@@ -2,7 +2,7 @@
 
 ## Compact Setup tables and scrollbars (2026-09-13)
 
-Baseline 46da897 on milestone1. User authorized GUI-S6/S7 implementation,
+Baseline 46da897 on milestone1; S6 committed as 28eafcd. User authorized GUI-S6/S7 implementation,
 review and commits. S6 adds conditional batch results with paths, attempted
 Verify/deletion settings, short truthful statuses, queued dismissal and
 terminal-only Clear results. Results remain with their origin until cleared.
@@ -33,11 +33,24 @@ gui-s6-headed-all-03.txt; subsequent product edits affected Setup only.
 gui-s6-imports-01.txt records all 12 import contracts kept. Direct tooltip and
 settings-cell consumers were migrated without retiring assertions.
 
-S7 awaits S6 closure. User chose a small fixed scrollbar gutter with a thin-to-wide
-thumb; native overlay parity is not promised. No host flags, vendor changes or
-dependency updates are authorized. Mica and the unresolved WCG shadow diagnosis
-remain unchanged.
+S7 implements the chosen 10px fixed scrollbar gutter, 2px pane-hover thumb and
+6px direct-hover/drag thumb in components.css for the eight existing scroll
+owners. It uses neutral theme tokens, rounded ends and equal hover/active paint;
+forced colors retain browser defaults. Native overlay painting, fading and
+input-mode awareness are not promised. The first interface department run passed all
+1,525 checks (gui-s7-interfaces-02.txt); all 30 installed interface scenarios now pass (gui-r1-headed-01.txt).
+No host flags, vendor changes or dependency updates were made. Mica and the
+unresolved WCG shadow diagnosis remain unchanged.
 
-Evidence logs use ignored build/gui-icons/gui-s6-* with unique external
+Evidence logs use ignored build/gui-icons/gui-s6-* and gui-s7-* with unique external
 basetemps and PIP_NO_CACHE_DIR=1. Root owns one pytest/Node slot. Do not close
 user-owned windows; relaunch the development app to load committed changes.
+
+GUI-R1 corrects native close-status visibility after Ready was hidden and gives
+the legacy installed fixture an explicit display override for its literal Ready
+witness. No handshake or shutdown policy changed. Independent review approved
+the diff with 118 focused and all 30 installed tests passed.
+
+The combined interface rerun passed 1,526 tests (gui-r1-interfaces-01.txt).
+GUI-R1 is committed as 65bd02a. GUI-S7 review and native verification are closed;
+GUI-S8 is the remaining 8px batch-footer spacing refinement.

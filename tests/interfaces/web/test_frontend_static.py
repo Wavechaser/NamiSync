@@ -1301,3 +1301,64 @@ def test_sh_g_7_shell_layout_reflows_without_fixed_viewport_clipping(
     assert "grid-template-rows: auto minmax(0, 1fr);" in app_css
     assert "grid-template-rows: auto minmax(0, 1fr) auto;" in app_css
     assert "--palette-" not in app_css
+
+
+def test_gui_s7_scrollbars_keep_fixed_native_geometry_and_forced_color_defaults(
+    built_wheel: BuiltWheel,
+) -> None:
+    assets = _wheel_assets(built_wheel)
+    components_css = assets["components.css"]
+    owners = (
+        "html",
+        ".nami-work-panel",
+        ".nami-task-rail__items",
+        ".nami-setup__recent-popup",
+        ".nami-setup__pair-viewport",
+        ".nami-tree",
+        ".nami-file-list",
+        ".nami-combobox__popup",
+    )
+
+    before_scrollbars, separator, remainder = components_css.partition(
+        "@media (forced-colors: none) {"
+    )
+    assert separator
+    scrollbar_rules, separator, after_scrollbars = remainder.partition("\n}\n")
+    assert separator
+    selector_groups = re.findall(
+        r":is\(\n([\s\S]*?)\n  \)(?=[:])",
+        scrollbar_rules,
+    )
+    assert selector_groups
+    assert all(
+        tuple(line.strip().removesuffix(",") for line in group.splitlines())
+        == owners
+        for group in selector_groups
+    )
+    assert "::-webkit-scrollbar {\n    height: 10px;\n    width: 10px;" in scrollbar_rules
+    assert (
+        "border: 4px solid var(--color-semantic-transparent);"
+        in scrollbar_rules
+    )
+    assert "border-width: 2px;" in scrollbar_rules
+    assert "background-clip: padding-box;" in scrollbar_rules
+    assert (
+        "background-color: var(--color-neutral-foreground-secondary);"
+        in scrollbar_rules
+    )
+    assert (
+        "background-color: var(--color-neutral-subtle-hover);"
+        in scrollbar_rules
+    )
+    assert "background-color: var(--color-semantic-transparent);" in scrollbar_rules
+    for part in ("thumb", "track"):
+        assert f"::-webkit-scrollbar-{part}:hover" in scrollbar_rules
+        assert f"::-webkit-scrollbar-{part}:active" in scrollbar_rules
+    assert "scrollbar-width" not in components_css
+    assert "::-webkit-scrollbar" not in before_scrollbars + after_scrollbars
+    assert not re.search(r":hover[^{}]*::-webkit-scrollbar\s*\{", scrollbar_rules)
+    assert all(
+        "scrollbar" not in source
+        for name, source in assets.items()
+        if name.endswith(".js")
+    )

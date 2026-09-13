@@ -88,7 +88,7 @@ The gallery is a natural-height specimen document with page scrolling; it does
 not inherit the task shell's viewport-height limit. Installed gallery checks
 reject overlap between its top-level specimen sections.
 
-Scrollbar styling remains browser-default. The bundled WebView2 SDK supports
+Scrolling remains browser-owned. The bundled WebView2 SDK supports
 [`ScrollBarStyle = FluentOverlay`](https://learn.microsoft.com/en-us/dotnet/api/microsoft.web.webview2.core.corewebview2environmentoptions.scrollbarstyle),
 but pinned pywebview 6.2.1 creates its environment through
 `CoreWebView2CreationProperties` and `EnsureCoreWebView2Async(None)` without an
@@ -96,10 +96,16 @@ environment-options hook. Changing the scrollbar after initialization is not
 the supported API path. No vendor patch or environment override is installed;
 Microsoft classifies the Fluent scrollbar browser flag as
 [development-only](https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/webview-features-flags).
-A future supported environment hook is the preferred native route. CSS thumb/
-track styling can approximate the appearance while retaining browser scrolling,
-but is a separate visual change requiring forced-color, pointer and keyboard
-checks; it does not promise native overlay animation or system-preference parity.
+A future supported environment hook is the preferred native route. Current CSS
+approximates Fluent with a small fixed gutter: the rounded thumb is hidden
+outside pane hover, thin over the pane and wider on direct hover/drag, with no
+extra pressed highlight. The track uses a subtle neutral fill. Wheel, keyboard,
+track clicks and dragging remain native; forced colors use browser defaults.
+The fixed gutter avoids hover layout shifts but cannot paint over content like
+native Fluent. CSS also does not reproduce native fade, input-method awareness
+or system-preference parity. Microsoft's [scroll viewer guidance](https://learn.microsoft.com/en-us/windows/apps/develop/ui/controls/scroll-controls)
+describes the thin-to-wide behavior; Chromium's [scrollbar styling guidance](https://developer.chrome.com/docs/css-ui/scrollbar-styling)
+explains the classic gutter introduced by custom scrollbar dimensions.
 
 Before window creation, the primary host constructs the service and consumes
 the shared database-pair facade. Fresh state initializes ledger then history;

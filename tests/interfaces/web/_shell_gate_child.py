@@ -336,12 +336,15 @@ _SCROLL_TREE_SETUP = r"""
   state.initial = {
     accepted,
     client_height: root.clientHeight,
+    client_width: root.clientWidth,
     generation,
     fixture_schema: fixture.schema,
     row_count: root.querySelectorAll(".nami-tree-row").length,
     row_h: ROW_H,
+    scrollbar_width: getComputedStyle(root, "::-webkit-scrollbar").width,
     total,
   };
+  state.idleThumbBorder = parseFloat(getComputedStyle(root, "::-webkit-scrollbar-thumb").borderLeftWidth);
   globalThis.__namiScrollTreeEvidence = state;
   await new Promise((resolve) => requestAnimationFrame(resolve));
   const scrollBeforeResize = root.scrollTop;
@@ -414,6 +417,8 @@ _SCROLL_TREE_EVIDENCE = r"""
     resize: state.resize,
     requests: state.requests,
     row_count: rendered.length,
+    scrollbar_hover: state.scrollbarHover,
+    stable_scrollbar_geometry: root.clientWidth === state.initial.client_width,
     scroll_top: root.scrollTop,
   };
   const requestsBeforeDispose = state.requests.length;
@@ -436,6 +441,40 @@ _SCROLL_TREE_EVIDENCE = r"""
   root.remove();
   delete globalThis.__namiScrollTreeEvidence;
   return result;
+})()
+"""
+
+_SCROLLBAR_HOVER_TARGET = r"""
+(() => {
+  const root = globalThis.__namiScrollTreeEvidence?.root;
+  if (!(root instanceof HTMLElement)) {
+    throw new Error("scrollbar hover target is unavailable");
+  }
+  const rect = root.getBoundingClientRect();
+  return {x: rect.right - 5, y: rect.top + 5};
+})()
+"""
+
+_SCROLLBAR_HOVER_EVIDENCE = r"""
+(async () => {
+  await new Promise((resolve) => requestAnimationFrame(resolve));
+  const state = globalThis.__namiScrollTreeEvidence;
+  const root = state?.root;
+  if (!(root instanceof HTMLElement)) {
+    throw new Error("scrollbar hover evidence is unavailable");
+  }
+  const thumb = getComputedStyle(root, "::-webkit-scrollbar-thumb");
+  const colorProbe = document.createElement("span");
+  colorProbe.style.color = "var(--color-neutral-foreground-secondary)";
+  root.append(colorProbe);
+  const expectedColor = getComputedStyle(colorProbe).color;
+  colorProbe.remove();
+  state.scrollbarHover = {
+    wider_than_pane: parseFloat(thumb.borderLeftWidth) > 0 &&
+      parseFloat(thumb.borderLeftWidth) < state.idleThumbBorder,
+    paint_matches_token: thumb.backgroundColor === expectedColor,
+  };
+  return {ready: true};
 })()
 """
 
@@ -1146,6 +1185,22 @@ def _begin_probe(
             callback,
         )
 
+    def move(
+        point: object,
+        callback: Callable[[object], None],
+    ) -> None:
+        if type(point) is not dict:
+            raise TypeError("pointer target is invalid")
+        x = point.get("x")
+        y = point.get("y")
+        if type(x) not in {int, float} or type(y) not in {int, float}:
+            raise TypeError("pointer coordinates are invalid")
+        protocol(
+            "Input.dispatchMouseEvent",
+            {"type": "mouseMoved", "x": x, "y": y, "buttons": 0},
+            callback,
+        )
+
     def after_initial(value: object) -> None:
         page["initial"] = value
         expression = _KEYBOARD_TREE_PROBE.replace(
@@ -1223,6 +1278,15 @@ def _begin_probe(
         wheel(value, 112, after_scroll_wheel)
 
     def after_scroll_wheel(_value: object) -> None:
+        evaluate(_SCROLLBAR_HOVER_TARGET, after_scrollbar_target)
+
+    def after_scrollbar_target(value: object) -> None:
+        move(value, after_scrollbar_move)
+
+    def after_scrollbar_move(_value: object) -> None:
+        evaluate(_SCROLLBAR_HOVER_EVIDENCE, after_scrollbar_hover)
+
+    def after_scrollbar_hover(_value: object) -> None:
         evaluate(_SCROLL_TREE_EVIDENCE, after_scroll_evidence)
 
     def after_scroll_evidence(value: object) -> None:

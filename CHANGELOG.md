@@ -28,6 +28,9 @@ packaging remain open.
 
 #### Refine task navigation, Settings and Setup (2026-09-11–13)
 
+- Added a Fluent-style CSS scrollbar approximation with a fixed small gutter,
+  a thin pane-hover thumb and wider direct-hover/drag thumb. Native scrolling
+  and forced-color defaults remain; hover does not shift content.
 - Added a conditional batch table with paths, attempted settings, short statuses,
   queued removal and explicit clearing of settled results. Single and batch
   creation actions align right; single Create stays disabled while batching.
@@ -37,8 +40,8 @@ packaging remain open.
   and hid the app's ordinary Ready label.
 
 - Investigated native Fluent overlay scrollbars: the pinned wrapper does not
-  expose the required environment option. Kept browser-default scrolling and
-  recorded native-hook and CSS alternatives without a workaround.
+  expose the required environment option. Recorded the native-hook limitation
+  before adopting the bounded CSS approximation.
 - Scoped batch feedback to its originating Setup, labelled both paths, and
   allowed queued-row removal without canceling submitted requests. Pending
   reconciliation remains accessible; fresh tasks no longer inherit messages.

@@ -19,6 +19,122 @@ body {
   color: var(--color-neutral-foreground);
 }
 
+@media (forced-colors: none) {
+  :is(
+    html,
+    .nami-work-panel,
+    .nami-task-rail__items,
+    .nami-setup__recent-popup,
+    .nami-setup__pair-viewport,
+    .nami-tree,
+    .nami-file-list,
+    .nami-combobox__popup
+  )::-webkit-scrollbar {
+    height: 10px;
+    width: 10px;
+  }
+
+  :is(
+    html,
+    .nami-work-panel,
+    .nami-task-rail__items,
+    .nami-setup__recent-popup,
+    .nami-setup__pair-viewport,
+    .nami-tree,
+    .nami-file-list,
+    .nami-combobox__popup
+  )::-webkit-scrollbar-thumb {
+    background-clip: padding-box;
+    background-color: var(--color-semantic-transparent);
+    border: 4px solid var(--color-semantic-transparent);
+    border-radius: var(--radius-circular);
+  }
+
+  :is(
+    html,
+    .nami-work-panel,
+    .nami-task-rail__items,
+    .nami-setup__recent-popup,
+    .nami-setup__pair-viewport,
+    .nami-tree,
+    .nami-file-list,
+    .nami-combobox__popup
+  ):hover::-webkit-scrollbar-thumb {
+    background-color: var(--color-neutral-foreground-secondary);
+  }
+
+  :is(
+    html,
+    .nami-work-panel,
+    .nami-task-rail__items,
+    .nami-setup__recent-popup,
+    .nami-setup__pair-viewport,
+    .nami-tree,
+    .nami-file-list,
+    .nami-combobox__popup
+  )::-webkit-scrollbar-thumb:hover,
+  :is(
+    html,
+    .nami-work-panel,
+    .nami-task-rail__items,
+    .nami-setup__recent-popup,
+    .nami-setup__pair-viewport,
+    .nami-tree,
+    .nami-file-list,
+    .nami-combobox__popup
+  )::-webkit-scrollbar-thumb:active {
+    background-color: var(--color-neutral-foreground-secondary);
+    border-width: 2px;
+  }
+
+  :is(
+    html,
+    .nami-work-panel,
+    .nami-task-rail__items,
+    .nami-setup__recent-popup,
+    .nami-setup__pair-viewport,
+    .nami-tree,
+    .nami-file-list,
+    .nami-combobox__popup
+  )::-webkit-scrollbar-track:hover,
+  :is(
+    html,
+    .nami-work-panel,
+    .nami-task-rail__items,
+    .nami-setup__recent-popup,
+    .nami-setup__pair-viewport,
+    .nami-tree,
+    .nami-file-list,
+    .nami-combobox__popup
+  )::-webkit-scrollbar-track:active {
+    background-color: var(--color-neutral-subtle-hover);
+    border-radius: var(--radius-circular);
+  }
+
+  :is(
+    html,
+    .nami-work-panel,
+    .nami-task-rail__items,
+    .nami-setup__recent-popup,
+    .nami-setup__pair-viewport,
+    .nami-tree,
+    .nami-file-list,
+    .nami-combobox__popup
+  )::-webkit-scrollbar-corner,
+  :is(
+    html,
+    .nami-work-panel,
+    .nami-task-rail__items,
+    .nami-setup__recent-popup,
+    .nami-setup__pair-viewport,
+    .nami-tree,
+    .nami-file-list,
+    .nami-combobox__popup
+  )::-webkit-scrollbar-track {
+    background-color: var(--color-semantic-transparent);
+  }
+}
+
 .nami-button,
 .nami-input,
 .nami-select,

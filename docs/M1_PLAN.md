@@ -42,57 +42,24 @@ The prior aggregate complete-owner-graph model and BR-G-45 are retired. No futur
 | ID | Accepted outcome | Named verification | Status |
 | --- | --- | --- | --- |
 | GUI-S6 | Conditional batch table retains results until cleared, shows paths/settings/short truthful status and queued removal; both tables use five 56px row slots and 28px headers with matching folder insets. Add pair precedes Create plan at the right; Create plan remains disabled during batching, and Create batch sits below the table at the right. Ordinary Setup guidance and app Ready status are hidden. | Browser behavior probes, installed Setup/shell/gallery checks, ordinary suite and independent adversarial review passed. HANDOFF records evidence. | Complete |
-| GUI-S7 | Best-effort Fluent CSS scrollbars preserve native input, thin idle appearance and stable layout, with rounded hover styling where practical. | Official Microsoft/Chromium guidance, focused CSS checks, installed scroll/layout checks and independent adversarial review. | In progress |
+| GUI-S7 | Best-effort Fluent CSS scrollbars preserve native input, thin idle appearance and stable layout, with rounded hover styling where practical. | Official guidance, focused CSS checks, 1,526 interface tests, all 30 installed scenarios and independent review passed. | Complete |
 | GUI-S8 | Separate the batch footer buttons from the table with a small vertical gap. | Installed Setup geometry and independent diff review. | Pending |
 | GUI-R1 | Complete the S6 host-status visibility migration: native close messages become visible, and legacy smoke fixtures retain a truthful Ready witness. | 118 focused host/harness tests, all 30 installed interface scenarios and independent review passed. | Complete |
 
-Population: web assets setup.js, app.js, app.css and components.css; their direct
-browser probes and installed Setup/shell/gallery/tree test helpers; the direct
-materials/native test helpers that reuse the host status as a completion marker;
-DESKTOP_UI,
-this register, CHANGELOG and HANDOFF (README only if its synopsis changes).
-Each row is one commit. GUI-S7 implementation follows GUI-S6 closure and
-revalidates the final scroll owners. No backend/protocol, host flags, dependencies,
-Mica workaround or replacement JavaScript scrollbar is included.
-User refinement during verification replaces the earlier 48px row/mutually
-exclusive single-action presentation with 56px rows and a retained disabled
-single Create button. The same source/test population and gate apply.
+GUI-S6 shipped in 28eafcd. Batch receipts remain origin-owned under the existing
+48-entry bound, serial runner, fresh admission and exact uncertain retry.
+Prepared settings are frozen for each attempt; uncertain work is never labelled
+Failed or Created. Clear results removes settled receipts, not tasks or pending
+work. Blank slots are inert, and ordinary Ready remains internal readiness state.
 
-Preimplementation study at 46da897 followed Setup rendering, the page-wide batch
-coordinator and their direct test consumers. Preserve the 48-entry bound, origin
-ownership, one serial runner, membership rechecks, fresh admission and exact
-uncertain retry. Snapshot prepared settings for all queued entries selected for
-a run; never label uncertain work Failed or Created. Clearing removes settled
-receipts only, not tasks or unresolved work. Blank table slots are inert and
-hidden from accessibility. Keep readiness state separate from its visible label,
-gallery natural height and independently scrolling rail/work areas. Native CSS
-cannot reliably grow a scrollbar over content: the accepted approximation must
-state its fixed-gutter limitation. The user selected a small fixed gutter with
-a thin-to-wide thumb. Existing archived GUI studies add no scope.
-The gates above include source review of these seams and final adversarial
-review; repository stop classes apply without additional task-specific classes.
-Direct-consumer study searched all host-status reads/writes under tests/assets
-and tests/interfaces/web. Materials, shell and native-popup fixtures reuse the
-production label and must unhide their own completion marker. Gallery creates a
-new label; transport and benchmark fixtures use separate status nodes. Readiness
-text consumers remain valid. This is a test-consumer migration, not a change to
-production readiness or host authority.
-
-GUI-S7 design study: customize native Chromium scrollbars only in components.css
-for html, work panel, rail items, location popup, shared pair viewport, tree,
-file list and combobox popup. Use a fixed small gutter, transparent idle paints,
-a thin pane-hover thumb and wider direct-hover/active thumb with equal pressed
-paint; retain rounded ends and neutral theme tokens. Forced colors use browser
-defaults. No JavaScript scroll owner or width change on hover. Microsoft documents
-the native 2px/6px indicator transition; Chromium CSS reserves a classic gutter,
-so true overlay painting and native fade/input-mode detection are not claimed.
-Verification population adds only focused CSS assertions and existing installed
-shell/gallery scroll evidence, followed by the interface department and headed
-interface suite. One CSS behavior/documentation commit follows S6, after checking
-the final shared pair viewport class. Unexpected scroll/input loss must be fixed
-before that commit; unsupported parity remains a documented approximation.
-S6 closed in 28eafcd; the shared pair viewport and other studied scroll owners
-are unchanged from the design study. GUI-S7 implementation is now active.
+GUI-S7 adds CSS styling for the eight existing native scroll owners: a fixed
+10px gutter, 2px pane-hover thumb and 6px direct-hover/drag thumb, rounded ends
+and neutral theme tokens. Forced colors retain browser defaults. Native wheel,
+track and drag input remain browser-owned; true overlay painting, fading and
+input-mode detection are not claimed. No host flags, dependencies, Mica changes
+or replacement JavaScript scrollbar were introduced. DESKTOP_UI owns the
+behavior and reference links; HANDOFF records verification. Independent review
+and the complete interface/headed gates passed after the GUI-R1 correction.
 GUI-S8 is the user's subsequent spacing refinement: app.css batch-actions margin,
 its existing installed Setup geometry assertion and these delivery docs only.
 Use an 8px token-based gap; preserve table height, footer alignment and action

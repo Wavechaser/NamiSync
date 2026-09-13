@@ -362,10 +362,12 @@ def test_sh_g_7_installed_shell_tree_keyboard_reflow_and_forced_colors(
         "initial": {
             "accepted": True,
             "client_height": 56,
+            "client_width": page["scroll_tree"]["initial"]["client_width"],
             "generation": 1,
             "fixture_schema": TREE_WINDOW_FIXTURE_SCHEMA,
             "row_count": 2,
             "row_h": 28,
+            "scrollbar_width": "10px",
             "total": views["maximum"]["total"],
         },
         "nonblank_viewport": True,
@@ -384,8 +386,14 @@ def test_sh_g_7_installed_shell_tree_keyboard_reflow_and_forced_colors(
             {"generation": 3, "index": 7},
         ],
         "row_count": 5,
+        "scrollbar_hover": {
+            "wider_than_pane": True,
+            "paint_matches_token": True,
+        },
+        "stable_scrollbar_geometry": True,
         "scroll_top": 112,
     }
+    assert page["scroll_tree"]["initial"]["client_width"] > 0
     assert page["controller_zoom"] == 2.0
     assert final["focused_before_tree"] == "Keyboard tree evidence"
     assert final["zoom"] == {
@@ -736,15 +744,23 @@ def _assert_report_schema(result: object) -> None:
         "resize",
         "requests",
         "row_count",
+        "scrollbar_hover",
+        "stable_scrollbar_geometry",
         "scroll_top",
+    }
+    assert set(result["page"]["scroll_tree"]["scrollbar_hover"]) == {
+        "wider_than_pane",
+        "paint_matches_token",
     }
     assert set(result["page"]["scroll_tree"]["initial"]) == {
         "accepted",
         "client_height",
+        "client_width",
         "generation",
         "fixture_schema",
         "row_count",
         "row_h",
+        "scrollbar_width",
         "total",
     }
     assert set(result["page"]["scroll_tree"]["resize"]) == {
