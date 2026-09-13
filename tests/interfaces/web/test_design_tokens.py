@@ -143,7 +143,11 @@ FLUENT_LIGHT_ALIASES = {
     "--color-focus-ring": "colorStrokeFocus2",
 }
 FLUENT_DARK_ALIASES = {
-    **FLUENT_LIGHT_ALIASES,
+    **{
+        local: upstream
+        for local, upstream in FLUENT_LIGHT_ALIASES.items()
+        if local != "--color-neutral-disabled-background"
+    },
     "--color-neutral-canvas": "colorNeutralBackground2",
     "--color-neutral-border-subtle": "colorNeutralStrokeSubtle",
 }
@@ -286,6 +290,9 @@ AUTHORED_SELECTION_VALUES = {
 AUTHORED_SCROLLBAR_VALUES = {
     "light": {"--color-scrollbar-thumb": "rgba(0,0,0,0.4)"},
     "dark": {"--color-scrollbar-thumb": "rgba(255,255,255,0.4)"},
+}
+AUTHORED_DISABLED_SURFACE_VALUES = {
+    "dark": {"--color-neutral-disabled-background": "#2a2a2a"},
 }
 AUTHORED_CARD_VALUES = {
     "light": {
@@ -538,7 +545,11 @@ def test_sh_g_11_tokens_route_authored_lights_only_to_new_semantic_roles() -> No
         for value in (
             *AUTHORED_PALETTE.values(),
             *FLUENT_LIGHT_VALUES.values(),
-            *FLUENT_DARK_VALUES.values(),
+            *(
+                value
+                for name, value in FLUENT_DARK_VALUES.items()
+                if name != "colorNeutralBackgroundDisabled"
+            ),
             *WINDOWS_ACCENT_FALLBACK["light"].values(),
             *WINDOWS_ACCENT_FALLBACK["dark"].values(),
             *AUTHORED_CONTROL_VALUES["light"].values(),
@@ -547,6 +558,7 @@ def test_sh_g_11_tokens_route_authored_lights_only_to_new_semantic_roles() -> No
             *AUTHORED_SELECTION_VALUES["dark"].values(),
             *AUTHORED_SCROLLBAR_VALUES["light"].values(),
             *AUTHORED_SCROLLBAR_VALUES["dark"].values(),
+            *AUTHORED_DISABLED_SURFACE_VALUES["dark"].values(),
             *AUTHORED_CARD_VALUES["light"].values(),
             *AUTHORED_CARD_VALUES["dark"].values(),
             *AUTHORED_FLYOUT_VALUES["light"].values(),
@@ -601,6 +613,8 @@ def test_sh_g_11_fluent_table_matches_pinned_source_transcription() -> None:
     assert AUTHORED_SCROLLBAR_VALUES["light"].items() <= light.items()
     assert AUTHORED_SCROLLBAR_VALUES["dark"].items() <= dark.items()
     assert AUTHORED_SCROLLBAR_VALUES["dark"].items() <= automatic_dark.items()
+    assert AUTHORED_DISABLED_SURFACE_VALUES["dark"].items() <= dark.items()
+    assert AUTHORED_DISABLED_SURFACE_VALUES["dark"].items() <= automatic_dark.items()
     assert AUTHORED_CARD_VALUES["light"].items() <= light.items()
     assert AUTHORED_CARD_VALUES["dark"].items() <= dark.items()
     assert AUTHORED_CARD_VALUES["dark"].items() <= automatic_dark.items()

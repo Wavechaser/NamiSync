@@ -92,7 +92,8 @@
    * Canvas intentionally selects Background1Hover (light) / Background2
    * (dark) to match the native opaque fallback. Task-card overlays intentionally
    * select the LightAlpha subtle aliases so Mica remains visible. Windows accent
-   * fallbacks and NamiSync's 15-swatch palette are separate, product-owned inputs.
+   * fallbacks, the dark disabled surface, and NamiSync's 15-swatch palette are
+   * separate, product-owned inputs.
    * The package and source are MIT licensed.
    */
   --color-neutral-canvas: #f5f5f5;
@@ -238,7 +239,7 @@
   --color-neutral-border-hover: #bdbdbd;
   --color-neutral-border-pressed: #b3b3b3;
   --color-neutral-border-subtle: #0a0a0a;
-  --color-neutral-disabled-background: #141414;
+  --color-neutral-disabled-background: #2a2a2a;
   --color-card-background-solid: var(--color-neutral-surface);
   --color-card-background: rgba(255,255,255,0.05);
   --color-card-background-secondary: rgba(255,255,255,0.03);
@@ -310,7 +311,7 @@
     --color-neutral-border-hover: #bdbdbd;
     --color-neutral-border-pressed: #b3b3b3;
     --color-neutral-border-subtle: #0a0a0a;
-    --color-neutral-disabled-background: #141414;
+    --color-neutral-disabled-background: #2a2a2a;
     --color-card-background-solid: var(--color-neutral-surface);
     --color-card-background: rgba(255,255,255,0.05);
     --color-card-background-secondary: rgba(255,255,255,0.03);

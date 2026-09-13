@@ -43,15 +43,15 @@ The prior aggregate complete-owner-graph model and BR-G-45 are retired. No futur
 | --- | --- | --- | --- |
 | GUI-R2 | Development windows hide ordinary Ready; only explicit smoke-test launches expose their readiness witness. | 55 focused, 11 installed and 1,528 interface checks plus independent review passed. | Complete |
 | GUI-S9 | Always-visible softened thin scrollbars widen on hover; tables reserve a stable vertical gutter below their headers through shared column/layout ownership, with horizontal scrolling only as needed. | 84 focused checks, 4,983 ordinary checks (including interfaces), all 30 installed scenarios and independent review. | Complete |
-| GUI-S10 | Tighten path-label spacing, separate primary and expanded options, align paired path values, and lighten disabled dark buttons to #2a2a2a. | Focused tokens/Setup checks, installed light/dark layout checks, interface gate and independent review. | Pending |
+| GUI-S10 | Tighten path-label spacing, separate primary and expanded options, align paired path values, and lighten disabled dark buttons to #2a2a2a. | 78 focused/installed checks, 1,528 interface checks and independent review passed. | Complete |
 | GUI-D6 | Record native overlay integration, verify-only batching and persistent customizable pair presets as M2 outcomes. | Active feature/roadmap cross-reference and independent review passed. | Complete |
 
 Non-goals: native backend/dependency changes, new batching or persistence commands,
 Mica/shadow work, and JavaScript measurement loops for column alignment. Existing
 task/admission authority, virtualized row bounds, keyboard/accessibility behavior,
 column resizing and horizontal scrolling must remain intact. Repository stop
-classes apply. Each row is an atomic commit; elaborate S9/S10 from their finite
-consumer studies before implementation.
+classes apply. Each row is an independently reviewed atomic commit; completed studies are
+condensed below.
 
 GUI-D6 records only accepted future outcomes in M2_PROPOSAL and FEATURES,
 with matching DESKTOP_UI, README and changelog references. Presets are deferred:
@@ -59,14 +59,9 @@ existing recent-pair admission can be reused, but durable records and bridge
 commands are not present. No current product behavior or M1 admission contract
 changes. Gate: finite search of these active documents and independent review.
 
-GUI-R2 study at cc5d853 found that tools/gui.ps1 launches the same installed-host
-helper whose unconditional display override exposes Ready for smoke tests.
-Population: _headed_host_child.py, test_slice1_headed.py readiness launches,
-test_headed_native.py and direct launcher guards; TOOLS, this register and HANDOFF.
-Make the override an explicit test-only opt-in, leaving development launches
-unchanged. Preserve literal post-handshake Ready waits, all close/error behavior
-and child-process ownership. No production readiness change is needed. Gate:
-focused helper/launcher tests and installed interface scenarios plus review.
+GUI-R2 (1398490) makes the development helper's Ready-label override an explicit
+smoke-test opt-in. Normal development launches use the production hidden-Ready
+behavior; readiness witnesses and close/error handling remain intact.
 
 GUI-S9 delivers shared CSS header/body tracks and stable gutters for Setup and
 file-list galleries, with one outer horizontal scroll area and body-only vertical
@@ -78,18 +73,12 @@ remain intact. Evidence: build/gui-icons/gui-s9-final-{focused,ordinary,headed}.
 the ordinary suite includes the interface department. Four existing Windows
 symlink-privilege skips remain; no GUI gate was skipped.
 
-GUI-S10 follows S9's final shared layout. Population: app.css Setup spacing and
-paired path label/value tracks, tokens.css disabled dark surface, matching token
-expectations and existing Setup/gallery geometry probes; DESKTOP_UI, this
-register, HANDOFF and CHANGELOG. Reduce the form label track from 4.5rem to 4rem,
-give primary options a 16px gap and expanded option rows an 8px gap. Give both
-paired path labels one shared fixed track and truncate only the value. Change
-the existing dark disabled fill to #2a2a2a with explicit authored provenance,
-preserving light and forced-color values and transparent-control overrides.
-The current token also serves other disabled controls; its shared role remains
-unchanged. Preserve focus, input state, click targets, task authority and row
-height. Gate: token/Setup checks, installed Setup/gallery light/dark evidence,
-interface regression and independent review. No unrelated token redesign.
+GUI-S10 follows S9 (42e86d1): compact form label tracks, 16px primary-option
+spacing, 8px expanded-row spacing and shared-width Source/Target labels with
+value-only ellipsis. The authored #2a2a2a dark disabled surface preserves light,
+forced-color and transparent overrides; upstream Fluent provenance is unchanged.
+Evidence: build/gui-icons/gui-s10-{focused,interfaces}.txt. No task, admission,
+input-state or table-row-height behavior changed.
 
 ### Compact Setup tables and scrollbars (2026-09-13)
 

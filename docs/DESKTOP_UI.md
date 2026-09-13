@@ -981,19 +981,21 @@ Setup and Recent pairs occupy separate cards. Setup starts at the work area's
 top without a repeated task-title heading; the region's accessible name retains
 the selected task identity. The task type uses the gallery's
 segmented radio control, with arrow-key selection. Each path row places its
-Source/Target label on the left, an editable path and recent-folder caret in one
+Source/Target label in a compact fixed-width track on the left, an editable path and recent-folder caret in one
 standard textbox, with its compact caret button inset on all sides and an accessible
 folder-open Browse button outside on the right. The
 recent dropdown supports keyboard navigation, selection and Escape dismissal.
 Plan options have no enclosing outline or divider: Verify execution and Additive
-sync switches sit together on the left, in that order. Additive on maps to
+sync switches sit together on the left, in that order, with 16px between them. Additive on maps to
 `additive`; off maps to `trash`. More options
 sits on the right of the same row and reveals preservation/update/casing switches
 and exclude filters below. Each advanced caption follows its toggle directly;
 Add filter sits beside the filter textbox; [PLANNER.md](PLANNER.md#exclude-filter-syntax-and-effect)
 documents pattern syntax and effect. Disclosure changes presentation only,
 never option values. Only the selected task type's Create action is visible.
-Expanded options have extra spacing below the always-visible switches.
+Expanded options have extra spacing below the always-visible switches and 8px
+between their rows. Disabled dark controls use an authored #2a2a2a surface;
+light, forced-color and transparent disabled-control styles remain unchanged.
 Empty and resolved paths omit routine hints; refusal and recovery messages remain
 visible. Each path has compact inset Clear and recent-folder buttons; Clear
 empties only that local field and invalidates its candidate without a Python
@@ -1032,8 +1034,9 @@ second. Corners, caption typography, header fill and alternating row surfaces
 match the gallery plan table, with 3.5rem (56px by default) two-line rows,
 1.75rem (28px) headers and 12px folder-column header/content insets. Both recent
 and batch tables reserve five row slots, scrolling additional rows beneath a
-sticky header. Empty slots are inert and excluded from accessibility. Both path
-lines carry Source:/Target: labels. The existing recent-activity query returns
+fixed header. Empty slots are inert and excluded from accessibility. Both path
+lines carry Source:/Target: labels in one shared-width track, so their truncated
+path values start at the same horizontal position. The existing recent-activity query returns
 at most five pairs; the shared table also supports larger batch populations.
 Hover, press and keyboard
 focus paint the whole enabled row, never individual cells. Long

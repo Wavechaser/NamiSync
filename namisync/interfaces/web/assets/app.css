@@ -257,6 +257,10 @@ body {
   gap: var(--space-2);
 }
 
+.nami-setup__primary-options {
+  gap: var(--space-5);
+}
+
 .nami-setup__policy-group {
   align-items: center;
   display: flex;
@@ -268,10 +272,14 @@ body {
 }
 
 .nami-setup__mode-group,
-.nami-setup__options-list,
 .nami-setup__filters {
   display: grid;
   gap: var(--space-2);
+}
+
+.nami-setup__options-list {
+  display: grid;
+  gap: var(--space-3);
 }
 
 .nami-setup__mode {
@@ -282,7 +290,7 @@ body {
   align-items: center;
   display: grid;
   gap: var(--space-2);
-  grid-template-columns: 4.5rem minmax(8rem, 1fr) auto;
+  grid-template-columns: 4rem minmax(8rem, 1fr) auto;
 }
 
 .nami-setup__path-control {
@@ -589,8 +597,17 @@ body {
   border-color: var(--color-semantic-transparent);
 }
 
-.nami-setup__pair-path {
+.nami-setup__pair-path,
+.nami-setup__batch-path {
+  display: grid;
+  gap: var(--space-2);
+  grid-template-columns: 3.5em minmax(0, 1fr);
+}
+
+.nami-setup__pair-path-value,
+.nami-setup__batch-path-value {
   display: block;
+  min-inline-size: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   unicode-bidi: isolate;
@@ -655,7 +672,6 @@ body {
   padding-inline-start: var(--space-4) !important;
 }
 
-.nami-setup__batch-path,
 .nami-setup__batch-settings > span {
   display: block;
   overflow: hidden;

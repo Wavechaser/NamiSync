@@ -62,9 +62,13 @@ def test_m1_6_installed_setup_flow(
     assert result["disclosure_closed_initially"] is True
     assert result["setup_aligned_top"] is True
     assert result["primary_options_one_line"] is True
+    assert result["primary_options_gap"] == pytest.approx(16, abs=1)
     assert result["primary_options_stable_open"] is True, result["primary_options_bounds"]
     assert result["advanced_below_full_width"] is True
     assert result["expanded_options_padding"] is True
+    assert result["expanded_option_row_gaps"]
+    assert all(gap == pytest.approx(8, abs=1) for gap in result["expanded_option_row_gaps"])
+    assert result["form_label_track"] == "64px"
     assert result["more_idle_transparent"] is True
     assert result["refresh_icon_transparent"] is True
     assert result["refresh_square"] is True
@@ -134,6 +138,7 @@ def test_m1_6_installed_setup_flow(
     assert result["endpoint_statuses_align_with_paths"] is True
     assert result["offline_pair_disabled"] is True
     assert result["pair_two_line_paths"] is True
+    assert result["pair_paths_aligned"] is True
     assert result["pair_paths_truncated"] is True
     assert result["availability_dots_distinct"] is True
     assert result["availability_text_neutral"] is True
@@ -157,6 +162,7 @@ def test_m1_6_installed_setup_flow(
     assert result["inventory_inapplicable_hidden"] is True
     assert result["mixed_batch"] is True
     assert result["batch_paths_visible"] is True
+    assert result["batch_paths_aligned"] is True
     assert result["batch_slots_bounded"] is True
     assert result["batch_column_widths"] is True
     assert result["batch_no_horizontal_overflow"] is True

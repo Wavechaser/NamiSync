@@ -19,7 +19,7 @@ hidden-Ready path. No production readiness, shutdown or process ownership change
 Evidence in build/gui-icons/: gui-r2-focused-01.txt (55 passed),
 gui-r2-headed-01.txt (11 passed), gui-r2-interfaces-01.txt (1,528 passed).
 
-GUI-S9 is verified and independently reviewed. Shared CSS owns stable
+GUI-S9 committed as 42e86d1 and independently approved. Shared CSS owns stable
 header/body gutters and column alignment for Setup and gallery file lists.
 One outer horizontal scroll area moves both; the body alone scrolls vertically.
 Intrinsic header sizing preserves resized tracks without JS correction loops.
@@ -30,8 +30,17 @@ gui-s9-final-ordinary.txt (4,983 passed, four existing Windows symlink-privilege
 skips; includes interfaces), gui-s9-final-headed.txt (all 30 passed).
 Temporary diagnostic hooks were removed; only ignored evidence artifacts remain.
 
-GUI-S10 follows final shared layout: tighter form label spacing, larger option
-gaps, aligned paired path values and authored #2a2a2a dark disabled fill.
+GUI-S10 is complete and independently approved: tighter form label spacing,
+larger option gaps, aligned paired path values and authored #2a2a2a dark disabled
+fill. Light, forced-color and transparent controls remain unchanged. Root evidence:
+build/gui-icons/gui-s10-focused.txt (78 passed, including installed Setup and
+light/dark/forced gallery), gui-s10-interfaces.txt (1,528 passed). The generated
+Setup capture confirms aligned paths; CDP captures of Mica are not color-health
+evidence. No tests were retired and no temporary diagnostic hooks remain.
+
+All accepted rows are complete. Further M1 slices still require their own user
+instruction. README's M2 synopsis is current; no additional overview change was
+needed for spacing and scrollbar refinements.
 
 No Mica/shadow, native backend, dependencies, batching admission or persistence
 changes are authorized in this pass. User-owned development windows remain open;

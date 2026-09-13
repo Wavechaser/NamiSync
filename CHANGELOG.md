@@ -28,6 +28,9 @@ packaging remain open.
 
 #### Refine task navigation, Settings and Setup (2026-09-11–13)
 
+- Tightened Setup path-label spacing, separated option toggles and aligned
+  Source/Target values in paired rows. Lightened disabled dark controls to
+  #2a2a2a while preserving light and transparent-control styles.
 - Restricted the Ready-label test override to explicit smoke launches, restoring
   the intended hidden Ready label in the editable development shell.
 - Deferred native overlay scrollbar integration, verify-only batching and

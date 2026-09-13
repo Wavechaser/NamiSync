@@ -1749,6 +1749,10 @@ def test_sh_g_11_component_gallery_uses_installed_tokens_and_non_color_cues(
         assert controls_by_key["button_primary"]["disabled"]["background"] == (
             controls_by_key["button"]["disabled"]["background"]
         )
+        if not report["media"]["forced"]:
+            assert controls_by_key["button"]["disabled"]["background"] == (
+                "rgb(42, 42, 42)" if theme == "dark" else "rgb(240, 240, 240)"
+            )
         assert controls_by_key["button_primary"]["disabled"]["foreground"] == (
             controls_by_key["button"]["disabled"]["foreground"]
         )

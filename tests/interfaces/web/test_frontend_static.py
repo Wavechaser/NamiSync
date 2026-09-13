@@ -1297,7 +1297,7 @@ def test_sh_g_7_shell_layout_reflows_without_fixed_viewport_clipping(
     assert "height: 100vh" not in app_css
     for selector, declarations in re.findall(r"([^{}]+)\{([^{}]*)\}", app_css.split(".nami-tree", 1)[0]):
         if "overflow: hidden" in declarations:
-            assert selector.strip() in {"#app", ".nami-task-rail", ".nami-setup__recent", ".nami-setup__pair-path", ".nami-setup__batch-path,\n.nami-setup__batch-settings > span", ".nami-setup__batch-status"}
+            assert selector.strip() in {"#app", ".nami-task-rail", ".nami-setup__recent", ".nami-setup__pair-path-value,\n.nami-setup__batch-path-value", ".nami-setup__batch-settings > span", ".nami-setup__batch-status"}
     assert "grid-template-rows: auto minmax(0, 1fr);" in app_css
     assert "grid-template-rows: auto minmax(0, 1fr) auto;" in app_css
     assert "--palette-" not in app_css

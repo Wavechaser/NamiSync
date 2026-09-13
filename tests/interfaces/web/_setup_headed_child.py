@@ -146,6 +146,11 @@ _EDITABLE_SCRIPT = r"""
   const optionsBounds = options.getBoundingClientRect();
   const advancedBounds = advanced.getBoundingClientRect();
   const expandedOptionsGap = advancedBounds.top - Math.max(...primaryBounds.map((rect) => rect.bottom));
+  const expandedRows = Array.from(advanced.querySelector(".nami-setup__options-list").children)
+    .map((item) => item.getBoundingClientRect());
+  const expandedRowGaps = expandedRows.slice(1).map((rect, index) =>
+    rect.top - expandedRows[index].bottom);
+  const sourceLineStyle = getComputedStyle(sourceLine);
   const standardFilter = document.querySelector("#setup-filter");
   if (!(standardFilter instanceof HTMLInputElement)) throw new Error("Setup standard filter input is unavailable");
   const filterIdleStyle = getComputedStyle(standardFilter);
@@ -198,7 +203,15 @@ _EDITABLE_SCRIPT = r"""
   const offlinePair = availabilityRows.find((row) => row.dataset.sourceAvailability !== row.dataset.targetAvailability);
   const offlinePaths = offlinePair.querySelectorAll(".nami-setup__pair-path");
   const recentHeaders = Array.from(document.querySelectorAll(".nami-setup__recent-pair-table th"));
-  const pathStyle = getComputedStyle(offlinePaths[0]);
+  const offlinePathValues = Array.from(offlinePair.querySelectorAll(".nami-setup__pair-path-value"));
+  const pathValueStyle = getComputedStyle(offlinePathValues[0]);
+  const pairedPathsAlign = () => Array.from(offlinePaths).every((item) => {
+    const label = item.querySelector(".nami-setup__pair-path-label").getBoundingClientRect();
+    const value = item.querySelector(".nami-setup__pair-path-value").getBoundingClientRect();
+    const expectedTrack = 3.5 * parseFloat(getComputedStyle(item).fontSize);
+    return Math.abs(label.width - expectedTrack) <= 1 && Math.abs(value.left - label.right - 4) <= 1;
+  }) && Math.abs(offlinePathValues[0].getBoundingClientRect().left - offlinePathValues[1].getBoundingClientRect().left) <= 1;
+  const defaultPairedPathsAlign = pairedPathsAlign();
   const mixedStatuses = Array.from(offlinePair.querySelectorAll(".nami-setup__availability"));
   const onlineStatuses = Array.from(onlinePair.querySelectorAll(".nami-setup__availability"));
   const neutralColor = getComputedStyle(document.querySelector(".nami-setup__recent-pair-table th")).color;
@@ -247,6 +260,7 @@ _EDITABLE_SCRIPT = r"""
   firstPairRow.style.removeProperty("block-size");
   recentViewport.style.setProperty("inline-size", "24rem");
   const narrowHorizontal = recentViewport.scrollWidth > recentViewport.clientWidth;
+  const narrowPairedPathsAlign = pairedPathsAlign();
   const narrowHeaderLefts = columnLefts(recentHeaderRow);
   const narrowBodyLefts = columnLefts(firstPairRow);
   const narrowViewportHeight = recentViewport.getBoundingClientRect().height;
@@ -408,6 +422,7 @@ _EDITABLE_SCRIPT = r"""
     setup_aligned_top: Math.abs(setupBounds.top - workBounds.top) <= 2,
     primary_options_one_line: primaryBounds.every((rect) => rect.top < primaryBounds[0].bottom && rect.bottom > primaryBounds[0].top) &&
       primaryBounds[0].left < primaryBounds[1].left && primaryBounds[1].right < primaryBounds[2].left,
+    primary_options_gap: primaryBounds[1].left - primaryBounds[0].right,
     primary_options_stable_open: primaryBounds.every((rect, index) =>
       Math.abs(rect.left - closedPrimaryBounds[index].left) <= 1 &&
       Math.abs(rect.top - closedPrimaryBounds[index].top) <= 1 &&
@@ -417,6 +432,8 @@ _EDITABLE_SCRIPT = r"""
     advanced_below_full_width: advancedBounds.top >= Math.max(...primaryBounds.map((rect) => rect.bottom)) &&
       Math.abs(advancedBounds.left - optionsBounds.left) <= 1 && Math.abs(advancedBounds.right - optionsBounds.right) <= 1,
     expanded_options_padding: expandedOptionsGap >= 8,
+    expanded_option_row_gaps: expandedRowGaps,
+    form_label_track: sourceLineStyle.gridTemplateColumns.split(" ")[0],
     more_idle_transparent: moreIdleTransparent,
     refresh_icon_transparent: refreshIdleTransparent,
     refresh_square: refreshSquare,
@@ -464,9 +481,10 @@ _EDITABLE_SCRIPT = r"""
       mixedStatusBounds.every((rect, index) => Math.abs(rect.top - mixedPathBounds[index].top) <= 2),
     offline_pair_disabled: offlinePair.getAttribute("aria-disabled") === "true",
     pair_two_line_paths: offlinePaths.length === 2 && offlinePaths[0].getBoundingClientRect().top < offlinePaths[1].getBoundingClientRect().top,
-    pair_paths_truncated: pathStyle.textOverflow === "ellipsis" && pathStyle.overflow === "hidden" &&
-      Array.from(offlinePaths).every((item) => item.scrollWidth > item.clientWidth &&
-        item.title === item.querySelector(".nami-setup__pair-path-value").textContent),
+    pair_paths_aligned: defaultPairedPathsAlign && narrowPairedPathsAlign,
+    pair_paths_truncated: pathValueStyle.textOverflow === "ellipsis" && pathValueStyle.overflow === "hidden" &&
+      offlinePathValues.every((value, index) => value.scrollWidth > value.clientWidth &&
+        offlinePaths[index].title === value.textContent),
     availability_dots_distinct: getComputedStyle(onlineDot).backgroundColor !== getComputedStyle(offlineDot).backgroundColor,
     availability_text_neutral: [...mixedStatuses, ...onlineStatuses].every((item) => getComputedStyle(item).color === neutralColor),
     pointer_focus_hidden: pointerFocusHidden,
@@ -767,6 +785,19 @@ _INDEPENDENT_SCRIPT = r"""
       path.querySelector(".nami-setup__batch-path-label")?.textContent === (index === 0 ? "Source: " : "Target: ") &&
       path.querySelector(".nami-setup__batch-path-value")?.textContent === path.title);
   });
+  const batchPathsAlign = () => queuedRows.every((row) => {
+    const paths = Array.from(row.querySelectorAll(".nami-setup__batch-path"));
+    const values = paths.map((path) => path.querySelector(".nami-setup__batch-path-value"));
+    return values.every((value, index) => {
+      const label = paths[index].querySelector(".nami-setup__batch-path-label").getBoundingClientRect();
+      const bounds = value.getBoundingClientRect();
+      const style = getComputedStyle(value);
+      const expectedTrack = 3.5 * parseFloat(getComputedStyle(paths[index]).fontSize);
+      return Math.abs(label.width - expectedTrack) <= 1 && Math.abs(bounds.left - label.right - 4) <= 1 &&
+        style.textOverflow === "ellipsis" && style.overflow === "hidden";
+    }) && Math.abs(values[0].getBoundingClientRect().left - values[1].getBoundingClientRect().left) <= 1;
+  });
+  const fullBatchPathsAlign = batchPathsAlign();
   const batchCells = queuedRows[0]?.children;
   const batchTable = batchViewport?.querySelector(".nami-setup__batch-table");
   const fitsViewport = () => batchViewport.scrollWidth === batchViewport.clientWidth &&
@@ -774,6 +805,7 @@ _INDEPENDENT_SCRIPT = r"""
   const queuedFullWidthFits = fitsViewport();
   batchViewport.style.inlineSize = "32rem";
   const queuedNarrowFits = fitsViewport();
+  const narrowBatchPathsAlign = batchPathsAlign();
   batchViewport.style.removeProperty("inline-size");
   const batchHeaderTop = batchHeader?.getBoundingClientRect().top;
   if (batchBody instanceof HTMLTableSectionElement) batchBody.scrollTop = 56;
@@ -841,6 +873,7 @@ _INDEPENDENT_SCRIPT = r"""
     inventory_inapplicable_hidden: inventoryInapplicableHidden,
     mixed_batch: true,
     batch_paths_visible: queuedPathsVisible,
+    batch_paths_aligned: fullBatchPathsAlign && narrowBatchPathsAlign,
     batch_slots_bounded: batchSlotsBounded,
     batch_column_widths: batchColumnWidths,
     batch_no_horizontal_overflow: queuedFullWidthFits && queuedNarrowFits && settledFullWidthFits && settledNarrowFits,
