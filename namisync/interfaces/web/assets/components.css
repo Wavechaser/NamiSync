@@ -197,7 +197,7 @@ body {
 .nami-button,
 .nami-icon-button {
   background: var(--color-control-fill);
-  border: 1px solid var(--color-button-edge-start);
+  border: 1.2px solid var(--color-button-edge-start);
   border-block-end-color: var(--color-button-edge-end);
   color: var(--color-neutral-foreground);
 }
@@ -485,7 +485,7 @@ body {
 .nami-checkbox {
   appearance: none;
   background: var(--color-neutral-surface);
-  border: 1px solid var(--color-control-strong-stroke);
+  border: 1.2px solid var(--color-control-strong-stroke);
   border-radius: var(--radius-small);
   color: var(--color-accent-fill-foreground);
   cursor: pointer;
@@ -546,7 +546,7 @@ body {
 .nami-toggle__control {
   appearance: none;
   background: var(--color-neutral-surface);
-  border: 1px solid var(--color-control-strong-stroke);
+  border: 1.2px solid var(--color-control-strong-stroke);
   border-radius: var(--radius-circular);
   cursor: pointer;
   inline-size: 2.5rem;
@@ -1784,6 +1784,12 @@ body {
   border-color: var(--color-neutral-border-subtle);
   color: var(--color-neutral-foreground-disabled);
   cursor: default;
+}
+
+.nami-input:disabled,
+.nami-select:disabled {
+  border-block-start-color: var(--color-textbox-disabled-border);
+  border-inline-color: var(--color-textbox-disabled-border);
 }
 
 .nami-button:disabled,

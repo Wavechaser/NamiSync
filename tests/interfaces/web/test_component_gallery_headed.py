@@ -260,7 +260,7 @@ _CONTROL_FILL_RGB = {
         "border": "rgb(229, 229, 229)",
     },
     "dark": {
-        "rest": "rgb(56, 56, 56)",
+        "rest": "rgb(45, 45, 45)",
         "hover": "rgb(50, 50, 50)",
         "pressed": "rgb(39, 39, 39)",
         "border": "rgb(53, 53, 53)",
@@ -268,7 +268,7 @@ _CONTROL_FILL_RGB = {
 }
 _BUTTON_EDGE_ALPHA = {
     "light": {"start": 0x0F / 0xFF, "end": 0x29 / 0xFF},
-    "dark": {"start": 0x18 / 0xFF, "end": 0x12 / 0xFF},
+    "dark": {"start": 0x0A / 0xFF, "end": 0x04 / 0xFF},
 }
 _CHECKBOX_STRONG_STROKE = {
     "light": ((0.0, 0.0, 0.0), 0x72 / 0xFF),
@@ -1656,7 +1656,11 @@ def test_sh_g_11_component_gallery_uses_installed_tokens_and_non_color_cues(
                 _BUTTON_EDGE_ALPHA[theme]["end"], abs=0.002
             )
         assert _color_alpha(normal_button["pressed"]["border_block_start"]) == pytest.approx(
-            _BUTTON_EDGE_ALPHA[theme]["end"] if theme == "dark" else _BUTTON_EDGE_ALPHA[theme]["start"],
+            (
+                0x0B / 0xFF
+                if theme == "dark"
+                else _BUTTON_EDGE_ALPHA[theme]["start"]
+            ),
             abs=0.002,
         )
         assert normal_button["pressed"]["border_block_start"] == normal_button["pressed"]["border_block_end"]
@@ -1706,12 +1710,16 @@ def test_sh_g_11_component_gallery_uses_installed_tokens_and_non_color_cues(
             input_width = _css_pixel_width(
                 controls_by_key["text_input"][state]["border_width"]
             )
+            toggle_width = _css_pixel_width(
+                controls_by_key["toggle_off"][state]["border_width"]
+            )
             assert button_width > 0
             assert checkbox_width == pytest.approx(button_width, abs=0.01)
-            assert input_width >= button_width * 1.75
-            # Static evidence owns the authored 1:2 logical-pixel contract.
+            assert toggle_width == pytest.approx(button_width, abs=0.01)
+            # Static evidence owns the authored 1.2:2 logical-pixel contract.
             # WebView2 reports device-snapped widths (for example 1:3 device
             # pixels at 175%), so headed evidence permits that upper rung.
+            assert input_width >= button_width * 1.5
             assert input_width <= checkbox_width * 3.01
         expected_flyout_alpha = 0.2 if report["media"]["dark"] else 0.06
         assert _color_alpha(
@@ -1799,6 +1807,14 @@ def test_sh_g_11_component_gallery_uses_installed_tokens_and_non_color_cues(
             abs=0.01,
         )
         input_states = controls_by_key["text_input"]
+        if theme == "dark" and not report["media"]["forced"]:
+            assert _color_alpha(
+                input_states["disabled"]["border_block_start"]
+            ) == pytest.approx(0x12 / 0xFF, abs=0.002)
+            assert (
+                input_states["disabled"]["border_block_end"]
+                == "rgb(10, 10, 10)"
+            )
         assert all("inset" in input_states[state]["box_shadow"] for state in (
             "rest",
             "hover",

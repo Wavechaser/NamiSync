@@ -143,6 +143,7 @@
   --color-toggle-thumb-disabled-off: #0000005C;
   --color-toggle-thumb-disabled-on: #FFFFFF;
   --color-textbox-border: rgba(0,0,0,0.06);
+  --color-textbox-disabled-border: var(--color-neutral-border-subtle);
   --color-textbox-underline: rgba(0,0,0,0.45);
   --color-backdrop: rgba(0,0,0,0.4);
   --color-shadow-ambient: rgba(0,0,0,0.12);
@@ -260,13 +261,13 @@
   --color-control-elevation-border-start: rgba(0,0,0,0.08);
   --color-control-elevation-border-end: rgba(0,0,0,0.26);
   --color-control-elevation-border-flat: rgba(0,0,0,0.20);
-  --color-control-fill: #383838;
+  --color-control-fill: #2d2d2d;
   --color-control-fill-hover: #323232;
   --color-control-fill-pressed: #272727;
   --color-control-border: #353535;
-  --color-button-edge-start: #FFFFFF18;
-  --color-button-edge-end: #FFFFFF12;
-  --color-button-edge-flat: #FFFFFF12;
+  --color-button-edge-start: #FFFFFF0A;
+  --color-button-edge-end: #FFFFFF04;
+  --color-button-edge-flat: #FFFFFF0B;
   --color-control-strong-stroke: #FFFFFF8B;
   --color-toggle-thumb-off: #FFFFFFC5;
   --color-toggle-fill-disabled-off: var(--color-semantic-transparent);
@@ -274,6 +275,7 @@
   --color-toggle-thumb-disabled-off: #FFFFFF5D;
   --color-toggle-thumb-disabled-on: #FFFFFF87;
   --color-textbox-border: rgba(255,255,255,0.07);
+  --color-textbox-disabled-border: #FFFFFF12;
   --color-textbox-underline: rgba(255,255,255,0.55);
   --color-backdrop: rgba(0,0,0,0.5);
   --color-shadow-ambient: rgba(0,0,0,0.24);
@@ -340,13 +342,13 @@
     --color-control-elevation-border-start: rgba(0,0,0,0.08);
     --color-control-elevation-border-end: rgba(0,0,0,0.26);
     --color-control-elevation-border-flat: rgba(0,0,0,0.20);
-    --color-control-fill: #383838;
+    --color-control-fill: #2d2d2d;
     --color-control-fill-hover: #323232;
     --color-control-fill-pressed: #272727;
     --color-control-border: #353535;
-    --color-button-edge-start: #FFFFFF18;
-    --color-button-edge-end: #FFFFFF12;
-    --color-button-edge-flat: #FFFFFF12;
+    --color-button-edge-start: #FFFFFF0A;
+    --color-button-edge-end: #FFFFFF04;
+    --color-button-edge-flat: #FFFFFF0B;
     --color-control-strong-stroke: #FFFFFF8B;
     --color-toggle-thumb-off: #FFFFFFC5;
     --color-toggle-fill-disabled-off: var(--color-semantic-transparent);
@@ -354,6 +356,7 @@
     --color-toggle-thumb-disabled-off: #FFFFFF5D;
     --color-toggle-thumb-disabled-on: #FFFFFF87;
     --color-textbox-border: rgba(255,255,255,0.07);
+    --color-textbox-disabled-border: #FFFFFF12;
     --color-textbox-underline: rgba(255,255,255,0.55);
     --color-backdrop: rgba(0,0,0,0.5);
     --color-shadow-ambient: rgba(0,0,0,0.24);
@@ -436,6 +439,7 @@
     --color-control-border: ButtonBorder;
     --color-control-strong-stroke: ButtonBorder;
     --color-textbox-border: ButtonBorder;
+    --color-textbox-disabled-border: ButtonBorder;
     --color-textbox-underline: CanvasText;
     --color-backdrop: Canvas;
     --color-shadow-ambient: CanvasText;

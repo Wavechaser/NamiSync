@@ -372,18 +372,19 @@ construction lines; the dual keyboard-focus stroke remains the accessible
 control boundary.
 
 The tuned component contract has two command-button tiers. Ordinary buttons
-keep the `#fbfbfb` Light and slightly lifted `#383838` Dark fills. Their one
-logical pixel border uses WinUI's default/secondary stroke tones: black 0F/29
-alpha in Light and white 12/18 alpha in Dark (hex alpha). A stronger lower
-Light edge or upper Dark edge approximates the short native elevation gradient.
-Pressed edges flatten to the default tone; disabling retains the resting edge
-tones as a deliberate Nami choice. One logical pixel may rasterize across two
-physical pixels at 175% scaling; it is not a two-logical-pixel stroke.
-Chromium and native XAML can snap that width differently at fractional scaling;
-this CSS approximation does not add device-specific thickness corrections.
-The source roles and thickness come from Microsoft's
+keep the `#fbfbfb` Light and `#2d2d2d` Dark fills. Dark hover/press remain
+`#323232`/`#272727`. Light borders retain black 0F/29 alpha; Dark uses white
+0A on the top/sides and 04 below, flattening to white 0B when pressed (hex
+alpha). Disabling retains the resting edge tones. Ordinary button, checkbox and toggle
+strokes use an authored 1.2px width to bias Chromium's fractional-DPI snapping;
+this is a local visual adjustment, not native WinUI thickness or a guarantee
+of identical physical pixels across displays. Native 1 logical px and the
+original elevation roles were referenced from Microsoft's
 [Button resources](https://github.com/microsoft/microsoft-ui-xaml/blob/main/controls/dev/CommonStyles/Button_themeresources.xaml)
 and [common colors](https://github.com/microsoft/microsoft-ui-xaml/blob/main/controls/dev/CommonStyles/Common_themeresources_any.xaml).
+Disabled dark textboxes use a separate white 12-alpha top/side stroke. Their
+fill, bottom border and inset underline retain the existing disabled treatment;
+light and forced-color roles remain unchanged.
 A Windows-accent
 primary modifier marks consequential actions such as Execute and Verify.
 Light selects Windows `AccentDark1` as its base; Dark selects `AccentLight2`.
@@ -428,7 +429,7 @@ keeps the page-contrast ring distinct from inverse control fills. Mouse
 activation does not request that ring. Forced colors continue to use the
 system focus outline and its explicit offset.
 
-Unchecked checkboxes use a 1 logical px neutral Fluent
+Unchecked checkboxes use a 1.2px neutral Fluent
 `ControlStrongStrokeColorDefault` boundary (`#72000000` Light / `#8BFFFFFF`
 Dark in WinUI ARGB notation, authored as CSS RGBA hex). Their selected fill and
 boundary become semantic accent states while retaining the 16 px outer

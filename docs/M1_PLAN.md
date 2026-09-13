@@ -39,6 +39,24 @@ The prior aggregate complete-owner-graph model and BR-G-45 are retired. No futur
 
 ### Final GUI control polish (2026-09-13)
 
+Follow-up GUI-S13 (2026-09-14): dark control palette tuning.
+
+| ID | Accepted outcome | Named verification | Status |
+| --- | --- | --- | --- |
+| GUI-S13 | Tune dark ordinary-button fill/edges and soften disabled textbox top/side borders; retain the user's 1.2px button/toggle strokes and match checkbox strokes to them. | 31 focused token/installed-gallery checks, 1,528 interface tests and independent review passed. | Complete |
+
+Bounded population: tokens.css, components.css, direct token/gallery test
+consumers, DESKTOP_UI, HANDOFF and CHANGELOG. At 23c7b64 plus the user's two
+1.2px edits, control-fill is used only by ordinary buttons; disabled textboxes
+inherit the shared subtle border. Override only their top/side colors after
+that shared rule, preserving bottom border, underline, fill and light/forced
+colors. No toggle styling changes beyond retaining the user's edit, no backend
+or other GUI behavior changes. The user additionally authorized matching
+checkbox strokes to 1.2px during implementation; retain their equality witness
+with buttons in the existing gallery. One palette commit includes the user edit and
+its direct test/documentation updates; existing repository stop classes apply.
+Evidence: build/gui-icons/gui-s13-focused02.txt and gui-s13-interfaces.txt.
+
 | ID | Accepted outcome | Named verification | Status |
 | --- | --- | --- | --- |
 | GUI-S11 | Reference Microsoft button/switch strokes and switch thumb states, correct centering and disabled appearance, and ratify the clear-button gallery sample. | 78 focused, 1,528 interface and all 30 installed checks; official source study and independent review passed. | Complete |

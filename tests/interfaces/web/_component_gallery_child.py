@@ -974,7 +974,7 @@ def _valid_control_boundary_widths(
         and checkbox is not None
         and math.isclose(checkbox, button, abs_tol=0.01)
         and text_input is not None
-        and text_input >= checkbox * 1.75
+        and text_input >= checkbox * 1.5
         and text_input <= checkbox * 3.01
     )
 

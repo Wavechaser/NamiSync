@@ -274,16 +274,17 @@ AUTHORED_CONTROL_VALUES = {
         "--color-toggle-thumb-disabled-off": "#0000005C",
         "--color-toggle-thumb-disabled-on": "#FFFFFF",
         "--color-textbox-border": "rgba(0,0,0,0.06)",
+        "--color-textbox-disabled-border": "var(--color-neutral-border-subtle)",
         "--color-textbox-underline": "rgba(0,0,0,0.45)",
     },
     "dark": {
-        "--color-control-fill": "#383838",
+        "--color-control-fill": "#2d2d2d",
         "--color-control-fill-hover": "#323232",
         "--color-control-fill-pressed": "#272727",
         "--color-control-border": "#353535",
-        "--color-button-edge-start": "#FFFFFF18",
-        "--color-button-edge-end": "#FFFFFF12",
-        "--color-button-edge-flat": "#FFFFFF12",
+        "--color-button-edge-start": "#FFFFFF0A",
+        "--color-button-edge-end": "#FFFFFF04",
+        "--color-button-edge-flat": "#FFFFFF0B",
         "--color-control-strong-stroke": "#FFFFFF8B",
         "--color-toggle-thumb-off": "#FFFFFFC5",
         "--color-toggle-fill-disabled-off": "var(--color-semantic-transparent)",
@@ -291,6 +292,7 @@ AUTHORED_CONTROL_VALUES = {
         "--color-toggle-thumb-disabled-off": "#FFFFFF5D",
         "--color-toggle-thumb-disabled-on": "#FFFFFF87",
         "--color-textbox-border": "rgba(255,255,255,0.07)",
+        "--color-textbox-disabled-border": "#FFFFFF12",
         "--color-textbox-underline": "rgba(255,255,255,0.55)",
     },
 }
@@ -841,6 +843,7 @@ def test_sh_g_11_forced_colors_replaces_semantics_with_system_colors() -> None:
     assert "--color-selection-highlight-pressed: Highlight;" in forced
     assert "--color-neutral-border: ButtonBorder;" in forced
     assert "--color-control-strong-stroke: ButtonBorder;" in forced
+    assert "--color-textbox-disabled-border: ButtonBorder;" in forced
     for name in (
         "filter-active-foreground",
         "filter-copy-background",
@@ -1588,7 +1591,11 @@ def test_sh_g_11_solid_controls_and_operation_filters_follow_tuned_states() -> N
         ".nami-button,\n.nami-icon-button ",
     )
     assert "background: var(--color-control-fill);" in ordinary_controls
-    assert "border: 1px solid var(--color-button-edge-start);" in ordinary_controls
+    # Retain the reviewed 1.2px authored stroke; headed evidence owns device snapping.
+    assert (
+        "border: 1.2px solid var(--color-button-edge-start);"
+        in ordinary_controls
+    )
     assert "border-block-end-color: var(--color-button-edge-end);" in ordinary_controls
     assert "color: var(--color-neutral-foreground);" in ordinary_controls
     ordinary_hover = _block(source, ".nami-button:hover,")
@@ -1639,9 +1646,19 @@ def test_sh_g_11_solid_controls_and_operation_filters_follow_tuned_states() -> N
     )
     input_focus = _block(source, ".nami-input:focus,\n.nami-select:focus ")
     assert "box-shadow: inset 0 -2px 0 var(--color-accent-fill);" in input_focus
+    disabled_input = _block(source, ".nami-input:disabled,\n.nami-select:disabled ")
+    assert (
+        "border-block-start-color: var(--color-textbox-disabled-border);"
+        in disabled_input
+    )
+    assert (
+        "border-inline-color: var(--color-textbox-disabled-border);"
+        in disabled_input
+    )
+    assert "border-block-end-color:" not in disabled_input
 
     checkbox = _block(source, ".nami-checkbox ")
-    assert "border: 1px solid var(--color-control-strong-stroke);" in checkbox
+    assert "border: 1.2px solid var(--color-control-strong-stroke);" in checkbox
     assert "color: var(--color-accent-fill-foreground);" in checkbox
     unchecked_checkbox_pressed = _block(source, ".nami-checkbox:active ")
     assert (
@@ -1676,7 +1693,8 @@ def test_sh_g_11_solid_controls_and_operation_filters_follow_tuned_states() -> N
     toggle_thumb = _block(source, ".nami-toggle__control:checked::after ")
     assert "background: var(--color-accent-fill-foreground);" in toggle_thumb
     toggle_control = _block(source, ".nami-toggle__control ")
-    assert "border: 1px solid var(--color-control-strong-stroke);" in toggle_control
+    # This deliberate 1.2px value shares the ordinary-button rendering adjustment.
+    assert "border: 1.2px solid var(--color-control-strong-stroke);" in toggle_control
     assert "inline-size: 2.5rem;" in toggle_control
     assert "block-size: 1.25rem;" in toggle_control
     assert "position: relative;" in toggle_control
