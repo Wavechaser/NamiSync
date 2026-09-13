@@ -372,9 +372,19 @@ construction lines; the dual keyboard-focus stroke remains the accessible
 control boundary.
 
 The tuned component contract has two command-button tiers. Ordinary buttons
-use the WinUI control composites: `#fbfbfb` fill with a subtle `#e5e5e5`
-boundary in Light and the slightly lifted `#383838` fill with `#353535` in
-Dark. A Windows-accent
+keep the `#fbfbfb` Light and slightly lifted `#383838` Dark fills. Their one
+logical pixel border uses WinUI's default/secondary stroke tones: black 0F/29
+alpha in Light and white 12/18 alpha in Dark (hex alpha). A stronger lower
+Light edge or upper Dark edge approximates the short native elevation gradient.
+Pressed edges flatten to the default tone; disabling retains the resting edge
+tones as a deliberate Nami choice. One logical pixel may rasterize across two
+physical pixels at 175% scaling; it is not a two-logical-pixel stroke.
+Chromium and native XAML can snap that width differently at fractional scaling;
+this CSS approximation does not add device-specific thickness corrections.
+The source roles and thickness come from Microsoft's
+[Button resources](https://github.com/microsoft/microsoft-ui-xaml/blob/main/controls/dev/CommonStyles/Button_themeresources.xaml)
+and [common colors](https://github.com/microsoft/microsoft-ui-xaml/blob/main/controls/dev/CommonStyles/Common_themeresources_any.xaml).
+A Windows-accent
 primary modifier marks consequential actions such as Execute and Verify.
 Light selects Windows `AccentDark1` as its base; Dark selects `AccentLight2`.
 Hover and press retain that base at 90% and 80% opacity respectively, so Mica
@@ -428,6 +438,20 @@ boundary and a stronger neutral bottom stroke at rest; focus changes only that
 underline to the semantic accent fill. Mouse focus therefore does not gain a
 keyboard ring, while `:focus-visible` composes the accented underline with the
 shared dual focus stroke.
+
+Switches retain a 40x20 logical pixel footprint and use the same strong neutral
+off-state stroke, including while disabled. The checked boundary is transparent.
+Following [WinUI's switch template](https://github.com/microsoft/microsoft-ui-xaml/blob/main/controls/dev/CommonStyles/ToggleSwitch_themeresources.xaml),
+the centered thumb is 12x12 at rest/disabled, 14x14 on hover and 17x14 while
+pressed, elongating inward. Enabled fill states retain the existing accent and
+neutral roles. Disabled off/on fills and thumb colors follow native disabled
+resource roles; keeping the off-state stroke unchanged is the requested local
+exception. Keyboard focus and forced-color system strokes remain independent.
+
+The clear-button modifier is transparent at rest and when disabled, uses the
+task-card hover/press fills when enabled and keeps keyboard focus feedback.
+Its Clear/dismiss specimen is included in the component gallery's full state
+matrix and the same modifier styles the two path Clear buttons.
 
 Elevated surfaces use a dedicated flyout boundary rather than the accessible
 control-stroke role: black 6% in Light and black 20% in Dark, with opaque

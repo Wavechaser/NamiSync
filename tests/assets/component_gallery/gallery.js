@@ -150,12 +150,14 @@ async function reportFailure(error) {
   const CONTROL_CASES = Object.freeze([
     { key: "button", className: "nami-button", tag: "button" },
     { key: "button_primary", className: "nami-button nami-button--primary", tag: "button" },
+    { key: "button_clear", className: "nami-button nami-button--clear", tag: "button" },
     { key: "dropdown", className: "nami-combobox__trigger", tag: "button" },
     { key: "tri_state_checkbox", className: "nami-checkbox", tag: "input" },
     { key: "progress_determinate", className: "nami-progress", tag: "progress" },
     { key: "progress_indeterminate", className: "nami-progress", tag: "progress" },
     { key: "text_input", className: "nami-input", tag: "input" },
-    { key: "toggle", className: "nami-toggle__control", tag: "input" },
+    { key: "toggle", className: "nami-toggle__control", tag: "input", checked: true },
+    { key: "toggle_off", className: "nami-toggle__control", tag: "input", checked: false },
     { key: "chip", className: "nami-chip", tag: "button" },
     { key: "filter_copy", className: "nami-chip", tag: "button",
       operation: "copy", pressed: false },
@@ -516,7 +518,12 @@ async function reportFailure(error) {
     if (definition.operation !== undefined) {
       element.dataset.operation = definition.operation;
     }
-    if (definition.key === "dropdown") {
+    if (definition.key === "button_clear") {
+      element.append(icon("dismiss", "sm"));
+      const text = document.createElement("span");
+      renderText(text, "Clear");
+      element.append(text);
+    } else if (definition.key === "dropdown") {
       root = document.createElement("div");
       root.className = "nami-combobox";
       element = document.createElement("button");
@@ -558,14 +565,14 @@ async function reportFailure(error) {
     } else if (definition.key === "text_input") {
       element.type = "text";
       element.value = "NamiSync";
-    } else if (definition.key === "toggle") {
+    } else if (definition.key === "toggle" || definition.key === "toggle_off") {
       root = document.createElement("label");
       root.className = "nami-toggle";
       element = document.createElement("input");
       element.className = "nami-toggle__control";
       element.type = "checkbox";
       element.setAttribute("role", "switch");
-      element.checked = true;
+      element.checked = definition.checked;
       const toggleText = document.createElement("span");
       renderText(toggleText, "Mirror options");
       root.append(element, toggleText);
@@ -1109,6 +1116,17 @@ async function reportFailure(error) {
         throw new TypeError("gallery control specimen is unavailable");
       }
       const style = getComputedStyle(element);
+      const thumbStyle = getComputedStyle(element, "::after");
+      const thumbWidth = Number.parseFloat(thumbStyle.width);
+      const thumbHeight = Number.parseFloat(thumbStyle.height);
+      const thumbInlineStart = Number.parseFloat(thumbStyle.insetInlineStart);
+      const thumbBlockStart = Number.parseFloat(thumbStyle.insetBlockStart);
+      const borderInlineStart = Number.parseFloat(style.borderInlineStartWidth);
+      const borderBlockStart = Number.parseFloat(style.borderBlockStartWidth);
+      const transform = thumbStyle.transform === "none"
+        ? new DOMMatrixReadOnly()
+        : new DOMMatrixReadOnly(thumbStyle.transform);
+      const controlWidth = Number.parseFloat(style.width);
       const motionTarget = definition.key.startsWith("progress_")
         ? element.querySelector(".nami-progress__bar") || element
         : element;
@@ -1137,6 +1155,8 @@ async function reportFailure(error) {
         border: style.borderColor,
         border_width: style.borderWidth,
         border_style: style.borderStyle,
+        border_block_start: style.borderBlockStartColor,
+        border_block_end: style.borderBlockEndColor,
         root_border: rootStyle.borderColor,
         root_border_width: rootStyle.borderWidth,
         root_border_style: rootStyle.borderStyle,
@@ -1153,6 +1173,17 @@ async function reportFailure(error) {
         transition_duration: motionStyle.transitionDuration,
         animation_duration: motionStyle.animationDuration,
         animation_name: motionStyle.animationName,
+        control_width: style.width,
+        control_height: style.height,
+        thumb_background: thumbStyle.backgroundColor,
+        thumb_width: thumbStyle.width,
+        thumb_height: thumbStyle.height,
+        thumb_inset_block_start: thumbStyle.insetBlockStart,
+        thumb_inset_inline_start: thumbStyle.insetInlineStart,
+        thumb_transform: thumbStyle.transform,
+        thumb_center_block: String(borderBlockStart + thumbBlockStart + transform.m42 + (thumbHeight / 2)),
+        thumb_edge_start: String(borderInlineStart + thumbInlineStart),
+        thumb_edge_end: String(controlWidth - borderInlineStart - thumbInlineStart - thumbWidth),
       });
     }
   }

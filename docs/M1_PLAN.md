@@ -37,6 +37,41 @@ The prior aggregate complete-owner-graph model and BR-G-45 are retired. No futur
 
 ## Remaining checkpoints
 
+### Final GUI control polish (2026-09-13)
+
+| ID | Accepted outcome | Named verification | Status |
+| --- | --- | --- | --- |
+| GUI-S11 | Reference Microsoft button/switch strokes and switch thumb states, correct centering and disabled appearance, and ratify the clear-button gallery sample. | 78 focused, 1,528 interface and all 30 installed checks; official source study and independent review passed. | Complete |
+| GUI-S12 | Use pinned Fluent chevrons in Setup, align availability dots, make pointer-open recents neutral, and retain both batch footer actions whenever the batch table exists. | Icon maintenance/provenance checks, Setup behavior and installed geometry/state checks, interface and combined ordinary/headed gates, independent review. | Pending |
+
+Boundary: browser presentation and local interaction only. No native backend,
+Mica/shadow, dispatcher, admission, batch-runner or persistence changes. Preserve
+keyboard/focus/disabled semantics, local clear behavior, same-command retry,
+task-local batch results and existing table/scroll guarantees. Repository stop
+classes apply. Each row is an atomic commit; root owns the sole test-run slot.
+
+S11 delivers native logical stroke sizing and per-edge ordinary button tones,
+centered 12/14/17x14 switch thumb states with preserved sliding motion, native
+disabled fill/thumb roles and the shared path-Clear/gallery modifier. Existing
+enabled fills, borderless primary buttons and system forced colors remain.
+Inactive off-switch/button strokes deliberately stay stable. The official
+source and browser pixel-snapping limitation are recorded in DESKTOP_UI;
+verification observes the installed environment, not a controlled OS DPI matrix.
+Evidence: build/gui-icons/gui-s11-{focused03,interfaces,headed}.txt.
+
+S12 study at 014613c: setup.js unconditionally clamps recent active index to zero
+on open and gives each batch footer button a separate hidden rule. Keep pointer
+opening unselected, enable active treatment only for keyboard navigation, and
+reset it when closing; preserve option choice, Escape/Tab and refresh focus.
+The batch container alone owns visibility; action eligibility remains disabled
+state and preserves running/locked/close/mode guards. Import four directional
+chevrons through tools/icons.json and tools/icons.py at the existing pin, then
+use 16px up/down glyphs at the two Setup controls. App CSS owns centered icon/dot
+geometry, not runtime measurements. Finite consumers: setup.js/app.css, icon
+catalog/generated outputs, setup_probe.mjs and its static gate, existing Setup
+headed probe/assertions, icon/tool/gallery packaging checks; DESKTOP_UI, this
+register, HANDOFF and CHANGELOG. Revalidate against S11 before implementation.
+
 ### Scrollbar layout and Setup polish (2026-09-13)
 
 | ID | Accepted outcome | Named verification | Status |

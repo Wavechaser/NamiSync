@@ -324,7 +324,6 @@ body {
 }
 
 .nami-setup__recent-trigger,
-.nami-setup__clear,
 .nami-setup__batch-remove,
 .nami-setup__more-summary,
 .nami-setup__refresh-recents,
@@ -334,7 +333,6 @@ body {
 }
 
 .nami-setup__recent-trigger:disabled,
-.nami-setup__clear:disabled,
 .nami-setup__batch-remove:disabled,
 .nami-setup__more-summary:disabled,
 .nami-setup__refresh-recents:disabled,
@@ -344,7 +342,6 @@ body {
 }
 
 .nami-setup__recent-trigger:not(:disabled):hover,
-.nami-setup__clear:not(:disabled):hover,
 .nami-setup__batch-remove:not(:disabled):hover,
 .nami-setup__more-summary:not(:disabled):hover,
 .nami-setup__refresh-recents:not(:disabled):hover,
@@ -353,7 +350,6 @@ body {
 }
 
 .nami-setup__recent-trigger:not(:disabled):active,
-.nami-setup__clear:not(:disabled):active,
 .nami-setup__batch-remove:not(:disabled):active,
 .nami-setup__more-summary:not(:disabled):active,
 .nami-setup__refresh-recents:not(:disabled):active,

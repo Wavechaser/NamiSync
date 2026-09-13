@@ -28,6 +28,10 @@ packaging remain open.
 
 #### Refine task navigation, Settings and Setup (2026-09-11–13)
 
+- Matched WinUI logical stroke sizing and button edge tones, centered switch
+  thumbs with native hover/press proportions and disabled colors, and ratified
+  the shared path Clear button in the gallery. Fractional-DPI pixel snapping
+  remains browser-owned.
 - Tightened Setup path-label spacing, separated option toggles and aligned
   Source/Target values in paired rows. Lightened disabled dark controls to
   #2a2a2a while preserving light and transparent-control styles.

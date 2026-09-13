@@ -172,12 +172,14 @@ _INTEGRITY_ROW_CASE_KEYS = {
 _CONTROL_KEYS = {
     "button",
     "button_primary",
+    "button_clear",
     "dropdown",
     "tri_state_checkbox",
     "progress_determinate",
     "progress_indeterminate",
     "text_input",
     "toggle",
+    "toggle_off",
     "chip",
     "filter_copy",
     "filter_copy_active",
@@ -218,7 +220,7 @@ _BOUNDARY_CONTROL_KEYS = {
     "button",
     "tri_state_checkbox",
     "text_input",
-    "toggle",
+    "toggle_off",
 }
 _OUTLINE_FREE_CONTROL_KEYS = {
     "button_primary",
@@ -240,6 +242,7 @@ _FORCED_STATIC_ACCENT_CONTROL_KEYS = {
     "task_card_current",
 }
 _FORCED_STATE_COLLAPSE_CONTROL_KEYS = _FORCED_STATIC_ACCENT_CONTROL_KEYS | {
+    "button_clear",
     "tri_state_checkbox",
     "toggle",
 }
@@ -262,6 +265,10 @@ _CONTROL_FILL_RGB = {
         "pressed": "rgb(39, 39, 39)",
         "border": "rgb(53, 53, 53)",
     },
+}
+_BUTTON_EDGE_ALPHA = {
+    "light": {"start": 0x0F / 0xFF, "end": 0x29 / 0xFF},
+    "dark": {"start": 0x18 / 0xFF, "end": 0x12 / 0xFF},
 }
 _CHECKBOX_STRONG_STROKE = {
     "light": ((0.0, 0.0, 0.0), 0x72 / 0xFF),
@@ -668,6 +675,8 @@ def test_component_gallery_report_parser_is_exact_and_nested(
             "border": "rgb(0, 0, 0)",
             "border_width": "1px",
             "border_style": "solid",
+            "border_block_start": "rgb(0, 0, 0)",
+            "border_block_end": "rgb(0, 0, 0)",
             "root_border": "rgb(0, 0, 0)",
             "root_border_width": "1px",
             "root_border_style": "solid",
@@ -684,6 +693,17 @@ def test_component_gallery_report_parser_is_exact_and_nested(
             "transition_duration": "0.1s",
             "animation_duration": "0s",
             "animation_name": "none",
+            "control_width": "40px",
+            "control_height": "20px",
+            "thumb_background": "rgb(0, 0, 0)",
+            "thumb_width": "12px",
+            "thumb_height": "12px",
+            "thumb_inset_block_start": "9px",
+            "thumb_inset_inline_start": "3px",
+            "thumb_transform": "matrix(1, 0, 0, 1, 0, -6)",
+            "thumb_center_block": "10",
+            "thumb_edge_start": "4",
+            "thumb_edge_end": "24",
         }
         for control in component_gallery_child._CONTROL_KEYS
         for state in component_gallery_child._CONTROL_STATES
@@ -1590,7 +1610,7 @@ def test_sh_g_11_component_gallery_uses_installed_tokens_and_non_color_cues(
                     control["root_border_width"],
                     control["root_border_style"],
                 )
-                if control["control"] in {"tri_state_checkbox", "toggle"}:
+                if control["control"] in {"tri_state_checkbox", "toggle_off"}:
                     assert _control_boundary_contrast(control) >= 3.0
                 elif control["control"] == "text_input":
                     underline_colors = _inset_shadow_colors(control)
@@ -1628,9 +1648,56 @@ def test_sh_g_11_component_gallery_uses_installed_tokens_and_non_color_cues(
             assert normal_button[state]["background"] == (
                 _CONTROL_FILL_RGB[theme][state]
             )
-            assert normal_button[state]["border"] == (
-                _CONTROL_FILL_RGB[theme]["border"]
+        for state in ("rest", "hover", "disabled", "focused"):
+            assert _color_alpha(normal_button[state]["border_block_start"]) == pytest.approx(
+                _BUTTON_EDGE_ALPHA[theme]["start"], abs=0.002
             )
+            assert _color_alpha(normal_button[state]["border_block_end"]) == pytest.approx(
+                _BUTTON_EDGE_ALPHA[theme]["end"], abs=0.002
+            )
+        assert _color_alpha(normal_button["pressed"]["border_block_start"]) == pytest.approx(
+            _BUTTON_EDGE_ALPHA[theme]["end"] if theme == "dark" else _BUTTON_EDGE_ALPHA[theme]["start"],
+            abs=0.002,
+        )
+        assert normal_button["pressed"]["border_block_start"] == normal_button["pressed"]["border_block_end"]
+
+        clear_button = controls_by_key["button_clear"]
+        assert _color_alpha(clear_button["rest"]["background"]) == 0
+        assert _color_alpha(clear_button["disabled"]["background"]) == 0
+        assert _color_alpha(clear_button["disabled"]["border"]) == 0
+        assert clear_button["hover"]["background"] != clear_button["rest"]["background"]
+        assert clear_button["pressed"]["background"] != clear_button["hover"]["background"]
+
+        toggle_sizes = {
+            "rest": (12.0, 12.0, 4.0),
+            "hover": (14.0, 14.0, 3.0),
+            "pressed": (17.0, 14.0, 4.0),
+            "disabled": (12.0, 12.0, 4.0),
+            "focused": (12.0, 12.0, 4.0),
+        }
+        for key in ("toggle", "toggle_off"):
+            rows = controls_by_key[key]
+            for state, (width, height, edge) in toggle_sizes.items():
+                row = rows[state]
+                assert _css_pixel_width(row["control_width"]) == pytest.approx(40.0, abs=0.5)
+                assert _css_pixel_width(row["control_height"]) == pytest.approx(20.0, abs=0.5)
+                assert _css_pixel_width(row["thumb_width"]) == pytest.approx(width, abs=0.5)
+                assert _css_pixel_width(row["thumb_height"]) == pytest.approx(height, abs=0.5)
+                assert float(row["thumb_center_block"]) == pytest.approx(10.0, abs=0.5)
+                active_edge = "thumb_edge_end" if key == "toggle" else "thumb_edge_start"
+                assert float(row[active_edge]) == pytest.approx(edge, abs=0.5)
+        assert controls_by_key["toggle"]["disabled"]["background"] != controls_by_key["toggle"]["rest"]["background"]
+        assert controls_by_key["toggle_off"]["disabled"]["background"] == "rgba(0, 0, 0, 0)"
+        disabled_on_thumb = controls_by_key["toggle"]["disabled"]["thumb_background"]
+        assert _color_rgb(disabled_on_thumb) == (255.0, 255.0, 255.0)
+        assert _color_alpha(disabled_on_thumb) == pytest.approx(
+            0x87 / 0xFF if theme == "dark" else 1.0, abs=0.002
+        )
+        disabled_off_thumb = controls_by_key["toggle_off"]["disabled"]["thumb_background"]
+        assert _color_rgb(disabled_off_thumb) == ((255.0,) * 3 if theme == "dark" else (0.0,) * 3)
+        assert _color_alpha(disabled_off_thumb) == pytest.approx(
+            (0x5D if theme == "dark" else 0x5C) / 0xFF, abs=0.002
+        )
         for state in _CONTROL_STATES:
             button_width = _css_pixel_width(normal_button[state]["border_width"])
             checkbox_width = _css_pixel_width(

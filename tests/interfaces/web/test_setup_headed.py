@@ -70,6 +70,7 @@ def test_m1_6_installed_setup_flow(
     assert all(gap == pytest.approx(8, abs=1) for gap in result["expanded_option_row_gaps"])
     assert result["form_label_track"] == "64px"
     assert result["more_idle_transparent"] is True
+    assert result["clear_shared_variant"] is True
     assert result["refresh_icon_transparent"] is True
     assert result["refresh_square"] is True
     assert result["recent_row_height"] == pytest.approx(56, abs=1)

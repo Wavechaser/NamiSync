@@ -20,6 +20,7 @@ ASSET_ROOT = (
 TOKENS = ASSET_ROOT / "tokens.css"
 COMPONENTS = ASSET_ROOT / "components.css"
 APP_LAYOUT = ASSET_ROOT / "app.css"
+SETUP = ASSET_ROOT / "setup.js"
 FLUENT_FIXTURE = Path(__file__).parents[2] / "assets" / "fluent_tokens"
 
 AUTHORED_PALETTE = {
@@ -263,7 +264,15 @@ AUTHORED_CONTROL_VALUES = {
         "--color-control-fill-hover": "#f6f6f6",
         "--color-control-fill-pressed": "#f5f5f5",
         "--color-control-border": "#e5e5e5",
+        "--color-button-edge-start": "#0000000F",
+        "--color-button-edge-end": "#00000029",
+        "--color-button-edge-flat": "#0000000F",
         "--color-control-strong-stroke": "#00000072",
+        "--color-toggle-thumb-off": "#0000009E",
+        "--color-toggle-fill-disabled-off": "var(--color-semantic-transparent)",
+        "--color-toggle-fill-disabled-on": "#00000037",
+        "--color-toggle-thumb-disabled-off": "#0000005C",
+        "--color-toggle-thumb-disabled-on": "#FFFFFF",
         "--color-textbox-border": "rgba(0,0,0,0.06)",
         "--color-textbox-underline": "rgba(0,0,0,0.45)",
     },
@@ -272,7 +281,15 @@ AUTHORED_CONTROL_VALUES = {
         "--color-control-fill-hover": "#323232",
         "--color-control-fill-pressed": "#272727",
         "--color-control-border": "#353535",
+        "--color-button-edge-start": "#FFFFFF18",
+        "--color-button-edge-end": "#FFFFFF12",
+        "--color-button-edge-flat": "#FFFFFF12",
         "--color-control-strong-stroke": "#FFFFFF8B",
+        "--color-toggle-thumb-off": "#FFFFFFC5",
+        "--color-toggle-fill-disabled-off": "var(--color-semantic-transparent)",
+        "--color-toggle-fill-disabled-on": "#FFFFFF28",
+        "--color-toggle-thumb-disabled-off": "#FFFFFF5D",
+        "--color-toggle-thumb-disabled-on": "#FFFFFF87",
         "--color-textbox-border": "rgba(255,255,255,0.07)",
         "--color-textbox-underline": "rgba(255,255,255,0.55)",
     },
@@ -566,7 +583,7 @@ def test_sh_g_11_tokens_route_authored_lights_only_to_new_semantic_roles() -> No
             *AUTHORED_FILTER_INTERACTION_VALUES["light"].values(),
             *AUTHORED_FILTER_INTERACTION_VALUES["dark"].values(),
         )
-        if value != "transparent"
+        if value != "transparent" and not value.startswith("var(")
     }
     assert actual_literals == expected_literals
 
@@ -1088,6 +1105,11 @@ def test_sh_g_11_components_cover_controls_states_and_non_color_cues() -> None:
 .nami-tree-row:not([aria-disabled="true"]):active {""" in source
     assert ".nami-row:hover," not in source
     assert ".nami-row:active," not in source
+    setup = SETUP.read_text(encoding="utf-8")
+    assert setup.count("nami-button--clear") == 1
+    assert "nami-button nami-button--clear nami-button--icon nami-setup__clear" in setup
+    for state in ("", ":disabled", ":not(:disabled):hover", ":not(:disabled):active"):
+        assert f".nami-setup__clear{state}," not in layout
     forced = _block(source, "@media (forced-colors: active)")
     declaration = "color: var(--color-accent-fill-foreground);"
     declaration_at = forced.index(declaration)
@@ -1566,12 +1588,14 @@ def test_sh_g_11_solid_controls_and_operation_filters_follow_tuned_states() -> N
         ".nami-button,\n.nami-icon-button ",
     )
     assert "background: var(--color-control-fill);" in ordinary_controls
-    assert "border: 1px solid var(--color-control-border);" in ordinary_controls
+    assert "border: 1px solid var(--color-button-edge-start);" in ordinary_controls
+    assert "border-block-end-color: var(--color-button-edge-end);" in ordinary_controls
     assert "color: var(--color-neutral-foreground);" in ordinary_controls
     ordinary_hover = _block(source, ".nami-button:hover,")
     ordinary_pressed = _block(source, ".nami-button:active,")
     assert "background: var(--color-control-fill-hover);" in ordinary_hover
     assert "background: var(--color-control-fill-pressed);" in ordinary_pressed
+    assert "border-color: var(--color-button-edge-flat);" in ordinary_pressed
 
     primary_boundary = _block(source, ".nami-button--primary ")
     assert "border: 0;" in primary_boundary
@@ -1651,6 +1675,37 @@ def test_sh_g_11_solid_controls_and_operation_filters_follow_tuned_states() -> N
     assert "background: var(--color-accent-fill-pressed);" in toggle_pressed
     toggle_thumb = _block(source, ".nami-toggle__control:checked::after ")
     assert "background: var(--color-accent-fill-foreground);" in toggle_thumb
+    toggle_control = _block(source, ".nami-toggle__control ")
+    assert "border: 1px solid var(--color-control-strong-stroke);" in toggle_control
+    assert "inline-size: 2.5rem;" in toggle_control
+    assert "block-size: 1.25rem;" in toggle_control
+    assert "position: relative;" in toggle_control
+    toggle_off_thumb = _block(source, ".nami-toggle__control::after ")
+    assert "inline-size: 0.75rem;" in toggle_off_thumb
+    assert "block-size: 0.75rem;" in toggle_off_thumb
+    assert "inset-block-start: 50%;" in toggle_off_thumb
+    assert "inset-inline-start: 0.1875rem;" in toggle_off_thumb
+    toggle_thumb_hover = _block(source, ".nami-toggle__control:hover::after ")
+    assert "inline-size: 0.875rem;" in toggle_thumb_hover
+    assert "block-size: 0.875rem;" in toggle_thumb_hover
+    assert "inset-inline-start: 0.125rem;" in toggle_thumb_hover
+    toggle_thumb_pressed = _block(source, ".nami-toggle__control:active::after ")
+    assert "inline-size: 1.0625rem;" in toggle_thumb_pressed
+    assert "block-size: 0.875rem;" in toggle_thumb_pressed
+    assert "inset-inline-start: 0.1875rem;" in toggle_thumb_pressed
+    assert "border-color: var(--color-semantic-transparent);" in toggle
+    toggle_disabled = _block(source, ".nami-toggle__control:disabled ")
+    assert "background: var(--color-toggle-fill-disabled-off);" in toggle_disabled
+    assert "border-color: var(--color-control-strong-stroke);" in toggle_disabled
+    toggle_disabled_checked = _block(source, ".nami-toggle__control:disabled:checked ")
+    assert "background: var(--color-toggle-fill-disabled-on);" in toggle_disabled_checked
+    assert "border-color: var(--color-semantic-transparent);" in toggle_disabled_checked
+
+    clear = _block(source, ".nami-button--clear,")
+    assert "background: var(--color-semantic-transparent);" in clear
+    assert "border-color: var(--color-semantic-transparent);" in clear
+    assert ".nami-button--clear:disabled:hover" in source
+    assert ".nami-button--clear:disabled:active" in source
 
     chip = next(
         block
@@ -1823,7 +1878,8 @@ def test_sh_g_11_solid_controls_and_operation_filters_follow_tuned_states() -> N
     assert "background: var(--color-accent-fill-pressed);" in segment_pressed
     for interaction in (segment_hover, segment_pressed):
         assert "color: var(--color-accent-fill-foreground);" in interaction
-    assert "transform: translateX(1.25rem);" in source
+    assert "inset-inline-start: calc(100% - 0.1875rem - 0.75rem);" in toggle_thumb
+    assert "inset-inline-start var(--motion-duration-fast)" in toggle_off_thumb
 
 
 def test_sh_g_11_shipped_page_loads_tokens_components_then_layout() -> None:

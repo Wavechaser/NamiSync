@@ -33,7 +33,7 @@ function createLocationRow(purpose, handlers) {
   const line = document.createElement("div");
   const pathControl = document.createElement("div");
   const input = document.createElement("input");
-  const clear = createButton("", "nami-button nami-button--icon nami-setup__clear");
+  const clear = createButton("", "nami-button nami-button--clear nami-button--icon nami-setup__clear");
   const recentTrigger = createButton("", "nami-button nami-setup__recent-trigger");
   const caret = document.createElement("span");
   const popup = document.createElement("div");

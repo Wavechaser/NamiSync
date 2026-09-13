@@ -197,7 +197,8 @@ body {
 .nami-button,
 .nami-icon-button {
   background: var(--color-control-fill);
-  border: 1px solid var(--color-control-border);
+  border: 1px solid var(--color-button-edge-start);
+  border-block-end-color: var(--color-button-edge-end);
   color: var(--color-neutral-foreground);
 }
 
@@ -221,6 +222,7 @@ body {
 .nami-button:active,
 .nami-icon-button:active {
   background: var(--color-control-fill-pressed);
+  border-color: var(--color-button-edge-flat);
 }
 
 .nami-chip:hover {
@@ -544,13 +546,14 @@ body {
 .nami-toggle__control {
   appearance: none;
   background: var(--color-neutral-surface);
-  border: 1px solid var(--color-neutral-border);
+  border: 1px solid var(--color-control-strong-stroke);
   border-radius: var(--radius-circular);
   cursor: pointer;
   inline-size: 2.5rem;
   block-size: 1.25rem;
   margin: 0;
-  padding: var(--space-1);
+  padding: 0;
+  position: relative;
   transition:
     background-color var(--motion-duration-fast) var(--motion-easing-standard),
     border-color var(--motion-duration-fast) var(--motion-easing-standard),
@@ -558,41 +561,70 @@ body {
 }
 
 .nami-toggle__control::after {
-  background: var(--color-neutral-foreground-secondary);
+  background: var(--color-toggle-thumb-off);
   border-radius: var(--radius-circular);
   content: "";
   display: block;
-  inline-size: 0.875rem;
-  block-size: 0.875rem;
-  transition: transform var(--motion-duration-normal) var(--motion-easing-decelerate);
+  inline-size: 0.75rem;
+  block-size: 0.75rem;
+  inset-block-start: 50%;
+  inset-inline-start: 0.1875rem;
+  position: absolute;
+  transform: translateY(-50%);
+  transition:
+    block-size var(--motion-duration-fast) var(--motion-easing-decelerate),
+    inline-size var(--motion-duration-fast) var(--motion-easing-decelerate),
+    inset-inline-start var(--motion-duration-fast) var(--motion-easing-decelerate),
+    transform var(--motion-duration-normal) var(--motion-easing-decelerate);
 }
 
 .nami-toggle__control:hover {
   background: var(--color-neutral-surface-hover);
 }
 
+.nami-toggle__control:hover::after {
+  block-size: 0.875rem;
+  inline-size: 0.875rem;
+  inset-inline-start: 0.125rem;
+}
+
 .nami-toggle__control:active {
-  border-color: var(--color-neutral-border-pressed);
+  border-color: var(--color-control-strong-stroke);
+}
+
+.nami-toggle__control:active::after {
+  block-size: 0.875rem;
+  inline-size: 1.0625rem;
+  inset-inline-start: 0.1875rem;
 }
 
 .nami-toggle__control:checked {
   background: var(--color-accent-fill);
-  border-color: var(--color-accent-fill);
+  border-color: var(--color-semantic-transparent);
 }
 
 .nami-toggle__control:checked:hover {
   background: var(--color-accent-fill-hover);
-  border-color: var(--color-accent-fill-hover);
+  border-color: var(--color-semantic-transparent);
 }
 
 .nami-toggle__control:checked:active {
   background: var(--color-accent-fill-pressed);
-  border-color: var(--color-accent-fill-pressed);
+  border-color: var(--color-semantic-transparent);
 }
 
 .nami-toggle__control:checked::after {
   background: var(--color-accent-fill-foreground);
-  transform: translateX(1.25rem);
+  inset-inline-start: calc(100% - 0.1875rem - 0.75rem);
+  transform: translateY(-50%);
+}
+
+.nami-toggle__control:checked:hover::after {
+  inset-inline-start: calc(100% - 0.125rem - 0.875rem);
+}
+
+.nami-toggle__control:checked:active::after {
+  inset-inline-start: calc(100% - 0.1875rem - 1.0625rem);
 }
 
 .nami-chip {
@@ -1728,6 +1760,56 @@ body {
   border-color: var(--color-neutral-border-subtle);
   color: var(--color-neutral-foreground-disabled);
   cursor: default;
+}
+
+.nami-button:disabled,
+.nami-button:disabled:hover,
+.nami-button:disabled:active,
+.nami-icon-button:disabled,
+.nami-icon-button:disabled:hover,
+.nami-icon-button:disabled:active {
+  border-color: var(--color-button-edge-start);
+  border-block-end-color: var(--color-button-edge-end);
+}
+
+.nami-button--clear,
+.nami-button--clear:disabled,
+.nami-button--clear:disabled:hover,
+.nami-button--clear:disabled:active {
+  background: var(--color-semantic-transparent);
+  border-color: var(--color-semantic-transparent);
+}
+
+.nami-button--clear:not(:disabled):hover {
+  background: var(--color-selection-highlight);
+  border-color: var(--color-semantic-transparent);
+}
+
+.nami-button--clear:not(:disabled):active {
+  background: var(--color-selection-highlight-pressed);
+  border-color: var(--color-semantic-transparent);
+}
+
+.nami-toggle__control:disabled {
+  background: var(--color-toggle-fill-disabled-off);
+  border-color: var(--color-control-strong-stroke);
+}
+
+.nami-toggle__control:disabled::after {
+  background: var(--color-toggle-thumb-disabled-off);
+  block-size: 0.75rem;
+  inline-size: 0.75rem;
+  inset-inline-start: 0.1875rem;
+}
+
+.nami-toggle__control:disabled:checked {
+  background: var(--color-toggle-fill-disabled-on);
+  border-color: var(--color-semantic-transparent);
+}
+
+.nami-toggle__control:disabled:checked::after {
+  background: var(--color-toggle-thumb-disabled-on);
+  inset-inline-start: calc(100% - 0.1875rem - 0.75rem);
 }
 
 @media (forced-colors: active) {

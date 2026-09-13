@@ -123,6 +123,9 @@ _EDITABLE_SCRIPT = r"""
   if (missingControls.length > 0) throw new Error(`Setup layout controls are unavailable: ${missingControls.join(", ")}`);
   const emptyPathHintHidden = targetStatus.textContent === "" && targetStatus.hidden && !targetStatus.checkVisibility();
   const moreIdleTransparent = getComputedStyle(more).backgroundColor === "rgba(0, 0, 0, 0)";
+  const clearSharedVariant = clearSource.classList.contains("nami-button--clear") &&
+    getComputedStyle(clearSource).backgroundColor === "rgba(0, 0, 0, 0)" &&
+    getComputedStyle(clearSource).borderColor === "rgba(0, 0, 0, 0)";
   const refreshControl = document.querySelector(".nami-setup__refresh-recents");
   const refreshIdleTransparent = getComputedStyle(refreshControl).backgroundColor === "rgba(0, 0, 0, 0)" &&
     refreshControl.textContent === "" && refreshControl.querySelector(".nami-icon--arrow-clockwise") !== null;
@@ -435,6 +438,7 @@ _EDITABLE_SCRIPT = r"""
     expanded_option_row_gaps: expandedRowGaps,
     form_label_track: sourceLineStyle.gridTemplateColumns.split(" ")[0],
     more_idle_transparent: moreIdleTransparent,
+    clear_shared_variant: clearSharedVariant,
     refresh_icon_transparent: refreshIdleTransparent,
     refresh_square: refreshSquare,
     recent_row_height: onlinePair.getBoundingClientRect().height,
