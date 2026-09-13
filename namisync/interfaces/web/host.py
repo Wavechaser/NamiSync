@@ -1384,6 +1384,7 @@ def _render_close_status_target(status: object, phase: _ClosePhase) -> None:
     except KeyError as error:
         raise ValueError("unsupported desktop close presentation state") from error
     status.text = message
+    status.attributes["hidden"] = None
 
 
 _ORIGINAL_CLOSE_STATUS_RENDERER = _render_close_status

@@ -661,6 +661,10 @@ A loaded document has a fixed five-second readiness deadline. The packaged readi
 
 Window close is host-owned. It rejects new dispatch while waiting boundedly for admitted calls, closes adapter delivery and wakes waiters, then invokes service close. Incomplete or exceptional closure leaves the window open with one owned Retry/Cancel interaction; only a completed shutdown closes appearance and permits programmatic destroy. A repeated load replaces the cached status target, so a late worker never queries a destroyed document.
 
+Publishing native closing or retry guidance also reveals the status label that
+ordinary Ready hides. Text is written before revealing it, so a failed write
+cannot expose stale Ready as close feedback.
+
 ### Package and frontend placement
 
 The frontend is plain local ES modules: no Node, npm, framework, bundler, transpiler, source map, inline script, or inline event handler. The CSP meta element is first in `head`; every import names a local file. Production package resources provide the page. A Python-construction-only absolute local index override exists for headed tests and is unavailable from GUI arguments, the bridge, or page data.

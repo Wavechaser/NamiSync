@@ -23,6 +23,44 @@ class _ExpiredElement(Exception):
     HResult = -2147220991
 
 
+def test_installed_host_exposes_ready_after_load_and_preserves_controller() -> None:
+    class Loaded(list[object]):
+        def __iadd__(self, callback: object):
+            self.append(callback)
+            return self
+
+    loaded = Loaded()
+    status = SimpleNamespace(style={})
+    controller = object()
+    calls: list[tuple[object, tuple[object, ...], dict[str, object]]] = []
+    window = SimpleNamespace(
+        dom=SimpleNamespace(
+            get_element=lambda selector: (
+                status if selector == "#host-status" else None
+            )
+        ),
+        events=SimpleNamespace(loaded=loaded),
+    )
+
+    def configure(subject: object, *args: object, **kwargs: object) -> object:
+        calls.append((subject, args, kwargs))
+        return controller
+
+    actual = host_child._configure_installed_ready_status(
+        window,
+        configure,
+        "cosmetics",
+        initial_appearance="initial",
+    )
+
+    assert actual is controller
+    assert calls == [(window, ("cosmetics",), {"initial_appearance": "initial"})]
+    assert status.style == {}
+    assert len(loaded) == 1
+    loaded[0]()
+    assert status.style == {"display": "block"}
+
+
 @pytest.mark.parametrize("expired_at", ("root", "lookup"))
 def test_uia_observation_loads_once_and_reacquires_the_owned_tree(
     monkeypatch: pytest.MonkeyPatch,

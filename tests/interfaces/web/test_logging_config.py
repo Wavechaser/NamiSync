@@ -139,7 +139,7 @@ class Window:
         )
         self.dom = SimpleNamespace(
             get_element=lambda selector: (
-                SimpleNamespace(text="Ready")
+                SimpleNamespace(text="Ready", attributes={"hidden": ""})
                 if selector == "#host-status"
                 else None
             )

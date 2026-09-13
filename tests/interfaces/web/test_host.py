@@ -3502,7 +3502,7 @@ def test_normal_user_close_does_not_close_the_service_twice(
 
 
 def test_close_status_uses_only_fixed_page_text() -> None:
-    element = SimpleNamespace(text="Ready")
+    element = SimpleNamespace(text="Ready", attributes={"hidden": ""})
     selectors: list[str] = []
     window = SimpleNamespace(
         dom=SimpleNamespace(
@@ -3512,17 +3512,20 @@ def test_close_status_uses_only_fixed_page_text() -> None:
 
     host._render_close_status(window, host._ClosePhase.CLOSING)
     assert element.text == "Closing safely…"
+    assert element.attributes["hidden"] is None
+    element.attributes["hidden"] = ""
     host._render_close_status(window, host._ClosePhase.RETRYABLE)
 
     assert selectors == ["#host-status", "#host-status"]
     assert element.text == (
         "Close did not finish. Choose Retry in the close dialog to try again."
     )
+    assert element.attributes["hidden"] is None
 
 
 def test_close_status_binds_each_loaded_document_before_async_render() -> None:
-    first = SimpleNamespace(text="first")
-    second = SimpleNamespace(text="second")
+    first = SimpleNamespace(text="first", attributes={"hidden": ""})
+    second = SimpleNamespace(text="second", attributes={"hidden": ""})
     elements = iter((first, second))
     selectors: list[str] = []
     window = SimpleNamespace(
@@ -3555,13 +3558,19 @@ def test_close_status_binds_each_loaded_document_before_async_render() -> None:
 
     assert selectors == ["#host-status", "#host-status"]
     assert first.text == "first"
+    assert first.attributes["hidden"] == ""
     assert second.text == "Closing safely\u2026"
+    assert second.attributes["hidden"] is None
 
 
 def test_close_status_write_failure_is_sanitized_and_does_not_change_truth(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     class FailedStatus:
+        @property
+        def attributes(self) -> object:
+            pytest.fail("a failed text write must not change visibility")
+
         @property
         def text(self) -> str:
             return "Ready"

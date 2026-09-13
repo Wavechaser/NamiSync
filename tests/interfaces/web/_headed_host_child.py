@@ -52,7 +52,8 @@ def main() -> int:
 
 def _run_installed_host(argv: list[str]) -> int:
     from namisync.interfaces.launcher import _report_startup_error
-    from namisync.interfaces.web.host import DesktopInstanceIdentity, run_desktop
+    from namisync.interfaces.web import host
+    from namisync.interfaces.web.host import DesktopInstanceIdentity
     from namisync.interfaces.web.paths import AppPaths
 
     parser = argparse.ArgumentParser()
@@ -60,11 +61,37 @@ def _run_installed_host(argv: list[str]) -> int:
     parser.add_argument("--mutex", required=True)
     parser.add_argument("--title", required=True)
     arguments = parser.parse_args(argv)
-    return run_desktop(
-        AppPaths.from_root(arguments.data_dir),
-        DesktopInstanceIdentity(arguments.mutex, arguments.title),
-        startup_error=_report_startup_error,
-    )
+    original = host._configure_window_appearance
+    with patch.object(
+        host,
+        "_configure_window_appearance",
+        lambda window, *args, **kwargs: _configure_installed_ready_status(
+            window, original, *args, **kwargs
+        ),
+    ):
+        return host.run_desktop(
+            AppPaths.from_root(arguments.data_dir),
+            DesktopInstanceIdentity(arguments.mutex, arguments.title),
+            startup_error=_report_startup_error,
+        )
+
+
+def _configure_installed_ready_status(
+    window: object,
+    configure: Callable[..., object],
+    *args: object,
+    **kwargs: object,
+) -> object:
+    controller = configure(window, *args, **kwargs)
+
+    def expose_ready_status() -> None:
+        status = window.dom.get_element("#host-status")
+        if status is None:
+            raise RuntimeError("installed host status element is unavailable")
+        status.style["display"] = "block"
+
+    window.events.loaded += expose_ready_status
+    return controller
 
 
 def _run_job_wrapper(argv: list[str]) -> int:
