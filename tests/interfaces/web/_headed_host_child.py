@@ -56,11 +56,13 @@ def _run_installed_host(argv: list[str]) -> int:
     from namisync.interfaces.web.host import DesktopInstanceIdentity
     from namisync.interfaces.web.paths import AppPaths
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--data-dir", required=True, type=Path)
-    parser.add_argument("--mutex", required=True)
-    parser.add_argument("--title", required=True)
-    arguments = parser.parse_args(argv)
+    arguments = _parse_installed_host_arguments(argv)
+    if not arguments.expose_ready_status:
+        return host.run_desktop(
+            AppPaths.from_root(arguments.data_dir),
+            DesktopInstanceIdentity(arguments.mutex, arguments.title),
+            startup_error=_report_startup_error,
+        )
     original = host._configure_window_appearance
     with patch.object(
         host,
@@ -74,6 +76,15 @@ def _run_installed_host(argv: list[str]) -> int:
             DesktopInstanceIdentity(arguments.mutex, arguments.title),
             startup_error=_report_startup_error,
         )
+
+
+def _parse_installed_host_arguments(argv: list[str]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--data-dir", required=True, type=Path)
+    parser.add_argument("--mutex", required=True)
+    parser.add_argument("--title", required=True)
+    parser.add_argument("--expose-ready-status", action="store_true")
+    return parser.parse_args(argv)
 
 
 def _configure_installed_ready_status(

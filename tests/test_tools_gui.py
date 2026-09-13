@@ -161,6 +161,7 @@ $modeValues = @(
         r"tests\interfaces\web\_headed_host_child.py"
     )
     assert "--mode" not in shell["Arguments"]
+    assert "--expose-ready-status" not in shell["Arguments"]
 
     assert value["dark_equal"] is True
     dark = value["implicit_dark"]

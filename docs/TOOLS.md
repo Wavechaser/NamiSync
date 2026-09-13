@@ -126,6 +126,10 @@ mode has its own corresponding development mutex/title and invokes the existing
 arguments, the production `Local\NamiSync.Desktop` mutex and `NamiSync` title,
 packaged assets, and both clean-wheel children remain unchanged.
 
+The shell keeps the ordinary Ready label hidden. Only smoke-test invocations
+explicitly pass the helper's `--expose-ready-status` switch for their UI Automation
+witness; `tools/gui.ps1` does not opt in to this test presentation override.
+
 Data is persistent and isolated beneath
 `%LOCALAPPDATA%\NamiSync-Development`: `shell` for the real development host and
 `gallery\<mode>\data` for each gallery mode. A launcher-control mutex refuses a

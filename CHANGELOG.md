@@ -28,6 +28,8 @@ packaging remain open.
 
 #### Refine task navigation, Settings and Setup (2026-09-11–13)
 
+- Restricted the Ready-label test override to explicit smoke launches, restoring
+  the intended hidden Ready label in the editable development shell.
 - Deferred native overlay scrollbar integration, verify-only batching and
   persistent customizable pair presets to M2, keeping their new backend and
   persistence contracts out of the M1 GUI refinement.

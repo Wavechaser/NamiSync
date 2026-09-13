@@ -41,8 +41,8 @@ The prior aggregate complete-owner-graph model and BR-G-45 are retired. No futur
 
 | ID | Accepted outcome | Named verification | Status |
 | --- | --- | --- | --- |
-| GUI-R2 | Development windows hide ordinary Ready; only explicit smoke-test launches expose their readiness witness. | Helper/launcher tests, installed readiness and Setup checks, independent review. | Pending |
-| GUI-S9 | Always-visible softened thin scrollbars widen on hover; tables reserve a stable vertical gutter below their headers through shared column/layout ownership, with horizontal scrolling only as needed. | Finite component/consumer study, browser and installed table/scroll/resize checks, interface and ordinary gates, independent review. | Study |
+| GUI-R2 | Development windows hide ordinary Ready; only explicit smoke-test launches expose their readiness witness. | 55 focused, 11 installed and 1,528 interface checks plus independent review passed. | Complete |
+| GUI-S9 | Always-visible softened thin scrollbars widen on hover; tables reserve a stable vertical gutter below their headers through shared column/layout ownership, with horizontal scrolling only as needed. | Finite component/consumer study, browser and installed table/scroll/resize checks, interface and ordinary gates, independent review. | In progress |
 | GUI-S10 | Tighten path-label spacing, separate primary and expanded options, align paired path values, and lighten disabled dark buttons to #2a2a2a. | Focused tokens/Setup checks, installed light/dark layout checks, interface gate and independent review. | Pending |
 | GUI-D6 | Record native overlay integration, verify-only batching and persistent customizable pair presets as M2 outcomes. | Active feature/roadmap cross-reference and independent review passed. | Complete |
 
@@ -91,6 +91,19 @@ semantics; otherwise stop and reconsider. Always paint a softened thin thumb,
 widen it on direct hover/drag with unchanged pressed paint, and reserve only the
 vertical gutter. Focused browser/installed checks, interface and ordinary suites,
 then fresh adversarial review close one shared-layout commit.
+
+GUI-S10 follows S9's final shared layout. Population: app.css Setup spacing and
+paired path label/value tracks, tokens.css disabled dark surface, matching token
+expectations and existing Setup/gallery geometry probes; DESKTOP_UI, this
+register, HANDOFF and CHANGELOG. Reduce the form label track from 4.5rem to 4rem,
+give primary options a 16px gap and expanded option rows an 8px gap. Give both
+paired path labels one shared fixed track and truncate only the value. Change
+the existing dark disabled fill to #2a2a2a with explicit authored provenance,
+preserving light and forced-color values and transparent-control overrides.
+The current token also serves other disabled controls; its shared role remains
+unchanged. Preserve focus, input state, click targets, task authority and row
+height. Gate: token/Setup checks, installed Setup/gallery light/dark evidence,
+interface regression and independent review. No unrelated token redesign.
 
 ### Compact Setup tables and scrollbars (2026-09-13)
 

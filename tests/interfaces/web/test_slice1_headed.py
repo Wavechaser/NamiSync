@@ -131,6 +131,7 @@ def test_sh_g_6_installed_wheel_packaged_page_smoke(
             rf"Local\NamiSync.Test.{token}",
             "--title",
             title,
+            "--expose-ready-status",
         ],
         cwd=headed_installed_wheel.root,
         environment=clean_child_environment(),
@@ -719,6 +720,7 @@ def _start_injected_host(
         selected_mutex,
         "--title",
         selected_title,
+        "--expose-ready-status",
     ]
     process = start_headed_process(
         command,

@@ -23,7 +23,57 @@ class _ExpiredElement(Exception):
     HResult = -2147220991
 
 
-def test_installed_host_exposes_ready_after_load_and_preserves_controller() -> None:
+def test_installed_host_ready_exposure_is_explicit_test_only_opt_in() -> None:
+    base = [
+        "--data-dir",
+        "isolated",
+        "--mutex",
+        r"Local\NamiSync.Test",
+        "--title",
+        "NamiSync Test",
+    ]
+
+    default = host_child._parse_installed_host_arguments(base)
+    opted_in = host_child._parse_installed_host_arguments(
+        [*base, "--expose-ready-status"]
+    )
+
+    assert default.expose_ready_status is False
+    assert opted_in.expose_ready_status is True
+
+
+def test_installed_host_applies_ready_override_only_when_opted_in(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from namisync.interfaces.web import host
+
+    original = host._configure_window_appearance
+    override_active: list[bool] = []
+
+    def run_desktop(*_args: object, **_kwargs: object) -> int:
+        override_active.append(host._configure_window_appearance is not original)
+        return len(override_active)
+
+    monkeypatch.setattr(host, "run_desktop", run_desktop)
+    base = [
+        "--data-dir",
+        str(tmp_path),
+        "--mutex",
+        r"Local\NamiSync.Test",
+        "--title",
+        "NamiSync Test",
+    ]
+
+    assert host_child._run_installed_host(base) == 1
+    assert host_child._run_installed_host(
+        [*base, "--expose-ready-status"]
+    ) == 2
+    assert override_active == [False, True]
+    assert host._configure_window_appearance is original
+
+
+def test_installed_host_ready_opt_in_delegates_and_preserves_controller() -> None:
     class Loaded(list[object]):
         def __iadd__(self, callback: object):
             self.append(callback)
@@ -554,6 +604,11 @@ def test_headed_source_never_targets_the_shared_production_desktop() -> None:
     assert "Local\\NamiSync.Desktop" in slice_source
     assert "--test-mutex" in slice_source
     assert "--test-title" in slice_source
+    assert '"--expose-ready-status"' in slice_source
+    gui_source = (PROJECT_ROOT / "tools" / "gui.ps1").read_text(
+        encoding="utf-8"
+    )
+    assert "--expose-ready-status" not in gui_source
     for path in helper_sources:
         source = path.read_text(encoding="utf-8")
         assert "Local\\NamiSync.Desktop" not in source
