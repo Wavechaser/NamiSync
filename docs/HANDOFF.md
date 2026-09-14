@@ -18,10 +18,16 @@ All 21 links in the condensed section resolve, including the BUGS anchor;
 git diff --check passes. This documentation outcome changes no executable
 contract and claims no product acceptance.
 
-M1-7 remains in read-only expansion. Its builder is tracing same-task execution
-attachment, selection commitment, bounded projection and sibling sorting;
-independent gate study identified the applicable 120k/240k plan scale criteria.
-No production or test edits have started. Baseline at unchanged product 7e94598:
+The user additionally authorized correcting six preexisting root AGENTS owner
+links: ARCHITECTURE, DEFENSE, FEATURES, BUGS, M1_PLAN and HANDOFF now point into
+`docs/`. This separate documentation correction changes no rule or product
+behavior; its gate is exact-link target, diff and independent review.
+
+M1-7 expansion is recorded and implementation is in progress. Its builder owns
+same-task execution attachment, selection commitment, bounded projection and
+sibling sorting; the separate gate author owns the quantitative fixture and
+validator. Uncommitted product/test work is excluded from the link-fix commit.
+Baseline at unchanged product 7e94598:
 99 selection/plan-limit tests and 3 exact admission/commitment/Plan-again tests
 passed. These are baseline probes only, not M1-7 acceptance.
 

@@ -32,6 +32,8 @@ packaging remain open.
   outcomes and subject-owner links. Git history retains exact studies and evidence.
 - Preserved pending product rows, the separate DOC-2 branch proposal, unresolved
   rendering investigations and active batch/admission guarantees.
+- Corrected six root AGENTS documentation-owner links to their existing `docs/`
+  targets after the user authorized repair of the preexisting broken references.
 - Independent documentation review, local-link and whitespace checks passed.
   M1-7 study continues separately; no product delivery is claimed by this cleanup.
 

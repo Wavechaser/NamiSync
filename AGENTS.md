@@ -203,7 +203,7 @@ into every consumer document.
 
 ### Subject Ownership
 
-- [ARCHITECTURE.md](ARCHITECTURE.md) owns durable decisions, contracts, layering,
+- [ARCHITECTURE.md](docs/ARCHITECTURE.md) owns durable decisions, contracts, layering,
   coordination, invariants, type/protocol meaning and milestone direction.
   Exact fields, enums, inheritance, protocols and signatures belong to the
   owning core symbol. Keep the contract-to-source locator current; reproduce
@@ -211,21 +211,21 @@ into every consumer document.
   docs explain use/extension policy without redefining shapes. Put dated
   status, acceptance results, measurements and implementation walkthroughs in
   the changelog, delivery plan or owning component document.
-- [DEFENSE.md](DEFENSE.md) is normative for supported assumptions, trusted
+- [DEFENSE.md](docs/DEFENSE.md) is normative for supported assumptions, trusted
   boundaries, hard walls, tolerances, quantitative evidence, residual-risk
   dispositions and model-reopen triggers. Other documents link to its policy
   and describe their own mechanisms; they do not restate its tables or accept
   a residual merely by describing it.
-- [FEATURES.md](FEATURES.md) owns product behavior and distinguishes active
+- [FEATURES.md](docs/FEATURES.md) owns product behavior and distinguishes active
   from unrealized outcomes, without milestone build recaps.
-- [BUGS.md](BUGS.md) owns substantive defects and its entry conventions. Keep
+- [BUGS.md](docs/BUGS.md) owns substantive defects and its entry conventions. Keep
   entries module-first, roughly 6–12 rendered lines, retaining consequence,
   cause, fix and essential residual/test context. Categories name reusable
   causal mechanisms; severity follows the worst supported product consequence,
   not the audit or gate that found it.
-- [M1_PLAN.md](M1_PLAN.md) is the sole active M1 delivery register. Archive
+- [M1_PLAN.md](docs/M1_PLAN.md) is the sole active M1 delivery register. Archive
   superseded plan ancestry rather than maintaining parallel current authorities.
-- [HANDOFF.md](HANDOFF.md) covers only the latest session: changes, verification
+- [HANDOFF.md](docs/HANDOFF.md) covers only the latest session: changes, verification
   and immediate operational context. Replace it rather than accumulating a
   project reference or transcript; retain necessary resumption/evidence pointers.
 - Superseded material are placed in `docs/obsolete/`. They are historical references, 
