@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 
 const TASK_A = `task-${"a".repeat(32)}`;
 const TASK_B = `task-${"b".repeat(32)}`;
+const TASK_C = `task-${"c".repeat(32)}`;
 const CHOICE = (digit) => `slot-${digit.repeat(32)}`;
 const DEFAULT_OPTIONS = Object.freeze({
   filters: [],
@@ -176,6 +177,7 @@ async function loadScenario({
     export class TaskCreateUncertainError extends BridgeTransportError {
       constructor(retry) { super(); this.retry = retry; }
     }
+    harness.BridgeTransportError = BridgeTransportError;
     harness.StartPlanUncertainError = StartPlanUncertainError;
     harness.TaskCreateUncertainError = TaskCreateUncertainError;
     export const acknowledgeShellReady = () => Promise.resolve({ acknowledged: true });
@@ -779,7 +781,7 @@ for (const sessionState of ["active", "failed"]) {
   batchPrepare.resolve(structuredClone(DEFAULT_OPTIONS));
   await until(() => !harness.model.batchRunning, "batch owner released");
   assert.equal(harness.model.batch[0].options.deletion_policy, "trash",
-    "the row retains the exact options frozen for its batch gesture");
+    "the row retains the exact options frozen when it was added");
   callbacks.onStartPlan();
   await until(() => harness.calls.some((call) => call[0] === "start-plan" && call[1] === TASK_A),
     "form start resumes after batch owner");
@@ -810,6 +812,84 @@ for (const sessionState of ["active", "failed"]) {
   await until(() => harness.model.batch.every((row) => row.state === "stopped"), "replacement stops unsent work");
   assert.equal(harness.calls.some((call) => call[0] === "start-plan"), false);
   assert.equal(harness.calls.filter((call) => call[0] === "create").length, 1);
+}
+
+{
+  const harness = await loadScenario();
+  const callbacks = harness.callbacks;
+  harness.pickFolder = (purpose) => Promise.resolve(choice(purpose, purpose === "source" ? "4" : "5"));
+  callbacks.onPick("source");
+  await until(() => harness.model.source.location?.state === "resolved", "snapshot source");
+  callbacks.onPick("target");
+  await until(() => harness.model.target.location?.state === "resolved", "snapshot pair");
+
+  harness.model.options.filters.push("remove-while-preparing/**");
+  callbacks.onAddPair();
+  harness.model.options.filters[0] = "reject/**";
+  callbacks.onAddPair();
+  harness.model.options.filters[0] = "first/**";
+  callbacks.onAddPair();
+  harness.model.options.filters[0] = "second/**";
+  harness.model.options.deletion_policy = "additive";
+  harness.model.options.verify_after_execute = true;
+  callbacks.onAddPair();
+  harness.model.options.filters[0] = "draft-after-add/**";
+
+  assert.deepEqual(harness.model.batch.map((row) => [
+    row.options.filters[0], row.options.deletion_policy, row.options.verify_after_execute,
+  ]), [
+    ["remove-while-preparing/**", "trash", false],
+    ["reject/**", "trash", false],
+    ["first/**", "trash", false],
+    ["second/**", "additive", true],
+  ], "each Add pair clones the then-current filters and switches");
+
+  const firstPrepare = deferred();
+  harness.prepareSetup = (options) => {
+    harness.calls.push(["prepare", structuredClone(options)]);
+    if (options.filters[0] === "remove-while-preparing/**") return firstPrepare.promise;
+    if (options.filters[0] === "reject/**") return Promise.reject(new harness.BridgeTransportError());
+    return Promise.resolve({ ...structuredClone(options), filters: [...options.filters, "canonical/**"] });
+  };
+  let createIndex = 0;
+  harness.createTask = () => {
+    harness.calls.push(["create"]);
+    createIndex += 1;
+    return Promise.resolve({ task_id: createIndex === 1 ? TASK_B : TASK_C });
+  };
+  let exactRetries = 0;
+  harness.startPlan = (...values) => {
+    harness.calls.push(["start-plan", ...structuredClone(values)]);
+    if (values[0] !== TASK_C) return Promise.resolve({ task_id: values[0] });
+    return Promise.reject(new harness.StartPlanUncertainError(() => {
+      exactRetries += 1;
+      return Promise.resolve({ task_id: TASK_C });
+    }));
+  };
+
+  callbacks.onStartBatch();
+  await until(() => harness.calls.some((call) => call[0] === "prepare"), "first row preparation");
+  callbacks.onRemoveBatchRow(harness.model.batch[0]);
+  assert.equal(harness.model.batch.length, 3, "the queued row being prepared remains removable");
+  harness.model.options.filters[0] = "draft-while-preparing/**";
+  firstPrepare.resolve({ ...structuredClone(harness.calls.find((call) => call[0] === "prepare")[1]), filters: ["remove-while-preparing/**", "canonical/**"] });
+  await until(() => !harness.model.batchRunning, "pair-owned batch settles");
+
+  assert.deepEqual(harness.calls.filter((call) => call[0] === "prepare").map((call) => call[1].filters),
+    [["remove-while-preparing/**"], ["reject/**"], ["first/**"], ["second/**"]],
+    "each retained queued row is prepared from its own Add-pair snapshot");
+  const submitted = harness.calls.filter((call) => call[0] === "start-plan");
+  assert.deepEqual(submitted.map((call) => [call[4].filters, call[4].deletion_policy, call[4].verify_after_execute]), [
+    [["first/**", "canonical/**"], "trash", false],
+    [["second/**", "canonical/**"], "additive", true],
+  ], "submission uses each row's canonical prepared options");
+  assert.equal(harness.model.batch.find((row) => row.options.filters[0] === "reject/**").state, "refused",
+    "one preparation refusal does not stop later serial settlement");
+  const preparesBeforeRetry = harness.calls.filter((call) => call[0] === "prepare").length;
+  callbacks.onStartBatch();
+  await until(() => exactRetries === 1, "uncertain row exact retry");
+  assert.equal(harness.calls.filter((call) => call[0] === "prepare").length, preparesBeforeRetry,
+    "an uncertain request retries without canonicalizing its options again");
 }
 
 await turns();

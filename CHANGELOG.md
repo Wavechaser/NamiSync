@@ -28,6 +28,10 @@ packaging remain open.
 
 #### Refine task navigation, Settings and Setup (2026-09-11–14)
 
+- Made Add pair capture its own settings snapshot, removing the later
+  current-form overwrite. Queued settings survive form edits, prepare per row,
+  and retain exact retry; removal during preparation prevents submission.
+
 - Replaced opaque button, textbox and combobox trigger fills with WinUI alpha
   roles in both themes, including disabled/input-active states and off-state
   switches/checkboxes. Accent-on and independent popup materials remain.

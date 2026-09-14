@@ -763,6 +763,16 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Application task lifecycle
 
+- MODERATE - FIXED (2026-09-14). Mutable queued options. Add pair retained
+  paths but no settings snapshot, so later form edits changed queued rows'
+  displayed semantics and the options used to create their plans. Batch start
+  also overwrote every queued row with one current-form snapshot. Fixed by
+  cloning settings at Add pair, displaying row-owned values and canonicalizing
+  each row separately. Regression coverage includes nested options, mixed
+  settings, removal during preparation, row-local refusal and exact retry.
+  Plan review remains required before execution; no filesystem mutation occurs
+  merely from queueing or creating these plans.
+
 - MODERATE - FIXED (2026-09-02). Plan-selection retirement race. A selection
   mutation could read a retained plan, lose a race to successful `drop_plan`,
   then return the existing `KeyError` while leaving unreachable selection

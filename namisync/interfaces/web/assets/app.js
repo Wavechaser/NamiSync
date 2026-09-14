@@ -981,6 +981,7 @@ function addCurrentPair() {
     task === null || task.closePending || !formIsEditable(form) || form.mode !== "sync-plan" ||
     (pageBatch !== null && pageBatch.running !== null)
   ) return;
+  if (form.options === null) return;
   if (pageBatch === null) pageBatch = { rows: [], generation: 0, running: null };
   if (pageBatch.rows.length >= 48) return;
   pageBatch.rows.push({
@@ -993,7 +994,7 @@ function addCurrentPair() {
     taskId: null,
     sourceId: null,
     targetId: null,
-    options: null,
+    options: cloneOptions(form.options),
     snapshot: null,
     recents: null,
     message: "Ready to create.",
@@ -1065,6 +1066,9 @@ async function startBatchRow(row, context) {
       }
       task = adoptBatchShell(result, row);
     } else {
+      const options = await prepareSetup(cloneOptions(row.options));
+      if (!context.contains(row) || row.state !== "queued" || !context.canSubmit()) return;
+      row.options = cloneOptions(options);
       row.state = "submitting";
       row.message = "Checking folders…";
       renderTasks();
@@ -1075,7 +1079,6 @@ async function startBatchRow(row, context) {
       }
       row.sourceId = source.choice_id;
       row.targetId = target.choice_id;
-      row.options = cloneOptions(context.options);
       row.snapshot = context.snapshot;
       row.recents = context.recents;
       if (!context.canSubmit()) {
@@ -1109,7 +1112,7 @@ async function startBatchRow(row, context) {
     } else {
       row.state = "refused";
       row.retry = null;
-      row.message = "That pair could not be created. Review its folders and try again.";
+      row.message = "That pair could not be created. Review its folders and settings, then try again.";
     }
   }
 }
@@ -1126,29 +1129,21 @@ async function startPairBatch() {
     && ["queued", "uncertain"].includes(row.state));
   if (rows.length === 0) return;
   const queued = rows.filter((row) => row.state === "queued");
-  if (queued.length > 0 && form.options === null) return;
+  if (queued.some((row) => row.options === null)) return;
   const owner = { originTaskId: task.taskId };
   const generation = batch.generation;
   const epoch = startupEpoch;
-  const optionsInput = queued.length === 0 ? null : cloneOptions(form.options);
   const context = {
     epoch,
     snapshot: form.setup,
     recents: defaultSetup?.recents ?? form.setup.recents,
-    options: null,
+    contains: (row) => batch.rows.includes(row),
     canSubmit: () => currentBatchRun(batch, owner, generation) && epoch === startupEpoch
       && tasks.get(task.taskId) === task && !task.closePending,
   };
   batch.running = owner;
   renderTasks();
   try {
-    if (optionsInput !== null) {
-      context.options = await prepareSetup(optionsInput);
-      for (const row of rows) {
-        if (batch.rows.includes(row) && row.state === "queued") row.options = cloneOptions(context.options);
-      }
-      renderTasks();
-    }
     for (const row of rows) {
       if (!currentBatchRun(batch, owner, generation) || epoch !== startupEpoch) break;
       if (!batch.rows.includes(row)) continue;
@@ -1156,8 +1151,6 @@ async function startPairBatch() {
       await startBatchRow(row, context);
       renderTasks();
     }
-  } catch (_error) {
-    // Preparing one exact option snapshot is read-only; queued rows remain retryable.
   } finally {
     if (batch.running === owner) batch.running = null;
     renderTasks();

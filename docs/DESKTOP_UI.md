@@ -1097,13 +1097,18 @@ Refresh rechecks these
 ephemeral observations. It does not start a task or retain folder authority.
 Unresolved remembered locations remain visible with stable identity context,
 never a stale drive hint. Multi-pair creation is a browser coordinator over
-ordinary serial plan starts: one gesture freezes one options snapshot, each row
-has a stable command id and independent outcome, and completed rows are never
+ordinary serial plan starts: Add pair captures a private options snapshot for
+that row, each row has a stable command id and independent outcome, and completed rows are never
 rolled back. Same-document navigation keeps the coordinator; document
 replacement may stop only rows not yet submitted, while admitted tasks are
 rediscovered from task enumeration.
 
-One active batch gesture owns its frozen row/options snapshot. Additional batch
+One active batch gesture owns its selected rows, each with its own captured
+options. Before admitting a queued pair, its snapshot is independently
+canonicalized; a preparation refusal affects only that row. Removing the row
+during preparation prevents its admission and submission. Uncertain requests
+reuse their canonical options and exact retry without preparing them again.
+Additional batch
 rows and new form starts wait for it to finish; each form also rejects overlapping
 gestures on that same task. This is not a global queue for independent form
 attempts already underway. Uncertain creation or start keeps
@@ -1117,9 +1122,10 @@ updates; response revisions cannot restore an edited row's old choice. The
 page retains one coordinator of at most 48 pairs. Each row belongs to its
 originating task, and only that Setup displays or starts those rows. Rows show
 source and target paths, Verify and deletion settings, and creation status in a
-conditional table under the composition actions. Queued entries reflect the
-draft options; preparation freezes the attempted settings for every selected
-entry. Ordinary statuses are Ready, Created and Failed; in-flight and uncertain
+conditional table under the composition actions. Queued entries display their
+own captured settings, including independent filter lists and preservation
+choices; later form edits cannot alter them. Preparation replaces only that
+row's snapshot with canonical settings. Ordinary statuses are Ready, Created and Failed; in-flight and uncertain
 requests retain truthful intermediate labels. Results remain visible until
 Clear results removes settled receipts, without closing created tasks or
 discarding unresolved requests. The table hides only when no entries remain.

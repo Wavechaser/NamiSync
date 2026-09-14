@@ -42,32 +42,19 @@ The prior aggregate complete-owner-graph model and BR-G-45 are retired. No futur
 | ID | Accepted outcome | Named verification | Status |
 | --- | --- | --- | --- |
 | GUI-S14 | Replace opaque ordinary control fills with WinUI translucent roles for buttons, textboxes, combobox triggers and off-state switches/checkboxes; retain accent-on treatment. | Official mapping, 31 focused checks, complete suite (5,013 passed, 4 existing skips), independent review. | Complete |
-| GUI-S15 | Each added pair owns a cloned options snapshot through display, canonical preparation, submission and exact retry. | App/Setup behavior regressions, installed Setup, ordinary integration and independent review. | In progress |
+| GUI-S15 | Each added pair owns a cloned options snapshot through display, canonical preparation, submission and exact retry. | Setup/coordinator regressions, complete suite (5,013 passed, 4 existing skips, including installed Setup), independent review. | Complete |
 
-Baseline f711386, clean tree. Two independent commits; root owns the serialized
-test slot and shared documentation. S14 owns tokens.css/components.css and
-direct token/gallery test consumers. Use control-specific roles, not global
-surface changes; inspect WinUI Common/Button/TextBox/ComboBox/ToggleSwitch/
-CheckBox resources. Preserve authored 1.2px strokes, recent border tuning,
-focus, transparent-action overrides, forced colors, Mica and shadow composition.
-Dropdown means trigger control here; popup materials retain their separate
-existing contract. No blanket element opacity or backend changes.
-The existing combobox's fill-gradient/color stack hides a full-area border
-gradient behind opaque paint. Translucency therefore requires one fill paint
-and an independent border; migrate the direct gradient expectations with it.
-
-S15 owns app.js/setup.js and direct app/Setup probe/headed consumers. Current
-Add pair stores null options, the table borrows current options, and batch start
-prepares one form snapshot then overwrites every queued row. Capture at Add pair,
-render row-owned options, and canonicalize each queued snapshot without replacing
-another row's settings. Preserve fresh location admission, same-command retry,
-serial best effort, row removal before submission, epoch/close guards, 48-row
-bound and origin ownership. Test mixed verify/deletion/filter snapshots, later
-draft edits, rejected preparation and uncertain retry. No protocol, dispatcher,
-workflow or persistence changes. Docs: DESKTOP_UI, M1_PLAN, HANDOFF, CHANGELOG,
-plus focused bug/feature contracts only where existing queued semantics change.
-Repository stop classes apply; existing M2 outcomes and shadow investigation
-remain deferred.
+Delivered from f711386 in two independent commits. S14 uses control-specific
+WinUI alpha roles and one combobox fill paint with independent elevation edges.
+Authored 1.2px strokes, tuned button/textbox borders, accent-on behavior and
+forced colors remain. Popup materials, Mica and shadow composition are unchanged.
+S15 captures settings at Add pair, renders them from the row and independently
+canonicalizes each queued snapshot, eliminating the current-form overwrite.
+Fresh admission, serial best effort, exact retry, removal during preparation,
+epoch/close guards, the 48-row bound and origin ownership remain verified.
+No protocol, backend or persistence changes; existing M2/shadow work stays
+deferred. Evidence: build/gui-icons/gui-s14-focused05.txt, gui-s15-probes.txt
+and gui-s14-s15-complete.txt. DESKTOP_UI owns the active behavior contract.
 
 ### Final GUI control polish (2026-09-13)
 

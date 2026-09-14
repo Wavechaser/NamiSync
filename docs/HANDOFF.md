@@ -15,8 +15,10 @@ Both implementations have passed independent review. Focused evidence in
 build/gui-icons/gui-s14-focused05.txt records 31 passing token/installed-gallery
 checks; gui-s15-probes.txt records both passing Setup/coordinator regressions.
 The combined complete suite passed: gui-s14-s15-complete.txt records 5,013 passed
-and 4 existing skips, including all 30 installed checks. S14 is ready to commit;
-S15's code is verified and its matching documentation closes next. Earlier S14 receipts exposed stale
+and 4 existing skips, including all 30 installed checks. S14 is committed as
+2f4fb8e; S15's code and matching documentation are complete for its separate
+commit. README's current GUI synopsis remains accurate; DESKTOP_UI records the
+changed queue contract and BUGS records its bounded consequence. Earlier S14 receipts exposed stale
 opaque-background assumptions in gallery contrast helpers and ambiguous
 disabled-rule selectors; final checks retain their thresholds and measure
 composited fills against the existing observed backdrop.

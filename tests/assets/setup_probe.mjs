@@ -296,7 +296,7 @@ panel.render(model);
 assert.equal(startPlan.disabled, false, "a missing row stays startable for a fresh retry");
 const queuedBatchRow = {
   source: { text: "C:\\batch-source" }, target: { text: "D:\\batch-target" },
-  state: "queued", message: "Ready to create.",
+  state: "queued", options: structuredClone(options), message: "Ready to create.",
 };
 model.batch = [queuedBatchRow];
 model.batchRunning = true;

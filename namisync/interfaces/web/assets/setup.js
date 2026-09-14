@@ -559,7 +559,7 @@ export function createSetupPanel(callbacks) {
     addFilter.disabled = !editable;
   }
 
-  function renderBatch(rows, currentOptions) {
+  function renderBatch(rows) {
     batchBody.replaceChildren();
     rows.forEach((value) => {
       const item = document.createElement("tr");
@@ -597,7 +597,7 @@ export function createSetupPanel(callbacks) {
       }
       sourcePath.title = value.source.text;
       targetPath.title = value.target.text;
-      const displayedOptions = value.options ?? currentOptions;
+      const displayedOptions = value.options;
       const verifySetting = document.createElement("span");
       const deletionSetting = document.createElement("span");
       renderText(verifySetting, `Verify: ${displayedOptions?.verify_after_execute ? "On" : "Off"}`);
@@ -755,7 +755,7 @@ export function createSetupPanel(callbacks) {
       startInventory.hidden = true;
       planAgain.hidden = true;
     }
-    renderBatch(model.batch.slice(0, MAX_BATCH_PAIRS), model.options);
+    renderBatch(model.batch.slice(0, MAX_BATCH_PAIRS));
   }
   return Object.freeze({ element: root, render });
 }
