@@ -1151,6 +1151,7 @@ async function reportFailure(error) {
         label: `${definition.key.replaceAll("_", " ")} — ${state.key}`,
         foreground: style.color,
         background: style.backgroundColor,
+        background_image: style.backgroundImage,
         fill_background: motionStyle.backgroundColor,
         border: style.borderColor,
         border_width: style.borderWidth,

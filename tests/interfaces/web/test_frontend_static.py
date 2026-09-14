@@ -518,6 +518,18 @@ def test_supplemental_node_shared_test_bootstrap_is_generation_bound() -> None:
     assert completed.stdout == "ok"
 
 
+def test_text_inputs_mark_pointer_origin_only_until_blur(
+    built_wheel: BuiltWheel,
+) -> None:
+    app = _wheel_assets(built_wheel)["app.js"]
+
+    assert 'document.addEventListener?.("pointerdown"' in app
+    assert 'document.addEventListener?.("focusout"' in app
+    assert app.count('event.target?.matches?.(".nami-input, .nami-select")') == 2
+    assert 'event.target.dataset.namiFocusOrigin = "pointer";' in app
+    assert "delete event.target.dataset.namiFocusOrigin;" in app
+
+
 def test_br_g_32_production_inert_text_helper_owns_text_writes(
     built_wheel: BuiltWheel,
 ) -> None:

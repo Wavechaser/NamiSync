@@ -169,9 +169,24 @@ body {
 
 .nami-input,
 .nami-select {
-  background-clip: padding-box;
+  --nami-textbox-underline: var(--color-textbox-underline);
+  background-clip: border-box, padding-box;
+  background-color: var(--color-text-control-fill);
+  background-image:
+    linear-gradient(
+      var(--nami-textbox-underline),
+      var(--nami-textbox-underline)
+    ),
+    linear-gradient(
+      var(--color-semantic-transparent),
+      var(--color-semantic-transparent)
+    );
+  background-origin: border-box, padding-box;
+  background-position: bottom, center;
+  background-repeat: no-repeat, no-repeat;
+  background-size: 100% 2px, 100% 100%;
   border: 1.2px solid var(--color-textbox-border);
-  border-block-end: 2px solid var(--color-textbox-underline);
+  border-block-end-color: var(--color-semantic-transparent);
 }
 
 .nami-menu,
@@ -237,8 +252,8 @@ body {
 }
 
 .nami-button:focus-visible,
-.nami-input:focus-visible,
-.nami-select:focus-visible,
+.nami-input:focus-visible:not([data-nami-focus-origin="pointer"]),
+.nami-select:focus-visible:not([data-nami-focus-origin="pointer"]),
 .nami-checkbox:focus-visible,
 .nami-toggle__control:focus-visible,
 .nami-chip:focus-visible,
@@ -298,7 +313,6 @@ body {
 
 .nami-input,
 .nami-select {
-  background: var(--color-text-control-fill);
   border-radius: var(--radius-small);
   color: var(--color-neutral-foreground);
   min-block-size: 2rem;
@@ -311,18 +325,18 @@ body {
 
 .nami-input:hover,
 .nami-select:hover {
-  background: var(--color-text-control-fill-hover);
+  background-color: var(--color-text-control-fill-hover);
 }
 
 .nami-input:active,
 .nami-select:active {
-  background: var(--color-text-control-fill-pressed);
+  background-color: var(--color-text-control-fill-pressed);
 }
 
 .nami-input:focus,
 .nami-select:focus {
-  background: var(--color-text-control-fill-focused);
-  border-block-end-color: var(--color-accent-fill);
+  --nami-textbox-underline: var(--color-accent-fill);
+  background-color: var(--color-text-control-fill-focused);
 }
 
 .nami-input::placeholder {
@@ -1780,6 +1794,7 @@ body {
 
 .nami-input:disabled,
 .nami-select:disabled {
+  background-image: none;
   border-color: var(--color-textbox-disabled-border);
 }
 
@@ -2014,8 +2029,8 @@ body {
   }
 
   .nami-button:focus-visible,
-  .nami-input:focus-visible,
-  .nami-select:focus-visible,
+  .nami-input:focus-visible:not(:disabled),
+  .nami-select:focus-visible:not(:disabled),
   .nami-checkbox:focus-visible,
   .nami-toggle__control:focus-visible,
   .nami-chip:focus-visible,

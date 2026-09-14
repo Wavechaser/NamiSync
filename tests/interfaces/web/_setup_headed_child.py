@@ -65,10 +65,9 @@ _EDITABLE_SCRIPT = r"""
     return style.boxShadow !== "none" ||
       (style.outlineStyle !== "none" && parseFloat(style.outlineWidth) > 0);
   };
-  const hasFocusedBottomBorder = (element) => {
+  const hasFocusedBottomStrip = (element, idleImage) => {
     const style = getComputedStyle(element);
-    return style.borderBlockEndColor !== style.borderBlockStartColor &&
-      parseFloat(style.borderBlockEndWidth) >= parseFloat(style.borderBlockStartWidth);
+    return style.backgroundImage !== "none" && style.backgroundImage !== idleImage;
   };
   await until(() => document.querySelector("#host-status")?.textContent === "Ready", "host readiness");
   document.querySelector(".nami-task-rail__header .nami-button")?.click();
@@ -148,7 +147,8 @@ _EDITABLE_SCRIPT = r"""
       (recentTriggerBounds.top + recentTriggerBounds.bottom) / 2) <= 0.5;
   recentTrigger.click();
   const idlePathStyle = getComputedStyle(source);
-  const idlePathAppearance = [idlePathStyle.backgroundColor, idlePathStyle.borderColor, idlePathStyle.borderRadius, idlePathStyle.boxShadow];
+  const idlePathImage = idlePathStyle.backgroundImage;
+  const idlePathAppearance = [idlePathStyle.backgroundColor, idlePathImage, idlePathStyle.borderColor, idlePathStyle.borderRadius, idlePathStyle.boxShadow];
   syncMode.focus();
   syncMode.dispatchEvent(new KeyboardEvent("keydown", {key: "ArrowRight", bubbles: true}));
   await until(() => inventoryMode.getAttribute("aria-checked") === "true" && document.activeElement === inventoryMode, "keyboard inventory segment");
@@ -181,7 +181,8 @@ _EDITABLE_SCRIPT = r"""
   const standardFilter = document.querySelector("#setup-filter");
   if (!(standardFilter instanceof HTMLInputElement)) throw new Error("Setup standard filter input is unavailable");
   const filterIdleStyle = getComputedStyle(standardFilter);
-  const filterIdleAppearance = [filterIdleStyle.backgroundColor, filterIdleStyle.borderColor, filterIdleStyle.borderRadius, filterIdleStyle.boxShadow];
+  const filterIdleImage = filterIdleStyle.backgroundImage;
+  const filterIdleAppearance = [filterIdleStyle.backgroundColor, filterIdleImage, filterIdleStyle.borderColor, filterIdleStyle.borderRadius, filterIdleStyle.boxShadow];
   const pathBounds = source.getBoundingClientRect();
   const pathControlBounds = pathControl.getBoundingClientRect();
   const caretBounds = recentTrigger.getBoundingClientRect();
@@ -375,19 +376,26 @@ _EDITABLE_SCRIPT = r"""
   const routineReadyHintHidden = Array.from(document.querySelectorAll(".nami-setup__location-status"))
     .every((item) => item.textContent !== "Folder is ready." || !item.checkVisibility());
   picker.focus({focusVisible: false});
+  source.dispatchEvent(new PointerEvent("pointerdown", {bubbles: true}));
   source.focus({focusVisible: true});
-  await until(() => hasFocusRing(source) && hasFocusedBottomBorder(source), "path focus boundary");
+  await until(() => source.dataset.namiFocusOrigin === "pointer" &&
+    hasFocusedBottomStrip(source, idlePathImage) && !hasFocusRing(source), "pointer focus strip without outer ring");
+  const pathPointerFocusHasNoOuterRing = source.dataset.namiFocusOrigin === "pointer" && !hasFocusRing(source);
+  picker.focus({focusVisible: false});
+  await until(() => !source.hasAttribute("data-nami-focus-origin"), "pointer focus marker cleanup");
+  source.focus({focusVisible: true});
+  await until(() => hasFocusRing(source) && hasFocusedBottomStrip(source, idlePathImage), "path focus boundary");
   await Promise.all(source.getAnimations().map((animation) => animation.finished));
   const pathFocusShadow = getComputedStyle(source).boxShadow;
-  const pathFocusBottom = getComputedStyle(source).borderBlockEndColor;
+  const pathFocusBottom = getComputedStyle(source).backgroundImage;
   const pathUsesStandardIdleStyle = idlePathAppearance.every((value, index) => value === filterIdleAppearance[index]);
   const pathHasStandardFocusRing = hasFocusRing(source) && !hasFocusRing(pathControl);
   standardFilter.focus({focusVisible: true});
-  await until(() => hasFocusRing(standardFilter) && hasFocusedBottomBorder(standardFilter), "filter focus boundary");
+  await until(() => hasFocusRing(standardFilter) && hasFocusedBottomStrip(standardFilter, filterIdleImage), "filter focus boundary");
   await Promise.all(standardFilter.getAnimations().map((animation) => animation.finished));
   const standardFilterStyle = getComputedStyle(standardFilter);
   const pathMatchesStandardFocus = standardFilterStyle.boxShadow === pathFocusShadow &&
-    standardFilterStyle.borderBlockEndColor === pathFocusBottom;
+    standardFilterStyle.backgroundImage === pathFocusBottom;
   recentTrigger.focus();
   recentTrigger.dispatchEvent(new KeyboardEvent("keydown", {key: "ArrowDown", bubbles: true}));
   const recentOption = await until(() => document.querySelector("#setup-source-recent-popup [role=option]:focus"), "keyboard recent option");
@@ -493,6 +501,7 @@ _EDITABLE_SCRIPT = r"""
     path_uses_standard_idle_style: pathUsesStandardIdleStyle,
     path_matches_standard_focus: pathMatchesStandardFocus,
     path_has_standard_focus_ring: pathHasStandardFocusRing,
+    path_pointer_focus_has_no_outer_ring: pathPointerFocusHasNoOuterRing,
     path_fills_rounded_control: pathFillsRoundedControl,
     caret_inside_path_with_text_space: caretInsidePath,
     clear_immediately_before_caret: clearImmediatelyBeforeCaret,

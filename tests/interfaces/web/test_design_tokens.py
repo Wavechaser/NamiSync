@@ -1710,21 +1710,30 @@ def test_sh_g_11_solid_controls_and_operation_filters_follow_tuned_states() -> N
 
     input_border = _block(source, ".nami-input,\n.nami-select ")
     assert "border: 1.2px solid var(--color-textbox-border);" in input_border
-    assert "border-block-end: 2px solid var(--color-textbox-underline);" in input_border
-    assert "background-clip: padding-box;" in input_border
+    assert "border-block-end-color: var(--color-semantic-transparent);" in input_border
+    assert "background-clip: border-box, padding-box;" in input_border
+    assert "background-origin: border-box, padding-box;" in input_border
+    assert "background-position: bottom, center;" in input_border
+    assert "background-size: 100% 2px, 100% 100%;" in input_border
+    assert "var(--color-semantic-transparent)" in input_border
     input_surface = next(
         block
         for block in re.findall(
             r"(?ms)^\.nami-input,\n\.nami-select\s*\{(.*?)^\}",
             source,
         )
-        if "background:" in block
+        if "background-color:" in block
     )
     assert "box-shadow: inset 0 -2px 0 var(--color-textbox-underline);" not in input_surface
-    assert "background: var(--color-text-control-fill);" in input_surface
+    assert "background-color: var(--color-text-control-fill);" in input_border
     input_focus = _block(source, ".nami-input:focus,\n.nami-select:focus ")
-    assert "background: var(--color-text-control-fill-focused);" in input_focus
-    assert "border-block-end-color: var(--color-accent-fill);" in input_focus
+    assert "background-color: var(--color-text-control-fill-focused);" in input_focus
+    assert "--nami-textbox-underline: var(--color-accent-fill);" in input_focus
+    assert '.nami-input:focus-visible:not([data-nami-focus-origin="pointer"])' in source
+    assert '.nami-select:focus-visible:not([data-nami-focus-origin="pointer"])' in source
+    assert ".nami-input:focus-visible:not(:disabled)," in forced
+    assert ".nami-select:focus-visible:not(:disabled)," in forced
+    assert "data-nami-focus-origin" not in forced
     input_active = _block(source, ".nami-input:active,\n.nami-select:active ")
     assert "border-color:" not in input_active
     disabled_input_fill = _block(
@@ -1737,6 +1746,7 @@ def test_sh_g_11_solid_controls_and_operation_filters_follow_tuned_states() -> N
         in disabled_input_fill
     )
     disabled_input = _block(source, ".nami-input:disabled,\n.nami-select:disabled ")
+    assert "background-image: none;" in disabled_input
     assert "border-color: var(--color-textbox-disabled-border);" in disabled_input
     assert "border-block-end-color:" not in disabled_input
 

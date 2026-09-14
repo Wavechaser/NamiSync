@@ -41,7 +41,7 @@ The prior aggregate complete-owner-graph model and BR-G-45 are retired. No futur
 
 | ID | Accepted outcome | Named verification | Status |
 | --- | --- | --- | --- |
-| GUI-S20 | Suppress the dual textbox focus ring for pointer-origin focus while preserving the focused accent strip, keyboard ring, forced-color visibility, and a straight lower strip with tapered radius-clipped ends. | Official TextBox mapping, static modality/geometry checks, installed gallery and Setup pointer/keyboard inspection, adversarial review. | Pending |
+| GUI-S20 | Suppress the dual textbox focus ring for pointer-origin focus while preserving the focused accent strip, keyboard ring, forced-color visibility, and a straight lower strip with tapered radius-clipped ends. | Official TextBox mapping, static modality/geometry checks, installed gallery and Setup pointer/keyboard inspection, adversarial review. | Complete |
 | GUI-S21 | Match the authored 1.2px control perimeter on combobox triggers without changing popup, selection, or keyboard behavior. | Official ComboBox mapping, focused static/gallery checks, installed light/dark/forced gallery inspection, adversarial review. | Pending |
 
 These are separate atomic commits. GUI-S20 owns `app.js`, `components.css`, the
@@ -117,7 +117,8 @@ inner border edge while accent fills retain the native outer-edge sizing. The
 GUI-S17 has the same CSS/test/document population plus installed Setup. Inputs
 clip their single translucent fill at the inner border edge. Top and side edges
 use the 1.2px `ControlStrokeColorDefault` role; the 2px neutral/accent strip is
-the bottom border rather than a second inset paint over a full perimeter.
+the only painted lower boundary rather than a second paint over a visible full
+perimeter.
 Disabled inputs flatten every edge to the disabled/default stroke and have no
 bottom highlight. The focused fill, placeholder/label roles, field geometry,
 validation, keyboard focus and forced-color authority remain unchanged. Its
@@ -134,6 +135,13 @@ installed light/dark/forced gallery and Setup headed gates. The gallery first
 caught a pressed-state cascade that erased the bottom strip; the final rule
 preserves that strip, uses the shared dual focus ring, and flattens every edge
 only when disabled.
+
+GUI-S20 passed 73 focused static/nonheaded-gallery checks plus the clean
+installed light/dark/forced gallery and Setup headed gate. Pointer-origin focus
+retains the focused fill and accent strip without the dual ring; blur clears
+the marker and subsequent keyboard focus restores the ring. The lower strip is
+a straight 2px border-box layer clipped into tapered rounded ends, while the
+single translucent fill remains padding-box clipped.
 
 GUI-D7 found no button-level alpha, filter or transform affecting disabled
 labels: the themes provide opaque disabled foreground colors, and the installed

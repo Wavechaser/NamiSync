@@ -672,6 +672,7 @@ def test_component_gallery_report_parser_is_exact_and_nested(
             "label": f"{control} {state}",
             "foreground": "rgb(0, 0, 0)",
             "background": "rgb(255, 255, 255)",
+            "background_image": "none",
             "fill_background": "rgb(255, 255, 255)",
             "border": "rgb(0, 0, 0)",
             "border_width": "1px",
@@ -713,9 +714,13 @@ def test_component_gallery_report_parser_is_exact_and_nested(
     ]
     for control in controls:
         if control["control"] == "text_input":
-            control["border_width"] = "1px 1px 2px"
+            control["background_image"] = (
+                "linear-gradient(rgb(0, 0, 0), rgb(0, 0, 0)), "
+                "linear-gradient(rgba(0, 0, 0, 0), rgba(0, 0, 0, 0))"
+            )
+            control["border_width"] = "1px"
             control["border_block_start_width"] = "1px"
-            control["border_block_end_width"] = "2px"
+            control["border_block_end_width"] = "1px"
     cosmetic_snapshot = {
         "section": "appearance",
         "value_version": 1,
@@ -1623,8 +1628,10 @@ def test_sh_g_11_component_gallery_uses_installed_tokens_and_non_color_cues(
                 if control["control"] in {"tri_state_checkbox", "toggle_off"}:
                     assert _control_boundary_contrast(control) >= 3.0
                 elif control["control"] == "text_input":
+                    underline = _RGB.search(control["background_image"])
+                    assert underline is not None
                     assert _foreground_contrast(
-                        control["border_block_end"],
+                        underline.group(0),
                         control["background"],
                         control["surrounding"],
                     ) >= 3.0
@@ -1759,10 +1766,7 @@ def test_sh_g_11_component_gallery_uses_installed_tokens_and_non_color_cues(
             input_bottom_width = _css_pixel_width(
                 controls_by_key["text_input"][state]["border_block_end_width"]
             )
-            # Static evidence owns the authored 1.2:2 logical-pixel contract;
-            # WebView2 may device-snap each edge at fractional display scales.
-            if state != "disabled":
-                assert input_bottom_width >= input_width
+            assert input_bottom_width == pytest.approx(input_width, abs=0.01)
         expected_flyout_alpha = 0.2 if report["media"]["dark"] else 0.06
         assert _color_alpha(
             controls_by_key["dialog"]["rest"]["border"]
@@ -1888,8 +1892,12 @@ def test_sh_g_11_component_gallery_uses_installed_tokens_and_non_color_cues(
             "pressed",
             "focused",
         ))
-        rest_underline = input_states["rest"]["border_block_end"]
-        focused_underline = input_states["focused"]["border_block_end"]
+        rest_match = _RGB.search(input_states["rest"]["background_image"])
+        focused_match = _RGB.search(input_states["focused"]["background_image"])
+        assert rest_match is not None
+        assert focused_match is not None
+        rest_underline = rest_match.group(0)
+        focused_underline = focused_match.group(0)
         assert focused_underline == (
             controls_by_key["button_primary"]["rest"]["background"]
         )

@@ -28,6 +28,11 @@ packaging remain open.
 
 #### Refine task navigation, Settings and Setup (2026-09-11–14)
 
+- Limited the dual textbox focus ring to keyboard-origin focus while keeping
+  pointer-focused fill and accent feedback. Repainted the lower strip as a
+  straight 2px layer with tapered rounded-corner ends rather than a border that
+  curves up both sides.
+
 - Investigated intermittent disabled-button label blur without changing CSS:
   disabled text is an opaque dedicated color with no whole-button alpha,
   filter or transform; recorded the WebView2 reproduction tuple needed to

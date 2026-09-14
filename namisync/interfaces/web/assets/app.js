@@ -39,6 +39,20 @@ if (
   throw new TypeError("NamiSync shell elements are unavailable");
 }
 
+document.addEventListener?.("pointerdown", (event) => {
+  if (
+    event.target?.matches?.(".nami-input, .nami-select")
+    && !event.target.disabled
+  ) {
+    event.target.dataset.namiFocusOrigin = "pointer";
+  }
+}, true);
+document.addEventListener?.("focusout", (event) => {
+  if (event.target?.matches?.(".nami-input, .nami-select")) {
+    delete event.target.dataset.namiFocusOrigin;
+  }
+}, true);
+
 function renderHostStatus(message) {
   renderText(status, message);
   status.hidden = message === "Ready";

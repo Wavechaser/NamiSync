@@ -411,13 +411,15 @@ through the host's
 [rasterization-scale contract](https://github.com/MicrosoftEdge/WebView2Feedback/blob/main/specs/RasterizationScale.md)
 before changing color tokens.
 
-Textboxes clip their translucent fill to the padding box. Their top and side
-edges use the authored 1.2px control stroke, while the neutral 2px bottom edge
-is the underline itself rather than an inset shadow painted over another
-border. Focus changes that bottom edge to accent and retains the shared dual
-keyboard-focus ring. Disabled textboxes flatten every edge to black 0F in Light
-or white 12 in Dark, with no surviving underline; their fill follows the
-disabled control role.
+Textboxes paint one translucent fill clipped to the padding box. Their top and
+side edges use the authored 1.2px control stroke; the ordinary lower border is
+transparent and a single straight 2px border-box layer supplies the neutral or
+accent strip. The rounded outer clip tapers the strip ends instead of bending a
+2px physical border up both sides. Focus changes the strip to accent. A
+capture-phase pointer marker suppresses the shared dual ring only for a clicked
+textbox and clears on blur; keyboard traversal retains that ring. Disabled
+textboxes remove the strip and flatten every edge to black 0F in Light or white
+12 in Dark; their fill follows the disabled control role.
 Forced colors remain system-owned. The mapping follows the same
 [common resources](https://github.com/microsoft/microsoft-ui-xaml/blob/main/controls/dev/CommonStyles/Common_themeresources_any.xaml),
 [textbox resources](https://github.com/microsoft/microsoft-ui-xaml/blob/main/controls/dev/CommonStyles/TextBox_themeresources.xaml)

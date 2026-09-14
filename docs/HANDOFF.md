@@ -1,5 +1,14 @@
 # Latest session handoff
 
+## GUI-S20 textbox focus and lower strip (2026-09-14)
+
+GUI-S20 marks pointer-origin text input focus until blur, suppressing only the
+dual outer ring while retaining the focused fill and accent strip. Keyboard
+focus still receives the ring. The 2px lower strip is now a straight
+border-box layer with rounded-clip tapered ends; the translucent fill remains
+a separate padding-box layer. Seventy-three focused checks and the clean
+installed gallery and Setup headed gates passed.
+
 ## GUI-D7 disabled-button label investigation (2026-09-14)
 
 GUI-D7 made no production change. Button CSS uses opaque disabled foreground

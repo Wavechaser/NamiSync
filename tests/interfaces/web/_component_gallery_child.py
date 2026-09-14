@@ -885,6 +885,7 @@ def _valid_control_rows(rows: object) -> bool:
         "label",
         "foreground",
         "background",
+        "background_image",
         "fill_background",
         "border",
         "border_width",
