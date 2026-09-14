@@ -26,3 +26,9 @@ composited fills against the existing observed backdrop.
 No backend/protocol, persistence, native display settings or user-owned window
 changes. Existing shadow and M2 dispositions remain deferred. No task-created
 branch/worktree. Relaunch the development shell to load changed assets.
+
+GUI-S18 replaces only the selected checkbox U+2713 pseudo-element with the
+pinned local Fluent `checkmark_16_regular.svg` mask. The mixed-state minus and
+unrelated lifecycle/status U+2713 cue are unchanged. Focused static verification
+passed all 12 design-token checks; the pinned-archive icon check and installed
+light/dark/forced gallery check passed.

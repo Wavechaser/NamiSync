@@ -1524,13 +1524,15 @@ def test_sh_g_11_components_cover_controls_states_and_non_color_cues() -> None:
         '"\\2013"',
         '"\\25b6"',
         '"\\2161"',
-        '"\\2713"',
         '"\\00d7"',
         '"\\2260"',
     }
 
     assert HEX_LITERAL.search(source) is None
     assert "--palette-" not in source
+    checked_checkbox = _block(source, ".nami-checkbox:checked::after")
+    assert 'url("./icons/checkmark_16_regular.svg")' in checked_checkbox
+    assert 'content: "";' in checked_checkbox
 
     forced = _block(source, "@media (forced-colors: active)")
     assert "outline: 2px solid var(--color-focus-ring);" in forced

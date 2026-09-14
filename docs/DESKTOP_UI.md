@@ -449,7 +449,8 @@ Unchecked checkboxes use a 1.2px neutral Fluent
 `ControlStrongStrokeColorDefault` boundary (`#72000000` Light / `#8BFFFFFF`
 Dark in WinUI ARGB notation, authored as CSS RGBA hex). Their selected fill and
 boundary become semantic accent states while retaining the 16 px outer
-geometry. Textboxes use a
+geometry. Selected checkboxes use the pinned local Fluent
+`checkmark_16_regular.svg` mask rather than a font glyph. Textboxes use a
 separate subtle 2 px control
 boundary and a stronger neutral bottom stroke at rest; focus changes only that
 underline to the semantic accent fill. Mouse focus therefore does not gain a

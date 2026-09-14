@@ -520,8 +520,12 @@ body {
 }
 
 .nami-checkbox:checked::after {
-  content: "\2713";
-  font-weight: var(--font-weight-semibold);
+  background-color: currentColor;
+  block-size: var(--icon-size-sm);
+  content: "";
+  inline-size: var(--icon-size-sm);
+  mask: url("./icons/checkmark_16_regular.svg") center / contain no-repeat;
+  -webkit-mask: url("./icons/checkmark_16_regular.svg") center / contain no-repeat;
 }
 
 .nami-checkbox:indeterminate::after,

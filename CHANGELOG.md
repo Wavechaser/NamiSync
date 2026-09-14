@@ -28,6 +28,10 @@ packaging remain open.
 
 #### Refine task navigation, Settings and Setup (2026-09-11–14)
 
+- Replaced the selected checkbox font glyph with the pinned local Fluent
+  `checkmark_16_regular.svg` mask; the mixed-state minus and unrelated status cue
+  remain unchanged.
+
 - Made Add pair capture its own settings snapshot, removing the later
   current-form overwrite. Queued settings survive form edits, prepare per row,
   and retain exact retry; removal during preparation prevents submission.
