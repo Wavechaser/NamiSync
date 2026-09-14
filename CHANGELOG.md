@@ -26,6 +26,15 @@ bounded asynchronous task commands, frozen Setup using shared location admission
 and remembered locations, and dormant sync/integrity file-list row renderers. Review content and beta
 packaging remain open.
 
+#### Condense completed M1 delivery records (2026-09-14)
+
+- Replaced the long completed GUI/documentation register with grouped delivered
+  outcomes and subject-owner links. Git history retains exact studies and evidence.
+- Preserved pending product rows, the separate DOC-2 branch proposal, unresolved
+  rendering investigations and active batch/admission guarantees.
+- Independent documentation review, local-link and whitespace checks passed.
+  M1-7 study continues separately; no product delivery is claimed by this cleanup.
+
 #### Clarify agent execution boundaries (2026-09-12–14)
 
 - Condensed AGENTS.md through deduplication, tighter wording and conditional

@@ -1,45 +1,30 @@
 # Latest session handoff
 
-## Agent instruction condensation (2026-09-14)
+## M1 record condensation and M1-7 study (2026-09-14)
 
-AI-2 continues the instruction-maintenance task from f6c9471. AGENTS.md is
-1,548 words / 187 lines, down from 3,311 / 385 (whitespace-delimited words).
-Reduction combines deduplication, concise boundary wording, component routing,
-relocated documentation conventions and removal of completed-migration history.
-No product/test, global instruction or personal/supplied skill file changed.
+The user authorized M1-7 implementation and required verification, then a pause
+for recap and GUI tweaks, plus condensation of the completed GUI/documentation
+records. The execute-task skill governs implementation and independent review.
 
-Clause dispositions reviewed against the starting root:
-- Product invariants, import law, RootAuthority, names, Windows and verification
-  remain in the root, with repeated atomicity/timestamp/layering advice merged.
-- Executor/verifier package details route to their existing owners. Executor
-  journal constraints and oracle retention are explicit in EXECUTOR; its
-  three-run settlement gate and independent review remain unchanged.
-- DATABASE now owns the direct-sqlite3/no-ORM, WAL and local-only placement rules;
-  TOOLS owns fixed icon provenance, generation restrictions and test ownership.
-  BRIDGE already owns the complete-request limit for all external adapters.
-- docs/README.md owns documentation maintenance, source authority and changelog
-  conventions; the root README indexes it. Existing subject docs remain owners.
-- Task containment preserves register triggers/content, preimplementation study,
-  accepted scope, direct-consumer allowance, exclusions, completion, dependent
-  planning, regression definition, bounded fixes, recurrence thresholds, scope
-  investigation/adjudication, mandatory stops and isolated recovery.
+Completed documentation outcome: M1_PLAN replaces roughly 380 lines of GUI and
+documentation history with a compact grouped record, subject-owner links and
+provenance through base 7e94598 on milestone1. Pending product rows and the
+separate DOC-2 branch proposal remain; no branch reconciliation, push or PR is
+authorized by this task. WCG-shadow and disabled-label investigations remain
+unresolved, with reopen evidence at their existing owners.
 
-Adversarial source review checked ordinary consumer additions versus exclusions;
-changed safety/ownership requires adjudication; second mechanism/third defect
-requires pause/review; hard-wall evidence stops immediately; unanswered requests
-never authorize work; interrupted work preserves only task-owned changes;
-dependent planning cannot authorize implementation; gates apply without skills.
-No boundary loss found. This is direct semantic review, not a live agent trial.
+Fresh independent review found no lost pending outcome or active constraint.
+All 21 links in the condensed section resolve, including the BUGS anchor;
+git diff --check passes. This documentation outcome changes no executable
+contract and claims no product acceptance.
 
-Verification: build/check-agent-docs.py reports 22 resolving root/maintenance
-links, the executor stability heading and bridge bound. Git diff whitespace and
-exact staged-scope checks pass before commit. No product suite was run because
-no executable behavior, contract or test authority changed. No recovery branch
-or worktree was needed. Temporary checking scripts remain under ignored build/.
+M1-7 remains in read-only expansion. Its builder is tracing same-task execution
+attachment, selection commitment, bounded projection and sibling sorting;
+independent gate study identified the applicable 120k/240k plan scale criteria.
+No production or test edits have started. Baseline at unchanged product 7e94598:
+99 selection/plan-limit tests and 3 exact admission/commitment/Plan-again tests
+passed. These are baseline probes only, not M1-7 acceptance.
 
-Immediate product context: GUI-S20/S21 are complete at the starting revision;
-textbox keyboard/pointer focus and the 1.2px combobox perimeter are documented
-in DESKTOP_UI and M1_PLAN. Prior focused/installed gallery and Setup evidence is
-in their delivery records; none was rerun here. Disabled-label blur and WCG
-shadow findings remain diagnostic, not fixed. Next product work follows M1_PLAN.
-Relaunch the development shell for asset changes; do not close user-owned windows.
+The original checkout was clean. No recovery branch or worktree has been
+created. Continue M1-7 only within its recorded finite scope, preserve AGENTS
+stops, and do not begin M1-8-capacity or other later checkpoint work.
