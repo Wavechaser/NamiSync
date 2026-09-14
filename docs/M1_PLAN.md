@@ -37,6 +37,32 @@ The prior aggregate complete-owner-graph model and BR-G-45 are retired. No futur
 
 ## Remaining checkpoints
 
+### Text-entry focus and boundary follow-up (2026-09-14)
+
+| ID | Accepted outcome | Named verification | Status |
+| --- | --- | --- | --- |
+| GUI-S20 | Suppress the dual textbox focus ring for pointer-origin focus while preserving the focused accent strip, keyboard ring, forced-color visibility, and a straight lower strip with tapered radius-clipped ends. | Official TextBox mapping, static modality/geometry checks, installed gallery and Setup pointer/keyboard inspection, adversarial review. | Pending |
+| GUI-S21 | Match the authored 1.2px control perimeter on combobox triggers without changing popup, selection, or keyboard behavior. | Official ComboBox mapping, focused static/gallery checks, installed light/dark/forced gallery inspection, adversarial review. | Pending |
+
+These are separate atomic commits. GUI-S20 owns `app.js`, `components.css`, the
+direct static/component-gallery/Setup headed consumers, DESKTOP_UI, FEATURES,
+HANDOFF and CHANGELOG. A capture-phase pointer marker may suppress only the
+outer dual ring on `.nami-input` and `.nami-select`; it clears on blur, so later
+keyboard traversal receives the ordinary focus-visible treatment. The focused
+fill and accent strip remain active for either modality. The strip is a single
+straight painted layer clipped at the rounded lower corners, not a 2px border
+that bends up the sides and not a second translucent control fill. Disabled
+and forced-color states retain their current authority.
+
+GUI-S21 owns the combobox trigger stroke declaration and its direct static and
+installed-gallery consumers plus matching GUI documentation. It changes only
+the closed trigger perimeter from 1px to the existing authored 1.2px adjustment;
+the elevation colors, pressed/open flattening, popup 1px material border,
+positioning, options, focus semantics and forced colors do not move. Existing
+repository stop classes apply. Any lost keyboard focus cue, pointer-visible
+outer textbox ring, missing focused strip, or popup geometry regression blocks
+the affected commit.
+
 ### Setup ownership and control-detail follow-up (2026-09-14)
 
 | ID | Accepted outcome | Named verification | Status |
