@@ -1,5 +1,14 @@
 # Latest session handoff
 
+## GUI-S17 textbox boundaries (2026-09-14)
+
+GUI-S17 clips each textbox fill once, uses the authored 1.2px perimeter, and
+makes the neutral/accent 2px strip the actual bottom border. Disabled inputs
+flatten every edge; focused inputs retain the shared dual focus ring. Seventy-two
+focused checks, the clean installed light/dark/forced gallery, and installed
+Setup passed. Adversarial headed review caught and corrected a pressed-state
+cascade that initially erased the bottom strip.
+
 ## GUI-S16 button boundaries (2026-09-14)
 
 GUI-S16 aligns ordinary and accent button borders with the pinned Microsoft

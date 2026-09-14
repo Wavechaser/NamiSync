@@ -28,6 +28,10 @@ packaging remain open.
 
 #### Refine task navigation, Settings and Setup (2026-09-11–14)
 
+- Replaced the textbox's overlapping full border and inset underline with a
+  clipped 1.2px perimeter whose 2px bottom edge carries the resting/focused
+  neutral or accent state; disabled inputs flatten all edges.
+
 - Aligned ordinary and accent button boundaries with Microsoft WinUI elevation
   resources, retaining the authored 1.2px stroke and clipping neutral fills to
   the inner border edge.

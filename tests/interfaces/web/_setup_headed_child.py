@@ -65,11 +65,10 @@ _EDITABLE_SCRIPT = r"""
     return style.boxShadow !== "none" ||
       (style.outlineStyle !== "none" && parseFloat(style.outlineWidth) > 0);
   };
-  const hasOnlyInsetShadow = (element) => {
-    const shadow = getComputedStyle(element).boxShadow;
-    const colors = shadow.match(/rgba?\([^)]*\)/g) ?? [];
-    const insets = shadow.match(/\binset\b/g) ?? [];
-    return colors.length > 0 && colors.length === insets.length;
+  const hasFocusedBottomBorder = (element) => {
+    const style = getComputedStyle(element);
+    return style.borderBlockEndColor !== style.borderBlockStartColor &&
+      parseFloat(style.borderBlockEndWidth) >= parseFloat(style.borderBlockStartWidth);
   };
   await until(() => document.querySelector("#host-status")?.textContent === "Ready", "host readiness");
   document.querySelector(".nami-task-rail__header .nami-button")?.click();
@@ -377,15 +376,18 @@ _EDITABLE_SCRIPT = r"""
     .every((item) => item.textContent !== "Folder is ready." || !item.checkVisibility());
   picker.focus({focusVisible: false});
   source.focus({focusVisible: true});
-  await until(() => hasOnlyInsetShadow(source), "path inset focus underline");
+  await until(() => hasFocusRing(source) && hasFocusedBottomBorder(source), "path focus boundary");
   await Promise.all(source.getAnimations().map((animation) => animation.finished));
   const pathFocusShadow = getComputedStyle(source).boxShadow;
+  const pathFocusBottom = getComputedStyle(source).borderBlockEndColor;
   const pathUsesStandardIdleStyle = idlePathAppearance.every((value, index) => value === filterIdleAppearance[index]);
-  const pathHasNoOuterRing = hasOnlyInsetShadow(source) && !hasFocusRing(pathControl);
+  const pathHasStandardFocusRing = hasFocusRing(source) && !hasFocusRing(pathControl);
   standardFilter.focus({focusVisible: true});
-  await until(() => hasOnlyInsetShadow(standardFilter), "filter inset focus underline");
+  await until(() => hasFocusRing(standardFilter) && hasFocusedBottomBorder(standardFilter), "filter focus boundary");
   await Promise.all(standardFilter.getAnimations().map((animation) => animation.finished));
-  const pathMatchesStandardFocus = getComputedStyle(standardFilter).boxShadow === pathFocusShadow;
+  const standardFilterStyle = getComputedStyle(standardFilter);
+  const pathMatchesStandardFocus = standardFilterStyle.boxShadow === pathFocusShadow &&
+    standardFilterStyle.borderBlockEndColor === pathFocusBottom;
   recentTrigger.focus();
   recentTrigger.dispatchEvent(new KeyboardEvent("keydown", {key: "ArrowDown", bubbles: true}));
   const recentOption = await until(() => document.querySelector("#setup-source-recent-popup [role=option]:focus"), "keyboard recent option");
@@ -490,7 +492,7 @@ _EDITABLE_SCRIPT = r"""
     add_filter_inline: addFilterInline,
     path_uses_standard_idle_style: pathUsesStandardIdleStyle,
     path_matches_standard_focus: pathMatchesStandardFocus,
-    path_has_no_outer_ring: pathHasNoOuterRing,
+    path_has_standard_focus_ring: pathHasStandardFocusRing,
     path_fills_rounded_control: pathFillsRoundedControl,
     caret_inside_path_with_text_space: caretInsidePath,
     clear_immediately_before_caret: clearImmediatelyBeforeCaret,

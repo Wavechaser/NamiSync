@@ -434,8 +434,8 @@ unrealized unless an entry says otherwise.
   and forced colors retain system outlines. The Sync/Integrity
   two-half state specimen uses radio-group semantics and highlights its checked
   half with the accent roles. Unchecked checkboxes use a softer 1 logical px
-  neutral boundary; textboxes use a subtle 2 px boundary plus neutral/accent
-  resting/focused underline. Task-backed switching, keyboard behavior, and
+  neutral boundary; textboxes use a subtle 1.2 px perimeter whose 2 px bottom
+  edge is the neutral/accent resting/focused underline. Task-backed switching, keyboard behavior, and
   actions remain part of the later unrealized work surfaces.
 - **Content Cards**. Background/content cards are static translucent material
   layers rather than controls: white 70% with a black 6% blended stroke in

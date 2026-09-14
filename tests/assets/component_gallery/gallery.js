@@ -1157,6 +1157,8 @@ async function reportFailure(error) {
         border_style: style.borderStyle,
         border_block_start: style.borderBlockStartColor,
         border_block_end: style.borderBlockEndColor,
+        border_block_start_width: style.borderBlockStartWidth,
+        border_block_end_width: style.borderBlockEndWidth,
         root_border: rootStyle.borderColor,
         root_border_width: rootStyle.borderWidth,
         root_border_style: rootStyle.borderStyle,

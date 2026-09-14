@@ -290,7 +290,7 @@ AUTHORED_CONTROL_VALUES = {
         "--color-toggle-thumb-disabled-off": "#0000005C",
         "--color-toggle-thumb-disabled-on": "#FFFFFF",
         "--color-textbox-border": "rgba(0,0,0,0.06)",
-        "--color-textbox-disabled-border": "var(--color-neutral-border-subtle)",
+        "--color-textbox-disabled-border": "#0000000F",
         "--color-textbox-underline": "rgba(0,0,0,0.45)",
     },
     "dark": {
@@ -1709,7 +1709,9 @@ def test_sh_g_11_solid_controls_and_operation_filters_follow_tuned_states() -> N
     assert ".nami-button--danger" not in source
 
     input_border = _block(source, ".nami-input,\n.nami-select ")
-    assert "border: 2px solid var(--color-textbox-border);" in input_border
+    assert "border: 1.2px solid var(--color-textbox-border);" in input_border
+    assert "border-block-end: 2px solid var(--color-textbox-underline);" in input_border
+    assert "background-clip: padding-box;" in input_border
     input_surface = next(
         block
         for block in re.findall(
@@ -1718,13 +1720,13 @@ def test_sh_g_11_solid_controls_and_operation_filters_follow_tuned_states() -> N
         )
         if "background:" in block
     )
-    assert "box-shadow: inset 0 -2px 0 var(--color-textbox-underline);" in (
-        input_surface
-    )
+    assert "box-shadow: inset 0 -2px 0 var(--color-textbox-underline);" not in input_surface
     assert "background: var(--color-text-control-fill);" in input_surface
     input_focus = _block(source, ".nami-input:focus,\n.nami-select:focus ")
     assert "background: var(--color-text-control-fill-focused);" in input_focus
-    assert "box-shadow: inset 0 -2px 0 var(--color-accent-fill);" in input_focus
+    assert "border-block-end-color: var(--color-accent-fill);" in input_focus
+    input_active = _block(source, ".nami-input:active,\n.nami-select:active ")
+    assert "border-color:" not in input_active
     disabled_input_fill = _block(
         source,
         ".nami-input:disabled,\n.nami-select:disabled,\n.nami-combobox__trigger:disabled,\n"
@@ -1735,14 +1737,7 @@ def test_sh_g_11_solid_controls_and_operation_filters_follow_tuned_states() -> N
         in disabled_input_fill
     )
     disabled_input = _block(source, ".nami-input:disabled,\n.nami-select:disabled ")
-    assert (
-        "border-block-start-color: var(--color-textbox-disabled-border);"
-        in disabled_input
-    )
-    assert (
-        "border-inline-color: var(--color-textbox-disabled-border);"
-        in disabled_input
-    )
+    assert "border-color: var(--color-textbox-disabled-border);" in disabled_input
     assert "border-block-end-color:" not in disabled_input
 
     checkbox = _block(source, ".nami-checkbox ")

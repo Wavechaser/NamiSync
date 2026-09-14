@@ -678,6 +678,8 @@ def test_component_gallery_report_parser_is_exact_and_nested(
             "border_style": "solid",
             "border_block_start": "rgb(0, 0, 0)",
             "border_block_end": "rgb(0, 0, 0)",
+            "border_block_start_width": "1px",
+            "border_block_end_width": "1px",
             "root_border": "rgb(0, 0, 0)",
             "root_border_width": "1px",
             "root_border_style": "solid",
@@ -711,11 +713,9 @@ def test_component_gallery_report_parser_is_exact_and_nested(
     ]
     for control in controls:
         if control["control"] == "text_input":
-            control["border_width"] = "2px"
-        if control["control"] == "text_input":
-            control["box_shadow"] = (
-                "rgba(0, 0, 0, 0.45) 0px -2px 0px 0px inset"
-            )
+            control["border_width"] = "1px 1px 2px"
+            control["border_block_start_width"] = "1px"
+            control["border_block_end_width"] = "2px"
     cosmetic_snapshot = {
         "section": "appearance",
         "value_version": 1,
@@ -1623,13 +1623,10 @@ def test_sh_g_11_component_gallery_uses_installed_tokens_and_non_color_cues(
                 if control["control"] in {"tri_state_checkbox", "toggle_off"}:
                     assert _control_boundary_contrast(control) >= 3.0
                 elif control["control"] == "text_input":
-                    underline_colors = _inset_shadow_colors(control)
-                    assert underline_colors
-                    assert max(
-                        _foreground_contrast(
-                            color, control["background"], control["surrounding"]
-                        )
-                        for color in underline_colors
+                    assert _foreground_contrast(
+                        control["border_block_end"],
+                        control["background"],
+                        control["surrounding"],
                     ) >= 3.0
             if control["state"] == "focused":
                 assert (
@@ -1640,12 +1637,8 @@ def test_sh_g_11_component_gallery_uses_installed_tokens_and_non_color_cues(
                 assert _contrast(focus_color, control["surrounding"]) >= 3.0
                 if control["outline_style"] == "none":
                     focus_colors = _focus_shadow_colors(control)
-                    if control["control"] == "text_input":
-                        assert focus_colors == []
-                        assert len(_inset_shadow_colors(control)) == 1
-                    else:
-                        assert len(focus_colors) == 2
-                        assert _contrast(focus_colors[0], focus_colors[1]) >= 3.0
+                    assert len(focus_colors) == 2
+                    assert _contrast(focus_colors[0], focus_colors[1]) >= 3.0
         controls_by_key = {
             key: {
                 row["state"]: row
@@ -1754,7 +1747,7 @@ def test_sh_g_11_component_gallery_uses_installed_tokens_and_non_color_cues(
                 controls_by_key["tri_state_checkbox"][state]["border_width"]
             )
             input_width = _css_pixel_width(
-                controls_by_key["text_input"][state]["border_width"]
+                controls_by_key["text_input"][state]["border_block_start_width"]
             )
             toggle_width = _css_pixel_width(
                 controls_by_key["toggle_off"][state]["border_width"]
@@ -1762,11 +1755,14 @@ def test_sh_g_11_component_gallery_uses_installed_tokens_and_non_color_cues(
             assert button_width > 0
             assert checkbox_width == pytest.approx(button_width, abs=0.01)
             assert toggle_width == pytest.approx(button_width, abs=0.01)
-            # Static evidence owns the authored 1.2:2 logical-pixel contract.
-            # WebView2 reports device-snapped widths (for example 1:3 device
-            # pixels at 175%), so headed evidence permits that upper rung.
-            assert input_width >= button_width * 1.5
-            assert input_width <= checkbox_width * 3.01
+            assert input_width == pytest.approx(button_width, abs=0.01)
+            input_bottom_width = _css_pixel_width(
+                controls_by_key["text_input"][state]["border_block_end_width"]
+            )
+            # Static evidence owns the authored 1.2:2 logical-pixel contract;
+            # WebView2 may device-snap each edge at fractional display scales.
+            if state != "disabled":
+                assert input_bottom_width >= input_width
         expected_flyout_alpha = 0.2 if report["media"]["dark"] else 0.06
         assert _color_alpha(
             controls_by_key["dialog"]["rest"]["border"]
@@ -1878,25 +1874,23 @@ def test_sh_g_11_component_gallery_uses_installed_tokens_and_non_color_cues(
             assert _color_alpha(input_states["focused"]["background"]) == pytest.approx(
                 0xB3 / 0xFF, abs=0.002
             )
-        if theme == "dark" and not report["media"]["forced"]:
+        if not report["media"]["forced"]:
+            disabled_border_alpha = 0x12 if theme == "dark" else 0x0F
             assert _color_alpha(
                 input_states["disabled"]["border_block_start"]
-            ) == pytest.approx(0x12 / 0xFF, abs=0.002)
-            assert (
-                input_states["disabled"]["border_block_end"]
-                == "rgb(10, 10, 10)"
+            ) == pytest.approx(disabled_border_alpha / 0xFF, abs=0.002)
+            assert input_states["disabled"]["border_block_end"] == (
+                input_states["disabled"]["border_block_start"]
             )
-        assert all("inset" in input_states[state]["box_shadow"] for state in (
+        assert all("inset" not in input_states[state]["box_shadow"] for state in (
             "rest",
             "hover",
             "pressed",
             "focused",
         ))
-        rest_underline = _inset_shadow_colors(input_states["rest"])
-        focused_underline = _inset_shadow_colors(input_states["focused"])
-        assert len(rest_underline) == 1
-        assert len(focused_underline) == 1
-        assert focused_underline[0] == (
+        rest_underline = input_states["rest"]["border_block_end"]
+        focused_underline = input_states["focused"]["border_block_end"]
+        assert focused_underline == (
             controls_by_key["button_primary"]["rest"]["background"]
         )
         assert rest_underline != focused_underline

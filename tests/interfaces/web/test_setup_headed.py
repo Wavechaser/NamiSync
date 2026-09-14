@@ -84,7 +84,7 @@ def test_m1_6_installed_setup_flow(
     assert result["add_filter_inline"] is True
     assert result["path_uses_standard_idle_style"] is True
     assert result["path_matches_standard_focus"] is True
-    assert result["path_has_no_outer_ring"] is True
+    assert result["path_has_standard_focus_ring"] is True
     assert result["path_fills_rounded_control"] is True
     assert result["caret_inside_path_with_text_space"] is True
     assert result["clear_immediately_before_caret"] is True

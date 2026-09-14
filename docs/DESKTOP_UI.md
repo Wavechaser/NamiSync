@@ -393,8 +393,13 @@ of identical physical pixels across displays. Native 1 logical px and the
 original elevation roles were referenced from Microsoft's
 [Button resources](https://github.com/microsoft/microsoft-ui-xaml/blob/main/controls/dev/CommonStyles/Button_themeresources.xaml)
 and [common colors](https://github.com/microsoft/microsoft-ui-xaml/blob/main/controls/dev/CommonStyles/Common_themeresources_any.xaml).
-Disabled dark textboxes retain the separate white 12-alpha top/side stroke,
-bottom border and inset underline; their fill follows the disabled control role.
+Textboxes clip their translucent fill to the padding box. Their top and side
+edges use the authored 1.2px control stroke, while the neutral 2px bottom edge
+is the underline itself rather than an inset shadow painted over another
+border. Focus changes that bottom edge to accent and retains the shared dual
+keyboard-focus ring. Disabled textboxes flatten every edge to black 0F in Light
+or white 12 in Dark, with no surviving underline; their fill follows the
+disabled control role.
 Forced colors remain system-owned. The mapping follows the same
 [common resources](https://github.com/microsoft/microsoft-ui-xaml/blob/main/controls/dev/CommonStyles/Common_themeresources_any.xaml),
 [textbox resources](https://github.com/microsoft/microsoft-ui-xaml/blob/main/controls/dev/CommonStyles/TextBox_themeresources.xaml)

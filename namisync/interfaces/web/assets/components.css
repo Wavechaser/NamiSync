@@ -169,7 +169,9 @@ body {
 
 .nami-input,
 .nami-select {
-  border: 2px solid var(--color-textbox-border);
+  background-clip: padding-box;
+  border: 1.2px solid var(--color-textbox-border);
+  border-block-end: 2px solid var(--color-textbox-underline);
 }
 
 .nami-menu,
@@ -298,7 +300,6 @@ body {
 .nami-select {
   background: var(--color-text-control-fill);
   border-radius: var(--radius-small);
-  box-shadow: inset 0 -2px 0 var(--color-textbox-underline);
   color: var(--color-neutral-foreground);
   min-block-size: 2rem;
   padding: var(--space-2) var(--space-3);
@@ -316,24 +317,12 @@ body {
 .nami-input:active,
 .nami-select:active {
   background: var(--color-text-control-fill-pressed);
-  border-color: var(--color-textbox-border);
 }
 
 .nami-input:focus,
 .nami-select:focus {
   background: var(--color-text-control-fill-focused);
-  box-shadow: inset 0 -2px 0 var(--color-accent-fill);
-}
-
-.nami-input:focus-visible {
-  box-shadow: inset 0 -2px 0 var(--color-accent-fill);
-}
-
-.nami-select:focus-visible {
-  box-shadow:
-    inset 0 -2px 0 var(--color-accent-fill),
-    0 0 0 1px var(--color-focus-inner),
-    0 0 0 3px var(--color-focus-ring);
+  border-block-end-color: var(--color-accent-fill);
 }
 
 .nami-input::placeholder {
@@ -1791,8 +1780,7 @@ body {
 
 .nami-input:disabled,
 .nami-select:disabled {
-  border-block-start-color: var(--color-textbox-disabled-border);
-  border-inline-color: var(--color-textbox-disabled-border);
+  border-color: var(--color-textbox-disabled-border);
 }
 
 .nami-button:disabled,

@@ -159,7 +159,7 @@
   --color-toggle-thumb-disabled-off: #0000005C;
   --color-toggle-thumb-disabled-on: #FFFFFF;
   --color-textbox-border: rgba(0,0,0,0.06);
-  --color-textbox-disabled-border: var(--color-neutral-border-subtle);
+  --color-textbox-disabled-border: #0000000F;
   --color-textbox-underline: rgba(0,0,0,0.45);
   --color-backdrop: rgba(0,0,0,0.4);
   --color-shadow-ambient: rgba(0,0,0,0.12);

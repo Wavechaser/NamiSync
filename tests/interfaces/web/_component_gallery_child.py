@@ -891,6 +891,8 @@ def _valid_control_rows(rows: object) -> bool:
         "border_style",
         "border_block_start",
         "border_block_end",
+        "border_block_start_width",
+        "border_block_end_width",
         "root_border",
         "root_border_width",
         "root_border_style",
@@ -966,7 +968,10 @@ def _valid_control_boundary_widths(
         rows[("tri_state_checkbox", state)]["border_width"]
     )
     text_input = _css_pixel_width(
-        rows[("text_input", state)]["border_width"]
+        rows[("text_input", state)]["border_block_start_width"]
+    )
+    text_input_bottom = _css_pixel_width(
+        rows[("text_input", state)]["border_block_end_width"]
     )
     return (
         button is not None
@@ -974,8 +979,9 @@ def _valid_control_boundary_widths(
         and checkbox is not None
         and math.isclose(checkbox, button, abs_tol=0.01)
         and text_input is not None
-        and text_input >= checkbox * 1.5
-        and text_input <= checkbox * 3.01
+        and math.isclose(text_input, button, abs_tol=0.01)
+        and text_input_bottom is not None
+        and text_input_bottom >= text_input
     )
 
 
