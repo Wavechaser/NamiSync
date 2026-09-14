@@ -254,15 +254,17 @@ _ACCENT_INTERACTIVE_CONTROL_KEYS = {
 }
 _CONTROL_FILL_RGB = {
     "light": {
-        "rest": "rgb(251, 251, 251)",
-        "hover": "rgb(246, 246, 246)",
-        "pressed": "rgb(245, 245, 245)",
+        "rest": ((255.0, 255.0, 255.0), 0xB3 / 0xFF),
+        "hover": ((249.0, 249.0, 249.0), 0x80 / 0xFF),
+        "pressed": ((249.0, 249.0, 249.0), 0x4D / 0xFF),
+        "disabled": ((249.0, 249.0, 249.0), 0x4D / 0xFF),
         "border": "rgb(229, 229, 229)",
     },
     "dark": {
-        "rest": "rgb(45, 45, 45)",
-        "hover": "rgb(50, 50, 50)",
-        "pressed": "rgb(39, 39, 39)",
+        "rest": ((255.0, 255.0, 255.0), 0x0F / 0xFF),
+        "hover": ((255.0, 255.0, 255.0), 0x15 / 0xFF),
+        "pressed": ((255.0, 255.0, 255.0), 0x08 / 0xFF),
+        "disabled": ((255.0, 255.0, 255.0), 0x0B / 0xFF),
         "border": "rgb(53, 53, 53)",
     },
 }
@@ -1549,6 +1551,7 @@ def test_sh_g_11_component_gallery_uses_installed_tokens_and_non_color_cues(
         _assert_complete_gallery_matrix(report)
         _assert_icon_registry_evidence(
             report["icons"],
+            controls=report["controls"],
             forced=report["media"]["forced"],
         )
         _assert_plan_list_evidence(
@@ -1598,7 +1601,7 @@ def test_sh_g_11_component_gallery_uses_installed_tokens_and_non_color_cues(
                 )
                 and control["state"] != "disabled"
             ):
-                assert _contrast(control["foreground"], control["background"]) >= 4.5
+                assert _foreground_contrast_on_control(control) >= 4.5
             if (
                 control["control"] in _BOUNDARY_CONTROL_KEYS
                 and control["state"] != "disabled"
@@ -1616,7 +1619,9 @@ def test_sh_g_11_component_gallery_uses_installed_tokens_and_non_color_cues(
                     underline_colors = _inset_shadow_colors(control)
                     assert underline_colors
                     assert max(
-                        _composited_contrast(color, control["background"])
+                        _foreground_contrast(
+                            color, control["background"], control["surrounding"]
+                        )
                         for color in underline_colors
                     ) >= 3.0
             if control["state"] == "focused":
@@ -1644,9 +1649,11 @@ def test_sh_g_11_component_gallery_uses_installed_tokens_and_non_color_cues(
         }
         theme = "dark" if report["media"]["dark"] else "light"
         normal_button = controls_by_key["button"]
-        for state in ("rest", "hover", "pressed"):
-            assert normal_button[state]["background"] == (
-                _CONTROL_FILL_RGB[theme][state]
+        for state in ("rest", "hover", "pressed", "disabled"):
+            expected_rgb, expected_alpha = _CONTROL_FILL_RGB[theme][state]
+            assert _color_rgb(normal_button[state]["background"]) == expected_rgb
+            assert _color_alpha(normal_button[state]["background"]) == pytest.approx(
+                expected_alpha, abs=0.002
             )
         for state in ("rest", "hover", "disabled", "focused"):
             assert _color_alpha(normal_button[state]["border_block_start"]) == pytest.approx(
@@ -1691,7 +1698,17 @@ def test_sh_g_11_component_gallery_uses_installed_tokens_and_non_color_cues(
                 active_edge = "thumb_edge_end" if key == "toggle" else "thumb_edge_start"
                 assert float(row[active_edge]) == pytest.approx(edge, abs=0.5)
         assert controls_by_key["toggle"]["disabled"]["background"] != controls_by_key["toggle"]["rest"]["background"]
-        assert controls_by_key["toggle_off"]["disabled"]["background"] == "rgba(0, 0, 0, 0)"
+        assert _color_alpha(
+            controls_by_key["toggle_off"]["disabled"]["background"]
+        ) == 0
+        toggle_off_alpha = {
+            "light": {"rest": 0x06, "hover": 0x0F, "pressed": 0x18},
+            "dark": {"rest": 0x19, "hover": 0x0B, "pressed": 0x12},
+        }
+        for state, alpha_byte in toggle_off_alpha[theme].items():
+            assert _color_alpha(
+                controls_by_key["toggle_off"][state]["background"]
+            ) == pytest.approx(alpha_byte / 0xFF, abs=0.002)
         disabled_on_thumb = controls_by_key["toggle"]["disabled"]["thumb_background"]
         assert _color_rgb(disabled_on_thumb) == (255.0, 255.0, 255.0)
         assert _color_alpha(disabled_on_thumb) == pytest.approx(
@@ -1807,6 +1824,31 @@ def test_sh_g_11_component_gallery_uses_installed_tokens_and_non_color_cues(
             abs=0.01,
         )
         input_states = controls_by_key["text_input"]
+        text_fill_alpha = {
+            "light": {
+                "rest": 0xB3,
+                "hover": 0x80,
+                "pressed": 0x4D,
+                "disabled": 0x4D,
+            },
+            "dark": {
+                "rest": 0x0F,
+                "hover": 0x15,
+                "pressed": 0x08,
+                "disabled": 0x0B,
+            },
+        }
+        for state, alpha_byte in text_fill_alpha[theme].items():
+            assert _color_alpha(input_states[state]["background"]) == pytest.approx(
+                alpha_byte / 0xFF, abs=0.002
+            )
+        if theme == "light":
+            assert _opaque_color(input_states["focused"]["background"])
+        else:
+            assert _color_rgb(input_states["focused"]["background"]) == (30.0,) * 3
+            assert _color_alpha(input_states["focused"]["background"]) == pytest.approx(
+                0xB3 / 0xFF, abs=0.002
+            )
         if theme == "dark" and not report["media"]["forced"]:
             assert _color_alpha(
                 input_states["disabled"]["border_block_start"]
@@ -1833,8 +1875,8 @@ def test_sh_g_11_component_gallery_uses_installed_tokens_and_non_color_cues(
             controls_by_key["button"]["disabled"]["background"]
         )
         if not report["media"]["forced"]:
-            assert controls_by_key["button"]["disabled"]["background"] == (
-                "rgb(42, 42, 42)" if theme == "dark" else "rgb(240, 240, 240)"
+            assert not _opaque_color(
+                controls_by_key["button"]["disabled"]["background"]
             )
         assert controls_by_key["button_primary"]["disabled"]["foreground"] == (
             controls_by_key["button"]["disabled"]["foreground"]
@@ -2055,7 +2097,16 @@ def test_sh_g_11_component_gallery_uses_installed_tokens_and_non_color_cues(
             )
     for sample in forced["icons"]["state_samples"]:
         assert sample["icon_color"] in system_colors
-        assert _contrast(sample["icon_color"], sample["control_background"]) >= 3.0
+        surrounding = next(
+            row["surrounding"]
+            for row in forced["controls"]
+            if row["control"] == "button" and row["state"] == sample["state"]
+        )
+        assert _foreground_contrast(
+            sample["icon_color"],
+            sample["control_background"],
+            surrounding,
+        ) >= 3.0
 
 
 @pytest.mark.headed
@@ -2139,6 +2190,7 @@ def test_sh_g_14_component_gallery_uses_closed_local_icon_registry(
         icons = report["icons"]
         _assert_icon_registry_evidence(
             icons,
+            controls=report["controls"],
             forced=report["media"]["forced"],
         )
         assert {sample["state"] for sample in icons["state_samples"]} == (
@@ -3176,7 +3228,7 @@ def _assert_complete_gallery_matrix(report: dict[str, object]) -> None:
         assert combobox["pressed_option_background"] == system_colors["Highlight"]
     else:
         assert not _opaque_color(combobox["ordinary_option_background"])
-        assert "linear-gradient" in combobox["trigger_background_image"]
+        assert combobox["trigger_background_image"] == "none"
         assert _opaque_color(combobox["popup_background"])
         assert combobox["selected_option_background"] == (
             combobox["hovered_option_background"]
@@ -3388,9 +3440,42 @@ def _composited_contrast(foreground: str, background: str) -> float:
     return (high + 0.05) / (low + 0.05)
 
 
+def _foreground_contrast_on_control(row: dict[str, str]) -> float:
+    return _foreground_contrast(
+        row["foreground"], row["background"], row["surrounding"]
+    )
+
+
+def _foreground_contrast(
+    foreground_color: str,
+    background_color: str,
+    surrounding_color: str,
+) -> float:
+    surrounding = _rgb(surrounding_color)
+    background_alpha = _color_alpha(background_color)
+    background_source = tuple(
+        channel / 255.0 for channel in _color_rgb(background_color)
+    )
+    background = tuple(
+        source * background_alpha + base * (1.0 - background_alpha)
+        for source, base in zip(background_source, surrounding, strict=True)
+    )
+    foreground_alpha = _color_alpha(foreground_color)
+    foreground_source = tuple(
+        channel / 255.0 for channel in _color_rgb(foreground_color)
+    )
+    foreground = tuple(
+        source * foreground_alpha + base * (1.0 - foreground_alpha)
+        for source, base in zip(foreground_source, background, strict=True)
+    )
+    low, high = sorted((_luminance(foreground), _luminance(background)))
+    return (high + 0.05) / (low + 0.05)
+
+
 def _assert_icon_registry_evidence(
     icons: dict[str, object],
     *,
+    controls: list[dict[str, str]],
     forced: bool,
 ) -> None:
     assert icons["registry_frozen"] is True
@@ -3434,8 +3519,17 @@ def _assert_icon_registry_evidence(
         )
     # Inactive controls are exempt from non-text contrast; their currentColor
     # inheritance and fixed local mask remain required above.
+    button_surroundings = {
+        row["state"]: row["surrounding"]
+        for row in controls
+        if row["control"] == "button"
+    }
     assert all(
-        _contrast(sample["icon_color"], sample["control_background"]) >= 3.0
+        _foreground_contrast(
+            sample["icon_color"],
+            sample["control_background"],
+            button_surroundings[sample["state"]],
+        ) >= 3.0
         for sample in icons["state_samples"]
         if sample["state"] != "disabled"
     )

@@ -1,24 +1,26 @@
 # Latest session handoff
 
-## Dark control palette follow-up (2026-09-14)
+## Translucent controls and queued options (2026-09-14)
 
-GUI-S13 starts at 23c7b64 on milestone1 with the user's uncommitted 1.2px
-button/toggle border edit. That edit is intentionally retained; the user also
-requested matching checkbox strokes to 1.2px during this delivery.
-Dark ordinary-button rest and edge colors are tuned; disabled dark textboxes
-receive a separate top/side stroke without changing their bottom border,
-underline or fill. Light, toggle and forced-color colors stay unchanged.
+Baseline f711386 on milestone1. GUI-S14 and GUI-S15 in M1_PLAN are the closed
+register for this delivery. User authorized implementation, review and commits.
+Execute-task builders own disjoint control-style and batch-state sources;
+root owns shared documentation, serialized testing and commits.
 
-Production scope is tokens.css/components.css; direct token/gallery tests and
-DESKTOP_UI, M1_PLAN and CHANGELOG travel with the commit. Root owns serialized
-verification and commit; execute-task builder/reviewer roles are separate.
-Verification passed: 31 focused token/installed-gallery checks in
-build/gui-icons/gui-s13-focused02.txt and 1,528 interface tests in
-gui-s13-interfaces.txt. Independent source/test review passed. The initial
-focused receipt is superseded: the gallery parser's width-ratio expectation
-needed the same 1.2px migration as the parent test. Checkbox/button equality
-remains enforced. Unique external basetemps keep test artifacts out of Git.
+S14 replaces RGB control-fill approximations with WinUI alpha roles while
+retaining 1.2px strokes, border tuning, accent states, forced colors and separate
+popup/Mica materials. S15 captures options at Add pair and removes the later
+batch-wide current-form overwrite, preserving admission/retry/removal guards.
+Both implementations have passed independent review. Focused evidence in
+build/gui-icons/gui-s14-focused05.txt records 31 passing token/installed-gallery
+checks; gui-s15-probes.txt records both passing Setup/coordinator regressions.
+The combined complete suite passed: gui-s14-s15-complete.txt records 5,013 passed
+and 4 existing skips, including all 30 installed checks. S14 is ready to commit;
+S15's code is verified and its matching documentation closes next. Earlier S14 receipts exposed stale
+opaque-background assumptions in gallery contrast helpers and ambiguous
+disabled-rule selectors; final checks retain their thresholds and measure
+composited fills against the existing observed backdrop.
 
-README's current GUI synopsis remains accurate. No backend, task lifecycle,
-Mica or icon changes. No user window/display settings changed and no temporary
-branch/worktree created. Relaunch the development shell to load updated assets.
+No backend/protocol, persistence, native display settings or user-owned window
+changes. Existing shadow and M2 dispositions remain deferred. No task-created
+branch/worktree. Relaunch the development shell to load changed assets.

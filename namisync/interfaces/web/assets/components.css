@@ -196,7 +196,7 @@ body {
 
 .nami-button,
 .nami-icon-button {
-  background: var(--color-control-fill);
+  background: var(--color-button-fill);
   border: 1.2px solid var(--color-button-edge-start);
   border-block-end-color: var(--color-button-edge-end);
   color: var(--color-neutral-foreground);
@@ -216,12 +216,12 @@ body {
 
 .nami-button:hover,
 .nami-icon-button:hover {
-  background: var(--color-control-fill-hover);
+  background: var(--color-button-fill-hover);
 }
 
 .nami-button:active,
 .nami-icon-button:active {
-  background: var(--color-control-fill-pressed);
+  background: var(--color-button-fill-pressed);
   border-color: var(--color-button-edge-flat);
 }
 
@@ -257,6 +257,7 @@ body {
 .nami-button:disabled,
 .nami-input:disabled,
 .nami-select:disabled,
+.nami-combobox__trigger:disabled,
 .nami-combobox[aria-disabled="true"] .nami-combobox__trigger,
 .nami-checkbox:disabled,
 .nami-toggle__control:disabled,
@@ -291,7 +292,7 @@ body {
 
 .nami-input,
 .nami-select {
-  background: var(--color-neutral-surface);
+  background: var(--color-text-control-fill);
   border-radius: var(--radius-small);
   box-shadow: inset 0 -2px 0 var(--color-textbox-underline);
   color: var(--color-neutral-foreground);
@@ -305,16 +306,18 @@ body {
 
 .nami-input:hover,
 .nami-select:hover {
-  background: var(--color-neutral-surface-subtle);
+  background: var(--color-text-control-fill-hover);
 }
 
 .nami-input:active,
 .nami-select:active {
+  background: var(--color-text-control-fill-pressed);
   border-color: var(--color-textbox-border);
 }
 
 .nami-input:focus,
 .nami-select:focus {
+  background: var(--color-text-control-fill-focused);
   box-shadow: inset 0 -2px 0 var(--color-accent-fill);
 }
 
@@ -342,24 +345,14 @@ body {
 }
 
 .nami-combobox__trigger {
-  --nami-combobox-trigger-background: var(--color-neutral-surface);
+  --nami-combobox-trigger-background: var(--color-text-control-fill);
   --nami-combobox-trigger-border-start: var(--color-control-elevation-border-start);
   --nami-combobox-trigger-border-end: var(--color-control-elevation-border-end);
   align-items: center;
   background-color: var(--nami-combobox-trigger-background);
-  background-image:
-    linear-gradient(
-      var(--nami-combobox-trigger-background),
-      var(--nami-combobox-trigger-background)
-    ),
-    linear-gradient(
-      to bottom,
-      var(--nami-combobox-trigger-border-start),
-      var(--nami-combobox-trigger-border-end)
-    );
-  background-clip: padding-box, border-box;
-  background-origin: border-box;
-  border: 1px solid var(--color-neutral-subtle-background);
+  background-image: none;
+  border: 1px solid var(--nami-combobox-trigger-border-start);
+  border-block-end-color: var(--nami-combobox-trigger-border-end);
   border-radius: var(--radius-small);
   color: var(--color-neutral-foreground);
   cursor: pointer;
@@ -385,12 +378,12 @@ body {
 }
 
 .nami-combobox__trigger:not(:disabled):hover {
-  --nami-combobox-trigger-background: var(--color-neutral-surface-subtle);
+  --nami-combobox-trigger-background: var(--color-text-control-fill-hover);
 }
 
 .nami-combobox__trigger:not(:disabled):active,
 .nami-combobox__trigger[aria-expanded="true"] {
-  --nami-combobox-trigger-background: var(--color-neutral-surface-pressed);
+  --nami-combobox-trigger-background: var(--color-text-control-fill-pressed);
   --nami-combobox-trigger-border-start: var(--color-control-elevation-border-flat);
   --nami-combobox-trigger-border-end: var(--color-control-elevation-border-flat);
 }
@@ -484,7 +477,7 @@ body {
 
 .nami-checkbox {
   appearance: none;
-  background: var(--color-neutral-surface);
+  background: var(--color-checkbox-fill-off);
   border: 1.2px solid var(--color-control-strong-stroke);
   border-radius: var(--radius-small);
   color: var(--color-accent-fill-foreground);
@@ -501,10 +494,11 @@ body {
 }
 
 .nami-checkbox:hover {
-  background: var(--color-neutral-surface-hover);
+  background: var(--color-checkbox-fill-off-hover);
 }
 
 .nami-checkbox:active {
+  background: var(--color-checkbox-fill-off-pressed);
   border-color: var(--color-control-strong-stroke);
 }
 
@@ -545,7 +539,7 @@ body {
 
 .nami-toggle__control {
   appearance: none;
-  background: var(--color-neutral-surface);
+  background: var(--color-toggle-fill-off);
   border: 1.2px solid var(--color-control-strong-stroke);
   border-radius: var(--radius-circular);
   cursor: pointer;
@@ -579,7 +573,7 @@ body {
 }
 
 .nami-toggle__control:hover {
-  background: var(--color-neutral-surface-hover);
+  background: var(--color-toggle-fill-off-hover);
 }
 
 .nami-toggle__control:hover::after {
@@ -589,6 +583,7 @@ body {
 }
 
 .nami-toggle__control:active {
+  background: var(--color-toggle-fill-off-pressed);
   border-color: var(--color-control-strong-stroke);
 }
 
@@ -1798,8 +1793,25 @@ body {
 .nami-icon-button:disabled,
 .nami-icon-button:disabled:hover,
 .nami-icon-button:disabled:active {
+  background: var(--color-button-fill-disabled);
   border-color: var(--color-button-edge-start);
   border-block-end-color: var(--color-button-edge-end);
+}
+
+.nami-input:disabled,
+.nami-select:disabled,
+.nami-combobox__trigger:disabled,
+.nami-combobox[aria-disabled="true"] .nami-combobox__trigger {
+  background: var(--color-text-control-fill-disabled);
+}
+
+.nami-checkbox:disabled:not(:checked):not(:indeterminate):not([aria-checked="mixed"]) {
+  background: var(--color-checkbox-fill-off-disabled);
+}
+
+.nami-checkbox:disabled:is(:checked, :indeterminate, [aria-checked="mixed"]) {
+  background: var(--color-toggle-fill-disabled-on);
+  border-color: var(--color-semantic-transparent);
 }
 
 .nami-button--clear,

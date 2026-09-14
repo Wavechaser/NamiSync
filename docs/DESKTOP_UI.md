@@ -372,8 +372,14 @@ construction lines; the dual keyboard-focus stroke remains the accessible
 control boundary.
 
 The tuned component contract has two command-button tiers. Ordinary buttons
-keep the `#fbfbfb` Light and `#2d2d2d` Dark fills. Dark hover/press remain
-`#323232`/`#272727`. Light borders retain black 0F/29 alpha; Dark uses white
+use WinUI's translucent control fills rather than opaque RGB approximations.
+In CSS RGBA order, Dark rest/hover/press/disabled use `#ffffff0f`,
+`#ffffff15`, `#ffffff08` and `#ffffff0b`; Light uses `#ffffffb3`,
+`#f9f9f980`, `#f9f9f94d` and `#f9f9f94d`. Textboxes and combobox triggers
+share these control-fill roles. Focused textboxes use the native input-active
+role: `#1e1e1eb3` in Dark and opaque white in Light. Alpha applies to the fill,
+not the whole element, so text and glyphs retain their own contrast.
+Light borders retain black 0F/29 alpha; Dark uses white
 0A on the top/sides and 04 below, flattening to white 0B when pressed (hex
 alpha). Disabling retains the resting edge tones. Ordinary button, checkbox and toggle
 strokes use an authored 1.2px width to bias Chromium's fractional-DPI snapping;
@@ -382,9 +388,19 @@ of identical physical pixels across displays. Native 1 logical px and the
 original elevation roles were referenced from Microsoft's
 [Button resources](https://github.com/microsoft/microsoft-ui-xaml/blob/main/controls/dev/CommonStyles/Button_themeresources.xaml)
 and [common colors](https://github.com/microsoft/microsoft-ui-xaml/blob/main/controls/dev/CommonStyles/Common_themeresources_any.xaml).
-Disabled dark textboxes use a separate white 12-alpha top/side stroke. Their
-fill, bottom border and inset underline retain the existing disabled treatment;
-light and forced-color roles remain unchanged.
+Disabled dark textboxes retain the separate white 12-alpha top/side stroke,
+bottom border and inset underline; their fill follows the disabled control role.
+Forced colors remain system-owned. The mapping follows the same
+[common resources](https://github.com/microsoft/microsoft-ui-xaml/blob/main/controls/dev/CommonStyles/Common_themeresources_any.xaml),
+[textbox resources](https://github.com/microsoft/microsoft-ui-xaml/blob/main/controls/dev/CommonStyles/TextBox_themeresources.xaml)
+and [combobox resources](https://github.com/microsoft/microsoft-ui-xaml/blob/main/controls/dev/ComboBox/ComboBox_themeresources.xaml).
+Popup material and shadow composition remain separate from trigger fills.
+The combobox trigger paints its fill once, with independent top/side/bottom
+strokes; it no longer stacks a fill gradient over a second fill and a full-area
+border gradient. This preserves the intended alpha over its actual parent.
+Its elevation edges use native black 0F/29 in Light and white 18/12 in Dark;
+pressed edges flatten to black 0F or white 12 respectively. The separately tuned
+ordinary-button stroke tones above remain a local choice.
 A Windows-accent
 primary modifier marks consequential actions such as Execute and Verify.
 Light selects Windows `AccentDark1` as its base; Dark selects `AccentLight2`.
@@ -444,8 +460,9 @@ Switches retain a 40x20 logical pixel footprint and use the same strong neutral
 off-state stroke, including while disabled. The checked boundary is transparent.
 Following [WinUI's switch template](https://github.com/microsoft/microsoft-ui-xaml/blob/main/controls/dev/CommonStyles/ToggleSwitch_themeresources.xaml),
 the centered thumb is 12x12 at rest/disabled, 14x14 on hover and 17x14 while
-pressed, elongating inward. Enabled fill states retain the existing accent and
-neutral roles. Disabled off/on fills and thumb colors follow native disabled
+pressed, elongating inward. Off-state switches and checkboxes use the native
+translucent alternate-control fill roles; checked states retain the accent
+base and its native hover/press opacity ladder. Disabled off/on fills and thumb colors follow native disabled
 resource roles; keeping the off-state stroke unchanged is the requested local
 exception. Keyboard focus and forced-color system strokes remain independent.
 
@@ -1023,8 +1040,9 @@ Add filter sits beside the filter textbox; [PLANNER.md](PLANNER.md#exclude-filte
 documents pattern syntax and effect. Disclosure changes presentation only,
 never option values. Only the selected task type's Create action is visible.
 Expanded options have extra spacing below the always-visible switches and 8px
-between their rows. Disabled dark controls use an authored #2a2a2a surface;
-light, forced-color and transparent disabled-control styles remain unchanged.
+between their rows. Buttons, textboxes and combobox triggers use translucent
+disabled fills; other disabled surfaces retain their own component roles.
+Forced-color and transparent-action overrides remain independent.
 Empty and resolved paths omit routine hints; refusal and recovery messages remain
 visible. Each path has compact inset Clear and recent-folder buttons; Clear
 empties only that local field and invalidates its candidate without a Python

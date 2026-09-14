@@ -28,6 +28,10 @@ packaging remain open.
 
 #### Refine task navigation, Settings and Setup (2026-09-11–14)
 
+- Replaced opaque button, textbox and combobox trigger fills with WinUI alpha
+  roles in both themes, including disabled/input-active states and off-state
+  switches/checkboxes. Accent-on and independent popup materials remain.
+
 - Tuned dark ordinary-button fill and edge opacity, softened disabled textbox
   top/side strokes, and matched buttons, toggles and checkboxes to the selected 1.2px border
   adjustment for fractional-DPI Chromium rendering.

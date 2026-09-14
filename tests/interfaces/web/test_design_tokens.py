@@ -260,9 +260,22 @@ WINDOWS_ACCENT_FALLBACK = {
 }
 AUTHORED_CONTROL_VALUES = {
     "light": {
-        "--color-control-fill": "#fbfbfb",
-        "--color-control-fill-hover": "#f6f6f6",
-        "--color-control-fill-pressed": "#f5f5f5",
+        "--color-button-fill": "#FFFFFFB3",
+        "--color-button-fill-hover": "#F9F9F980",
+        "--color-button-fill-pressed": "#F9F9F94D",
+        "--color-button-fill-disabled": "#F9F9F94D",
+        "--color-text-control-fill": "#FFFFFFB3",
+        "--color-text-control-fill-hover": "#F9F9F980",
+        "--color-text-control-fill-pressed": "#F9F9F94D",
+        "--color-text-control-fill-focused": "#FFFFFF",
+        "--color-text-control-fill-disabled": "#F9F9F94D",
+        "--color-checkbox-fill-off": "#00000006",
+        "--color-checkbox-fill-off-hover": "#0000000F",
+        "--color-checkbox-fill-off-pressed": "#00000018",
+        "--color-checkbox-fill-off-disabled": "transparent",
+        "--color-toggle-fill-off": "#00000006",
+        "--color-toggle-fill-off-hover": "#0000000F",
+        "--color-toggle-fill-off-pressed": "#00000018",
         "--color-control-border": "#e5e5e5",
         "--color-button-edge-start": "#0000000F",
         "--color-button-edge-end": "#00000029",
@@ -278,9 +291,22 @@ AUTHORED_CONTROL_VALUES = {
         "--color-textbox-underline": "rgba(0,0,0,0.45)",
     },
     "dark": {
-        "--color-control-fill": "#2d2d2d",
-        "--color-control-fill-hover": "#323232",
-        "--color-control-fill-pressed": "#272727",
+        "--color-button-fill": "#FFFFFF0F",
+        "--color-button-fill-hover": "#FFFFFF15",
+        "--color-button-fill-pressed": "#FFFFFF08",
+        "--color-button-fill-disabled": "#FFFFFF0B",
+        "--color-text-control-fill": "#FFFFFF0F",
+        "--color-text-control-fill-hover": "#FFFFFF15",
+        "--color-text-control-fill-pressed": "#FFFFFF08",
+        "--color-text-control-fill-focused": "#1E1E1EB3",
+        "--color-text-control-fill-disabled": "#FFFFFF0B",
+        "--color-checkbox-fill-off": "#00000019",
+        "--color-checkbox-fill-off-hover": "#FFFFFF0B",
+        "--color-checkbox-fill-off-pressed": "#FFFFFF12",
+        "--color-checkbox-fill-off-disabled": "transparent",
+        "--color-toggle-fill-off": "#00000019",
+        "--color-toggle-fill-off-hover": "#FFFFFF0B",
+        "--color-toggle-fill-off-pressed": "#FFFFFF12",
         "--color-control-border": "#353535",
         "--color-button-edge-start": "#FFFFFF0A",
         "--color-button-edge-end": "#FFFFFF04",
@@ -334,17 +360,17 @@ AUTHORED_FLYOUT_VALUES = {
         "--color-flyout-background-solid": "#ffffff",
         "--color-flyout-border-solid": "#ebebeb",
         "--color-flyout-border": "rgba(0,0,0,0.06)",
-        "--color-control-elevation-border-start": "rgba(0,0,0,0.04)",
-        "--color-control-elevation-border-end": "rgba(0,0,0,0.12)",
-        "--color-control-elevation-border-flat": "rgba(0,0,0,0.10)",
+        "--color-control-elevation-border-start": "#0000000F",
+        "--color-control-elevation-border-end": "#00000029",
+        "--color-control-elevation-border-flat": "#0000000F",
     },
     "dark": {
         "--color-flyout-background-solid": "#292929",
         "--color-flyout-border-solid": "#1c1c1c",
         "--color-flyout-border": "rgba(0,0,0,0.20)",
-        "--color-control-elevation-border-start": "rgba(0,0,0,0.08)",
-        "--color-control-elevation-border-end": "rgba(0,0,0,0.26)",
-        "--color-control-elevation-border-flat": "rgba(0,0,0,0.20)",
+        "--color-control-elevation-border-start": "#FFFFFF18",
+        "--color-control-elevation-border-end": "#FFFFFF12",
+        "--color-control-elevation-border-flat": "#FFFFFF12",
     },
 }
 INTENTS = (
@@ -517,6 +543,22 @@ def _contrast(first: str, second: str) -> float:
         (_luminance(first), _luminance(second)), reverse=True
     )
     return (lighter + 0.05) / (darker + 0.05)
+
+
+def _composite_over(foreground: str, background: str) -> str:
+    match = re.fullmatch(r"#([0-9A-Fa-f]{6})([0-9A-Fa-f]{2})", foreground)
+    assert match is not None, foreground
+    assert re.fullmatch(r"#[0-9A-Fa-f]{6}", background), background
+    alpha = int(match.group(2), 16) / 255
+    source = tuple(
+        int(match.group(1)[index : index + 2], 16) for index in (0, 2, 4)
+    )
+    base = tuple(int(background[index : index + 2], 16) for index in (1, 3, 5))
+    channels = tuple(
+        round(front * alpha + back * (1 - alpha))
+        for front, back in zip(source, base, strict=True)
+    )
+    return "#" + "".join(f"{channel:02X}" for channel in channels)
 
 
 def _has_raw_color(source: str) -> bool:
@@ -1290,14 +1332,18 @@ def test_sh_g_11_components_cover_controls_states_and_non_color_cues() -> None:
     assert "border: 1px solid var(--color-flyout-border-solid);" in elevated
     assert "border-color: var(--color-flyout-border);" in elevated
     combobox_trigger = _block(source, ".nami-combobox__trigger ")
+    assert "var(--color-text-control-fill)" in combobox_trigger
     assert "var(--color-control-elevation-border-start)" in combobox_trigger
     assert "var(--color-control-elevation-border-end)" in combobox_trigger
-    assert "linear-gradient(" in combobox_trigger
+    assert "background-image: none;" in combobox_trigger
+    assert "background-clip:" not in combobox_trigger
+    assert "background-origin:" not in combobox_trigger
     combobox_open = _block(
         source,
         '.nami-combobox__trigger:not(:disabled):active,',
     )
     assert "var(--color-control-elevation-border-flat)" in combobox_open
+    assert "var(--color-text-control-fill-pressed)" in combobox_open
     assert """.nami-combobox__trigger:not(:disabled):active,
 .nami-combobox__trigger[aria-expanded="true"] {""" in source
     popup = next(
@@ -1577,7 +1623,10 @@ def test_sh_g_11_solid_controls_and_operation_filters_follow_tuned_states() -> N
         )
         assert _contrast(
             _resolve("--color-neutral-foreground", theme),
-            _resolve("--color-control-fill", theme),
+            _composite_over(
+                _resolve("--color-button-fill", theme),
+                _resolve("--color-neutral-canvas", theme),
+            ),
         ) >= 4.5
 
     shared_controls = _block(
@@ -1590,7 +1639,7 @@ def test_sh_g_11_solid_controls_and_operation_filters_follow_tuned_states() -> N
         source,
         ".nami-button,\n.nami-icon-button ",
     )
-    assert "background: var(--color-control-fill);" in ordinary_controls
+    assert "background: var(--color-button-fill);" in ordinary_controls
     # Retain the reviewed 1.2px authored stroke; headed evidence owns device snapping.
     assert (
         "border: 1.2px solid var(--color-button-edge-start);"
@@ -1600,9 +1649,16 @@ def test_sh_g_11_solid_controls_and_operation_filters_follow_tuned_states() -> N
     assert "color: var(--color-neutral-foreground);" in ordinary_controls
     ordinary_hover = _block(source, ".nami-button:hover,")
     ordinary_pressed = _block(source, ".nami-button:active,")
-    assert "background: var(--color-control-fill-hover);" in ordinary_hover
-    assert "background: var(--color-control-fill-pressed);" in ordinary_pressed
+    assert "background: var(--color-button-fill-hover);" in ordinary_hover
+    assert "background: var(--color-button-fill-pressed);" in ordinary_pressed
     assert "border-color: var(--color-button-edge-flat);" in ordinary_pressed
+    disabled_button = _block(
+        source,
+        ".nami-button:disabled,\n.nami-button:disabled:hover,\n"
+        ".nami-button:disabled:active,\n.nami-icon-button:disabled,\n"
+        ".nami-icon-button:disabled:hover,\n.nami-icon-button:disabled:active ",
+    )
+    assert "background: var(--color-button-fill-disabled);" in disabled_button
 
     primary_boundary = _block(source, ".nami-button--primary ")
     assert "border: 0;" in primary_boundary
@@ -1644,8 +1700,19 @@ def test_sh_g_11_solid_controls_and_operation_filters_follow_tuned_states() -> N
     assert "box-shadow: inset 0 -2px 0 var(--color-textbox-underline);" in (
         input_surface
     )
+    assert "background: var(--color-text-control-fill);" in input_surface
     input_focus = _block(source, ".nami-input:focus,\n.nami-select:focus ")
+    assert "background: var(--color-text-control-fill-focused);" in input_focus
     assert "box-shadow: inset 0 -2px 0 var(--color-accent-fill);" in input_focus
+    disabled_input_fill = _block(
+        source,
+        ".nami-input:disabled,\n.nami-select:disabled,\n.nami-combobox__trigger:disabled,\n"
+        '.nami-combobox[aria-disabled="true"] .nami-combobox__trigger ',
+    )
+    assert (
+        "background: var(--color-text-control-fill-disabled);"
+        in disabled_input_fill
+    )
     disabled_input = _block(source, ".nami-input:disabled,\n.nami-select:disabled ")
     assert (
         "border-block-start-color: var(--color-textbox-disabled-border);"
@@ -1658,9 +1725,16 @@ def test_sh_g_11_solid_controls_and_operation_filters_follow_tuned_states() -> N
     assert "border-block-end-color:" not in disabled_input
 
     checkbox = _block(source, ".nami-checkbox ")
+    assert "background: var(--color-checkbox-fill-off);" in checkbox
     assert "border: 1.2px solid var(--color-control-strong-stroke);" in checkbox
     assert "color: var(--color-accent-fill-foreground);" in checkbox
+    checkbox_hover = _block(source, ".nami-checkbox:hover ")
+    assert "background: var(--color-checkbox-fill-off-hover);" in checkbox_hover
     unchecked_checkbox_pressed = _block(source, ".nami-checkbox:active ")
+    assert (
+        "background: var(--color-checkbox-fill-off-pressed);"
+        in unchecked_checkbox_pressed
+    )
     assert (
         "border-color: var(--color-control-strong-stroke);"
         in unchecked_checkbox_pressed
@@ -1693,6 +1767,7 @@ def test_sh_g_11_solid_controls_and_operation_filters_follow_tuned_states() -> N
     toggle_thumb = _block(source, ".nami-toggle__control:checked::after ")
     assert "background: var(--color-accent-fill-foreground);" in toggle_thumb
     toggle_control = _block(source, ".nami-toggle__control ")
+    assert "background: var(--color-toggle-fill-off);" in toggle_control
     # This deliberate 1.2px value shares the ordinary-button rendering adjustment.
     assert "border: 1.2px solid var(--color-control-strong-stroke);" in toggle_control
     assert "inline-size: 2.5rem;" in toggle_control
@@ -1707,10 +1782,14 @@ def test_sh_g_11_solid_controls_and_operation_filters_follow_tuned_states() -> N
     assert "inline-size: 0.875rem;" in toggle_thumb_hover
     assert "block-size: 0.875rem;" in toggle_thumb_hover
     assert "inset-inline-start: 0.125rem;" in toggle_thumb_hover
+    toggle_off_hover = _block(source, ".nami-toggle__control:hover ")
+    assert "background: var(--color-toggle-fill-off-hover);" in toggle_off_hover
     toggle_thumb_pressed = _block(source, ".nami-toggle__control:active::after ")
     assert "inline-size: 1.0625rem;" in toggle_thumb_pressed
     assert "block-size: 0.875rem;" in toggle_thumb_pressed
     assert "inset-inline-start: 0.1875rem;" in toggle_thumb_pressed
+    toggle_off_pressed = _block(source, ".nami-toggle__control:active ")
+    assert "background: var(--color-toggle-fill-off-pressed);" in toggle_off_pressed
     assert "border-color: var(--color-semantic-transparent);" in toggle
     toggle_disabled = _block(source, ".nami-toggle__control:disabled ")
     assert "background: var(--color-toggle-fill-disabled-off);" in toggle_disabled
