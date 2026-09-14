@@ -200,9 +200,6 @@ never hides the other result axes in rendered output.
 
 ## Documentation
 
-- [Documentation maintenance](docs/README.md) — subject ownership, editing
-  conventions and changelog structure for contributors.
-
 - [Architecture](docs/ARCHITECTURE.md) — system layers, contracts, and milestone order.
 - [Features](docs/FEATURES.md), [Bugs](docs/BUGS.md), and [Threat Model](docs/DEFENSE.md) — 
   present and future scope, known issues, and supported assumptions, tolerance policy, 

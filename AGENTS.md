@@ -10,15 +10,21 @@ stays outside the GUI for reuse by other entry points.
 Preserve these invariants unless the user explicitly changes their contract,
 with matching tests and documentation:
 
-- Filesystem changes follow the reviewed plan; destructive effects remain
-  guarded, scoped and visible. `trash` is the default deletion policy;
-  `additive` and `mirror` are the other names. Guard or hide `mirror` until
-  the safety model is proven.
-- Publish copies atomically on the target volume. Record durable state only
-  after the corresponding filesystem operation succeeds. Preserve timestamps
-  and stable metadata so immediate reruns converge on an accurate near-no-op.
-- Planning/execution, inventory/integrity, history and presentation have distinct
-  responsibilities; none silently reinterprets or invalidates another's state.
+- **Operational safety:** filesystem changes follow an explicit reviewed plan;
+  destructive behavior stays guarded, scoped, and visible to the user.
+- **Atomicity:** publish copied files atomically on the target volume, and only
+  record durable state after the corresponding filesystem operation succeeds.
+- **Idempotency:** repeated scans and immediate reruns must converge on an
+  accurate no-op or fire the same pending action. Preserve stable metadata and
+  timestamps where they support that result.
+- **Feature orthogonality:** planning/execution, inventory/integrity, history,
+  and UI presentation have distinct responsibilities. Do not make one feature
+  silently reinterpret, duplicate, or invalidate another feature's state.
+- **Discrete layering:** `core` defines contracts; `modules` implement isolated
+  domain operations; `db` owns persistence; `workflows` are the only place
+  modules meet; `dispatcher` is domain-blind; and `interfaces` adapt workflows
+  and sessions. Dependencies follow the import law in `ARCHITECTURE.md`; UI code
+  does not decide sync behavior or reach around workflows.
 - `RootAuthority` is point-of-use evidence, never lasting authorization. Consumers
   re-probe under their own admission/outcome policies. Shared core code probes
   and classifies; it does not cache freshness, persist bindings or decide policy.
@@ -48,25 +54,22 @@ Use the relevant routes below, not a mandatory full-document reading sequence:
 - Cross-layer/contracts work: [ARCHITECTURE.md](docs/ARCHITECTURE.md) owns the
   import law and contract-to-source locator. Exact shared shapes are source-owned
   under core; prefer explicit dataclasses and typed functions.
-- Safety or quantitative claims: [DEFENSE.md](docs/DEFENSE.md), including §7 for
-  evidence authority. Diagnostics, targets and drift guards are not acceptance
-  merely because they were measured. Classify consequence and enforceability
+- Safety, bugfix boundaries, or quantitative claims: [DEFENSE.md](docs/DEFENSE.md), 
+  including §7 for evidence authority. Diagnostics, targets and drift guards are not
+  acceptance merely because they were measured. Classify consequence and enforceability
   before choosing the lowest sufficient tier; keep observations separate from
   contracts/validators. Record fixtures, profiles, scaling, aggregation/retention,
   artifacts and rerun triggers in the owning component doc, not TESTS.md.
 - Adapter/host/lifecycle work: [INTERFACES.md](docs/INTERFACES.md); command/event
   transport and ingress: [BRIDGE.md](docs/BRIDGE.md); tree/search/sort/selection
   and scale: [PRESENTATION.md](docs/PRESENTATION.md).
-- UI and icons: [DESKTOP_UI.md](docs/DESKTOP_UI.md); icon assets or catalog/tool
-  changes also require [TOOLS.md](docs/TOOLS.md)'s icon maintenance rules.
+- UI and icons: [DESKTOP_UI.md](docs/DESKTOP_UI.md); icon assets or catalog servicing
+  should use the tooling and maintenance guidelines documented in [TOOLS.md](docs/TOOLS.md).
 - Product scope: [FEATURES.md](docs/FEATURES.md); checkpoints:
   [M1_PLAN.md](docs/M1_PLAN.md), the sole active M1 delivery register. Accepted
   future outcomes remain binding, but unrealized representation, reservation,
   DTO and command-count recipes are reconsidered at first use; retain only
   narrow admission and measured scale obligations with named owners.
-- Documentation edits: [docs/README.md](docs/README.md) defines ownership and
-  maintenance conventions. Superseded material in `docs/obsolete/` is historical,
-  not current implementation guidance.
 
 ## Implementation And Verification
 
@@ -172,8 +175,8 @@ expand authority or relax repository gates.
 ## Commits And Documentation
 
 - One coherent checkpoint per mergeable commit, including its tests and matching
-  documentation. Review relevant docs, obsolete material, README and AGENTS for
-  updates before committing; stale behavior documentation blocks readiness.
+  documentation. Review relevant docs, obsolete material, and AGENTS for updates
+  before committing; stale behavior documentation blocks readiness.
 - Use `<category>(<optional-scope>): <imperative summary>` with the narrowest of
   `feat`, `fix`, `perf`, `test`, `docs`, `refactor`, `build`, `chore`; scope is a
   lowercase owning component, omitted for cross-cutting work. `wip` is recovery-
@@ -184,4 +187,59 @@ expand authority or relax repository gates.
   At task delivery, extend the matching CHANGELOG task/date range or add a new
   task when none fits; update README's summary only if its phase/milestone
   synopsis changes. Replace HANDOFF with latest-session changes, verification
-  and immediate operational context. Follow [documentation conventions](docs/README.md).
+  and immediate operational context. 
+
+## Documentation Maintenance
+
+Active subject documents live in `docs/`; superseded plans belong in
+`obsolete/` and must not guide current implementation. Root `AGENTS.md` owns
+repository execution boundaries. Root `README.md` remains the product/package
+readme, documentation index, roadmap and concise milestone/phase changelog;
+this file owns editing conventions, not a second product index.
+
+Read the section relevant to the document being edited. Update a subject's
+existing owner rather than creating parallel authority or copying its rules
+into every consumer document.
+
+### Subject Ownership
+
+- [ARCHITECTURE.md](ARCHITECTURE.md) owns durable decisions, contracts, layering,
+  coordination, invariants, type/protocol meaning and milestone direction.
+  Exact fields, enums, inheritance, protocols and signatures belong to the
+  owning core symbol. Keep the contract-to-source locator current; reproduce
+  exact shapes only when needed to explain an architectural decision. Module
+  docs explain use/extension policy without redefining shapes. Put dated
+  status, acceptance results, measurements and implementation walkthroughs in
+  the changelog, delivery plan or owning component document.
+- [DEFENSE.md](DEFENSE.md) is normative for supported assumptions, trusted
+  boundaries, hard walls, tolerances, quantitative evidence, residual-risk
+  dispositions and model-reopen triggers. Other documents link to its policy
+  and describe their own mechanisms; they do not restate its tables or accept
+  a residual merely by describing it.
+- [FEATURES.md](FEATURES.md) owns product behavior and distinguishes active
+  from unrealized outcomes, without milestone build recaps.
+- [BUGS.md](BUGS.md) owns substantive defects and its entry conventions. Keep
+  entries module-first, roughly 6–12 rendered lines, retaining consequence,
+  cause, fix and essential residual/test context. Categories name reusable
+  causal mechanisms; severity follows the worst supported product consequence,
+  not the audit or gate that found it.
+- [M1_PLAN.md](M1_PLAN.md) is the sole active M1 delivery register. Archive
+  superseded plan ancestry rather than maintaining parallel current authorities.
+- [HANDOFF.md](HANDOFF.md) covers only the latest session: changes, verification
+  and immediate operational context. Replace it rather than accumulating a
+  project reference or transcript; retain necessary resumption/evidence pointers.
+- Superseded material are placed in `docs/obsolete/`. They are historical references, 
+  not current implementation guidance.
+
+### Changelogs
+
+Both root changelogs are newest-first. README has only `##` milestone/release
+and `###` phase summaries, never task entries. CHANGELOG repeats those levels
+and adds dated `####` tasks with concise delivery bullets. Before named releases,
+use milestone headings such as `M1`; afterward use version and nickname, such as
+`v0.1.0 "Gertrud"`.
+
+Before adding a task, decide whether the session advances an existing one;
+extend its date range and summary when it does. Put post-delivery work in the
+relevant hardening phase rather than appending it to the original feature task.
+Update README's changelog synopsis only when the milestone/phase summary changes.
