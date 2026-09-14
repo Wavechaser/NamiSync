@@ -9,6 +9,20 @@ their behavior; measurement output remains subject to the authority rules below.
 
 ## Icon maintenance
 
+`namisync/interfaces/web/assets/icons/` contains fixed local monochrome SVGs
+from pinned `@fluentui/svg-icons`. `tools/icons.json` is the reviewed, development-
+only authority for package version, glyph selection and deliberate size fallbacks.
+Keep upstream filenames, exact package/file URLs, version, per-file SHA-256
+hashes and MIT license with the assets. Runtime registration, remote loading,
+generated SVG/path markup and data-derived asset paths are forbidden.
+
+`tools/icons.py` verifies archive integrity and copies native SVGs, generating
+provenance and marked fixed registry/CSS sections offline. Commit the generated
+source; the app never loads the catalog or generator. Tests belong in `tests/`
+and independently check catalog/output correspondence, SVG safety, packaging
+and rendering without a second glyph/hash catalog. Temporary archives, fixtures
+and command evidence belong in ignored `build/`.
+
 Edit `tools/icons.json` to select glyph names and declare missing-size fallbacks,
 then synchronize and review the generated diff:
 

@@ -26,6 +26,19 @@ bounded asynchronous task commands, frozen Setup using shared location admission
 and remembered locations, and dormant sync/integrity file-list row renderers. Review content and beta
 packaging remain open.
 
+#### Clarify agent execution boundaries (2026-09-12–14)
+
+- Condensed AGENTS.md through deduplication, tighter wording and conditional
+  component/documentation routing; removed obsolete migration history while
+  preserving execution boundaries and safety gates.
+- Clarified routine consumer updates within accepted boundaries, completion and
+  task-relevant documentation/testing. Preserved hard-wall and recurrence stops.
+- Retired the completed monolith prerequisite while retaining the current
+  executor settlement stability gate and protected oracle.
+- Aligned the two personal execution/review skills outside this repository:
+  retained GPT-5.6 cost preference and explicit-only execution invocation;
+  clarified existing review authorization and removed the plan-work dependency.
+
 #### Refine task navigation, Settings and Setup (2026-09-11–14)
 
 - Matched closed combobox triggers to the authored 1.2px button/textbox
@@ -137,16 +150,6 @@ packaging remain open.
 - Preserved actual hidden-mode/action visibility and keyboard focus through
   rerenders. Verified with 4,979 ordinary tests (four skips), all 30 installed
   headed tests, 12 import contracts and independent adversarial review.
-
-#### Clarify agent execution boundaries (2026-09-12)
-
-- Clarified routine consumer updates within accepted boundaries, completion and
-  task-relevant documentation/testing. Preserved hard-wall and recurrence stops.
-- Retired the completed monolith prerequisite while retaining the current
-  executor settlement stability gate and protected oracle.
-- Aligned the two personal execution/review skills outside this repository:
-  retained GPT-5.6 cost preference and explicit-only execution invocation;
-  clarified existing review authorization and removed the plan-work dependency.
 
 #### Expand the icon vocabulary and selective usage guidance (2026-09-11)
 

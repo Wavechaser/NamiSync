@@ -1,385 +1,187 @@
 # NamiSync Working Rules
 
-## Project Goal
+## Product And Integrity
 
-Build a Windows 11 x64 headed desktop app for safe one-way file mirroring.
-Users review a dry-run plan before execution; location inventory, integrity
-verification, history, and the desktop UI are part of the active product, not
-future placeholders. Core sync behavior remains outside the GUI so it can be
-reused by CLI, queue, or service entry points.
+Build a Windows 11 x64 headed app for safe one-way file mirroring. Users review
+an explicit dry-run plan before execution. Inventory, integrity verification,
+history and desktop presentation are product responsibilities; sync behavior
+stays outside the GUI for reuse by other entry points.
 
-## Directory Conventions
+Preserve these invariants unless the user explicitly changes their contract,
+with matching tests and documentation:
 
-- `namisync/core/`: contracts, session state, events, lexical path safety,
-  ephemeral root-authority evidence, and protocol shapes. It imports only the
-  Python standard library. Shared root-authority code probes and classifies;
-  it does not cache freshness, persist bindings, or decide module policy.
-- `namisync/modules/`: scanner, planner, preflight, executor, and verifier. A
-  domain component may be one module or a package. Files inside one component
-  package may import one another; component roots do not import sibling domain
-  components and import project contracts only from `core`.
-- `namisync/modules/executor/`: the executor component package. `__init__.py`
-  is the stable public facade; `runtime.py` owns operation policy, dispatch,
-  final-touch guards, retries, the typed effect journal, cancellation,
-  recording, settlement, and outcomes; `native.py` owns Windows filesystem
-  primitives, metadata, handles, publication, trash, and root-authority
-  adaptation; `pipeline.py` owns the bounded one-file read/hash/write flow,
-  teardown, metrics, and `CopyDigest` production. `native.py` and `pipeline.py`
-  are independent leaves and never import `runtime.py` or one another.
-- `namisync/modules/verifier/`: the verifier component package. `__init__.py`
-  is the stable public facade; `engine.py` owns classification, progress,
-  recording, and verifier policy; `native.py` owns the Windows cache-honest,
-  handle-bound reader and native bindings and never imports `engine.py`.
-- `namisync/db/`: recorder, repositories, schemas, and the history observer. It
-  imports `core` and is the sole writer of the main ledger.
-- `namisync/workflows/`: sync and integrity workflow coordination. It is the
-  only layer where modules meet and may import `core`, `modules`, and `db`.
-- `namisync/dispatcher/`: domain-blind session admission, custody, control, and
-  event fan-out. It imports `core`, never modules or workflows.
-- `namisync/interfaces/`: CLI, API, and desktop adapters. It imports workflows
-  and the dispatcher through the composition root and owns no domain policy.
-- `namisync/interfaces/web/assets/icons/`: fixed local monochrome icon assets
-  selected from pinned `@fluentui/svg-icons`. The catalog owns the version. Upstream filenames,
-  exact package/file URLs, version, per-file SHA-256 hashes, and MIT license
-  stay with the assets.
-  Runtime registration, remote loading, generated SVG/path markup, and
-  data-derived asset paths are forbidden. `tools/icons.json` is the reviewed
-  development-only catalog of package pin, glyphs and deliberate size fallbacks.
-  `tools/icons.py` verifies upstream archive integrity and copies native SVGs,
-  generating provenance and marked fixed registry/CSS sections offline. Generated
-  outputs remain committed source; the app never loads the catalog or generator.
-  Tests independently check catalog-to-output relationships, SVG safety,
-  packaging and rendering rather than maintaining a second glyph/hash catalog.
-- `tools/icons.py` and `tools/icons.json`: icon maintenance command and its
-  authored selection/package catalog. Tests for the command belong in `tests/`;
-  temporary archives, fixtures and command evidence belong in ignored `build/`.
-- `tests/`: pytest tests mirroring package boundaries where practical.
-- Active focused documentation lives in `docs/`:
-  - `DEFENSE.md` for supported assumptions, trusted boundaries, hard walls,
-    tolerance policy, quantitative-evidence authority, and residual-risk
-    dispositions.
-  - `BUGS.md` for substantive defects, verified fixes, and current status.
-  - `FEATURES.md` for all planned and existing features.
-  - `ARCHITECTURE.md` for project architectural decisions and design principles. 
-  - `BRIDGE.md` for external command/event protocol, transport, retry/recovery,
-    and its focused acceptance evidence; `PRESENTATION.md` for tree/view,
-    window/search/sort/selection presentation and focused scale contracts.
-  - `INTERFACES.md` for adapter, host/package, and implemented task lifecycle.
-    `M1_PLAN.md` is the sole remaining M1 delivery register; completed plan
-    ancestry and decision history are archived, not parallel active authorities.
-  - Accepted future user outcomes remain binding; unrealized representation,
-    reservation, DTO, and command-count recipes are reconsidered at first use.
-    Keep only narrow admission and measured scale obligations with named owners.
-  - `HANDOFF.md` for the latest session only: changes made, verification, and
-    immediate next-session operational context. Replace it each session rather
-    than accumulating project-level reference material.
-- Superseded planning material lives in `docs/obsolete/`; it remains readable
-  for historical context but must not describe current behavior or guide new
-  implementation.
-- `README.md` at the repository root is the project-level README, package
-  readme, active documentation index, roadmap/future directions, and concise
-  milestone/phase changelog summary.
-- `CHANGELOG.md` at the repository root is the detailed task history, grouped
-  by milestone or released version and then by phase.
-- `AGENTS.md` stays at the repository root as the repository instruction file.
+- Filesystem changes follow the reviewed plan; destructive effects remain
+  guarded, scoped and visible. `trash` is the default deletion policy;
+  `additive` and `mirror` are the other names. Guard or hide `mirror` until
+  the safety model is proven.
+- Publish copies atomically on the target volume. Record durable state only
+  after the corresponding filesystem operation succeeds. Preserve timestamps
+  and stable metadata so immediate reruns converge on an accurate near-no-op.
+- Planning/execution, inventory/integrity, history and presentation have distinct
+  responsibilities; none silently reinterprets or invalidates another's state.
+- `RootAuthority` is point-of-use evidence, never lasting authorization. Consumers
+  re-probe under their own admission/outcome policies. Shared core code probes
+  and classifies; it does not cache freshness, persist bindings or decide policy.
+- Bound complete external requests before constructing interface/presentation
+  values. All external adapters follow [BRIDGE.md](docs/BRIDGE.md)'s ingress
+  contract, including its equal-or-stricter bound for future adapters.
 
-Use this map to select documentation relevant to the task; it is not a required
-reading sequence. Read component contracts when changing their behavior, safety
-policy when touching its boundaries, and delivery registers for checkpoint work.
+## Structure And Task Routing
 
-## System Integrity Principles
+| Path | Responsibility and permitted project imports |
+| --- | --- |
+| `namisync/core/` | Contracts, session state/events, path safety, root evidence and protocols; standard library only. |
+| `namisync/modules/` | Isolated domain components; import contracts from core, never sibling components. Files within one component package may collaborate behind its facade. |
+| `namisync/db/` | Persistence, repositories and history observer; imports core; sole main-ledger writer. |
+| `namisync/workflows/` | Only place domain modules meet; imports core, modules and db. |
+| `namisync/dispatcher/` | Domain-blind admission, custody, control and event fan-out; imports core only. |
+| `namisync/interfaces/` | CLI/API/desktop adapters; access workflows and dispatcher through composition; no domain policy. |
+| `tests/` | Pytest coverage following package boundaries. |
+| `tools/` | Development utilities; temporary fixtures, archives and evidence go in ignored `build/`. |
 
-These are product invariants. Preserve them unless the task explicitly changes
-their contract, and update the matching tests and documentation when it does.
+Use the relevant routes below, not a mandatory full-document reading sequence:
 
-- **Operational safety:** filesystem changes follow an explicit reviewed plan;
-  destructive behavior stays guarded, scoped, and visible to the user.
-- **Atomicity:** publish copied files atomically on the target volume, and only
-  record durable state after the corresponding filesystem operation succeeds.
-- **Idempotency:** repeated scans and immediate reruns must converge on an
-  accurate no-op or near-no-op plan. Preserve stable metadata and timestamps
-  where they support that result.
-- **Feature orthogonality:** planning/execution, inventory/integrity, history,
-  and UI presentation have distinct responsibilities. Do not make one feature
-  silently reinterpret, duplicate, or invalidate another feature's state.
-- **Discrete layering:** `core` defines contracts; `modules` implement isolated
-  domain operations; `db` owns persistence; `workflows` are the only place
-  modules meet; `dispatcher` is domain-blind; and `interfaces` adapt workflows
-  and sessions. Dependencies follow the import law in `ARCHITECTURE.md`; UI code
-  does not decide sync behavior or reach around workflows.
+- Component work: read its focused document in `docs/`. In particular,
+  [EXECUTOR.md](docs/EXECUTOR.md) owns package/effect boundaries and the settlement
+  stability gate; [VERIFIER.md](docs/VERIFIER.md) owns engine/native boundaries;
+  [DATABASE.md](docs/DATABASE.md) owns persistence and placement requirements.
+- Cross-layer/contracts work: [ARCHITECTURE.md](docs/ARCHITECTURE.md) owns the
+  import law and contract-to-source locator. Exact shared shapes are source-owned
+  under core; prefer explicit dataclasses and typed functions.
+- Safety or quantitative claims: [DEFENSE.md](docs/DEFENSE.md), including §7 for
+  evidence authority. Diagnostics, targets and drift guards are not acceptance
+  merely because they were measured. Classify consequence and enforceability
+  before choosing the lowest sufficient tier; keep observations separate from
+  contracts/validators. Record fixtures, profiles, scaling, aggregation/retention,
+  artifacts and rerun triggers in the owning component doc, not TESTS.md.
+- Adapter/host/lifecycle work: [INTERFACES.md](docs/INTERFACES.md); command/event
+  transport and ingress: [BRIDGE.md](docs/BRIDGE.md); tree/search/sort/selection
+  and scale: [PRESENTATION.md](docs/PRESENTATION.md).
+- UI and icons: [DESKTOP_UI.md](docs/DESKTOP_UI.md); icon assets or catalog/tool
+  changes also require [TOOLS.md](docs/TOOLS.md)'s icon maintenance rules.
+- Product scope: [FEATURES.md](docs/FEATURES.md); checkpoints:
+  [M1_PLAN.md](docs/M1_PLAN.md), the sole active M1 delivery register. Accepted
+  future outcomes remain binding, but unrealized representation, reservation,
+  DTO and command-count recipes are reconsidered at first use; retain only
+  narrow admission and measured scale obligations with named owners.
+- Documentation edits: [docs/README.md](docs/README.md) defines ownership and
+  maintenance conventions. Superseded material in `docs/obsolete/` is historical,
+  not current implementation guidance.
 
-## Naming Conventions
+## Implementation And Verification
 
-- Python modules use lowercase snake_case.
-- Dataclasses, enums, and public types use clear domain names:
-  `RootMapping`, `FileRecord`, `ScanResult`, `SyncOptions`, `SyncPlan`,
-  `PlanOperation`, `ProgressEvent`, and `RunResult`.
-- Relative paths stored by the app are root-relative strings. Filesystem APIs
-  may use `pathlib.Path`, but persisted paths must not depend on a drive letter.
-- Deletion policies are named `trash`, `additive`, and `mirror`; `trash` is the
-  default user-facing policy.
-- Use `NamiSync` as the product name, `namisync` as the Python package and
-  module name, and `nami-sync` as the command-line executable. Never use
-  `nami_sync`.
-
-## Implementation Rules
-
-- Keep the minimum code that solves the current phase. Do not add speculative
-  features, extension points, or broad refactors.
-- Make surgical changes. Every changed line should trace to the current task.
-- Prefer explicit dataclasses and typed functions over implicit dictionaries for
-  core contracts.
-- Treat `RootAuthority` as reviewed evidence, never as a lasting authorization
-  token. Consumers must re-probe at their existing point of use; scanner,
-  preflight, executor, and verifier retain their distinct admission and outcome
-  policies.
-- Keep executor effects typed and operation-local. Publication, metadata, and
-  non-byte mutation effects are orthogonal journal entries whose settlement is
-  reduced centrally; do not reintroduce parallel ad-hoc state dictionaries or
-  sibling-specific settlement branches.
-- The executor split and journal/reducer migration are complete; their historical
-  three-run monolith gate is recorded in the changelog. Retain the settlement
-  oracle and its baseline under `tools/`, including during verifier or test
-  consolidation. Future structural settlement work still requires the three-run
-  stability gate and independent review in `docs/EXECUTOR.md` (Settlement
-  Stability Gate), under the protected-evidence policy in `docs/DEFENSE.md`.
-- Use `sqlite3` directly. Do not add an ORM.
-- Keep live SQLite databases local only. Do not place app DBs in cloud-synced
-  folders.
-- Bound every externally reachable request before constructing interface or
-  presentation values. The desktop bridge limits the complete serialized
-  command envelope to 65,536 UTF-8 bytes; any future non-bridge external
-  adapter must impose an equal-or-stricter complete-request bound at its own
-  ingress rather than relying on a field-level presentation limit.
-- Use WAL mode for the main database.
-- Commit database state only after successful filesystem operations.
-- Preserve timestamps on copied files so reruns can stay stable.
-- Hide or guard `mirror` deletion until the rest of the safety model is proven.
+- Make only task-relevant changes; avoid speculative features and adjacent
+  refactors. Remove only orphans/artifacts created by this task, preserving
+  unrelated work. Keep build outputs, caches, virtual environments, databases
+  and sync trash out of Git.
+- Use `NamiSync`, Python package `namisync`, and executable `nami-sync`; never
+  `nami_sync`. Use lowercase snake_case modules and clear domain type names.
+  Persist root-relative paths independent of drive letters; filesystem APIs
+  may use `pathlib.Path` with long-path-safe handling.
+- Use native PowerShell and preferably Python 3.13 from the project venv. Do not
+  introduce CMD, Bash, Git Bash or WSL unless requested or technically necessary.
+- Follow [TESTS.md](docs/TESTS.md) for test scope and execution.
+  `tests/_departments.py` owns exact primary module assignment; do not duplicate
+  its catalogs in prose. Departments do not prove blast radius: add direct
+  consumer departments for public contracts and use the ordinary suite when
+  impact is broad or uncertain.
+- Import component public APIs through their facades; patch internal collaborators
+  in the owning submodule. For fixes, identify a reproducer first when practical;
+  add focused tests for new core behavior.
+- Run focused checks and required broader gates. Repeat passed checks only when
+  edits, failures or changed seams invalidate evidence. Documentation-only work
+  needs consistency, link and diff checks; product tests are needed when it
+  changes an executable contract or test authority.
 
 ## Task Containment And Recovery
 
-- This file defines repository boundaries, required outcomes and stop classes.
-  Execution skills prescribe investigation, user interaction, delegation and
-  recovery mechanics within those rules; they cannot expand authority or relax
-  a gate. The repository requirements apply even without a particular skill.
-- Within the accepted outcome and declared mechanism/verification boundary,
-  choose routine implementation details and update direct consumers without
-  asking again. A file list identifies the known population, not an independent
-  file-count gate: record newly identified consumers before editing them when
-  they remain within that boundary. Explicit exclusions remain binding. Changed
-  outcomes, architectural ownership, safety/effect models or verification
-  boundaries require the scope adjudication below.
-- Continue authorized work through implementation, relevant verification,
-  correction of introduced regressions, required documentation and adversarial
-  review. An intermediate implementation is not completion. Ask about ambiguity
-  when it changes an accepted outcome or boundary; resolve routine choices from
-  current contracts and state material assumptions. Existing authorization
-  covers those steps, subject to the stop classes below.
-- Before an audit-driven implementation, hardening or stabilization pass,
-  cross-component change, or task with more than one independently committable
-  outcome, record a closed checkpoint register in the owning delivery
-  document. Each row has a stable id, one accepted outcome, status, and named
-  verification. Record non-goals and any task-specific stop classes beside the
-  register. A quantified criterion is closed only when its search domain,
-  procedure, and terminal observation are finite. Discovery work may instead
-  close over a named corpus and method; its findings are output, not implicit
-  implementation scope.
-- Before a pending checkpoint's implementation, elaborate its accepted outcome
-  into a finite production, test and documentation population; current owners
-  and seams; one acceptance gate and coherent commit boundary; relevant archived
-  dispositions/non-goals; and a preimplementation regression study. Regression
-  means a lost guarantee, false state, unauthorized or duplicate effect, or
-  newly unbounded work. Red tests are evidence to investigate, not proof of
-  regression; green tests are not proof of its absence. Final adversarial review
-  is required at every checkpoint.
-- The next checkpoint's design study may overlap the predecessor's final
-  product implementation and its testing, verification and review. Planning
-  remains read-only toward product/test sources and cannot weaken or delay the
-  predecessor's gate. Record the observed revision and revalidate changed seams
-  against the predecessor's final integrated state before dependent product
-  implementation. Planning is not implementation authorization; dependent
-  implementation waits for predecessor completion and the user's active scope.
-- The accepted register is the completion denominator. A checkpoint is
-  complete only when every accepted row satisfies its named verification and
-  the declared baseline has not regressed. A new finding does not add a row and
-  does not by itself authorize a fix; handle it only under the regression,
-  bounded pre-existing defect, and stop rules below. If it prevents a named
-  check from passing and those rules do not authorize handling it, suspend the
-  dependent implementation and obtain user adjudication. Only an explicit user
-  decision may change the active scope after implementation starts. Acceptance
-  of a future outcome is not permission to change the current checkpoint.
-- Before deciding on a scope-only full stop, thoroughly probe the proposed
-  extension within a named finite corpus: its cause, owners, dependencies,
-  affected consumers (including test helpers outside the initial subtree),
-  preserved guarantees and verification. Present one closed proposal for the
-  known mechanism, not successive first-failure file additions. This is
-  investigation authority, not permission to implement the extension.
-- A narrow, well-understood extension preserving the accepted outcome and its
-  ownership/safety model may seek an explicit decision during the active turn.
-  Larger architectural changes, unresolved boundaries, or a changed safety or
-  effect model require a full stop and reviewable redesign. Assess consequence
-  and mechanism, not file/line count: an exact test-consumer migration can be
-  narrow; new callback-delivery ownership can be architectural. Unanswered
-  requests after a bounded response window require a full stop and recovery,
-  never inferred consent. Existing approval persists; do not ask again for the
-  same unchanged extension. Always-stop classes below take precedence over
-  investigation and waiting. Only independent authorized work may continue
-  while an ordinary scope decision is pending.
-- A regression introduced by the active checkpoint must be corrected before
-  its mergeable commit. A bounded pre-existing substantive defect may land as
-  a separate fix commit when it does not trigger a stop rule. Treat mechanisms
-  semantically, not by exact `BUGS.md` Category spelling. On the second
-  unplanned instance of one causal mechanism, or the third unplanned
-  substantive defect of any kind within one pass or checkpoint, finish only
-  the current safety-preserving atomic outcome, begin no further instance fix,
-  and produce a mechanism table naming each consequence, owner, and common
-  choke point or the reason no common choke point exists. Reorganize the work
-  and obtain review before resuming. A narrow reorganization may use the in-turn
-  adjudication path above; the required pause and review are not waived. A
-  predeclared finite migration does not trigger this rule.
-- Always stop, preserve the exact work state, and report evidence of supported-
-  path data loss or corruption, unauthorized or out-of-root mutation, a
-  supported security- or hard-wall escape, false durable or terminal success,
-  duplicate or replayed mutation, or inability to preserve or recover the
-  current work. A broad checkpoint may add narrower stop classes stated as a
-  precise consequence and transition before work starts; only the user may
-  expand them during the checkpoint. Other verified findings are logged and
-  deferred.
-- Atomic outcome, not diff size, determines commit scope. Do not impose a line-
-  count or file-count stop. If one accepted outcome grows beyond its stated
-  mechanism or verification boundary, suspend dependent work and resolve scope
-  under the adjudication rules before starting another outcome; do not commit
-  a non-atomic half merely to make the diff smaller.
-- If work must stop before a merge-ready commit, preserve only task-owned
-  changes on an isolated disposable recovery branch, with enough provenance,
-  scope, verification and excluded-work information for exact resumption.
-  Preservation must not absorb or destroy unrelated work. A recovery commit is
-  not a review unit: never merge or cherry-pick it as-is. Rebuild useful changes
-  into coherent commits under ordinary readiness checks. Remove recovery refs
-  only after their content is reviewed, integrated and accounted for.
+These boundaries apply with or without a skill. Execution skills define the
+investigation, interaction, delegation and recovery procedure; they cannot
+expand authority or relax repository gates.
 
-## Windows Rules
+### Scope And Completion
 
-- The target platform is native Windows 11 x64.
-- Use PowerShell syntax for project commands.
-- Prefer Python 3.13 from the project virtual environment.
-- Do not introduce WSL, Bash, Git Bash, or CMD workflows unless explicitly
-  requested or technically necessary.
-- Use long-path-safe handling where code touches filesystem paths.
+- Before audit-driven implementation, hardening/stabilization, cross-component
+  work or multiple independently committable outcomes, record a closed register
+  in the owning delivery doc: stable ids, accepted outcomes, status, named
+  verification, non-goals and task-specific stops. Quantified criteria require
+  a finite domain, procedure and terminal observation; discovery may instead
+  close over a named corpus/method without authorizing fixes.
+- Before implementing a pending row, declare its finite production/test/doc
+  population, owners/seams, acceptance gate, atomic commit boundary, relevant
+  archived dispositions and a regression study. Scope is the accepted outcome
+  and mechanism/verification boundary, not file/line count. Record newly found
+  direct consumers before editing; routine in-bound choices need no new approval.
+  Explicit exclusions remain binding.
+- Continue through implementation, correction of introduced regressions, required
+  tests/docs and final adversarial review of every checkpoint. Completion means
+  every accepted row passes its named gate without regressing the declared
+  baseline. Resolve routine ambiguity from contracts and state material
+  assumptions; ask when an outcome or boundary changes.
+- Next-checkpoint design may overlap the predecessor's final implementation and
+  verification, but stays read-only toward product/tests and cannot weaken or
+  delay its gate. Record the inspected revision and revalidate changed seams
+  against the integrated predecessor. Dependent implementation waits for its
+  completion and active user scope; a future outcome or ready plan is not authority.
 
-## Testing And Verification
+### Findings And Scope Decisions
 
-- Use pytest.
-- Follow `docs/TESTS.md` for focused, departmental, neighborhood, ordinary,
-  and complete/headed verification. `tests/_departments.py` is the executable
-  authority for exact primary module ownership; keep prose free of parallel
-  module or case catalogs.
-- Departments route primary ownership rather than proving complete blast
-  radius. Add consumer departments explicitly for changed public contracts,
-  and use the ordinary repository suite when impact is broad or uncertain.
-- Import component public APIs through the component facade. Tests that inject
-  or patch an internal collaborator patch the submodule that owns the symbol,
-  not a facade re-export.
-- For bug fixes, write or identify a reproducing test first when practical.
-- For new core behavior, add focused tests in the matching test area.
-- Document behavioral changes in the module-specific document in `docs/` in
-  the same change: GUI, database, scanner, planner, executor, history, or
-  another focused document as appropriate. Update or create that focused
-  document when a component has no adequate coverage.
-- Also update `README.md` whenever a change affects the product overview,
-  features, safety model, limitations, documentation index, roadmap, or other
-  cross-cutting/user-visible behavior. Keep superseded material in
-  `docs/obsolete/` rather than leaving it as active guidance.
-- Run focused verification for the changed behavior and broader checks required
-  by `docs/TESTS.md` and the checkpoint gate. Repeat passed checks when subsequent
-  edits, failures or changed seams invalidate their evidence. For documentation-
-  only edits, check consistency, links and diffs; run product tests only when
-  the edited documentation changes an executable contract or test authority.
+- New findings do not add scope. Regressions are lost guarantees, false states,
+  unauthorized/duplicate effects or newly unbounded work; test color alone proves
+  neither their presence nor absence. Correct introduced regressions before a
+  mergeable commit. A bounded pre-existing substantive defect may receive a
+  separate fix commit only while no stop rule applies; log and defer other
+  verified findings. A blocked gate with no authorized remedy needs adjudication.
+- Only the user may change active scope. Suspend dependent work when an outcome,
+  architectural ownership, safety/effect model or mechanism/verification boundary
+  changes; do not split off a non-atomic commit to evade that boundary. Before a
+  scope-only full stop, investigate a finite corpus covering cause, owners,
+  dependencies and consumers (including external test helpers), preserved
+  guarantees and verification. Present one coherent proposal, not successive
+  first-failure additions. Investigation does not authorize implementation.
+- A narrow understood extension preserving outcome and ownership/safety may seek
+  an explicit in-turn decision. Larger architectural changes, unresolved
+  boundaries or changed safety/effects require a full stop and reviewable redesign.
+  Existing approval persists. While a decision is pending, only independent
+  authorized work may continue. No answer within a bounded response window means
+  stop and recover, never consent. Always-stop rules override investigation/waiting.
+- On the **second unplanned instance of one causal mechanism**, or **third
+  unplanned substantive defect** in a pass/checkpoint, finish only the current
+  safety-preserving atomic outcome and begin no further instance fix. Produce a
+  mechanism table of consequences, owners and common choke point (or why none
+  exists); reorganize and obtain review before resuming. Narrow reorganization
+  may use in-turn adjudication, never waive the pause/review. Count mechanisms
+  semantically, not by BUGS category spelling. Predeclared finite migrations
+  are exempt from this recurrence rule.
 
-## Measurement Authority
+### Mandatory Stops And Preservation
 
-- Follow `docs/DEFENSE.md` §7 for quantitative-claim classification,
-  enforceability, evidence tiers, and protected-authority requirements. A
-  target, diagnostic, or drift guard does not become acceptance evidence merely
-  because it was measured rigorously.
-- Classify the consequence and production-enforceability of a claim before
-  selecting the lowest sufficient tier; keep observation separate from the
-  predeclared contract and validator.
-- Record exact fixtures, profiles, scaling axes, aggregation or retention,
-  artifacts, and rerun triggers in the owning component document.
-  `docs/TESTS.md` governs test scope and execution, not measurement authority.
+- Always stop, preserve exact state and report evidence of supported-path data
+  loss/corruption, unauthorized or out-of-root mutation, supported security or
+  hard-wall escape, false durable/terminal success, duplicate/replayed mutation,
+  or inability to preserve/recover current work. Broad checkpoints may add
+  narrower stops with precise consequences/transitions before work starts;
+  only the user may expand them during a checkpoint.
+- If stopping before a merge-ready commit, preserve only task-owned changes on
+  an isolated disposable recovery branch with provenance, scope, verification
+  and excluded-work details sufficient for exact resumption. Never absorb or
+  destroy unrelated work. Recovery commits are not review units: never merge or
+  cherry-pick them as-is. Rebuild useful changes into coherent verified commits;
+  remove recovery refs only after review, integration and full accounting.
 
-## Commit Titles
+## Commits And Documentation
 
-- Start every commit title with a category using
-  `<category>(<optional-scope>): <imperative summary>`.
-- Use the narrowest primary category: `feat`, `fix`, `perf`, `test`, `docs`,
-  `refactor`, `build`, or `chore`. The optional lowercase scope names the owning
-  component, such as `web`, `executor`, or `dispatcher`; omit it when the change
-  is genuinely cross-cutting.
-- `wip` is reserved for the recovery commits defined under Task Containment And
-  Recovery. It is forbidden on default, milestone, release, or other
-  integration branches and is never a mergeable category.
-- Keep one coherent checkpoint per commit. The title describes the commit's
-  primary effect even when matching tests and documentation travel with it.
-
-## Commit Readiness
-
-The rules below govern mergeable commits. A recovery-only `wip` commit is
-exempt while it remains on its disposable branch, but it never becomes ready;
-its useful changes must be rebuilt and verified under the ordinary rules.
-
-- Before any mergeable commit, review whether the relevant files under `docs/`,
-  `docs/obsolete/`, `README.md`, or `AGENTS.md` need updates for the committed
-  behavior.
-- Do not commit behavior changes whose matching documentation is stale.
-- Update `CHANGELOG.md` when a task-level delivery is complete. Before adding a
-  new task, first decide whether the session advances an existing task; extend
-  that task's date range and concise summary when it does. Create a new task
-  only when no existing entry accurately fits the outcome. Update the README
-  summary only when its milestone or phase synopsis changes.
-
-## Documentation Maintenance
-
-- Keep both changelogs newest-first. README contains only `##` milestone or
-  released-version summaries and `###` phase summaries; it never lists task
-  details. `CHANGELOG.md` repeats those two levels and adds dated `####` task
-  entries with concise bullets describing what happened.
-- Before named releases, use milestone headings such as `M1`. After versioning,
-  use the version and codename, such as `v0.1.0 "Gertrud"`. Group related
-  sessions under one task and put post-delivery work in the relevant hardening
-  phase rather than appending it to the original feature task.
-- Keep `docs/DEFENSE.md` as the normative owner of supported assumptions,
-  trusted boundaries, hard walls, tolerance classes, quantitative-evidence
-  authority, residual-risk dispositions, and model-reopen triggers. Other
-  documents link to that policy and own their mechanisms or behavior; they do
-  not restate its tables or accept a residual merely by describing it.
-- Keep `docs/ARCHITECTURE.md` limited to durable decisions, contracts,
-  layering, coordination, invariants, type/protocol meaning, and milestone-level
-  direction. Dated build status, acceptance results, exact measurement evidence,
-  and module implementation walkthroughs belong in the changelog, active
-  delivery plan, or owning module document. Architecture defines a shared
-  contract's meaning and invariants; the owning symbol under `namisync/core/`
-  defines its exact standardized fields, enum values, inheritance, protocols,
-  and signatures; module documents explain use and extension policy without
-  redefining that shape. Keep the architecture contract-to-source locator
-  current, and reproduce exact shapes only when the shape itself explains an
-  architectural decision. `docs/FEATURES.md` owns product behavior and states
-  whether behavior is active or unrealized without carrying milestone build
-  recaps.
-- Keep `docs/BUGS.md` as a concise module-first defect ledger. A category is a
-  reusable causal class stated as a short noun phrase (for example, `TOCTOU
-  parent redirection` or `shutdown ownership race`), not the incident's observed
-  behavior, affected filename, milestone, review gate, test outcome, or broad
-  consequence. Assign severity from the worst supported product consequence,
-  not from the importance of the audit or gate that found it. Target 6–12
-  rendered lines per entry, retaining only the consequence, cause, fix, and
-  essential residual boundary or test context.
-
-## Cleanup
-
-- Remove only unused imports, variables, files, or generated artifacts created
-  by the current change.
-- Do not remove unrelated dead code or reformat adjacent files opportunistically.
-- Keep generated build outputs, caches, virtual environments, databases, and
-  sync trash out of Git.
+- One coherent checkpoint per mergeable commit, including its tests and matching
+  documentation. Review relevant docs, obsolete material, README and AGENTS for
+  updates before committing; stale behavior documentation blocks readiness.
+- Use `<category>(<optional-scope>): <imperative summary>` with the narrowest of
+  `feat`, `fix`, `perf`, `test`, `docs`, `refactor`, `build`, `chore`; scope is a
+  lowercase owning component, omitted for cross-cutting work. `wip` is recovery-
+  only, never on integration branches; its temporary readiness exemption does
+  not make it mergeable.
+- Update/create the owning component doc with behavior changes. Update README
+  for product, safety, limitations, roadmap or documentation-index changes.
+  At task delivery, extend the matching CHANGELOG task/date range or add a new
+  task when none fits; update README's summary only if its phase/milestone
+  synopsis changes. Replace HANDOFF with latest-session changes, verification
+  and immediate operational context. Follow [documentation conventions](docs/README.md).

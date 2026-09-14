@@ -1,82 +1,45 @@
 # Latest session handoff
 
-## GUI-S21 combobox trigger stroke (2026-09-14)
+## Agent instruction condensation (2026-09-14)
 
-GUI-S21 changes only the combobox trigger perimeter from 1px to the authored
-1.2px control adjustment. The popup remains 1px. Focused static checks and the
-clean installed light/dark/forced gallery passed.
+AI-2 continues the instruction-maintenance task from f6c9471. AGENTS.md is
+1,548 words / 187 lines, down from 3,311 / 385 (whitespace-delimited words).
+Reduction combines deduplication, concise boundary wording, component routing,
+relocated documentation conventions and removal of completed-migration history.
+No product/test, global instruction or personal/supplied skill file changed.
 
-## GUI-S20 textbox focus and lower strip (2026-09-14)
+Clause dispositions reviewed against the starting root:
+- Product invariants, import law, RootAuthority, names, Windows and verification
+  remain in the root, with repeated atomicity/timestamp/layering advice merged.
+- Executor/verifier package details route to their existing owners. Executor
+  journal constraints and oracle retention are explicit in EXECUTOR; its
+  three-run settlement gate and independent review remain unchanged.
+- DATABASE now owns the direct-sqlite3/no-ORM, WAL and local-only placement rules;
+  TOOLS owns fixed icon provenance, generation restrictions and test ownership.
+  BRIDGE already owns the complete-request limit for all external adapters.
+- docs/README.md owns documentation maintenance, source authority and changelog
+  conventions; the root README indexes it. Existing subject docs remain owners.
+- Task containment preserves register triggers/content, preimplementation study,
+  accepted scope, direct-consumer allowance, exclusions, completion, dependent
+  planning, regression definition, bounded fixes, recurrence thresholds, scope
+  investigation/adjudication, mandatory stops and isolated recovery.
 
-GUI-S20 marks pointer-origin text input focus until blur, suppressing only the
-dual outer ring while retaining the focused fill and accent strip. Keyboard
-focus still receives the ring. The 2px lower strip is now a straight
-border-box layer with rounded-clip tapered ends; the translucent fill remains
-a separate padding-box layer. Seventy-three focused checks and the clean
-installed gallery and Setup headed gates passed.
+Adversarial source review checked ordinary consumer additions versus exclusions;
+changed safety/ownership requires adjudication; second mechanism/third defect
+requires pause/review; hard-wall evidence stops immediately; unanswered requests
+never authorize work; interrupted work preserves only task-owned changes;
+dependent planning cannot authorize implementation; gates apply without skills.
+No boundary loss found. This is direct semantic review, not a live agent trial.
 
-## GUI-D7 disabled-button label investigation (2026-09-14)
+Verification: build/check-agent-docs.py reports 22 resolving root/maintenance
+links, the executor stability heading and bridge bound. Git diff whitespace and
+exact staged-scope checks pass before commit. No product suite was run because
+no executable behavior, contract or test authority changed. No recovery branch
+or worktree was needed. Temporary checking scripts remain under ignored build/.
 
-GUI-D7 made no production change. Button CSS uses opaque disabled foreground
-tokens and no button-level opacity, filter or transform; the installed gallery
-did not reproduce the intermittent blur. WebView2 DPI/rasterization or
-transparent-composition state remains a plausible but unproved source. The
-finite reopen tuple is recorded in DESKTOP_UI and M1_PLAN.
-
-## GUI-S17 textbox boundaries (2026-09-14)
-
-GUI-S17 clips each textbox fill once, uses the authored 1.2px perimeter, and
-makes the neutral/accent 2px strip the actual bottom border. Disabled inputs
-flatten every edge; focused inputs retain the shared dual focus ring. Seventy-two
-focused checks, the clean installed light/dark/forced gallery, and installed
-Setup passed. Adversarial headed review caught and corrected a pressed-state
-cascade that initially erased the bottom strip.
-
-## GUI-S16 button boundaries (2026-09-14)
-
-GUI-S16 aligns ordinary and accent button borders with the pinned Microsoft
-WinUI resources while retaining the authored 1.2px stroke. Neutral fills clip
-to the padding box; accent fills retain border-box sizing. Focused token and
-component checks passed all 57 cases; the installed light/dark/forced gallery
-gate passed. Textbox behavior remains deferred to GUI-S17.
-
-## Translucent controls and queued options (2026-09-14)
-
-Baseline f711386 on milestone1. GUI-S14 and GUI-S15 in M1_PLAN are the closed
-register for this delivery. User authorized implementation, review and commits.
-Execute-task builders own disjoint control-style and batch-state sources;
-root owns shared documentation, serialized testing and commits.
-
-S14 replaces RGB control-fill approximations with WinUI alpha roles while
-retaining 1.2px strokes, border tuning, accent states, forced colors and separate
-popup/Mica materials. S15 captures options at Add pair and removes the later
-batch-wide current-form overwrite, preserving admission/retry/removal guards.
-Both implementations have passed independent review. Focused evidence in
-build/gui-icons/gui-s14-focused05.txt records 31 passing token/installed-gallery
-checks; gui-s15-probes.txt records both passing Setup/coordinator regressions.
-The combined complete suite passed: gui-s14-s15-complete.txt records 5,013 passed
-and 4 existing skips, including all 30 installed checks. S14 is committed as
-2f4fb8e; S15's code and matching documentation are complete for its separate
-commit. README's current GUI synopsis remains accurate; DESKTOP_UI records the
-changed queue contract and BUGS records its bounded consequence. Earlier S14 receipts exposed stale
-opaque-background assumptions in gallery contrast helpers and ambiguous
-disabled-rule selectors; final checks retain their thresholds and measure
-composited fills against the existing observed backdrop.
-
-No backend/protocol, persistence, native display settings or user-owned window
-changes. Existing shadow and M2 dispositions remain deferred. No task-created
-branch/worktree. Relaunch the development shell to load changed assets.
-
-GUI-S18 replaces only the selected checkbox U+2713 pseudo-element with the
-pinned local Fluent `checkmark_16_regular.svg` mask. The mixed-state minus and
-unrelated lifecycle/status U+2713 cue are unchanged. Focused static verification
-passed all 12 design-token checks; the pinned-archive icon check and installed
-light/dark/forced gallery check passed.
-
-GUI-S19 keeps the bounded `pageBatch` coordinator intact while projecting batch
-rows, count, pending state and messages only into editable Sync Setup forms.
-Inventory hides retained sync rows and can start with queued rows; an active
-batch still serializes starts, and close/exact-retry ownership guards remain.
-The setup-app probe additionally proves an uncertain child cannot start a
-separate inventory. All 45 frontend-static checks and the installed headed Setup
-flow passed.
+Immediate product context: GUI-S20/S21 are complete at the starting revision;
+textbox keyboard/pointer focus and the 1.2px combobox perimeter are documented
+in DESKTOP_UI and M1_PLAN. Prior focused/installed gallery and Setup evidence is
+in their delivery records; none was rerun here. Disabled-label blur and WCG
+shadow findings remain diagnostic, not fixed. Next product work follows M1_PLAN.
+Relaunch the development shell for asset changes; do not close user-owned windows.

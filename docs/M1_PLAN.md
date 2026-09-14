@@ -326,25 +326,27 @@ and preserve exact retry. Pending close cannot start a batch. Recent pairs use
 the details and nonbinding batch-housing options. No backend/protocol change,
 vendor patch, dependency upgrade, scrollbar CSS or Mica workaround was added.
 
-### Agent instruction maintenance (2026-09-12)
+### Agent instruction maintenance (2026-09-12–14)
 
 | ID | Accepted outcome | Named verification | Status |
 | --- | --- | --- | --- |
 | AI-1 | Clarify repository execution boundaries and retire the completed monolith prerequisite; update only the personal execute-task and claude-code-reviewer skills to handle those boundaries. | Diff and adversarial scenario review passed; both skill validators passed; Git whitespace and exact staged scope checked before commit. | Complete |
+| AI-2 | Condense AGENTS.md by deduplication, tighter boundaries, conditional documentation routing and removal of obsolete history without changing required decisions. | Clause disposition and boundary scenario review against f6c9471 passed; 22 local links resolve; whitespace and exact commit scope checked. | Complete |
 
-Population: AGENTS.md, this register, CHANGELOG.md and HANDOFF.md; outside the
-repository, only the two named personal SKILL.md files. Repository rules own
-scope, acceptance and stops; execute-task owns operating mechanics. One repository
-documentation commit; personal skill edits remain outside repository history.
-Non-goals: product/test changes, global AGENTS.md, supplied skills, invocation
-metadata, model-family changes, new references or relaxed hard-wall stops.
-Regression study: check routine in-bound consumer edits versus explicit exclusions,
-changed safety/ownership models, repeated findings, unanswered scope questions,
-existing review authorization and completion before reporting. Preserve numerical
-recurrence gates, oracle retention and independent review. The completed split is
-recorded in CHANGELOG's August 10–11 maintenance entry; its historical prerequisite
-must not be presented as a pending operation. No product suite is needed for these
-instruction-only edits; final review must account for each preserved boundary.
+AI-2 continues AI-1 from f6c9471. One documentation outcome covers AGENTS.md,
+the executor/database/tool owners, docs/README.md, the root index and delivery
+records. No product/test, skill or global instruction changes. The pre-edit
+study compared each root section with EXECUTOR, VERIFIER, ARCHITECTURE, DATABASE,
+BRIDGE, DEFENSE, TOOLS and TESTS; acceptance preserves decisions, not a word quota.
+Root guidance fell from 3,311 to 1,548 whitespace-delimited words. Component
+details route to their owners; documentation conventions moved to docs/README.md;
+duplicates and completed-migration history were removed. Hard-wall/recurrence
+stops, scope authority, prerequisite planning and recovery requirements remain.
+Direct review covered in-bound consumers, exclusions, changed ownership/safety,
+recurrence, immediate stops, unanswered decisions, recovery and completion without
+execute-task. Link and diff checks passed; no executable contract changed, so no
+product suite ran. AI-1's two personal skill edits remain the September 12 delivery;
+AI-2 did not modify them. Existing stop classes applied throughout.
 
 ### Settings shell and GUI refinement (2026-09-12)
 

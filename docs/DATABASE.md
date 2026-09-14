@@ -267,7 +267,9 @@ ledger stores durable operational evidence; the history database stores an
 independent activity audit. They have separate connections, versions,
 retention, failure domains, and no cross-database foreign keys.
 
-Live databases are local, never placed in a cloud-synced managed root.
+Use `sqlite3` directly, without an ORM; enable WAL for the main database.
+Live databases are local, never placed in cloud-synced folders. Record durable
+filesystem state only after the corresponding operation succeeds.
 Schema-versioned semantic defaults live in database-owned `settings.json`;
 semantic settings used by a plan are snapshotted into that plan. Cosmetic UI
 state is interface-owned and never shares this file.

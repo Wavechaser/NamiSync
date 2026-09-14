@@ -88,6 +88,14 @@ alternate execution engine.
 
 ## Component Package
 
+Keep effects typed and operation-local: publication, metadata and non-byte
+mutations are orthogonal journal entries reduced centrally. Do not reintroduce
+parallel ad-hoc state dictionaries or sibling-specific settlement branches.
+Structural settlement changes require the [Settlement Stability Gate](#settlement-stability-gate)
+and its independent review before implementation. Retain the oracle and baseline
+under `tools/`, including during verifier work or test consolidation; they are
+protected evidence under [DEFENSE.md](DEFENSE.md), not disposable build artifacts.
+
 `namisync.modules.executor` is a stable public facade over three ownership
 files. `runtime.py` owns operation dispatch and policy, final-touch guards,
 retries, continuations, cancellation, recording, settlement, progress, and
