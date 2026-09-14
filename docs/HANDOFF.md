@@ -1,5 +1,13 @@
 # Latest session handoff
 
+## GUI-S16 button boundaries (2026-09-14)
+
+GUI-S16 aligns ordinary and accent button borders with the pinned Microsoft
+WinUI resources while retaining the authored 1.2px stroke. Neutral fills clip
+to the padding box; accent fills retain border-box sizing. Focused token and
+component checks passed all 57 cases; the installed light/dark/forced gallery
+gate passed. Textbox behavior remains deferred to GUI-S17.
+
 ## Translucent controls and queued options (2026-09-14)
 
 Baseline f711386 on milestone1. GUI-S14 and GUI-S15 in M1_PLAN are the closed

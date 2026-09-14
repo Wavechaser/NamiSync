@@ -223,7 +223,6 @@ _BOUNDARY_CONTROL_KEYS = {
     "toggle_off",
 }
 _OUTLINE_FREE_CONTROL_KEYS = {
-    "button_primary",
     "progress_determinate",
     "progress_indeterminate",
     "chip",
@@ -269,8 +268,8 @@ _CONTROL_FILL_RGB = {
     },
 }
 _BUTTON_EDGE_ALPHA = {
-    "light": {"start": 0x0F / 0xFF, "end": 0x29 / 0xFF},
-    "dark": {"start": 0x0A / 0xFF, "end": 0x04 / 0xFF},
+    "light": {"start": 0x29 / 0xFF, "end": 0x0F / 0xFF},
+    "dark": {"start": 0x18 / 0xFF, "end": 0x12 / 0xFF},
 }
 _CHECKBOX_STRONG_STROKE = {
     "light": ((0.0, 0.0, 0.0), 0x72 / 0xFF),
@@ -1587,6 +1586,14 @@ def test_sh_g_11_component_gallery_uses_installed_tokens_and_non_color_cues(
                     control["root_border_width"],
                     control["root_border_style"],
                 )
+            if control["control"] == "button_primary":
+                visible_edge = max(
+                    _color_alpha(control["border_block_start"]),
+                    _color_alpha(control["border_block_end"]),
+                ) > 0
+                assert visible_edge is (
+                    control["state"] in {"rest", "hover", "focused"}
+                )
             if (
                 control["control"] in _TEXT_CONTROL_KEYS
                 and control["control"] != "filter_delete"
@@ -1655,22 +1662,44 @@ def test_sh_g_11_component_gallery_uses_installed_tokens_and_non_color_cues(
             assert _color_alpha(normal_button[state]["background"]) == pytest.approx(
                 expected_alpha, abs=0.002
             )
-        for state in ("rest", "hover", "disabled", "focused"):
+        for state in ("rest", "hover", "focused"):
             assert _color_alpha(normal_button[state]["border_block_start"]) == pytest.approx(
                 _BUTTON_EDGE_ALPHA[theme]["start"], abs=0.002
             )
             assert _color_alpha(normal_button[state]["border_block_end"]) == pytest.approx(
                 _BUTTON_EDGE_ALPHA[theme]["end"], abs=0.002
             )
-        assert _color_alpha(normal_button["pressed"]["border_block_start"]) == pytest.approx(
-            (
-                0x0B / 0xFF
-                if theme == "dark"
-                else _BUTTON_EDGE_ALPHA[theme]["start"]
-            ),
-            abs=0.002,
-        )
-        assert normal_button["pressed"]["border_block_start"] == normal_button["pressed"]["border_block_end"]
+        flat_alpha = (0x12 if theme == "dark" else 0x0F) / 0xFF
+        for state in ("pressed", "disabled"):
+            assert _color_alpha(
+                normal_button[state]["border_block_start"]
+            ) == pytest.approx(flat_alpha, abs=0.002)
+            assert (
+                normal_button[state]["border_block_start"]
+                == normal_button[state]["border_block_end"]
+            )
+        primary_button = controls_by_key["button_primary"]
+        for state in ("rest", "hover", "focused"):
+            assert _color_rgb(primary_button[state]["border_block_start"]) == (
+                255.0,
+            ) * 3
+            assert _color_alpha(
+                primary_button[state]["border_block_start"]
+            ) == pytest.approx(0x14 / 0xFF, abs=0.002)
+            assert _color_rgb(primary_button[state]["border_block_end"]) == (
+                0.0,
+            ) * 3
+            assert _color_alpha(
+                primary_button[state]["border_block_end"]
+            ) == pytest.approx(
+                (0x23 if theme == "dark" else 0x66) / 0xFF,
+                abs=0.002,
+            )
+        for state in ("pressed", "disabled"):
+            assert _color_alpha(
+                primary_button[state]["border_block_start"]
+            ) == 0
+            assert _color_alpha(primary_button[state]["border_block_end"]) == 0
 
         clear_button = controls_by_key["button_clear"]
         assert _color_alpha(clear_button["rest"]["background"]) == 0

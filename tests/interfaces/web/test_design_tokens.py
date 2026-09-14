@@ -277,9 +277,12 @@ AUTHORED_CONTROL_VALUES = {
         "--color-toggle-fill-off-hover": "#0000000F",
         "--color-toggle-fill-off-pressed": "#00000018",
         "--color-control-border": "#e5e5e5",
-        "--color-button-edge-start": "#0000000F",
-        "--color-button-edge-end": "#00000029",
+        "--color-button-edge-start": "#00000029",
+        "--color-button-edge-end": "#0000000F",
         "--color-button-edge-flat": "#0000000F",
+        "--color-accent-button-edge-start": "#FFFFFF14",
+        "--color-accent-button-edge-end": "#00000066",
+        "--color-accent-button-edge-flat": "var(--color-semantic-transparent)",
         "--color-control-strong-stroke": "#00000072",
         "--color-toggle-thumb-off": "#0000009E",
         "--color-toggle-fill-disabled-off": "var(--color-semantic-transparent)",
@@ -308,9 +311,12 @@ AUTHORED_CONTROL_VALUES = {
         "--color-toggle-fill-off-hover": "#FFFFFF0B",
         "--color-toggle-fill-off-pressed": "#FFFFFF12",
         "--color-control-border": "#353535",
-        "--color-button-edge-start": "#FFFFFF0A",
-        "--color-button-edge-end": "#FFFFFF04",
-        "--color-button-edge-flat": "#FFFFFF0B",
+        "--color-button-edge-start": "#FFFFFF18",
+        "--color-button-edge-end": "#FFFFFF12",
+        "--color-button-edge-flat": "#FFFFFF12",
+        "--color-accent-button-edge-start": "#FFFFFF14",
+        "--color-accent-button-edge-end": "#00000023",
+        "--color-accent-button-edge-flat": "var(--color-semantic-transparent)",
         "--color-control-strong-stroke": "#FFFFFF8B",
         "--color-toggle-thumb-off": "#FFFFFFC5",
         "--color-toggle-fill-disabled-off": "var(--color-semantic-transparent)",
@@ -1642,6 +1648,7 @@ def test_sh_g_11_solid_controls_and_operation_filters_follow_tuned_states() -> N
         ".nami-button,\n.nami-icon-button ",
     )
     assert "background: var(--color-button-fill);" in ordinary_controls
+    assert "background-clip: padding-box;" in ordinary_controls
     # Retain the reviewed 1.2px authored stroke; headed evidence owns device snapping.
     assert (
         "border: 1.2px solid var(--color-button-edge-start);"
@@ -1661,9 +1668,18 @@ def test_sh_g_11_solid_controls_and_operation_filters_follow_tuned_states() -> N
         ".nami-icon-button:disabled:hover,\n.nami-icon-button:disabled:active ",
     )
     assert "background: var(--color-button-fill-disabled);" in disabled_button
+    assert "border-color: var(--color-button-edge-flat);" in disabled_button
 
     primary_boundary = _block(source, ".nami-button--primary ")
-    assert "border: 0;" in primary_boundary
+    assert (
+        "border: 1.2px solid var(--color-accent-button-edge-start);"
+        in primary_boundary
+    )
+    assert (
+        "border-block-end-color: var(--color-accent-button-edge-end);"
+        in primary_boundary
+    )
+    assert "background-clip: border-box;" in primary_boundary
     primary = _block(source, ".nami-button--primary:not(:disabled) ")
     assert "background: var(--color-accent-fill);" in primary
     assert "color: var(--color-accent-fill-foreground);" in primary
@@ -1679,6 +1695,9 @@ def test_sh_g_11_solid_controls_and_operation_filters_follow_tuned_states() -> N
         assert "color: var(--color-accent-fill-foreground);" in interaction
     assert "background: var(--color-accent-fill-hover);" in primary_hover
     assert "background: var(--color-accent-fill-pressed);" in primary_active
+    assert "border-color: var(--color-accent-button-edge-flat);" in primary_active
+    disabled_primary = _block(source, ".nami-button--primary:disabled,")
+    assert "border-color: var(--color-accent-button-edge-flat);" in disabled_primary
     assert "filter:" not in primary_hover
     assert "filter:" not in primary_active
     forced = _block(source, "@media (forced-colors: active)")

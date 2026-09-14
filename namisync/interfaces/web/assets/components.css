@@ -197,6 +197,7 @@ body {
 .nami-button,
 .nami-icon-button {
   background: var(--color-button-fill);
+  background-clip: padding-box;
   border: 1.2px solid var(--color-button-edge-start);
   border-block-end-color: var(--color-button-edge-end);
   color: var(--color-neutral-foreground);
@@ -272,7 +273,9 @@ body {
 }
 
 .nami-button--primary {
-  border: 0;
+  border: 1.2px solid var(--color-accent-button-edge-start);
+  border-block-end-color: var(--color-accent-button-edge-end);
+  background-clip: border-box;
 }
 
 .nami-button--primary:not(:disabled) {
@@ -287,6 +290,7 @@ body {
 
 .nami-button--primary:not(:disabled):active {
   background: var(--color-accent-fill-pressed);
+  border-color: var(--color-accent-button-edge-flat);
   color: var(--color-accent-fill-foreground);
 }
 
@@ -1798,8 +1802,13 @@ body {
 .nami-icon-button:disabled:hover,
 .nami-icon-button:disabled:active {
   background: var(--color-button-fill-disabled);
-  border-color: var(--color-button-edge-start);
-  border-block-end-color: var(--color-button-edge-end);
+  border-color: var(--color-button-edge-flat);
+}
+
+.nami-button--primary:disabled,
+.nami-button--primary:disabled:hover,
+.nami-button--primary:disabled:active {
+  border-color: var(--color-accent-button-edge-flat);
 }
 
 .nami-input:disabled,

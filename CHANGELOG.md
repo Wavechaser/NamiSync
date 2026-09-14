@@ -28,6 +28,10 @@ packaging remain open.
 
 #### Refine task navigation, Settings and Setup (2026-09-11–14)
 
+- Aligned ordinary and accent button boundaries with Microsoft WinUI elevation
+  resources, retaining the authored 1.2px stroke and clipping neutral fills to
+  the inner border edge.
+
 - Scoped the current batch queue to editable Sync Setup projection. Inventory
   hides retained sync rows and can start while queued sync work remains; active
   batch serialization and close/retry ownership are unchanged.

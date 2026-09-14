@@ -379,10 +379,15 @@ In CSS RGBA order, Dark rest/hover/press/disabled use `#ffffff0f`,
 share these control-fill roles. Focused textboxes use the native input-active
 role: `#1e1e1eb3` in Dark and opaque white in Light. Alpha applies to the fill,
 not the whole element, so text and glyphs retain their own contrast.
-Light borders retain black 0F/29 alpha; Dark uses white
-0A on the top/sides and 04 below, flattening to white 0B when pressed (hex
-alpha). Disabling retains the resting edge tones. Ordinary button, checkbox and toggle
-strokes use an authored 1.2px width to bias Chromium's fractional-DPI snapping;
+Light ordinary-button borders retain black 29 on the top/sides and 0F below;
+Dark uses white 18 on the top/sides and 12 below, flattening to black 0F or
+white 12 when pressed or disabled (hex alpha).
+Accent buttons use white 14 over black 66 in Light and white 14 over black 23
+in Dark for normal/hover elevation; pressed and disabled accent borders are
+transparent.
+Ordinary button borders flatten to the neutral stroke when pressed or disabled;
+checkbox and toggle strokes use an authored 1.2px width to bias Chromium's
+fractional-DPI snapping;
 this is a local visual adjustment, not native WinUI thickness or a guarantee
 of identical physical pixels across displays. Native 1 logical px and the
 original elevation roles were referenced from Microsoft's

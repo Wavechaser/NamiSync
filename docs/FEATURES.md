@@ -410,9 +410,10 @@ unrealized unless an entry says otherwise.
   base-fill contrast foreground stays fixed through interaction; forced colors
   remain system-owned.
 - **Solid Desktop Control States**. The active component foundation exposes
-  exactly two command-button tiers: WinUI-neutral fills with subtle boundaries
-  for ordinary actions and live Windows accent for primary
-  Execute/Verify-class actions. Primary and
+  exactly two command-button tiers: ordinary actions use WinUI-neutral fills
+  with subtle elevation boundaries (top/sides stronger than the bottom), while
+  primary Execute/Verify-class actions use live Windows accent with
+  accent-specific elevation boundaries. Primary and
   other accent-filled labels use the native base accent's contrast-selected
   exact black or white, stay fixed through interaction, and use 90%/80%
   base-fill opacity for hover/press. Filter pills
