@@ -45,7 +45,7 @@ The prior aggregate complete-owner-graph model and BR-G-45 are retired. No futur
 | GUI-S17 | Paint textbox translucent fills once, soften their boundary to 1.2px, and make the resting/focused bottom strip replace rather than overlap the bottom border. | Official source mapping, focused token/component/gallery checks, installed gallery and Setup inspection, adversarial review. | Pending |
 | GUI-D7 | Investigate disabled-button label blur without changing production behavior. | Finite inspection of button CSS, official Fluent resources, installed gallery states and renderer/compositor evidence; record conclusion and reopen trigger. | Pending |
 | GUI-S18 | Replace the checkbox's authored U+2713 mark with the pinned local Fluent checkmark asset. | Static component/icon relationship checks, icon-catalog verification, installed gallery inspection, adversarial review. | Complete |
-| GUI-S19 | Keep composition and results for the current batch queue on Sync Setup only so switching to Inventory cannot expose an inoperable batch surface. | Setup/coordinator browser regressions, installed Setup task-switch inspection, relevant interface tests, adversarial review. | Pending |
+| GUI-S19 | Keep composition and results for the current batch queue on Sync Setup only so switching to Inventory cannot expose an inoperable batch surface. | Setup/coordinator browser regressions, installed Setup task-switch inspection, relevant interface tests, adversarial review. | Complete |
 
 Each row is an independently reviewed atomic commit except GUI-D7, which is a
 read-only study commit if documentation changes are warranted. Before each
@@ -96,6 +96,12 @@ Disabled inputs flatten every edge to the disabled/default stroke and have no
 bottom highlight. The focused fill, placeholder/label roles, field geometry,
 validation, keyboard focus and forced-color authority remain unchanged. Its
 gate is focused token/component tests and installed gallery/Setup inspection.
+
+GUI-S19 passed all 45 frontend-static checks and the installed headed Setup
+flow. Adversarial review retained the submitting/uncertain task guard while
+allowing queued sync rows to coexist with Inventory: an uncertain batch child
+cannot start a second inventory request and receives origin guidance without
+exposing the sync batch table.
 
 ### Translucent controls and queued options (2026-09-14)
 

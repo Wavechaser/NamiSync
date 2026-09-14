@@ -32,3 +32,11 @@ pinned local Fluent `checkmark_16_regular.svg` mask. The mixed-state minus and
 unrelated lifecycle/status U+2713 cue are unchanged. Focused static verification
 passed all 12 design-token checks; the pinned-archive icon check and installed
 light/dark/forced gallery check passed.
+
+GUI-S19 keeps the bounded `pageBatch` coordinator intact while projecting batch
+rows, count, pending state and messages only into editable Sync Setup forms.
+Inventory hides retained sync rows and can start with queued rows; an active
+batch still serializes starts, and close/exact-retry ownership guards remain.
+The setup-app probe additionally proves an uncertain child cannot start a
+separate inventory. All 45 frontend-static checks and the installed headed Setup
+flow passed.

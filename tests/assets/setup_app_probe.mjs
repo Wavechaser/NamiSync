@@ -445,6 +445,24 @@ async function loadScenario({
 {
   const harness = await loadScenario();
   const callbacks = harness.callbacks;
+  callbacks.onEdit("source", "C:\\sync-source");
+  callbacks.onEdit("target", "D:\\sync-target");
+  callbacks.onAddPair();
+  assert.equal(harness.model.batch.length, 1, "sync Setup owns its queued row");
+  callbacks.onMode("inventory");
+  assert.deepEqual(harness.model.batch, [], "Inventory hides the sync batch rows");
+  assert.equal(harness.model.batchCount, 0, "Inventory has no batch count");
+  assert.equal(harness.model.batchPending, false, "Inventory is not batch-pending");
+  callbacks.onEdit("source", "I:\\inventory");
+  callbacks.onStartInventory();
+  await until(() => harness.calls.some((call) => call[0] === "start-inventory"), "inventory start with queued sync row");
+  callbacks.onMode("sync-plan");
+  assert.equal(harness.model.batch.length, 1, "returning to Sync restores the retained row");
+}
+
+{
+  const harness = await loadScenario();
+  const callbacks = harness.callbacks;
   callbacks.onEdit("source", "C:\\source");
   callbacks.onEdit("target", "D:\\target");
   const pendingAdmission = deferred();
@@ -716,6 +734,16 @@ for (const sessionState of ["active", "failed"]) {
   assert.match(harness.model.batchMessage, /Task 1/, "the child points back to its batch origin");
   const startsBeforeBlockedChild = harness.calls.filter((call) => call[0] === "start-plan").length;
   callbacks.onStartPlan();
+  callbacks.onMode("inventory");
+  callbacks.onEdit("source", "I:\\blocked-inventory");
+  const inventoryStartsBeforeBlockedChild = harness.calls.filter((call) => call[0] === "start-inventory").length;
+  callbacks.onStartInventory();
+  await turns();
+  assert.deepEqual(harness.model.batch, [], "Inventory does not expose the uncertain sync row");
+  assert.equal(harness.model.batchPending, true, "uncertain child ownership still guards Inventory");
+  assert.match(harness.model.batchMessage, /Task 1/, "Inventory directs the child back to its batch origin");
+  assert.equal(harness.calls.filter((call) => call[0] === "start-inventory").length,
+    inventoryStartsBeforeBlockedChild, "uncertain batch child cannot start Inventory");
   harness.railCallbacks.onClose(TASK_B);
   await turns();
   assert.equal(harness.calls.filter((call) => call[0] === "start-plan").length, startsBeforeBlockedChild,

@@ -1121,7 +1121,9 @@ the remaining task-local choices. Start admits unresolved nonempty rows automati
 Stable form elements retain focus and drafts through rail, drain and navigation
 updates; response revisions cannot restore an edited row's old choice. The
 page retains one coordinator of at most 48 pairs. Each row belongs to its
-originating task, and only that Setup displays or starts those rows. Rows show
+originating task, and only an editable Sync Setup displays or starts those rows;
+Inventory Setup hides the retained queue and remains startable while rows are
+queued. Returning to Sync restores the same rows. Rows show
 source and target paths, Verify and deletion settings, and creation status in a
 conditional table under the composition actions. Queued entries display their
 own captured settings, including independent filter lists and preservation

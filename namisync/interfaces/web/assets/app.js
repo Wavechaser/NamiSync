@@ -110,14 +110,19 @@ function renderTasks() {
     if (task.form !== null) {
       task.form.recentPairAvailability = recentPairAvailability;
       task.form.batchRunning = pageBatch !== null && pageBatch.running !== null;
-      task.form.batch = task.form.editable && pageBatch !== null
+      const syncBatchOwner = task.form.editable && task.form.mode === "sync-plan";
+      const batchBlockReason = batchTaskBlockReason(task.taskId);
+      task.form.batch = syncBatchOwner && pageBatch !== null
         ? pageBatch.rows.filter((row) => row.originTaskId === task.taskId)
         : [];
-      task.form.batchCount = pageBatch?.rows.length ?? 0;
-      task.form.batchPending = pageBatch?.rows.some((row) => row.originTaskId === task.taskId
-        && ["queued", "submitting", "uncertain"].includes(row.state)) ?? false;
-      task.form.batchPending ||= batchTaskBlockReason(task.taskId) !== null;
-      task.form.batchMessage = batchTaskStartMessage(task.taskId);
+      task.form.batchCount = syncBatchOwner ? pageBatch?.rows.length ?? 0 : 0;
+      task.form.batchPending = syncBatchOwner && (pageBatch?.rows.some((row) => row.originTaskId === task.taskId
+        && ["queued", "submitting", "uncertain"].includes(row.state)) ?? false);
+      task.form.batchPending ||= batchBlockReason !== null;
+      task.form.batchMessage = syncBatchOwner ? batchTaskStartMessage(task.taskId)
+        : batchBlockReason === null ? null
+          : batchTaskStartMessage(task.taskId)
+            ?? "Return to Sync to resolve its in-flight batch request before starting Inventory.";
       task.form.closePending = task.closePending;
     }
     task.batchCloseReason = batchTaskBlockReason(task.taskId);
@@ -950,7 +955,7 @@ async function startCurrentInventory() {
   const form = task?.form;
   if (
     task === null || task.closePending || form === null || !form.editable || form.mode !== "inventory" ||
-    (originHasPendingBatch(task.taskId) || batchTaskBlockReason(task.taskId) !== null) ||
+    batchTaskBlockReason(task.taskId) !== null ||
     (pageBatch !== null && pageBatch.running !== null)
   ) return;
   if (form.attempt !== null) {
