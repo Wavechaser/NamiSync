@@ -37,6 +37,66 @@ The prior aggregate complete-owner-graph model and BR-G-45 are retired. No futur
 
 ## Remaining checkpoints
 
+### Setup ownership and control-detail follow-up (2026-09-14)
+
+| ID | Accepted outcome | Named verification | Status |
+| --- | --- | --- | --- |
+| GUI-S16 | Align ordinary and accent-button boundaries with the official Fluent reference while retaining the authored 1.2px Chromium stroke adjustment. | Official source mapping, focused token/component/gallery checks, installed gallery inspection, adversarial review. | Pending |
+| GUI-S17 | Paint textbox translucent fills once, soften their boundary to 1.2px, and make the resting/focused bottom strip replace rather than overlap the bottom border. | Official source mapping, focused token/component/gallery checks, installed gallery and Setup inspection, adversarial review. | Pending |
+| GUI-D7 | Investigate disabled-button label blur without changing production behavior. | Finite inspection of button CSS, official Fluent resources, installed gallery states and renderer/compositor evidence; record conclusion and reopen trigger. | Pending |
+| GUI-S18 | Replace the checkbox's authored U+2713 mark with the pinned local Fluent checkmark asset. | Static component/icon relationship checks, icon-catalog verification, installed gallery inspection, adversarial review. | Pending |
+| GUI-S19 | Keep composition and results for the current batch queue on Sync Setup only so switching to Inventory cannot expose an inoperable batch surface. | Setup/coordinator browser regressions, installed Setup task-switch inspection, relevant interface tests, adversarial review. | Pending |
+
+Each row is an independently reviewed atomic commit except GUI-D7, which is a
+read-only study commit if documentation changes are warranted. Before each
+implementation, elaborate its exact production, test and documentation
+population and revalidate the affected seams against the integrated predecessor.
+No row changes backend commands, durable queue ownership, task admission,
+inventory batching support, Mica/shadow policy, font rendering, or the authored
+1.2px control-stroke adjustment. Preserve keyboard/focus/forced-color semantics,
+the 48-row batch bound, captured per-row options, serial best effort, exact
+retry, removal/clear eligibility, and settled results. Existing repository stop
+classes apply; false terminal success, duplicate/replayed mutation, or
+out-of-scope filesystem effects require an immediate stop.
+
+GUI-S18 population is `components.css`, the existing pinned
+`checkmark_16_regular.svg` registration/provenance, its direct design-token and
+installed-gallery consumers, DESKTOP_UI, HANDOFF and CHANGELOG. The checkbox
+pseudo-element will consume the existing local mask without changing checkbox
+state, geometry, the mixed-state minus, icon generation, or the unrelated
+lifecycle/status U+2713 cue. Its gate is the focused static/icon checks plus an
+installed gallery state inspection; the coherent commit owns production, tests
+and matching documentation.
+
+GUI-S19 population is `app.js`, the setup-app browser harness and direct static
+consumer, DESKTOP_UI, HANDOFF and CHANGELOG. `pageBatch` remains the bounded
+same-document coordinator, but only an editable `sync-plan` form receives its
+origin rows, count, pending state or message. Inventory may start while queued
+sync rows are retained and hidden; returning to Sync restores them. An active
+batch run still serializes starts, and submitting/uncertain ownership continues
+to guard task close and exact retry. No setup renderer, bridge, dispatcher,
+admission, batch-row state machine or backend contract changes. The gate is the
+focused browser regression proving hide/start/restore plus the relevant static
+and interface checks.
+
+GUI-S16 population is `tokens.css`, `components.css`, their direct token/static
+and installed-gallery consumers, DESKTOP_UI, FEATURES, HANDOFF and CHANGELOG.
+Neutral rest/hover edges map the official `ControlElevationBorderBrush` order;
+pressed/disabled flatten to `ControlStrokeColorDefault`. Accent rest/hover use
+the official `AccentControlElevationBorderBrush` light-over/dark-under roles,
+then become transparent when pressed or disabled. Neutral fills clip at the
+inner border edge while accent fills retain the native outer-edge sizing. The
+1.2px authored width remains; no label, layout, focus or action semantics move.
+
+GUI-S17 has the same CSS/test/document population plus installed Setup. Inputs
+clip their single translucent fill at the inner border edge. Top and side edges
+use the 1.2px `ControlStrokeColorDefault` role; the 2px neutral/accent strip is
+the bottom border rather than a second inset paint over a full perimeter.
+Disabled inputs flatten every edge to the disabled/default stroke and have no
+bottom highlight. The focused fill, placeholder/label roles, field geometry,
+validation, keyboard focus and forced-color authority remain unchanged. Its
+gate is focused token/component tests and installed gallery/Setup inspection.
+
 ### Translucent controls and queued options (2026-09-14)
 
 | ID | Accepted outcome | Named verification | Status |
