@@ -43,7 +43,7 @@ The prior aggregate complete-owner-graph model and BR-G-45 are retired. No futur
 | --- | --- | --- | --- |
 | GUI-S16 | Align ordinary and accent-button boundaries with the official Fluent reference while retaining the authored 1.2px Chromium stroke adjustment. | Official source mapping, focused token/component/gallery checks, installed gallery inspection, adversarial review. | Complete |
 | GUI-S17 | Paint textbox translucent fills once, soften their boundary to 1.2px, and make the resting/focused bottom strip replace rather than overlap the bottom border. | Official source mapping, focused token/component/gallery checks, installed gallery and Setup inspection, adversarial review. | Complete |
-| GUI-D7 | Investigate disabled-button label blur without changing production behavior. | Finite inspection of button CSS, official Fluent resources, installed gallery states and renderer/compositor evidence; record conclusion and reopen trigger. | Pending |
+| GUI-D7 | Investigate disabled-button label blur without changing production behavior. | Finite inspection of button CSS, official Fluent resources, installed gallery states and renderer/compositor evidence; record conclusion and reopen trigger. | Complete |
 | GUI-S18 | Replace the checkbox's authored U+2713 mark with the pinned local Fluent checkmark asset. | Static component/icon relationship checks, icon-catalog verification, installed gallery inspection, adversarial review. | Complete |
 | GUI-S19 | Keep composition and results for the current batch queue on Sync Setup only so switching to Inventory cannot expose an inoperable batch surface. | Setup/coordinator browser regressions, installed Setup task-switch inspection, relevant interface tests, adversarial review. | Complete |
 
@@ -108,6 +108,14 @@ installed light/dark/forced gallery and Setup headed gates. The gallery first
 caught a pressed-state cascade that erased the bottom strip; the final rule
 preserves that strip, uses the shared dual focus ring, and flattens every edge
 only when disabled.
+
+GUI-D7 found no button-level alpha, filter or transform affecting disabled
+labels: the themes provide opaque disabled foreground colors, and the installed
+gallery did not reproduce the intermittent blur. Microsoft WebView2 evidence
+makes DPI/rasterization or transparent-composition state a plausible cause, not
+a demonstrated one. No production change is authorized. Reopen only with the
+runtime version, monitor DPI and text scale, active/inactive and monitor-move
+state, HDR/material state, and a capture comparing enabled and disabled labels.
 
 GUI-S16 passed all 57 focused token/frontend-static checks and the installed
 light/dark/forced gallery gate. The headed consumer now verifies exact neutral

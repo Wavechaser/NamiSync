@@ -28,6 +28,11 @@ packaging remain open.
 
 #### Refine task navigation, Settings and Setup (2026-09-11–14)
 
+- Investigated intermittent disabled-button label blur without changing CSS:
+  disabled text is an opaque dedicated color with no whole-button alpha,
+  filter or transform; recorded the WebView2 reproduction tuple needed to
+  distinguish DPI/rasterization from transparent-composition behavior.
+
 - Replaced the textbox's overlapping full border and inset underline with a
   clipped 1.2px perimeter whose 2px bottom edge carries the resting/focused
   neutral or accent state; disabled inputs flatten all edges.

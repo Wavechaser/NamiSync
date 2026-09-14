@@ -393,6 +393,24 @@ of identical physical pixels across displays. Native 1 logical px and the
 original elevation roles were referenced from Microsoft's
 [Button resources](https://github.com/microsoft/microsoft-ui-xaml/blob/main/controls/dev/CommonStyles/Button_themeresources.xaml)
 and [common colors](https://github.com/microsoft/microsoft-ui-xaml/blob/main/controls/dev/CommonStyles/Common_themeresources_any.xaml).
+
+The GUI-D7 disabled-button label investigation found no element-wide alpha,
+filter or transform in the button path. Light and Dark use dedicated opaque
+disabled foregrounds (`#bdbdbd` and `#5c5c5c`), consistent with Fluent's
+separate disabled-label brush rather than fading the whole control. The clean
+installed gallery did not reproduce the intermittent blur, so production CSS
+is unchanged. WebView2 defines rasterization scale as the combination of
+monitor DPI and text scaling and tracks monitor changes; Microsoft also records
+[high-DPI blurry-text](https://github.com/MicrosoftEdge/WebView2Feedback/issues/571)
+and [transparent-host rendering](https://github.com/MicrosoftEdge/WebView2Feedback/issues/4945)
+reports. Those make a renderer/compositor condition plausible, not proven.
+Reopen with the WebView2 runtime version, monitor DPI and text scale,
+active/inactive and monitor-move state, HDR/material state, and a same-frame
+capture of enabled and disabled labels; whole-surface blur should be diagnosed
+through the host's
+[rasterization-scale contract](https://github.com/MicrosoftEdge/WebView2Feedback/blob/main/specs/RasterizationScale.md)
+before changing color tokens.
+
 Textboxes clip their translucent fill to the padding box. Their top and side
 edges use the authored 1.2px control stroke, while the neutral 2px bottom edge
 is the underline itself rather than an inset shadow painted over another

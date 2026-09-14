@@ -1,5 +1,13 @@
 # Latest session handoff
 
+## GUI-D7 disabled-button label investigation (2026-09-14)
+
+GUI-D7 made no production change. Button CSS uses opaque disabled foreground
+tokens and no button-level opacity, filter or transform; the installed gallery
+did not reproduce the intermittent blur. WebView2 DPI/rasterization or
+transparent-composition state remains a plausible but unproved source. The
+finite reopen tuple is recorded in DESKTOP_UI and M1_PLAN.
+
 ## GUI-S17 textbox boundaries (2026-09-14)
 
 GUI-S17 clips each textbox fill once, uses the authored 1.2px perimeter, and
