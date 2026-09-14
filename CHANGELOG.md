@@ -28,6 +28,9 @@ packaging remain open.
 
 #### Refine task navigation, Settings and Setup (2026-09-11–14)
 
+- Matched closed combobox triggers to the authored 1.2px button/textbox
+  perimeter while retaining the popup's separate 1px material border.
+
 - Limited the dual textbox focus ring to keyboard-origin focus while keeping
   pointer-focused fill and accent feedback. Repainted the lower strip as a
   straight 2px layer with tapered rounded-corner ends rather than a border that

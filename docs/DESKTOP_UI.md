@@ -428,7 +428,8 @@ Popup material and shadow composition remain separate from trigger fills.
 The combobox trigger paints its fill once, with independent top/side/bottom
 strokes; it no longer stacks a fill gradient over a second fill and a full-area
 border gradient. This preserves the intended alpha over its actual parent.
-Its elevation edges use native black 0F/29 in Light and white 18/12 in Dark;
+Its authored 1.2px perimeter matches buttons and textboxes while retaining
+native black 0F/29 elevation edges in Light and white 18/12 in Dark;
 pressed edges flatten to black 0F or white 12 respectively. The separately tuned
 ordinary-button stroke tones above remain a local choice.
 A Windows-accent

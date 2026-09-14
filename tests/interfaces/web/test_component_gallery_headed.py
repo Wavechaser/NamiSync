@@ -1756,6 +1756,9 @@ def test_sh_g_11_component_gallery_uses_installed_tokens_and_non_color_cues(
             input_width = _css_pixel_width(
                 controls_by_key["text_input"][state]["border_block_start_width"]
             )
+            dropdown_width = _css_pixel_width(
+                controls_by_key["dropdown"][state]["border_width"]
+            )
             toggle_width = _css_pixel_width(
                 controls_by_key["toggle_off"][state]["border_width"]
             )
@@ -1763,6 +1766,7 @@ def test_sh_g_11_component_gallery_uses_installed_tokens_and_non_color_cues(
             assert checkbox_width == pytest.approx(button_width, abs=0.01)
             assert toggle_width == pytest.approx(button_width, abs=0.01)
             assert input_width == pytest.approx(button_width, abs=0.01)
+            assert dropdown_width == pytest.approx(button_width, abs=0.01)
             input_bottom_width = _css_pixel_width(
                 controls_by_key["text_input"][state]["border_block_end_width"]
             )

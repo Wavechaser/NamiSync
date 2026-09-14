@@ -358,7 +358,7 @@ body {
   align-items: center;
   background-color: var(--nami-combobox-trigger-background);
   background-image: none;
-  border: 1px solid var(--nami-combobox-trigger-border-start);
+  border: 1.2px solid var(--nami-combobox-trigger-border-start);
   border-block-end-color: var(--nami-combobox-trigger-border-end);
   border-radius: var(--radius-small);
   color: var(--color-neutral-foreground);

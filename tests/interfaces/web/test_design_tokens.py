@@ -1341,6 +1341,7 @@ def test_sh_g_11_components_cover_controls_states_and_non_color_cues() -> None:
     assert "var(--color-text-control-fill)" in combobox_trigger
     assert "var(--color-control-elevation-border-start)" in combobox_trigger
     assert "var(--color-control-elevation-border-end)" in combobox_trigger
+    assert "border: 1.2px solid var(--nami-combobox-trigger-border-start);" in combobox_trigger
     assert "background-image: none;" in combobox_trigger
     assert "background-clip:" not in combobox_trigger
     assert "background-origin:" not in combobox_trigger

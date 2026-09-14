@@ -1,5 +1,11 @@
 # Latest session handoff
 
+## GUI-S21 combobox trigger stroke (2026-09-14)
+
+GUI-S21 changes only the combobox trigger perimeter from 1px to the authored
+1.2px control adjustment. The popup remains 1px. Focused static checks and the
+clean installed light/dark/forced gallery passed.
+
 ## GUI-S20 textbox focus and lower strip (2026-09-14)
 
 GUI-S20 marks pointer-origin text input focus until blur, suppressing only the

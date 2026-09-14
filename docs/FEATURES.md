@@ -438,6 +438,9 @@ unrealized unless an entry says otherwise.
   straight, corner-clipped 2 px neutral/accent lower strip. Pointer focus keeps
   that strip without the dual keyboard ring. Task-backed switching, keyboard behavior, and
   actions remain part of the later unrealized work surfaces.
+- **Combobox Trigger Boundary**. Closed combobox triggers use the same authored
+  1.2 px perimeter adjustment as buttons and textboxes. Their popup remains a
+  separately elevated material surface with a 1 px boundary.
 - **Content Cards**. Background/content cards are static translucent material
   layers rather than controls: white 70% with a black 6% blended stroke in
   Light, white 5% with a black 10% blended stroke in Dark, plus opaque solid

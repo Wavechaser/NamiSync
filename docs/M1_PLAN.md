@@ -42,7 +42,7 @@ The prior aggregate complete-owner-graph model and BR-G-45 are retired. No futur
 | ID | Accepted outcome | Named verification | Status |
 | --- | --- | --- | --- |
 | GUI-S20 | Suppress the dual textbox focus ring for pointer-origin focus while preserving the focused accent strip, keyboard ring, forced-color visibility, and a straight lower strip with tapered radius-clipped ends. | Official TextBox mapping, static modality/geometry checks, installed gallery and Setup pointer/keyboard inspection, adversarial review. | Complete |
-| GUI-S21 | Match the authored 1.2px control perimeter on combobox triggers without changing popup, selection, or keyboard behavior. | Official ComboBox mapping, focused static/gallery checks, installed light/dark/forced gallery inspection, adversarial review. | Pending |
+| GUI-S21 | Match the authored 1.2px control perimeter on combobox triggers without changing popup, selection, or keyboard behavior. | Official ComboBox mapping, focused static/gallery checks, installed light/dark/forced gallery inspection, adversarial review. | Complete |
 
 These are separate atomic commits. GUI-S20 owns `app.js`, `components.css`, the
 direct static/component-gallery/Setup headed consumers, DESKTOP_UI, FEATURES,
@@ -142,6 +142,11 @@ retains the focused fill and accent strip without the dual ring; blur clears
 the marker and subsequent keyboard focus restores the ring. The lower strip is
 a straight 2px border-box layer clipped into tapered rounded ends, while the
 single translucent fill remains padding-box clipped.
+
+GUI-S21 passed the 73 focused static/nonheaded-gallery checks and the clean
+installed light/dark/forced gallery. Trigger borders now match the authored
+1.2px button/textbox adjustment in every state; the popup retains its separate
+1px material boundary and its geometry and interaction contracts are unchanged.
 
 GUI-D7 found no button-level alpha, filter or transform affecting disabled
 labels: the themes provide opaque disabled foreground colors, and the installed
