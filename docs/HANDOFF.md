@@ -1,54 +1,55 @@
 # Latest session handoff
 
-## M1-7 full acceptance and closure (2026-09-16)
+## M1-7 ablation study (2026-09-16)
 
-The user authorized one full measurement run on P8 (`3c3bbbc`), followed by
-M1-7 closure if it passed, with multiple coherent integration commits rather
-than a single squash. Product and measurement code stayed unchanged.
+The user requested a coarse-to-fine ablation study of delivered commits
+`ae3daf6` through `5986c57`, including an independent single Opus 5 xhigh review.
+The checkout remains on `milestone1` at `5986c57`. Production and test paths
+are unchanged; only study/report/index/changelog/handoff documentation is edited.
+No commit, push, PR, M1-8 work or product implementation was performed.
 
-P9 passed all 35 readiness cases in 15 children and all 35 fixed quantitative
-criteria across 175 fresh children / 775 samples, without retries. Independent
-terminal, collection, process identity and source/installed/wheel/runtime audit
-passed. Changed-sort p95s are 0.756–1.109 s (largest max 1.192 s); review memory
-is 280,768,512 bytes / 267.762 MiB; execution admission receipt is 54.6 ms p95,
-55.4 ms max. The original 1.5/3 s, 320 MiB and 100/250 ms criteria are unchanged.
-Receipt timing still follows actual admission. Memory does not measure the
-shared index's extended paused-execution lifetime, documented in ARCHITECTURE.
+[M1_7_ABLATION_STUDY.md](M1_7_ABLATION_STUDY.md) is the final report.
+[M1_PLAN.md](M1_PLAN.md#post-delivery-ablation-study-2026-09-16) closes AB7-1–AB7-4.
+The report contains twelve candidates with source evidence, retained guarantees,
+falsifying gates and sequencing. Recommendations are not implementation authority.
 
-Evidence root: `build/m1-7/evidence/p9-full-20260916/`. It includes fresh
-authority, readiness, all raw child receipts, incremental collection indexes,
-terminal measurements, `evidence-audit.json`, and supplemental before/after
-core execution identities. Canonical compact authority/measurement artifacts
-are updated; previous bytes are preserved in the evidence directory and Git.
-No legacy contract or historical legacy artifact is changed. M1_PLAN records
-artifact hashes, supplemental binding, scope and integration requirements.
+Strong candidates consolidate independent-validator receipt checks, producer
+publication bookkeeping, browser retries and selection admission; separate
+synthetic validator fixtures from live scale construction; remove test ordinal/
+source-count coupling and unused mechanisms; and avoid four repeated safety
+derivations on a successful selection mutation. Public preview compatibility and
+workflow authority must survive. A larger selection-overlay representation needs
+hotspot evidence; legacy-reader and diagnostic-tracer retirements need explicit
+dispositions. Do not merge all recommendations into another oversized checkpoint.
 
-Prior unchanged P8 checks passed: 5,157 ordinary tests, 259 focused checkpoint/
-resume/post-execution tests, 12 import contracts and the installed Plan flow.
-Final new-artifact/scale validation passes 55 tests (28.62 s); the ordinary suite
-passes 5,158 tests with four platform skips and 30 headed deselections (262.71 s).
-Independent documentation and reconstructed endpoint reviews pass. The P8 import
-and installed Plan results remain applicable because product/test code is
-unchanged. Clean committed-source validation, supplemental core physical/HEAD
-identity and exact product/test accounting passed on the accepted recovery
-revision `ba31c1e`; the same checks bind the final reconstructed series.
+E1 in a disposable copy: 33 focused projection/review tests passed before and
+after a canonical-comparator simplification; intentional reverse ordering failed
+the retained nonlexical-order assertion. E2: five synthetic validator controls
+passed before and after substituting frozen manifests with live generation
+forced to raise; intentionally removing maximum-budget rejection failed the
+existing maximum-only control. E2 is a cohort-only diagnostic patch, not an
+integration-ready replacement for shared live-fixture helpers. Both copies were
+removed after their absolute paths were checked. No full ordinary/headed suite
+or 175-child scale run was repeated; no performance acceptance is claimed.
 
-M1-7 is complete. Integration into `milestone1` uses six reconstructed outcomes:
-Plan/confirmation and framework
-readiness; covered windows and compact Plan scale; review/selection retention;
-digest reuse; shared structure; accepted evidence/closure. The final product/test
-tree equals P8 except the two accepted artifacts. Original recovery commits,
-including `cf5a00b`, remain unchanged under archive tag
-`codex/m1-7-recovery-20260916` and verified `m1-7-recovery.bundle` in the evidence
-root. The recovery and temporary integration branches are pruned only after
-verified integration. `integration-receipt.json` records both tips, exact tree
-accounting, bundle identity and cleanup; it is the operational Git receipt.
+Two Codex sidecars reviewed measurement and frontend/harness families, followed
+by adversarial checks. Claude used Opus 5 xhigh in session
+`bfd6b79e-d74d-4714-a0cc-38bdafe5b5e2`, then resumed that exact session for a
+targeted challenge. Both invocations report zero Claude subagents. The reviewer
+accepted corrections to census, map copying, membership cost, public DTO and
+constructor-validation contracts, fake-DOM assumptions and rerun-policy claims.
+The final report records each disposition and separate per-model usage; total
+CLI-reported cost is $9.483037, including $0.001508 auxiliary Haiku usage.
 
-Reviewed reconstructed commits: `ae3daf6` (foundation/framework), `8ffbd3a`
-(compact Plan), `5c31894` (retention), `ef2308a` (digest), `ea5f997` (structure).
-Their final tree is exactly `3c3bbbc`; `d1ce79d` carries accepted evidence.
-This final documentation record follows the verified fast-forward and cleanup;
-the current checkout is `milestone1`. No changes were pushed.
+Evidence: ignored `build/m1-7-ablation/` holds the inventory, prompts, raw JSON,
+review tool audit, original-state preservation receipt, experiment manifests,
+scripts, exact patches and six control/ablation/fault logs. Review-start tracked
+diff/status stayed unchanged through Claude's work. Documentation/link/diff
+checks and product/test identity against `5986c57` close this delivery.
 
-Stop on `milestone1` for recap and GUI review. No M1-8, DOC-2, push, PR
-or release work is authorized.
+M1-7 acceptance remains the prior P9 result at
+`build/m1-7/evidence/p9-full-20260916/`, with canonical committed artifacts and
+supplemental core binding recorded in M1_PLAN. This study neither replaces nor
+revalidates those measurements. Recovery ancestry remains under
+`codex/m1-7-recovery-20260916` and its verified bundle. Next action is discussion
+and selection of bounded simplification scope, not automatic implementation.

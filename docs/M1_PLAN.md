@@ -135,6 +135,40 @@ silence never expands it, and unchanged approvals are not requested again.
 
 ## M1-7 implementation and closure
 
+### Post-delivery ablation study (2026-09-16)
+
+This discovery-only pass studies `ae3daf6^..5986c57`, starting from a clean
+`5986c57` checkout. It authorizes no production/test changes, new acceptance
+criteria, M1-8 work, push or PR. Work proceeds from diff/structure inventories
+to selected behavioral seams and direct consumers, not exhaustive line review.
+The [completed report](M1_7_ABLATION_STUDY.md) distinguishes observed redundancy,
+bounded experimental support and design proposals; no recommendation is
+implementation authorization.
+
+| ID | Accepted study outcome | Named verification | Status |
+| --- | --- | --- | --- |
+| AB7-1 | Attribute checkpoint growth and map product/test/evidence owners. | Inclusive Git/AST census: 77 files, 22,273 additions; 72.3% of added lines in tests/helpers/evidence. | Complete |
+| AB7-2 | Identify bounded architecture, logic and test ablations while preserving behavioral guarantees. | Twelve source/consumer-backed candidates with retained obligations and falsifying gates; E1 33/33 focused control/ablation passes, E2 5/5, and both deliberately seeded faults detected. | Complete |
+| AB7-3 | Independently review with one Claude Opus 5 xhigh session and synthesize useful findings. | Two invocations of the same session, zero Claude subagents; targeted challenge accepted, corrected claims and useful recommendations synthesized. | Complete |
+| AB7-4 | Deliver a ranked report and preserve exact review provenance. | Adversarial synthesis, documentation/link/diff checks, preserved review-start state, unchanged product/test tree; disposable copies removed. | Complete |
+
+Finite corpus: the 77 changed files, their immediate symbol consumers and
+owning active documents; earlier reduction dispositions are contextual evidence.
+Stop discovery and report if supported hard-wall/data-loss/false-success
+evidence is established; do not fix findings during this study. Other findings
+are recommendations only. No benchmark rerun or performance claim is authorized
+by static inspection. Evidence lives in ignored `build/m1-7-ablation/`: named
+UTF-8 prompts/scripts, structural inventories, original-state receipt and raw
+review responses. Preserve these for report provenance; disposable fixtures,
+if needed, must be separately identified and removed after verification.
+
+Both E1/E2 experiments used disposable copies and retained their exact plans,
+patches and control/ablation/fault logs. E2's cohort-only patch is not suitable
+for direct integration: any implementation must separate synthetic controls
+from live-generator coverage. No full benchmark rerun, product/test edit or
+commit was performed. Review session and usage, caveats and recommendation
+dispositions are in the report. Further implementation awaits user-selected scope.
+
 The user authorized M1-7, the closing-race correction, snapshot-bound destructive
 confirmation, aggregate/breakdown facts, an inert gallery preview, and confirmed
 Plan-again/control consumer corrections. Stop after this checkpoint for recap and

@@ -218,6 +218,9 @@ never hides the other result axes in rendered output.
   and diagnostic commands.
 - [Test ablation study](docs/TEST_ABLATION.md) — measured detection losses,
   rebased recommendations and subsequent refinement dispositions.
+- [M1-7 ablation study](docs/M1_7_ABLATION_STUDY.md) — post-delivery architecture,
+  logic and test simplification candidates, isolated experiments and peer-review
+  dispositions; recommendations only.
 - [Test refinement register](docs/TEST_REFINEMENT.md) — bounded implementation
   outcomes and verification of retained test guarantees.
 - [Production reduction register](docs/PRODUCTION_REDUCTION.md) — bounded

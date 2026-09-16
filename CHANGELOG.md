@@ -714,6 +714,23 @@ repeated machinery while preserving operational safety and boundary contracts.
 Safety, settlement, authority, and measurement work made high-risk release
 claims explicit, independently reviewable, and regression-backed.
 
+#### Study M1-7 architecture and test ablation after delivery (2026-09-16)
+
+- Study `ae3daf6` through `5986c57` from diff/structure to selected behaviors
+  and consumers. Record twelve bounded candidates covering receipt/evidence
+  machinery, retry/admission duplication, test coupling, internal selection
+  transfers, repeated safety derivation and conditional historical retirement.
+- Validate a canonical-comparator ablation with 33 focused tests before/after,
+  and a synthetic-fixture separation with five controls before/after, exclusively
+  in disposable copies. Retained tests detect both deliberately seeded faults;
+  record the cohorts' limits and preserve live-fixture obligations.
+- Reconcile two Codex sidecar reviews and one Opus 5 xhigh session, including a
+  same-session challenge that corrects overclaims and rejects validation/API
+  weakening. Preserve prompts, raw responses, usage and experiment provenance.
+- Leave production/tests and accepted measurement authority unchanged; remove
+  disposable copies and deliver the report, closed study register and handoff.
+  No implementation, benchmark rerun, commit, push or PR is included.
+
 #### Bound task inputs, custody, and retained settlement (2026-08-27 – 2026-08-30)
 
 - In scanner, planner, inventory, integrity, and repository paths, admitted raw
