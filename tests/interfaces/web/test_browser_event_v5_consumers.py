@@ -26,7 +26,7 @@ from namisync.core.session import (
 )
 from namisync.interfaces.web import bridge as bridge_module
 from namisync.interfaces.web.bridge import to_primitive_view
-from namisync.workflows import PLAN_KIND
+from namisync.workflows import EXECUTION_KIND, INVENTORY_KIND, PLAN_KIND
 from namisync.workflows.views import (
     SessionRecordView,
     operation_result_view,
@@ -188,5 +188,50 @@ def test_required_node_session_record_keeps_timestamp_boundary() -> None:
             "expected": accepted,
             "value": value,
         })
+
+    _assert_node_cases(cases)
+
+
+def test_required_node_session_record_keeps_task_kind_pause_contract() -> None:
+    record = to_primitive_view(SessionRecordView(
+        SESSION_ID,
+        PLAN_KIND,
+        "completed",
+        False,
+        "2026-08-25T00:00:00+00:00",
+        None,
+        "2026-08-25T00:00:00+00:00",
+        operation_result_view(OperationResult(SessionState.COMPLETED)),
+    ))
+    cases = []
+    for kind, supports_pause in (
+        (PLAN_KIND, False),
+        (INVENTORY_KIND, False),
+        (EXECUTION_KIND, True),
+    ):
+        value = deepcopy(record)
+        value.update(kind=kind, supports_pause=supports_pause)
+        cases.append({
+            "name": f"{kind}-canonical-capability",
+            "kind": "record",
+            "expected": True,
+            "value": value,
+        })
+        wrong = deepcopy(value)
+        wrong["supports_pause"] = not supports_pause
+        cases.append({
+            "name": f"{kind}-wrong-capability",
+            "kind": "record",
+            "expected": False,
+            "value": wrong,
+        })
+    unknown = deepcopy(record)
+    unknown["kind"] = "sync-execute"
+    cases.append({
+        "name": "unknown-task-kind",
+        "kind": "record",
+        "expected": False,
+        "value": unknown,
+    })
 
     _assert_node_cases(cases)

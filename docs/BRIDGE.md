@@ -14,6 +14,13 @@ Identifiers are opaque. `HexId` is 32 lowercase hexadecimal characters; current 
 
 Production core events are v5. There is no positive v3/v4 compatibility path. The bridge response envelope is independently v1; each live event carries the nested `schema_version: 5` and the exact `body_type`/`body` pair from `CORE.md`. A `SessionEventView` carries session id, positive sequence, strict UTC timestamp, schema version, body type, and body. A terminal `SessionRecordView` carries a non-null result consistent with its terminal state. A drain update is exactly `{update_type:"event",event:SessionEventView}` or `{update_type:"record",record:SessionRecordView}`. The response has no cursor, acknowledgement, receipt, has_more, or echoed replay value. A result-free snapshot is not a terminal update and cannot release a session.
 
+Task terminal records describe the underlying plan, inventory or execution
+session, even when the retained task kind remains sync-plan. Native and browser
+validators preserve that closed kind/capability mapping: plan and inventory do
+not support pause; execution does. A fast terminal result must reach the task
+queue and release path just as a later result does. Exact source-owned record
+validation remains in `task_port.py` and its browser consumer.
+
 `next_events` is the current observation operation. It identifies the task, exact session, fresh drain id, and optional positive replay sequence, returns the longest response-byte-admitted ordered prefix of zero to 64 updates and consumes only that prefix. The 8 MiB response wall may admit fewer than 64. The server wait is at most 25 seconds and the browser deadline is 30 seconds. A valid reliable envelope is at most 1,048,576 canonical UTF-8 bytes before sequence, queue, replay, subscriber, or audit mutation, so one valid queue head fits the response wall.
 
 Progress is lossy and may be coalesced; numeric sequence holes alone do not trigger recovery. An explicit `Gap` is visible, stops later batch application, and starts recovery from its first missing sequence. Transport uncertainty uses a new drain id and replay from the last accepted non-Gap sequence plus one. The browser validates a whole response and applies it atomically: an invalid wrapper, order, lifecycle relation, Gap cursor, or reducer relation changes no accepted cursor and runs no callback. A matching leading Gap on recovery proves the prefix is gone; preserve it, apply the available tail, and do not loop. A terminal record stops draining without erasing a visible loss.
@@ -146,7 +153,7 @@ commands still use that native path for their admission return.
 
 ### Small asynchronous native commands
 
-Only `create_task`, `start_plan`, `start_inventory`, `plan_again`,
+Only `create_task`, `start_plan`, `start_inventory`, `plan_again`, `start_execution`,
 `release_terminal_session`, `close_task` and `probe_recent_pairs`
 select the `CommandSpec` small asynchronous work class. Native dispatch
 validates the request and admitted context before starting one command worker.
@@ -259,6 +266,13 @@ BOOTSTRAP rows, commands require OPEN.
 | `start_plan` | `{task_id:TaskId,command_id:HexId,source_id:SlotId,target_id:SlotId,options:SetupOptions}` | `{task_id:TaskId,request_id:HexId,session_id:HexId}` | 30 s; one same-command replay after uncertainty/reinjection/internal_error; manual Retry retains id |
 | `start_inventory` | `{task_id:TaskId,command_id:HexId,root_id:SlotId}` | `{task_id:TaskId,request_id:HexId,session_id:HexId}` | 30 s; same-command recovery |
 | `plan_again` | `{task_id:TaskId,command_id:HexId,source_mount:null\|string,target_mount:null\|string}` | `{task_id:TaskId,request_id:HexId,session_id:HexId}` | 30 s; same-command recovery |
+| `open_plan_view` | `{task_id:TaskId}` | `PlanViewSummary` | 5 s; one identical-payload retry |
+| `update_plan_view` | `{task_id:TaskId,expected_revision:SafeInt,search_query:string,filters:[PlanFilter],sort_column:"path"\|"filename"\|"size"\|"mtime",sort_direction:"ascending"\|"descending",collapse_node_id:null\|NodeId,collapsed:null\|boolean}` | `PlanViewSummary` | 5 s; no automatic retry |
+| `get_plan_window` | `{task_id:TaskId,expected_revision:SafeInt,offset:SafeInt,limit:1..256}` | `{disposition:"current"\|"conflict",view_revision:SafeInt,offset:SafeInt,total:SafeInt,rows:[PlanWindowRow]}` | 5 s; one identical-payload retry |
+| `get_plan_anchor` | `{task_id:TaskId,expected_revision:SafeInt,node_id:NodeId}` | `{disposition:"current"\|"conflict",view_revision:SafeInt,node_id:null\|NodeId,index:null\|SafeInt}` | 5 s; one identical-payload retry |
+| `mutate_plan_selection` | `{task_id:TaskId,command_id:HexId,expected_revision:SafeInt,node_id:NodeId,selected:boolean}` | `PlanViewSummary` | 5 s; one same-command replay after uncertainty |
+| `start_execution` | `{task_id:TaskId,request_id:HexId,command_id:HexId,expected_revision:SafeInt,destructive_acknowledged:boolean}` | task/session start or `{disposition:"in-flight"\|"frozen"\|"conflict"\|"confirmation-required",revision:SafeInt,state:"reviewing"\|"committing"\|"committed",session:null\|{request_id:HexId,session_id:HexId}}` | async-small; 30 s; one same-command replay, then visible exact-command retry after uncertainty |
+| `control_execution` | `{task_id:TaskId,session_id:HexId,action:"pause"\|"resume"\|"cancel"}` | `{code:string,session_id:HexId,before:null\|string,after:null\|string,detail:string,accepted:boolean}` | 5 s; no automatic retry |
 | `next_events` | `{task_id:TaskId,session_id:HexId,drain_id:HexId,replay_from:null\|positive-integer}` | `{task_id:TaskId,session_id:HexId,drain_id:HexId,updates:array}` | 30 s client / 25 s server; recovery mints a new drain id |
 | `release_terminal_session` | `{task_id:TaskId,session_id:HexId}` | `{task_id:TaskId,session_id:HexId}` | 30 s; identical-payload recovery at 100/250/500 ms, then visible manual retry |
 | `close_task` | `{task_id:TaskId,session_id:null\|HexId}` | `{task_id:TaskId,session_id:null\|HexId,disposition:"pending"\|"closed"}` | 30 s; identical-payload recovery at 100/250/500 ms, then visible manual retry |
@@ -272,6 +286,50 @@ an admitted Python handler. Start replay resolves retained wire intent before
 volatile slots: equal id/intent survives expiry; changed wire/resolved intent
 conflicts. Lifecycle release/close uses exact owner identity and idempotent
 recovery, not invented command receipts.
+
+`PlanViewSummary` has exactly `disposition`, `task_id`, `request_id`,
+`view_revision`, `selection_revision`, `selection_state`, `source_path`,
+`target_path`, `selected_operation_count`, `selectable_operation_count`,
+`operation_count`, `preflight_ready`, `preflight_refusal_count`, `warning_count`,
+`requires_destructive_confirmation`, `irreversible_update_count`,
+`destructive_operation_count`, `destructive_operation_counts`,
+`irreversible_operation_count`, `required_bytes`,
+`visible_row_count`, `search_query`, `filters`, `sort_column`, `sort_direction`,
+and `collapsed_count`. The view disposition is `opened|current|applied|noop|conflict|in-flight|frozen`;
+selection state is `reviewing|committing|committed`. `PlanWindowRow` is the exact
+source-owned projection row serialized by `commands.py`; all scalar counts and
+revisions remain JavaScript-safe. `NodeId` is `node-` plus 32 lowercase hex
+digits. `PlanFilter` is one of the exact plan operation/status filter values
+validated by the command table. Path sort admits ascending only, and a collapse
+node and Boolean state are either both null or both present.
+
+Selection facts come from the workflow's effective selection. Required bytes use
+canonical nonnegative signed-64-bit decimal text; operation counts are SafeInts.
+Confirmation is required exactly when `destructive_operation_count` is positive.
+The browser does not infer this requirement from visible rows or filters.
+`destructive_operation_counts` is exactly `{update,move_update,trash,delete}`,
+with a SafeInt for every kind including zero; their sum is the destructive total.
+`irreversible_update_count` counts selected UPDATEs without trash backup, and
+`irreversible_operation_count` adds selected DELETEs. These separate facts allow
+accurate replacement, removal and recoverability wording without changing policy.
+
+The browser publishes local pending feedback before awaiting view, selection,
+Execute, or control receipts. That feedback grants no authority. View and
+selection responses are adopted only for their exact task and generation;
+Execute custody survives navigation once admitted so the exact returned session
+is attached without a duplicate start. Controls bind the exact current task and
+session identity. A retired planning or prior execution session cannot control a
+replacement. Negative review-preflight facts remain immutable review context;
+post-admission preflight refusal leaves selection committed and execution unrun.
+
+Execute freezes task id, request id and selection revision before opening the
+destructive confirmation dialog. Cancel sends no command; Confirm submits that
+same snapshot with acknowledgment. Non-destructive scope submits immediately.
+The backend validates request/revision, commits selection and admits execution
+within the same command; there is no separate validation/go response. Stale
+snapshots receive a no-effect refusal, never refreshed consent. Receipt recovery
+retains the exact command and snapshot, fencing selection and Close until the
+admission result is known. DESKTOP_UI owns modality and focus behavior.
 
 `probe_recent_pairs` reads at most five remembered pairs, deduplicates at most
 ten endpoint resolutions, and returns only exact IDs and raw states. LocationId
@@ -295,6 +353,15 @@ card remains until terminal delivery permits a replayed `closed` disposition.
 Terminal-session release and task close remain distinct operations. The browser
 rejects stale document, navigation, and list generations before adopting task
 state.
+
+Once exact terminal Close begins, the browser fences that task/session pair from
+new drains and replacement work until the close receipt is known. An uncertain
+result retains the same fence and only the identical Close may recover it;
+`task_unavailable` cannot be treated as proof of completion or used to mint a
+new intent. A `pending` receipt clears the terminal-retirement fence and resumes
+ordinary draining because cancellation has not yet retired the task. A `closed`
+receipt removes the task. Backend retirement independently rejects Plan view,
+selection, Execute and Plan-again admission after terminal retirement begins.
 
 The browser retains the existing exact create/start submission after uncertain
 delivery. New task, Setup and its batch coordinator expose the same command's retry closure.
@@ -388,15 +455,14 @@ aggregate task-list limits.
 Appearance is the sole current mutable cosmetic section. It is exact, bounded, and non-semantic: accepted appearance changes do not alter settings policy, service/registry/planner state, plan fingerprints, tasks, or sessions. The browser reconciles a conflict or uncertain replacement through the declared read command instead of retrying an unknown mutation. Native material, high-contrast precedence, accent, and reduced-motion behavior remain system-owned presentation rules in `DESKTOP_UI.md`; the bridge only carries the typed section snapshot. Reads/replacements reject another section, another value version, unknown members, a non-JavaScript-safe revision, or a theme outside the three declared values before persistence or UI mutation.
 Concurrent handlers synchronize effect admission, drains and retirement without holding adapter locks across workflow I/O. INTERFACES owns implemented lifecycle. Prospective generation pins, replacement leases and publication seals are not prescribed here.
 
-## Accepted future outcomes
+## Remaining future outcomes
 
-The next task/review surface must give users idempotent actions, stale-intent refusal, explicit close, truthful terminal delivery, bounded ingress and populations, and a finite containment/refusal/evidence design. The mechanism is open: future work must record its own bounded delivery register and name its runtime enforcer and evidence. Do not revive complete-owner-graph charging, byte reservations, phase-ahead leases, precharged response capacity, or an exact command-map expansion by citing this document.
+Future inventory, integrity, execution-detail and history surfaces must retain the implemented task/review guarantees: idempotent actions, stale-intent refusal, explicit close, truthful terminal delivery, bounded ingress and populations, and a finite containment/refusal/evidence design. Each future mechanism must record its own bounded delivery register and name its runtime enforcer and evidence. Do not revive complete-owner-graph charging, byte reservations, phase-ahead leases or precharged response capacity by citing this document.
 
 Location admission and typed/picker/recent Setup are implemented through the
 common workflow-owned no-follow path. A slot, candidate or remembered identity
-is never durable authorization or path-policy authority. Future review and
-execution commands must preserve these outcomes without inheriting retired
-representation recipes.
+is never durable authorization or path-policy authority. Future commands must
+preserve these outcomes without inheriting retired representation recipes.
 
 ## Evidence and ongoing checks
 

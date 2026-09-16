@@ -180,6 +180,15 @@ def test_br_g_2_rejects_ambiguous_members_instead_of_corrupting_indexes() -> Non
             rel_path_key="WRONG",
         )
 
+    forged = _member("forged", r"a\one.txt")
+    object.__setattr__(forged, "rel_path_key", "WRONG")
+    with pytest.raises(ValueError, match="canonical"):
+        build_node_tree(
+            tree_kind=NodeTreeKind.INVENTORY,
+            scope_identity="location-1",
+            members=(forged,),
+        )
+
 
 def test_br_g_2_indexes_are_read_only_and_input_is_consumed_once() -> None:
     members = (
@@ -318,6 +327,22 @@ def test_case_variant_paths_keep_the_lexicographic_minimum_display() -> None:
     assert folder.rel_path == "FOLDER"
     assert leaf.rel_path == r"FOLDER\FILE.txt"
     assert leaf.member_ids == ("lower", "mixed", "upper")
+
+
+def test_canonicalizable_separators_keep_raw_leaf_and_canonical_ancestors() -> None:
+    tree = build_node_tree(
+        tree_kind=NodeTreeKind.PLAN,
+        scope_identity="separator-plan",
+        members=(_member("mixed", r"a/b\c.txt"),),
+    )
+
+    assert tuple(node.rel_path for node in tree.nodes) == (
+        "",
+        "a",
+        r"a\b",
+        r"a/b\c.txt",
+    )
+    assert tuple(node.depth for node in tree.nodes) == (0, 1, 2, 3)
 
 
 def test_br_g_3_planner_uses_the_promoted_helpers_without_private_copies() -> None:

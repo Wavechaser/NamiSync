@@ -177,6 +177,12 @@ SELECTION_PREVIEW = SelectionPreviewView(
     (),
     True,
     1,
+    3,
+    2,
+    MappingProxyType(
+        {"update": 1, "move_update": 1, "trash": 0, "delete": 1}
+    ),
+    "17",
     (SELECTION_OPERATION,),
 )
 SELECTION_PREVIEW_JSON = {
@@ -188,6 +194,15 @@ SELECTION_PREVIEW_JSON = {
     "user_deselected": [],
     "requires_destructive_confirmation": True,
     "irreversible_update_count": 1,
+    "destructive_operation_count": 3,
+    "irreversible_operation_count": 2,
+    "destructive_operation_counts": {
+        "update": 1,
+        "move_update": 1,
+        "trash": 0,
+        "delete": 1,
+    },
+    "required_bytes": "17",
     "operations": [SELECTION_OPERATION_JSON],
 }
 OPERATION_ITEM = OperationItemView(

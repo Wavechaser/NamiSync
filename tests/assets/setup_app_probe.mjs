@@ -93,9 +93,11 @@ async function loadScenario({
   const app = new ElementFake();
   const status = new ElementFake("Starting...");
   const theme = new ElementFake();
+  const body = new ElementFake();
   const windowListeners = new Map();
   globalThis.document = {
     documentElement: new ElementFake(),
+    body,
     querySelector(selector) {
       return selector === "#app" ? app : selector === "#host-status" ? status : theme;
     },
@@ -234,6 +236,9 @@ async function loadScenario({
       invalidate() {}, refresh() { return Promise.resolve(); }, open() {},
     });
   `);
+  const executionConfirmationUrl = moduleUrl(`
+    export const createExecutionConfirmation = () => ({ element: {}, show() {} });
+  `);
   let source = await readFile(process.argv[2], "utf8");
   source = source.replace(
     /import \{[\s\S]*?\} from "\.\/bridge\.js";/,
@@ -243,6 +248,7 @@ async function loadScenario({
     .replace("./readiness.js", readinessUrl)
     .replace("./appearance.js", appearanceUrl)
     .replace("./theme.js", themeUrl)
+    .replace("./execution_confirmation.js", executionConfirmationUrl)
     .replace("./panels.js", panelUrl)
     .replace("./rail.js", railUrl)
     .replace("./render.js", renderUrl);

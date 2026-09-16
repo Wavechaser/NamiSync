@@ -23,8 +23,63 @@ history, and workflow product while building its secured headed WebView2 shell.
 Stage 6 delivered the secured desktop host, command/event transport, design
 foundation with a fixed local Fluent icon vocabulary, bounded presentation core, process-live task navigation and closure,
 bounded asynchronous task commands, frozen Setup using shared location admission
-and remembered locations, and dormant sync/integrity file-list row renderers. Review content and beta
+and remembered locations, bounded Plan review/selection/sorting and same-task
+execution with live controls. Execution-result/inventory review and beta
 packaging remain open.
+
+#### Correct measurement readiness and evidence retention (2026-09-15)
+
+- Completed the subsequently authorized single measurement run: 175 children,
+  35 metrics and 775 samples, with complete independently checked provenance.
+  Fixed acceptance failed on ten changed-window latency cases, projection staging
+  memory, and typed execution-start receipt latency; the other 23 metrics meet
+  criteria. Preserved the raw result and stopped without repair, rerun or merge.
+- Registered the shared typed-execution receipt observer
+  on the document-message channel. The missing registration caused deterministic
+  timeouts after successful admission across nine execution/control cases.
+  Gave only the 21-case component readiness group a 600-second process watchdog;
+  other readiness and measurement children retain 300 seconds.
+- Verified 46 owner tests (one pending-artifact skip), final listener/ablation and
+  four watchdog controls, independent source/authority review, and full readiness:
+  all 35 cases across 15 children. The repair stop preceded the separately
+  authorized measurement run above; M1-7 remains unmerged.
+- Implemented the reviewed framework boundary: semantic selection warmup, untimed
+  readiness before sampling, and incremental receipts with explicit incomplete
+  collection state. Preserve production behavior, timing criteria and terminal
+  validation; no automatic resume or cross-revision reuse.
+- Earlier failed readiness collections remain preserved; the repairs and successful
+  readiness use separate authority. M1-7 quantitative acceptance remains unmet.
+
+#### Correct measurement runtime initialization (2026-09-15)
+
+- Moved the authority probe's `System.Action` import into the host's loaded
+  callback. Exact-diff review and compilation pass; the single Freeze retry
+  succeeds using the existing reviewed smoke. Frozen authority independently
+  passes; the correction and authority are separate commit `30d35f3`.
+- The fixed run stops at the selection-click pending-frame prerequisite, without
+  producing a measurement artifact. No retry, repair or diagnostic expansion
+  follows. Quantitative acceptance remains blocked for framework review;
+  `cf5a00b` and `milestone1` remain unchanged.
+
+#### Preserve bounded Plan review implementation (2026-09-14)
+
+- Added bounded hierarchical review with literal search, filters, raw-key sibling
+  sorting, server-owned selection and destructive confirmation. Same-task Execute
+  preserves admission rollback and committed-but-unrun preflight truth.
+- Corrected the user-approved closing race: retirement fences follow-up admission,
+  settlement rechecks claim ownership after waits, and exact Plan-again replay
+  survives source task closure. Live controls retain exact task/session binding.
+- Replaced persistent acknowledgment with a snapshot-bound Fluent smoke modal;
+  added workflow-owned aggregate/breakdown counts and an inert gallery preview.
+  All four installed gallery appearance modes pass.
+- Corrected execution terminal-record consumers, Plan-again readiness/visibility,
+  current-session control-state ordering, and the advertised selection retry after
+  a failed Plan load. The complete installed desktop gate passes 30 cases; final
+  affected native reruns and 5,083 ordinary tests pass. Recovery retains the
+  candidate at the user's stop boundary. The reviewed sequential fixture barrier
+  passes its sole smoke at 27 ms against the unchanged 50 ms budget, but authority
+  freeze fails before runtime initialization. No measurements or further repair
+  loop followed. M1-7 is not yet delivered or integrated.
 
 #### Condense completed M1 delivery records (2026-09-14)
 

@@ -48,16 +48,18 @@ completion for small task commands, native folder picking,
 the Fluent/accessibility foundation, process-live blank task creation,
 newest-first navigation and explicit close, frozen Setup with typed/picker/recent
 locations, compact recent-pair and batch tables with retained creation results,
-serial plan and standalone inventory starts, Plan again, a minimal
-Settings/About page with theme control and independent task-rail scrolling, and dormant
-gallery-proven sync/integrity file-list row renderers. User-facing review content,
+serial plan and standalone inventory starts, Plan again, bounded Plan review
+with server-owned selection, sibling sorting and a blocking Fluent confirmation
+for each destructive execution admission,
+live pause/resume/cancel controls, and a minimal Settings/About page with theme
+control and independent task-rail scrolling. Execution-result and inventory review,
 final packaging, and beta
 closure remain open, so the window is not yet the complete desktop product.
 Desktop release also requires scoped cold-start resource budgets and repeated/
 long-workload leak checks under the [resource acceptance policy](docs/DEFENSE.md#7-quantitative-evidence-and-measurement-authority).
 These remain open and do not promise universal whole-runtime memory containment.
 
-Remaining desktop work covers bounded plan/execution review and
+Remaining desktop work covers execution-result review and
 inventory/integrity content within the active task shell. Accepted sorting and rebaseline
 behavior lives in the [feature catalog](docs/FEATURES.md); the
 [M1 plan](docs/M1_PLAN.md) owns remaining delivery and verification.
@@ -270,7 +272,10 @@ Fluent icon vocabulary, maintained from one offline source catalog, supports
 selective, accessible icon use. Setup separates compact path/options controls
 from recent pairs with fresh availability checks. Settings/About occupies the
 work area while preserving tasks; the rail scrolls independently. The exact
-event-v5/data-epoch-7 protocol cut is active. Review content and beta
+event-v5/data-epoch-7 protocol cut is active. Plan review adds bounded hierarchy,
+search/filter/sort, authoritative selection, snapshot-bound destructive confirmation and
+same-task execution with live controls. Close fences new admission while keeping
+terminal release and retained review distinct. Execution-result/inventory review and beta
 packaging remain open.
 
 ### M1 Consolidation

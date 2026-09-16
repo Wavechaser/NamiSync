@@ -273,6 +273,36 @@ class _Service:
         )
         return TaskStartView("task-" + "4" * 32, "6" * 32, "7" * 32)
 
+    def open_plan_view(self, task_id):
+        self.calls.append(("open-plan-view", task_id))
+        return {"disposition": "opened", "task_id": task_id}
+
+    def update_plan_view(self, task_id, **kwargs):
+        self.calls.append(("update-plan-view", task_id, kwargs))
+        return {"disposition": "applied", "task_id": task_id}
+
+    def get_plan_window(self, task_id, **kwargs):
+        self.calls.append(("get-plan-window", task_id, kwargs))
+        return {"disposition": "current", "rows": []}
+
+    def get_plan_anchor(self, task_id, **kwargs):
+        self.calls.append(("get-plan-anchor", task_id, kwargs))
+        return {"disposition": "current", "node_id": kwargs["node_id"], "index": 0}
+
+    def mutate_plan_selection(self, task_id, **kwargs):
+        self.calls.append(("mutate-plan-selection", task_id, kwargs))
+        return {"disposition": "applied", "task_id": task_id}
+
+    def start_execution(self, task_id, **kwargs):
+        self.calls.append(("start-execution", task_id, kwargs))
+        return ExecutionAdmissionView("confirmation-required", 0, "reviewing")
+
+    def control_execution(self, task_id, session_id, action):
+        self.calls.append(("control-execution", task_id, session_id, action))
+        return service_module.ControlView(
+            "accepted", session_id, "running", "paused", "", True
+        )
+
     def drain(
         self,
         task_id: str,
@@ -450,6 +480,13 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
         "start_plan",
         "start_inventory",
         "plan_again",
+        "open_plan_view",
+        "update_plan_view",
+        "get_plan_window",
+        "get_plan_anchor",
+        "mutate_plan_selection",
+        "start_execution",
+        "control_execution",
         "next_events",
         "release_terminal_session",
         "close_task",
@@ -468,6 +505,7 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
         "release_terminal_session",
         "close_task",
         "probe_recent_pairs",
+        "start_execution",
     }
     assert all(
         spec.work is CommandWork.DIRECT
@@ -480,6 +518,7 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
             "release_terminal_session",
             "close_task",
             "probe_recent_pairs",
+            "start_execution",
         }
     )
     assert (
@@ -654,6 +693,150 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
         commands["future_command"] = commands["pick_folder"]  # type: ignore[index]
     with pytest.raises(FrozenInstanceError):
         commands["pick_folder"].retry = CommandRetry.SAME_COMMAND_ONCE  # type: ignore[misc]
+
+
+def test_m1_7_plan_commands_validate_and_reach_task_authority() -> None:
+    commands, _slots, service = _commands()
+    node_id = "node-" + "9" * 32
+
+    opened = _invoke(commands["open_plan_view"], {"task_id": TASK_ID})
+    updated = _invoke(
+        commands["update_plan_view"],
+        {
+            "task_id": TASK_ID,
+            "expected_revision": 0,
+            "search_query": "ßeta",
+            "filters": ["copy", "blocked"],
+            "sort_column": "size",
+            "sort_direction": "descending",
+            "collapse_node_id": node_id,
+            "collapsed": True,
+        },
+    )
+    window = _invoke(
+        commands["get_plan_window"],
+        {"task_id": TASK_ID, "expected_revision": 1, "offset": 0, "limit": 256},
+    )
+    anchor = _invoke(
+        commands["get_plan_anchor"],
+        {"task_id": TASK_ID, "expected_revision": 1, "node_id": node_id},
+    )
+    mutation = _invoke(
+        commands["mutate_plan_selection"],
+        {
+            "task_id": TASK_ID,
+            "command_id": COMMAND_ID,
+            "expected_revision": 0,
+            "node_id": node_id,
+            "selected": False,
+        },
+    )
+    execution = _invoke(
+        commands["start_execution"],
+        {
+            "task_id": TASK_ID,
+            "request_id": "4" * 32,
+            "command_id": "b4" * 16,
+            "expected_revision": 1,
+            "destructive_acknowledged": False,
+        },
+    )
+    control = _invoke(
+        commands["control_execution"],
+        {"task_id": TASK_ID, "session_id": SESSION_ID, "action": "pause"},
+    )
+
+    assert opened["disposition"] == "opened"
+    assert updated["disposition"] == "applied"
+    assert window["rows"] == []
+    assert anchor["node_id"] == node_id
+    assert mutation["disposition"] == "applied"
+    assert execution.disposition == "confirmation-required"
+    assert service.calls[-2] == (
+        "start-execution",
+        TASK_ID,
+        {
+            "request_id": "4" * 32,
+            "expected_revision": 1,
+            "destructive_acknowledged": False,
+            "command_id": "b4" * 16,
+            "wire_intent": (
+                "start-execution",
+                TASK_ID,
+                "4" * 32,
+                1,
+                False,
+            ),
+        },
+    )
+    assert control.accepted is True
+    assert [call[0] for call in service.calls] == [
+        "open-plan-view",
+        "update-plan-view",
+        "get-plan-window",
+        "get-plan-anchor",
+        "mutate-plan-selection",
+        "start-execution",
+        "control-execution",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("command", "payload"),
+    (
+        ("get_plan_window", {"task_id": TASK_ID, "expected_revision": 0, "offset": 0, "limit": 257}),
+        ("update_plan_view", {"task_id": TASK_ID, "expected_revision": 0, "search_query": "x", "filters": [], "sort_column": "path", "sort_direction": "descending", "collapse_node_id": None, "collapsed": None}),
+        ("mutate_plan_selection", {"task_id": TASK_ID, "command_id": COMMAND_ID, "expected_revision": 0, "node_id": "bad", "selected": False}),
+        (
+            "start_execution",
+            {
+                "task_id": TASK_ID,
+                "command_id": COMMAND_ID,
+                "expected_revision": 0,
+                "destructive_acknowledged": True,
+            },
+        ),
+    ),
+)
+def test_m1_7_plan_commands_refuse_unbounded_or_noncanonical_payloads(command, payload) -> None:
+    commands, _slots, _service = _commands()
+    with pytest.raises(CommandPayloadError):
+        _invoke(commands[command], payload)
+
+
+@pytest.mark.parametrize(
+    "result",
+    (
+        object(),
+        service_module.ControlView(
+            "accepted", "9" * 32, "running", "paused", "", True
+        ),
+    ),
+)
+def test_m1_7_control_execution_refuses_malformed_registry_result(result) -> None:
+    class Registry(_Service):
+        def control_execution(self, task_id, session_id, action):
+            self.calls.append(("control-execution", task_id, session_id, action))
+            return result
+
+    registry = Registry()
+    commands = production_command_specs(
+        picker=lambda: None,
+        slots=_Slots(),
+        registry=registry,
+        cosmetics=_Cosmetics(),
+        shell_ready=lambda _generation: None,
+        readiness_echo=lambda _generation, _challenge: False,
+    )
+
+    with pytest.raises(RuntimeError, match="invalid control data"):
+        _invoke(
+            commands["control_execution"],
+            {"task_id": TASK_ID, "session_id": SESSION_ID, "action": "pause"},
+        )
+    assert registry.calls == [
+        ("control-execution", TASK_ID, SESSION_ID, "pause")
+    ]
 
 
 def test_async_small_real_command_projections_have_exact_bounded_completion_shapes() -> None:

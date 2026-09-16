@@ -2,10 +2,11 @@
 
 The secured host, theme/accessibility foundation, generic tree renderer and
 file-row gallery are implemented. Process-live tasks expose frozen Setup and
-typed/picker/recent plan and standalone inventory starts. Production
-plan/execution/inventory/integrity review content remains unrealized, while
-history and global settings pages are deferred. Current v5 item progress is reduced by the bridge, while production
-row binding remains future work.
+typed/picker/recent plan and standalone inventory starts. Production Plan
+review, execution admission and live pause/resume/cancel controls are active;
+inventory, integrity, detailed execution-result review, history and global
+settings pages remain deferred. Current v5 item progress is reduced by the
+bridge, while detailed production result-row binding remains future work.
 
 This document owns visual/user interaction behavior. BRIDGE owns exact transport,
 PRESENTATION owns projection/window/search/sort behavior, INTERFACES owns the host,
@@ -1225,9 +1226,8 @@ structural/search/filter/window/anchor contract and installed shell/tree
 contract live in `PRESENTATION.md`; the installed shell/tree witness is SH-G-7 in
 `INTERFACES.md`.
 
-The accepted but unrealized view contract adds server-owned sibling sorting for
-plan and inventory views.
-New views start in canonical path-key order; users can choose filename, size,
+The Plan view adds server-owned sibling sorting; inventory retains the accepted
+contract for later implementation. New Plan views start in canonical path-key order; users can choose filename, size,
 or mtime with explicit direction, and reset restores path-key order. The server
 sorts complete sibling sets before windowing, with deterministic ties and
 unavailable values last. Size/time use raw numeric facts, including only a
@@ -1238,14 +1238,56 @@ browser cannot sort only a page or reuse old numeric indexes. Ordinary
 sort/reset starts at offset zero; enabled plan follow resolves the active item
 through a fresh guarded server anchor.
 
-The 48rem table's mtime column and ordering/reset control layout may remain
-latent, but production commands, validators, state, raw row facts, and window/
-anchor behavior must be complete when sorting activates. Later GUI
-layout work must not reopen those contracts. Status/progress sorting, global
+The Plan review renders its current bounded window in the compact file-row grid
+with exact 24-CSS-pixel rows and matching leading/trailing spacer offsets; the
+generic `tree.js` renderer keeps its separate 28-pixel contract. The 48rem
+table's final column and control layout remain eligible for later GUI tuning,
+while production commands, validators, state, raw row facts, and window/anchor
+behavior are active. Status/progress sorting, global
 flat sorting, and durable preferences are excluded from M1. Exact rules and
 acceptance live in [Bridge DR-BR-15](PRESENTATION.md#search-filters-sorting-and-follow);
 the existing shell/tree witness does not close this new work. The active M1
 delivery plan owns sequencing.
+
+Execute opens a Fluent smoke confirmation dialog whenever the workflow reports
+selected destructive operations. The dialog states the replacement/removal
+consequence and selected count, with Cancel and Confirm and execute actions.
+There is no persistent consent checkbox. Non-destructive selections submit
+immediately. Request/revision binding and admission recovery are owned by
+[BRIDGE](BRIDGE.md); the dialog grants no separate lasting authority.
+
+The native HTML dialog uses `showModal()` and existing `.nami-dialog` material
+and motion. The app and theme-popup roots remain inert through the exit
+transition: pointer, wheel, keyboard and focus cannot interact with the page
+behind the smoke. Backdrop gestures are consumed; the page scroll lock retains
+and restores the prior inline overflow value and priority, while the dialog can
+scroll within a short viewport. Initial focus is Cancel; Tab
+stays within the dialog, Escape cancels, and closing restores the invoking
+control's focus when it remains available. Confirm is single-shot and begins
+admission immediately. Cancel before submission leaves the review editable;
+uncertain submission instead retains the exact retry and disables selection and
+Close until admission truth is recovered. Shared reduced-motion and
+forced-color rules apply.
+
+Plan-again availability follows the same app-owned eligibility rule as dispatch,
+including loaded Setup readiness, pending attempts and batch/close blockers.
+The control remains disabled while those prerequisites are unresolved; an
+unsubmitted gesture never displays a completed-request message.
+Plan-review layout rules honor HTML hidden state, including the loading toolbar,
+action footer and inactive execution controls. An unbound review exposes no
+actionable controls.
+If a Plan load fails, the task card directs the user to select it to retry.
+Selecting that eligible task retries Plan loading as well as Setup; repeated
+selection shares an in-flight load and an already current review remains cached.
+Successful recovery clears the error and restores the exact reviewed task.
+
+The component gallery includes a Preview destructive confirmation button. It
+opens this same production dialog with a sample count of 13; Cancel and Confirm
+only dismiss the preview and report that no files changed. It stays closed at
+rest, so the gallery remains available for inspecting other components. The
+installed light/dark/forced-color/reduced-motion gallery witness exercises both
+dismissals, background inertness, native wheel blocking and focus restoration alongside the existing
+material matrix.
 
 A valid scroll page is terminal for the viewport snapshot that requested it.
 If it is narrower than the viewport, the renderer waits for a later viewport

@@ -189,13 +189,14 @@ async function reportFailure(error) {
     dispatchInteractive,
     readCosmeticSection,
     replaceCosmeticSection,
-  }, { renderText }, iconModule, { renderPlanRow }, { renderIntegrityRow }, { createTaskRail }] = await Promise.all([
+  }, { renderText }, iconModule, { renderPlanRow }, { renderIntegrityRow }, { createTaskRail }, { createExecutionConfirmation }] = await Promise.all([
     import("/bridge.js"),
     import("/render.js"),
     import("/icons.js"),
     import("/plan.js"),
     import("/integrity.js"),
     import("/rail.js"),
+    import("/execution_confirmation.js"),
   ]);
   const { createIcon, ICON_NAMES } = iconModule;
   if (
@@ -329,6 +330,30 @@ async function reportFailure(error) {
   renderText(status, `Gallery ${mode} measuring`);
   galleryHeader.append(heading, status, themeField);
   app.append(galleryHeader);
+
+  // The gallery replaces the task page; its preview has no execution callback.
+  document.querySelector("#execution-confirmation")?.remove();
+  const confirmationPreview = createExecutionConfirmation([
+    app, document.querySelector("#theme-options"),
+  ]);
+  document.body.append(confirmationPreview.element);
+  const previewButton = document.createElement("button");
+  previewButton.type = "button";
+  previewButton.className = "nami-button nami-button--secondary";
+  previewButton.dataset.galleryConfirmationPreview = "";
+  renderText(previewButton, "Preview destructive confirmation");
+  const previewResult = document.createElement("span");
+  previewResult.setAttribute("role", "status");
+  renderText(previewResult, "Preview only. No files will change.");
+  previewButton.addEventListener("click", () => {
+    confirmationPreview.show({
+      destructiveOperationCount: 13,
+      returnFocus: previewButton,
+      onCancel: () => renderText(previewResult, "Preview canceled. No files were changed."),
+      onConfirm: () => renderText(previewResult, "Preview confirmed. No files were changed."),
+    });
+  });
+  galleryHeader.append(previewButton, previewResult);
 
   const galleryRail = createTaskRail({
     onCreate() {},
@@ -1890,6 +1915,7 @@ async function reportFailure(error) {
   const mixedCheckboxStyle = getComputedStyle(mixedCheckbox);
   const uncheckedCheckboxStyle = getComputedStyle(uncheckedCheckbox);
   const dialogExit = await dialogExitEvidence();
+  const confirmationPreviewEvidence = await measureConfirmationPreview();
   themeTrigger.blur();
   themeTrigger.click();
   await new Promise((resolve) =>
@@ -1960,6 +1986,7 @@ async function reportFailure(error) {
       mixed_border_width: mixedCheckboxStyle.borderWidth,
     },
     dialog_exit: dialogExit,
+    confirmation_preview: confirmationPreviewEvidence,
     segmented: (() => {
       const selected = document.querySelector(
         "#gallery-control-segmented_control-rest",
@@ -2150,6 +2177,55 @@ async function reportFailure(error) {
       retained_while_closing: retainedWhileClosing,
       faded: closingOpacity < 0.01,
       closed,
+    };
+  }
+
+  async function measureConfirmationPreview() {
+    const dialog = confirmationPreview.element;
+    const initiallyClosed = !dialog.open;
+    async function waitForClose() {
+      for (let frame = 0; frame < 120; frame += 1) {
+        if (!dialog.open) return;
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+      }
+      throw new Error("gallery confirmation preview did not close");
+    }
+    previewButton.focus();
+    previewButton.click();
+    const openedFromButton = dialog.open && dialog.matches(":modal");
+    const backgroundInert = app.inert && document.querySelector("#theme-options").inert;
+    const scrollRoot = document.scrollingElement;
+    const scrollableGallery = scrollRoot.scrollHeight > innerHeight + 100;
+    const beforeWheel = scrollRoot.scrollTop;
+    for (const target of ["content", "backdrop"]) {
+      globalThis.__namiGalleryWheelTarget = null;
+      await dispatchInteractive(
+        "test_report", Object.freeze({ phase: "preview_wheel", target }), validAccepted,
+      );
+      for (let frame = 0; globalThis.__namiGalleryWheelTarget !== target; frame += 1) {
+        if (frame === 300) throw new Error("native gallery wheel input did not complete");
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+      }
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    }
+    const wheelBlocked = scrollableGallery && scrollRoot.scrollTop === beforeWheel;
+    dialog.querySelector("[data-cancel-execution]").click();
+    await waitForClose();
+    const cancelClosed = !app.inert && !document.querySelector("#theme-options").inert
+      && previewResult.textContent === "Preview canceled. No files were changed.";
+    const cancelFocus = document.activeElement === previewButton;
+    previewButton.click();
+    dialog.querySelector("[data-confirm-execution]").click();
+    await waitForClose();
+    return {
+      initially_closed: initiallyClosed,
+      opened_from_button: openedFromButton,
+      background_inert: backgroundInert,
+      cancel_closed: cancelClosed,
+      confirm_closed: !app.inert && !document.querySelector("#theme-options").inert
+        && previewResult.textContent === "Preview confirmed. No files were changed.",
+      focus_restored: cancelFocus && document.activeElement === previewButton,
+      wheel_blocked: wheelBlocked,
     };
   }
 })().catch(reportFailure);

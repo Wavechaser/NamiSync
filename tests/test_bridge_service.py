@@ -80,7 +80,10 @@ def _install_plan_effect(
 
 
 def _artifact(plan_value):
-    return SimpleNamespace(plan=plan_value)
+    return SimpleNamespace(
+        plan=plan_value,
+        request=SimpleNamespace(verify_after_execute=False),
+    )
 
 
 class _PlanRuntime:
@@ -148,6 +151,7 @@ def _service(runtime, dispatcher=None) -> NamiSyncService:
         runtime=runtime,
         dispatcher=dispatcher or _Dispatcher(),
         observer=SimpleNamespace(
+            adopt=lambda _session_id, _sink, _stream: None,
             release=lambda _session_id: None,
             close=lambda: None,
         ),
@@ -159,6 +163,39 @@ def _service(runtime, dispatcher=None) -> NamiSyncService:
             PLAN_SESSION_ID,
         )
     return service
+
+
+def _released_task_plan_service(runtime, dispatcher=None):
+    service = _service(runtime, dispatcher)
+    lifecycle = TaskLifecycle()
+    service._lifecycle = lifecycle
+    plan_command = _opaque_id(90_010)
+    signature = ("source", "target", None)
+    task = lifecycle.begin_task_start(plan_command, signature)
+    admission = lifecycle.begin_admission(
+        "task-plan",
+        plan_command,
+        signature,
+        task_id=task.task_id,
+    )
+    lifecycle.attach_session(admission, PLAN_SESSION_ID)
+    _association, receipt = lifecycle.publish_start(
+        admission,
+        PLAN_SESSION_ID,
+        REQUEST_ID,
+    )
+    settlement = lifecycle.begin_settlement(
+        PLAN_SESSION_ID,
+        task_id=task.task_id,
+        close_task=False,
+    )
+    work = lifecycle.confirm_settlement(
+        settlement,
+        terminal_digest=b"p" * 32,
+        dispatcher_truth_observed=True,
+    )
+    lifecycle.complete_settlement(work)
+    return service, task.task_id, plan_command, signature, receipt
 
 
 def _inventory_row(
@@ -189,7 +226,12 @@ def _inventory_row(
 
 
 def test_br_g_13_replan_discards_selection_even_with_identical_operation_ids() -> None:
-    copied = operation(OperationKind.COPY, source=file_stat())
+    copied = operation(
+        OperationKind.UPDATE,
+        source=file_stat(),
+        target=file_stat(identity_index=2),
+        intended=file_stat(),
+    )
     plan_value = plan((copied,))
     runtime = _PlanRuntime(_artifact(plan_value))
     service = _service(runtime)
@@ -218,6 +260,7 @@ def test_br_g_13_replan_discards_selection_even_with_identical_operation_ids() -
     stale_execution = service.start_execution(
         REQUEST_ID,
         expected_revision=changed.revision,
+        destructive_acknowledged=True,
     )
 
     assert changed.revision == 1
@@ -230,6 +273,7 @@ def test_br_g_13_replan_discards_selection_even_with_identical_operation_ids() -
     assert stale_mutation.disposition == "conflict"
     assert isinstance(stale_execution, ExecutionAdmissionView)
     assert stale_execution.disposition == "conflict"
+    assert runtime.commits == []
 
 
 def test_br_g_13_mutation_racing_replan_returns_the_current_artifact() -> None:
@@ -533,6 +577,96 @@ def test_br_g_15_admission_failure_unfreezes_selection() -> None:
     with pytest.raises(RuntimeError, match="admission failed"):
         failed_service.start_execution(REQUEST_ID, expected_revision=0)
     assert failed_service.preview_selection(REQUEST_ID).state == "reviewing"
+
+
+def test_m1_7_task_execution_admission_failure_restores_plan_task_for_retry() -> None:
+    noop = operation(
+        OperationKind.NOOP,
+        reason=OperationReason.METADATA_MATCH,
+    )
+    runtime = _PlanRuntime(_artifact(plan((noop,))))
+
+    class FailOnceDispatcher(_Dispatcher):
+        def __init__(self) -> None:
+            super().__init__()
+            self.fail = True
+
+        def submit(self, kind: str, request: object, *, attach=None) -> str:
+            if self.fail:
+                self.fail = False
+                raise RuntimeError("admission failed")
+            return super().submit(kind, request, attach=attach)
+
+    dispatcher = FailOnceDispatcher()
+    service, task_id, plan_command, signature, plan_receipt = (
+        _released_task_plan_service(runtime, dispatcher)
+    )
+    execution_command = _opaque_id(90_011)
+
+    with pytest.raises(RuntimeError, match="admission failed"):
+        service.start_task_execution(
+            task_id,
+            REQUEST_ID,
+            expected_revision=0,
+            destructive_acknowledged=False,
+            command_id=execution_command,
+            delivery_factory=lambda _task_id: lambda _update: None,
+        )
+
+    retained = service._lifecycle._tasks[task_id]
+    assert retained.session_id == PLAN_SESSION_ID
+    assert retained.start_kind is None
+    assert service.preview_selection(REQUEST_ID).state == "reviewing"
+    assert service._lifecycle.replay_start(
+        plan_command,
+        "task-plan",
+        signature,
+    ) == plan_receipt
+
+    retried = service.start_task_execution(
+        task_id,
+        REQUEST_ID,
+        expected_revision=0,
+        destructive_acknowledged=False,
+        command_id=execution_command,
+        delivery_factory=lambda _task_id: lambda _update: None,
+    )
+    assert retried.task_id == task_id
+    assert retried.session_id != PLAN_SESSION_ID
+    assert service.preview_selection(REQUEST_ID).state == "committed"
+    assert service.recover_task_execution(
+        task_id,
+        REQUEST_ID,
+        expected_revision=0,
+        destructive_acknowledged=False,
+        command_id=execution_command,
+    ) == retried
+
+
+def test_m1_7_task_execution_preflight_failure_releases_followup_claim() -> None:
+    noop = operation(
+        OperationKind.NOOP,
+        reason=OperationReason.METADATA_MATCH,
+    )
+    runtime = _PlanRuntime(_artifact(plan((noop,))))
+    service, task_id, _command, _signature, _receipt = (
+        _released_task_plan_service(runtime)
+    )
+    runtime.artifact = None
+
+    with pytest.raises(AttributeError):
+        service.start_task_execution(
+            task_id,
+            REQUEST_ID,
+            expected_revision=0,
+            destructive_acknowledged=False,
+            command_id=_opaque_id(90_012),
+            delivery_factory=lambda _task_id: lambda _update: None,
+        )
+
+    retained = service._lifecycle._tasks[task_id]
+    assert retained.session_id == PLAN_SESSION_ID
+    assert retained.start_kind is None
 
 
 def test_br_g_21_commitment_states_are_named_and_always_resolve() -> None:
@@ -1473,7 +1607,7 @@ def test_br_g_18_typed_scan_warnings_reach_inventory_details_view() -> None:
     ] == [("root_unavailable", "private", "access denied")]
 
 
-def test_br_g_20_risk_uses_effective_updates_and_excludes_move_update() -> None:
+def test_m1_7_confirmation_uses_all_effective_destructive_operations() -> None:
     update = operation(
         OperationKind.UPDATE,
         source=file_stat(),
@@ -1490,8 +1624,27 @@ def test_br_g_20_risk_uses_effective_updates_and_excludes_move_update() -> None:
         intended=file_stat(identity_index=3),
         reason=OperationReason.IDENTITY_RENAME_CHANGED,
     )
+    trash = operation(
+        OperationKind.TRASH,
+        source_path=None,
+        target_path="trash.bin",
+        target=file_stat(identity_index=5),
+        reason=OperationReason.TARGET_ONLY,
+    )
+    delete = operation(
+        OperationKind.DELETE,
+        source_path=None,
+        target_path="old-folder",
+        reason=OperationReason.DIRECTORY_CLEANUP,
+    )
+    copy = operation(
+        OperationKind.COPY,
+        source_path="copy.bin",
+        target_path="copy.bin",
+        source=file_stat(size=11, identity_index=6),
+    )
     plan_value = replace(
-        plan((update, move_update)),
+        plan((update, move_update, trash, delete, copy)),
         trash_on_update=False,
     )
     admission_service = _service(_PlanRuntime(_artifact(plan_value)))
@@ -1523,11 +1676,51 @@ def test_br_g_20_risk_uses_effective_updates_and_excludes_move_update() -> None:
         0,
         deselect=(str(update.op_id),),
     ).preview
+    nondestructive = service.mutate_selection(
+        REQUEST_ID,
+        after.revision,
+        deselect=(
+            str(move_update.op_id),
+            str(trash.op_id),
+            str(delete.op_id),
+        ),
+    ).preview
 
     assert before.requires_destructive_confirmation
     assert before.irreversible_update_count == 1
-    assert not after.requires_destructive_confirmation
+    assert before.destructive_operation_count == 4
+    assert dict(before.destructive_operation_counts) == {
+        "update": 1,
+        "move_update": 1,
+        "trash": 1,
+        "delete": 1,
+    }
+    assert before.irreversible_operation_count == 2
+    assert before.destructive_operation_count == sum(
+        before.destructive_operation_counts.values()
+    )
+    assert before.required_bytes == "25"
+    assert after.requires_destructive_confirmation
     assert after.irreversible_update_count == 0
+    assert after.destructive_operation_count == 3
+    assert dict(after.destructive_operation_counts) == {
+        "update": 0,
+        "move_update": 1,
+        "trash": 1,
+        "delete": 1,
+    }
+    assert after.irreversible_operation_count == 1
+    assert after.required_bytes == "18"
+    assert not nondestructive.requires_destructive_confirmation
+    assert nondestructive.destructive_operation_count == 0
+    assert dict(nondestructive.destructive_operation_counts) == {
+        "update": 0,
+        "move_update": 0,
+        "trash": 0,
+        "delete": 0,
+    }
+    assert nondestructive.irreversible_operation_count == 0
+    assert nondestructive.required_bytes == "11"
 
 
 def test_br_g_24_folder_mutation_uses_full_subtree_not_collapsed_rows() -> None:

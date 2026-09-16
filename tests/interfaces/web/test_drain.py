@@ -10,8 +10,9 @@ from datetime import datetime, timezone
 import gc
 import json
 from pathlib import Path
-from threading import Condition, Event, Thread
+from threading import Condition, Event, Thread, current_thread
 from time import monotonic, sleep
+from types import SimpleNamespace
 from weakref import ref
 
 import pytest
@@ -22,6 +23,7 @@ from namisync.core.events import (
     Terminal, TerminalSummary,
 )
 from namisync.core.evidence import Outcome
+from namisync.core.preflight import Refusal, RefusalCode, Verdict
 from namisync.core.session import OperationResult, SessionId, SessionState
 from namisync.dispatcher import (
     Dispatcher,
@@ -54,13 +56,22 @@ from namisync.interfaces.task_port import (
     TaskCloseView,
     TaskDrainView,
     TaskEventUpdateView,
+    TaskRecordUpdateView,
     TaskSessionReleaseView,
     TaskShellView,
     TaskStartView,
     TaskTerminalDelivery,
     TaskUnavailableError,
 )
-from namisync.workflows import PLAN_KIND
+from namisync.workflows import (
+    EXECUTION_KIND,
+    INVENTORY_KIND,
+    PLAN_KIND,
+    PlanProjection,
+    PlanProjectionNode,
+    PlanSortColumn,
+    SortDirection,
+)
 from namisync.workflows.views import (
     SessionEventView, SessionRecordView, operation_result_view, session_event_view,
 )
@@ -205,12 +216,17 @@ def _event(sequence: int, body_type: str = "StateChanged") -> SessionEventView:
     ))
 
 
-def _record(*, terminal: bool = True) -> SessionRecordView:
+def _record(
+    *,
+    terminal: bool = True,
+    kind: str = PLAN_KIND,
+    supports_pause: bool = False,
+) -> SessionRecordView:
     return SessionRecordView(
         SESSION,
-        PLAN_KIND,
+        kind,
         "completed" if terminal else "pending",
-        False,
+        supports_pause,
         "2026-01-01T00:00:00+00:00",
         None,
         "2026-01-01T00:00:00+00:00" if terminal else None,
@@ -238,6 +254,7 @@ class _Service:
         self.release_reobserve = Event()
         self.release_reobserve.set()
         self.reobserve_result = _record(terminal=False)
+        self.projection_calls = 0
 
     def create_task_shell(self, command_id, delivery_factory):
         task_id = self.shells.get(command_id)
@@ -253,7 +270,21 @@ class _Service:
 
     def cancel_task_session(self, task_id, session_id):
         self.lifecycle_calls.append(("cancel_task_session", task_id, session_id))
-        return object()
+        return service_module.ControlView(
+            "accepted", session_id, "running", "canceling", "", True
+        )
+
+    def pause_task_session(self, task_id, session_id):
+        self.lifecycle_calls.append(("pause_task_session", task_id, session_id))
+        return service_module.ControlView(
+            "accepted", session_id, "running", "paused", "", True
+        )
+
+    def resume_task_session(self, task_id, session_id):
+        self.lifecycle_calls.append(("resume_task_session", task_id, session_id))
+        return service_module.ControlView(
+            "accepted", session_id, "paused", "running", "", True
+        )
 
     def start_task_plan(
         self,
@@ -291,6 +322,85 @@ class _Service:
         self.start_entered.set()
         assert self.release_start.wait(2)
         return PlanSession(REQUEST, SESSION)
+
+    def start_task_execution(
+        self,
+        task_id,
+        request_id,
+        *,
+        expected_revision,
+        destructive_acknowledged,
+        command_id,
+        delivery_factory,
+    ):
+        self.start_calls.append(
+            (
+                "task-execution",
+                task_id,
+                request_id,
+                expected_revision,
+                destructive_acknowledged,
+                command_id,
+            )
+        )
+        sink = delivery_factory(task_id)
+        session_id = "b" * 32
+        sink(replace(_event(1), session_id=session_id))
+        return TaskStartView(task_id, "c" * 32, session_id)
+
+    def recover_task_execution(self, *args, **kwargs):
+        return None
+
+    def get_plan_projection(self, request_id):
+        self.projection_calls += 1
+        root = PlanProjectionNode(
+            node_id="node-" + "1" * 32,
+            display="Plan",
+            rel_path_key="",
+            position=0,
+            depth=0,
+            parent_index=None,
+            subtree_end=1,
+            is_container=True,
+            row_kind="folder",
+            operation_id=None,
+            operation_kind=None,
+            reason=None,
+            blocked_reason=None,
+            selection="disabled",
+            selectable_operation_count=0,
+            selected_operation_count=0,
+            operation_count=0,
+            size=None,
+            mtime_ns=None,
+            dependency_count=0,
+            risk="none",
+        )
+        projection = PlanProjection(
+            request_id,
+            (root,),
+            {root.node_id: 0},
+            {},
+            frozenset(),
+        )
+        preview = SimpleNamespace(
+            revision=0,
+            state="reviewing",
+            selected_operation_ids=(),
+            requires_destructive_confirmation=False,
+            irreversible_update_count=0,
+            destructive_operation_count=0,
+            irreversible_operation_count=0,
+            destructive_operation_counts={
+                "update": 0,
+                "move_update": 0,
+                "trash": 0,
+                "delete": 0,
+            },
+            required_bytes="0",
+            operations=(),
+        )
+        return projection, preview, "source", "target"
 
     def reobserve_task(self, task_id, session_id, sink, from_sequence):
         assert task_id.startswith("task-")
@@ -2472,10 +2582,667 @@ def test_terminal_session_release_retains_start_response_replay() -> None:
         ),
     ]
     assert start.task_id in registry._tasks
+    assert not registry._tasks[start.task_id].retiring
     assert command_id in registry._start_responses
     assert registry.replay_start(command_id, wire_intent) == start
     with pytest.raises(TaskUnavailableError):
         registry.drain(start.task_id, SESSION, DRAIN, replay_from=None)
+
+
+def test_m1_7_fast_refused_execution_reaches_task_drain_and_release(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+    source.mkdir()
+    target.mkdir()
+    (source / "copy.txt").write_text("copy", encoding="utf-8")
+    service = NamiSyncService(tmp_path / "ledger.db", tmp_path / "history.db")
+    registry = _make_registry(service, drain_wait=0.2)
+    drain_ids = iter(f"{index:032x}" for index in range(100, 120))
+
+    try:
+        planned = registry.start_plan(
+            str(source),
+            str(target),
+            deletion_policy=None,
+            command_id=f"{1:032x}",
+        )
+        _wait_terminal(service._dispatcher, planned.session_id)
+        _drain_until_record(
+            registry,
+            planned.task_id,
+            planned.session_id,
+            drain_ids,
+        )
+        registry.release_terminal_session(planned.task_id, planned.session_id)
+
+        original_dependencies = service._runtime._deps
+
+        def refuse_execution(_review, world, **_kwargs):
+            return Verdict(
+                False,
+                (Refusal(RefusalCode.INSUFFICIENT_SPACE),),
+                world,
+            )
+
+        monkeypatch.setattr(
+            service._runtime,
+            "_deps",
+            replace(original_dependencies, preflight=refuse_execution),
+        )
+        execution = registry.start_execution(
+            planned.task_id,
+            request_id=planned.request_id,
+            expected_revision=0,
+            destructive_acknowledged=False,
+            command_id=f"{2:032x}",
+            wire_intent=(planned.task_id, planned.request_id, 0, False),
+        )
+        _wait_terminal(service._dispatcher, execution.session_id)
+        updates = _drain_until_record(
+            registry,
+            execution.task_id,
+            execution.session_id,
+            drain_ids,
+        )
+        terminal = next(
+            update.record
+            for update in updates
+            if type(update) is TaskRecordUpdateView
+        )
+
+        assert terminal.kind == EXECUTION_KIND
+        assert terminal.supports_pause is True
+        assert terminal.state == "refused"
+        assert terminal.result is not None
+        registry.release_terminal_session(execution.task_id, execution.session_id)
+        summary = registry.list_tasks().tasks[0]
+        assert summary.session_state == "refused"
+        assert summary.session_released is True
+    finally:
+        registry.begin_close()
+        service.close(timeout=2)
+
+
+def test_m1_7_execution_reuses_plan_task_and_preserves_original_start_replay() -> None:
+    registry, service = _registry()
+    plan_command = "4" * 32
+    wire_intent = ("source-slot", "target-slot", None)
+    plan_start = registry.start_plan(
+        "source",
+        "target",
+        deletion_policy=None,
+        command_id=plan_command,
+        wire_intent=wire_intent,
+    )
+    _mark_terminal_drained(registry, plan_start)
+    registry.release_terminal_session(plan_start.task_id, plan_start.session_id)
+
+    execution = registry.start_execution(
+        plan_start.task_id,
+        request_id=plan_start.request_id,
+        expected_revision=0,
+        destructive_acknowledged=False,
+        command_id="5" * 32,
+        wire_intent=(plan_start.task_id, plan_start.request_id, 0, False),
+    )
+    summary = registry.list_tasks().tasks[0]
+
+    assert execution == TaskStartView(plan_start.task_id, "c" * 32, "b" * 32)
+    assert summary.task_id == plan_start.task_id
+    assert summary.request_id == plan_start.request_id
+    assert summary.session_id == execution.session_id
+    assert summary.session_released is False
+    assert registry.replay_start(plan_command, wire_intent) == plan_start
+    with pytest.raises(TaskUnavailableError):
+        registry.close_task(plan_start.task_id, plan_start.session_id)
+    assert service.lifecycle_calls == [
+        (
+            "release_task_session",
+            plan_start.task_id,
+            plan_start.session_id,
+            TaskTerminalDelivery(
+                replace(_record(), session_id=plan_start.session_id)
+            ),
+        )
+    ]
+
+
+def test_m1_7_execution_refuses_changed_request_snapshot_before_submission() -> None:
+    registry, service = _registry()
+    plan_start = _start(registry)
+    _mark_terminal_drained(registry, plan_start)
+    registry.release_terminal_session(plan_start.task_id, plan_start.session_id)
+
+    with pytest.raises(TaskUnavailableError):
+        registry.start_execution(
+            plan_start.task_id,
+            request_id="f" * 32,
+            expected_revision=0,
+            destructive_acknowledged=True,
+            command_id="5" * 32,
+            wire_intent=(plan_start.task_id, "f" * 32, 0, True),
+        )
+
+    assert not any(call[0] == "task-execution" for call in service.start_calls)
+    task = registry._tasks[plan_start.task_id]
+    assert task.request_id == plan_start.request_id
+    assert task.session_id == plan_start.session_id
+    assert task.session_released is True
+    assert not task.transition
+
+
+def test_m1_7_execution_controls_require_exact_current_task_session() -> None:
+    registry, service = _registry()
+    plan_start = _start(registry)
+    _mark_terminal_drained(registry, plan_start)
+    registry.release_terminal_session(plan_start.task_id, plan_start.session_id)
+    execution = registry.start_execution(
+        plan_start.task_id,
+        request_id=plan_start.request_id,
+        expected_revision=0,
+        destructive_acknowledged=False,
+        command_id="5" * 32,
+        wire_intent=(plan_start.task_id, plan_start.request_id, 0, False),
+    )
+
+    paused = registry.control_execution(
+        execution.task_id, execution.session_id, "pause"
+    )
+    resumed = registry.control_execution(
+        execution.task_id, execution.session_id, "resume"
+    )
+    canceled = registry.control_execution(
+        execution.task_id, execution.session_id, "cancel"
+    )
+
+    assert (paused.after, resumed.after, canceled.after) == (
+        "paused", "running", "canceling"
+    )
+    with pytest.raises(TaskUnavailableError):
+        registry.control_execution(
+            plan_start.task_id, plan_start.session_id, "cancel"
+        )
+    assert [call[0] for call in service.lifecycle_calls[-3:]] == [
+        "pause_task_session", "resume_task_session", "cancel_task_session"
+    ]
+
+
+def test_m1_7_reopen_retains_view_identity_and_execution_commit_revision() -> None:
+    registry, service = _registry()
+    plan_start = _start(registry)
+    _mark_terminal_drained(registry, plan_start)
+    registry.release_terminal_session(plan_start.task_id, plan_start.session_id)
+
+    opened = registry.open_plan_view(plan_start.task_id)
+    changed = registry.update_plan_view(
+        plan_start.task_id,
+        expected_revision=opened["view_revision"],
+        search_query="",
+        filters=frozenset(),
+        sort_column=PlanSortColumn.PATH,
+        sort_direction=SortDirection.ASCENDING,
+        collapse_node_id="node-" + "1" * 32,
+        collapsed=True,
+    )
+    reopened = registry.open_plan_view(plan_start.task_id)
+
+    assert reopened["view_revision"] == changed["view_revision"] == 1
+    assert reopened["collapsed_count"] == 1
+    assert service.projection_calls == 1
+
+    execution = registry.start_execution(
+        plan_start.task_id,
+        request_id=plan_start.request_id,
+        expected_revision=0,
+        destructive_acknowledged=False,
+        command_id="5" * 32,
+        wire_intent=(plan_start.task_id, plan_start.request_id, 0, False),
+    )
+    committed = registry.open_plan_view(plan_start.task_id)
+    assert committed["selection_state"] == "committed"
+    assert committed["view_revision"] == 2
+    assert service.projection_calls == 1
+    stale = registry.get_plan_window(
+        plan_start.task_id,
+        expected_revision=1,
+        offset=0,
+        limit=1,
+    )
+    assert stale["disposition"] == "conflict"
+    assert execution.session_id == "b" * 32
+
+
+def test_m1_7_execution_publication_failure_restores_released_plan_delivery() -> None:
+    class Service(_Service):
+        def start_task_execution(self, task_id, request_id, **kwargs):
+            kwargs["delivery_factory"](task_id)
+            raise RuntimeError("dispatcher refused execution")
+
+    service = Service()
+    registry, _ = _registry(service)
+    plan_start = _start(registry)
+    _mark_terminal_drained(registry, plan_start)
+    registry.release_terminal_session(plan_start.task_id, plan_start.session_id)
+    before = registry.list_tasks().tasks[0]
+
+    with pytest.raises(RuntimeError, match="task start failed"):
+        registry.start_execution(
+            plan_start.task_id,
+            request_id=plan_start.request_id,
+            expected_revision=0,
+            destructive_acknowledged=False,
+            command_id="5" * 32,
+            wire_intent=(plan_start.task_id, plan_start.request_id, 0, False),
+        )
+
+    after = registry.list_tasks().tasks[0]
+    assert after == before
+    assert after.session_id == plan_start.session_id
+    assert after.session_released is True
+
+
+def test_m1_7_execution_response_failure_recovers_admitted_receipt() -> None:
+    class Service(_Service):
+        admitted: TaskStartView | None = None
+
+        def start_task_execution(self, task_id, request_id, **kwargs):
+            sink = kwargs["delivery_factory"](task_id)
+            self.admitted = TaskStartView(task_id, "c" * 32, "b" * 32)
+            sink(replace(_event(1), session_id=self.admitted.session_id))
+            raise RuntimeError("response was lost after admission")
+
+        def recover_task_execution(self, *args, **kwargs):
+            return self.admitted
+
+    service = Service()
+    registry, _ = _registry(service)
+    plan_start = _start(registry)
+    _mark_terminal_drained(registry, plan_start)
+    registry.release_terminal_session(plan_start.task_id, plan_start.session_id)
+
+    recovered = registry.start_execution(
+        plan_start.task_id,
+        request_id=plan_start.request_id,
+        expected_revision=0,
+        destructive_acknowledged=False,
+        command_id="5" * 32,
+        wire_intent=(plan_start.task_id, plan_start.request_id, 0, False),
+    )
+    summary = registry.list_tasks().tasks[0]
+
+    assert recovered == service.admitted
+    assert summary.session_id == recovered.session_id
+    assert summary.session_released is False
+    assert registry.start_execution(
+        plan_start.task_id,
+        request_id=plan_start.request_id,
+        expected_revision=0,
+        destructive_acknowledged=False,
+        command_id="5" * 32,
+        wire_intent=(plan_start.task_id, plan_start.request_id, 0, False),
+    ) == recovered
+    with pytest.raises(TaskIntentConflictError):
+        registry.start_execution(
+            plan_start.task_id,
+            request_id="f" * 32,
+            expected_revision=0,
+            destructive_acknowledged=False,
+            command_id="5" * 32,
+            wire_intent=(plan_start.task_id, "f" * 32, 0, False),
+        )
+
+
+def test_m1_7_close_first_fences_plan_consumers_and_execution() -> None:
+    class Service(_Service):
+        def __init__(self) -> None:
+            super().__init__()
+            self.close_entered = Event()
+            self.allow_close = Event()
+
+        def close_task(self, task_id, session_id, delivery):
+            self.lifecycle_calls.append(("close_task", task_id, session_id, delivery))
+            self.close_entered.set()
+            assert self.allow_close.wait(2)
+            return TaskCloseView(task_id, session_id)
+
+    service = Service()
+    registry, _ = _registry(service)
+    plan_start = _start(registry)
+    _mark_terminal_drained(registry, plan_start)
+    registry.release_terminal_session(plan_start.task_id, plan_start.session_id)
+    opened = registry.open_plan_view(plan_start.task_id)
+    close_results: list[TaskCloseView] = []
+    close_errors: list[BaseException] = []
+
+    def close_plan() -> None:
+        try:
+            close_results.append(
+                registry.close_task(plan_start.task_id, plan_start.session_id)
+            )
+        except BaseException as error:
+            close_errors.append(error)
+
+    close_thread = Thread(target=close_plan)
+    close_thread.start()
+    assert service.close_entered.wait(1)
+
+    plan_calls = (
+        lambda: registry.open_plan_view(plan_start.task_id),
+        lambda: registry.update_plan_view(
+            plan_start.task_id,
+            expected_revision=opened["view_revision"],
+            search_query="",
+            filters=frozenset(),
+            sort_column=PlanSortColumn.PATH,
+            sort_direction=SortDirection.ASCENDING,
+            collapse_node_id=None,
+            collapsed=None,
+        ),
+        lambda: registry.get_plan_window(
+            plan_start.task_id,
+            expected_revision=opened["view_revision"],
+            offset=0,
+            limit=1,
+        ),
+        lambda: registry.get_plan_anchor(
+            plan_start.task_id,
+            expected_revision=opened["view_revision"],
+            node_id="node-" + "1" * 32,
+        ),
+        lambda: registry.mutate_plan_selection(
+            plan_start.task_id,
+            expected_revision=0,
+            node_id="node-" + "1" * 32,
+            selected=False,
+            command_id="6" * 32,
+        ),
+        lambda: registry.start_execution(
+            plan_start.task_id,
+            request_id=plan_start.request_id,
+            expected_revision=0,
+            destructive_acknowledged=False,
+            command_id="5" * 32,
+            wire_intent=(plan_start.task_id, plan_start.request_id, 0, False),
+        ),
+    )
+    for call in plan_calls:
+        with pytest.raises(TaskUnavailableError):
+            call()
+
+    service.allow_close.set()
+    close_thread.join(2)
+    assert not close_thread.is_alive()
+    assert close_errors == []
+    assert close_results == [TaskCloseView(plan_start.task_id, plan_start.session_id)]
+    assert not any(call[0] == "task-execution" for call in service.start_calls)
+
+
+def test_m1_7_reserved_execution_wins_before_close(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class Service(_Service):
+        def __init__(self) -> None:
+            super().__init__()
+            self.execution_entered = Event()
+            self.allow_execution = Event()
+
+        def start_task_execution(self, *args, **kwargs):
+            self.execution_entered.set()
+            assert self.allow_execution.wait(2)
+            return super().start_task_execution(*args, **kwargs)
+
+    service = Service()
+    registry, _ = _registry(service)
+    plan_start = _start(registry)
+    _mark_terminal_drained(registry, plan_start)
+    registry.release_terminal_session(plan_start.task_id, plan_start.session_id)
+    task = registry._tasks[plan_start.task_id]
+    close_waiting = Event()
+    condition_type = type(task.condition)
+    original_wait = condition_type.wait
+
+    def observe_wait(condition, timeout=None):
+        if condition is task.condition and current_thread().name == "plan-close":
+            close_waiting.set()
+        return original_wait(condition, timeout)
+
+    monkeypatch.setattr(condition_type, "wait", observe_wait)
+    execution_results: list[TaskStartView] = []
+    execution_errors: list[BaseException] = []
+    close_errors: list[BaseException] = []
+
+    def execute() -> None:
+        try:
+            execution_results.append(
+                registry.start_execution(
+                    plan_start.task_id,
+                    request_id=plan_start.request_id,
+                    expected_revision=0,
+                    destructive_acknowledged=False,
+                    command_id="5" * 32,
+                    wire_intent=(plan_start.task_id, plan_start.request_id, 0, False),
+                )
+            )
+        except BaseException as error:
+            execution_errors.append(error)
+
+    def close_plan() -> None:
+        try:
+            registry.close_task(plan_start.task_id, plan_start.session_id)
+        except BaseException as error:
+            close_errors.append(error)
+
+    execution_thread = Thread(target=execute)
+    execution_thread.start()
+    assert service.execution_entered.wait(1)
+    close_thread = Thread(target=close_plan, name="plan-close")
+    close_thread.start()
+    assert close_waiting.wait(1)
+
+    service.allow_execution.set()
+    execution_thread.join(2)
+    close_thread.join(2)
+
+    assert not execution_thread.is_alive()
+    assert not close_thread.is_alive()
+    assert execution_errors == []
+    assert execution_results == [
+        TaskStartView(plan_start.task_id, "c" * 32, "b" * 32)
+    ]
+    assert len(close_errors) == 1
+    assert isinstance(close_errors[0], TaskUnavailableError)
+    assert not any(call[0] == "close_task" for call in service.lifecycle_calls)
+
+
+def test_m1_7_close_first_refuses_fresh_plan_again_without_new_work() -> None:
+    class Service(_Service):
+        def start_task_plan_again(self, *args, **kwargs):
+            self.start_calls.append(("plan-again", args, kwargs))
+            raise AssertionError("retired Plan again reached the lifecycle")
+
+    service = Service()
+    registry, _ = _registry(service)
+    plan_start = _start(registry)
+    _mark_terminal_drained(registry, plan_start)
+    registry.release_terminal_session(plan_start.task_id, plan_start.session_id)
+    close_entered = Event()
+    allow_close = Event()
+    original_close = service.close_task
+
+    def close_task(task_id, session_id, delivery):
+        close_entered.set()
+        assert allow_close.wait(2)
+        return original_close(task_id, session_id, delivery)
+
+    service.close_task = close_task
+    close_results = []
+    close_thread = Thread(
+        target=lambda: close_results.append(
+            registry.close_task(plan_start.task_id, plan_start.session_id)
+        )
+    )
+    close_thread.start()
+    assert close_entered.wait(1)
+
+    with pytest.raises(TaskUnavailableError):
+        registry.start_plan_again(
+            plan_start.task_id,
+            source_mount=None,
+            target_mount=None,
+            command_id="7" * 32,
+            wire_intent=(plan_start.task_id, None, None),
+        )
+    assert registry._provisional == {}
+    assert not any(call[0] == "plan-again" for call in service.start_calls)
+
+    allow_close.set()
+    close_thread.join(2)
+    assert not close_thread.is_alive()
+    assert close_results == [TaskCloseView(plan_start.task_id, plan_start.session_id)]
+
+
+@pytest.mark.parametrize("fail_plan_again", (False, True))
+def test_m1_7_plan_again_reservation_settles_before_close(
+    monkeypatch: pytest.MonkeyPatch,
+    fail_plan_again: bool,
+) -> None:
+    class Service(_Service):
+        def __init__(self) -> None:
+            super().__init__()
+            self.plan_again_entered = Event()
+            self.allow_plan_again = Event()
+
+        def start_task_plan_again(
+            self,
+            old_task_id,
+            request_id,
+            *,
+            command_id,
+            delivery_factory,
+            **_kwargs,
+        ):
+            self.start_calls.append(("plan-again", old_task_id, request_id))
+            self.plan_again_entered.set()
+            assert self.allow_plan_again.wait(2)
+            if fail_plan_again:
+                delivery_factory("task-" + "d" * 32)
+                raise RuntimeError("Plan again failed")
+            task_id = "task-" + "d" * 32
+            sink = delivery_factory(task_id)
+            session_id = "e" * 32
+            sink(replace(_event(1), session_id=session_id))
+            return TaskStartView(task_id, "f" * 32, session_id)
+
+    service = Service()
+    registry, _ = _registry(service)
+    plan_start = _start(registry)
+    _mark_terminal_drained(registry, plan_start)
+    registry.release_terminal_session(plan_start.task_id, plan_start.session_id)
+    old = registry._tasks[plan_start.task_id]
+    close_waiting = Event()
+    condition_type = type(old.condition)
+    original_wait = condition_type.wait
+
+    def observe_wait(condition, timeout=None):
+        if condition is old.condition and current_thread().name == "plan-again-close":
+            close_waiting.set()
+        return original_wait(condition, timeout)
+
+    monkeypatch.setattr(condition_type, "wait", observe_wait)
+    plan_results = []
+    plan_errors: list[BaseException] = []
+    close_results = []
+
+    def plan_again() -> None:
+        try:
+            plan_results.append(
+                registry.start_plan_again(
+                    plan_start.task_id,
+                    source_mount=None,
+                    target_mount=None,
+                    command_id="7" * 32,
+                    wire_intent=(plan_start.task_id, None, None),
+                )
+            )
+        except BaseException as error:
+            plan_errors.append(error)
+
+    plan_thread = Thread(target=plan_again)
+    close_thread = Thread(
+        target=lambda: close_results.append(
+            registry.close_task(plan_start.task_id, plan_start.session_id)
+        ),
+        name="plan-again-close",
+    )
+    plan_thread.start()
+    assert service.plan_again_entered.wait(1)
+    close_thread.start()
+    assert close_waiting.wait(1)
+
+    service.allow_plan_again.set()
+    plan_thread.join(2)
+    close_thread.join(2)
+
+    assert not plan_thread.is_alive()
+    assert not close_thread.is_alive()
+    assert close_results == [TaskCloseView(plan_start.task_id, plan_start.session_id)]
+    if fail_plan_again:
+        assert len(plan_errors) == 1
+        assert isinstance(plan_errors[0], RuntimeError)
+        assert plan_results == []
+        assert registry._provisional == {}
+    else:
+        assert plan_errors == []
+        assert plan_results == [
+            TaskStartView("task-" + "d" * 32, "f" * 32, "e" * 32)
+        ]
+
+
+def test_m1_7_exact_plan_again_replays_after_source_task_close() -> None:
+    class Service(_Service):
+        def start_task_plan_again(
+            self,
+            old_task_id,
+            request_id,
+            *,
+            delivery_factory,
+            **_kwargs,
+        ):
+            self.start_calls.append(("plan-again", old_task_id, request_id))
+            task_id = "task-" + "d" * 32
+            sink = delivery_factory(task_id)
+            session_id = "e" * 32
+            sink(replace(_event(1), session_id=session_id))
+            return TaskStartView(task_id, "f" * 32, session_id)
+
+    service = Service()
+    registry, _ = _registry(service)
+    plan_start = _start(registry)
+    _mark_terminal_drained(registry, plan_start)
+    registry.release_terminal_session(plan_start.task_id, plan_start.session_id)
+    wire_intent = (plan_start.task_id, None, None)
+    admitted = registry.start_plan_again(
+        plan_start.task_id,
+        source_mount=None,
+        target_mount=None,
+        command_id="7" * 32,
+        wire_intent=wire_intent,
+    )
+    registry.close_task(plan_start.task_id, plan_start.session_id)
+
+    replay = registry.start_plan_again(
+        plan_start.task_id,
+        source_mount=None,
+        target_mount=None,
+        command_id="7" * 32,
+        wire_intent=wire_intent,
+    )
+
+    assert replay == admitted
+    assert [call[0] for call in service.start_calls].count("plan-again") == 1
 
 
 def test_terminal_session_release_lost_response_replay_is_idempotent() -> None:
@@ -3352,6 +4119,16 @@ def test_close_failure_retires_private_graph_before_high_level_retry() -> None:
     assert raised.value.__context__ is None
     assert all(reference() is None for reference in graph_references[3:])
     assert start.task_id in registry._tasks
+    assert registry._tasks[start.task_id].retiring
+    with pytest.raises(TaskUnavailableError):
+        registry.start_execution(
+            start.task_id,
+            request_id=start.request_id,
+            expected_revision=0,
+            destructive_acknowledged=False,
+            command_id="5" * 32,
+            wire_intent=(start.task_id, start.request_id, 0, False),
+        )
     assert registry.close_task(
         start.task_id,
         start.session_id,
@@ -3648,6 +4425,55 @@ def _malformed_task_updates():
         replace(record, result=replace(record.result, bytes_done=0)),
         replace(record, result=replace(record.result, recording="degraded")),
     ]
+
+
+@pytest.mark.parametrize(
+    ("kind", "supports_pause"),
+    (
+        (PLAN_KIND, False),
+        (INVENTORY_KIND, False),
+        (EXECUTION_KIND, True),
+    ),
+)
+def test_task_offer_accepts_exact_supported_terminal_record_capability(
+    kind: str,
+    supports_pause: bool,
+) -> None:
+    registry, service = _registry()
+    start = _start(registry)
+    record = replace(
+        _record(kind=kind, supports_pause=supports_pause),
+        session_id=start.session_id,
+    )
+
+    service.sink(record)
+
+    assert registry._tasks[start.task_id].terminal_record == record
+
+
+@pytest.mark.parametrize(
+    ("kind", "supports_pause"),
+    (
+        (PLAN_KIND, True),
+        (INVENTORY_KIND, True),
+        (EXECUTION_KIND, False),
+        ("sync-execute", False),
+    ),
+)
+def test_task_offer_rejects_wrong_task_record_capability(
+    kind: str,
+    supports_pause: bool,
+) -> None:
+    registry, service = _registry()
+    start = _start(registry)
+
+    with pytest.raises(ValueError, match="supported terminal result"):
+        service.sink(replace(
+            _record(kind=kind, supports_pause=supports_pause),
+            session_id=start.session_id,
+        ))
+
+    assert registry._tasks[start.task_id].terminal_record is None
 
 
 @pytest.mark.parametrize("update", _malformed_task_updates())

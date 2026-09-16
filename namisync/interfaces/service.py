@@ -9,7 +9,8 @@ from hashlib import sha256
 from json import dumps
 from pathlib import Path
 from threading import Lock
-from typing import Callable, Never
+from types import MappingProxyType
+from typing import Callable, Mapping, Never
 from uuid import uuid4
 
 from namisync.dispatcher import (
@@ -59,6 +60,7 @@ from namisync.workflows.runtime import (
     build_plan_node_tree,
     execution_selection_digest_hex,
 )
+from namisync.workflows import PlanProjection, build_plan_projection
 from namisync.workflows.selection import (
     apply_selection_mutation,
     derive_execution_selection,
@@ -239,6 +241,10 @@ class SelectionPreviewView:
     user_deselected: tuple[str, ...]
     requires_destructive_confirmation: bool
     irreversible_update_count: int
+    destructive_operation_count: int
+    irreversible_operation_count: int
+    destructive_operation_counts: Mapping[str, int]
+    required_bytes: str
     operations: tuple[SelectionOperationView, ...]
 
 
@@ -1028,6 +1034,199 @@ class NamiSyncService:
                 command_id=command_id,
             )
 
+    def start_task_execution(
+        self,
+        task_id: str,
+        request_id: str,
+        *,
+        expected_revision: int,
+        destructive_acknowledged: bool,
+        command_id: str,
+        delivery_factory: TaskDeliveryFactory,
+    ) -> TaskStartView | ExecutionAdmissionView:
+        """Commit one reviewed selection and attach execution to its task."""
+
+        if type(expected_revision) is not int:
+            raise TypeError("expected_revision must be an int")
+        if type(destructive_acknowledged) is not bool:
+            raise TypeError("destructive_acknowledged must be a bool")
+        if not callable(delivery_factory):
+            raise TypeError("delivery_factory must be callable")
+        signature = (
+            request_id,
+            expected_revision,
+            destructive_acknowledged,
+        )
+
+        with self._lifecycle.command_guard(command_id):
+            claim = self._lifecycle.begin_task_followup(
+                task_id,
+                request_id,
+                command_id,
+                "task-execution",
+                signature,
+            )
+            if claim.replay is not None:
+                replay = claim.replay
+                return TaskStartView(task_id, replay.request_id, replay.session_id)
+
+            preflight_response: ExecutionAdmissionView | None = None
+            try:
+                state, artifact = self._selection_state(request_id)
+                with self._lock:
+                    if state.phase == "committing":
+                        preflight_response = ExecutionAdmissionView(
+                            "in-flight", state.revision, state.phase
+                        )
+                    elif state.phase == "committed":
+                        preflight_response = ExecutionAdmissionView(
+                            "frozen",
+                            state.revision,
+                            state.phase,
+                            state.execution_session,
+                        )
+                    elif expected_revision != state.revision:
+                        preflight_response = ExecutionAdmissionView(
+                            "conflict", state.revision, state.phase
+                        )
+                    else:
+                        decision = derive_execution_selection(
+                            artifact.plan,
+                            user_deselected=state.user_deselected,
+                        )
+                        if not decision.selection:
+                            raise ValueError(
+                                "Nothing is selected to synchronize"
+                            )
+                        if (
+                            decision.requires_destructive_confirmation
+                            and not destructive_acknowledged
+                        ):
+                            preflight_response = ExecutionAdmissionView(
+                                "confirmation-required",
+                                state.revision,
+                                state.phase,
+                            )
+                        else:
+                            user_deselected = state.user_deselected
+                            state.phase = "committing"
+            except BaseException:
+                self._lifecycle.abort_task_start(task_id)
+                raise
+            if preflight_response is not None:
+                self._lifecycle.abort_task_start(task_id)
+                return preflight_response
+
+            succeeded = False
+            result: ExecutionSession | None = None
+            try:
+                sink = delivery_factory(task_id)
+                if not callable(sink):
+                    raise TypeError("task delivery factory must return a sink")
+                request = self._runtime.commit_plan(
+                    request_id,
+                    verify_after_execute=artifact.request.verify_after_execute,
+                    user_deselected=user_deselected,
+                    expected_artifact=artifact,
+                )
+                session_id, receipt = self._submit_session(
+                    EXECUTION_KIND,
+                    request,
+                    effect_kind="task-execution",
+                    command_id=command_id,
+                    signature=signature,
+                    request_id=str(request.execution_set.run_id),
+                    detail_owner=("execution", str(request.execution_set.run_id)),
+                    observation_sink=sink,
+                    task_id=task_id,
+                )
+                result = ExecutionSession(
+                    str(request.execution_set.run_id),
+                    str(session_id),
+                )
+                succeeded = True
+                return TaskStartView(task_id, receipt.request_id, receipt.session_id)
+            except BaseException:
+                self._lifecycle.abort_task_start(task_id)
+                raise
+            finally:
+                with self._lock:
+                    current = self._plan_selections.get(request_id)
+                    if current is state:
+                        state.phase = "committed" if succeeded else "reviewing"
+                        state.execution_session = result if succeeded else None
+
+    def get_plan_projection(
+        self,
+        request_id: str,
+    ) -> tuple[PlanProjection, SelectionPreviewView, str, str]:
+        """Return one immutable projection bound to the current plan artifact."""
+
+        state, artifact = self._selection_state(request_id)
+        with self._lock:
+            user_deselected = state.user_deselected
+            preview = self._selection_preview_locked(
+                request_id,
+                state,
+                artifact,
+            )
+        projection = build_plan_projection(
+            request_id,
+            artifact,
+            user_deselected=user_deselected,
+        )
+        if self._runtime.get_plan(request_id) is not artifact:
+            raise ValueError("plan changed before review projection")
+        with self._lock:
+            if (
+                self._plan_selections.get(request_id) is not state
+                or state.user_deselected != user_deselected
+                or state.revision != preview.revision
+                or state.phase != preview.state
+            ):
+                raise ValueError("selection changed before review projection")
+        return (
+            projection,
+            preview,
+            artifact.request.source_path,
+            artifact.request.target_path,
+        )
+
+    def recover_task_execution(
+        self,
+        task_id: str,
+        request_id: str,
+        *,
+        expected_revision: int,
+        destructive_acknowledged: bool,
+        command_id: str,
+    ) -> TaskStartView | None:
+        """Read an admitted execution receipt without starting new work."""
+
+        signature = (
+            request_id,
+            expected_revision,
+            destructive_acknowledged,
+        )
+        with self._lifecycle.command_guard(command_id):
+            try:
+                receipt = self._lifecycle.replay_start(
+                    command_id,
+                    "task-execution",
+                    signature,
+                )
+            except LifecycleReceiptConflictError:
+                raise TaskIntentConflictError(
+                    "task command intent conflicts"
+                ) from None
+        if receipt is None:
+            return None
+        if receipt.task_id != task_id:
+            raise LifecycleAssociationError(
+                "task execution receipt changed its task"
+            )
+        return TaskStartView(task_id, receipt.request_id, receipt.session_id)
+
     def _start_execution_once(
         self,
         request_id: str,
@@ -1090,11 +1289,10 @@ class NamiSyncService:
             )
             if not decision.selection:
                 raise ValueError("Nothing is selected to synchronize")
-            risk_count = self._irreversible_update_count(
-                artifact.plan,
-                decision.selection,
-            )
-            if risk_count and not destructive_acknowledged:
+            if (
+                decision.requires_destructive_confirmation
+                and not destructive_acknowledged
+            ):
                 return ExecutionAdmissionView(
                     "confirmation-required",
                     state.revision,
@@ -1407,6 +1605,20 @@ class NamiSyncService:
         except LifecycleAssociationError:
             raise TaskUnavailableError("task is unavailable") from None
         return _control_view(self._dispatcher.cancel(session_id))
+
+    def pause_task_session(self, task_id: str, session_id: str) -> ControlView:
+        try:
+            self._lifecycle.require_session(session_id, task_id=task_id)
+        except LifecycleAssociationError:
+            raise TaskUnavailableError("task is unavailable") from None
+        return _control_view(self._dispatcher.pause(session_id))
+
+    def resume_task_session(self, task_id: str, session_id: str) -> ControlView:
+        try:
+            self._lifecycle.require_session(session_id, task_id=task_id)
+        except LifecycleAssociationError:
+            raise TaskUnavailableError("task is unavailable") from None
+        return _control_view(self._dispatcher.resume(session_id))
 
     def close_task_shell(self, task_id: str) -> TaskShellView:
         try:
@@ -2070,10 +2282,6 @@ class NamiSyncService:
             for operation in artifact.plan.operations
             if operation.op_id in decision.selection
         )
-        risk_count = self._irreversible_update_count(
-            artifact.plan,
-            decision.selection,
-        )
         return SelectionPreviewView(
             request_id=request_id,
             revision=state.revision,
@@ -2083,8 +2291,23 @@ class NamiSyncService:
             ),
             selected_operation_ids=selected_ids,
             user_deselected=tuple(sorted(state.user_deselected)),
-            requires_destructive_confirmation=bool(risk_count),
-            irreversible_update_count=risk_count,
+            requires_destructive_confirmation=(
+                decision.requires_destructive_confirmation
+            ),
+            irreversible_update_count=decision.irreversible_update_count,
+            destructive_operation_count=decision.destructive_operation_count,
+            irreversible_operation_count=decision.irreversible_operation_count,
+            destructive_operation_counts=MappingProxyType(
+                {
+                    "update": decision.destructive_operation_counts.update,
+                    "move_update": (
+                        decision.destructive_operation_counts.move_update
+                    ),
+                    "trash": decision.destructive_operation_counts.trash,
+                    "delete": decision.destructive_operation_counts.delete,
+                }
+            ),
+            required_bytes=decision.required_bytes,
             operations=tuple(
                 SelectionOperationView(
                     operation_id=str(operation.op_id),
@@ -2102,16 +2325,6 @@ class NamiSyncService:
                 )
                 for operation in artifact.plan.operations
             ),
-        )
-
-    @staticmethod
-    def _irreversible_update_count(plan, selection: frozenset[str]) -> int:
-        if plan.trash_on_update:
-            return 0
-        return sum(
-            operation.op_id in selection
-            and operation.kind.value == "update"
-            for operation in plan.operations
         )
 
     @staticmethod

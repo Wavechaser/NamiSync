@@ -21,8 +21,11 @@ const app = new HTMLElementFake();
 const status = new HTMLElementFake("Starting...");
 const theme = new HTMLSelectElementFake();
 const settings = new HTMLElementFake();
+const themeOptions = new HTMLElementFake();
+const body = new HTMLElementFake();
 globalThis.document = {
   documentElement: new HTMLElementFake(),
+  body,
   querySelector(selector) {
     return selector === "#app"
       ? app
@@ -30,7 +33,9 @@ globalThis.document = {
         ? status
         : selector === "#theme-mode"
           ? theme
-          : selector === "#settings-view" ? settings : null;
+          : selector === "#settings-view"
+            ? settings
+            : selector === "#theme-options" ? themeOptions : null;
   },
 };
 
@@ -176,6 +181,9 @@ const panelsStub = moduleUrl(`
 const renderStub = moduleUrl(`
   export const renderText = (element, value) => { element.textContent = value; };
 `);
+const executionConfirmationStub = moduleUrl(`
+  export const createExecutionConfirmation = () => ({ element: {}, show() {} });
+`);
 
 let source = await readFile(process.argv[2], "utf8");
 source = source.replace(
@@ -186,6 +194,7 @@ source = source
   .replace("./readiness.js", readinessStub)
   .replace("./appearance.js", appearanceStub)
   .replace("./theme.js", themeStub)
+  .replace("./execution_confirmation.js", executionConfirmationStub)
   .replace("./panels.js", panelsStub)
   .replace("./rail.js", railStub)
   .replace("./render.js", renderStub);

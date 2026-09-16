@@ -136,6 +136,9 @@ def test_br_g_12_user_deselection_cascades_and_reselection_closes_upward() -> No
     assert exclusions[child.op_id].outcome is Outcome.DEFERRED
     assert exclusions[child.op_id].reason == ExclusionReason.BLOCKED_DEPENDENCY
     assert exclusions[cleanup.op_id].outcome is Outcome.DEFERRED
+    assert deselected.destructive_operation_count == 0
+    assert deselected.destructive_operation_counts.trash == 0
+    assert deselected.destructive_operation_counts.delete == 0
 
     reselected = apply_selection_mutation(
         plan,
@@ -148,6 +151,43 @@ def test_br_g_12_user_deselection_cascades_and_reselection_closes_upward() -> No
     assert child.op_id in decision.selection
     assert folder.op_id in decision.selection
     assert cleanup.op_id not in decision.selection
+
+
+def test_m1_7_selection_facts_cover_every_destructive_kind() -> None:
+    update = _operation(1, OperationKind.UPDATE, "update.bin")
+    move_update = _operation(2, OperationKind.MOVE_UPDATE, "moved.bin")
+    trash = _operation(3, OperationKind.TRASH, "trashed.bin")
+    delete = _operation(4, OperationKind.DELETE, "deleted")
+    harmless = tuple(
+        _operation(index, kind, f"safe-{index}")
+        for index, kind in enumerate(
+            (
+                OperationKind.COPY,
+                OperationKind.MKDIR,
+                OperationKind.MOVE,
+                OperationKind.RECASE,
+                OperationKind.NOOP,
+            ),
+            5,
+        )
+    )
+    plan = _plan((update, move_update, trash, delete, *harmless))
+
+    decision = derive_execution_selection(plan)
+
+    assert decision.destructive_operation_count == 4
+    assert decision.requires_destructive_confirmation
+    assert decision.destructive_operation_counts.update == 1
+    assert decision.destructive_operation_counts.move_update == 1
+    assert decision.destructive_operation_counts.trash == 1
+    assert decision.destructive_operation_counts.delete == 1
+    assert (
+        decision.destructive_operation_count
+        == decision.destructive_operation_counts.total
+    )
+    assert decision.irreversible_operation_count == 1
+    assert decision.required_bytes == "0"
+    assert decision.irreversible_update_count == 0
 
 
 def test_br_g_12_unknown_and_safety_excluded_mutations_are_refused() -> None:

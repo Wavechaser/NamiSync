@@ -51,6 +51,7 @@ _ASSET_NAMES = (
     "file_row.js",
     "integrity.js",
     "plan.js",
+    "execution_confirmation.js",
 )
 _TEST_ONLY_MARKERS = (
     b"NAMISYNC_TEST_ONLY_COMPONENT_GALLERY_5CE45567A17F4D74",
@@ -622,6 +623,28 @@ def test_component_gallery_seed_accepts_a_persisted_same_mode_relaunch(
     }
 
 
+def test_component_gallery_preview_wheel_is_bounded(tmp_path: Path) -> None:
+    scheduled: list[str] = []
+    spec = component_gallery_child._test_report_spec(
+        component_gallery_child._Recorder(EvidencePaths(tmp_path.resolve()), "light"),
+        lambda _targets: None, "light", scheduled.append,
+    )
+    for payload in (
+        {"phase": "preview_wheel", "target": "body"},
+        {"phase": "preview_wheel", "target": []},
+        {"phase": "preview_wheel", "target": "content", "deltaY": 999},
+    ):
+        with pytest.raises(CommandPayloadError):
+            spec.invoke(payload, context=_OPEN_CONTEXT)
+    assert scheduled == []
+    for target in ("content", "backdrop"):
+        payload = {"phase": "preview_wheel", "target": target}
+        assert spec.invoke(payload, context=_OPEN_CONTEXT) == {"accepted": True}
+        with pytest.raises(CommandPayloadError):
+            spec.invoke(payload, context=_OPEN_CONTEXT)
+    assert scheduled == ["content", "backdrop"]
+
+
 def test_component_gallery_report_parser_is_exact_and_nested(
     tmp_path: Path,
 ) -> None:
@@ -1119,6 +1142,15 @@ def test_component_gallery_report_parser_is_exact_and_nested(
                 "retained_while_closing": True,
                 "faded": True,
                 "closed": True,
+            },
+            "confirmation_preview": {
+                "initially_closed": True,
+                "opened_from_button": True,
+                "background_inert": True,
+                "cancel_closed": True,
+                "confirm_closed": True,
+                "focus_restored": True,
+                "wheel_blocked": True,
             },
             "segmented": {
                 "group_role": "radiogroup",
@@ -2340,9 +2372,14 @@ def _run_gallery_mode(
     assert result["production_command_names"] == [
         "admit_location",
         "close_task",
+        "control_execution",
         "create_task",
+        "get_plan_anchor",
+        "get_plan_window",
         "list_tasks",
+        "mutate_plan_selection",
         "next_events",
+        "open_plan_view",
         "pick_folder",
         "plan_again",
         "prepare_setup",
@@ -2353,8 +2390,10 @@ def _run_gallery_mode(
         "release_terminal_session",
         "replace_cosmetic_section",
         "shell_ready",
+        "start_execution",
         "start_inventory",
         "start_plan",
+        "update_plan_view",
     ]
     assert result["combined_mapping_type"] == "mappingproxy"
     assert result["combined_command_names"] == sorted(
@@ -3209,6 +3248,15 @@ def _assert_complete_gallery_matrix(report: dict[str, object]) -> None:
         "retained_while_closing": True,
         "faded": True,
         "closed": True,
+    }
+    assert report["control_contract"]["confirmation_preview"] == {
+        "initially_closed": True,
+        "opened_from_button": True,
+        "background_inert": True,
+        "cancel_closed": True,
+        "confirm_closed": True,
+        "focus_restored": True,
+        "wheel_blocked": True,
     }
     assert report["control_contract"]["segmented"] == {
         "group_role": "radiogroup",

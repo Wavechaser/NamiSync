@@ -78,7 +78,7 @@ Each checkpoint is a closed register row. A new finding does not enlarge a row; 
 | M1-async | Separate bounded command admission from asynchronous completion for create/start/release/close, reusing current task/session effect owners and one shared exchange budget. | After M1-4; default before M1-5, permitted after M1-5 but before M1-6. M1-async-G passed; delivered/excluded outcomes and evidence are below. | Complete |
 | M1-5 | Give Setup and inventory one workflow-owned location-candidate pipeline with typed admission results and bounded remembered locations. | After M1-4, normally after M1-async. Verify parser refusals; leaf/reparse/placeholder and long paths; missing, offline, remount, and clone ambiguity; bounded recents; activation/slot races and purpose mismatch. Review path parsing and TOCTOU. Scanner, preflight, executor, and verifier retain fresh re-probes. | Complete |
 | M1-6 | Deliver frozen, backend-canonical Setup, typed/picker/recent inputs, standalone inventory creation, serial best-effort pair creation, and explicit Plan-again after fresh reviewed-identity resolution. | Verify bounded inputs, canonical snapshots, immediate invalidation, no global-default mutation or browser filter normalization, partial-pair refusal, mixed batches, replay/recovery, slot/plan-generation races, and headed hostile-text/picker/recent flows. Map needed command behavior in BRIDGE when this activates; do not prescribe the retired 18-command expansion. | Complete |
-| M1-7 | Deliver bounded plan review, selection, execution admission, and the full plan consumer for sibling sorting. A review remains truthful when execution never ran; an admitted attempt keeps its selection committed. | Exercise plan publication, selection and commitment freshness, stale/replayed mutation, admission-failure rollback versus post-admission preflight refusal, fresh Plan-again review after source/target changes, destructive confirmation, controls, windows/anchors/search/filter, and headed production flows. No terminal selection reopening or subset retry. BRIDGE and PRESENTATION define protocol and projection criteria. | Pending |
+| M1-7 | Deliver bounded plan review, selection, execution admission, and the full plan consumer for sibling sorting. A review remains truthful when execution never ran; an admitted attempt keeps its selection committed. | Exercise plan publication, selection and commitment freshness, stale/replayed mutation, admission-failure rollback versus post-admission preflight refusal, fresh Plan-again review after source/target changes, destructive confirmation, controls, windows/anchors/search/filter, and headed production flows. No terminal selection reopening or subset retry. BRIDGE and PRESENTATION define protocol and projection criteria. | Measurements complete; 12 criteria failures |
 | M1-8-capacity | Distinguish recognized disk-capacity I/O failure and stop admission of later executor operations after settling the current operation. | Before M1-8, use the existing failure-policy/Stop and settlement paths; verify direct and wrapped capacity failures, ordinary I/O distinction, current-effect/recording truth, later work left unrun, terminal projection, and unchanged sharing-violation retries. Run executor plus core/workflow/interface consumers and the retained settlement oracle. No general I/O taxonomy or settlement restructuring. | Pending |
 | M1-8 | Deliver live and retained execution review with bounded item windows, exact execution overlays, task/item recording issues, terminal axes, current ledger evidence, capacity/generic-I/O messages, and informational trash location. | Test filesystem/recording combinations, overlay and omission invariants, Gap plus terminal reconciliation, navigation/re-observation, generic unrun presentation, yellow capacity without hiding known failures, bounded evidence queries, and post-copy overlay independence. Trash counts require complete outcome evidence; location-only fallback must not assert a planned count, scan all trash, or imply purge. | Pending |
 | M1-9 | Deliver bounded inventory projections, current evidence, and the full inventory consumer for sibling sorting. | Test complete or prior-complete publication, warnings outside action scope, raw evidence provenance, search/filter/collapse/window/detail behavior, replacement/races, supported sort/reset production paths, and headed witnesses. | Pending |
@@ -131,6 +131,332 @@ mechanism; unanswered requests within the bounded procedure become a full stop.
 Architectural or unresolved changes require a full stop with the design study.
 Hard-wall stops take precedence immediately. Record approved scope before edits;
 silence never expands it, and unchanged approvals are not requested again.
+
+## M1-7 implementation and closure
+
+The user authorized M1-7, the closing-race correction, snapshot-bound destructive
+confirmation, aggregate/breakdown facts, an inert gallery preview, and confirmed
+Plan-again/control consumer corrections. Stop after this checkpoint for recap and
+GUI tweaks. No M1-8, DOC-2, push or PR is included. Original study revision:
+`7e94598`; documentation cleanup is integrated in `a1d78ca` and `40ca76f`.
+
+### Implemented behavior and ownership
+
+- Workflows derive immutable Plan projections, raw sibling-sort facts and selected
+  operation/risk/space totals. Selection preserves dependency closure, operation
+  ordering and immutable artifact identity. Filters and windows do not redefine
+  scope. The browser retains only its bounded 1–256-row window.
+- TaskRegistry owns task delivery and the current session; the existing service
+  and lifecycle own reviewed identity, selection commitment and admission.
+  Same-task Execute requires the released planning session. Failed admission
+  restores editable review; admitted execution remains committed even when fresh
+  preflight refuses before effects. Original Plan replay cannot become current.
+- Execute captures task/request/selection revision. Every selected destructive
+  scope opens the production Fluent smoke modal. Cancel submits nothing; Confirm
+  submits the same snapshot for backend validation, commitment and admission in
+  one command. Exact uncertain retries retain their intent and fence selection
+  and Close. Modal/background focus, pointer, wheel, Escape, animation exit and
+  reduced-motion behavior are verified. The gallery starts closed and previews
+  the same dialog without execution effects.
+- Terminal-session release retains a task; explicit Close retires it. Close and
+  follow-up admission have atomic ordering and claim revalidation after waits,
+  without holding owner locks over domain I/O. Exact replay survives source-task
+  retirement. Terminal records retain the exact plan/inventory/execution kind and
+  capability contract.
+- Current-session StateChanged events drive execution controls. A later event or
+  terminal record prevents an older command reply from regressing presentation;
+  Plan refresh preserves live state. Hidden Plan controls stay hidden. Plan again
+  creates a fresh task under the existing 48-task limit; release does not free a
+  task slot. Selecting a task after a Plan-load error performs the advertised
+  guarded retry, preserving cached and in-flight views.
+
+Behavior owners: [BRIDGE](BRIDGE.md), [PRESENTATION](PRESENTATION.md),
+[INTERFACES](INTERFACES.md), [DESKTOP_UI](DESKTOP_UI.md), [FEATURES](FEATURES.md).
+[BUGS](BUGS.md) records substantive corrected mechanisms. Core source remains the
+authority for exact contract shapes; no dispatcher/module/db effect-policy change
+was needed.
+
+### Finite implementation and regression boundary
+
+Production owners are workflow tree/projection/selection helpers; existing
+interface service/lifecycle/task-port owners; web commands, task delivery and
+Plan review; and packaged app/bridge/Plan/modal assets. Tests cover those owners
+and their current setup/task-shell/gallery, event, wheel, replay/uncertainty,
+close-ordering and quantitative consumers. The user-approved investigation
+compared Setup, Task 47→48 and post-release Task 48→49 across button, eligibility,
+attempt, bridge, host validation, registry, response and refresh boundaries.
+Its bounded opt-in test trace preserves installed asset bytes and is diagnostic
+only; clean installed runs establish acceptance. Raw findings are retained in
+`build/m1-7/evidence/plan-again-findings.md` and its referenced records.
+
+Regression guarantees include exact review/session identity, current-request
+binding, monotonic selection revision, stale callback rejection, single admission,
+Close/replay ordering, truthful committed-but-unrun status, inert hostile display
+text, bounded ingress/windows and authoritative state ordering. There is no
+selection reopening, terminal subset retry, execution-result overlay, inventory
+projection, capacity-policy change or global-settings expansion. Archived bridge
+recipes remain provenance, not renewed representation or reservation requirements.
+
+### Acceptance evidence
+
+**M1-7-G** combines the functional/regression checks, affected owner/consumer
+neighborhood, ordinary suite, twelve import contracts, clean installed headed
+flows, fixed quantitative acceptance, links/diff checks and independent review.
+The fixed quantitative contract and validator were independently reviewed before
+measurement. Its 35 cases retain the predeclared populations, 5 fresh children per
+case, warm/cold sampling, timing endpoints and budgets. Publish-once native
+fixtures use ordinary task navigation and exact fresh reviewed identities; they
+do not rewrite private task state or synthesize startup events. Component memory
+evidence is not an aggregate headed-memory claim.
+Before startup, the fixture settles each published view sequentially through
+public open/window reads and retains exact identity/revision/window proof. The
+browser still selects every task and verifies the rendered source outside timing.
+This prepares the interaction cases' declared current-review state; it does not
+establish concurrent cold-start latency. Separate cold-construction cases retain
+their original limits. The recurrence pause and independent reorganization
+review distinguished the corrected selection-retry consumer from fixture setup;
+no product scheduling or transport deadline was changed.
+
+The source-owned quantitative population is `tests/plan_review_benchmark.py` and
+`tests/interfaces/web/_plan_review_scale.py`, `test_plan_review_scale.py`,
+`m1_7_plan_contract.json`, `m1_7_plan_authority.json` and
+`m1_7_plan_measurements.json`. The contract enumerates the 42 measured source
+paths, 38 installed product paths and finite runtime roles. Hash inclusion grants
+no implementation authority over otherwise excluded owners. PRESENTATION and
+BRIDGE own the unchanged budgets, profile and sampling procedure.
+
+Acceptance requires frozen physical source/wheel/installed bytes, the finite
+direct runtime corpus, fixture and profile, plus genuine raw measurements
+validated independently against the fixed criteria. Git-clean HEAD identity
+must be checked separately after the checkpoint commit. Any measured
+source/runtime/profile change requires the corresponding rebuild and rerun.
+
+Current verification:
+
+| Gate | Evidence / state |
+| --- | --- |
+| Ordinary repository | 5,083 passed; four platform-capability skips and one pending scale-artifact skip. `ordinary-20260914-230402.txt`. |
+| Installed desktop | 30 passed in `headed-20260914-222005.txt`; final affected task-flow rerun passed in `headed-20260914-230854.txt`. Unchanged desktop cases remain valid. |
+| Focused / layering | Frontend static 48 passed; twelve import contracts passed (`imports-20260914-222917.txt`). Closing race has 532 owner tests plus twelve ordering and nine retained-consumer checks. |
+| Independent review | Product, consumer and fixture diffs pass. Measurement provenance/completeness passed independent review; fixed acceptance failed on 12 metrics, blocking closure. |
+| Quantitative | Full readiness passes 15 children / 35 cases. The single measurement run completed 175 children / 775 samples; provenance validates, but 12 of 35 metrics exceed fixed criteria. Raw artifact and complete collection retained under `framework-20260915-155500/`; stopped without repair or rerun. |
+
+Logs above live under `build/m1-7/evidence/`. The latest quantitative wheel is
+`6811e25f018296117ee86330febf36ab05d11fa602695134e24e78af795525a8`;
+all 38 physical source/wheel/installed product files match. Current contract SHA-256:
+`0c82a7044348193af2d68b25c6645263e15c4f532f4015257324c33227b930c3`.
+Readiness repairs passed 46 owner tests with one pending-artifact skip, the final
+listener control and same-control ablation, and four affected watchdog controls.
+
+The bounded trace in `plan-load-trace-20260914232426/` records 17 complete
+observations: initial loads and the admitted selection retry exhaust the two
+5-second open-view transport attempts, before window reading. A later public
+read returns the exact current view. This is diagnostic evidence of the reached
+boundary, not proof of native handler counts or the sole cause of the delay.
+The reviewed fixture barrier establishes the interaction cases' declared initial
+state; it does not close concurrent cold-start latency.
+
+### Recurrence review and current containment
+
+Three unplanned product defects triggered the AGENTS pause. No further instance
+fix began before the mechanism table and independent reorganization review:
+
+| Mechanism | Consequence / owner | Disposition |
+| --- | --- | --- |
+| Hidden-state cascade | Unbound loading controls remained visible; Plan CSS/null projection. | Scoped hidden rule and focused/installed witnesses pass. |
+| Unordered live-state projection | Pause/Resume and refreshed terminal truth regressed; app event/receipt/refresh arbitration. | Closed ordering matrix and installed control flow pass. |
+| Missing recovery dispatch | Selection did not perform the advertised Plan retry; app selection/load guard. | Guarded eligible-task retry; open/window failure, duplicate, stale and cached-view probes pass. |
+
+The orchestrator accepted the independent narrow reorganization under the user's
+existing confirmed-cause authorization. These defects meet at browser task/review
+orchestration but do not justify another lifecycle owner. No eager-load,
+coalescing, transport-deadline or effect-policy change is included. The sequential
+fixture preparation is separately reviewed as untimed initial-state settlement.
+BUGS records the corrected product mechanisms; raw evidence retains investigation
+details. No new diagnostic or repair loop is authorized by this record.
+
+### Integration and stop
+
+**Measurement authorization (2026-09-15, current):** run the fixed 175-child
+measurements once from `325b0a6`, after verifying unchanged authority and the
+completed 35-case readiness. Use the retained
+`framework-20260915-155500/` inputs and fresh measurement children. Preserve
+incremental receipts and the final outcome; stop and recap regardless of result.
+No retry, repair, refreeze, criteria change, integration or branch pruning.
+
+**Current result and stop:** the one run completed 175 distinct children, 35
+metrics and 775 samples with valid provenance and a complete retained collection.
+Strict acceptance failed. Ten changed-window metrics exceed 1.5-second p95 and
+3-second maximum budgets (p95 4.396–6.143 s; maxima 4.415–6.258 s); projection
+staging memory is 525,881,344 / 335,544,320 bytes; typed Execute receipt is
+520.4 / 100 ms p95 and 523.7 / 250 ms maximum. The other 23 metrics meet criteria.
+No cause investigation, repair or rerun follows. Raw artifact SHA-256 is
+`345c2fcc14517218ce57741967594cb10ce690e6696604e69a619af22df50c13`.
+Preserve this failed acceptance result separately; M1-7 remains unmerged.
+
+**Readiness repair authorization (2026-09-15, completed):** the user authorizes
+investigating and fixing the remaining readiness issues. Resume from `f1a33a3`
+on the same recovery branch; retain all earlier commits unchanged. Close the
+read-only study over all 13 headed setup/action/observation paths, their fixture
+builders, public bridge/UI contracts and existing focused controls before
+implementing the confirmed common corrections. This supersedes the previous
+stop-at-first-readiness-issue instruction for repairs within that population.
+Product behavior, criteria, fixture scale, sample counts, automatic evidence
+reuse and expensive measurement runs remain outside this repair pass.
+
+| Repair row | Outcome and finite scope | Gate | Status |
+| --- | --- | --- | --- |
+| R1 | Align all remaining headed readiness setup/action/observation paths with existing public contracts; begin at Confirm's typed-receipt timeout. Runner and focused scale tests own corrections; add validator/contract changes only if a confirmed direct consumer requires them, recorded before editing. | Closed regression study, executable fault controls, focused tests, independent source review, fresh authority and complete 35-case readiness. | Passed |
+| R2 | Investigate the grouped component readiness child's 300-second process timeout under the user's remaining-readiness repair scope. Runner process orchestration and owner tests only; preserve the 21-case group, 15-child/35-case total, correctness and measurement budgets. | Establish watchdog ownership and a finite justified correction before editing; focused orchestration control, independent review, refreshed authority and full readiness. | Passed |
+
+One separate coherent correction commit includes owning PRESENTATION guidance,
+delivery records and fresh authority. Preserve each attempt's evidence. Stop for
+product/contract changes, unresolved ownership or the repository recurrence and
+safety conditions; do not widen into a diagnostic campaign. Finish readiness and
+recap before starting any fixed measurement run or integration.
+
+R1 confirmed cause: `observeStartReceipt` defined/removed its handler but had never
+registered it with `chrome.webview.addEventListener`. Existing retained database
+evidence shows Confirm admitted a running execution, while this observer could
+only time out. Nine remaining headed IDs share the helper (Confirm,
+nondestructive Execute, typed Execute and six control cases); the one-row read
+does not. Correct the missing registration in the runner and add executable
+EventTarget delivery/cleanup controls in `test_plan_review_scale.py`. The absent
+registration must fail the same control. No native cause probe is needed after
+that reproducer; remaining fixture/criteria/validator/contract stay unchanged.
+This is one predeclared common-helper correction across the nine consumers,
+followed by fresh full readiness, not nine independent instance fixes.
+The full owner test file passes 46 tests with one pending-measurement-artifact
+skip; the final multi-listener control passes independently. Source/wrapper
+review and fresh Prepare/Freeze pass. The new evidence directory is
+`build/m1-7/evidence/framework-20260915-153500/`; the previous directory retains
+the failed readiness receipts and observer regression evidence.
+The refreshed pass accepted selection then stopped at the component group's
+300-second process watchdog, before reaching Confirm. R2 closes only that grouped
+orchestration boundary; this is the second distinct readiness issue in this pass.
+No measurement began and no incomplete readiness has been accepted.
+R2 correction: retain the existing 300-second child watchdog for every measured
+child and all other readiness children; give only the fixed 21-case component
+readiness group a 600-second parent-process allowance. This operational hang
+guard is not a timing acceptance budget. The prior same group completed in
+240.724 seconds; the current timeout alone cannot distinguish slow work from a
+stall. Add only a timeout argument at the subprocess seam and focused controls
+proving the sole grouped override and unchanged defaults. No progress protocol,
+schema, validator, contract, sample or fixture change. After review/refreeze,
+one full readiness attempt follows; another timeout or substantive issue stops
+for review rather than increasing the allowance again.
+
+**Repair completion:** both corrections pass independent source review. Fresh
+authority `e068a5d36045247f0329a20251d13dee97e693d8d7eb1143030c79db3f2cef63`
+passes independent workspace validation (42 source, 38 installed, 14 runtime
+owners; unchanged contract, product, runtime/profile and fixtures). Full readiness
+passes all 35 cases in 15 distinct children under
+`build/m1-7/evidence/framework-20260915-155500/`. That repair stop preceded the
+separately authorized measurement run recorded above; M1-7 remains unmerged.
+
+**Framework authorization (2026-09-15, preceding):** implement the independently
+reviewed `build/m1-7/evidence/framework-review-20260915.md` proposal. Preserve
+`cf5a00b`, `30d35f3`, `fdc7c1b` and the current recovery branch; all new commits
+remain separate. M1-7 stays unmerged. Stop at any newly exposed prerequisite,
+readiness or substantive issue; no new diagnostic or repair campaign. If all
+correction gates pass and measurement is warranted, run the fixed set once and
+stop for recap after it finishes, regardless of result. Do not integrate/prune.
+
+| Framework row | Accepted outcome / finite owners | Verification | Status |
+| --- | --- | --- | --- |
+| F1 | Runner selects an exact eligible operation; proves pending warmup and authoritative revision/row settlement through synchronous public views. No product edit or pending-frame relaxation. | Focused disabled/stale/eligible and false-warmup controls; selection first in the single readiness pass. | Source/review/native readiness pass |
+| F2 | Exact 35-case untimed readiness coverage in 15 children: shared 21 non-memory component cases, isolated memory construction, 13 fresh headed cases. Same action/correctness paths, full fixtures; no measurement samples or state reuse. | Exact coverage, identity, cold/memory semantics and measurement refusal without valid readiness; independently reviewed new authority and one readiness pass. | Source/review/full native readiness pass |
+| F3 | Atomic retained child receipts and an incomplete sidecar index; unchanged terminal receipt/run schemas and complete-case validator. No automatic reuse. | Failure/interruption retention and incomplete/missing/duplicate/tampered evidence controls; final source review. | Source/review and retained-evidence validation pass |
+
+Code/test population is `tests/plan_review_benchmark.py`,
+`tests/interfaces/web/test_plan_review_scale.py`, and the minimum contract or
+independent-validator changes needed for readiness/provenance. New authority and
+genuine measurement artifacts use their existing paths; old evidence is preserved
+before replacement. PRESENTATION owns the procedure; this register, HANDOFF and
+CHANGELOG own delivery records. Existing installed product bytes and smoke remain
+valid only after changed-seam review; the instrument change requires a fresh
+authority. Focused framework gates replace no existing product gate, but unchanged
+functional evidence need not be rerun. One coherent separate framework commit
+includes tests/docs/authority after verification; any earlier stop preserves new
+work separately. Sampling, budgets, scale, production behavior, automatic resume,
+cross-revision reuse and all next-checkpoint work are excluded.
+
+The preceding framework candidate passed 44 focused tests, with one expected pending
+measurement-artifact skip; the final reviewed seams pass five affected tests.
+Compilation, CLI parsing, diff checks and independent source review pass. Fresh
+Prepare, Freeze and independent authority review pass. Evidence is under
+`build/m1-7/evidence/framework-20260915-120000/`. Contract SHA-256 is
+`0c82a7044348193af2d68b25c6645263e15c4f532f4015257324c33227b930c3`.
+The preceding authority remains preserved as historical evidence, not authority
+for this changed instrument.
+
+**Preceding stop (resolved by R1/R2 above):** the earlier readiness pass accepted
+five children / 25 cases, then timed out waiting for Confirm's typed receipt.
+Its index and `ready.txt` preserve the failure, with no complete artifact in that
+directory. Recovery commit `f1a33a3` remains unchanged. Current full readiness
+and the confirmed observer cause are recorded above; quantitative acceptance
+remains pending.
+
+**Historical resumption authorization (2026-09-15, completed and superseded):** apply only the reviewed
+`System.Action` import relocation within
+`tests/plan_review_benchmark.py::_capture_headed_runtime_identity`, from function
+entry to the loaded callback. Preserve host initialization, runtime identity
+fields, installed isolation and all measurement criteria. Review the exact diff,
+compile the runner and retry the existing Freeze stage once, retaining the sole
+reviewed smoke. If Freeze succeeds, review authority and continue fixed
+measurements; another harness prerequisite blocker requires a stop without
+diagnostic expansion. Keep `cf5a00b` unchanged and all subsequent work in separate
+commits, following the user's final instruction. Do not split its contents or
+add verification merely to reorganize commits. The owning documentation and
+genuine authority/measurement artifacts accompany the new work; no product edit
+is authorized by this correction.
+
+The import relocation passed exact-diff review and compilation. The single
+Freeze retry succeeded and produced `m1_7_plan_authority.json` (49,163 bytes),
+SHA-256 `056ebe994473885f541691d00c556ef77a24b603e3b6f703dc70f841572a856b`.
+The reviewed smoke and candidate remain unchanged; no second smoke ran.
+
+The scoped fix and authority are committed separately in `30d35f3`, directly
+after unchanged `cf5a00b`. Independent authority review passed before the fixed
+run. That run stopped at `ui_mutate_plan_selection_click_feedback` with
+`selection did not commit a pending frame`. This is a failed correctness
+prerequisite, not a measured budget miss or an established product root cause.
+No raw artifact, retry, repair, extra diagnostic, validation run or integration
+followed. That authority is preserved as historical evidence. The subsequent
+review and framework correction above supersede this stop's next-step guidance;
+the subsequent R1/R2 repairs and complete readiness above supersede that stop.
+
+**Historical user closure boundary (2026-09-14, superseded):** finish the currently open reviewed
+sequential untimed fixture barrier and run exactly one quantitative smoke. If it
+passes, freeze inputs, run the fixed measurements and proceed to closure and
+verified integration into `milestone1`. If the smoke fails, stop and preserve the
+current recovery branch, provide a recap and investigate possible redesign for
+review. Do not expand diagnostics. Any unpassed measurement or closing gate
+remains a blocker; it cannot be bypassed or relabeled as completion.
+
+`milestone1` remains `40ca76f`; work is on `codex/wip-20260914-1600-m1-7`.
+Recovery `cf5a00b` remains unchanged, with scoped fix `30d35f3` and the separate
+stop-record commit afterward. Verified
+ignored recovery bundles preserve earlier tips. No M1-7 integration or
+recovery-branch pruning has occurred.
+
+At the preceding September 14 stop, the sole smoke passed but authority freeze failed at
+`_capture_headed_runtime_identity` importing `System` before desktop runtime
+initialization. No authority or measurements were produced then.
+Independent source review confirms an instrument initialization-order defect:
+the passing headed child imports `System.Action` inside the host's loaded callback.
+The subsequently authorized correction moves the freeze probe's import into its own loaded
+callback, then verifies the existing isolated Freeze command and authority
+binding. No direct CLR bootstrap, product change, extra smoke or criteria change
+is proposed. The measured source hash must be refreshed before authority creation.
+No further diagnostics were added; the September 15 result is recorded above.
+
+Integration is outside the current framework authorization. Preserve the existing
+recovery baseline and separate follow-up commits; do not rewrite or split them
+to prepare an unsolicited merge. Recovery refs can be removed only after future
+verified integration and full accounting. AGENTS safety, recurrence and recovery
+rules remain binding; any later integration or checkpoint work requires active
+user scope.
 
 ## M1-4 delivered
 
@@ -343,6 +669,6 @@ performed a product release run.
 ## Resumption
 
 M1-4, M1-async (`675181a`), M1-5 (`e19ed9d`), GUI-1 (`b98dce4`) and M1-6
-are delivered on `milestone1`. Pause before M1-7. Its expansion and implementation require a new
-user instruction. No halo workaround, push or PR is part of this delivery.
-HANDOFF owns current operational context; AGENTS owns containment boundaries.
+are delivered on `milestone1`. M1-7 remains active under its implementation and
+user closure boundary above. HANDOFF owns current operational context; AGENTS
+owns containment. No later checkpoint, halo workaround, push or PR is authorized.

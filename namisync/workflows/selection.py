@@ -12,8 +12,10 @@ from namisync.core.planning import (
     OpId,
     OperationKind,
     Plan,
+    calculate_required_bytes,
     quarantined_operation_ids,
 )
+from namisync.core.scalars import scalar_64_to_text
 
 
 class ExclusionReason(StrEnum):
@@ -39,9 +41,46 @@ class OperationExclusion:
 
 
 @dataclass(frozen=True, slots=True)
+class DestructiveOperationCounts:
+    update: int
+    move_update: int
+    trash: int
+    delete: int
+
+    def __post_init__(self) -> None:
+        if any(
+            type(value) is not int or value < 0
+            for value in (self.update, self.move_update, self.trash, self.delete)
+        ):
+            raise ValueError("destructive operation counts must be nonnegative ints")
+
+    @property
+    def total(self) -> int:
+        return self.update + self.move_update + self.trash + self.delete
+
+
+@dataclass(frozen=True, slots=True)
 class ExecutionSelection:
     selection: frozenset[OpId]
     exclusions: tuple[OperationExclusion, ...]
+    destructive_operation_counts: DestructiveOperationCounts
+    irreversible_update_count: int
+    required_bytes: str
+
+    @property
+    def destructive_operation_count(self) -> int:
+        return self.destructive_operation_counts.total
+
+    @property
+    def irreversible_operation_count(self) -> int:
+        return (
+            self.irreversible_update_count
+            + self.destructive_operation_counts.delete
+        )
+
+    @property
+    def requires_destructive_confirmation(self) -> bool:
+        return self.destructive_operation_count > 0
 
 
 _INCOMPLETE_SCAN_UNSAFE = {
@@ -50,7 +89,6 @@ _INCOMPLETE_SCAN_UNSAFE = {
     OperationKind.TRASH,
     OperationKind.DELETE,
 }
-
 
 def derive_execution_selection(
     plan: Plan,
@@ -72,16 +110,46 @@ def derive_execution_selection(
         )
 
     _close_exclusions_over_dependencies(plan, exclusions)
+    selected_operations = tuple(
+        operation
+        for operation in plan.operations
+        if operation.op_id not in exclusions
+    )
+    selection = frozenset(operation.op_id for operation in selected_operations)
+    update_count = 0
+    move_update_count = 0
+    trash_count = 0
+    delete_count = 0
+    for operation in selected_operations:
+        if operation.kind is OperationKind.UPDATE:
+            update_count += 1
+        elif operation.kind is OperationKind.MOVE_UPDATE:
+            move_update_count += 1
+        elif operation.kind is OperationKind.TRASH:
+            trash_count += 1
+        elif operation.kind is OperationKind.DELETE:
+            delete_count += 1
     return ExecutionSelection(
-        frozenset(
-            operation.op_id
-            for operation in plan.operations
-            if operation.op_id not in exclusions
-        ),
+        selection,
         tuple(
             exclusions[operation.op_id]
             for operation in plan.operations
             if operation.op_id in exclusions
+        ),
+        DestructiveOperationCounts(
+            update_count,
+            move_update_count,
+            trash_count,
+            delete_count,
+        ),
+        0 if plan.trash_on_update else update_count,
+        scalar_64_to_text(
+            calculate_required_bytes(
+                selected_operations,
+                target_profile=plan.target_profile,
+                trash_on_update=plan.trash_on_update,
+            ),
+            "execution selection required_bytes",
         ),
     )
 
@@ -129,7 +197,11 @@ def _derive_safety_exclusions(
             operation.blocked_reason.value,
         )
 
-    quarantined = quarantined_operation_ids(plan.operations)
+    quarantined = (
+        quarantined_operation_ids(plan.operations)
+        if exclusions
+        else frozenset()
+    )
     for operation in plan.operations:
         if operation.op_id in quarantined:
             exclusions[operation.op_id] = OperationExclusion(

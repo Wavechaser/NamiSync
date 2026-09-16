@@ -7,6 +7,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol
 
+from namisync.workflows import EXECUTION_KIND, INVENTORY_KIND, PLAN_KIND
 from namisync.workflows.inventory import LocationCandidate
 from namisync.workflows.views import (
     SessionEventView,
@@ -19,6 +20,11 @@ from namisync.workflows.views import (
 _TASK_DRAIN_CAPACITY = 64
 _OPAQUE_ID = re.compile(r"[0-9a-f]{32}")
 _TASK_ID = re.compile(r"task-[0-9a-f]{32}")
+_TASK_RECORD_PAUSE_SUPPORT = {
+    PLAN_KIND: False,
+    INVENTORY_KIND: False,
+    EXECUTION_KIND: True,
+}
 
 TaskDeliveryUpdate = SessionEventView | SessionRecordView
 TaskDeliverySink = Callable[[TaskDeliveryUpdate], None]
@@ -362,7 +368,30 @@ class TaskLifecyclePort(Protocol):
         delivery_factory: TaskDeliveryFactory,
     ) -> TaskStartView | TaskStartOutcome: ...
 
+    def start_task_execution(
+        self,
+        task_id: str,
+        request_id: str,
+        *,
+        expected_revision: int,
+        destructive_acknowledged: bool,
+        command_id: str,
+        delivery_factory: TaskDeliveryFactory,
+    ) -> TaskStartView | object: ...
+
+    def recover_task_execution(
+        self,
+        task_id: str,
+        request_id: str,
+        *,
+        expected_revision: int,
+        destructive_acknowledged: bool,
+        command_id: str,
+    ) -> TaskStartView | None: ...
+
     def read_plan_setup(self, request_id: str) -> TaskSetupSnapshotView: ...
+
+    def get_plan_projection(self, request_id: str) -> object: ...
 
     def reobserve_task(
         self,
@@ -378,6 +407,10 @@ class TaskLifecyclePort(Protocol):
         session_id: str,
         delivery: TaskTerminalDelivery,
     ) -> TaskSessionReleaseView: ...
+
+    def pause_task_session(self, task_id: str, session_id: str) -> object: ...
+
+    def resume_task_session(self, task_id: str, session_id: str) -> object: ...
 
     def close_task(
         self,
@@ -407,12 +440,13 @@ def _validate_task_observation(
             update,
             expected_session_id=expected_session_id,
         )
+        expected_pause_support = _TASK_RECORD_PAUSE_SUPPORT.get(update.kind)
         if (
-            update.kind not in {"sync-plan", "inventory"}
-            or update.supports_pause
+            expected_pause_support is None
+            or update.supports_pause is not expected_pause_support
             or update.result is None
         ):
-            raise ValueError("task record requires a terminal sync-plan result")
+            raise ValueError("task record requires a supported terminal result")
     else:
         raise TypeError("task updates must be exact service view types")
 

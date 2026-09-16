@@ -124,6 +124,9 @@ class _TaskEffect:
     start_command_id: str | None = None
     start_signature: tuple[object, ...] | None = None
     start_kind: str | None = None
+    plan_token: PlanToken | None = None
+    retirement_claim_id: int | None = None
+    retiring: bool = False
 
 
 @dataclass(slots=True)
@@ -153,6 +156,7 @@ class _SessionAssociation:
     settlement_target: Literal["session", "task"] | None = None
     session_released: bool = False
     settlement_claim: SettlementClaim | None = None
+    prior_session_id: str | None = None
 
 
 class TaskLifecycle:
@@ -341,13 +345,79 @@ class TaskLifecycle:
             task.start_failed = False
             return TaskStartClaim(task_id, None, True)
 
+    def begin_task_followup(
+        self,
+        task_id: str,
+        request_id: str,
+        command_id: str,
+        kind: str,
+        signature: tuple[object, ...],
+    ) -> TaskStartClaim:
+        """Claim the sole M1 follow-up session of one released plan task."""
+
+        self._require_command_id(command_id)
+        self._require_opaque_id(request_id, "plan request id")
+        self._require_signature(signature)
+        if kind != "task-execution":
+            raise ValueError("task follow-up kind is unavailable")
+        replay = self.replay_start(command_id, kind, signature)
+        if replay is not None:
+            if replay.task_id != task_id:
+                raise LifecycleReceiptConflictError(
+                    "task command replay belongs to another task"
+                )
+            return TaskStartClaim(task_id, replay, False)
+        with self._condition:
+            if self._closed:
+                raise RuntimeError("service is closed")
+            task = self._tasks.get(task_id)
+            plan = self._plans.get(request_id)
+            association = (
+                None
+                if task is None or task.session_id is None
+                else self._sessions.get(task.session_id)
+            )
+            if (
+                task is None
+                or plan is None
+                or task.retirement_claim_id is not None
+                or task.retiring
+                or task.plan_token != self._plan_token(plan)
+                or association is None
+                or association.plan_token != task.plan_token
+                or not association.session_released
+                or association.terminal_digest is None
+                or association.settlement_claim is not None
+                or task.admission_identity is not None
+                or task.start_kind == kind
+            ):
+                raise LifecycleAssociationError("task follow-up is unavailable")
+            if any(
+                other.start_command_id == command_id
+                for other in self._tasks.values()
+            ):
+                raise LifecycleReceiptConflictError(
+                    "command_id was reused for a different task start"
+                )
+            task.start_command_id = command_id
+            task.start_signature = signature
+            task.start_kind = kind
+            task.start_failed = False
+            return TaskStartClaim(task_id, None, False)
+
     def abort_task_start(self, task_id: str) -> None:
         with self._condition:
             task = self._tasks.get(task_id)
             if task is None:
                 return
             task.start_failed = True
-            if task.session_id is None and task.admission_identity is None:
+            if task.admission_identity is None and (
+                task.session_id is None
+                or (
+                    task.plan_token is not None
+                    and task.start_kind == "task-execution"
+                )
+            ):
                 self._finish_failed_task_start_locked(task)
             self._condition.notify_all()
 
@@ -598,16 +668,31 @@ class TaskLifecycle:
         with self._condition:
             if self._closed:
                 raise RuntimeError("service is closed")
+            prior_session_id: str | None = None
             if task_id is not None:
                 task = self._tasks.get(task_id)
                 if (
                     task is None
-                    or task.session_id is not None
                     or task.admission_identity is not None
+                    or task.retirement_claim_id is not None
+                    or task.retiring
                 ):
                     raise LifecycleAssociationError(
                         "task is unavailable for admission"
                     )
+                if task.session_id is not None:
+                    prior = self._sessions.get(task.session_id)
+                    if (
+                        kind != "task-execution"
+                        or prior is None
+                        or not prior.session_released
+                        or prior.terminal_digest is None
+                        or task.plan_token is None
+                    ):
+                        raise LifecycleAssociationError(
+                            "task is unavailable for admission"
+                        )
+                    prior_session_id = task.session_id
                 if (
                     task.start_command_id != command_id
                     or task.start_signature != signature
@@ -625,6 +710,7 @@ class TaskLifecycle:
                 task_id,
                 None,
                 detail_owner,
+                prior_session_id=prior_session_id,
             )
             self._admissions[admission.identity] = admission
             if task_id is not None:
@@ -654,6 +740,7 @@ class TaskLifecycle:
             if task is not None:
                 task.session_id = session_id
             self._sessions[session_id] = admission
+            self._condition.notify_all()
             return self._association_token(admission)
 
     def publish_start(
@@ -731,6 +818,12 @@ class TaskLifecycle:
                 elif plan.session_id != session_id:
                     raise RuntimeError("plan request id was reused")
                 admission.plan_token = self._plan_token(plan)
+                if task is not None:
+                    task.plan_token = admission.plan_token
+            elif admission.kind == "task-execution":
+                if task is None or task.plan_token is None:
+                    raise RuntimeError("task execution lost its reviewed plan")
+                admission.plan_token = task.plan_token
             admission.request_id = request_id
             if admission.command_id is not None:
                 self._start_receipts[admission.command_id] = receipt
@@ -882,8 +975,7 @@ class TaskLifecycle:
             )
             assert association is not None
             identity = association.identity
-            while association.settlement_claim is not None:
-                self._condition.wait()
+            while True:
                 if self._closed:
                     raise LifecycleAssociationError("session is unavailable")
                 association = self._sessions.get(session_id)
@@ -894,16 +986,47 @@ class TaskLifecycle:
                     task_id=task_id,
                     require_live=False,
                 )
-            if close_task and association.task_id is None:
-                raise LifecycleAssociationError("direct session has no task")
+                if association.settlement_claim is not None:
+                    self._condition.wait()
+                    continue
+                if close_task and association.task_id is None:
+                    raise LifecycleAssociationError("direct session has no task")
+                if not close_task:
+                    break
+                task = self._tasks.get(association.task_id)
+                if task is None or task.session_id != association.session_id:
+                    raise LifecycleAssociationError(
+                        "task close names a superseded session"
+                    )
+                if (
+                    association.kind in {"plan", "task-plan"}
+                    and task.start_kind == "task-execution"
+                    and (
+                        task.session_id == association.session_id
+                        or task.admission_identity is not None
+                    )
+                ):
+                    self._condition.wait()
+                    continue
+                break
             if not close_task and association.settlement_target == "task":
                 raise LifecycleAssociationError("task close remains pending")
+            if (
+                close_task
+                and association.task_id is not None
+                and self._tasks[association.task_id].retirement_claim_id is not None
+            ):
+                raise RuntimeError("task retirement is already reserved")
             claim = SettlementClaim(
                 self._association_token(association),
                 self._mint_claim_id_locked(),
                 close_task,
             )
             association.settlement_claim = claim
+            if close_task:
+                assert association.task_id is not None
+                task = self._tasks[association.task_id]
+                task.retirement_claim_id = claim.claim_id
             try:
                 while association.observation_claim is not None:
                     self._condition.wait()
@@ -919,6 +1042,13 @@ class TaskLifecycle:
             except BaseException:
                 if association.settlement_claim == claim:
                     association.settlement_claim = None
+                    if close_task and association.task_id is not None:
+                        task = self._tasks.get(association.task_id)
+                        if (
+                            task is not None
+                            and task.retirement_claim_id == claim.claim_id
+                        ):
+                            task.retirement_claim_id = None
                     self._condition.notify_all()
                 raise
             return claim
@@ -948,6 +1078,13 @@ class TaskLifecycle:
                 dispatcher_truth_observed=dispatcher_truth_observed,
             )
             if claim.close_task:
+                assert association.task_id is not None
+                task = self._tasks.get(association.task_id)
+                if task is None or task.retirement_claim_id != claim.claim_id:
+                    raise LifecycleAssociationError(
+                        "task retirement claim is stale"
+                    )
+                task.retiring = True
                 association.settlement_target = "task"
             elif association.settlement_target is None:
                 association.settlement_target = "session"
@@ -1019,6 +1156,13 @@ class TaskLifecycle:
             ):
                 return
             association.settlement_claim = None
+            if claim.close_task and association.task_id is not None:
+                task = self._tasks.get(association.task_id)
+                if (
+                    task is not None
+                    and task.retirement_claim_id == claim.claim_id
+                ):
+                    task.retirement_claim_id = None
             self._condition.notify_all()
 
     def close(self) -> None:
@@ -1185,7 +1329,7 @@ class TaskLifecycle:
         task = self._task_for_association_locked(association)
         self._sessions.pop(association.session_id)
         if task is not None:
-            task.session_id = None
+            task.session_id = association.prior_session_id
             if task.start_failed:
                 self._finish_failed_task_start_locked(task)
 
@@ -1215,9 +1359,16 @@ class TaskLifecycle:
         if self._sessions.get(association.session_id) is not association:
             raise LifecycleAssociationError("session association is stale")
         task = self._task_for_association_locked(association)
-        self._sessions.pop(association.session_id)
-        if association.command_id is not None:
-            self._start_receipts.pop(association.command_id, None)
+        retired = tuple(
+            candidate
+            for candidate in self._sessions.values()
+            if candidate.task_id == association.task_id
+        ) if task is not None else (association,)
+        for candidate in retired:
+            if candidate.session_id is not None:
+                self._sessions.pop(candidate.session_id, None)
+            if candidate.command_id is not None:
+                self._start_receipts.pop(candidate.command_id, None)
         if task is not None:
             self._tasks.pop(task.task_id, None)
 
@@ -1270,7 +1421,10 @@ class TaskLifecycle:
                 return task_id
 
     def _finish_failed_task_start_locked(self, task: _TaskEffect) -> None:
-        if task.signature == ("task-shell",) and task.shell_published:
+        if (
+            task.plan_token is not None
+            and task.session_id is not None
+        ) or (task.signature == ("task-shell",) and task.shell_published):
             task.start_command_id = None
             task.start_signature = None
             task.start_kind = None

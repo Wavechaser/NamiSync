@@ -28,6 +28,7 @@ _ASSET_NAMES = (
     "file_row.js",
     "integrity.js",
     "plan.js",
+    "execution_confirmation.js",
 )
 _MEDIA_FEATURES: dict[str, tuple[tuple[str, str], ...]] = {
     "light": (
@@ -465,6 +466,7 @@ def _test_report_spec(
     recorder: _Recorder,
     schedule_pseudos: object,
     expected_mode: str,
+    schedule_wheel: object = None,
 ):
     from namisync.interfaces.web.commands import (
         CommandAccess,
@@ -477,10 +479,15 @@ def _test_report_spec(
 
     parts: list[tuple[str, object]] = []
     completed = False
+    wheel_targets: set[str] = set()
 
     def validate(payload: object) -> dict[str, object]:
         if type(payload) is not dict or type(payload.get("phase")) is not str:
             raise CommandPayloadError("component gallery report is invalid")
+        if payload["phase"] == "preview_wheel" and set(payload) == {"phase", "target"}:
+            if type(payload["target"]) is not str or payload["target"] not in {"content", "backdrop"}:
+                raise CommandPayloadError("component gallery wheel target is invalid")
+            return dict(payload)
         if payload["phase"] == "prepare" and set(payload) == {
             "phase",
             "targets",
@@ -573,6 +580,13 @@ def _test_report_spec(
             return {"accepted": True}
         if completed:
             raise CommandPayloadError("component gallery report is invalid")
+        if payload["phase"] == "preview_wheel":
+            target = payload["target"]
+            if target in wheel_targets or not callable(schedule_wheel):
+                raise CommandPayloadError("component gallery wheel request is invalid")
+            wheel_targets.add(target)
+            schedule_wheel(target)
+            return {"accepted": True}
         if payload["phase"] == "failure":
             recorder.set("report_part_count", len(parts))
             recorder.set("report", payload)
@@ -1034,6 +1048,7 @@ def _valid_control_contract(value: object) -> bool:
         "accent",
         "tri_state",
         "dialog_exit",
+        "confirmation_preview",
         "segmented",
         "combobox",
         "task_rail",
@@ -1044,6 +1059,7 @@ def _valid_control_contract(value: object) -> bool:
     accent = value["accent"]
     tri_state = value["tri_state"]
     dialog_exit = value["dialog_exit"]
+    confirmation_preview = value["confirmation_preview"]
     segmented = value["segmented"]
     combobox = value["combobox"]
     task_rail = value["task_rail"]
@@ -1089,6 +1105,12 @@ def _valid_control_contract(value: object) -> bool:
         and set(dialog_exit)
         == {"opened", "retained_while_closing", "faded", "closed"}
         and all(value is True for value in dialog_exit.values())
+        and type(confirmation_preview) is dict
+        and set(confirmation_preview) == {
+            "initially_closed", "opened_from_button", "background_inert",
+            "cancel_closed", "confirm_closed", "focus_restored", "wheel_blocked",
+        }
+        and all(item is True for item in confirmation_preview.values())
         and segmented
         == {
             "group_role": "radiogroup",
@@ -1923,6 +1945,79 @@ def _schedule_pseudo_states(
     on_ui(lambda: protocol("DOM.enable", {}, dom_enabled))
 
 
+def _schedule_preview_wheel(
+    native: object,
+    core: object,
+    target: str,
+    recorder: _Recorder,
+    retained_delegates: list[object],
+) -> None:
+    from System import Action
+
+    def on_ui(callback: object) -> None:
+        action = Action(callback)
+        retained_delegates.append(action)
+        native.BeginInvoke(action)
+
+    def fail() -> None:
+        recorder.set("native_script_failure", {"stage": "preview_wheel", "type": "ScriptExecutionError"})
+        recorder.write()
+
+    def locate() -> None:
+        expression = """(() => {
+          const dialog = document.querySelector('#execution-confirmation');
+          if (!dialog?.matches(':modal')) throw new Error('preview is not modal');
+          const rect = dialog.querySelector('[data-confirm-execution]').getBoundingClientRect();
+          return {x: (rect.left + rect.right) / 2, y: (rect.top + rect.bottom) / 2};
+        })()""" if target == "content" else "({x: 4, y: innerHeight / 2})"
+        task = core.CallDevToolsProtocolMethodAsync(
+            "Runtime.evaluate", json.dumps({"expression": expression, "returnByValue": True}),
+        )
+
+        def located() -> None:
+            if task.IsFaulted or task.IsCanceled:
+                fail()
+                return
+            try:
+                point = json.loads(str(task.Result))["result"]["value"]
+                if set(point) != {"x", "y"} or any(
+                    type(value) not in {int, float} or not math.isfinite(value)
+                    for value in point.values()
+                ):
+                    raise ValueError("invalid preview coordinates")
+            except (KeyError, TypeError, ValueError):
+                fail()
+                return
+
+            def wheel() -> None:
+                sent = core.CallDevToolsProtocolMethodAsync(
+                    "Input.dispatchMouseEvent",
+                    json.dumps({"type": "mouseWheel", **point, "deltaX": 0, "deltaY": 500}),
+                )
+
+                def finished() -> None:
+                    if sent.IsFaulted or sent.IsCanceled:
+                        fail()
+                        return
+                    on_ui(lambda: _execute_script_checked(
+                        core, f"globalThis.__namiGalleryWheelTarget = {json.dumps(target)};",
+                        stage="preview_wheel", recorder=recorder,
+                        retained_delegates=retained_delegates,
+                    ))
+
+                completion = Action(finished)
+                retained_delegates.append(completion)
+                sent.GetAwaiter().OnCompleted(completion)
+
+            on_ui(wheel)
+
+        completion = Action(located)
+        retained_delegates.append(completion)
+        task.GetAwaiter().OnCompleted(completion)
+
+    on_ui(locate)
+
+
 def _execute_script_checked(
     core: object,
     source: str,
@@ -1961,6 +2056,7 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
     original_background = host._opaque_window_background
     retained_delegates: list[object] = []
     pseudo_scheduler: dict[str, object] = {}
+    wheel_scheduler: dict[str, object] = {}
 
     def create_seeded_ui_state(path: Path):
         return _seeded_ui_state_owner(path, arguments.mode, recorder)
@@ -1990,11 +2086,18 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
                 raise RuntimeError("component gallery pseudo-state owner is pending")
             callback(targets)
 
+        def wheel(target: str) -> None:
+            callback = wheel_scheduler.get("value")
+            if not callable(callback):
+                raise RuntimeError("component gallery wheel owner is pending")
+            callback(target)
+
         return {
             "test_report": _test_report_spec(
                 recorder,
                 schedule,
                 arguments.mode,
+                wheel,
             )
         }
 
@@ -2045,6 +2148,9 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
                             "component gallery UI dispatch did not reach the UI thread"
                         )
                     core = native.browser.webview.CoreWebView2
+                    wheel_scheduler["value"] = lambda target: _schedule_preview_wheel(
+                        native, core, target, recorder, retained_delegates,
+                    )
                     pseudo_scheduler["value"] = lambda targets: (
                         _schedule_pseudo_states(
                             native,

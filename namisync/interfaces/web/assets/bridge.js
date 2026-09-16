@@ -34,6 +34,13 @@ const COMMAND_POLICY_JSON = `{
   "start_plan": {"timeout": "mutation-30-seconds", "retry": "same-command-once", "phase": "open"},
   "start_inventory": {"timeout": "mutation-30-seconds", "retry": "same-command-once", "phase": "open"},
   "plan_again": {"timeout": "mutation-30-seconds", "retry": "same-command-once", "phase": "open"},
+  "open_plan_view": {"timeout": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
+  "update_plan_view": {"timeout": "local-5-seconds", "retry": "none", "phase": "open"},
+  "get_plan_window": {"timeout": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
+  "get_plan_anchor": {"timeout": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
+  "mutate_plan_selection": {"timeout": "local-5-seconds", "retry": "same-command-once", "phase": "open"},
+  "start_execution": {"timeout": "mutation-30-seconds", "retry": "same-command-once", "phase": "open"},
+  "control_execution": {"timeout": "local-5-seconds", "retry": "none", "phase": "open"},
   "next_events": {"timeout": "drain-30-seconds", "retry": "none", "phase": "open"},
   "release_terminal_session": {"timeout": "mutation-30-seconds", "retry": "same-payload-bounded", "phase": "open"},
   "close_task": {"timeout": "mutation-30-seconds", "retry": "same-payload-bounded", "phase": "open"}
@@ -72,6 +79,10 @@ const INVENTORY_START_TIMEOUT_MS =
   TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.start_inventory.timeout];
 const PLAN_AGAIN_TIMEOUT_MS =
   TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.plan_again.timeout];
+const PLAN_VIEW_TIMEOUT_MS =
+  TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.open_plan_view.timeout];
+const EXECUTION_START_TIMEOUT_MS =
+  TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.start_execution.timeout];
 const DRAIN_TIMEOUT_MS =
   TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.next_events.timeout];
 const SESSION_RELEASE_TIMEOUT_MS =
@@ -184,6 +195,7 @@ let bridgeGeneration = 0;
 let operationalGeneration = -1;
 let commandHostGeneration = null;
 const taskDrains = new Map();
+const taskCloseFences = new Map();
 const asyncCommandAttempts = new Map();
 
 const documentMessages = globalThis.chrome?.webview;
@@ -450,6 +462,7 @@ export function startTaskDrain(
   acceptUpdate,
   acceptRefusal,
   initialState = null,
+  acceptRelease = null,
 ) {
   if (
     typeof taskId !== "string" ||
@@ -459,8 +472,14 @@ export function startTaskDrain(
   ) {
     throw new TypeError("startTaskDrain requires task and session ids");
   }
+  if (taskCloseFences.has(taskId)) {
+    throw new TypeError("that task is retiring");
+  }
   if (typeof acceptUpdate !== "function" || typeof acceptRefusal !== "function") {
     throw new TypeError("startTaskDrain requires update and refusal callbacks");
+  }
+  if (acceptRelease !== null && typeof acceptRelease !== "function") {
+    throw new TypeError("startTaskDrain release callback must be a function");
   }
   if (
     initialState !== null &&
@@ -471,14 +490,20 @@ export function startTaskDrain(
   ) {
     throw new TypeError("startTaskDrain initial state is invalid");
   }
-  if (taskDrains.has(taskId)) {
-    throw new TypeError("that task already has a browser drain");
+  const existing = taskDrains.get(taskId);
+  if (existing !== undefined) {
+    if (!existing.terminal || !existing.sessionReleased) {
+      throw new TypeError("that task already has a browser drain");
+    }
+    stopTask(existing);
+    taskDrains.delete(taskId);
   }
   const task = {
     taskId,
     sessionId,
     acceptUpdate,
     acceptRefusal,
+    acceptRelease,
     epoch: 0,
     active: null,
     armScheduled: false,
@@ -594,14 +619,17 @@ export function echoReadiness(challenge) {
 
 export async function closeTask(taskId, sessionId = null) {
   const task = taskDrains.get(taskId);
+  const retainedFence = taskCloseFences.get(taskId);
   if (
     typeof taskId !== "string" ||
     !TASK_PATTERN.test(taskId) ||
     !(sessionId === null || (typeof sessionId === "string" && ID_PATTERN.test(sessionId))) ||
-    (sessionId !== null && (task?.sessionId !== sessionId || task.stopped))
+    (sessionId !== null && (task?.sessionId !== sessionId || task.stopped)) ||
+    (retainedFence !== undefined && retainedFence !== sessionId)
   ) {
     throw new TypeError("closeTask requires an exact retained task identity");
   }
+  taskCloseFences.set(taskId, sessionId);
 
   const submit = async () => {
     for (
@@ -620,12 +648,18 @@ export async function closeTask(taskId, sessionId = null) {
         if (result.disposition === "closed" && task !== undefined) {
           stopTask(task);
         }
+        if (taskCloseFences.get(taskId) === sessionId) {
+          taskCloseFences.delete(taskId);
+        }
         return result;
       } catch (error) {
         if (
           !(error instanceof BridgeTransportError) &&
           !isUncertainTaskCommandFailure(error)
         ) {
+          if (taskCloseFences.get(taskId) === sessionId) {
+            taskCloseFences.delete(taskId);
+          }
           throw error;
         }
         if (attempt >= TASK_CLOSE_RECOVERY_DELAYS_MS.length) {
@@ -665,6 +699,157 @@ function submitStart(payload, command, timeoutMs) {
     }
   };
   return submit();
+}
+
+export async function openPlanView(taskId) {
+  requireTaskId(taskId, "openPlanView");
+  const payload = Object.freeze({ task_id: taskId });
+  const submit = () => dispatchAttempt(
+    "open_plan_view", payload, validatePlanViewSummary, PLAN_VIEW_TIMEOUT_MS,
+  );
+  try {
+    return await submit();
+  } catch (error) {
+    if (!(error instanceof BridgeTransportError)) throw error;
+  }
+  return submit();
+}
+
+export function updatePlanView(taskId, expectedRevision, view) {
+  requireTaskId(taskId, "updatePlanView");
+  if (!isNonnegativeInteger(expectedRevision) || !isPlanViewGesture(view)) {
+    throw new TypeError("updatePlanView requires an exact revision and gesture");
+  }
+  return dispatchAttempt(
+    "update_plan_view",
+    Object.freeze({
+      task_id: taskId,
+      expected_revision: expectedRevision,
+      search_query: view.searchQuery,
+      filters: Object.freeze([...view.filters]),
+      sort_column: view.sortColumn,
+      sort_direction: view.sortDirection,
+      collapse_node_id: view.collapseNodeId,
+      collapsed: view.collapsed,
+    }),
+    validatePlanViewSummary,
+    PLAN_VIEW_TIMEOUT_MS,
+  );
+}
+
+export async function getPlanWindow(taskId, expectedRevision, offset, limit) {
+  requireTaskId(taskId, "getPlanWindow");
+  if (!isNonnegativeInteger(expectedRevision) || !isNonnegativeInteger(offset)
+      || !Number.isInteger(limit) || limit < 1 || limit > 256) {
+    throw new TypeError("getPlanWindow requires a bounded exact window");
+  }
+  const payload = Object.freeze({
+    task_id: taskId, expected_revision: expectedRevision, offset, limit,
+  });
+  const submit = () => dispatchAttempt(
+    "get_plan_window", payload, validatePlanWindow, PLAN_VIEW_TIMEOUT_MS,
+  );
+  try {
+    return await submit();
+  } catch (error) {
+    if (!(error instanceof BridgeTransportError)) throw error;
+  }
+  return submit();
+}
+
+export async function getPlanAnchor(taskId, expectedRevision, nodeId) {
+  requireTaskId(taskId, "getPlanAnchor");
+  if (!isNonnegativeInteger(expectedRevision) || !isNodeId(nodeId)) {
+    throw new TypeError("getPlanAnchor requires an exact revision and node");
+  }
+  const payload = Object.freeze({
+    task_id: taskId, expected_revision: expectedRevision, node_id: nodeId,
+  });
+  const submit = () => dispatchAttempt(
+    "get_plan_anchor", payload, validatePlanAnchor, PLAN_VIEW_TIMEOUT_MS,
+  );
+  try {
+    return await submit();
+  } catch (error) {
+    if (!(error instanceof BridgeTransportError)) throw error;
+  }
+  return submit();
+}
+
+export function mutatePlanSelection(taskId, expectedRevision, nodeId, selected) {
+  requireTaskId(taskId, "mutatePlanSelection");
+  if (!isNonnegativeInteger(expectedRevision) || !isNodeId(nodeId)
+      || typeof selected !== "boolean") {
+    throw new TypeError("mutatePlanSelection requires an exact selection gesture");
+  }
+  const payload = Object.freeze({
+    task_id: taskId,
+    command_id: mintId(),
+    expected_revision: expectedRevision,
+    node_id: nodeId,
+    selected,
+  });
+  return dispatchAttempt(
+    "mutate_plan_selection", payload, validatePlanViewSummary,
+    PLAN_VIEW_TIMEOUT_MS,
+  );
+}
+
+export function startExecution(taskId, requestId, expectedRevision, destructiveAcknowledged = false) {
+  requireTaskId(taskId, "startExecution");
+  if (typeof requestId !== "string" || !ID_PATTERN.test(requestId)
+      || !isNonnegativeInteger(expectedRevision)
+      || typeof destructiveAcknowledged !== "boolean") {
+    throw new TypeError("startExecution requires exact review commitment");
+  }
+  const payload = Object.freeze({
+    task_id: taskId,
+    request_id: requestId,
+    command_id: mintId(),
+    expected_revision: expectedRevision,
+    destructive_acknowledged: destructiveAcknowledged,
+  });
+  let automaticReplayUsed = false;
+  const submit = async () => {
+    try {
+      return await dispatchAttempt(
+        "start_execution", payload, validateExecutionAdmission,
+        EXECUTION_START_TIMEOUT_MS, true,
+      );
+    } catch (error) {
+      if (!isUncertainStartPlanFailure(error)) throw error;
+      if (!automaticReplayUsed) {
+        automaticReplayUsed = true;
+        try {
+          return await dispatchAttempt(
+            "start_execution", payload, validateExecutionAdmission,
+            EXECUTION_START_TIMEOUT_MS, true,
+          );
+        } catch (replayError) {
+          if (!isUncertainStartPlanFailure(replayError)) throw replayError;
+        }
+      }
+      throw new StartPlanUncertainError(submit);
+    }
+  };
+  return submit();
+}
+
+export function controlExecution(taskId, sessionId, action) {
+  requireTaskId(taskId, "controlExecution");
+  const task = taskDrains.get(taskId);
+  if (typeof sessionId !== "string" || !ID_PATTERN.test(sessionId)
+      || !["pause", "resume", "cancel"].includes(action)
+      || task === undefined || task.sessionId !== sessionId
+      || task.stopped || task.terminal) {
+    throw new TypeError("controlExecution requires the current live execution");
+  }
+  return dispatchAttempt(
+    "control_execution",
+    Object.freeze({ task_id: taskId, session_id: sessionId, action }),
+    (value) => validateControlReceipt(value, sessionId),
+    PLAN_VIEW_TIMEOUT_MS,
+  );
 }
 
 export function admitLocation(purpose, value) {
@@ -1900,6 +2085,16 @@ function settleTaskRelease(task, epoch) {
   }
   task.releaseControl = null;
   task.sessionReleased = true;
+  if (task.acceptRelease !== null) {
+    try {
+      task.acceptRelease(task.taskId, task.sessionId);
+    } catch (_error) {
+      reportTaskRefusal(
+        task,
+        new BridgeTransportError("The completed task could not be presented."),
+      );
+    }
+  }
 }
 
 function refuseTaskRelease(task, epoch, error) {
@@ -2306,9 +2501,9 @@ function validateSessionRecord(record, sessionId) {
       "result",
     ]) &&
     record.session_id === sessionId &&
-    record.kind === "sync-plan" &&
+    isOneOf(record.kind, ["sync-plan", "inventory", "sync-execution"]) &&
     isOneOf(record.state, TERMINAL_STATES) &&
-    record.supports_pause === false &&
+    record.supports_pause === (record.kind === "sync-execution") &&
     isUtcTimestamp(record.created_at) &&
     (record.started_at === null || isUtcTimestamp(record.started_at)) &&
     isUtcTimestamp(record.ended_at) &&
@@ -2558,6 +2753,162 @@ function isExactObject(value, keys) {
   }
   const actual = Object.keys(value);
   return actual.length === keys.length && keys.every((key) => actual.includes(key));
+}
+
+function requireTaskId(taskId, operation) {
+  if (typeof taskId !== "string" || !TASK_PATTERN.test(taskId)) {
+    throw new TypeError(`${operation} requires a task id`);
+  }
+}
+
+function isNodeId(value) {
+  return typeof value === "string" && /^node-[0-9a-f]{32}$/.test(value);
+}
+
+function isPlanViewGesture(value) {
+  const filters = new Set([
+    "copy", "mkdir", "move", "recase", "update", "move_update",
+    "trash", "delete", "noop", "blocked", "notice",
+  ]);
+  return isExactObject(value, [
+    "searchQuery", "filters", "sortColumn", "sortDirection",
+    "collapseNodeId", "collapsed",
+  ]) && isValidUnicode(value.searchQuery)
+    && new TextEncoder().encode(value.searchQuery).length <= 65536
+    && Array.isArray(value.filters) && value.filters.length <= filters.size
+    && value.filters.every((item) => filters.has(item))
+    && new Set(value.filters).size === value.filters.length
+    && ["path", "filename", "size", "mtime"].includes(value.sortColumn)
+    && ["ascending", "descending"].includes(value.sortDirection)
+    && !(value.sortColumn === "path" && value.sortDirection !== "ascending")
+    && (value.collapseNodeId === null || isNodeId(value.collapseNodeId))
+    && (value.collapsed === null || typeof value.collapsed === "boolean")
+    && ((value.collapseNodeId === null) === (value.collapsed === null));
+}
+
+function validatePlanViewSummary(value) {
+  return isExactObject(value, [
+    "disposition", "task_id", "request_id", "view_revision",
+    "selection_revision", "selection_state", "source_path", "target_path",
+    "selected_operation_count", "selectable_operation_count", "operation_count",
+    "preflight_ready", "preflight_refusal_count", "warning_count",
+    "requires_destructive_confirmation", "destructive_operation_count",
+    "destructive_operation_counts", "irreversible_operation_count",
+    "irreversible_update_count", "required_bytes",
+    "visible_row_count", "search_query", "filters", "sort_column",
+    "sort_direction", "collapsed_count",
+  ])
+    && ["opened", "current", "applied", "noop", "conflict", "in-flight", "frozen"]
+      .includes(value.disposition)
+    && typeof value.task_id === "string" && TASK_PATTERN.test(value.task_id)
+    && typeof value.request_id === "string" && ID_PATTERN.test(value.request_id)
+    && [value.view_revision, value.selection_revision,
+      value.selected_operation_count, value.selectable_operation_count,
+      value.operation_count, value.visible_row_count, value.collapsed_count]
+      .every(isNonnegativeInteger)
+    && typeof value.preflight_ready === "boolean"
+    && isNonnegativeInteger(value.preflight_refusal_count)
+    && isNonnegativeInteger(value.warning_count)
+    && typeof value.requires_destructive_confirmation === "boolean"
+    && isNonnegativeInteger(value.destructive_operation_count)
+    && isExactObject(value.destructive_operation_counts, [
+      "update", "move_update", "trash", "delete",
+    ])
+    && Object.values(value.destructive_operation_counts).every(isNonnegativeInteger)
+    && isNonnegativeInteger(value.irreversible_operation_count)
+    && isNonnegativeInteger(value.irreversible_update_count)
+    && isScalar64(value.required_bytes)
+    && ["reviewing", "committing", "committed"].includes(value.selection_state)
+    && isValidUnicode(value.source_path) && isValidUnicode(value.target_path)
+    && isValidUnicode(value.search_query)
+    && Array.isArray(value.filters)
+    && value.filters.every((item) => typeof item === "string")
+    && ["path", "filename", "size", "mtime"].includes(value.sort_column)
+    && ["ascending", "descending"].includes(value.sort_direction)
+    && value.selected_operation_count <= value.selectable_operation_count
+    && value.selectable_operation_count <= value.operation_count
+    && value.destructive_operation_count <= value.selected_operation_count
+    && Object.values(value.destructive_operation_counts)
+      .reduce((total, count) => total + count, 0) === value.destructive_operation_count
+    && value.irreversible_update_count <= value.destructive_operation_counts.update
+    && value.irreversible_operation_count
+      === value.destructive_operation_counts.delete + value.irreversible_update_count
+    && value.requires_destructive_confirmation
+      === (value.destructive_operation_count > 0);
+}
+
+function validatePlanWindowRow(value) {
+  return isExactObject(value, [
+    "node_id", "display", "depth", "is_container", "visible_index",
+    "parent_visible_index", "first_child_visible_index", "position_in_set",
+    "set_size", "expanded", "row_kind", "operation_id", "operation_kind",
+    "reason", "blocked_reason", "selection", "selectable_operation_count",
+    "selected_operation_count", "operation_count", "size", "mtime_ns",
+    "dependency_count", "risk", "move_peer_id", "notice",
+    "selection_exclusion_reason",
+  ]) && isNodeId(value.node_id) && isValidUnicode(value.display)
+    && isNonnegativeInteger(value.depth) && typeof value.is_container === "boolean"
+    && isNonnegativeInteger(value.visible_index)
+    && (value.parent_visible_index === null || isNonnegativeInteger(value.parent_visible_index))
+    && (value.first_child_visible_index === null || isNonnegativeInteger(value.first_child_visible_index))
+    && isNonnegativeInteger(value.position_in_set) && value.position_in_set >= 1
+    && isNonnegativeInteger(value.set_size) && value.position_in_set <= value.set_size
+    && (value.expanded === null || typeof value.expanded === "boolean")
+    && typeof value.row_kind === "string"
+    && (value.operation_id === null || (typeof value.operation_id === "string" && ID_PATTERN.test(value.operation_id)))
+    && (value.operation_kind === null || typeof value.operation_kind === "string")
+    && (value.reason === null || typeof value.reason === "string")
+    && (value.blocked_reason === null || typeof value.blocked_reason === "string")
+    && ["selected", "unselected", "mixed", "disabled"].includes(value.selection)
+    && [value.selectable_operation_count, value.selected_operation_count,
+      value.operation_count, value.dependency_count].every(isNonnegativeInteger)
+    && value.selected_operation_count <= value.selectable_operation_count
+    && value.selectable_operation_count <= value.operation_count
+    && (value.size === null || isScalar64(value.size))
+    && (value.mtime_ns === null || isScalar64(value.mtime_ns))
+    && ["none", "reversible", "irreversible"].includes(value.risk)
+    && (value.move_peer_id === null || isNodeId(value.move_peer_id))
+    && (value.notice === null || isValidUnicode(value.notice))
+    && (value.selection_exclusion_reason === null
+      || isValidUnicode(value.selection_exclusion_reason));
+}
+
+function validatePlanWindow(value) {
+  return isExactObject(value, [
+    "disposition", "view_revision", "offset", "total", "rows",
+  ]) && ["current", "conflict"].includes(value.disposition)
+    && [value.view_revision, value.offset, value.total].every(isNonnegativeInteger)
+    && Array.isArray(value.rows) && value.rows.length <= 256
+    && value.rows.every(validatePlanWindowRow);
+}
+
+function validatePlanAnchor(value) {
+  return isExactObject(value, ["disposition", "view_revision", "node_id", "index"])
+    && ["current", "conflict"].includes(value.disposition)
+    && isNonnegativeInteger(value.view_revision)
+    && (value.node_id === null || isNodeId(value.node_id))
+    && (value.index === null || isNonnegativeInteger(value.index))
+    && ((value.node_id === null) === (value.index === null));
+}
+
+function validateExecutionAdmission(value) {
+  if (validateStartPlanResult(value)) return true;
+  return isExactObject(value, ["disposition", "revision", "state", "session"])
+    && ["in-flight", "frozen", "conflict", "confirmation-required"].includes(value.disposition)
+    && isNonnegativeInteger(value.revision)
+    && ["reviewing", "committing", "committed"].includes(value.state)
+    && (value.session === null || (isExactObject(value.session, ["request_id", "session_id"])
+      && typeof value.session.request_id === "string" && ID_PATTERN.test(value.session.request_id)
+      && typeof value.session.session_id === "string" && ID_PATTERN.test(value.session.session_id)));
+}
+
+function validateControlReceipt(value, sessionId) {
+  return isExactObject(value, [
+    "code", "session_id", "before", "after", "detail", "accepted",
+  ]) && typeof value.code === "string" && value.session_id === sessionId
+    && (value.before === null || typeof value.before === "string")
+    && (value.after === null || typeof value.after === "string")
+    && isValidUnicode(value.detail) && typeof value.accepted === "boolean";
 }
 
 function isLocationId(value) {

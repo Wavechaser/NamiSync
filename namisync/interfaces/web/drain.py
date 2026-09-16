@@ -42,8 +42,10 @@ from namisync.workflows.views import (
     validate_session_record_view,
 )
 from namisync.workflows.inventory import LocationCandidate, RememberedLocations
+from namisync.workflows import PlanSortColumn, SortDirection
 
 from ._exception_graph import retire_exception_graph as _retire_exception_graph
+from .plan_review import PlanReviewState
 
 
 _CAPACITY = 64
@@ -175,12 +177,16 @@ class _TaskState:
     active_drain: _DrainClaim | None = None
     transition: bool = False
     closing: bool = False
+    retiring: bool = False
     recovery_caller: int | None = None
     response_capture_caller: int | None = None
     start_command_id: str | None = None
     task_kind: str | None = None
     request_id: str | None = None
     setup: TaskSetupSnapshotView | None = None
+    start_response_ids: set[str] = field(default_factory=set)
+    prior_session_id: str | None = None
+    prior_delivery: tuple[object, ...] | None = None
 
     def sink(self, generation: int) -> Callable[[TaskDeliveryUpdate], None]:
         def accept(update: TaskDeliveryUpdate) -> None:
@@ -338,6 +344,7 @@ class TaskRegistry:
         self._progress_linger = normalized_progress_linger
         self._condition = Condition(Lock())
         self._tasks: dict[str, _TaskState] = {}
+        self._plan_views: dict[str, PlanReviewState] = {}
         self._provisional: dict[str, _TaskState] = {}
         self._start_responses: OrderedDict[str, _StartResponse] = OrderedDict()
         self._close_receipts: OrderedDict[
@@ -440,17 +447,33 @@ class TaskRegistry:
     @staticmethod
     def _task_summary(task: _TaskState) -> TaskSummaryView:
         with task.condition:
-            if task.session_id is None:
+            session_id = (
+                task.prior_session_id
+                if task.transition and task.prior_session_id is not None
+                else task.session_id
+            )
+            prior_record = (
+                task.prior_delivery[5]
+                if task.transition and task.prior_delivery is not None
+                else None
+            )
+            if session_id is None:
                 session_state = None
+            elif prior_record is not None:
+                session_state = prior_record.state
             elif task.delivered_terminal_record is not None:
                 session_state = task.delivered_terminal_record.state
             else:
                 session_state = "active"
             return TaskSummaryView(
                 task.task_id,
-                task.session_id,
+                session_id,
                 session_state,
-                task.session_released,
+                (
+                    bool(task.prior_delivery[6])
+                    if task.transition and task.prior_delivery is not None
+                    else task.session_released
+                ),
                 task.task_kind,
                 task.request_id,
             )
@@ -688,27 +711,534 @@ class TaskRegistry:
         command_id: str,
         wire_intent: tuple[object, ...],
     ) -> TaskStartView:
+        replay = self.replay_start(command_id, wire_intent)
+        if replay is not None:
+            return replay
         with self._condition:
+            if self._closing:
+                raise TaskUnavailableError("task registry is closing")
             old = self._tasks.get(old_task_id)
         if old is None:
             raise TaskUnavailableError("task is unavailable")
         with old.condition:
-            if old.task_kind != "sync-plan" or old.request_id is None:
+            if (
+                old.task_kind != "sync-plan"
+                or old.request_id is None
+                or old.retiring
+                or old.transition
+            ):
                 raise TaskUnavailableError("task is unavailable")
             request_id = old.request_id
-        return self._start_new_task(
-            command_id,
-            wire_intent,
-            lambda factory: self._lifecycle.start_task_plan_again(
-                old_task_id,
-                request_id,
-                source_mount=source_mount,
-                target_mount=target_mount,
-                command_id=command_id,
-                signature=wire_intent,
-                delivery_factory=factory,
-            ),
+            old.transition = True
+            old.condition.notify_all()
+        try:
+            return self._start_new_task(
+                command_id,
+                wire_intent,
+                lambda factory: self._lifecycle.start_task_plan_again(
+                    old_task_id,
+                    request_id,
+                    source_mount=source_mount,
+                    target_mount=target_mount,
+                    command_id=command_id,
+                    signature=wire_intent,
+                    delivery_factory=factory,
+                ),
+            )
+        finally:
+            with old.condition:
+                old.transition = False
+                old.condition.notify_all()
+
+    def open_plan_view(self, task_id: str) -> dict[str, object]:
+        with self._condition:
+            existing = self._plan_views.get(task_id)
+            retained_task = self._tasks.get(task_id)
+            if existing is not None and retained_task is not None:
+                with retained_task.condition:
+                    if (
+                        retained_task.request_id == existing.request_id
+                        and retained_task.session_id is not None
+                        and not retained_task.transition
+                        and not retained_task.retiring
+                        and self._plan_review_ready(retained_task)
+                    ):
+                        return existing.summary()
+        task, request_id = self._require_plan_review_task(task_id)
+        with task.condition:
+            generation = task.generation
+            session_id = task.session_id
+        projection, preview, source_path, target_path = (
+            self._lifecycle.get_plan_projection(request_id)
         )
+        view = PlanReviewState(
+            task_id=task_id,
+            request_id=request_id,
+            projection=projection,
+            selection_revision=preview.revision,
+            selection_state=preview.state,
+            source_path=source_path,
+            target_path=target_path,
+            requires_destructive_confirmation=(
+                preview.requires_destructive_confirmation
+            ),
+            irreversible_update_count=preview.irreversible_update_count,
+            destructive_operation_count=preview.destructive_operation_count,
+            irreversible_operation_count=preview.irreversible_operation_count,
+            destructive_operation_counts=preview.destructive_operation_counts,
+            required_bytes=preview.required_bytes,
+        )
+        with self._condition:
+            if self._closing or self._tasks.get(task_id) is not task:
+                raise TaskUnavailableError("task is unavailable")
+            with task.condition:
+                if (
+                    task.generation != generation
+                    or task.session_id != session_id
+                    or task.request_id != request_id
+                    or task.transition
+                    or task.retiring
+                    or not self._plan_review_ready(task)
+                ):
+                    raise TaskUnavailableError("task is unavailable")
+                existing = self._plan_views.get(task_id)
+                if existing is not None:
+                    return existing.summary()
+                self._plan_views[task_id] = view
+        return view.summary(disposition="opened")
+
+    def update_plan_view(
+        self,
+        task_id: str,
+        *,
+        expected_revision: int,
+        search_query: str,
+        filters: frozenset[str],
+        sort_column: PlanSortColumn,
+        sort_direction: SortDirection,
+        collapse_node_id: str | None,
+        collapsed: bool | None,
+    ) -> dict[str, object]:
+        task, view = self._require_plan_view(task_id)
+        with task.condition:
+            self._require_plan_view_locked(task, view)
+            return view.update(
+                expected_revision=expected_revision,
+                search_query=search_query,
+                filters=filters,
+                sort_column=sort_column,
+                sort_direction=sort_direction,
+                collapse_node_id=collapse_node_id,
+                collapsed=collapsed,
+            )
+
+    def get_plan_window(
+        self,
+        task_id: str,
+        *,
+        expected_revision: int,
+        offset: int,
+        limit: int,
+    ) -> dict[str, object]:
+        task, view = self._require_plan_view(task_id)
+        with task.condition:
+            self._require_plan_view_locked(task, view)
+            return view.window(
+                expected_revision=expected_revision,
+                offset=offset,
+                limit=limit,
+            )
+
+    def get_plan_anchor(
+        self,
+        task_id: str,
+        *,
+        expected_revision: int,
+        node_id: str,
+    ) -> dict[str, object]:
+        task, view = self._require_plan_view(task_id)
+        with task.condition:
+            self._require_plan_view_locked(task, view)
+            return view.anchor(
+                expected_revision=expected_revision,
+                node_id=node_id,
+            )
+
+    def mutate_plan_selection(
+        self,
+        task_id: str,
+        *,
+        expected_revision: int,
+        node_id: str,
+        selected: bool,
+        command_id: str,
+    ) -> dict[str, object]:
+        task, request_id = self._require_released_plan_task(task_id)
+        view_task, view = self._require_plan_view(task_id)
+        if view_task is not task:
+            raise TaskUnavailableError("task is unavailable")
+        with task.condition:
+            if (
+                task.request_id != request_id
+                or task.session_id is None
+                or not task.session_released
+                or task.transition
+                or task.retiring
+            ):
+                raise TaskUnavailableError("task is unavailable")
+            node = view.node_for_id(node_id)
+            if node.selection == "disabled" or node.row_kind.startswith("prior-"):
+                raise ValueError("plan row is not selectable")
+            selection_id = node.operation_id or node.node_id
+            mutation = self._lifecycle.mutate_selection(
+                request_id,
+                expected_revision,
+                deselect=() if selected else (selection_id,),
+                reselect=(selection_id,) if selected else (),
+                command_id=command_id,
+            )
+            preview = mutation.preview
+            view.replace_selection(
+                selected_operation_ids=frozenset(preview.selected_operation_ids),
+                exclusion_reasons={
+                    operation.operation_id: operation.reason
+                    for operation in preview.operations
+                },
+                selection_revision=preview.revision,
+                selection_state=preview.state,
+                requires_destructive_confirmation=(
+                    preview.requires_destructive_confirmation
+                ),
+                irreversible_update_count=preview.irreversible_update_count,
+                destructive_operation_count=preview.destructive_operation_count,
+                irreversible_operation_count=preview.irreversible_operation_count,
+                destructive_operation_counts=preview.destructive_operation_counts,
+                required_bytes=preview.required_bytes,
+            )
+            return view.summary(disposition=mutation.disposition)
+
+    def _require_released_plan_task(
+        self,
+        task_id: str,
+    ) -> tuple[_TaskState, str]:
+        if type(task_id) is not str or _TASK_ID.fullmatch(task_id) is None:
+            raise TaskUnavailableError("task is unavailable")
+        with self._condition:
+            if self._closing:
+                raise TaskUnavailableError("task registry is closing")
+            task = self._tasks.get(task_id)
+        if task is None:
+            raise TaskUnavailableError("task is unavailable")
+        with task.condition:
+            if (
+                task.task_kind != "sync-plan"
+                or task.request_id is None
+                or task.session_id is None
+                or task.delivered_terminal_record is None
+                or not task.session_released
+                or task.transition
+            ):
+                raise TaskUnavailableError("task is unavailable")
+            return task, task.request_id
+
+    def _require_plan_review_task(
+        self,
+        task_id: str,
+    ) -> tuple[_TaskState, str]:
+        if type(task_id) is not str or _TASK_ID.fullmatch(task_id) is None:
+            raise TaskUnavailableError("task is unavailable")
+        with self._condition:
+            if self._closing:
+                raise TaskUnavailableError("task registry is closing")
+            task = self._tasks.get(task_id)
+        if task is None:
+            raise TaskUnavailableError("task is unavailable")
+        with task.condition:
+            if (
+                task.task_kind != "sync-plan"
+                or task.request_id is None
+                or task.session_id is None
+                or task.transition
+                or task.retiring
+                or not self._plan_review_ready(task)
+            ):
+                raise TaskUnavailableError("task is unavailable")
+            return task, task.request_id
+
+    @staticmethod
+    def _plan_review_ready(task: _TaskState) -> bool:
+        return (
+            task.delivered_terminal_record is not None
+            and task.session_released
+        ) or len(task.start_response_ids) == 2
+
+    def _require_plan_view(
+        self,
+        task_id: str,
+    ) -> tuple[_TaskState, PlanReviewState]:
+        with self._condition:
+            if self._closing:
+                raise TaskUnavailableError("task registry is closing")
+            view = self._plan_views.get(task_id)
+            task = self._tasks.get(task_id)
+        if view is None or task is None or task.request_id != view.request_id:
+            raise TaskUnavailableError("plan view is unavailable")
+        with task.condition:
+            self._require_plan_view_locked(task, view)
+        return task, view
+
+    @staticmethod
+    def _require_plan_view_locked(
+        task: _TaskState,
+        view: PlanReviewState,
+    ) -> None:
+        if (
+            task.retiring
+            or task.transition
+            or task.request_id != view.request_id
+        ):
+            raise TaskUnavailableError("plan view is unavailable")
+
+    def start_execution(
+        self,
+        task_id: str,
+        *,
+        request_id: str,
+        expected_revision: int,
+        destructive_acknowledged: bool,
+        command_id: str,
+        wire_intent: tuple[object, ...],
+    ) -> object:
+        """Attach the one M1 execution follow-up to its reviewed plan task."""
+
+        _require_opaque_id(request_id, "plan request id")
+        _require_opaque_id(command_id, "task command id")
+        with self._condition:
+            if self._closing:
+                raise TaskUnavailableError("task registry is closing")
+            retained = self._start_responses.get(command_id)
+            if retained is not None:
+                if retained.wire_intent != wire_intent:
+                    raise TaskIntentConflictError("task command intent conflicts")
+                retained.participants += 1
+            task = self._tasks.get(task_id)
+        if retained is not None:
+            try:
+                return self._await_start_response(retained)
+            finally:
+                self._leave_start_response(retained)
+        if task is None:
+            raise TaskUnavailableError("task is unavailable")
+        with task.condition:
+            if (
+                task.task_kind != "sync-plan"
+                or task.request_id != request_id
+                or task.session_id is None
+                or task.delivered_terminal_record is None
+                or not task.session_released
+                or task.transition
+                or task.retiring
+                or len(task.start_response_ids) >= 2
+            ):
+                raise TaskUnavailableError("task is unavailable")
+            task.transition = True
+            task.condition.notify_all()
+
+        response: _StartResponse | None = None
+
+        def delivery_factory(delivered_task_id: str):
+            nonlocal response
+            if delivered_task_id != task_id:
+                raise ObservationConflictError("task lifecycle changed its task")
+            with self._condition:
+                if self._closing or self._tasks.get(task_id) is not task:
+                    raise TaskUnavailableError("task is unavailable")
+                if command_id in self._start_responses:
+                    raise RuntimeError("application repeated a task delivery factory")
+                response = _StartResponse(command_id, wire_intent, participants=1)
+                self._start_responses[command_id] = response
+                self._condition.notify_all()
+            with task.condition:
+                if (
+                    task.task_kind != "sync-plan"
+                    or task.request_id != request_id
+                    or task.session_id is None
+                    or task.delivered_terminal_record is None
+                    or not task.session_released
+                    or not task.transition
+                    or task.retiring
+                    or len(task.start_response_ids) >= 2
+                ):
+                    raise TaskUnavailableError("task is unavailable")
+                task.prior_session_id = task.session_id
+                task.prior_delivery = (
+                    tuple(task.queue),
+                    task.progress_available_at,
+                    task.terminal_record,
+                    task.terminal_pending,
+                    task.delivered_terminal_event,
+                    task.delivered_terminal_record,
+                    task.session_released,
+                    task.closing,
+                )
+                task.generation += 1
+                task.session_id = None
+                task.queue.clear()
+                task.progress_available_at = None
+                task.terminal_record = None
+                task.terminal_pending = False
+                task.delivered_terminal_event = None
+                task.delivered_terminal_record = None
+                task.session_released = False
+                task.active_drain = None
+                task.closing = False
+                return task.sink(task.generation)
+
+        result: object | None = None
+        failure_code: str | None = None
+        try:
+            candidate = self._lifecycle.start_task_execution(
+                task_id,
+                request_id,
+                expected_revision=expected_revision,
+                destructive_acknowledged=destructive_acknowledged,
+                command_id=command_id,
+                delivery_factory=delivery_factory,
+            )
+            if type(candidate) is TaskStartView:
+                candidate.__post_init__()
+                self._publish_execution_start(
+                    task,
+                    task_id,
+                    command_id,
+                    candidate,
+                )
+                plan_view = self._plan_views.get(task_id)
+                if plan_view is not None:
+                    plan_view.mark_selection_committed()
+                result = candidate
+            else:
+                result = candidate
+        except BaseException as error:
+            if response is None:
+                self._abandon_execution_transition(task)
+                raise
+            _retire_exception_graph(error)
+            recovered = self._lifecycle.recover_task_execution(
+                task_id,
+                request_id,
+                expected_revision=expected_revision,
+                destructive_acknowledged=destructive_acknowledged,
+                command_id=command_id,
+            )
+            if recovered is None:
+                failure_code = _classify_start_failure(error)
+                self._restore_plan_delivery(task)
+            else:
+                recovered.__post_init__()
+                self._publish_execution_start(
+                    task,
+                    task_id,
+                    command_id,
+                    recovered,
+                )
+                plan_view = self._plan_views.get(task_id)
+                if plan_view is not None:
+                    plan_view.mark_selection_committed()
+                result = recovered
+
+        if response is None:
+            self._abandon_execution_transition(task)
+
+        if response is None:
+            return result
+        with self._condition:
+            response.result = result if type(result) is TaskStartView else None
+            response.failure_code = failure_code
+            response.complete = True
+            self._condition.notify_all()
+        try:
+            if result is not None:
+                return result
+            assert failure_code is not None
+            _raise_start_failure(failure_code)
+        finally:
+            self._leave_start_response(response)
+
+    def control_execution(
+        self,
+        task_id: str,
+        session_id: str,
+        action: str,
+    ) -> object:
+        task = self._require_task(task_id, session_id)
+        with task.condition:
+            if task.task_kind != "sync-plan" or len(task.start_response_ids) != 2:
+                raise TaskUnavailableError("task is unavailable")
+        if action == "pause":
+            result = self._lifecycle.pause_task_session(task_id, session_id)
+        elif action == "resume":
+            result = self._lifecycle.resume_task_session(task_id, session_id)
+        elif action == "cancel":
+            result = self._lifecycle.cancel_task_session(task_id, session_id)
+        else:
+            raise ValueError("execution control action is invalid")
+        return result
+
+    @staticmethod
+    def _abandon_execution_transition(task: _TaskState) -> None:
+        with task.condition:
+            if task.transition and task.prior_delivery is None:
+                task.transition = False
+                task.condition.notify_all()
+
+    @staticmethod
+    def _restore_plan_delivery(task: _TaskState) -> None:
+        with task.condition:
+            prior = task.prior_delivery
+            if not task.transition or prior is None:
+                return
+            task.generation += 1
+            task.session_id = task.prior_session_id
+            task.queue = deque(prior[0])
+            task.progress_available_at = prior[1]
+            task.terminal_record = prior[2]
+            task.terminal_pending = prior[3]
+            task.delivered_terminal_event = prior[4]
+            task.delivered_terminal_record = prior[5]
+            task.session_released = prior[6]
+            task.closing = prior[7]
+            task.prior_session_id = None
+            task.prior_delivery = None
+            task.transition = False
+            task.condition.notify_all()
+
+    @staticmethod
+    def _publish_execution_start(
+        task: _TaskState,
+        task_id: str,
+        command_id: str,
+        candidate: TaskStartView,
+    ) -> None:
+        with task.condition:
+            if not task.transition:
+                return
+            if candidate.task_id != task_id:
+                raise ObservationConflictError("task lifecycle changed its task")
+            if any(
+                update.session_id != candidate.session_id
+                for update in task.queue
+            ):
+                raise ObservationConflictError(
+                    "task observation does not match execution"
+                )
+            task.session_id = candidate.session_id
+            task.start_command_id = command_id
+            task.start_response_ids.add(command_id)
+            task.prior_session_id = None
+            task.prior_delivery = None
+            task.transition = False
+            task.condition.notify_all()
 
     def _start_existing_task(
         self,
@@ -882,6 +1412,7 @@ class TaskRegistry:
             task.task_kind = candidate.snapshot.task_kind
             task.request_id = result.request_id
             task.setup = candidate.snapshot
+            task.start_response_ids.add(command_id)
             task.transition = False
             task.condition.notify_all()
         return result
@@ -965,6 +1496,7 @@ class TaskRegistry:
             if provisional.task_kind is None:
                 provisional.task_kind = "sync-plan"
             provisional.request_id = candidate.request_id
+            provisional.start_response_ids.add(command_id)
             provisional.condition.notify_all()
         with self._condition:
             if self._closing:
@@ -1237,6 +1769,7 @@ class TaskRegistry:
 
         with self._condition:
             self._closing = True
+            self._plan_views.clear()
             tasks = tuple(self._tasks.values()) + tuple(self._provisional.values())
             for command_id, response in tuple(self._start_responses.items()):
                 if (
@@ -1284,6 +1817,8 @@ class TaskRegistry:
             task.condition.notify_all()
             while task.transition:
                 task.condition.wait()
+            if task.session_id != session_id:
+                raise TaskUnavailableError("task is unavailable")
 
         while True:
             try:
@@ -1403,6 +1938,7 @@ class TaskRegistry:
         with self._condition:
             if self._tasks.get(task_id) is task:
                 self._tasks.pop(task_id, None)
+            self._plan_views.pop(task_id, None)
             self._close_receipts[receipt_key] = result
             self._close_receipts.move_to_end(receipt_key)
             while len(self._close_receipts) > _CLOSE_RECEIPT_CAPACITY:
@@ -1427,16 +1963,17 @@ class TaskRegistry:
             raise TaskUnavailableError("task is unavailable")
         with task.condition:
             task.require_no_response_capture_reentry()
+            while task.transition:
+                task.condition.wait()
             if task.session_id != session_id:
                 raise TaskUnavailableError("task is unavailable")
             delivery = self._terminal_delivery_locked(task)
+            task.retiring = True
             task.closing = True
             task.generation += 1
             if task.active_drain is not None:
                 task.active_drain.superseded = True
             task.condition.notify_all()
-            while task.transition:
-                task.condition.wait()
 
         response: _StartResponse | None = None
         with self._condition:
@@ -1490,7 +2027,10 @@ class TaskRegistry:
                 self._close_receipts.popitem(last=False)
             if self._tasks.get(task_id) is task:
                 self._tasks.pop(task_id, None)
+            self._plan_views.pop(task_id, None)
             response.delivery_retiring = False
+            for command_id in task.start_response_ids:
+                self._start_responses.pop(command_id, None)
             if self._start_responses.get(response_key) is response:
                 self._start_responses.pop(response_key, None)
             self._condition.notify_all()

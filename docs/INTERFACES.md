@@ -4,7 +4,7 @@ This document owns the implemented CLI and desktop adapters, service/task lifecy
 
 `BRIDGE.md` owns external desktop protocol, transport, retry/recovery, and its exact evidence. `PRESENTATION.md` owns tree/view/search/sort/selection behavior and visual scale evidence. The frozen v1 event-and-transport custody result is scoped to its bridge evidence and does not establish whole-runtime containment. The former BR-G-45 aggregate terminal-artifact model is retired. SH-G-15 remains an open, scoped release criterion defined below.
 
-The active service and CLI support sync, inventory, baseline, verify and rebaseline. The desktop exposes the bounded host/transport foundation and process-live tasks with frozen Setup, typed/picker/recent locations, plan and standalone inventory starts, Plan again, navigation, reconstruction, and explicit close. Plan/execution review, inventory projections, manual post-copy verification, and the history/settings pages remain accepted but unrealized outcomes. Their delivery register is [M1_PLAN.md](M1_PLAN.md).
+The active service and CLI support sync, inventory, baseline, verify and rebaseline. The desktop exposes the bounded host/transport foundation and process-live tasks with frozen Setup, typed/picker/recent locations, plan and standalone inventory starts, Plan again, navigation, reconstruction, and explicit close. Plan review supplies bounded hierarchy, sibling sorting, server-owned selection, destructive confirmation and same-task execution with live controls. Execution-result review, inventory projections, manual post-copy verification, history and full settings remain accepted but unrealized outcomes. Their delivery register is [M1_PLAN.md](M1_PLAN.md).
 
 
 ## Purpose
@@ -57,7 +57,7 @@ pause capabilities. Each location command supplies exactly one root or retained
 location id plus an optional exact selected scope and ambiguity-resolving mount;
 no adapter infers location from a mapping or another argument. Rebaseline also
 requires an explicit selected scope and acceptance intent. Queue control,
-machine output, and the desktop action layer remain deferred.
+machine output, and desktop integrity controls remain deferred.
 
 ## M1 Shared Service
 
@@ -114,7 +114,25 @@ internal replacement of an artifact under one request resets user selection
 and advances that request's revision monotonically, even when deterministic
 operation ids repeat. Recognized selection command ids remain retry tombstones
 across that replacement, so a lost response cannot reapply old intent to the
-new artifact. In the desktop flow, changed Setup
+new artifact. Workflow selection facts are the single owner of the selected
+destructive-operation count, required-byte total, and closed UPDATE/MOVE_UPDATE/
+TRASH/DELETE breakdown. The breakdown includes zero-valued kinds and must sum to
+the destructive aggregate. Its irreversible aggregate is DELETE plus UPDATE only
+when trash-on-update is disabled; MOVE_UPDATE and TRASH remain reversible. The
+compatibility irreversible-update count is retained for precise file-replacement
+wording and does not decide admission. UPDATE, MOVE_UPDATE, TRASH, and DELETE
+require an exact Boolean acknowledgment even when the operation is recoverable;
+COPY, MKDIR, MOVE, RECASE, and NOOP do not. Required bytes use the same workflow
+calculation as execution preflight and are published as canonical scalar text,
+while all counts stay within the bounded plan-operation SafeInt population.
+
+The desktop execution command names the exact task id, plan request id, selection
+revision, and acknowledgment in one retained intent. The adapter rejects a
+request id that no longer belongs to that task before calling the application
+lifecycle. The service then checks the monotone selection revision and workflow
+confirmation requirement before commitment or Dispatcher submission. An exact
+retry recovers the retained command or application receipt; changing any snapshot
+field under the same command id is an intent conflict. In the desktop flow, changed Setup
 or explicit Plan again creates a new task, while the old plan slot stays
 immutable. Plan again asks the backend to resolve the retained plan's reviewed
 volume identities into freshly admitted roots; it never submits the old display path
@@ -417,6 +435,30 @@ A task-bound release consumes a truthful adapter terminal-delivery fact, advance
 application settlement, confirms service-observer release, closes Dispatcher
 custody, retires the exact runtime detail, and only then optionally retires the
 plan/task. The fixed cleanup owners are independently idempotent or monotone.
+Terminal-session release closes only the current delivery generation; it does
+not mark the retained task for retirement, so released Plan review and Execute
+remain available. Explicit task Close instead reserves retirement after any
+already-reserved follow-up transition settles. Execute reserves that transition
+under the task condition before application work, so Close-first refuses every
+Plan view, selection, and execution consumer, while Execute-first supersedes the
+planning session and makes its raced Close stale. Neither condition is held
+across service, workflow, runtime, or Dispatcher work.
+
+Fresh Plan again uses the same source-task transition reservation, so Close
+waits for its new-task publication or failure before retiring the source. An
+exact retained Plan-again response is resolved before source-task lookup; it
+therefore remains replayable after the source task closes without repeating
+location resolution, planning, or native work. Fresh intent never uses that
+exception: a retiring source or another source transition is unavailable.
+
+The application lifecycle repeats the same ordering for direct callers. A task
+close claim excludes a later follow-up; a prior follow-up reservation makes
+close wait without holding the lifecycle condition, then revalidate the exact
+session after admission or rollback. Terminal validation seals retirement
+before physical cleanup. An unconfirmed close failure abandons its reservation
+and leaves the plan usable, while a confirmed cleanup failure keeps the task
+retirement-only for exact Close retry. Follow-up refusal or rollback clears its
+start claim and restores the released planning association and receipt truth.
 The durable owner-call contract is: settlement may repeat exact-owner calls,
 but each exact physical transition and observable effect occurs at most once.
 After failure or interruption, the whole cleanup call sequence may repeat from
@@ -459,7 +501,8 @@ closes observer and Dispatcher custody while retaining the task and its actual
 terminal headline; only explicit task close retires the card and remaining
 task/plan ownership. Busy close is an exact task/session cancellation request,
 then a close after delivered settlement. A failed close leaves the task
-available for the same close recovery path.
+unavailable to new Plan actions once retirement is sealed; exact Close retry and
+the existing concurrent release/Close receipt convergence remain available.
 
 Plan task records retain the workflow's exact `sync-plan` kind across the
 service and browser boundary; retained database history remains independent of

@@ -11,8 +11,6 @@ from typing import Iterable, Mapping
 from namisync.core.pathing import (
     fold_validated_path,
     normalize_relative_path,
-    relative_path_depth,
-    relative_path_parent,
     validate_relative_path,
 )
 from namisync.core.review import (
@@ -58,6 +56,16 @@ class NodeTreeMember:
             raise ValueError("member path key is not canonical")
         if type(self.is_container) is not bool:
             raise TypeError("is_container must be a bool")
+
+
+@dataclass(frozen=True, slots=True)
+class _ValidatedNodeTreeMember:
+    """Workflow-internal member whose source domain value already validated its path."""
+
+    member_id: str
+    rel_path: str
+    rel_path_key: str
+    is_container: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -153,6 +161,38 @@ def build_node_tree(
 ) -> NodeTree:
     """Build one deterministic tree and its subtree/member indexes."""
 
+    return _build_node_tree(
+        tree_kind=tree_kind,
+        scope_identity=scope_identity,
+        members=members,
+        revalidate_members=True,
+    )
+
+
+def _build_validated_node_tree(
+    *,
+    tree_kind: NodeTreeKind,
+    scope_identity: str,
+    members: Iterable[_ValidatedNodeTreeMember],
+) -> NodeTree:
+    """Build from exact members constructed inside the workflows package."""
+
+    return _build_node_tree(
+        tree_kind=tree_kind,
+        scope_identity=scope_identity,
+        members=members,
+        revalidate_members=False,
+    )
+
+
+def _build_node_tree(
+    *,
+    tree_kind: NodeTreeKind,
+    scope_identity: str,
+    members: Iterable[NodeTreeMember | _ValidatedNodeTreeMember],
+    revalidate_members: bool,
+) -> NodeTree:
+
     if not isinstance(tree_kind, NodeTreeKind):
         raise TypeError("tree_kind must be a NodeTreeKind")
     if not isinstance(scope_identity, str) or not scope_identity:
@@ -170,14 +210,17 @@ def build_node_tree(
             field_name="node-tree source members",
         ):
             raise NodeTreePopulationLimitError(tree_kind)
-        if type(member) is not NodeTreeMember:
-            raise TypeError("members must contain exact NodeTreeMember values")
-        member = NodeTreeMember(
-            member.member_id,
-            member.rel_path,
-            member.rel_path_key,
-            member.is_container,
-        )
+        if revalidate_members:
+            if type(member) is not NodeTreeMember:
+                raise TypeError("members must contain exact NodeTreeMember values")
+            member = NodeTreeMember(
+                member.member_id,
+                member.rel_path,
+                member.rel_path_key,
+                member.is_container,
+            )
+        elif type(member) is not _ValidatedNodeTreeMember:
+            raise TypeError("validated members have the wrong type")
         if member.member_id in seen_member_ids:
             raise ValueError(f"duplicate member_id: {member.member_id}")
         seen_member_ids.add(member.member_id)
@@ -197,8 +240,8 @@ def build_node_tree(
                 display_paths[path_key] = path
             if path_key == "":
                 break
-            parent = relative_path_parent(path)
-            parent_key = relative_path_parent(path_key)
+            parent = _tree_path_parent(path)
+            parent_key = _tree_path_key_parent(path_key)
             path = "" if parent is None else parent
             path_key = "" if parent_key is None else parent_key
 
@@ -208,7 +251,7 @@ def build_node_tree(
     for path_key in display_paths:
         if path_key == "":
             continue
-        parent_key = relative_path_parent(path_key)
+        parent_key = _tree_path_key_parent(path_key)
         children_by_path_key["" if parent_key is None else parent_key].append(
             path_key
         )
@@ -235,7 +278,7 @@ def build_node_tree(
     ]
     for position in range(len(ordered_path_keys) - 1, 0, -1):
         path_key = ordered_path_keys[position]
-        parent_key = relative_path_parent(path_key)
+        parent_key = _tree_path_key_parent(path_key)
         parent_position = position_by_path_key[
             "" if parent_key is None else parent_key
         ]
@@ -249,9 +292,14 @@ def build_node_tree(
 
     nodes: list[NodeTreeNode] = []
     position_by_node_id: dict[str, int] = {}
+    node_id_prefix = blake2b(digest_size=16, person=b"NamiSyncNodeV1")
+    for value in (tree_kind.value, scope_identity):
+        encoded = value.encode("utf-8")
+        node_id_prefix.update(len(encoded).to_bytes(4, "big"))
+        node_id_prefix.update(encoded)
     for position, path_key in enumerate(ordered_path_keys):
         parent_key = (
-            None if path_key == "" else relative_path_parent(path_key)
+            None if path_key == "" else _tree_path_key_parent(path_key)
         )
         parent_index = (
             None
@@ -260,7 +308,11 @@ def build_node_tree(
                 "" if parent_key is None else parent_key
             ]
         )
-        node_id = _node_id(tree_kind, scope_identity, path_key)
+        digest = node_id_prefix.copy()
+        encoded_path_key = path_key.encode("utf-8")
+        digest.update(len(encoded_path_key).to_bytes(4, "big"))
+        digest.update(encoded_path_key)
+        node_id = f"node-{digest.hexdigest()}"
         if node_id in position_by_node_id:
             raise RuntimeError("deterministic node-id collision")
         position_by_node_id[node_id] = position
@@ -278,7 +330,7 @@ def build_node_tree(
                     or bool(children_by_path_key[path_key])
                 ),
                 position=position,
-                depth=relative_path_depth(path_key),
+                depth=_tree_path_depth(path_key),
                 parent_index=parent_index,
                 subtree_end=subtree_ends[position],
                 subtree_member_count=subtree_member_counts[position],
@@ -294,14 +346,22 @@ def build_node_tree(
     )
 
 
-def _node_id(
-    tree_kind: NodeTreeKind,
-    scope_identity: str,
-    rel_path_key: str,
-) -> str:
-    digest = blake2b(digest_size=16, person=b"NamiSyncNodeV1")
-    for value in (tree_kind.value, scope_identity, rel_path_key):
-        encoded = value.encode("utf-8")
-        digest.update(len(encoded).to_bytes(4, "big"))
-        digest.update(encoded)
-    return f"node-{digest.hexdigest()}"
+def _tree_path_parent(path: str) -> str | None:
+    """Return the parent of one already-validated relative tree path."""
+
+    canonical = path.replace("/", "\\")
+    parent, separator, _name = canonical.rpartition("\\")
+    return parent if separator else None
+
+
+def _tree_path_key_parent(path_key: str) -> str | None:
+    """Return the parent of one canonical comparison key."""
+
+    parent, separator, _name = path_key.rpartition("\\")
+    return parent if separator else None
+
+
+def _tree_path_depth(path_key: str) -> int:
+    """Return depth for one canonical comparison key, including root."""
+
+    return 0 if not path_key else path_key.count("\\") + 1

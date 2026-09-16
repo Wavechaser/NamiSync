@@ -82,6 +82,8 @@ from namisync.workflows.views import (
     RecordingIssueView,
     ReviewFactLimitView,
 )
+from namisync.workflows import PlanSortColumn, SortDirection
+from .plan_review import PLAN_FILTERS
 from namisync.workflows.inventory import (
     LocationCandidate,
     LocationCandidateResult,
@@ -251,6 +253,20 @@ class TaskAuthority(Protocol):
     def start_setup_inventory(self, *args, **kwargs) -> TaskStartView: ...
 
     def start_plan_again(self, *args, **kwargs) -> TaskStartView: ...
+
+    def open_plan_view(self, *args, **kwargs) -> dict[str, object]: ...
+
+    def update_plan_view(self, *args, **kwargs) -> dict[str, object]: ...
+
+    def get_plan_window(self, *args, **kwargs) -> dict[str, object]: ...
+
+    def get_plan_anchor(self, *args, **kwargs) -> dict[str, object]: ...
+
+    def mutate_plan_selection(self, *args, **kwargs) -> dict[str, object]: ...
+
+    def start_execution(self, *args, **kwargs) -> object: ...
+
+    def control_execution(self, *args, **kwargs) -> object: ...
 
     def replay_start(
         self,
@@ -443,6 +459,63 @@ class _PlanAgainPayload:
     command_id: str
     source_mount: str | None
     target_mount: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class _OpenPlanViewPayload:
+    task_id: str
+
+
+@dataclass(frozen=True, slots=True)
+class _UpdatePlanViewPayload:
+    task_id: str
+    expected_revision: int
+    search_query: str
+    filters: frozenset[str]
+    sort_column: PlanSortColumn
+    sort_direction: SortDirection
+    collapse_node_id: str | None
+    collapsed: bool | None
+
+
+@dataclass(frozen=True, slots=True)
+class _PlanWindowPayload:
+    task_id: str
+    expected_revision: int
+    offset: int
+    limit: int
+
+
+@dataclass(frozen=True, slots=True)
+class _PlanAnchorPayload:
+    task_id: str
+    expected_revision: int
+    node_id: str
+
+
+@dataclass(frozen=True, slots=True)
+class _MutatePlanSelectionPayload:
+    task_id: str
+    command_id: str
+    expected_revision: int
+    node_id: str
+    selected: bool
+
+
+@dataclass(frozen=True, slots=True)
+class _StartExecutionPayload:
+    task_id: str
+    request_id: str
+    command_id: str
+    expected_revision: int
+    destructive_acknowledged: bool
+
+
+@dataclass(frozen=True, slots=True)
+class _ControlExecutionPayload:
+    task_id: str
+    session_id: str
+    action: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -808,6 +881,98 @@ def production_command_specs(
             raise RuntimeError("Plan-again service returned invalid data")
         return result
 
+    def open_plan_view(payload: object) -> object:
+        if type(payload) is not _OpenPlanViewPayload:
+            raise TypeError("open_plan_view received an unvalidated payload")
+        return registry.open_plan_view(payload.task_id)
+
+    def update_plan_view(payload: object) -> object:
+        if type(payload) is not _UpdatePlanViewPayload:
+            raise TypeError("update_plan_view received an unvalidated payload")
+        return registry.update_plan_view(
+            payload.task_id,
+            expected_revision=payload.expected_revision,
+            search_query=payload.search_query,
+            filters=payload.filters,
+            sort_column=payload.sort_column,
+            sort_direction=payload.sort_direction,
+            collapse_node_id=payload.collapse_node_id,
+            collapsed=payload.collapsed,
+        )
+
+    def get_plan_window(payload: object) -> object:
+        if type(payload) is not _PlanWindowPayload:
+            raise TypeError("get_plan_window received an unvalidated payload")
+        return registry.get_plan_window(
+            payload.task_id,
+            expected_revision=payload.expected_revision,
+            offset=payload.offset,
+            limit=payload.limit,
+        )
+
+    def get_plan_anchor(payload: object) -> object:
+        if type(payload) is not _PlanAnchorPayload:
+            raise TypeError("get_plan_anchor received an unvalidated payload")
+        return registry.get_plan_anchor(
+            payload.task_id,
+            expected_revision=payload.expected_revision,
+            node_id=payload.node_id,
+        )
+
+    def mutate_plan_selection(payload: object) -> object:
+        if type(payload) is not _MutatePlanSelectionPayload:
+            raise TypeError(
+                "mutate_plan_selection received an unvalidated payload"
+            )
+        try:
+            return registry.mutate_plan_selection(
+                payload.task_id,
+                expected_revision=payload.expected_revision,
+                node_id=payload.node_id,
+                selected=payload.selected,
+                command_id=payload.command_id,
+            )
+        except (CommandIdConflictError, TaskIntentConflictError) as error:
+            raise CommandConflictError(
+                "mutate_plan_selection command id conflicts with retained intent"
+            ) from error
+
+    def start_execution(payload: object) -> object:
+        if type(payload) is not _StartExecutionPayload:
+            raise TypeError("start_execution received an unvalidated payload")
+        wire_intent = (
+            "start-execution",
+            payload.task_id,
+            payload.request_id,
+            payload.expected_revision,
+            payload.destructive_acknowledged,
+        )
+        try:
+            return registry.start_execution(
+                payload.task_id,
+                request_id=payload.request_id,
+                expected_revision=payload.expected_revision,
+                destructive_acknowledged=payload.destructive_acknowledged,
+                command_id=payload.command_id,
+                wire_intent=wire_intent,
+            )
+        except (CommandIdConflictError, TaskIntentConflictError) as error:
+            raise CommandConflictError(
+                "start_execution command id conflicts with retained intent"
+            ) from error
+
+    def control_execution(payload: object) -> object:
+        if type(payload) is not _ControlExecutionPayload:
+            raise TypeError("control_execution received an unvalidated payload")
+        result = registry.control_execution(
+            payload.task_id,
+            payload.session_id,
+            payload.action,
+        )
+        if type(result) is not ControlView or result.session_id != payload.session_id:
+            raise RuntimeError("task registry returned invalid control data")
+        return result
+
     def create_task(payload: object) -> object:
         if not isinstance(payload, _CreateTaskPayload):
             raise TypeError("create_task received an unvalidated payload")
@@ -1025,6 +1190,70 @@ def production_command_specs(
                 timeout=CommandTimeout.MUTATION_30_SECONDS,
                 retry=CommandRetry.SAME_COMMAND_ONCE,
                 work=CommandWork.ASYNC_SMALL,
+            ),
+            "open_plan_view": CommandSpec(
+                validate_payload=_validate_open_plan_view,
+                handler=open_plan_view,
+                access=CommandAccess.READ_ONLY,
+                command_id=FieldRequirement.FORBIDDEN,
+                revision=FieldRequirement.FORBIDDEN,
+                timeout=CommandTimeout.LOCAL_5_SECONDS,
+                retry=CommandRetry.SAME_PAYLOAD_ONCE,
+            ),
+            "update_plan_view": CommandSpec(
+                validate_payload=_validate_update_plan_view,
+                handler=update_plan_view,
+                access=CommandAccess.READ_ONLY,
+                command_id=FieldRequirement.FORBIDDEN,
+                revision=FieldRequirement.REQUIRED,
+                timeout=CommandTimeout.LOCAL_5_SECONDS,
+                retry=CommandRetry.NONE,
+            ),
+            "get_plan_window": CommandSpec(
+                validate_payload=_validate_plan_window,
+                handler=get_plan_window,
+                access=CommandAccess.READ_ONLY,
+                command_id=FieldRequirement.FORBIDDEN,
+                revision=FieldRequirement.REQUIRED,
+                timeout=CommandTimeout.LOCAL_5_SECONDS,
+                retry=CommandRetry.SAME_PAYLOAD_ONCE,
+            ),
+            "get_plan_anchor": CommandSpec(
+                validate_payload=_validate_plan_anchor,
+                handler=get_plan_anchor,
+                access=CommandAccess.READ_ONLY,
+                command_id=FieldRequirement.FORBIDDEN,
+                revision=FieldRequirement.REQUIRED,
+                timeout=CommandTimeout.LOCAL_5_SECONDS,
+                retry=CommandRetry.SAME_PAYLOAD_ONCE,
+            ),
+            "mutate_plan_selection": CommandSpec(
+                validate_payload=_validate_mutate_plan_selection,
+                handler=mutate_plan_selection,
+                access=CommandAccess.MUTATING,
+                command_id=FieldRequirement.REQUIRED,
+                revision=FieldRequirement.REQUIRED,
+                timeout=CommandTimeout.LOCAL_5_SECONDS,
+                retry=CommandRetry.SAME_COMMAND_ONCE,
+            ),
+            "start_execution": CommandSpec(
+                validate_payload=_validate_start_execution,
+                handler=start_execution,
+                access=CommandAccess.MUTATING,
+                command_id=FieldRequirement.REQUIRED,
+                revision=FieldRequirement.REQUIRED,
+                timeout=CommandTimeout.MUTATION_30_SECONDS,
+                retry=CommandRetry.SAME_COMMAND_ONCE,
+                work=CommandWork.ASYNC_SMALL,
+            ),
+            "control_execution": CommandSpec(
+                validate_payload=_validate_control_execution,
+                handler=control_execution,
+                access=CommandAccess.MUTATING,
+                command_id=FieldRequirement.FORBIDDEN,
+                revision=FieldRequirement.FORBIDDEN,
+                timeout=CommandTimeout.LOCAL_5_SECONDS,
+                retry=CommandRetry.NONE,
             ),
             "next_events": CommandSpec(
                 validate_payload=_validate_next_events,
@@ -1254,6 +1483,195 @@ def _validate_plan_again(value: object) -> _PlanAgainPayload:
         source_mount,
         target_mount,
     )
+
+
+def _validate_open_plan_view(value: object) -> _OpenPlanViewPayload:
+    if type(value) is not dict or set(value) != {"task_id"}:
+        raise CommandPayloadError("open_plan_view payload is invalid")
+    task_id = value["task_id"]
+    if type(task_id) is not str or _TASK_ID.fullmatch(task_id) is None:
+        raise CommandPayloadError("open_plan_view payload is invalid")
+    return _OpenPlanViewPayload(task_id)
+
+
+def _validate_update_plan_view(value: object) -> _UpdatePlanViewPayload:
+    expected_keys = {
+        "task_id",
+        "expected_revision",
+        "search_query",
+        "filters",
+        "sort_column",
+        "sort_direction",
+        "collapse_node_id",
+        "collapsed",
+    }
+    if type(value) is not dict or set(value) != expected_keys:
+        raise CommandPayloadError("update_plan_view payload is invalid")
+    task_id = value["task_id"]
+    expected_revision = value["expected_revision"]
+    search_query = value["search_query"]
+    filters = value["filters"]
+    collapse_node_id = value["collapse_node_id"]
+    collapsed = value["collapsed"]
+    if (
+        type(task_id) is not str
+        or _TASK_ID.fullmatch(task_id) is None
+        or not _is_javascript_safe_integer(expected_revision)
+        or expected_revision < 0
+        or type(search_query) is not str
+        or type(filters) is not list
+        or len(filters) > len(PLAN_FILTERS)
+        or any(type(item) is not str or item not in PLAN_FILTERS for item in filters)
+        or len(filters) != len(set(filters))
+        or collapse_node_id is not None
+        and (
+            type(collapse_node_id) is not str
+            or re.fullmatch(r"node-[0-9a-f]{32}", collapse_node_id) is None
+        )
+        or collapsed is not None and type(collapsed) is not bool
+        or (collapse_node_id is None) != (collapsed is None)
+    ):
+        raise CommandPayloadError("update_plan_view payload is invalid")
+    try:
+        if len(search_query.encode("utf-8")) > 65_536:
+            raise ValueError
+        sort_column = PlanSortColumn(value["sort_column"])
+        sort_direction = SortDirection(value["sort_direction"])
+        if sort_column is PlanSortColumn.PATH and sort_direction is not SortDirection.ASCENDING:
+            raise ValueError
+    except (TypeError, ValueError, UnicodeError) as error:
+        raise CommandPayloadError("update_plan_view payload is invalid") from error
+    return _UpdatePlanViewPayload(
+        task_id,
+        expected_revision,
+        search_query,
+        frozenset(filters),
+        sort_column,
+        sort_direction,
+        collapse_node_id,
+        collapsed,
+    )
+
+
+def _validate_plan_window(value: object) -> _PlanWindowPayload:
+    if type(value) is not dict or set(value) != {
+        "task_id", "expected_revision", "offset", "limit"
+    }:
+        raise CommandPayloadError("get_plan_window payload is invalid")
+    task_id = value["task_id"]
+    expected_revision = value["expected_revision"]
+    offset = value["offset"]
+    limit = value["limit"]
+    if (
+        type(task_id) is not str
+        or _TASK_ID.fullmatch(task_id) is None
+        or not _is_javascript_safe_integer(expected_revision)
+        or expected_revision < 0
+        or not _is_javascript_safe_integer(offset)
+        or offset < 0
+        or type(limit) is not int
+        or not 1 <= limit <= 256
+    ):
+        raise CommandPayloadError("get_plan_window payload is invalid")
+    return _PlanWindowPayload(task_id, expected_revision, offset, limit)
+
+
+def _validate_plan_anchor(value: object) -> _PlanAnchorPayload:
+    if type(value) is not dict or set(value) != {
+        "task_id", "expected_revision", "node_id"
+    }:
+        raise CommandPayloadError("get_plan_anchor payload is invalid")
+    task_id = value["task_id"]
+    expected_revision = value["expected_revision"]
+    node_id = value["node_id"]
+    if (
+        type(task_id) is not str
+        or _TASK_ID.fullmatch(task_id) is None
+        or not _is_javascript_safe_integer(expected_revision)
+        or expected_revision < 0
+        or type(node_id) is not str
+        or re.fullmatch(r"node-[0-9a-f]{32}", node_id) is None
+    ):
+        raise CommandPayloadError("get_plan_anchor payload is invalid")
+    return _PlanAnchorPayload(task_id, expected_revision, node_id)
+
+
+def _validate_mutate_plan_selection(value: object) -> _MutatePlanSelectionPayload:
+    if type(value) is not dict or set(value) != {
+        "task_id", "command_id", "expected_revision", "node_id", "selected"
+    }:
+        raise CommandPayloadError("mutate_plan_selection payload is invalid")
+    task_id = value["task_id"]
+    command_id = value["command_id"]
+    expected_revision = value["expected_revision"]
+    node_id = value["node_id"]
+    selected = value["selected"]
+    if (
+        type(task_id) is not str
+        or _TASK_ID.fullmatch(task_id) is None
+        or type(command_id) is not str
+        or _OPAQUE_ID.fullmatch(command_id) is None
+        or not _is_javascript_safe_integer(expected_revision)
+        or expected_revision < 0
+        or type(node_id) is not str
+        or re.fullmatch(r"node-[0-9a-f]{32}", node_id) is None
+        or type(selected) is not bool
+    ):
+        raise CommandPayloadError("mutate_plan_selection payload is invalid")
+    return _MutatePlanSelectionPayload(
+        task_id, command_id, expected_revision, node_id, selected
+    )
+
+
+def _validate_start_execution(value: object) -> _StartExecutionPayload:
+    if type(value) is not dict or set(value) != {
+        "task_id",
+        "request_id",
+        "command_id",
+        "expected_revision",
+        "destructive_acknowledged",
+    }:
+        raise CommandPayloadError("start_execution payload is invalid")
+    task_id = value["task_id"]
+    request_id = value["request_id"]
+    command_id = value["command_id"]
+    expected_revision = value["expected_revision"]
+    acknowledged = value["destructive_acknowledged"]
+    if (
+        type(task_id) is not str
+        or _TASK_ID.fullmatch(task_id) is None
+        or type(request_id) is not str
+        or _OPAQUE_ID.fullmatch(request_id) is None
+        or type(command_id) is not str
+        or _OPAQUE_ID.fullmatch(command_id) is None
+        or not _is_javascript_safe_integer(expected_revision)
+        or expected_revision < 0
+        or type(acknowledged) is not bool
+    ):
+        raise CommandPayloadError("start_execution payload is invalid")
+    return _StartExecutionPayload(
+        task_id, request_id, command_id, expected_revision, acknowledged
+    )
+
+
+def _validate_control_execution(value: object) -> _ControlExecutionPayload:
+    if type(value) is not dict or set(value) != {
+        "task_id", "session_id", "action"
+    }:
+        raise CommandPayloadError("control_execution payload is invalid")
+    task_id = value["task_id"]
+    session_id = value["session_id"]
+    action = value["action"]
+    if (
+        type(task_id) is not str
+        or _TASK_ID.fullmatch(task_id) is None
+        or type(session_id) is not str
+        or _OPAQUE_ID.fullmatch(session_id) is None
+        or type(action) is not str
+        or action not in {"pause", "resume", "cancel"}
+    ):
+        raise CommandPayloadError("control_execution payload is invalid")
+    return _ControlExecutionPayload(task_id, session_id, action)
 
 
 def _validate_create_task(value: object) -> _CreateTaskPayload:

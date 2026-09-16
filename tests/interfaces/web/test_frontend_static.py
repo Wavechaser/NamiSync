@@ -247,17 +247,20 @@ def test_modules_use_only_local_explicit_js_imports(
             "./readiness.js",
             "./appearance.js",
             "./theme.js",
+            "./execution_confirmation.js",
             "./panels.js",
             "./rail.js",
             "./render.js",
         ],
         "appearance.js": [],
         "bridge.js": [],
+        "execution_confirmation.js": ["./render.js"],
         "file_row.js": ["./render.js"],
         "icons.js": [],
         "integrity.js": ["./file_row.js", "./render.js"],
-        "panels.js": ["./render.js", "./setup.js"],
+        "panels.js": ["./render.js", "./setup.js", "./plan_review.js"],
         "plan.js": ["./file_row.js", "./render.js"],
+        "plan_review.js": ["./plan.js", "./render.js"],
         "rail.js": ["./icons.js", "./render.js"],
         "readiness.js": [],
         "render.js": [],
@@ -458,6 +461,44 @@ def test_process_live_task_shell_transitions_use_production_modules() -> None:
         timeout=10,
     )
     assert completed.returncode == 0, completed.stderr
+
+
+def test_plan_review_component_keeps_actions_bounded_and_generation_safe() -> None:
+    node = _node_executable()
+    assert node is not None, "Node.js is required for the plan-review witness"
+    assets = PROJECT_ROOT / "namisync" / "interfaces" / "web" / "assets"
+    completed = subprocess.run(
+        [
+            str(node),
+            str(PROJECT_ROOT / "tests" / "assets" / "plan_review_probe.mjs"),
+            str(assets / "plan_review.js"),
+            str(assets / "render.js"),
+        ],
+        capture_output=True,
+        check=False,
+        text=True,
+        timeout=10,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert completed.stdout == "ok"
+
+
+def test_execution_confirmation_keeps_smoke_and_focus_native() -> None:
+    node = _node_executable()
+    assert node is not None, "Node.js is required for the execution-confirmation witness"
+    assets = PROJECT_ROOT / "namisync" / "interfaces" / "web" / "assets"
+    completed = subprocess.run(
+        [
+            str(node),
+            str(PROJECT_ROOT / "tests" / "assets" / "execution_confirmation_probe.mjs"),
+            str(assets / "execution_confirmation.js"),
+        ],
+        capture_output=True,
+        check=False,
+        text=True,
+        timeout=10,
+    )
+    assert completed.returncode == 0, completed.stderr
     assert completed.stdout == "ok"
 
 
@@ -600,7 +641,7 @@ def test_br_g_32_production_inert_text_helper_owns_text_writes(
     assert re.search(r"\.textContent\s*=(?!=)", plan) is None
 
 
-def test_plan_row_renderer_is_dormant_and_consumes_only_projected_views(
+def test_plan_row_renderer_is_active_and_consumes_only_projected_views(
     built_wheel: BuiltWheel,
 ) -> None:
     assets = _wheel_assets(built_wheel)
@@ -609,7 +650,8 @@ def test_plan_row_renderer_is_dormant_and_consumes_only_projected_views(
     plan = assets["plan.js"]
     layout = assets["app.css"]
     production_shell = "\n".join(
-        assets[name] for name in ("index.html", "app.js", "panels.js", "rail.js")
+        assets[name]
+        for name in ("index.html", "app.js", "panels.js", "plan_review.js", "rail.js")
     )
 
     assert re.findall(r"export function ([A-Za-z0-9_]+)\(", plan) == [
@@ -622,9 +664,10 @@ def test_plan_row_renderer_is_dormant_and_consumes_only_projected_views(
         "renderFileRow",
         "renderFileProgress",
     ]
-    assert '"./plan.js"' not in production_shell
+    assert '"./plan_review.js"' in production_shell
+    assert '"./plan.js"' in production_shell
     assert '"./integrity.js"' not in production_shell
-    assert "renderPlanRow" not in production_shell
+    assert "renderPlanRow" in production_shell
     dormant_renderers = "\n".join((file_row, plan, integrity))
     assert '"./bridge.js"' not in dormant_renderers
     assert not any(
@@ -737,6 +780,12 @@ def test_plan_row_renderer_is_dormant_and_consumes_only_projected_views(
 
     zebra = ".nami-file-list__body > .nami-file-row:nth-child(even)"
     assert zebra in layout
+    hidden_plan_review = re.search(
+        r"(?ms)^\.nami-plan-review \[hidden\]\s*\{(?P<body>.*?)^\}",
+        layout,
+    )
+    assert hidden_plan_review is not None
+    assert hidden_plan_review.group("body").strip() == "display: none;"
     assert ".nami-file-list__body > .nami-file-row[hidden]" in layout
     assert "display: none;" in layout
     assert layout.count("--nami-file-column-") == 12
@@ -1264,9 +1313,9 @@ def test_sh_g_7_packaged_shell_has_accessible_process_live_blank_tasks(
     assert "task.closePending = true;" in app
     assert "tasks.get(task.taskId) !== task" in app
     assert "epoch !== startupEpoch" in app
-    assert '"./plan.js"' not in app + panels
+    assert '"./plan_review.js"' in panels
     assert '"./integrity.js"' not in app + panels
-    assert "renderPlanRow" not in shell
+    assert "createPlanReviewPanel" in panels
     assert 'status.textContent === "Starting..."' in app
 
     theme = assets["theme.js"]

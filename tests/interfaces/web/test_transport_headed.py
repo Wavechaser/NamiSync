@@ -1023,9 +1023,14 @@ def test_br_g_32_hostile_text_crosses_real_return_transport_and_production_text_
     assert result["production_command_names"] == [
         "admit_location",
         "close_task",
+        "control_execution",
         "create_task",
+        "get_plan_anchor",
+        "get_plan_window",
         "list_tasks",
+        "mutate_plan_selection",
         "next_events",
+        "open_plan_view",
         "pick_folder",
         "plan_again",
         "prepare_setup",
@@ -1036,15 +1041,22 @@ def test_br_g_32_hostile_text_crosses_real_return_transport_and_production_text_
         "release_terminal_session",
         "replace_cosmetic_section",
         "shell_ready",
+        "start_execution",
         "start_inventory",
         "start_plan",
+        "update_plan_view",
     ]
     assert result["combined_command_names"] == [
         "admit_location",
         "close_task",
+        "control_execution",
         "create_task",
+        "get_plan_anchor",
+        "get_plan_window",
         "list_tasks",
+        "mutate_plan_selection",
         "next_events",
+        "open_plan_view",
         "pick_folder",
         "plan_again",
         "prepare_setup",
@@ -1055,9 +1067,11 @@ def test_br_g_32_hostile_text_crosses_real_return_transport_and_production_text_
         "release_terminal_session",
         "replace_cosmetic_section",
         "shell_ready",
+        "start_execution",
         "start_inventory",
         "start_plan",
         "test_report",
+        "update_plan_view",
     ]
     assert result["combined_mapping_type"] == "mappingproxy"
     assert result["dispatcher_type"] == (
@@ -1133,9 +1147,14 @@ def test_br_g_32_origin_recheck_rejects_dispatch_independently(
     assert result["production_command_names"] == [
         "admit_location",
         "close_task",
+        "control_execution",
         "create_task",
+        "get_plan_anchor",
+        "get_plan_window",
         "list_tasks",
+        "mutate_plan_selection",
         "next_events",
+        "open_plan_view",
         "pick_folder",
         "plan_again",
         "prepare_setup",
@@ -1146,8 +1165,10 @@ def test_br_g_32_origin_recheck_rejects_dispatch_independently(
         "release_terminal_session",
         "replace_cosmetic_section",
         "shell_ready",
+        "start_execution",
         "start_inventory",
         "start_plan",
+        "update_plan_view",
     ]
     assert result["dispatcher_type"] == (
         "namisync.interfaces.web.bridge.BridgeDispatcher"

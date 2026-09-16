@@ -3,10 +3,15 @@ import {
   admitLocation,
   BridgeTransportError,
   closeTask,
+  controlExecution,
   createTask,
   echoReadiness,
+  getPlanAnchor,
+  getPlanWindow,
   listTasks,
   markBridgeOperational,
+  mutatePlanSelection,
+  openPlanView,
   pickFolder,
   planAgain,
   prepareSetup,
@@ -14,14 +19,17 @@ import {
   readSetup,
   StartPlanUncertainError,
   startInventory,
+  startExecution,
   startPlan,
   startTaskDrain,
   TaskCreateUncertainError,
   whenBridgeApiReady,
+  updatePlanView,
 } from "./bridge.js";
 import { installReadinessReceiver } from "./readiness.js";
 import { installAppearanceReceiver } from "./appearance.js";
 import { installThemeCombobox, installThemeSelector } from "./theme.js";
+import { createExecutionConfirmation } from "./execution_confirmation.js";
 import { createWorkPanel } from "./panels.js";
 import { createTaskRail } from "./rail.js";
 import { renderText } from "./render.js";
@@ -30,11 +38,13 @@ const app = document.querySelector("#app");
 const status = document.querySelector("#host-status");
 const themeSelector = document.querySelector("#theme-mode");
 const settingsView = document.querySelector("#settings-view");
+const themeOptions = document.querySelector("#theme-options");
 if (
   !(app instanceof HTMLElement)
   || !(status instanceof HTMLElement)
   || !(themeSelector instanceof HTMLElement)
   || !(settingsView instanceof HTMLElement)
+  || !(themeOptions instanceof HTMLElement)
 ) {
   throw new TypeError("NamiSync shell elements are unavailable");
 }
@@ -86,6 +96,25 @@ let recentPairProbeRunning = false;
 let recentPairProbePending = false;
 let pageBatch = null;
 
+const ACTIVE_EXECUTION_CONTROL_STATES = new Set([
+  "pending",
+  "running",
+  "pausing",
+  "paused",
+  "canceling",
+]);
+
+function executionControlMessage(state) {
+  switch (state) {
+    case "pending": return "Execution is waiting to run.";
+    case "running": return "Execution is running.";
+    case "pausing": return "Pausing execution…";
+    case "paused": return "Execution is paused. Resume is available.";
+    case "canceling": return "Canceling execution…";
+    default: return "Follow the live execution status.";
+  }
+}
+
 const panel = createWorkPanel({
   onEdit: editLocation,
   onValidate: validateLocation,
@@ -106,6 +135,19 @@ const panel = createWorkPanel({
   onClearBatchResults: clearBatchResults,
   onStartBatch: () => { void startPairBatch(); },
   onPlanAgain: () => { void startPlanAgain(); },
+}, {
+  onViewChange: (review, patch) => { void changePlanView(review, patch); },
+  onWindow: (review, offset) => { void loadPlanWindow(review, offset); },
+  onSelect: (review, row, selected) => {
+    void changePlanSelection(review, row, selected);
+  },
+  onExecute: (review, returnFocus) => {
+    void executeReviewedPlan(review, returnFocus);
+  },
+  onControl: (review, action) => {
+    void controlReviewedExecution(review, action);
+  },
+  onPlanAgain: (review) => { void planAgainFromReview(review); },
 }, settingsView);
 const rail = createTaskRail({
   onCreate: () => { void createBlankTask(); },
@@ -114,6 +156,8 @@ const rail = createTaskRail({
   onSettings: showSettings,
 });
 app.append(rail.element, panel.element);
+const executionConfirmation = createExecutionConfirmation([app, themeOptions]);
+document.body.append(executionConfirmation.element);
 
 function taskArray() {
   return Array.from(tasks.values()).reverse();
@@ -139,7 +183,10 @@ function renderTasks() {
             ?? "Return to Sync to resolve its in-flight batch request before starting Inventory.";
       task.form.closePending = task.closePending;
     }
-    task.batchCloseReason = batchTaskBlockReason(task.taskId);
+    task.batchCloseReason = task.executionAttempt === null
+      ? batchTaskBlockReason(task.taskId)
+      : "Resolve the in-flight execution request before closing.";
+    task.canPlanAgain = canStartPlanAgain(task);
   }
   rail.render(
     taskArray(),
@@ -159,14 +206,21 @@ function showSettings() {
 }
 
 function selectTask(taskId) {
-  if (!tasks.has(taskId)) {
+  const task = tasks.get(taskId);
+  if (task === undefined) {
     return;
   }
   navigationRevision += 1;
   selectedTaskId = taskId;
   settingsVisible = false;
   renderTasks();
-  void loadTaskSetup(tasks.get(taskId));
+  void loadTaskSetup(task);
+  if (
+    task.taskKind === "sync-plan"
+    && (task.sessionReleased || task.sessionState === "active")
+  ) {
+    void loadPlanReview(task);
+  }
 }
 
 function adoptTask(summary) {
@@ -185,10 +239,26 @@ function adoptTask(summary) {
       stopDrain: null,
       form: null,
       setupRevision: 0,
+      review: null,
+      reviewLoading: false,
+      reviewRevision: 0,
+      reviewSessionId: null,
+      executionStarted: false,
+      executionAttempt: null,
+      executionControlState: "running",
+      executionControlRevision: 0,
     };
     nextTaskNumber += 1;
     tasks.set(task.taskId, task);
   } else {
+    if (
+      task.sessionId !== null
+      && summary.session_id !== null
+      && task.sessionId !== summary.session_id
+      && task.review !== null
+    ) {
+      task.executionStarted = true;
+    }
     task.sessionId = summary.session_id;
     task.sessionState = summary.session_state;
     task.sessionReleased = summary.session_released;
@@ -200,28 +270,58 @@ function adoptTask(summary) {
     task.sessionId !== null &&
     task.stopDrain === null
   ) {
-    task.stopDrain = startTaskDrain(
-      task.taskId,
-      task.sessionId,
-      (update) => acceptTaskUpdate(task, update),
-      () => acceptTaskRefusal(task),
-      {
-        terminal: task.sessionState !== "active",
-        sessionReleased: task.sessionReleased,
-      },
-    );
+    attachTaskDrain(task);
+  }
+  if (
+    task.taskKind === "sync-plan"
+    && (task.sessionReleased || task.sessionState === "active")
+  ) {
+    void loadPlanReview(task);
   }
   return task;
 }
 
-function acceptTaskUpdate(task, update) {
-  if (tasks.get(task.taskId) !== task) {
+function attachTaskDrain(task) {
+  const sessionId = task.sessionId;
+  task.stopDrain = startTaskDrain(
+    task.taskId,
+    sessionId,
+    (update) => acceptTaskUpdate(task, sessionId, update),
+    () => acceptTaskRefusal(task, sessionId),
+    {
+      terminal: task.sessionState !== "active",
+      sessionReleased: task.sessionReleased,
+    },
+    (_taskId, sessionId) => acceptTaskRelease(task, sessionId),
+  );
+}
+
+function acceptTaskUpdate(task, sessionId, update) {
+  if (tasks.get(task.taskId) !== task || task.sessionId !== sessionId) {
+    return;
+  }
+  if (
+    update.update_type === "event"
+    && update.event?.body_type === "StateChanged"
+    && ACTIVE_EXECUTION_CONTROL_STATES.has(update.event.body?.state)
+    && task.sessionState === "active"
+  ) {
+    task.executionControlRevision += 1;
+    task.executionControlState = update.event.body.state;
+    if (task.executionStarted && task.review !== null) {
+      task.review.message = executionControlMessage(task.executionControlState);
+    }
+    renderTasks();
     return;
   }
   if (update.update_type === "record") {
     taskMutationRevision += 1;
+    task.executionControlRevision += 1;
     task.sessionState = update.record.state;
     if (task.form !== null) task.form.sessionState = task.sessionState;
+    if (task.executionStarted && task.review !== null) {
+      task.review.message = `Execution ${task.sessionState}.`;
+    }
     if (task.closePending) {
       task.closePending = false;
       void closeRetainedTask(task.taskId);
@@ -233,8 +333,8 @@ function acceptTaskUpdate(task, update) {
   }
 }
 
-function acceptTaskRefusal(task) {
-  if (tasks.get(task.taskId) !== task) {
+function acceptTaskRefusal(task, sessionId) {
+  if (tasks.get(task.taskId) !== task || task.sessionId !== sessionId) {
     return;
   }
   task.error = "Task updates stopped. Close can be retried.";
@@ -338,7 +438,7 @@ async function createBlankTask() {
 
 async function closeRetainedTask(taskId) {
   const task = tasks.get(taskId);
-  if (task === undefined || task.closePending) {
+  if (task === undefined || task.closePending || task.executionAttempt !== null) {
     return;
   }
   if (batchTaskBlockReason(taskId) !== null) return;
@@ -621,6 +721,461 @@ function editMode(mode) {
   clearLocationChoice(form.source);
   form.actionMessage = null;
   renderTasks();
+}
+
+function acceptTaskRelease(task, sessionId) {
+  if (tasks.get(task.taskId) !== task || task.sessionId !== sessionId) return;
+  task.sessionReleased = true;
+  renderTasks();
+  if (task.taskKind === "sync-plan") void loadPlanReview(task);
+}
+
+function currentReviewTask(review) {
+  const task = currentTask();
+  return task !== null && task.review === review ? task : null;
+}
+
+function retainedReviewTask(review) {
+  const taskId = review?.summary?.task_id;
+  const task = typeof taskId === "string" ? tasks.get(taskId) ?? null : null;
+  return task !== null && task.review === review ? task : null;
+}
+
+async function loadPlanReview(task, force = false) {
+  if (
+    task === undefined || tasks.get(task.taskId) !== task
+    || task.taskKind !== "sync-plan" || task.sessionId === null
+    || task.reviewLoading
+    || (!force && task.review !== null && task.reviewSessionId === task.sessionId)
+  ) return;
+  const request = ++task.reviewRevision;
+  const sessionId = task.sessionId;
+  task.reviewLoading = true;
+  renderTasks();
+  try {
+    const summary = await openPlanView(task.taskId);
+    const window = await getPlanWindow(task.taskId, summary.view_revision, 0, 256);
+    if (
+      tasks.get(task.taskId) !== task || task.reviewRevision !== request
+      || task.sessionId !== sessionId || window.disposition !== "current"
+      || window.view_revision !== summary.view_revision
+    ) return;
+    task.executionStarted ||= summary.selection_state === "committed";
+    const message = task.executionStarted
+      ? task.sessionState === "active"
+        ? executionControlMessage(task.executionControlState)
+        : `Execution ${task.sessionState}.`
+      : summary.preflight_ready
+        ? "Review the selected operations, then execute."
+        : "This plan did not pass review preflight. Inspect its notices and create a fresh plan.";
+    task.review = {
+      summary,
+      window,
+      pending: null,
+      message,
+      actionRevision: 0,
+    };
+    task.reviewSessionId = sessionId;
+    task.error = null;
+  } catch (_error) {
+    if (
+      tasks.get(task.taskId) === task && task.reviewRevision === request
+      && task.sessionId === sessionId
+      && task.sessionState !== "active"
+    ) {
+      task.error = "Plan review could not be loaded. Select the task to retry.";
+    }
+  } finally {
+    if (tasks.get(task.taskId) === task && task.reviewRevision === request) {
+      task.reviewLoading = false;
+      renderTasks();
+    }
+  }
+}
+
+async function readPlanWindowAtAnchor(task, review, summary, anchorNodeId, fallbackOffset) {
+  let offset = fallbackOffset;
+  if (anchorNodeId !== null) {
+    try {
+      const anchor = await getPlanAnchor(
+        task.taskId,
+        summary.view_revision,
+        anchorNodeId,
+      );
+      if (anchor.disposition === "current" && anchor.index !== null) {
+        offset = anchor.index;
+      }
+    } catch (_error) {
+      offset = 0;
+    }
+  }
+  return getPlanWindow(task.taskId, summary.view_revision, offset, 256);
+}
+
+async function changePlanView(review, patch) {
+  const task = currentReviewTask(review);
+  if (task === null || review.pending !== null) return;
+  const action = ++review.actionRevision;
+  const anchorNodeId = review.window.rows[0]?.node_id ?? null;
+  const sortColumn = patch.sortColumn ?? review.summary.sort_column;
+  const gesture = {
+    searchQuery: patch.searchQuery ?? review.summary.search_query,
+    filters: [...(patch.filters ?? review.summary.filters)],
+    sortColumn,
+    sortDirection: sortColumn === "path"
+      ? "ascending"
+      : patch.sortDirection ?? review.summary.sort_direction,
+    collapseNodeId: patch.collapseNodeId ?? null,
+    collapsed: patch.collapseNodeId === undefined ? null : patch.collapsed,
+  };
+  review.pending = "view";
+  review.message = "Updating this view…";
+  renderTasks();
+  try {
+    const summary = await updatePlanView(
+      task.taskId,
+      review.summary.view_revision,
+      gesture,
+    );
+    if (retainedReviewTask(review) !== task || review.actionRevision !== action) return;
+    const window = await readPlanWindowAtAnchor(
+      task,
+      review,
+      summary,
+      anchorNodeId,
+      0,
+    );
+    if (
+      retainedReviewTask(review) !== task || review.actionRevision !== action
+      || window.disposition !== "current"
+      || window.view_revision !== summary.view_revision
+    ) return;
+    review.summary = summary;
+    review.window = window;
+    review.message = summary.disposition === "conflict"
+      ? "The plan view changed. The current view has been restored."
+      : "View updated.";
+  } catch (_error) {
+    if (retainedReviewTask(review) === task && review.actionRevision === action) {
+      review.message = "The view could not be updated. Try again.";
+    }
+  } finally {
+    if (retainedReviewTask(review) === task && review.actionRevision === action) {
+      review.pending = null;
+      renderTasks();
+    }
+  }
+}
+
+async function loadPlanWindow(review, offset) {
+  const task = currentReviewTask(review);
+  if (task === null || review.pending !== null) return;
+  const action = ++review.actionRevision;
+  review.pending = "window";
+  review.message = "Loading more operations…";
+  renderTasks();
+  try {
+    const window = await getPlanWindow(
+      task.taskId,
+      review.summary.view_revision,
+      offset,
+      256,
+    );
+    if (
+      retainedReviewTask(review) !== task || review.actionRevision !== action
+      || window.disposition !== "current"
+    ) return;
+    review.window = window;
+    review.message = "";
+  } catch (_error) {
+    if (retainedReviewTask(review) === task && review.actionRevision === action) {
+      review.message = "More operations could not be loaded. Scroll to retry.";
+    }
+  } finally {
+    if (retainedReviewTask(review) === task && review.actionRevision === action) {
+      review.pending = null;
+      renderTasks();
+    }
+  }
+}
+
+async function changePlanSelection(review, row, selected) {
+  const task = currentReviewTask(review);
+  if (
+    task === null || review.pending !== null
+    || review.summary.selection_state !== "reviewing"
+    || task.executionAttempt !== null
+  ) return;
+  const action = ++review.actionRevision;
+  const anchorNodeId = review.window.rows[0]?.node_id ?? null;
+  review.pending = "selection";
+  review.message = "Updating the selected operations…";
+  renderTasks();
+  try {
+    const summary = await mutatePlanSelection(
+      task.taskId,
+      review.summary.selection_revision,
+      row.node_id,
+      selected,
+    );
+    if (retainedReviewTask(review) !== task || review.actionRevision !== action) return;
+    const window = await readPlanWindowAtAnchor(
+      task,
+      review,
+      summary,
+      anchorNodeId,
+      review.window.offset,
+    );
+    if (
+      retainedReviewTask(review) !== task || review.actionRevision !== action
+      || window.disposition !== "current"
+    ) return;
+    review.summary = summary;
+    review.window = window;
+    review.message = summary.disposition === "applied"
+      ? "Selection updated."
+      : summary.disposition === "conflict"
+        ? "Selection changed elsewhere. The current selection is shown."
+        : summary.disposition === "frozen" || summary.disposition === "in-flight"
+          ? "Selection is already committed to execution."
+          : "Selection is unchanged.";
+  } catch (_error) {
+    if (retainedReviewTask(review) === task && review.actionRevision === action) {
+      review.message = "Selection status was uncertain. Reloading the authoritative review…";
+      review.pending = null;
+      void loadPlanReview(task, true);
+      return;
+    }
+  } finally {
+    if (
+      retainedReviewTask(review) === task && review.actionRevision === action
+      && review.pending !== null
+    ) {
+      review.pending = null;
+      renderTasks();
+    }
+  }
+}
+
+async function executeReviewedPlan(review, returnFocus) {
+  const task = currentReviewTask(review);
+  if (
+    task !== null
+    && task.executionAttempt?.state === "uncertain"
+  ) {
+    await submitReviewedExecution(task, task.executionAttempt);
+    return;
+  }
+  if (
+    task === null || review.pending !== null
+    || review.summary.selection_state !== "reviewing"
+    || task.executionAttempt !== null
+  ) return;
+  const attempt = {
+    review,
+    taskId: task.taskId,
+    requestId: review.summary.request_id,
+    selectionRevision: review.summary.selection_revision,
+    destructiveAcknowledged: review.summary.requires_destructive_confirmation,
+    destructiveOperationCount: review.summary.destructive_operation_count,
+    retry: null,
+    submissionStarted: false,
+    state: review.summary.requires_destructive_confirmation ? "confirming" : "submitting",
+  };
+  task.executionAttempt = attempt;
+  review.pending = attempt.state === "confirming" ? "confirmation" : "execute";
+  review.message = attempt.state === "confirming"
+    ? "Confirm the selected destructive changes in the dialog."
+    : "Starting execution…";
+  renderTasks();
+  if (attempt.state === "confirming") {
+    try {
+      executionConfirmation.show({
+        destructiveOperationCount: attempt.destructiveOperationCount,
+        returnFocus,
+        onCancel: () => cancelReviewedExecution(task, attempt),
+        onConfirm: () => { void submitReviewedExecution(task, attempt); },
+      });
+    } catch (_error) {
+      task.executionAttempt = null;
+      review.pending = null;
+      review.message = "Confirmation could not open. The selection remains editable.";
+      renderTasks();
+    }
+    return;
+  }
+  await submitReviewedExecution(task, attempt);
+}
+
+function cancelReviewedExecution(task, attempt) {
+  if (task.executionAttempt !== attempt || attempt.state !== "confirming") return;
+  task.executionAttempt = null;
+  if (task.review === attempt.review) {
+    attempt.review.pending = null;
+    attempt.review.message = "Execution was not submitted. The selection remains editable.";
+  }
+  renderTasks();
+}
+
+async function submitReviewedExecution(task, attempt) {
+  if (
+    task.executionAttempt !== attempt
+    || !["confirming", "submitting", "uncertain"].includes(attempt.state)
+  ) return;
+  if (attempt.submissionStarted) return;
+  const submit = attempt.retry ?? (() => startExecution(
+    attempt.taskId,
+    attempt.requestId,
+    attempt.selectionRevision,
+    attempt.destructiveAcknowledged,
+  ));
+  attempt.retry = null;
+  attempt.submissionStarted = true;
+  attempt.state = "submitting";
+  if (task.review !== null) {
+    task.review.pending = "execute";
+    task.review.message = attempt.destructiveAcknowledged
+      ? "Starting confirmed execution…"
+      : "Starting execution…";
+  }
+  renderTasks();
+  try {
+    const result = await submit();
+    if (tasks.get(task.taskId) !== task || task.executionAttempt !== attempt) return;
+    task.executionAttempt = null;
+    if (typeof result.task_id === "string") {
+      task.sessionId = result.session_id;
+      task.sessionState = "active";
+      task.sessionReleased = false;
+      task.executionStarted = true;
+      task.executionControlRevision += 1;
+      task.executionControlState = "running";
+      task.reviewSessionId = result.session_id;
+      attachTaskDrain(task);
+      if (task.review === attempt.review) {
+        attempt.review.message = "Execution started.";
+        attempt.review.pending = null;
+      }
+      renderTasks();
+      await loadPlanReview(task, true);
+      return;
+    }
+    const currentReview = task.review;
+    if (currentReview === null) return;
+    currentReview.message = result.disposition === "confirmation-required"
+      ? "The destructive confirmation no longer matches this selection. Review it again."
+      : result.disposition === "conflict"
+        ? "Selection changed. Review the current selection before executing."
+        : "Execution admission is already in progress.";
+    currentReview.pending = null;
+    renderTasks();
+    await loadPlanReview(task, true);
+  } catch (error) {
+    if (tasks.get(task.taskId) !== task || task.executionAttempt !== attempt) return;
+    const currentReview = task.review;
+    if (error instanceof StartPlanUncertainError) {
+      attempt.state = "uncertain";
+      attempt.retry = error.retry;
+      attempt.submissionStarted = false;
+      if (currentReview !== null) {
+        currentReview.pending = null;
+        currentReview.message = "The execution response is uncertain. Retry the exact submitted request.";
+      }
+    } else {
+      task.executionAttempt = null;
+      if (currentReview !== null) {
+        currentReview.pending = null;
+        currentReview.message = currentReview.summary.preflight_ready
+          ? "Execution did not start. The selection is still editable."
+          : "This refused plan cannot execute. Create a fresh plan.";
+      }
+    }
+    renderTasks();
+  } finally {
+    if (
+      tasks.get(task.taskId) === task && task.executionAttempt === attempt
+      && attempt.state !== "uncertain"
+    ) {
+      task.executionAttempt = null;
+      if (task.review === attempt.review) attempt.review.pending = null;
+      renderTasks();
+    }
+  }
+}
+
+async function controlReviewedExecution(review, actionName) {
+  const task = currentReviewTask(review);
+  if (
+    task === null || review.pending !== null || !task.executionStarted
+    || task.sessionState !== "active" || task.sessionId === null
+  ) return;
+  const action = ++review.actionRevision;
+  const sessionId = task.sessionId;
+  const controlRevision = task.executionControlRevision;
+  const controlState = task.executionControlState;
+  review.pending = actionName;
+  review.message = `${actionName[0].toUpperCase()}${actionName.slice(1)} requested…`;
+  renderTasks();
+  try {
+    const result = await controlExecution(task.taskId, sessionId, actionName);
+    if (
+      retainedReviewTask(review) !== task || review.actionRevision !== action
+      || task.sessionId !== sessionId || task.sessionState !== "active"
+    ) return;
+    if (
+      task.executionControlRevision === controlRevision
+      || task.executionControlState === controlState
+    ) {
+      if (result.accepted && ACTIVE_EXECUTION_CONTROL_STATES.has(result.after)) {
+        task.executionControlRevision += 1;
+        task.executionControlState = result.after;
+        review.message = executionControlMessage(result.after);
+      } else {
+        review.message = result.detail || `The ${actionName} request was not accepted.`;
+      }
+    }
+  } catch (_error) {
+    if (
+      retainedReviewTask(review) === task && review.actionRevision === action
+      && task.sessionId === sessionId && task.sessionState === "active"
+      && (
+        task.executionControlRevision === controlRevision
+        || task.executionControlState === controlState
+      )
+    ) {
+      review.message = `The ${actionName} response was uncertain. Follow the live task status.`;
+    }
+  } finally {
+    if (
+      retainedReviewTask(review) === task && review.actionRevision === action
+      && task.sessionId === sessionId
+    ) {
+      review.pending = null;
+      renderTasks();
+    }
+  }
+}
+
+async function planAgainFromReview(review) {
+  const task = currentReviewTask(review);
+  if (task === null || review.pending !== null) return;
+  if (!canStartPlanAgain(task)) {
+    review.message = "Wait for this task's current action to finish, then try Plan again.";
+    renderTasks();
+    return;
+  }
+  const action = ++review.actionRevision;
+  review.pending = "plan-again";
+  review.message = "Creating a fresh plan…";
+  renderTasks();
+  const dispatched = await startPlanAgain(task);
+  if (retainedReviewTask(review) === task && review.actionRevision === action) {
+    review.pending = null;
+    review.message = dispatched
+      ? task.form?.actionMessage ?? "Fresh plan request finished."
+      : "Wait for this task's current action to finish, then try Plan again.";
+    renderTasks();
+  }
 }
 
 function editLocation(purpose, text) {
@@ -1196,27 +1751,36 @@ function choosePlanAgainMount(purpose, mount) {
   renderTasks();
 }
 
-async function startPlanAgain() {
-  const task = currentTask();
+function canStartPlanAgain(task) {
   const form = task?.form;
   if (
-    task === null || task.closePending || form?.canPlanAgain !== true ||
+    task === null || currentTask() !== task || task.closePending ||
+    form?.canPlanAgain !== true ||
     originHasPendingBatch(task.taskId) || batchTaskBlockReason(task.taskId) !== null ||
     (pageBatch !== null && pageBatch.running !== null)
-  ) return;
+  ) return false;
+  return form.attempt === null || (
+    form.attempt.kind === "plan-again" && !form.attempt.running &&
+    typeof form.attempt.retry === "function"
+  );
+}
+
+async function startPlanAgain(task = currentTask()) {
+  const form = task?.form;
+  if (!canStartPlanAgain(task)) return false;
   if (form.attempt !== null) {
-    await retryFormAttempt(task, form, "plan-again");
-    return;
+    return retryFormAttempt(task, form, "plan-again");
   }
   const revision = form.revision;
   const sourceMount = form.planAgainMounts.source;
   const targetMount = form.planAgainMounts.target;
   const attempt = beginFormAttempt(task, form, "plan-again");
-  if (attempt === null || !freshFormAttempt(task, form, attempt, revision)) return;
+  if (attempt === null || !freshFormAttempt(task, form, attempt, revision)) return false;
   await dispatchFormAttempt(
     task, form, attempt,
     () => planAgain(task.taskId, sourceMount, targetMount),
   );
+  return true;
 }
 
 class StartupSupersededError extends Error {}

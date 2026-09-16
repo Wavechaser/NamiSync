@@ -1211,13 +1211,18 @@ def test_task_lifecycle_port_surface_is_exact() -> None:
         "create_task_shell",
         "close_task_shell",
         "cancel_task_session",
+        "pause_task_session",
+        "resume_task_session",
         "start_task_plan",
         "read_setup_options",
         "prepare_setup_options",
         "start_task_setup_plan",
         "start_task_setup_inventory",
         "start_task_plan_again",
+        "start_task_execution",
+        "recover_task_execution",
         "read_plan_setup",
+        "get_plan_projection",
         "reobserve_task",
         "release_task_session",
         "close_task",
@@ -1678,6 +1683,539 @@ def test_lifecycle_task_replay_crosses_release_but_joins_task_close(
     replay_thread.join(2)
     assert not replay_thread.is_alive()
     assert replays == [None]
+
+
+def _release_lifecycle_task(
+    lifecycle: TaskLifecycle,
+    task_id: str,
+    session_id: str,
+    marker: bytes = b"r" * 32,
+) -> None:
+    claim = lifecycle.begin_settlement(
+        session_id,
+        task_id=task_id,
+        close_task=False,
+    )
+    work = lifecycle.confirm_settlement(
+        claim,
+        terminal_digest=marker,
+        dispatcher_truth_observed=True,
+    )
+    lifecycle.complete_settlement(work)
+
+
+def test_m1_7_task_followup_preserves_plan_and_both_exact_start_replays() -> None:
+    lifecycle = TaskLifecycle()
+    plan_command = f"{51_401:032x}"
+    plan_session = f"{51_402:032x}"
+    task, _token, plan_receipt = _publish_lifecycle_task(
+        lifecycle,
+        plan_command,
+        plan_session,
+    )
+    _release_lifecycle_task(lifecycle, task.task_id, plan_session)
+
+    execution_command = f"{51_403:032x}"
+    execution_signature = (plan_receipt.request_id, 0, False)
+    claim = lifecycle.begin_task_followup(
+        task.task_id,
+        plan_receipt.request_id,
+        execution_command,
+        "task-execution",
+        execution_signature,
+    )
+    assert claim.replay is None
+    execution_session = f"{51_404:032x}"
+    execution_request = f"{51_405:032x}"
+    admission = lifecycle.begin_admission(
+        "task-execution",
+        execution_command,
+        execution_signature,
+        task_id=task.task_id,
+    )
+    lifecycle.attach_session(admission, execution_session)
+    _association, execution_receipt = lifecycle.publish_start(
+        admission,
+        execution_session,
+        execution_request,
+    )
+
+    assert lifecycle.replay_start(
+        plan_command,
+        "task-plan",
+        ("source", "target", None),
+    ) == plan_receipt
+    assert lifecycle.begin_task_followup(
+        task.task_id,
+        plan_receipt.request_id,
+        execution_command,
+        "task-execution",
+        execution_signature,
+    ).replay == execution_receipt
+    assert lifecycle._tasks[task.task_id].session_id == execution_session
+    assert lifecycle._sessions[execution_session].plan_token == lifecycle.require_plan(
+        plan_receipt.request_id
+    )
+    assert len(lifecycle._sessions) == 2
+    with pytest.raises(LifecycleAssociationError, match="superseded"):
+        lifecycle.begin_settlement(
+            plan_session,
+            task_id=task.task_id,
+            close_task=True,
+        )
+    with pytest.raises(LifecycleAssociationError, match="follow-up"):
+        lifecycle.begin_task_followup(
+            task.task_id,
+            plan_receipt.request_id,
+            f"{51_406:032x}",
+            "task-execution",
+            (plan_receipt.request_id, 1, False),
+        )
+
+
+def test_m1_7_task_followup_rollback_restores_released_plan_for_retry() -> None:
+    lifecycle = TaskLifecycle()
+    task, _token, plan_receipt = _publish_lifecycle_task(
+        lifecycle,
+        f"{51_411:032x}",
+        f"{51_412:032x}",
+    )
+    plan_session = plan_receipt.session_id
+    _release_lifecycle_task(lifecycle, task.task_id, plan_session)
+    command = f"{51_413:032x}"
+    signature = (plan_receipt.request_id, 0, False)
+    lifecycle.begin_task_followup(
+        task.task_id,
+        plan_receipt.request_id,
+        command,
+        "task-execution",
+        signature,
+    )
+    admission = lifecycle.begin_admission(
+        "task-execution",
+        command,
+        signature,
+        task_id=task.task_id,
+    )
+    lifecycle.attach_session(admission, f"{51_414:032x}")
+    rollback = lifecycle.begin_admission_rollback(admission)
+    assert rollback is not None
+    lifecycle.complete_admission_rollback(rollback)
+    lifecycle.abort_task_start(task.task_id)
+
+    retained = lifecycle._tasks[task.task_id]
+    assert retained.session_id == plan_session
+    assert retained.start_kind is None
+    retry = lifecycle.begin_task_followup(
+        task.task_id,
+        plan_receipt.request_id,
+        f"{51_415:032x}",
+        "task-execution",
+        (plan_receipt.request_id, 0, True),
+    )
+    assert retry.replay is None
+
+
+def test_m1_7_task_close_waits_for_reserved_followup_admission(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    lifecycle = TaskLifecycle()
+    task, _token, plan_receipt = _publish_lifecycle_task(
+        lifecycle,
+        f"{51_416:032x}",
+        f"{51_417:032x}",
+    )
+    plan_session = plan_receipt.session_id
+    _release_lifecycle_task(lifecycle, task.task_id, plan_session)
+    command = f"{51_418:032x}"
+    signature = (plan_receipt.request_id, 0, False)
+    lifecycle.begin_task_followup(
+        task.task_id,
+        plan_receipt.request_id,
+        command,
+        "task-execution",
+        signature,
+    )
+
+    close_waiting = Event()
+    condition_type = type(lifecycle._condition)
+    original_wait = condition_type.wait
+
+    def observe_wait(condition, timeout=None):
+        if (
+            condition is lifecycle._condition
+            and current_thread().name == "reserved-followup-close"
+        ):
+            close_waiting.set()
+        return original_wait(condition, timeout)
+
+    monkeypatch.setattr(condition_type, "wait", observe_wait)
+    close_errors: list[BaseException] = []
+
+    def close_original_plan() -> None:
+        try:
+            lifecycle.begin_settlement(
+                plan_session,
+                task_id=task.task_id,
+                close_task=True,
+            )
+        except BaseException as error:
+            close_errors.append(error)
+
+    close_thread = Thread(target=close_original_plan, name="reserved-followup-close")
+    close_thread.start()
+    assert close_waiting.wait(1)
+
+    admission = lifecycle.begin_admission(
+        "task-execution",
+        command,
+        signature,
+        task_id=task.task_id,
+    )
+    execution_session = f"{51_419:032x}"
+    lifecycle.attach_session(admission, execution_session)
+    lifecycle.publish_start(
+        admission,
+        execution_session,
+        f"{51_420:032x}",
+    )
+    close_thread.join(2)
+
+    assert not close_thread.is_alive()
+    assert len(close_errors) == 1
+    assert isinstance(close_errors[0], LifecycleAssociationError)
+    assert "superseded" in str(close_errors[0])
+
+
+def test_m1_7_task_close_continues_after_reserved_followup_rolls_back(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    lifecycle = TaskLifecycle()
+    task, _token, plan_receipt = _publish_lifecycle_task(
+        lifecycle,
+        f"{51_427:032x}",
+        f"{51_428:032x}",
+    )
+    plan_session = plan_receipt.session_id
+    _release_lifecycle_task(lifecycle, task.task_id, plan_session)
+    command = f"{51_429:032x}"
+    signature = (plan_receipt.request_id, 0, False)
+    lifecycle.begin_task_followup(
+        task.task_id,
+        plan_receipt.request_id,
+        command,
+        "task-execution",
+        signature,
+    )
+    admission = lifecycle.begin_admission(
+        "task-execution",
+        command,
+        signature,
+        task_id=task.task_id,
+    )
+    close_waiting = Event()
+    condition_type = type(lifecycle._condition)
+    original_wait = condition_type.wait
+
+    def observe_wait(condition, timeout=None):
+        if (
+            condition is lifecycle._condition
+            and current_thread().name == "rollback-followup-close"
+        ):
+            close_waiting.set()
+        return original_wait(condition, timeout)
+
+    monkeypatch.setattr(condition_type, "wait", observe_wait)
+    close_claims = []
+    close_thread = Thread(
+        target=lambda: close_claims.append(
+            lifecycle.begin_settlement(
+                plan_session,
+                task_id=task.task_id,
+                close_task=True,
+            )
+        ),
+        name="rollback-followup-close",
+    )
+    close_thread.start()
+    assert close_waiting.wait(1)
+
+    lifecycle.attach_session(admission, f"{51_430:032x}")
+    rollback = lifecycle.begin_admission_rollback(admission)
+    assert rollback is not None
+    lifecycle.complete_admission_rollback(rollback)
+    lifecycle.abort_task_start(task.task_id)
+    close_thread.join(2)
+
+    assert not close_thread.is_alive()
+    assert len(close_claims) == 1
+    lifecycle.abandon_settlement(close_claims[0])
+    assert lifecycle.require_plan(plan_receipt.request_id).request_id == (
+        plan_receipt.request_id
+    )
+
+
+def test_m1_7_task_close_rechecks_release_claim_after_followup_wait(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    lifecycle = TaskLifecycle()
+    task, _token, plan_receipt = _publish_lifecycle_task(
+        lifecycle,
+        f"{51_431:032x}",
+        f"{51_432:032x}",
+    )
+    plan_session = plan_receipt.session_id
+    _release_lifecycle_task(lifecycle, task.task_id, plan_session)
+    lifecycle.begin_task_followup(
+        task.task_id,
+        plan_receipt.request_id,
+        f"{51_433:032x}",
+        "task-execution",
+        (plan_receipt.request_id, 0, False),
+    )
+    first_wait = Event()
+    second_wait = Event()
+    waits = 0
+    condition_type = type(lifecycle._condition)
+    original_wait = condition_type.wait
+
+    def observe_wait(condition, timeout=None):
+        nonlocal waits
+        if (
+            condition is lifecycle._condition
+            and current_thread().name == "release-claim-close"
+        ):
+            waits += 1
+            (first_wait if waits == 1 else second_wait).set()
+        return original_wait(condition, timeout)
+
+    monkeypatch.setattr(condition_type, "wait", observe_wait)
+    close_claims = []
+    close_thread = Thread(
+        target=lambda: close_claims.append(
+            lifecycle.begin_settlement(
+                plan_session,
+                task_id=task.task_id,
+                close_task=True,
+            )
+        ),
+        name="release-claim-close",
+    )
+    close_thread.start()
+    assert first_wait.wait(1)
+    release = lifecycle.begin_settlement(
+        plan_session,
+        task_id=task.task_id,
+        close_task=False,
+    )
+    lifecycle.abort_task_start(task.task_id)
+    assert second_wait.wait(1)
+
+    assert lifecycle._sessions[plan_session].settlement_claim == release
+    assert close_claims == []
+    release_work = lifecycle.confirm_settlement(
+        release,
+        terminal_digest=b"r" * 32,
+    )
+    assert release_work.replay
+    lifecycle.complete_settlement(release_work)
+    close_thread.join(2)
+
+    assert not close_thread.is_alive()
+    assert len(close_claims) == 1
+    assert lifecycle._sessions[plan_session].settlement_claim == close_claims[0]
+    lifecycle.abandon_settlement(close_claims[0])
+
+
+def test_m1_7_two_task_close_waiters_keep_exact_claim_order(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    lifecycle = TaskLifecycle()
+    task, _token, plan_receipt = _publish_lifecycle_task(
+        lifecycle,
+        f"{51_434:032x}",
+        f"{51_435:032x}",
+    )
+    marker = b"r" * 32
+    _release_lifecycle_task(
+        lifecycle,
+        task.task_id,
+        plan_receipt.session_id,
+        marker,
+    )
+    first = lifecycle.begin_settlement(
+        plan_receipt.session_id,
+        task_id=task.task_id,
+        close_task=True,
+    )
+    second_waiting = Event()
+    condition_type = type(lifecycle._condition)
+    original_wait = condition_type.wait
+
+    def observe_wait(condition, timeout=None):
+        if (
+            condition is lifecycle._condition
+            and current_thread().name == "second-task-close"
+        ):
+            second_waiting.set()
+        return original_wait(condition, timeout)
+
+    monkeypatch.setattr(condition_type, "wait", observe_wait)
+    second_claims = []
+    second_thread = Thread(
+        target=lambda: second_claims.append(
+            lifecycle.begin_settlement(
+                plan_receipt.session_id,
+                task_id=task.task_id,
+                close_task=True,
+            )
+        ),
+        name="second-task-close",
+    )
+    second_thread.start()
+    assert second_waiting.wait(1)
+    assert lifecycle._sessions[plan_receipt.session_id].settlement_claim == first
+
+    lifecycle.confirm_settlement(first, terminal_digest=marker)
+    lifecycle.abandon_settlement(first)
+    second_thread.join(2)
+
+    assert not second_thread.is_alive()
+    assert len(second_claims) == 1
+    assert second_claims[0].claim_id != first.claim_id
+    assert lifecycle._sessions[plan_receipt.session_id].settlement_claim == (
+        second_claims[0]
+    )
+    lifecycle.abandon_settlement(second_claims[0])
+
+
+def test_m1_7_task_close_fences_later_followup_without_losing_plan() -> None:
+    lifecycle = TaskLifecycle()
+    task, _token, plan_receipt = _publish_lifecycle_task(
+        lifecycle,
+        f"{51_420:032x}",
+        f"{51_421:032x}",
+    )
+    _release_lifecycle_task(lifecycle, task.task_id, plan_receipt.session_id)
+    close = lifecycle.begin_settlement(
+        plan_receipt.session_id,
+        task_id=task.task_id,
+        close_task=True,
+    )
+
+    with pytest.raises(LifecycleAssociationError, match="follow-up"):
+        lifecycle.begin_task_followup(
+            task.task_id,
+            plan_receipt.request_id,
+            f"{51_422:032x}",
+            "task-execution",
+            (plan_receipt.request_id, 0, False),
+        )
+
+    with pytest.raises(RuntimeError, match="terminal truth"):
+        lifecycle.confirm_settlement(close, terminal_digest=b"x" * 32)
+    lifecycle.abandon_settlement(close)
+    assert lifecycle.require_plan(plan_receipt.request_id).request_id == (
+        plan_receipt.request_id
+    )
+    assert lifecycle.begin_task_followup(
+        task.task_id,
+        plan_receipt.request_id,
+        f"{51_423:032x}",
+        "task-execution",
+        (plan_receipt.request_id, 0, False),
+    ).replay is None
+
+
+def test_m1_7_confirmed_task_close_keeps_retirement_fence_on_retry() -> None:
+    lifecycle = TaskLifecycle()
+    task, _token, plan_receipt = _publish_lifecycle_task(
+        lifecycle,
+        f"{51_424:032x}",
+        f"{51_425:032x}",
+    )
+    marker = b"r" * 32
+    _release_lifecycle_task(
+        lifecycle,
+        task.task_id,
+        plan_receipt.session_id,
+        marker,
+    )
+    close = lifecycle.begin_settlement(
+        plan_receipt.session_id,
+        task_id=task.task_id,
+        close_task=True,
+    )
+    lifecycle.confirm_settlement(close, terminal_digest=marker)
+    lifecycle.abandon_settlement(close)
+
+    with pytest.raises(LifecycleAssociationError, match="follow-up"):
+        lifecycle.begin_task_followup(
+            task.task_id,
+            plan_receipt.request_id,
+            f"{51_426:032x}",
+            "task-execution",
+            (plan_receipt.request_id, 0, False),
+        )
+    retry = lifecycle.begin_settlement(
+        plan_receipt.session_id,
+        task_id=task.task_id,
+        close_task=True,
+    )
+    assert retry.claim_id != close.claim_id
+
+
+def test_m1_7_task_close_after_followup_retires_both_bounded_receipts() -> None:
+    lifecycle = TaskLifecycle()
+    plan_command = f"{51_421:032x}"
+    task, _token, plan_receipt = _publish_lifecycle_task(
+        lifecycle,
+        plan_command,
+        f"{51_422:032x}",
+    )
+    _release_lifecycle_task(
+        lifecycle,
+        task.task_id,
+        plan_receipt.session_id,
+    )
+    execution_command = f"{51_423:032x}"
+    signature = (plan_receipt.request_id, 0, False)
+    lifecycle.begin_task_followup(
+        task.task_id,
+        plan_receipt.request_id,
+        execution_command,
+        "task-execution",
+        signature,
+    )
+    admission = lifecycle.begin_admission(
+        "task-execution",
+        execution_command,
+        signature,
+        task_id=task.task_id,
+    )
+    execution_session = f"{51_424:032x}"
+    lifecycle.attach_session(admission, execution_session)
+    lifecycle.publish_start(
+        admission,
+        execution_session,
+        f"{51_425:032x}",
+    )
+    _release_lifecycle_task(lifecycle, task.task_id, execution_session, b"e" * 32)
+    close = lifecycle.begin_settlement(
+        execution_session,
+        task_id=task.task_id,
+        close_task=True,
+    )
+    work = lifecycle.confirm_settlement(close, terminal_digest=b"e" * 32)
+    assert work.plan_token is not None
+    retirement = lifecycle.begin_plan_retirement(work.plan_token)
+    assert retirement is not None
+    lifecycle.complete_plan_retirement(retirement)
+    lifecycle.complete_settlement(work)
+
+    assert lifecycle._tasks == {}
+    assert lifecycle._sessions == {}
+    assert lifecycle._start_receipts == {}
 
 
 def test_lifecycle_admission_claim_owns_exact_liabilities() -> None:

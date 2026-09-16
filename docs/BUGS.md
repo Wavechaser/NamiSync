@@ -745,6 +745,45 @@ defect, and move implementation-level test choreography out of the log.
 
 ## INTERFACES
 
+### Plan review confirmation
+
+- MODERATE - FIXED (2026-09-14). Missing recovery dispatch. A failed Plan load
+  advertised selecting the task to retry, but selection only reloaded Setup,
+  leaving the Plan unavailable. Cause: the navigation consumer omitted the Plan
+  loader. Selection now invokes the existing guarded loader for eligible sync-plan
+  tasks; cached views remain unchanged and repeated clicks share one in-flight
+  load. Focused open/window failure probes verify exact-task recovery, stale-read
+  rejection and error clearance. The original transient load failure remains
+  unlocalized; public retry returned the exact current view and full 256-row window.
+
+- MODERATE - FIXED (2026-09-14). Unordered live-state projection. Repeat Pause
+  could remain available while pausing and Resume unavailable after reaching
+  paused, while a late receipt or review refresh
+  could overwrite a newer paused or terminal presentation. Cause: the browser
+  ignored StateChanged events and treated command replies and refreshed views
+  as current state. It now consumes only the attached session's live events,
+  fences receipts against advancing observations and derives refreshed messages from
+  retained execution truth. Forced event/receipt/refresh orders and stale-session
+  probes pass; the clean installed task flow verifies Pause, Resume and Cancel.
+
+- MODERATE - FIXED (2026-09-14). Hidden-state cascade override. During Plan
+  loading, an enabled Plan-again control could remain visible without a current
+  review binding and silently ignore a click. Cause: authored grid/flex display
+  rules overrode HTML hidden state. A Plan-scoped hidden rule now hides loading
+  action regions and inactive controls. The DOM probe preserves zero dispatch
+  for an unbound review; installed Setup reaches the complete Plan-again route.
+  The separate task-shell 49th-task failure was an invalid capacity fixture,
+  corrected without changing the 48-task limit or terminal task retention.
+
+- SEVERE - FIXED (2026-09-14). Unbound destructive acknowledgment. A retained
+  checkbox could acknowledge changed selection revisions without a fresh gesture.
+  Cause: the panel retained a Boolean independently of reviewed identity. Execute
+  now snapshots task/request/revision and opens a blocking modal for every selected
+  destructive scope; Confirm submits that snapshot for atomic validation and
+  admission, while Cancel submits nothing. Exact uncertain retries retain the
+  original payload. DOM revision/replacement and installed modal witnesses cover
+  the correction; the overall M1-7 delivery gate remains open in M1_PLAN.
+
 ### Desktop material composition
 
 - MINOR - DEFERRED (2026-09-11). Transparent-host color composition
@@ -762,6 +801,29 @@ defect, and move implementation-level test choreography out of the log.
   GUI-D2–D4 evidence is in `build/gui-tuning/halo-10bit/`.
 
 ### Application task lifecycle
+
+- MODERATE - FIXED (2026-09-14). Incomplete terminal-record discriminant.
+  An execution could finish Refused while its task still appeared active and could
+  not release. Cause: native and browser task-record validators retained older
+  kind/capability restrictions. They now accept exactly plan and inventory records
+  without pause support and execution records with pause support, preserving
+  session/result validation. Producer-consumer tests and the installed execution
+  trace verify terminal delivery, release and service retirement.
+
+- SEVERE - FIXED (2026-09-14). Task-retirement admission race. A released Plan
+  task used the same delivery-closing flag for terminal-session release and
+  explicit task Close. Execute could reserve a follow-up before Close, then its
+  delivery factory could clear Close's flag and admit execution after the user
+  had retired the task; concurrent Plan views and selection calls also lacked a
+  consistent retirement fence. Fixed with distinct adapter and application
+  retirement state plus atomic Close/follow-up ordering at both owners. Close-
+  first now refuses every Plan consumer without Dispatcher submission;
+  follow-up-first makes the original-session Close stale. Unconfirmed close and
+  failed follow-up restore retry truth, while confirmed cleanup failure retains
+  exact Close recovery. Plan again now reserves the source transition, while an
+  admitted exact replay resolves before a retired source lookup and repeats no
+  native work. Deterministic barriers cover both orderings, claim exclusion,
+  rollback, two Close waiters, and source retirement.
 
 - MODERATE - FIXED (2026-09-14). Mutable queued options. Add pair retained
   paths but no settings snapshot, so later form edits changed queued rows'

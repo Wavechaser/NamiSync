@@ -156,7 +156,14 @@ def test_sh_g_14_tokens_and_components_own_size_color_and_fixed_masks() -> None:
     assert "mask-image: var(--nami-icon-mask);" in components
     assert "-webkit-mask-image: var(--nami-icon-mask);" in components
     assert set(ICON_MASK_FILES.values()) == set(ICON_FILES)
-    assert components.count('url("./icons/') == len(ICON_MASK_FILES)
+    # The shared checkbox also uses the fixed small checkmark in both engines.
+    checkbox_masks = (
+        'mask: url("./icons/checkmark_16_regular.svg") center / contain no-repeat;',
+        '-webkit-mask: url("./icons/checkmark_16_regular.svg") center / contain no-repeat;',
+    )
+    for declaration in checkbox_masks:
+        assert f"  {declaration}" in components
+    assert components.count('url("./icons/') == len(ICON_MASK_FILES) + len(checkbox_masks)
     for key, filename in ICON_MASK_FILES.items():
         glyph, size = key.split(":")
         block = re.search(rf"\.nami-icon--{glyph} \{{([^}}]+)\}}", components)

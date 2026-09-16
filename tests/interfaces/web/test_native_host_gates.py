@@ -396,9 +396,14 @@ def test_br_g_30_real_installed_host_assumptions_are_measured(
     assert evidence["production_command_names"] == [
         "admit_location",
         "close_task",
+        "control_execution",
         "create_task",
+        "get_plan_anchor",
+        "get_plan_window",
         "list_tasks",
+        "mutate_plan_selection",
         "next_events",
+        "open_plan_view",
         "pick_folder",
         "plan_again",
         "prepare_setup",
@@ -409,8 +414,10 @@ def test_br_g_30_real_installed_host_assumptions_are_measured(
         "release_terminal_session",
         "replace_cosmetic_section",
         "shell_ready",
+        "start_execution",
         "start_inventory",
         "start_plan",
+        "update_plan_view",
     ]
     assert evidence["combined_command_names"] == sorted(
         [*evidence["production_command_names"], "native_probe"]
@@ -989,9 +996,14 @@ def _assert_packaged_popup_evidence(
     assert evidence["production_command_names"] == [
         "admit_location",
         "close_task",
+        "control_execution",
         "create_task",
+        "get_plan_anchor",
+        "get_plan_window",
         "list_tasks",
+        "mutate_plan_selection",
         "next_events",
+        "open_plan_view",
         "pick_folder",
         "plan_again",
         "prepare_setup",
@@ -1002,8 +1014,10 @@ def _assert_packaged_popup_evidence(
         "release_terminal_session",
         "replace_cosmetic_section",
         "shell_ready",
+        "start_execution",
         "start_inventory",
         "start_plan",
+        "update_plan_view",
     ]
     assert evidence["combined_command_names"] == sorted(
         [*evidence["production_command_names"], "packaged_probe"]

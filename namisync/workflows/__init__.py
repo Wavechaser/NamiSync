@@ -37,6 +37,15 @@ from namisync.workflows.models import (
     PlanRequest,
     PlanReview,
 )
+from namisync.workflows.plan_projection import (
+    PlanProjection,
+    PlanProjectionNode,
+    PlanSortColumn,
+    SortDirection,
+    apply_plan_projection_selection,
+    build_plan_projection,
+    sort_plan_projection,
+)
 from namisync.workflows.runtime import (
     BASELINE_KIND,
     EXECUTION_KIND,
@@ -107,6 +116,9 @@ __all__ = [
     "PLAN_KIND",
     "PlanRequest",
     "PlanReview",
+    "PlanProjection",
+    "PlanProjectionNode",
+    "PlanSortColumn",
     "PreservationPolicy",
     "REBASELINE_KIND",
     "RememberedLocation",
@@ -114,6 +126,7 @@ __all__ = [
     "RememberedPair",
     "SyncDependencies",
     "SyncOptions",
+    "SortDirection",
     "VERIFY_KIND",
     "VolumeResolution",
     "VolumeResolutionRequired",
@@ -121,9 +134,12 @@ __all__ = [
     "VolumeId",
     "resolve_reviewed_binding",
     "default_database_paths",
+    "apply_plan_projection_selection",
+    "build_plan_projection",
     "integrity_request",
     "run_execution",
     "run_plan",
+    "sort_plan_projection",
     "sync_options",
     "validate_sync_paths",
 ]

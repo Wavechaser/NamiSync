@@ -11,6 +11,13 @@ from threading import Lock
 from typing import Any
 
 from _headed_evidence import EvidencePaths, EvidencePublisher
+from _plan_again_trace import (
+    PlanAgainHostTrace,
+    trace_registry_plan_again,
+    traced_plan_again_commands,
+    validate_trace_snapshot,
+)
+from _startup_test_support import headed_command_extension
 
 
 _COMPLETE_TEXT = "Setup headed gate complete"
@@ -22,13 +29,24 @@ class _Recorder:
         self._lock = Lock()
         self._finished = False
         self._diagnostics: dict[str, str] = {}
+        self._plan_again_trace: dict[str, object] = {}
 
     def observe(self, name: str, value: object) -> None:
         with self._lock:
             self._diagnostics[name] = repr(value)[:2048]
 
     def ready(self, payload: dict[str, object]) -> None:
-        self._publisher.publish_ready(payload)
+        with self._lock:
+            self._publisher.publish_ready({**payload, **self._plan_again_trace})
+
+    def plan_again_trace(self, browser: object, host: object) -> None:
+        validate_trace_snapshot(browser, {"setup"})
+        validate_trace_snapshot(host, {"setup"}, allow_empty=True)
+        with self._lock:
+            self._plan_again_trace = {
+                "plan_again_browser_trace": browser,
+                "plan_again_host_trace": host,
+            }
 
     def failure(self, stage: str, error: BaseException) -> None:
         with self._lock:
@@ -39,6 +57,7 @@ class _Recorder:
                 "type": type(error).__name__,
                 "detail": str(error)[:1024],
                 "diagnostics": dict(self._diagnostics),
+                **self._plan_again_trace,
             })
 
     def finish(self, exit_code: int) -> None:
@@ -693,6 +712,20 @@ _FROZEN_SCRIPT = r"""
     }
     throw new Error(`timed out waiting for ${label}`);
   }
+  async function planAgainTraceControl(action, value = null) {
+    if (globalThis.__namiPlanAgainTrace === undefined) return;
+    const requestId = "f".repeat(32);
+    const native = await window.pywebview.api.dispatch(JSON.stringify({
+      schema_version: 1, request_id: requestId, command: "setup_plan_again_trace",
+      payload: {action, value},
+    }));
+    const response = JSON.parse(JSON.stringify(native.response));
+    if (native.response_token !== null) {
+      await window.pywebview.api.dispatch(`ack:${native.response_token}`);
+    }
+    if (response?.request_id !== requestId || response.ok !== true ||
+        response.result?.accepted !== true) throw new Error("Plan-again trace publication failed");
+  }
   const source = document.querySelector("#setup-source-path");
   const target = document.querySelector("#setup-target-path");
   const button = document.querySelector(".nami-setup__actions .nami-button--primary");
@@ -722,9 +755,12 @@ _FROZEN_SCRIPT = r"""
   });
   let planAgain;
   try {
+    await until(() => document.querySelector(".nami-plan-review"), "production Plan review");
     planAgain = await until(() => {
-      const candidate = document.querySelector(".nami-setup__actions .nami-button:last-child");
-      return candidate instanceof HTMLButtonElement && !candidate.hidden ? candidate : null;
+      const candidate = document.querySelector('.nami-plan-review [data-action="plan-again"]');
+      return candidate instanceof HTMLButtonElement && !candidate.hidden
+        && candidate.checkVisibility() && !candidate.disabled
+        ? candidate : null;
     }, "fresh Plan-again readiness");
   } catch (error) {
     const detail = {
@@ -737,8 +773,27 @@ _FROZEN_SCRIPT = r"""
     throw new Error(`${error.message}; dom=${JSON.stringify(detail)}`);
   }
   const before = document.querySelectorAll(".nami-task-rail__row").length;
-  planAgain.click();
-  await until(() => document.querySelectorAll(".nami-task-rail__row").length === before + 1, "Plan-again task identity");
+  await planAgainTraceControl("begin");
+  globalThis.__namiPlanAgainTrace?.begin("setup");
+  let routeError = null;
+  try {
+    planAgain.click();
+    await until(() => document.querySelectorAll(".nami-task-rail__row").length === before + 1, "Plan-again task identity");
+  } catch (error) {
+    routeError = error;
+  }
+  try {
+    const trace = globalThis.__namiPlanAgainTrace?.snapshot();
+    if (trace !== undefined) {
+      if (!globalThis.__namiPlanAgainTrace.end("setup")) {
+        throw new Error("Plan-again trace phase did not end");
+      }
+      await planAgainTraceControl("record", trace);
+    }
+  } catch (error) {
+    if (routeError === null) routeError = error;
+  }
+  if (routeError !== null) throw routeError;
   return {
     frozen: true,
     source_disabled: source.disabled,
@@ -918,9 +973,16 @@ _INDEPENDENT_SCRIPT = r"""
   await until(() => !document.querySelector(".nami-setup__batch").checkVisibility(), "cleared settled batch");
   const original = Array.from(document.querySelectorAll(".nami-task-card"))
     .find((button) => button.querySelector(".nami-task-card__title")?.textContent === "Task 1");
-  if (!(original instanceof HTMLButtonElement)) throw new Error("original frozen task is unavailable");
+  if (!(original instanceof HTMLButtonElement)) throw new Error("original completed task is unavailable");
   original.click();
-  await until(() => document.querySelector("#setup-source-path")?.disabled, "original frozen task navigation");
+  await until(() => {
+    const review = document.querySelector(".nami-plan-review");
+    const row = review?.querySelector(".nami-plan-review__rows [data-node-id]");
+    return original.ariaCurrent === "page"
+      && document.querySelector(".nami-work-panel")?.getAttribute("aria-label") === "Work area — Task 1"
+      && review instanceof HTMLElement && review.checkVisibility()
+      && row instanceof HTMLElement && row.checkVisibility();
+  }, "original completed Plan review navigation");
   return {
     recent_activated: true,
     recent_pair_activated: pairActivated,
@@ -939,7 +1001,7 @@ _INDEPENDENT_SCRIPT = r"""
     batch_footer_actions_retained: queuedFooterActionsRetained,
     batch_clear_hides_settled: true,
     queued_batch_removable: true,
-    navigation_retains_frozen: true,
+    navigation_retains_completed_plan: true,
   };
 })()
 """
@@ -983,25 +1045,24 @@ _AMBIGUITY_SCRIPT = r"""
   const chosenIndex = Number(mounts[1].dataset.mountIndex);
   mounts[1].click();
   await until(() => source.dataset.state === "resolved" && !start.disabled, "continued picker choice");
-  const frozenTask = Array.from(document.querySelectorAll(".nami-task-card"))
+  const completedTask = Array.from(document.querySelectorAll(".nami-task-card"))
     .find((button) => button.querySelector(".nami-task-card__title")?.textContent === "Task 1");
-  if (!(frozenTask instanceof HTMLButtonElement)) throw new Error("frozen task is unavailable before reload");
-  frozenTask.click();
+  if (!(completedTask instanceof HTMLButtonElement)) throw new Error("completed task is unavailable before reload");
+  completedTask.click();
   await until(() => {
-    const frozenSource = document.querySelector("#setup-source-path");
-    const mode = document.querySelector(".nami-setup__mode-group");
-    const planAgain = Array.from(document.querySelectorAll(".nami-setup__actions button"))
-      .find((button) => button.textContent === "Plan again");
-    return frozenSource instanceof HTMLInputElement && frozenSource.disabled &&
-      mode instanceof HTMLDivElement && mode.hidden &&
-      planAgain instanceof HTMLButtonElement && !planAgain.hidden;
-  }, "frozen task before screenshot and reload");
+    const review = document.querySelector(".nami-plan-review");
+    const row = review?.querySelector(".nami-plan-review__rows [data-node-id]");
+    return completedTask.ariaCurrent === "page"
+      && document.querySelector(".nami-work-panel")?.getAttribute("aria-label") === "Work area — Task 1"
+      && review instanceof HTMLElement && review.checkVisibility()
+      && row instanceof HTMLElement && row.checkVisibility();
+  }, "completed Plan review before screenshot and reload");
   return {
     picker_ambiguous: true,
     picker_mount_index: chosenIndex,
     picker_continued: source.dataset.state === "resolved",
     start_refused_before_choice: refusedBeforeChoice,
-    frozen_before_capture: true,
+    plan_review_before_capture: true,
     task_count_before_reload: document.querySelectorAll(".nami-task-rail__row").length,
   };
 })()
@@ -1022,42 +1083,25 @@ _RELOADED_SCRIPT = r"""
   await until(() => document.querySelector("#host-status")?.textContent === "Ready", "reloaded host readiness");
   await until(() => document.querySelectorAll(".nami-task-rail__row").length === __TASK_COUNT__, "reloaded task identities");
   const cards = Array.from(document.querySelectorAll(".nami-task-rail__items .nami-task-card"));
-  let reconstructed = false;
-  const observations = [];
-  for (const card of cards) {
-    const title = card.querySelector(".nami-task-card__title")?.textContent;
-    if (!title) throw new Error("reloaded task lacks its title");
-    card.click();
-    let source = null;
-    for (let attempt = 0; attempt < 80 && source === null; attempt += 1) {
-      const value = document.querySelector("#setup-source-path");
-      if (document.querySelector(".nami-work-panel")?.getAttribute("aria-label") === `Work area — ${title}` &&
-          value instanceof HTMLInputElement) source = value;
-      else await sleep(25);
-    }
-    const target = document.querySelector("#setup-target-path");
-    const planAgain = Array.from(document.querySelectorAll(".nami-setup__actions button"))
-      .find((button) => button.textContent === "Plan again");
-    observations.push({
-      title,
-      setup: source instanceof HTMLInputElement,
-      source_disabled: source instanceof HTMLInputElement ? source.disabled : null,
-      target_disabled: target instanceof HTMLInputElement ? target.disabled : null,
-      plan_again_visible: planAgain instanceof HTMLButtonElement ? !planAgain.hidden : null,
-    });
-    if (source instanceof HTMLInputElement && source.disabled && target instanceof HTMLInputElement && target.disabled &&
-        planAgain instanceof HTMLButtonElement && !planAgain.hidden) {
-      reconstructed = true;
-      break;
-    }
-  }
+  const original = cards.find((card) =>
+    card.querySelector(".nami-task-card__title")?.textContent === "Task 1");
+  if (!(original instanceof HTMLButtonElement)) throw new Error("reloaded completed task is unavailable");
+  original.click();
+  await until(() => {
+    const review = document.querySelector(".nami-plan-review");
+    const row = review?.querySelector(".nami-plan-review__rows [data-node-id]");
+    return original.ariaCurrent === "page"
+      && document.querySelector(".nami-work-panel")?.getAttribute("aria-label") === "Work area — Task 1"
+      && review instanceof HTMLElement && review.checkVisibility()
+      && row instanceof HTMLElement && row.checkVisibility();
+  }, "reloaded completed Plan review");
   const marker = document.createElement("p");
   marker.textContent = "Setup headed gate complete";
   document.body.append(marker);
   return {
     reload_task_count: cards.length,
-    reload_frozen_reconstructed: reconstructed,
-    reload_observations: observations,
+    reload_plan_review_reconstructed: true,
+    reload_selected_task: "Task 1",
   };
 })()
 """
@@ -1320,42 +1364,28 @@ def _begin(
                                 def ambiguity_done() -> None:
                                     try:
                                         ambiguity = _runtime_value(ambiguity_task)
-                                        ax_task = core.CallDevToolsProtocolMethodAsync(
-                                            "Accessibility.getFullAXTree", "{}"
+                                        report = {
+                                            **editable,
+                                            **frozen,
+                                            **independent,
+                                            **ambiguity,
+                                        }
+
+                                        def reload_page() -> None:
+                                            state["report"] = report
+                                            state["stage"] = "reload"
+                                            reload_settings = json.dumps({
+                                                "expression": "location.reload();",
+                                                "awaitPromise": False,
+                                                "returnByValue": True,
+                                            })
+                                            core.CallDevToolsProtocolMethodAsync("Runtime.evaluate", reload_settings)
+
+                                        _capture(
+                                            core, screenshot_dir / "plan-review.png", retained,
+                                            reload_page,
+                                            lambda error: recorder.failure("plan-review-screenshot", error),
                                         )
-
-                                        def accessibility_done() -> None:
-                                            try:
-                                                accessibility = _table_accessibility_evidence(ax_task)
-                                                report = {
-                                                    **editable,
-                                                    **frozen,
-                                                    **independent,
-                                                    **ambiguity,
-                                                    "table_accessibility": accessibility,
-                                                }
-
-                                                def reload_page() -> None:
-                                                    state["report"] = report
-                                                    state["stage"] = "reload"
-                                                    reload_settings = json.dumps({
-                                                        "expression": "location.reload();",
-                                                        "awaitPromise": False,
-                                                        "returnByValue": True,
-                                                    })
-                                                    core.CallDevToolsProtocolMethodAsync("Runtime.evaluate", reload_settings)
-
-                                                _capture(
-                                                    core, screenshot_dir / "frozen.png", retained,
-                                                    reload_page,
-                                                    lambda error: recorder.failure("frozen-screenshot", error),
-                                                )
-                                            except BaseException as error:
-                                                recorder.failure("accessibility", error)
-
-                                        accessibility_action = Action(accessibility_done)
-                                        retained.append(accessibility_action)
-                                        ax_task.GetAwaiter().OnCompleted(accessibility_action)
                                     except BaseException as error:
                                         recorder.failure("ambiguity", error)
 
@@ -1386,13 +1416,26 @@ def _begin(
                     lambda error: recorder.failure("editable-expanded-screenshot", error),
                 )
 
-            _pointer_checks(
-                core,
-                source,
-                retained,
-                pointer_done,
-                lambda error: recorder.failure("editable-pointer", error),
+            ax_task = core.CallDevToolsProtocolMethodAsync(
+                "Accessibility.getFullAXTree", "{}"
             )
+
+            def accessibility_done() -> None:
+                try:
+                    editable["table_accessibility"] = _table_accessibility_evidence(ax_task)
+                    _pointer_checks(
+                        core,
+                        source,
+                        retained,
+                        pointer_done,
+                        lambda error: recorder.failure("editable-pointer", error),
+                    )
+                except BaseException as error:
+                    recorder.failure("accessibility", error)
+
+            accessibility_action = Action(accessibility_done)
+            retained.append(accessibility_action)
+            ax_task.GetAwaiter().OnCompleted(accessibility_action)
         except BaseException as error:
             recorder.failure("editable", error)
 
@@ -1417,7 +1460,7 @@ def _begin_reloaded(window: object, recorder: _Recorder, retained: list[object],
         try:
             reloaded = _runtime_value(task)
             state["stage"] = "complete"
-            recorder.ready({**report, **reloaded, "screenshots": ["editable", "editable-expanded", "frozen"]})
+            recorder.ready({**report, **reloaded, "screenshots": ["editable", "editable-expanded", "plan-review"]})
         except BaseException as error:
             recorder.failure("reload", error)
 
@@ -1489,6 +1532,7 @@ def _arguments() -> argparse.Namespace:
     parser.add_argument("--screenshot-dir", required=True, type=Path)
     parser.add_argument("--source", required=True, type=Path)
     parser.add_argument("--target", required=True, type=Path)
+    parser.add_argument("--plan-again-trace", action="store_true")
     return parser.parse_args()
 
 
@@ -1526,6 +1570,15 @@ class _AmbiguousRegistry:
             self._recorder.observe("start_setup_plan_error", error)
             raise
         self._recorder.observe("start_setup_plan", result)
+        return result
+
+    def start_plan_again(self, *args: object, **kwargs: object) -> object:
+        try:
+            result = self._inner.start_plan_again(*args, **kwargs)
+        except BaseException as error:
+            self._recorder.observe("start_plan_again_error", type(error).__name__)
+            raise
+        self._recorder.observe("start_plan_again_result", "started")
         return result
 
     def admit_location_candidate(self, candidate: object) -> object:
@@ -1677,6 +1730,8 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
     retained: list[object] = []
     original = host._configure_window_appearance
     original_commands = host._production_commands
+    plan_again_trace = PlanAgainHostTrace() if arguments.plan_again_trace else None
+    registry_traced = False
     ambiguous = arguments.source.parent / "ambiguous-picker"
     picked_source = arguments.source.parent / "picked-source"
     offline_source = arguments.source.parent / ("offline-source-" + "s" * 72)
@@ -1698,6 +1753,10 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
         return [str(selected.resolve())]
 
     def commands(**kwargs: object) -> object:
+        nonlocal registry_traced
+        if plan_again_trace is not None and not registry_traced:
+            trace_registry_plan_again(kwargs["registry"], plan_again_trace)
+            registry_traced = True
         registry = _AmbiguousRegistry(
             kwargs["registry"],
             ambiguous.resolve(),
@@ -1707,10 +1766,34 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
         from namisync.interfaces.web.commands import _TaskResponseCodecBinder
         if not isinstance(registry, _TaskResponseCodecBinder):
             raise RuntimeError("headed registry wrapper does not preserve response-codec binding")
-        return original_commands(**{**kwargs, "picker": picker, "registry": registry})
+        result = original_commands(**{**kwargs, "picker": picker, "registry": registry})
+        return result if plan_again_trace is None else traced_plan_again_commands(
+            result, plan_again_trace,
+        )
+
+    def trace_extension(_document: object, _registry: object) -> dict[str, object]:
+        if plan_again_trace is None:
+            return {}
+
+        def record_trace(payload: object) -> object:
+            if type(payload) is not dict or set(payload) != {"action", "value"}:
+                raise ValueError("setup Plan-again trace payload is invalid")
+            if payload["action"] == "begin" and payload["value"] is None:
+                plan_again_trace.begin("setup")
+                return {"accepted": True}
+            if payload["action"] != "record":
+                raise ValueError("setup Plan-again trace action is invalid")
+            host_trace = plan_again_trace.snapshot()
+            plan_again_trace.end("setup")
+            recorder.plan_again_trace(payload["value"], host_trace)
+            return {"accepted": True}
+
+        return {"setup_plan_again_trace": _trace_spec(record_trace)}
 
     with ExitStack() as stack:
         stack.enter_context(patch.object(host, "_production_commands", commands))
+        if plan_again_trace is not None:
+            stack.enter_context(headed_command_extension(host, trace_extension))
         stack.enter_context(patch.object(
             host,
             "_configure_window_appearance",
@@ -1723,6 +1806,22 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
         )
     recorder.finish(exit_code)
     return exit_code
+
+
+def _trace_spec(handler: object) -> object:
+    from namisync.interfaces.web.commands import (
+        CommandAccess, CommandRetry, CommandSpec, CommandTimeout, FieldRequirement,
+    )
+
+    return CommandSpec(
+        validate_payload=lambda payload: payload,
+        handler=handler,
+        access=CommandAccess.READ_ONLY,
+        command_id=FieldRequirement.FORBIDDEN,
+        revision=FieldRequirement.FORBIDDEN,
+        timeout=CommandTimeout.LOCAL_5_SECONDS,
+        retry=CommandRetry.NONE,
+    )
 
 
 def main() -> int:

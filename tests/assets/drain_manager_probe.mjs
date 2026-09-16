@@ -1629,16 +1629,21 @@ assert.equal(terminalCallbackAttempts[1].record.state, "completed");
 assert.equal(releaseRequests.length, terminalCallbackReleaseStart + 1);
 assert.equal(closeRequests.length, terminalCallbackCloseStart);
 stopTerminalCallback();
-assert.throws(
-  () => bridge.startTaskDrain(task("3"), session("c"), assert.fail, assert.fail),
-  TypeError,
+const stopTerminalReplacement = bridge.startTaskDrain(
+  task("3"),
+  session("c"),
+  assert.fail,
+  assert.fail,
 );
+await nextRequest(requests.length);
+stopTerminalReplacement();
 
 // A terminal record is presented before session release begins. A lost release
 // response retries the same task/session authority; confirmed release retains
 // the browser entry, and only explicit close removes it.
 const acceptedRelease = [];
 const releaseRefusals = [];
+const confirmedReleases = [];
 const releaseCountBefore = releaseRequests.length;
 const closeCountBeforeRelease = closeRequests.length;
 const releaseDelayIndex = scheduledDelays.length;
@@ -1654,6 +1659,8 @@ const stopRelease = bridge.startTaskDrain(
   session("a"),
   (update) => acceptedRelease.push(update),
   (error) => releaseRefusals.push(error),
+  null,
+  (taskId, sessionId) => confirmedReleases.push({ taskId, sessionId }),
 );
 const release0 = await nextRequest(releaseDrainIndex);
 success(release0, [terminalRecord(session("a"))]);
@@ -1669,6 +1676,9 @@ assert.deepEqual(
 );
 assert.deepEqual(scheduledDelays.slice(releaseDelayIndex), [100]);
 assert.equal(releaseRefusals.length, 0);
+assert.deepEqual(confirmedReleases, [
+  { taskId: task("1"), sessionId: session("a") },
+]);
 assert.equal(closeRequests.length, closeCountBeforeRelease);
 const closeDelayIndex = scheduledDelays.length;
 closeFailuresRemaining = 1;
@@ -1687,6 +1697,7 @@ assert.deepEqual(
     { task_id: task("1"), session_id: session("a") },
   ],
 );
+assert.equal(confirmedReleases.length, 1, "close cannot repeat release publication");
 const stopReleaseReplacement = bridge.startTaskDrain(
   task("1"),
   session("a"),
@@ -1695,6 +1706,17 @@ const stopReleaseReplacement = bridge.startTaskDrain(
 );
 await nextRequest(requests.length);
 stopReleaseReplacement();
+assert.throws(
+  () => bridge.startTaskDrain(
+    task("3"),
+    session("d"),
+    () => {},
+    () => {},
+    null,
+    {},
+  ),
+  TypeError,
+);
 
 // Native admission saturation is uncertain for both drain consumption and
 // terminal cleanup. Both paths back off and preserve their exact authority.

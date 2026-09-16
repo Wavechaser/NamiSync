@@ -4088,6 +4088,12 @@ def test_ls_3_terminal_reconciliation_matches_dispatcher_truth() -> None:
                 session_id,
                 task_id=task_id,
             ) == association
+        with pytest.raises(
+            RuntimeError,
+            match="delivered terminal truth disagrees",
+        ):
+            service.close_task(task_id, session_id, mismatch)
+        assert not lifecycle._tasks[task_id].retiring
 
     released = service.release_task_session(
         task_id,
@@ -4348,6 +4354,7 @@ def test_ls_4b_whole_operation_cleanup_replay_converges(
 
     with pytest.raises(RuntimeError, match=f"{fault_step} fault"):
         service.close_task(task_id, session_id, delivery)
+    assert lifecycle._tasks[task_id].retiring
     assert service.close_task(task_id, session_id, delivery) == TaskCloseView(
         task_id,
         session_id,
@@ -5062,7 +5069,7 @@ def test_create_task_shell_refuses_49th_before_delivery() -> None:
     assert len(delivered) == TASK_EFFECT_CAPACITY
 
 
-def test_cancel_task_session_requires_exact_live_task_association() -> None:
+def test_task_controls_require_exact_live_task_association() -> None:
     lifecycle = TaskLifecycle()
     task_id, _association = _publish_task_plan(
         lifecycle,
@@ -5073,19 +5080,31 @@ def test_cancel_task_session_requires_exact_live_task_association() -> None:
     )
     direct_session_id = f"{53_304:032x}"
     _publish_session(lifecycle, direct_session_id, kind="inventory")
-    cancel_calls: list[str] = []
+    control_calls: list[tuple[str, str]] = []
 
     class Dispatcher:
-        def cancel(self, session_id: str) -> object:
-            cancel_calls.append(session_id)
+        @staticmethod
+        def _receipt(session_id: str, after: str) -> object:
             return SimpleNamespace(
                 code=SimpleNamespace(value="accepted"),
                 session_id=session_id,
                 before=SimpleNamespace(value="running"),
-                after=SimpleNamespace(value="canceling"),
-                detail="cancellation requested",
+                after=SimpleNamespace(value=after),
+                detail="control accepted",
                 accepted=True,
             )
+
+        def cancel(self, session_id: str) -> object:
+            control_calls.append(("cancel", session_id))
+            return self._receipt(session_id, "canceling")
+
+        def pause(self, session_id: str) -> object:
+            control_calls.append(("pause", session_id))
+            return self._receipt(session_id, "paused")
+
+        def resume(self, session_id: str) -> object:
+            control_calls.append(("resume", session_id))
+            return self._receipt(session_id, "running")
 
     service = make_service(dispatcher=Dispatcher())
     service._lifecycle = lifecycle
@@ -5094,12 +5113,19 @@ def test_cancel_task_session_requires_exact_live_task_association() -> None:
         service.cancel_task_session(f"task-{'f' * 32}", f"{53_301:032x}")
     with pytest.raises(TaskUnavailableError):
         service.cancel_task_session(task_id, direct_session_id)
-    assert cancel_calls == []
+    assert control_calls == []
 
+    paused = service.pause_task_session(task_id, f"{53_301:032x}")
+    resumed = service.resume_task_session(task_id, f"{53_301:032x}")
     result = service.cancel_task_session(task_id, f"{53_301:032x}")
+    assert (paused.after, resumed.after) == ("paused", "running")
     assert (result.session_id, result.code, result.accepted) == (
         f"{53_301:032x}",
         "accepted",
         True,
     )
-    assert cancel_calls == [f"{53_301:032x}"]
+    assert control_calls == [
+        ("pause", f"{53_301:032x}"),
+        ("resume", f"{53_301:032x}"),
+        ("cancel", f"{53_301:032x}"),
+    ]

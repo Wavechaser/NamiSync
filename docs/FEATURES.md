@@ -318,8 +318,8 @@ location activities through the shared service.
 
 ## DESKTOP UI
 
-The appearance, bridge, shell, generic presentation, task lifecycle and frozen
-Setup surfaces are active. Plan/inventory review and history surfaces remain
+The appearance, bridge, shell, generic presentation, task lifecycle, frozen
+Setup and Plan-review surfaces are active. Inventory review and history remain
 unrealized unless an entry says otherwise.
 
 - **Desktop Presentation Foundation Realignment**. One pure tree-agnostic
@@ -367,28 +367,31 @@ unrealized unless an entry says otherwise.
 - **Single-Page Task Shell**. Each task keeps its applicable Setup, status,
   progress, review, and log controls on one page without fabricating a paired
   source/target scope for standalone inventory work. M1 task creation,
-  navigation, rail retention, and explicit close are process-live; task bodies
-  expose editable or frozen Setup while review content remains pending.
+  navigation, rail retention, explicit close and Plan review/control content are
+  process-live; later inventory, integrity, execution-detail and history content
+  remains pending.
 - **Frozen Setup**. Source, target, and standalone-inventory rows accept typed, picked, or remembered local folders through one admission path. Inputs are treated literally—never as shell, URI, environment, or current-directory expressions—and unsupported, remote, ambiguous, unavailable, file, reparse, placeholder, or overlong choices receive distinct guidance. Accepted choices are process-local, expire, and are freshly checked when real work starts; editing invalidates the prior choice. `BRIDGE.md` owns the exact grammar, supported-volume matrix, bounds, and slot policy.
 - **Explicit Setup Options**. Setup exposes trash/additive deletion, update-to-trash, filters, creation-time and ACL preservation, source-casing propagation, and linked verification. Mirror remains unavailable and alternate data streams remain visibly unsupported. Defaults only prepopulate the row: planning freezes the complete approved options, and execution cannot resupply or silently change them.
 - **Serial Multi-Pair Creation**. One gesture can create several plan tasks serially from one frozen option snapshot. Each row succeeds or fails independently with no rollback; navigation preserves already admitted tasks, while replacing the document may leave unsent rows for the user to resubmit.
 - **Folder Selection**. The Setup surface gives source, destination and standalone inventory roots editable typed/recent controls plus folder-browser buttons. All three paths share the same admission rules, never turn a selected file into its parent, and never trust a stale remembered path.
 - **Plan Again**. The explicit action resolves both reviewed location identities afresh and creates a separate task with the old frozen options and default selection. Offline or ambiguous identities require correction or a current mount choice; old display paths, selection and execution authorization are never reused.
-- **Plan Tree**. The Plan view shows every immutable operation exactly once in a safe, directory-nested tree with rollups, reasons, selection, dependencies, and execution/post-copy status. Same-target collisions become an explicit operation group whose members remain individually reviewable; ambiguous move relationships stay literal rather than implying a false pair. Hostile filenames remain text-only and accessible. `PRESENTATION.md` owns identity, projection, and move-pairing mechanics.
-- **Plan Review View** *(accepted Stage 6 target; unrealized)*. Plan review combines frozen locations and review-time facts with the current selection, required bytes, risks, notices, search, filters, facets, and rollups. Selection changes do not rewrite the original review result or notices. Execute commits the current nonempty selection and then performs fresh preflight. An admission failure rolls back to review; a preflight refusal after admission remains committed. **Plan again** resolves the old task's reviewed volume identities into fresh Setup, creates a separate task with its frozen options, then scans again for a new review with default selection. It never treats the old display path as authority or carries selection/authorization forward.
+- **Plan Tree**. The Plan view shows every immutable operation exactly once in a safe, directory-nested tree with review-time rollups, reasons, selection and dependencies. Same-target collisions become an explicit operation group whose members remain individually reviewable; ambiguous move relationships stay literal rather than implying a false pair. Hostile filenames remain text-only and accessible. Execution/post-copy row status remains part of the later Execution Review surface. `PRESENTATION.md` owns identity, projection, and move-pairing mechanics.
+- **Plan Review View**. Plan review combines frozen locations and immutable review-time preflight facts with the current selection, required bytes, risks, notices, search, filters, sorting, collapse and rollups. Selection changes update only server-owned selection and rollups; they do not rewrite the original review result or notices. Execute commits the current nonempty selection and then performs fresh preflight. An admission failure rolls back to review; a preflight refusal after admission remains committed and visibly unrun. Task-bound pause, resume and cancel control only the exact live execution session. **Plan again** resolves the old task's reviewed volume identities into fresh Setup, creates a separate task with its frozen options, then scans again for a new review with default selection. It never treats the old display path as authority or carries selection/authorization forward.
 - **Execution Review** *(accepted Stage 6 target; unrealized)*. Live and settled plan rows show filesystem, recording, integrity, and audit truth independently. Every admitted operation has one coherent result and completed execution is immutable. Manual post-copy verification is available only after a normal execution-only completion and occupies a separate replaceable axis; canceled or abnormal executions are read-only, and a normal degraded result is reviewed like a green result without item retry. Excess diagnostic detail is omitted visibly rather than truncated or allowed to hide the typed result. Exact event/result mechanics remain in `BRIDGE.md`.
 - **Inventory Tree**. Inventory appears as a directory tree with current presence, integrity, reappeared, acknowledgement, and typed-warning states kept distinct. Refresh or verification replaces a complete settled result rather than mixing old and new fields; folders and warnings never masquerade as file outcomes. Folder totals report overflow explicitly instead of clamping, and current hashes remain labelled with their provenance and validity. Exact projection and scalar rules live in `PRESENTATION.md` and `DEFENSE.md` §1.3.
 - **Inventory Review View** *(accepted Stage 6 target; unrealized)*. Inventory review combines search, filters, facets, completeness, location state, and counts while hiding acknowledged missing rows by default. Choosing the Acknowledged filter reveals those rows for restoration. Warnings remain informational, visible as errors where appropriate, and cannot become file or folder action targets.
+- **Destructive Execution Confirmation**. Each Execute action containing selected UPDATE, MOVE_UPDATE, TRASH or DELETE operations opens a blocking Fluent smoke dialog, including recoverable changes. Cancel returns to review without submitting; Confirm admits the frozen task, plan/request and selection revision immediately through backend validation. Changed selection or plan identity requires a fresh review, and consent never carries forward. Selections without those operations execute directly. An uncertain response retains only the exact submitted retry until admission is resolved.
+
 - **Plan Filters**. Plan review filters by operation and blocked/unsupported state with truthful counts. Search, filters, and collapse never change selection, and informational notices remain visible context rather than operations. `PRESENTATION.md` owns filtering behavior; exact future facet DTOs are reopened.
 - **Inventory Filters**. Inventory review filters by presence, evidence, mismatch/error, reappearance, and acknowledgement with truthful overlapping counts. Hiding acknowledged rows changes presentation only, never inventory truth. `PRESENTATION.md` owns filtering behavior; exact future facet DTOs are reopened.
 - **View Toggle**. A persistent Plan | Inventory toggle switches between retained plan and location-inventory views without conflating them.
 - **Inventory Actions**. Menus and row actions support exact-file or recursive-folder refresh and integrity work, missing acknowledgement/restore, and path copying. Acknowledgement hides a missing row without changing canonical totals; warning rows remain informational. Baseline and verify need no extra confirmation, while rebaseline explicitly confirms replacement of current evidence and carries that approval through retries.
 - **Server-Owned Selection**. Plan selection belongs to the complete server-side operation tree, not the current viewport or filter. Selecting a folder includes its operations and descendants; selecting an operation group includes its direct members without granting that group filesystem-folder scope. The desktop previews and batches changes but cannot invent selection authority.
 - **Bounded Tree Views**. Large plan and inventory reviews load in bounded pages without retaining a hidden complete browser list. An oversized initial review gives a typed no-partial refusal; a failed refresh preserves the last complete view. `PRESENTATION.md` and `DEFENSE.md` §1.3 own exact limits.
-- **Sibling Sorting** *(accepted; unrealized)*. New plan and inventory views use path-key order, and reset restores it. Users may choose filename, size, or mtime in either direction. The server orders complete sibling sets before windowing, preserves hierarchy, selection, collapse and execution authority/order, uses raw numeric facts with deterministic ties and unavailable values last, and never invents descendant-derived folder times. Full command/raw-mtime support is independent of the later 48rem-table column/reset layout. Status/progress sorting, global flat sorting, and durable sort preferences are excluded from M1; [Bridge decision](PRESENTATION.md#search-filters-sorting-and-follow) owns the exact contract.
+- **Sibling Sorting**. Plan views use path-key order, and reset restores it. Users may choose filename, size, or mtime in either direction. The server orders complete sibling sets before windowing, preserves hierarchy, selection, collapse and execution authority/order, uses raw numeric facts with deterministic ties and unavailable values last, and never invents descendant-derived folder times. Inventory retains this accepted behavior for its later review surface. The Plan command/raw-mtime behavior is independent of later 48rem-table layout tuning. Status/progress sorting, global flat sorting, and durable sort preferences are excluded from M1; [Bridge decision](PRESENTATION.md#search-filters-sorting-and-follow) owns the exact contract.
 - **Tree Search**. Plan and Inventory search matches literal display text, preserves ancestor context, and reports authoritative facet counts. A stale response or failure never replaces the current valid view; an active off-screen item resolves to visible context instead of being guessed from paths. Exact query behavior lives in `PRESENTATION.md`.
 - **Live Progress**. The active protocol preserves exact recording problems and large quantities, with stable active-item, phase, retry-attempt, and monotonic progress that never substitutes for settlement. Binding that protocol to the desktop execution and verification surfaces remains unrealized. `BRIDGE.md` owns the transport contract.
-- **Plan Follow Mode**. Plan review follows the active operation until the user scrolls away. If that row is collapsed or filtered, the server identifies the nearest visible ancestor; if no chain is visible the UI reports that state instead of guessing from paths or a retained page.
+- **Plan Follow Mode** *(accepted; unrealized)*. Plan review will follow the active operation until the user scrolls away. If that row is collapsed or filtered, the server identifies the nearest visible ancestor; if no chain is visible the UI reports that state instead of guessing from paths or a retained page.
 - **Live Integrity Feedback**. The Inventory view follows the file being hashed while keeping provisional progress visually distinct from settled outcomes; live telemetry never changes which rows belong in the settled review.
 - **Cooperative UI Workers**. Long-running operations run through cancellable worker sessions with guarded cleanup and release handling, independent of whichever UI toolkit hosts them.
 - **GUI Single Instance**. A second desktop launch activates the existing window and exits successfully; activation failure is visible. Read-only CLI commands and non-conflicting CLI mutations are not subject to the GUI-instance restriction.
@@ -436,8 +439,8 @@ unrealized unless an entry says otherwise.
   half with the accent roles. Unchecked checkboxes use a softer 1 logical px
   neutral boundary; textboxes use a subtle 1.2 px top/side perimeter plus a
   straight, corner-clipped 2 px neutral/accent lower strip. Pointer focus keeps
-  that strip without the dual keyboard ring. Task-backed switching, keyboard behavior, and
-  actions remain part of the later unrealized work surfaces.
+  that strip without the dual keyboard ring. Plan task switching and actions are
+  active; later inventory, integrity and history surfaces retain the same foundation.
 - **Combobox Trigger Boundary**. Closed combobox triggers use the same authored
   1.2 px perimeter adjustment as buttons and textboxes. Their popup remains a
   separately elevated material surface with a 1 px boundary.
@@ -458,17 +461,16 @@ unrealized unless an entry says otherwise.
   Ordinary SDR elevation remains; dark HDR
   suppresses CSS flyout shadows to avoid transparent WebView2/Mica alpha halos,
   while forced colors use system surfaces without acrylic or shadow.
-- **Dormant File-List Row Foundation**. Packaged `file_row.js` owns the shared
+- **File-List Row Foundation**. Packaged `file_row.js` owns the shared
   compact row skeleton, while `plan.js` and `integrity.js` expose narrow
   presentation-local renderers. Both consume already-projected 16 px checkbox,
   mixed/folder/disclosure, basename, size, status, and notes values in a 24 px
   row with 12 px text and a 48 rem horizontally scrolling content floor. In
   the six-column layout, the sync specialization adds operation and eight-character
   checksum cells, while integrity adds a combined presence/status cell and an
-  eight-character checksum cell. Actual
-  projection, transport, selection/tree policy, execution, and progress remain
-  unrealized Slice 5 work: production imports neither specialization and still
-  renders no rows. Test-only static fixtures settle plain and partially selected
+  eight-character checksum cell. The Plan specialization is active with bounded
+  server-projected windows, selection, review notices, execution admission and
+  live controls. Integrity remains a gallery-only specialization. Static fixtures settle plain and partially selected
   folder hierarchies with two basename-only children, all operations, all three
   intent exceptions, and every integrity state. Both renderers wrap supplied
   status text in the channel-scoped semantic-label component and accept exact
@@ -518,7 +520,8 @@ unrealized unless an entry says otherwise.
   count/percentage for paused or canceled work is a recorded decision point,
   not a current payload or renderer feature. Channel-specific aliases,
   component forms, complete static gallery fixtures, and their evidence are
-  active; production workflow-list color consumers remain dormant.
+  active; Plan intent and lifecycle consumers are active while inventory and
+  integrity workflow-list consumers remain dormant.
 - **Closed Fluent Icon Foundation**. GUI Break 1 seeds a minimal frozen registry
   with four pinned local regular Microsoft Fluent SVG masks and their source,
   hash, and license record. Icons inherit `currentColor`; tokens own shared
