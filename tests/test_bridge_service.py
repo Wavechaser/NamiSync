@@ -21,6 +21,7 @@ from namisync.core.planning import (
     BlockedReason, DeletionPolicy, FilterSet, OperationKind, OperationReason,
     PreservationPolicy, SyncOptions,
 )
+from namisync.core.preflight import Verdict
 from namisync.core.session import OperationResult, SessionId, SessionRecord, SessionState
 from namisync.db.repositories import InventoryPresence, InventorySnapshot
 from namisync.dispatcher import SessionNotFound
@@ -49,6 +50,7 @@ from namisync.workflows import (
     LocationCandidateState, PlanRequest, VolumeResolution,
     VolumeResolutionState,
 )
+from namisync.workflows.models import PlanArtifact
 from namisync.workflows.views import (
     PreservationSettingsView, SetupOptionsView, session_record_view,
 )
@@ -86,10 +88,25 @@ def _artifact(plan_value):
     )
 
 
+def _projection_artifact(plan_value) -> PlanArtifact:
+    return PlanArtifact(
+        PlanRequest(
+            REQUEST_ID,
+            plan_value.source_root.path,
+            plan_value.target_root.path,
+        ),
+        SimpleNamespace(warnings=()),
+        SimpleNamespace(warnings=()),
+        plan_value,
+        Verdict(True, (), SimpleNamespace()),
+    )
+
+
 class _PlanRuntime:
     def __init__(self, artifact) -> None:
         self.artifact = artifact
         self.commits: list[tuple[str, bool, frozenset[str]]] = []
+        self.selection_decisions: list[object] = []
 
     def get_plan(self, request_id: str):
         return self.artifact
@@ -117,6 +134,7 @@ class _PlanRuntime:
         assert expected_artifact is self.artifact
         assert selection_decision is not None
         assert selection_decision.selection
+        self.selection_decisions.append(selection_decision)
         self.commits.append(
             (request_id, verify_after_execute, user_deselected)
         )
@@ -563,6 +581,212 @@ def test_br_g_14_revision_conflict_noop_and_digest_cycle_are_distinct() -> None:
     )
     assert restored.revision == 3
     assert restored.preview.selection_digest == original.selection_digest
+
+
+def test_selection_decision_is_revision_bound_reused_and_released() -> None:
+    first = operation(
+        OperationKind.COPY,
+        source_path="first.txt",
+        target_path="first.txt",
+        source=file_stat(identity_index=301),
+    )
+    second = operation(
+        OperationKind.COPY,
+        source_path="second.txt",
+        target_path="second.txt",
+        source=file_stat(identity_index=302),
+    )
+    runtime = _PlanRuntime(_artifact(plan((first, second))))
+    service = _service(runtime)
+
+    initial = service.preview_selection(REQUEST_ID)
+    initial_state = service._plan_selections[REQUEST_ID]
+    initial_decision = initial_state.selection_decision
+    assert initial_decision is not None
+    assert (
+        service.get_plan_selection_membership(REQUEST_ID, initial.revision)
+        is initial_decision.selection
+    )
+    assert service.preview_selection(REQUEST_ID) is not initial
+    assert initial_state.selection_decision is initial_decision
+
+    changed = service.mutate_selection(
+        REQUEST_ID,
+        initial.revision,
+        deselect=(str(first.op_id),),
+    ).preview
+    changed_decision = initial_state.selection_decision
+    assert changed_decision is not None and changed_decision is not initial_decision
+    assert (
+        service.get_plan_selection_membership(REQUEST_ID, changed.revision)
+        is changed_decision.selection
+    )
+    with pytest.raises(ValueError, match="selection changed"):
+        service.get_plan_selection_membership(REQUEST_ID, initial.revision)
+
+    runtime.artifact = _artifact(plan((first, second)))
+    replaced = service.preview_selection(REQUEST_ID)
+    replacement_state = service._plan_selections[REQUEST_ID]
+    assert replacement_state is not initial_state
+    assert replacement_state.selection_decision is not changed_decision
+    assert replaced.revision > changed.revision
+
+    runtime.drop_plan = lambda request_id: None
+    service.drop_plan(REQUEST_ID)
+    assert REQUEST_ID not in service._plan_selections
+
+
+def test_plan_projection_reuses_complete_retained_decision_at_each_revision() -> None:
+    selected = operation(
+        OperationKind.UPDATE,
+        source_path="selected.txt",
+        target_path="selected.txt",
+        source=file_stat(size=13, identity_index=303),
+        target=file_stat(size=5, identity_index=304),
+    )
+    user_excluded = operation(
+        OperationKind.COPY,
+        source_path="excluded.txt",
+        target_path="excluded.txt",
+        source=file_stat(size=17, identity_index=305),
+    )
+    blocked = replace(
+        operation(
+            OperationKind.COPY,
+            source_path="blocked.txt",
+            target_path="blocked.txt",
+            source=file_stat(size=19, identity_index=306),
+        ),
+        blocked_reason=BlockedReason.UNSUPPORTED,
+    )
+    dependent = replace(
+        operation(
+            OperationKind.COPY,
+            source_path="dependent.txt",
+            target_path="dependent.txt",
+            source=file_stat(size=23, identity_index=307),
+        ),
+        dependencies=(blocked.op_id,),
+    )
+    artifact = _projection_artifact(
+        replace(
+            plan((selected, user_excluded, blocked, dependent)),
+            trash_on_update=False,
+        )
+    )
+    service = _service(_PlanRuntime(artifact))
+
+    initial_projection, initial_preview, _, _ = service.get_plan_projection(
+        REQUEST_ID
+    )
+    state = service._plan_selections[REQUEST_ID]
+    initial_decision = state.selection_decision
+    assert initial_decision is not None
+    assert initial_projection.selected_operation_ids is initial_decision.selection
+    assert set(initial_decision.selection) == {selected.op_id, user_excluded.op_id}
+    assert tuple(
+        (item.op_id, item.outcome.value, item.reason)
+        for item in initial_decision.exclusions
+    ) == (
+        (blocked.op_id, "blocked", "unsupported"),
+        (dependent.op_id, "deferred", "blocked-dependency"),
+    )
+    assert initial_decision.exclusions[0].detail == {}
+    assert initial_decision.exclusions[1].detail == {
+        "excluded_dependencies": (str(blocked.op_id),),
+    }
+    assert initial_decision.selection | {
+        item.op_id for item in initial_decision.exclusions
+    } == {item.op_id for item in artifact.plan.operations}
+    assert (
+        initial_decision.destructive_operation_counts.update,
+        initial_decision.destructive_operation_counts.move_update,
+        initial_decision.destructive_operation_counts.trash,
+        initial_decision.destructive_operation_counts.delete,
+    ) == (1, 0, 0, 0)
+    assert initial_decision.irreversible_update_count == 1
+    assert initial_decision.required_bytes == "30"
+    another_preview = service.preview_selection(REQUEST_ID)
+    assert initial_preview is not another_preview
+    assert initial_preview.operations is not another_preview.operations
+
+    changed = service.mutate_selection(
+        REQUEST_ID,
+        initial_preview.revision,
+        deselect=(str(user_excluded.op_id),),
+    ).preview
+    changed_decision = state.selection_decision
+    assert changed_decision is not None and changed_decision is not initial_decision
+    changed_projection, projected_preview, _, _ = service.get_plan_projection(
+        REQUEST_ID
+    )
+
+    assert projected_preview.revision == changed.revision
+    assert changed_projection.selected_operation_ids is changed_decision.selection
+    assert changed_decision.selection == frozenset({selected.op_id})
+    assert tuple(
+        (item.op_id, item.outcome.value, item.reason)
+        for item in changed_decision.exclusions
+    ) == (
+        (user_excluded.op_id, "skipped", "user-deselected"),
+        (blocked.op_id, "blocked", "unsupported"),
+        (dependent.op_id, "deferred", "blocked-dependency"),
+    )
+    assert tuple(item.detail for item in changed_decision.exclusions) == (
+        {},
+        {},
+        {"excluded_dependencies": (str(blocked.op_id),)},
+    )
+    assert changed_decision.selection | {
+        item.op_id for item in changed_decision.exclusions
+    } == {item.op_id for item in artifact.plan.operations}
+    assert changed_decision.destructive_operation_count == 1
+    assert changed_decision.irreversible_operation_count == 1
+    assert changed_decision.requires_destructive_confirmation
+    assert changed_decision.required_bytes == "13"
+    assert projected_preview is not changed
+    assert projected_preview.operations is not changed.operations
+
+
+def test_service_close_releases_retained_selection_decision() -> None:
+    copied = operation(
+        OperationKind.COPY,
+        source=file_stat(identity_index=308),
+    )
+    dispatcher = _Dispatcher()
+    dispatcher.shutdown = lambda *, timeout: SimpleNamespace(
+        complete=True,
+        unfinished=(),
+        custody_released=True,
+    )
+    service = _service(
+        _PlanRuntime(_artifact(plan((copied,)))),
+        dispatcher,
+    )
+    service.preview_selection(REQUEST_ID)
+    retained = service._plan_selections[REQUEST_ID].selection_decision
+
+    closed = service.close()
+
+    assert closed.complete
+    assert retained is not None
+    assert service._plan_selections == {}
+
+
+def test_execution_reuses_the_exact_preview_selection_decision() -> None:
+    copied = operation(OperationKind.COPY, source=file_stat(identity_index=303))
+    runtime = _PlanRuntime(_artifact(plan((copied,))))
+    service = _service(runtime)
+
+    preview = service.preview_selection(REQUEST_ID)
+    retained = service._plan_selections[REQUEST_ID].selection_decision
+    started = service.start_execution(
+        REQUEST_ID,
+        expected_revision=preview.revision,
+    )
+
+    assert isinstance(started, ExecutionSession)
+    assert runtime.selection_decisions == [retained]
 
 
 def test_br_g_15_admission_failure_unfreezes_selection() -> None:

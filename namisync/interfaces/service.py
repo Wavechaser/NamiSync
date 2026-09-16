@@ -62,8 +62,10 @@ from namisync.workflows.runtime import (
 )
 from namisync.workflows import PlanProjection, build_plan_projection
 from namisync.workflows.selection import (
+    ExecutionSelection,
     apply_selection_mutation,
     derive_execution_selection,
+    require_derived_execution_selection,
 )
 from namisync.workflows.views import (
     InventoryRowView,
@@ -306,6 +308,7 @@ class _PlanSelectionState:
     user_deselected: frozenset[str] = frozenset()
     phase: str = "reviewing"
     execution_session: ExecutionSession | None = None
+    selection_decision: ExecutionSelection | None = None
 
 
 class NamiSyncService:
@@ -971,13 +974,19 @@ class NamiSyncService:
                         plan,
                         reselect,
                     )
-                    state.user_deselected = apply_selection_mutation(
+                    next_user_deselected = apply_selection_mutation(
                         plan,
                         state.user_deselected,
                         deselect=frozenset(resolved_deselect),
                         reselect=frozenset(resolved_reselect),
                     )
+                    next_decision = derive_execution_selection(
+                        plan,
+                        user_deselected=next_user_deselected,
+                    )
+                    state.user_deselected = next_user_deselected
                     state.revision += 1
+                    state.selection_decision = next_decision
                     effect_applied = True
                     response = SelectionMutationView(
                         "applied",
@@ -1090,9 +1099,9 @@ class NamiSyncService:
                             "conflict", state.revision, state.phase
                         )
                     else:
-                        decision = derive_execution_selection(
-                            artifact.plan,
-                            user_deselected=state.user_deselected,
+                        decision = self._selection_decision_locked(
+                            state,
+                            artifact,
                         )
                         if not decision.selection:
                             raise ValueError(
@@ -1166,6 +1175,7 @@ class NamiSyncService:
         state, artifact = self._selection_state(request_id)
         with self._lock:
             user_deselected = state.user_deselected
+            decision = self._selection_decision_locked(state, artifact)
             preview = self._selection_preview_locked(
                 request_id,
                 state,
@@ -1175,6 +1185,7 @@ class NamiSyncService:
             request_id,
             artifact,
             user_deselected=user_deselected,
+            selection_decision=decision,
         )
         if self._runtime.get_plan(request_id) is not artifact:
             raise ValueError("plan changed before review projection")
@@ -1192,6 +1203,25 @@ class NamiSyncService:
             artifact.request.source_path,
             artifact.request.target_path,
         )
+
+    def get_plan_selection_membership(
+        self,
+        request_id: str,
+        expected_revision: int,
+    ) -> frozenset[str]:
+        """Return the workflow-owned membership for one exact review revision."""
+
+        if type(expected_revision) is not int:
+            raise TypeError("expected_revision must be an int")
+        state, artifact = self._selection_state(request_id)
+        with self._lock:
+            if (
+                self._plan_selections.get(request_id) is not state
+                or state.artifact is not artifact
+                or state.revision != expected_revision
+            ):
+                raise ValueError("selection changed before membership read")
+            return self._selection_decision_locked(state, artifact).selection
 
     def recover_task_execution(
         self,
@@ -1284,10 +1314,7 @@ class NamiSyncService:
                     state.revision,
                     state.phase,
                 )
-            decision = derive_execution_selection(
-                artifact.plan,
-                user_deselected=state.user_deselected,
-            )
+            decision = self._selection_decision_locked(state, artifact)
             if not decision.selection:
                 raise ValueError("Nothing is selected to synchronize")
             if (
@@ -2271,10 +2298,7 @@ class NamiSyncService:
         state: _PlanSelectionState,
         artifact: object,
     ) -> SelectionPreviewView:
-        decision = derive_execution_selection(
-            artifact.plan,
-            user_deselected=state.user_deselected,
-        )
+        decision = self._selection_decision_locked(state, artifact)
         exclusions = {
             str(exclusion.op_id): exclusion
             for exclusion in decision.exclusions
@@ -2327,6 +2351,26 @@ class NamiSyncService:
                 )
                 for operation in artifact.plan.operations
             ),
+        )
+
+    @staticmethod
+    def _selection_decision_locked(
+        state: _PlanSelectionState,
+        artifact: object,
+    ) -> ExecutionSelection:
+        if state.artifact is not artifact:
+            raise ValueError("selection state belongs to a different plan artifact")
+        decision = state.selection_decision
+        if decision is None:
+            decision = derive_execution_selection(
+                artifact.plan,
+                user_deselected=state.user_deselected,
+            )
+            state.selection_decision = decision
+        return require_derived_execution_selection(
+            decision,
+            plan=artifact.plan,
+            user_deselected=state.user_deselected,
         )
 
     @staticmethod

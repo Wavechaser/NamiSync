@@ -277,6 +277,141 @@ details. No new diagnostic or repair loop is authorized by this record.
 
 ### Integration and stop
 
+**P6 resumption (base `28c7b44`, authorized 2026-09-16):** investigate and fix
+the observed busy-close cancellation-drain failure, considering ordering/timing
+and comparison with `353092b`; finish the named selection-retention evidence
+gaps, then run the focused comparisons. Initial finite cause corpus: the failed
+test and its registry drain/close, service delivery/cancel and dispatcher event
+publication seams. Preserve reliable event order/exactly-once cancellation and
+truthful pending close; do not prescribe a one-batch observation unless that is
+the product contract. Record the confirmed correction population before editing.
+Selection evidence population is the existing service/projection/drain owners'
+tests; no new product behavior is implied. Focused regression, ordinary/import,
+installed Plan and independent-review gates precede existing untimed readiness
+and one eight-metric comparison round. No repeated optimization/measurement
+loop, criterion changes, full run, amendment, merge or pruning. Stop on a new
+unresolved functional/harness blocker or repository mandatory stop; the prior
+named cancellation observation is now authorized for correction.
+
+Confirmed cancellation correction population: the named test in `test_drain.py`
+only. Dispatcher CANCELING publication precedes asynchronous SessionObserver
+delivery into the task adapter; a 0.1 s test drain may return before that handoff.
+The exercised cancellation code and test match `353092b`; prior passes do not
+establish same-next-batch delivery. Use a controlled delayed-offer reproducer
+and an actual adapter-offer readiness witness, preserving ordered single-event
+delivery, repeated pending close and retained task assertions. No production
+change, sleep or timeout increase.
+
+Resumption verification: the corrected cancellation case and busy-close
+neighborhood pass; the selection owner file passes 36 tests, closing all named
+retention gaps. Independent review passes. Ordinary suite: 5,152 passed,
+5 skipped / 30 deselected (260.57 s); imports: 12 kept; installed Plan GUI:
+1 passed / 2 deselected (44.26 s). No product source files changed during this
+resumption. The prepared diagnostic driver was corrected before use to apply
+maximum, not the 30-sample p95 helper, to five cold memory samples, and to
+record/check its own hash. Protected measurement artifacts are unchanged.
+
+The single focused round completed 23 untimed readiness cases in three
+processes, then 40 measurement processes / 215 samples for eight metrics.
+All six changed sorts pass: filename asc/desc p95 0.728396/0.737502 s;
+size asc/desc 0.751273/0.728179 s; mtime asc/desc 0.746687/0.746219 s.
+Their maxima are all below 0.770 s, versus fixed p95/max limits 1.5/3 s.
+Memory overlap maximum is 279,744,512 bytes (266.785 MiB), down from
+443,437,056 bytes (422.895 MiB); the 320 MiB criterion needs no adjustment.
+Execution receipt p95/max are 170/175.4 ms, improved from 283/284.1 ms.
+Its maximum passes 250 ms, but p95 still fails 100 ms: seven of eight focused
+metrics pass. These are diagnostic comparisons, not a new full terminal
+acceptance artifact. Stop after this round without another optimization,
+measurement, full run or integration. Raw children, runtime/source/installed
+authority, dispersion and aggregate report are retained in
+`build/m1-7/evidence/p6-resume-20260916/comparison/`.
+Independent evidence audit verifies all 43 unique process/child/token identities,
+215 samples, linked receipt hashes, 42 source files, 38 installed/wheel members,
+14 runtime roles and driver/contract/interpreter identities against the frozen
+authority; `comparison/evidence-audit.json` records that audit, not acceptance.
+
+**P6 budget correction (base `4a01b2c`, authorized 2026-09-16):** implement
+the three proposals below, then return with updated targeted measurements.
+Finite production population: workflow projection/order and selection facades,
+service selection lifecycle, PlanReview callers and their direct tests. Root
+owns PRESENTATION/INTERFACES, this register, HANDOFF and CHANGELOG updates.
+The direct PlanReview registry selection-refresh consumer is included so
+membership remains shared after edits as well as initial projection creation;
+its revision/currentness checks and external DTO/wire shape remain unchanged.
+Projection sort/construction form one atomic outcome; shared selection follows
+its overlapping projection seam as a second outcome. No early core execution
+structure, six-order cache, dispatcher redesign, new runtime model or changes
+to protected evidence/criteria. Preserve the archived evidence-reader-only
+disposition and all public validation/admission guarantees described below.
+Focused regression/equivalence and ownership/lifetime checks, ordinary suite,
+import contracts, installed Plan GUI and independent review precede quantitative
+collection. Run the existing untimed readiness for each measured interaction,
+then one fixed five-child comparison for each of the eight failed metrics;
+collect this round's results without optimization/retry loops. Stop on functional,
+readiness, harness or repository mandatory-stop failures. Budget misses are
+reported after this round, not repaired in another pass. The 320 MiB criterion
+remains unchanged; a moderate residual may be discussed only after measurement.
+No full measurement run, amendment, merge or pruning in this round.
+
+The original P6 pass was preserved at `28c7b44` after the cancellation test
+failure, before measurements. Its focused evidence remains under
+`build/m1-7/evidence/p6-budget-20260916/`. The authorized resumption above fixes
+that fixture assumption and fills the service-level projection-sharing,
+close-release and complete exclusion/fact verification gaps. Independent source
+review and focused correction tests pass; final gates and targeted results
+belong to `build/m1-7/evidence/p6-resume-20260916/`.
+
+**Remaining budget study (base `353092b`, read-only):** investigate the six
+changed-sort p95 failures, retained review memory and execution-start receipt.
+Close over retained compact artifacts and exact benchmark boundaries; projection/
+ordering/visible-state construction; bridge/service/registry/runtime admission;
+and direct owner tests. Separate measured outcomes from source-based cost
+candidates. Return one bounded resolution proposal with preserved guarantees,
+consumer scope and verification; no product/test changes, profiling, measurement
+reruns, threshold changes or integration before discussion.
+
+Study outcome: six changed-sort p95 values are 1.629–1.861 s versus 1.5 s
+(all maxima pass), peak review-construction overlap is 422.895 MiB versus
+320 MiB, and start-receipt p95/max are 283/284.1 ms versus 100/250 ms.
+These are end-to-end observations, not measured function-level attribution.
+Proposed corrections, approved for P6 above:
+
+- **Sort:** derive real orders in the workflow owner from cached canonical
+  sibling order. Stable-sort available raw primary values and append unavailable
+  siblings in canonical tie order, avoiding comparator-sorting 120,000 notice
+  rows. Privately publish generated orders; retain public malformed-input
+  validation, immutable nodes/inverse maps and atomic view publication. Scope:
+  projection/order owner, PlanReview caller and projection/review/visible/scale
+  witnesses. No six-order cache or further visibility redesign.
+- **Memory:** use private slotted drafts, release completed tree/index
+  intermediates before materialization and stream warnings. Materialization
+  already clears consumed drafts; earlier coexistence remains. Preserve final
+  projection shape, identities, peer links and selection facts. Scope:
+  projection builder and owner/scale tests. The sampler measures process-private
+  peak while two reviews coexist, not final buffer sizes; no retained phase data
+  establishes which allocation dominates or guarantees recovery of 102.895 MiB.
+- **Receipt:** reuse the workflow-derived decision already computed for review,
+  bound to exact plan/deselection identity and atomically refreshed with revision
+  changes. Share its selected membership with projection state rather than
+  retaining another independent O(N) set. Scope: service selection state,
+  preview/admission, workflow projection/selection and direct web/runtime
+  consumers. Preserve runtime authority checks, destructive acknowledgment,
+  and actual admission/custody/publication before receipt. Defer a new reusable
+  core execution structure: that would transfer validation earlier and extend
+  index lifetime. The review-only memory fixture does not account for additional
+  service caches. Account for the full decision, exclusions and preview DTOs,
+  including replacement, invalidation and task-release lifetimes; sharing
+  membership alone does not establish no net memory increase. This accounting
+  is an acceptance requirement alongside the unchanged memory comparison.
+
+Proposed verification: independent sort equivalence/public rejection,
+projection/peer/notice/selection parity, shared membership and cache invalidation,
+stale revision/artifact rejection, admission replay/rollback/custody, and relevant
+owner/consumer suites. Untimed readiness precedes one targeted comparison per
+failed group under unchanged fixtures and budgets; stop at the first failure.
+Another full run requires passing comparisons and user authorization. No
+product/test changes, profiling or measurements occurred during this study.
+
 **P5 GUI repair (2026-09-16; base `1c14ccc`, full-measurement stop):** investigate
 the retained `page_plan_review_plan_ack` runtime error and fix its confirmed
 cause. Initial finite corpus: task-shell headed scenario/confirmation driver,

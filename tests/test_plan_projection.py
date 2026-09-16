@@ -17,6 +17,7 @@ from namisync.workflows.plan_projection import (
     build_plan_projection,
     sort_plan_projection,
 )
+from namisync.workflows.selection import derive_execution_selection
 
 from _db_fixtures import file_stat, operation, plan
 
@@ -88,6 +89,41 @@ def test_plan_projection_preserves_groups_selection_and_move_old_path_ancestry()
         node.row_kind == "prior-folder" and node.display == "old"
         for node in projection.nodes
     )
+
+
+def test_plan_projection_reuses_exact_workflow_selection_membership() -> None:
+    copied = operation(
+        OperationKind.COPY,
+        source_path="source.txt",
+        target_path="target.txt",
+        source=file_stat(identity_index=101),
+    )
+    artifact = _artifact(copied)
+    user_deselected = frozenset()
+    decision = derive_execution_selection(
+        artifact.plan,
+        user_deselected=user_deselected,
+    )
+
+    projection = build_plan_projection(
+        REQUEST_ID,
+        artifact,
+        user_deselected=user_deselected,
+        selection_decision=decision,
+    )
+
+    assert projection.selected_operation_ids is decision.selection
+
+    equal_but_distinct_intent = frozenset({copied.op_id}) - {copied.op_id}
+    assert equal_but_distinct_intent == user_deselected
+    assert equal_but_distinct_intent is not user_deselected
+    with pytest.raises(ValueError, match="different user intent"):
+        build_plan_projection(
+            REQUEST_ID,
+            artifact,
+            user_deselected=equal_but_distinct_intent,
+            selection_decision=decision,
+        )
 
 
 def test_move_peers_are_assigned_before_node_materialization(monkeypatch) -> None:
@@ -394,3 +430,79 @@ def test_sort_refuses_invalid_source_tree_before_publishing_order() -> None:
     )
     with pytest.raises(ValueError, match="parent/subtree closure"):
         sort_plan_projection(broken_parent, PlanSortColumn.SIZE, SortDirection.DESCENDING)
+
+    with pytest.raises(ValueError, match="permutation"):
+        projection_module.PlanProjectionOrder(
+            projection,
+            projection_module.CompactUnsignedIntegers((0, 0), maximum=1),
+            projection_module.CompactUnsignedIntegers((0, 1), maximum=1),
+        )
+
+
+@pytest.mark.parametrize(
+    ("column", "direction", "expected"),
+    [
+        (PlanSortColumn.FILENAME, SortDirection.ASCENDING, (0, 1, 2, 3, 4)),
+        (PlanSortColumn.FILENAME, SortDirection.DESCENDING, (0, 3, 2, 1, 4)),
+        (PlanSortColumn.SIZE, SortDirection.ASCENDING, (0, 1, 2, 3, 4)),
+        (PlanSortColumn.SIZE, SortDirection.DESCENDING, (0, 2, 3, 1, 4)),
+        (PlanSortColumn.MTIME, SortDirection.ASCENDING, (0, 3, 2, 1, 4)),
+        (PlanSortColumn.MTIME, SortDirection.DESCENDING, (0, 2, 1, 3, 4)),
+    ],
+)
+def test_trusted_sort_matches_explicit_orders_for_all_real_sorts(
+    column,
+    direction,
+    expected,
+) -> None:
+    first = operation(
+        OperationKind.COPY,
+        source_path="Å.txt",
+        target_path="Å.txt",
+        source=file_stat(size=7, mtime_ns=10, identity_index=15),
+    )
+    second = operation(
+        OperationKind.COPY,
+        source_path="z.txt",
+        target_path="z.txt",
+        source=file_stat(size=7, mtime_ns=20, identity_index=16),
+    )
+    third = operation(
+        OperationKind.COPY,
+        source_path="Beta.txt",
+        target_path="Beta.txt",
+        source=file_stat(size=3, mtime_ns=20, identity_index=17),
+    )
+    warning = ScanWarning(ScanWarningCode.ACCESS_DENIED, "unavailable", "detail")
+    projection = build_plan_projection(
+        REQUEST_ID, _artifact(first, second, third, warnings=(warning,))
+    )
+    root_children = [
+        node for node in projection.nodes if node.parent_index == 0
+    ]
+    replacements = {
+        root_children[0].position: "Z",
+        root_children[1].position: "A",
+        root_children[2].position: "M",
+        root_children[3].position: "N",
+    }
+    nonlexical = replace(
+        projection,
+        nodes=tuple(
+            replace(node, rel_path_key=replacements[node.position])
+            if node.position in replacements
+            else node
+            for node in projection.nodes
+        ),
+    )
+    canonical = sort_plan_projection(
+        nonlexical, PlanSortColumn.PATH, SortDirection.ASCENDING
+    )
+
+    trusted = projection_module._sort_plan_projection_from_canonical(
+        canonical, column, direction
+    )
+
+    assert tuple(trusted.ordered_source_positions) == expected
+    assert tuple(trusted.order_rank_by_source_position)[0] == 0
+    assert nonlexical.nodes[trusted.ordered_source_positions[-1]].row_kind == "notice"

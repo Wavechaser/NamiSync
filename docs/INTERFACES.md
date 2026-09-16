@@ -134,7 +134,23 @@ confirmation requirement before commitment or Dispatcher submission. An exact
 workflow-derived decision is reused for commitment only while bound to that same
 immutable plan and deselection snapshot; direct workflow calls still derive their
 own decision. This does not bypass the service's revision or acknowledgement
-checks. An exact
+checks. The service retains one decision per current selection state and reuses
+it for previews, projection construction and commitment. A selection mutation
+derives the next decision before publishing its deselection and revision;
+artifact replacement replaces the state. Projection membership shares the
+decision's frozenset, including after selection edits through a revision-checked
+internal read. No additional wire field or command is introduced.
+
+Retention follows the existing plan lifecycle: replacement, exact retirement and
+service close release the state-owned decision. Its selected membership and
+exclusions are bounded by the admitted plan's operations; count/scalar facts are
+fixed-size fields. Preview operation DTOs are constructed for each response,
+not stored in the decision cache. Exclusions remain newly retained state even
+when membership is shared; the projection-only memory fixture does not measure
+this service retention. Owner tests account for sharing and invalidation rather
+than claiming zero additional memory.
+
+An exact
 retry recovers the retained command or application receipt; changing any snapshot
 field under the same command id is an intent conflict. In the desktop flow, changed Setup
 or explicit Plan again creates a new task, while the old plan slot stays

@@ -393,6 +393,12 @@ class TaskLifecyclePort(Protocol):
 
     def get_plan_projection(self, request_id: str) -> object: ...
 
+    def get_plan_selection_membership(
+        self,
+        request_id: str,
+        expected_revision: int,
+    ) -> frozenset[str]: ...
+
     def reobserve_task(
         self,
         task_id: str,

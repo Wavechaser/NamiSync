@@ -402,6 +402,11 @@ class _Service:
         )
         return projection, preview, "source", "target"
 
+    def get_plan_selection_membership(self, request_id, expected_revision):
+        assert request_id
+        assert expected_revision == 0
+        return frozenset()
+
     def reobserve_task(self, task_id, session_id, sink, from_sequence):
         assert task_id.startswith("task-")
         return self.reobserve(session_id, sink, from_sequence)
@@ -544,6 +549,30 @@ def test_repeated_busy_task_close_is_pending_without_duplicate_cancel_event(
 ) -> None:
     entered = Event()
     release = Event()
+    canceling_delivery_entered = Event()
+    release_canceling_delivery = Event()
+    canceling_offered = Event()
+
+    original_offer = drain_module._TaskState._offer
+
+    def observe_canceling_offer(self, generation, update):
+        if (
+            type(update) is SessionEventView
+            and update.body_type == "StateChanged"
+            and update.body == {"state": "canceling"}
+        ):
+            canceling_delivery_entered.set()
+            assert release_canceling_delivery.wait(1)
+            original_offer(self, generation, update)
+            canceling_offered.set()
+            return
+        original_offer(self, generation, update)
+
+    monkeypatch.setattr(
+        drain_module._TaskState,
+        "_offer",
+        observe_canceling_offer,
+    )
 
     class Invocation:
         def run(self, context):
@@ -587,17 +616,34 @@ def test_repeated_busy_task_close_is_pending_without_duplicate_cancel_event(
         )
 
         first = registry.request_task_close(started.task_id, started.session_id)
-        canceled = registry.drain(
+        assert canceling_delivery_entered.wait(1)
+        before_delivery = registry.drain(
             started.task_id,
             started.session_id,
             "7" * 32,
+            replay_from=None,
+        )
+        assert not any(
+            type(update) is TaskEventUpdateView
+            and update.event.body_type == "StateChanged"
+            and update.event.body == {"state": "canceling"}
+            for update in before_delivery.updates
+        )
+        assert dispatcher.get(SessionId(started.session_id)).state is SessionState.CANCELING
+
+        release_canceling_delivery.set()
+        assert canceling_offered.wait(1)
+        canceled = registry.drain(
+            started.task_id,
+            started.session_id,
+            "8" * 32,
             replay_from=None,
         )
         second = registry.request_task_close(started.task_id, started.session_id)
         repeated = registry.drain(
             started.task_id,
             started.session_id,
-            "8" * 32,
+            "9" * 32,
             replay_from=None,
         )
 
@@ -613,6 +659,7 @@ def test_repeated_busy_task_close_is_pending_without_duplicate_cancel_event(
         assert repeated.updates == ()
         assert registry.list_tasks().tasks[0].task_id == started.task_id
     finally:
+        release_canceling_delivery.set()
         release.set()
         registry.begin_close()
         service.close(timeout=2)

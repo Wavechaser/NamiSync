@@ -38,6 +38,7 @@ from namisync.workflows.models import (
     PlanReview,
 )
 from namisync.workflows.plan_projection import (
+    _sort_plan_projection_from_canonical,
     CompactUnsignedIntegers,
     PlanProjection,
     PlanProjectionNode,

@@ -10,6 +10,7 @@ from types import MappingProxyType
 from namisync.interfaces.ui_state import MAX_JAVASCRIPT_SAFE_INTEGER
 
 from namisync.workflows import (
+    _sort_plan_projection_from_canonical,
     PlanProjection,
     PlanProjectionNode,
     PlanProjectionOrder,
@@ -92,7 +93,9 @@ class PlanReviewState:
         self._order = (
             self._canonical_order
             if self.sort_column is PlanSortColumn.PATH
-            else sort_plan_projection(self.projection, self.sort_column, self.sort_direction)
+            else _sort_plan_projection_from_canonical(
+                self._canonical_order, self.sort_column, self.sort_direction
+            )
         )
         self._visible = _derive_view(
             self._order,
@@ -207,7 +210,9 @@ class PlanReviewState:
                 elif sort_column is PlanSortColumn.PATH:
                     order = self._canonical_order
                 else:
-                    order = sort_plan_projection(self.projection, sort_column, sort_direction)
+                    order = _sort_plan_projection_from_canonical(
+                        self._canonical_order, sort_column, sort_direction
+                    )
                 visible = _derive_view(
                     order,
                     search_query=search_query,
@@ -250,7 +255,9 @@ class PlanReviewState:
             order = (
                 canonical_order
                 if self.sort_column is PlanSortColumn.PATH
-                else sort_plan_projection(projection, self.sort_column, self.sort_direction)
+                else _sort_plan_projection_from_canonical(
+                    canonical_order, self.sort_column, self.sort_direction
+                )
             )
             visible = _derive_view(
                 order,

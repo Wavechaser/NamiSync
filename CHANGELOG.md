@@ -29,6 +29,26 @@ packaging remain open.
 
 #### Reduce Plan review and execution overhead (2026-09-15 – 2026-09-16)
 
+- Derive changed sorts from cached canonical sibling order and publish generated
+  compact orders without repeated public validation. Reduce projection-building
+  overlap with slotted drafts, streamed warnings and earlier temporary release.
+  Reuse revision-bound workflow selection decisions for preview and admission,
+  sharing projection membership through initial construction and selection edits.
+  Preserve external contracts and admission checks. Correct the busy-close test
+  to observe asynchronous adapter delivery instead of requiring cancellation in
+  the next batch; the exercised product path is unchanged from `353092b`.
+  Complete service-level selection sharing, exclusion facts and close-release
+  evidence. Independent review, 5,152 ordinary tests, 12 import contracts and
+  installed Plan verification pass. One focused comparison round passes all six
+  sorts (p95 0.728–0.751 s) and memory (266.785 MiB versus 320 MiB). Execution
+  receipt improves to p95/max 170/175.4 ms; p95 still misses 100 ms. Stop after
+  the round with unchanged criteria and preserved evidence; M1-7 stays unmerged.
+
+- Investigate the remaining eight budget failures without product/test changes
+  or measurement reruns. Propose canonical-order sort reuse, smaller projection
+  construction intermediates and shared reviewed selection facts; retain all
+  criteria and stop for discussion before implementation.
+
 - Correct the installed confirmation fixture's transient-closing race with
   paused, effect-free animation barriers and a durable native acknowledgment.
   Product admission and animation behavior stay unchanged. Focused/interfaces

@@ -229,7 +229,9 @@ def test_plan_review_state_retains_complete_view_when_update_rebuild_fails(
     def fail_sort(*_args, **_kwargs):
         raise RuntimeError("sort failed")
 
-    monkeypatch.setattr(plan_review_module, "sort_plan_projection", fail_sort)
+    monkeypatch.setattr(
+        plan_review_module, "_sort_plan_projection_from_canonical", fail_sort
+    )
     with pytest.raises(RuntimeError, match="sort failed"):
         state.update(
             expected_revision=0,
@@ -397,6 +399,40 @@ def test_plan_review_reuses_order_for_search_filter_and_collapse(monkeypatch) ->
     )
 
     assert state.current_order is current
+
+
+def test_plan_review_privately_publishes_sort_from_validated_canonical_order(
+    monkeypatch,
+) -> None:
+    state = PlanReviewState(
+        "task-" + "1" * 32,
+        "a" * 32,
+        _projection(),
+        0,
+        "reviewing",
+        "source",
+        "target",
+    )
+    monkeypatch.setattr(
+        plan_review_module.PlanProjectionOrder,
+        "__post_init__",
+        lambda self: (_ for _ in ()).throw(
+            AssertionError("trusted order was publicly revalidated")
+        ),
+    )
+
+    state.update(
+        expected_revision=0,
+        search_query="",
+        filters=frozenset(),
+        sort_column=PlanSortColumn.SIZE,
+        sort_direction=SortDirection.DESCENDING,
+        collapse_node_id=None,
+        collapsed=None,
+    )
+
+    assert tuple(state.current_order.ordered_source_positions) == (0, 3, 1, 2)
+    assert tuple(state.current_order.order_rank_by_source_position) == (0, 2, 3, 1)
 
 
 def test_plan_review_selection_rebinds_cached_orders_with_one_projection_clone(monkeypatch) -> None:

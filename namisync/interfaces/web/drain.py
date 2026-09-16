@@ -898,8 +898,14 @@ class TaskRegistry:
                 command_id=command_id,
             )
             preview = mutation.preview
+            selected_operation_ids = (
+                self._lifecycle.get_plan_selection_membership(
+                    request_id,
+                    preview.revision,
+                )
+            )
             view.replace_selection(
-                selected_operation_ids=frozenset(preview.selected_operation_ids),
+                selected_operation_ids=selected_operation_ids,
                 exclusion_reasons={
                     operation.operation_id: operation.reason
                     for operation in preview.operations

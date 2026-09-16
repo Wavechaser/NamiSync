@@ -21,7 +21,11 @@ from .node_tree import (
     _ValidatedNodeTreeMember,
     _build_validated_node_tree,
 )
-from .selection import derive_execution_selection
+from .selection import (
+    ExecutionSelection,
+    derive_execution_selection,
+    require_derived_execution_selection,
+)
 
 
 class PlanSortColumn(StrEnum):
@@ -217,11 +221,39 @@ class PlanProjectionOrder:
         return rebound
 
 
+@dataclass(slots=True)
+class _PlanProjectionDraft:
+    node_id: str
+    display: str
+    rel_path_key: str
+    depth: int
+    parent: int | None
+    is_container: bool
+    row_kind: str
+    operation_id: str | None
+    operation_kind: str | None
+    reason: str | None
+    blocked_reason: str | None
+    selection: str
+    selectable_operation_count: int
+    selected_operation_count: int
+    operation_count: int
+    size: int | None
+    mtime_ns: int | None
+    dependency_count: int
+    risk: str
+    move_peer_id: str | None = None
+    notice: str | None = None
+    selection_exclusion_reason: str | None = None
+    filename_key: str | None = None
+
+
 def build_plan_projection(
     request_id: str,
     artifact: PlanArtifact,
     *,
     user_deselected: frozenset[OpId] = frozenset(),
+    selection_decision: ExecutionSelection | None = None,
 ) -> PlanProjection:
     """Project operations, old-path ancestry, and all informational notices."""
 
@@ -231,18 +263,24 @@ def build_plan_projection(
         raise TypeError("artifact must be an exact PlanArtifact")
     plan = artifact.plan
     operations = {str(item.op_id): item for item in plan.operations}
-    safety_decision = derive_execution_selection(plan)
     decision = (
-        safety_decision
-        if not user_deselected
-        else derive_execution_selection(plan, user_deselected=user_deselected)
+        derive_execution_selection(plan, user_deselected=user_deselected)
+        if selection_decision is None
+        else require_derived_execution_selection(
+            selection_decision,
+            plan=plan,
+            user_deselected=user_deselected,
+        )
     )
-    selected = frozenset(str(item) for item in decision.selection)
+    safety_decision = (
+        decision if not user_deselected else derive_execution_selection(plan)
+    )
+    selected = decision.selection
     excluded = {str(item.op_id): item.reason for item in decision.exclusions}
     selectable = frozenset(str(item) for item in safety_decision.selection)
 
     target_tree = _operation_tree(request_id, plan.operations, prior=False)
-    drafts: list[dict[str, object]] = []
+    drafts: list[_PlanProjectionDraft] = []
     operation_draft_by_id: dict[str, int] = {}
     target_draft_by_tree_position: dict[int, int] = {}
     _append_operation_tree(
@@ -258,6 +296,7 @@ def build_plan_projection(
         parent_override=None,
         row_prefix="",
     )
+    del target_tree, target_draft_by_tree_position
 
     prior_operations = tuple(
         item for item in plan.operations if item.prior_target_rel_path is not None
@@ -292,19 +331,27 @@ def build_plan_projection(
             parent_override=prior_group,
             row_prefix="prior-",
         )
+        del prior_tree, prior_draft_by_tree_position
         for operation_id, target_draft in operation_draft_by_id.items():
             prior_draft = prior_operation_draft_by_id.get(operation_id)
             if prior_draft is not None:
                 peer_pairs.append((target_draft, prior_draft))
+        del prior_operation_draft_by_id
 
-    for side, warning in (
-        *(("source", item) for item in artifact.source_scan.warnings),
-        *(("target", item) for item in artifact.target_scan.warnings),
+    for target, prior in peer_pairs:
+        drafts[target].move_peer_id = drafts[prior].node_id
+        drafts[prior].move_peer_id = drafts[target].node_id
+    del peer_pairs, operations, safety_decision, decision, excluded, selectable
+
+    for side, warnings in (
+        ("source", artifact.source_scan.warnings),
+        ("target", artifact.target_scan.warnings),
     ):
-        display = f"{side}: {warning.rel_path or 'root'} — {warning.code.value}"
-        if warning.detail:
-            display += f" — {warning.detail}"
-        drafts.append(_notice_draft(request_id, len(drafts), display))
+        for warning in warnings:
+            display = f"{side}: {warning.rel_path or 'root'} — {warning.code.value}"
+            if warning.detail:
+                display += f" — {warning.detail}"
+            drafts.append(_notice_draft(request_id, len(drafts), display))
     for refusal in artifact.verdict.refusals:
         drafts.append(
             _notice_draft(
@@ -316,10 +363,6 @@ def build_plan_projection(
                 ),
             )
         )
-
-    for target, prior in peer_pairs:
-        drafts[target]["move_peer_id"] = drafts[prior]["node_id"]
-        drafts[prior]["move_peer_id"] = drafts[target]["node_id"]
 
     return _materialize_projection(
         request_id,
@@ -353,10 +396,76 @@ def sort_plan_projection(
     for index, node in enumerate(nodes[1:], 1):
         assert node.parent_index is not None
         children.setdefault(node.parent_index, []).append(index)
-    key = cmp_to_key(lambda left, right: _compare_nodes(nodes[left], nodes[right], column, direction))
+    canonical_key = cmp_to_key(
+        lambda left, right: _compare_nodes(
+            nodes[left], nodes[right], PlanSortColumn.PATH, SortDirection.ASCENDING
+        )
+    )
     for siblings in children.values():
-        siblings.sort(key=key)
+        siblings.sort(key=canonical_key)
+    canonical = _publish_plan_projection_order(projection, children)
+    return (
+        canonical
+        if column is PlanSortColumn.PATH
+        else _sort_plan_projection_from_canonical(canonical, column, direction)
+    )
 
+
+def _sort_plan_projection_from_canonical(
+    canonical: PlanProjectionOrder,
+    column: PlanSortColumn,
+    direction: SortDirection,
+) -> PlanProjectionOrder:
+    """Derive a trusted real sort from a validated canonical sibling order."""
+
+    if type(canonical) is not PlanProjectionOrder:
+        raise TypeError("canonical order must be an exact PlanProjectionOrder")
+    if type(column) is not PlanSortColumn or type(direction) is not SortDirection:
+        raise TypeError("plan sort must use exact enums")
+    if column is PlanSortColumn.PATH:
+        if direction is not SortDirection.ASCENDING:
+            raise ValueError("canonical path sort supports ascending only")
+        return canonical
+    projection = canonical.projection
+    nodes = projection.nodes
+    children: dict[int, list[int]] = {}
+    for source_position in canonical.ordered_source_positions:
+        if source_position == 0:
+            continue
+        parent = nodes[source_position].parent_index
+        assert parent is not None
+        children.setdefault(parent, []).append(source_position)
+    for parent, siblings in children.items():
+        available: list[int] = []
+        unavailable: list[int] = []
+        for source_position in siblings:
+            node = nodes[source_position]
+            value = (
+                node.filename_key
+                if column is PlanSortColumn.FILENAME
+                else node.size
+                if column is PlanSortColumn.SIZE
+                else node.mtime_ns
+            )
+            (unavailable if value is None else available).append(source_position)
+        available.sort(
+            key=lambda position: (
+                nodes[position].filename_key
+                if column is PlanSortColumn.FILENAME
+                else nodes[position].size
+                if column is PlanSortColumn.SIZE
+                else nodes[position].mtime_ns
+            ),
+            reverse=direction is SortDirection.DESCENDING,
+        )
+        children[parent] = available + unavailable
+    return _publish_plan_projection_order(projection, children)
+
+
+def _publish_plan_projection_order(
+    projection: PlanProjection,
+    children: Mapping[int, Sequence[int]],
+) -> PlanProjectionOrder:
     ordered: list[int] = []
     stack = [0]
     while stack:
@@ -366,12 +475,20 @@ def sort_plan_projection(
     inverse = [0] * len(ordered)
     for rank, source_position in enumerate(ordered):
         inverse[source_position] = rank
-    children.clear()
-    return PlanProjectionOrder(
-        projection,
-        CompactUnsignedIntegers(ordered, maximum=max(len(nodes) - 1, 0)),
-        CompactUnsignedIntegers(inverse, maximum=max(len(nodes) - 1, 0)),
+    maximum = max(len(projection.nodes) - 1, 0)
+    published = object.__new__(PlanProjectionOrder)
+    object.__setattr__(published, "projection", projection)
+    object.__setattr__(
+        published,
+        "ordered_source_positions",
+        CompactUnsignedIntegers(ordered, maximum=maximum),
     )
+    object.__setattr__(
+        published,
+        "order_rank_by_source_position",
+        CompactUnsignedIntegers(inverse, maximum=maximum),
+    )
+    return published
 
 
 def _validate_projection_topology(projection: PlanProjection) -> None:
@@ -507,7 +624,7 @@ def _operation_tree(
 
 
 def _append_operation_tree(
-    drafts: list[dict[str, object]],
+    drafts: list[_PlanProjectionDraft],
     tree: NodeTree,
     plan: Plan,
     operations: Mapping[str, PlanOperation],
@@ -628,36 +745,36 @@ def _operation_draft(
     operation_count: int,
     plan: Plan,
     selection_exclusion_reason: str | None,
-) -> dict[str, object]:
+) -> _PlanProjectionDraft:
     stat = None if operation is None else _operation_stat(operation)
     prior = row_kind.startswith("prior-")
-    return {
-        "node_id": node_id,
-        "display": display or "Plan",
-        "rel_path_key": rel_path_key,
-        "depth": depth,
-        "parent": parent,
-        "is_container": is_container,
-        "row_kind": row_kind,
-        "operation_id": None if operation is None or prior else str(operation.op_id),
-        "operation_kind": None if operation is None else operation.kind.value,
-        "reason": None if operation is None else operation.reason.value,
-        "blocked_reason": None if operation is None or operation.blocked_reason is None else operation.blocked_reason.value,
-        "selection": "disabled" if prior else selection,
-        "selectable_operation_count": 0 if prior else selectable_count,
-        "selected_operation_count": 0 if prior else selected_count,
-        "operation_count": operation_count,
-        "size": None if prior or stat is None or stat.kind is not EntryKind.FILE else stat.size,
-        "mtime_ns": None if prior or stat is None else stat.mtime_ns,
-        "dependency_count": 0 if operation is None else len(operation.dependencies),
-        "risk": "none" if operation is None else _operation_risk(operation, plan),
-        "move_peer_id": None,
-        "notice": None,
-        "selection_exclusion_reason": (
-            None if prior else selection_exclusion_reason
+    return _PlanProjectionDraft(
+        node_id=node_id,
+        display=display or "Plan",
+        rel_path_key=rel_path_key,
+        depth=depth,
+        parent=parent,
+        is_container=is_container,
+        row_kind=row_kind,
+        operation_id=None if operation is None or prior else str(operation.op_id),
+        operation_kind=None if operation is None else operation.kind.value,
+        reason=None if operation is None else operation.reason.value,
+        blocked_reason=(
+            None
+            if operation is None or operation.blocked_reason is None
+            else operation.blocked_reason.value
         ),
-        "filename_key": filename_key,
-    }
+        selection="disabled" if prior else selection,
+        selectable_operation_count=0 if prior else selectable_count,
+        selected_operation_count=0 if prior else selected_count,
+        operation_count=operation_count,
+        size=None if prior or stat is None or stat.kind is not EntryKind.FILE else stat.size,
+        mtime_ns=None if prior or stat is None else stat.mtime_ns,
+        dependency_count=0 if operation is None else len(operation.dependencies),
+        risk="none" if operation is None else _operation_risk(operation, plan),
+        selection_exclusion_reason=None if prior else selection_exclusion_reason,
+        filename_key=filename_key,
+    )
 
 
 def _structural_draft(
@@ -669,21 +786,32 @@ def _structural_draft(
     *,
     row_kind: str,
     is_container: bool,
-) -> dict[str, object]:
-    return {
-        "node_id": node_id, "display": display, "rel_path_key": rel_path_key,
-        "depth": depth, "parent": parent, "is_container": is_container,
-        "row_kind": row_kind, "operation_id": None, "operation_kind": None,
-        "reason": None, "blocked_reason": None, "selection": "disabled",
-        "selectable_operation_count": 0, "selected_operation_count": 0,
-        "operation_count": 0, "size": None, "mtime_ns": None,
-        "dependency_count": 0, "risk": "none", "move_peer_id": None,
-        "notice": None, "selection_exclusion_reason": None,
-        "filename_key": _basename(rel_path_key).casefold() if rel_path_key else None,
-    }
+) -> _PlanProjectionDraft:
+    return _PlanProjectionDraft(
+        node_id=node_id,
+        display=display,
+        rel_path_key=rel_path_key,
+        depth=depth,
+        parent=parent,
+        is_container=is_container,
+        row_kind=row_kind,
+        operation_id=None,
+        operation_kind=None,
+        reason=None,
+        blocked_reason=None,
+        selection="disabled",
+        selectable_operation_count=0,
+        selected_operation_count=0,
+        operation_count=0,
+        size=None,
+        mtime_ns=None,
+        dependency_count=0,
+        risk="none",
+        filename_key=_basename(rel_path_key).casefold() if rel_path_key else None,
+    )
 
 
-def _notice_draft(request_id: str, ordinal: int, display: str) -> dict[str, object]:
+def _notice_draft(request_id: str, ordinal: int, display: str) -> _PlanProjectionDraft:
     draft = _structural_draft(
         _projection_id(b"NamiSyncNoticeV1", request_id, str(ordinal)),
         display,
@@ -693,13 +821,13 @@ def _notice_draft(request_id: str, ordinal: int, display: str) -> dict[str, obje
         row_kind="notice",
         is_container=False,
     )
-    draft["notice"] = display
+    draft.notice = display
     return draft
 
 
 def _materialize_projection(
     request_id: str,
-    drafts: list[dict[str, object]],
+    drafts: list[_PlanProjectionDraft],
     selected: frozenset[str],
     operation_draft_by_id: Mapping[str, int],
     *,
@@ -709,36 +837,37 @@ def _materialize_projection(
 ) -> PlanProjection:
     subtree_ends = [index + 1 for index in range(len(drafts))]
     for index in range(len(drafts) - 1, 0, -1):
-        parent = int(drafts[index]["parent"])
+        parent = drafts[index].parent
+        assert parent is not None
         subtree_ends[parent] = max(subtree_ends[parent], subtree_ends[index])
     nodes: list[PlanProjectionNode] = []
     for index, draft in enumerate(drafts):
         nodes.append(PlanProjectionNode(
-            node_id=draft["node_id"],
-            display=draft["display"],
-            rel_path_key=draft["rel_path_key"],
+            node_id=draft.node_id,
+            display=draft.display,
+            rel_path_key=draft.rel_path_key,
             position=index,
-            depth=draft["depth"],
-            parent_index=None if draft["parent"] is None else int(draft["parent"]),
+            depth=draft.depth,
+            parent_index=draft.parent,
             subtree_end=subtree_ends[index],
-            is_container=draft["is_container"],
-            row_kind=draft["row_kind"],
-            operation_id=draft["operation_id"],
-            operation_kind=draft["operation_kind"],
-            reason=draft["reason"],
-            blocked_reason=draft["blocked_reason"],
-            selection=draft["selection"],
-            selectable_operation_count=draft["selectable_operation_count"],
-            selected_operation_count=draft["selected_operation_count"],
-            operation_count=draft["operation_count"],
-            size=draft["size"],
-            mtime_ns=draft["mtime_ns"],
-            dependency_count=draft["dependency_count"],
-            risk=draft["risk"],
-            move_peer_id=draft["move_peer_id"],
-            notice=draft["notice"],
-            selection_exclusion_reason=draft["selection_exclusion_reason"],
-            filename_key=draft["filename_key"],
+            is_container=draft.is_container,
+            row_kind=draft.row_kind,
+            operation_id=draft.operation_id,
+            operation_kind=draft.operation_kind,
+            reason=draft.reason,
+            blocked_reason=draft.blocked_reason,
+            selection=draft.selection,
+            selectable_operation_count=draft.selectable_operation_count,
+            selected_operation_count=draft.selected_operation_count,
+            operation_count=draft.operation_count,
+            size=draft.size,
+            mtime_ns=draft.mtime_ns,
+            dependency_count=draft.dependency_count,
+            risk=draft.risk,
+            move_peer_id=draft.move_peer_id,
+            notice=draft.notice,
+            selection_exclusion_reason=draft.selection_exclusion_reason,
+            filename_key=draft.filename_key,
         ))
         drafts[index] = None  # type: ignore[list-item]
     frozen_nodes = tuple(nodes)

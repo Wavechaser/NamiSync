@@ -98,15 +98,21 @@ target into acceptance.
 
 ## M1-7 plan measurement procedure
 
-Projection construction assigns move peers before final node materialization and
-releases consumed row drafts before publishing the final projection. Source
-nodes remain stable across display sorts. Real sorts produce
+Projection construction uses private slotted row drafts, streams warning rows,
+and releases completed tree/index intermediates before materialization. Move
+peers are assigned before final nodes are built; consumed drafts are released
+before publication. Source nodes remain stable across display sorts. Real sorts produce
 compact source-position permutations and inverse ranks, preserving exact sibling
 comparison and subtree contiguity without cloning projection nodes or identity
 maps. PlanReviewState validates structure on acquisition/staged replacement and
 retains only canonical and current orders. Search, filters and collapse reuse the
-current order; reset can reuse canonical order. Selection-only updates rebind
-orders to the new projection under the owner's structural/key guarantee, so old
+current order; reset can reuse canonical order.
+Real sorts derive siblings from canonical order, stable-sort available raw
+primary values and append unavailable siblings in their canonical tie order.
+Internally generated orders use trusted publication; public construction still
+validates malformed topology and permutations. No extra per-sort cache is kept.
+Selection-only updates rebind orders to the new projection under the owner's
+structural/key guarantee, so old
 projection nodes are not kept alive by cached order references. Full replacement
 invalidates orders even for an equal request ID. Public malformed structure/order
 rejection remains intact; trusted derivation reuses already validated inputs.

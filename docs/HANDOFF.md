@@ -1,58 +1,91 @@
 # Latest session handoff
 
-## M1-7: Plan fixture repaired; full measurements fail budgets (2026-09-16)
+## M1-7 P6: fixture corrected; focused round complete (2026-09-16)
 
-Base `1c14ccc` on `codex/wip-20260914-1600-m1-7`. The user authorized the
-confirmed Plan runtime-error fix, a single 1.5-second comparison after acceptance,
-and a full measurement only on pass, with a stop afterward. That sequence is
-complete. Preserve this pass separately; do not amend earlier commits, merge to
-`milestone1`, prune recovery history or begin another fix/run.
+Base `28c7b44` on `codex/wip-20260914-1600-m1-7`. The user authorized fixing
+the cancellation-drain failure and running focused measurements. The fix and
+remaining selection-retention checks are complete. One focused measurement
+round completed; seven of eight metrics pass. Stop here before more optimization,
+measurements, a full run or integration. Budgets remain unchanged.
 
 ### Confirmed cause and correction
 
-The retained driver record showed committed selection and running execution,
-with the dialog already closed while the page still awaited transient closing.
-The headed fixture polled `data-closing`, although production promises no minimum
-closing duration. Both confirmation paths now arm paused, effect-free finite
-animations before trusted input and finish them only after native closing
-witnesses. The live page waits on the durable native acknowledgment. Production
-admission, modal/inert behavior and zero-motion timing are unchanged. The fix
-changes only the headed child and its owner guard, plus documentation.
+The busy-close test required the very next 0.1-second drain to contain the
+canceling event. Dispatcher publishes that event before returning, but the
+SessionObserver hands it to the adapter asynchronously. The exercised test and
+cancel/delivery/publication code match `353092b`; earlier passes depended on
+scheduling rather than a same-batch guarantee. The test now gates the actual
+canceling offer, proves Dispatcher can be CANCELING before adapter delivery,
+then releases and waits for completed delivery before requiring exactly one
+event. Earlier running updates remain permitted in the intervening batch.
+Repeated close must remain pending, the task retained and no duplicate event
+returned. This is a test-only correction, with no sleep or timeout increase.
 
-### Verification and measurements
+Service tests now verify projection membership shares the exact retained
+workflow decision initially and after mutation; full selected/excluded
+populations, exclusion details and destructive/byte facts remain consistent;
+preview DTOs are fresh; and close releases the state-owned decision. No product
+files changed during this resumption. P6 production remains in `28c7b44`.
 
-- Independent source review passed; focused tests 50 passed / 1 deselected.
-- Interfaces suite: 1,667 passed, one pending-artifact skip, 3,507 deselected.
-- Installed Plan GUI: 1 passed / 2 deselected in 41.50 s. One launch was rejected
-  before process creation due to approval-review model capacity; the unchanged
-  launch succeeded on retry. This was not a failed test or a test rerun.
-- All 38 source/wheel/installed product files match. Previous 5,140-test ordinary,
-  12-import-contract and generic-tree GUI evidence remains applicable because
-  product bytes and those seams are unchanged.
-- All 21 untimed component readiness cases passed. One changed-search comparison
-  (5 fresh processes / 30 samples) passed: p95 151,705,000 ns, max 153,806,600 ns.
-- Compact authority froze successfully. Full readiness passed 35 cases across
-  15 processes. One full run completed 175 children / 775 samples / 35 metrics.
-- Terminal validation rejects fixed budgets: 27 metrics pass and 8 fail. Six
-  changed-sort p95 values are 1.629–1.861 s (limit 1.5 s; all maxima below 3 s).
-  Retained memory is 443,437,056 bytes (422.895 MiB), limit 320 MiB. Execution-start
-  receipt p95/max are 283/284.1 ms, limits 100/250 ms. The compact memory case
-  measures expanded retained review state, so old projection-only numbers are
-  not a directly equivalent baseline.
+### Verification
 
-### Preserved evidence and next discussion
+- Corrected cancellation case: 1 passed; busy-close neighborhood: 2 passed.
+- Selection-retention focused targets: 4 passed; whole owner file: 36 passed.
+- Independent source review: no findings; all prior retention gaps closed.
+- Ordinary suite: 5,152 passed, 5 skipped, 30 deselected in 260.57 s.
+- Import contracts: 12 kept, zero broken.
+- Fresh installed Plan GUI: 1 passed, 2 deselected in 44.26 s.
+- Untimed readiness: 23 cases across three fresh processes passed.
 
-Evidence root: `build/m1-7/evidence/plan-ack-fix-20260916/`. It contains the prior
-confirmation-driver record, passed functional logs, installed byte identity,
-`views/comparison.json`, full readiness/collection/child receipts, an arithmetic
-summary, and preservation records. The complete versioned authority and raw
-measurement files are `tests/interfaces/web/m1_7_plan_compact_authority.json`
-and `m1_7_plan_compact_measurements.json`; old protected evidence is untouched.
-The installed environment remains under
-`C:/Users/Spectrum/AppData/Local/Temp/namisync-plan-ack-fix-20260916-headed/`.
+Initial test-development logs retain a gated-batch assertion that also needed
+to permit an earlier RUNNING event and two incomplete test-fixture values; these
+were corrected before the passing owner/ordinary gates. Driver review also
+caught its unused five-sample memory/p95 mismatch before measurement. The driver
+now uses maximum for memory, and records/verifies its own hash. No measurement
+was restarted or retried.
 
-Stop for discussion of the remaining budget failures. No post-run diagnosis,
-optimization or measurement rerun is authorized by these results. Legacy
-compatibility remains confined to historical evidence reading. `cf5a00b`, the
-separate `30d35f3` fix and earlier recovery commits remain intact;
-`milestone1` remains `40ca76f` and M1-7 stays unmerged.
+### Focused results
+
+Each timing metric uses five fresh processes and 30 samples; memory uses five
+fresh cold processes and five samples. Forty measurement processes completed
+215 samples. Sort p95/max limits remain 1.5/3 seconds; memory 320 MiB; receipt
+p95/max 100/250 milliseconds.
+
+| Metric | p95 | Maximum | Result |
+| --- | ---: | ---: | --- |
+| Filename ascending | 0.728396 s | 0.732044 s | Pass |
+| Filename descending | 0.737502 s | 0.741012 s | Pass |
+| Size ascending | 0.751273 s | 0.769985 s | Pass |
+| Size descending | 0.728179 s | 0.751456 s | Pass |
+| Mtime ascending | 0.746687 s | 0.750556 s | Pass |
+| Mtime descending | 0.746219 s | 0.756561 s | Pass |
+| Review memory overlap | — | 266.785156 MiB | Pass |
+| Execution-start receipt | 170 ms | 175.4 ms | p95 fails |
+
+Memory fell from 422.894531 MiB to 266.785156 MiB, leaving 53.214844 MiB below
+320 MiB; no criterion revision is needed. Receipt p95 fell from 283 to 170 ms
+but remains 70 ms above its budget. This run provides no phase attribution for
+the remaining receipt cost. Do not infer a particular next fix from total time.
+These are focused diagnostic comparisons, not a replacement for full M1-7
+terminal acceptance. No full 35-metric run was launched.
+
+### Evidence and preserved state
+
+Evidence root: `build/m1-7/evidence/p6-resume-20260916/`. It contains raw
+focused/ordinary/import/installed logs, source comparison, the one-shot driver
+and scripts. `comparison/` holds fresh source/installed/wheel/runtime authority,
+all readiness and measurement receipts with hashes, incremental status,
+per-child dispersion and final `comparison.json`.
+Independent `comparison/evidence-audit.json` verifies all 43 unique processes,
+215 samples and receipt/invocation/log hashes, plus all 42 declared source files,
+38 installed/wheel members and 14 runtime roles against the frozen authority.
+The fresh installed environment remains under
+`C:/Users/Spectrum/AppData/Local/Temp/namisync-p6-resume-20260916-headed/`.
+
+The original P6 stop/evidence remains under
+`build/m1-7/evidence/p6-budget-20260916/`; previous full results remain under
+`build/m1-7/evidence/plan-ack-fix-20260916/` and in the unchanged versioned
+compact files. Historical evidence compatibility stays reader-only.
+Keep `cf5a00b`, `30d35f3`, `28c7b44` and prior recovery history unchanged.
+`milestone1` remains `40ca76f`; M1-7 stays unmerged. Discuss the remaining
+receipt p95 before further work.

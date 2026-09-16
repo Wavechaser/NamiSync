@@ -1223,6 +1223,7 @@ def test_task_lifecycle_port_surface_is_exact() -> None:
         "recover_task_execution",
         "read_plan_setup",
         "get_plan_projection",
+        "get_plan_selection_membership",
         "reobserve_task",
         "release_task_session",
         "close_task",
