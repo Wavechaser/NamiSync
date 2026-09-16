@@ -172,11 +172,21 @@ commit is `dbeb7a5`; it preserves the original review reconciliation and usage.
 
 ### Post-delivery ablation implementation (2026-09-16 – 2026-09-17)
 
+**Current direction (2026-09-17):** R7-1–R7-4 are delivered through `95f31e1`.
+The user has suspended continuation to reassess substantial reductions of the
+added test/evidence machinery; the production shell is not the target. The
+ablation document's RI-1–RI-4 register now owns a read-only investigation,
+including deferred retirement options. R7-5–R7-8 and R7-G remain unexecuted;
+the earlier scope below is historical authorization, not an instruction to
+resume. Proposed readiness/partial-index/tracer retirement, historical
+archival and a simpler current acceptance path require a new decision before
+implementation or evidence-policy changes. Existing SLOs and P9 meaning stay.
+
 The user first requested a reviewed subtractive plan, then authorized execution
 on 2026-09-17 after baseline and working-set preparation.
 [M1_7_ABLATION_STUDY.md](M1_7_ABLATION_STUDY.md#checkpoint-register) is this
 register's detailed maintenance subregister: R7-1–R7-8 and R7-G are the finite
-accepted completion denominator; implementation rows remain pending at startup.
+accepted completion denominator before this reassessment.
 Its candidate register preserves A1–A12 and explicitly separates selected
 portions from deferred work. This does not reopen M1-7 product acceptance or
 authorize M1-8, deferred redesigns, push or PR.

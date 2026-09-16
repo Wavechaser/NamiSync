@@ -1,5 +1,227 @@
 # M1-7 ablation implementation plan
 
+## Active reassessment — test and evidence machinery (2026-09-17)
+
+The user has redirected the task after R7-4: investigate materially larger
+reductions in M1-7 test/evidence machinery, including retirement and reopening
+deferred candidates. R7-5–R7-8 and R7-G execution is suspended during this study.
+Existing product guarantees and historical acceptance are unchanged. Later
+"Deliver now" wording records the prior implementation scope, not current
+permission to resume it. Investigation does not authorize proposed deletions or
+changes to evidence authority.
+
+Baseline: clean `milestone1` at `95f31e1`. Finite corpus: original M1-7 changes
+`40ca76f..5986c57`, integrated R7 changes through this baseline; added/changed
+test, benchmark, validator, headed driver, JavaScript probe and artifact files;
+their repository callers, CLI/CI consumers and owning active documentation;
+deferred A6/A10/A11 and the relevant archived reduction dispositions. Product
+source is inspected only to identify actual guarantees and test seams.
+
+| ID | Investigation outcome | Closure evidence | Status |
+| --- | --- | --- | --- |
+| RI-1 | Census machinery and distinguish product, test, evidence and temporary study cost | Reproducible inventory.json/families.json and original/current deltas below | complete |
+| RI-2 | Trace necessity and authority of major machinery families | Guarantee/consumer map, DEFENSE §7 classification and pinned historical replay below | complete |
+| RI-3 | Compare larger retirement/replacement approaches | Options A/B/C, candidate populations, losses and retained detectors below | complete |
+| RI-4 | Recommend a coherent reduced target and disposition of pending R7 rows | Proposal below; independent challenge resolved through pinned-contract and archive exit criteria | complete |
+
+Only this register, M1_PLAN, CHANGELOG and HANDOFF may change for delivery.
+Ignored evidence lives under `build/m1-7-ablation/reassessment/`, beginning with
+its manifest. No production/test edits, benchmark runs, artifact rewrites, new
+general harnesses or implementation commits. Source counts are diagnostics,
+not proof of saved maintenance or runtime. Stop and report any supported hard
+wall violation; otherwise close the named corpus and present one coherent
+proposal without treating discoveries as implementation scope.
+
+### Findings: the unit of reduction must be a capability
+
+The previous plan optimized local duplication while preserving almost every
+test/evidence capability. That is insufficient for the clarified goal. Original
+M1-7 additions were 5,322/442 added/removed product lines and 16,097/272 test,
+helper and evidence lines. R7-1–R7-4 changed product by +1/-77 and tests/helpers
+by +214/-80: net **76 product lines removed, 134 test lines added**. The diff
+does not move production algorithms into tests; it adds fixture separation and
+retained behavioral witnesses. Nevertheless it has not reduced test machinery.
+Documentation and ignored experiment scripts add further authoring/review cost.
+
+Current benchmark producer (3,998 lines), independent validator (2,008) and
+scale tests (1,866) total **7,872 textual lines**. Those three files dominate
+the removable evidence architecture. Existing large service/host test files
+also received M1-7 additions, but their whole sizes are not M1-7-owned deletion
+populations. JSON byte volume is separate from source complexity. Counts are
+reproducible in `build/m1-7-ablation/reassessment/inventory.json`; AST spans in
+`families.json` describe candidate populations, not predicted net savings.
+
+The main costs are distinct:
+
+- **Maintenance:** multiple schemas and validation entrances, dual historical
+  families, fabricated authority/install/runtime graphs, source rewriting and
+  tests of those mechanisms.
+- **Run time:** 35 cases × five fresh children = 175 measurement processes;
+  15 additional readiness children. Keeping all cases and sample counts keeps
+  most of the reported 70–90 minute full-run cost. No duration saving is measured.
+- **Change procedure:** copying validators, constructing per-checkpoint fault
+  matrices and proving unchanged intermediates can exceed the local code saving.
+  These are temporary study costs, not shipped production code, but still matter.
+
+### Authority versus machinery
+
+DEFENSE §7 and PRESENTATION classify these fixed-profile budgets as Tier 2.
+Preserving them requires genuine observations, declared fixture/profile/sample
+counts, committed raw evidence and a separate validator. It does **not** require
+the present readiness protocol, partial collection API, dual-family reader or
+optional tracer. PRESENTATION currently prescribes several of those mechanisms;
+change that owner explicitly before removing them. No policy is changed here.
+
+| Family and current consumers | Value / removal consequence | Candidate population and disposition |
+| --- | --- | --- |
+| Separate untimed readiness: producer child modes, `run_readiness`, validator, terminal prerequisite and scale tests | Finds bad setup before a long run; supplies no measurement acceptance. Removing it may discover some failures later. | Six producer functions span 424 lines; readiness validator helpers span 106. Remove the readiness artifact, schema, coverage table and prerequisite together, not just its duplicated loop. Keep ordinary driver checks and each measured child's untimed setup/correctness checks. |
+| Durable partial collection: producer index/state bookkeeping, `validate_collection_index`, interruption tests | Preserves independently inspectable accepted prefixes after interruption. It is explicitly **not resumable**. Losing this means less structured post-failure evidence, not false permission to accept an incomplete run. | Collection validator/error functions span 221 lines, producer helpers 29, plus interleaved loop state. Readiness/collection-specific test and fixture functions span 374 lines across both families. Retire accepted-prefix/next-or-failed state and public partial validation; retain failure logs/raw child outputs as diagnostics and publish a terminal artifact only after completion. Do not replace it with a journal. |
+| Live legacy compatibility: v4/v5 family dispatch, old representation checker and historical-verdict test | Reproduces interpretation of old failed evidence; no product compatibility path. | The legacy representation function alone spans 125 lines, plus family branches/constants/tests. Archive reproducible interpretation at a pinned repository revision; current code handles only the new active family and refuses obsolete/mixed inputs. Preserve old artifact bytes, paths and verdict meaning. A pinned replay verifies historical interpretation, not a fresh run on an unavailable old environment. |
+| Optional Plan-again tracer: `_plan_again_trace.py`, Setup/task parents and both children | Provides phase-level diagnosis through source rewriting and wrappers; snapshot validation is not a complete causal correctness proof. | Entire tracer is 529 lines; the trace-test region in `test_setup_headed.py` spans about 308 more, plus four consumer integrations. Retire the whole optional capability if its diagnostic loss is accepted. Preserve installed Plan-again outcomes, transport/replay tests and ordinary production-wrapper tests. R7-8's mirrored-oracle repair then becomes unnecessary. |
+| Browser/native test scaffolding: renderer/app/modal probes, headed driver helpers and static prescription tests | Different probes reach different seams; similar fake DOMs do not establish redundant coverage. Some tests instead prescribe helper spelling or preserve accidental shared ordinals. | Reopen A6: delete the disconnected historical checkbox, use scenario-local deferred receipts, remove exact source-occurrence prescriptions after retaining executable driver refusals. Consolidate repeated confirmation setup locally. Do not build a universal fake DOM or delete entire browser/native layers by test-count comparison. |
+| Actual measurement fixture/driver and independent verdict | Establishes the numerical claims and genuine installed endpoints. Most of this remains if all 35 SLOs remain. | Keep fixed large populations, fresh eligible plans, actual pending-frame/receipt endpoints, P95 **and maximum**, identity/membership and retained-memory classification. Simplify their surrounding representation, not the independent expected answers. |
+
+Named function spans above are non-additive deletion estimates: some call-site
+code is outside them, some shared setup survives, and replacement code is not
+designed yet. The first three retirement families expose 905 lines of named
+producer/validator bodies plus the 374-line test/fixture population; tracer
+retirement exposes a separate 837-line module/test-region population before its
+consumer edits. This is a materially larger surface than two local extractions,
+but is **not** a promised 2,116-line net reduction.
+
+Repository consumer search found no production caller of the benchmark or
+validator. CLI entry points and direct scale tests are active consumers;
+`NAMISYNC_M1_7_READINESS_PATH` also controls the ordinary real-artifact test.
+No checked-in CI workflow was found. Manual external callers cannot be excluded.
+Ignored R7 measurement scripts consume the current validator and must remain
+bound to their recorded revision, not silently updated to the successor API.
+
+### Options and recommendation
+
+| Approach | What actually becomes smaller | What remains / decision required |
+| --- | --- | --- |
+| A. Retire optional capabilities, keep the current measurement data model | Readiness, partial-index state machine, legacy branches, tracer and their own tests disappear; A6 reduces brittle harness coupling. | Lower implementation risk, meaningful subtraction, but much of the 7,872-line scale system and 175-child cost remains. Explicit readiness/partial-diagnostic/tracer tradeoffs and archival decision required. |
+| **B. One current acceptance path, with A's retirements — recommended under unchanged SLOs** | One fixed reviewed case specification, one authority record, one terminal raw artifact, one independent verdict path. Remove duplicate capability-specific contracts and synthetic fixtures instead of wrapping them in helpers. | Retain all 35 budgets/cases and fresh-process counts initially. Version the evidence contract and revise PRESENTATION mechanisms; keep physical source/wheel/install binding, runtime/profile identity, separate Git-normalized identity and independent semantic/statistical checks. This is a bounded evidence redesign, not a general benchmarking platform. |
+| C. Rationalize the numeric acceptance contract as well | A smaller metric catalog can remove transition/setup branches and many fresh-process runs; the greatest possible deletion is retiring quantitative acceptance entirely. | Each dropped metric loses its specific current latency/memory claim. Structural tests and representative timings do not certify unmeasured variants. Requires a separate explicit product-acceptance decision, revised PRESENTATION/contract and new evidence for whatever remains. Historical P9 still describes its original bytes/profile. |
+
+For B, freeze the reviewed declarative case specification by identity. Producer
+and validator may read the same prescribed case IDs/budgets; the producer must
+not generate or alter the expected answers. The validator independently owns
+fixture expectations, endpoint witnesses and statistics. Sharing a generated
+manifest or correctness function is not this simplification. Contract identity
+and a separate verdict are essential; repeating every descriptive metadata
+field in several parallel tables is not automatically independent evidence.
+
+Concretely, the successor independent validator must contain the reviewed
+contract digest (or an equivalently pinned immutable blob reference) outside
+producer-supplied run files. It checks the loaded case table against that pin
+before scheduling evidence can receive a verdict. A producer-supplied digest
+matching its own edited table is insufficient. Fixture/endpoint expected
+answers remain independently authored validator data or functions, not values
+copied from observed child receipts. Changed budgets/case membership require
+review and a new pinned contract, never automatic regeneration of the trust pin.
+
+### Archival exit gate for B
+
+The existing six JSON files remain at their original paths under
+`tests/interfaces/web/`; this proposal does not rewrite, move or delete them.
+The following exact interpreter blobs are recorded in their own authority
+manifests and are reachable from repository history:
+
+| Family | Existing artifact filenames (contract / authority / measurements) | Pinned validator | Reproduced historical interpretation |
+| --- | --- | --- | --- |
+| Legacy | `m1_7_plan_contract.json` / `m1_7_plan_authority.json` / `m1_7_plan_measurements.json` | Git blob `76a5ac04bae7618cd50ba59d85fc62b6140f3f52`, introduced at `ae3daf67` | Rejected: `plan-review maximum exceeds its fixed budget` |
+| Compact P9 | `m1_7_plan_compact_contract.json` / `m1_7_plan_compact_authority.json` / `m1_7_plan_compact_measurements.json` | Git blob `5f5dfadbabaef47195cbca199b452d5b39fc7074`, present at `5986c57` | Accepted historical artifact, 35 observations |
+
+Bounded replay command run during this investigation:
+`.venv/Scripts/python.exe build/m1-7-ablation/reassessment/replay_history.py`.
+It reads each pinned blob with `git cat-file blob`, verifies its Git object
+identity, loads that validator, then calls its `validate_artifact` with the
+unchanged contract, authority bytes, raw artifact and original authority receipt
+Git identity. `historical_replay.json` records all six physical SHA256s and both
+verdicts. Dependencies for this interpretation check were Git and CPython
+3.13.14 standard library; it does not require or reconstruct the old installed
+desktop/runtime. This reproduces the old verdict, not current-source acceptance
+or a new timing run.
+
+Before retiring active readers, preserve these blobs/artifacts/replay recipe
+in an explicitly retained repository revision or verified archive with a manifest;
+prove replay from that preserved material without the successor validator.
+The **user's approval of this archival disposition** must explicitly decide
+that old families no longer need validation by current ordinary tests. Update
+PRESENTATION and M1_PLAN accordingly. Keep one bounded archive-integrity/verdict
+check at migration, rather than porting old schemas into every future validator.
+No archival exit decision has been granted by this investigation alone.
+
+### Target execution shape
+
+The terminal result should be the only acceptance-bearing run artifact.
+Raw child outputs can remain useful diagnostics, without an accepted-prefix
+schema or partial-inspection API. A failed/interrupted run has no accepted
+terminal result. Keep subprocess isolation and timeouts; dropping a separate
+readiness pass does not drop correctness checks inside each measured child.
+Do not replace the removed protocols with configurable modes, resume support,
+schema adapters or a shared producer/validator framework.
+
+Before changing case count under C, distinguish runtime reduction from code
+reduction. The six unchanged-after-sort cases already share one transition
+implementation; removing five timing cases mostly reduces runs, not six drivers.
+Changed search/filter/collapse/reset and numeric/name sort paths differ; no
+worst-case dominance proof was established here. Likewise modal opening,
+destructive confirmation, non-destructive Execute and control receipts have
+different endpoints. Do not choose an arbitrary "representative ten" and claim
+the other 25 budgets remain certified. If reducing the **majority** of all scale
+machinery is the goal, that may require C; B cannot promise it while preserving
+all genuine observations and provenance.
+
+### Proposed boundary and verification for a replacement plan
+
+1. Ratify B's retired capabilities and diagnostic tradeoffs in PRESENTATION and
+   the parent delivery register, preserving numerical criteria and DEFENSE §7.
+   Freeze historical v4/v5 source/artifact identities and reproducible verdicts;
+   do not rewrite their files or make the current validator carry both forever.
+2. Retire the optional tracer as one independent outcome, including its four
+   consumers and trace-only tests. Ordinary production-wrapper and installed
+   Plan-again outcome checks close this change; no new generic trace substitute.
+3. Replace the evidence lifecycle as one coherent outcome: producer, current-only
+   validator, direct scale tests and contract wiring. Delete readiness/index
+   states and their bespoke test fixtures together. Review a before/after
+   rule/state/artifact ownership map; reject mere forwarding or relocated logic.
+4. Apply bounded A6 scenario/driver cleanup after the surviving harness shape is
+   known. Leave product refactors A4/A5/A7/A8/A12 out of this test-machinery task.
+
+Acceptance must follow retained guarantees, not the old machinery's entire API.
+Keep a compact finite set of independent controls for wrong build/profile,
+wrong fixture/endpoint, missing/duplicate/swapped cases or process identities,
+bad sample type/count/order/correctness, P95-only and maximum-only rejection,
+and incomplete terminal publication. Retired readiness/partial-index semantics
+need no replacement detector once explicitly removed from the contract. Tests
+for remaining product or safety guarantees still do: ST-5 is not a perpetual
+one-to-one replacement obligation for tests of an intentionally retired feature.
+
+Use focused/department gates for each changed surviving boundary, installed
+headed tests when drivers change, ordinary/import checks at integration and
+one full fresh run on the final versioned acceptance path. Reuse unchanged
+passing evidence only with its actual dependency/byte identity. Do not run old
+and new 70–90 minute suites at every helper commit or create a mutation framework
+to prove every deleted line. Numeric contract changes under C would need their
+own ratified gate, not this unchanged-SLO procedure.
+
+**Pending R7 disposition:** supersede R7-5 and R7-8 if B is approved; they polish
+capabilities being retired. Leave R7-6/R7-7 as optional production maintenance,
+outside this clarified goal. Replace R7-G with the selected redesign's integrated
+closeout after approval; do not claim its old full-current-source obligation has
+already passed. R7-1–R7-4 remain delivered; do not spend another checkpoint
+reverting their small changes before the larger ownership decision.
+
+**Investigation limits:** source/AST/Git and repository consumer inspection,
+with independent read-only policy and harness reviews, plus the bounded pinned
+historical-interpretation replay above. No deletions, mutation experiments,
+timing runs or new product correctness/current-source acceptance results. Unknowns are net
+replacement size, actual run-time savings, external manual consumers and which
+diagnostic/numeric capabilities the user chooses to retain. The recommendation
+is reviewable design scope, not implementation authorization.
+
 ## Main objectives
 
 Reduce duplicated receipt/retry logic and test setup cost while preserving the

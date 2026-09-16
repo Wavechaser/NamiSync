@@ -29,6 +29,12 @@ packaging remain open.
 
 #### Consolidate the delivered Plan shell (2026-09-17)
 
+- Reassess the goal after R7-4: suspend remaining implementation and investigate
+  larger test/evidence capability retirement. Record the actual net test growth,
+  producer/validator/driver ownership, diagnostic tradeoffs and a proposed
+  single current acceptance path. Compare preserving all 35 SLOs with explicitly
+  reducing numeric claims; no production, test or evidence authority changes.
+
 - Record the clean baseline and first checkpoint's provider/consumer working set
   for the authorized R7-1–R7-8 consolidation and R7-G closeout.
 - Use affected local measurement drift checks per checkpoint and one full
