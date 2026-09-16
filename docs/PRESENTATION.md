@@ -302,6 +302,14 @@ do not establish either. Deterministic structure/permutation and bounded-work
 witnesses remain separate from elapsed time. Rerun after changes to any measured
 source, key, comparator, index, publication, retention or admitted profile.
 
+Common receipt checks belong to validator-local helpers, independent of producer
+checks and constants. Collection callers retain path, byte hash, planned order
+and partial-prefix validation; readiness retains complete coverage; terminal
+acceptance retains complete membership and aggregate budgets. Each entry keeps
+its own identity-reuse checks. Inspecting valid partial evidence never grants
+terminal acceptance. Baseline/candidate public-entry corruption comparisons
+protect these boundaries when consolidating their implementation.
+
 For the user-authorized R7 consolidation batch, affected checkpoint checks are
 Tier 1 drift guards; run the full 35-case gate once at R7-G on the integrated
 candidate. Freeze each checkpoint's dependency-based case selection before

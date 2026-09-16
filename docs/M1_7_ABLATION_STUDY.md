@@ -149,7 +149,7 @@ an otherwise-required checkpoint gate.
 | R7-1 | Separate synthetic manifests from real generator observations (A3) | Startup `ee8d861` | Full scale-test module; synthetic generator trap and live population/order faults | complete |
 | R7-2 | Replace obsolete canonical comparator with direct key (A9) | Startup ee8d861 | Projection/review tests; reversed-order fault and all real sort modes | complete |
 | R7-3 | Remove unused in-place full projection replacement (A9) | R7-2 | Acquisition, selection, new-view and failed-publication witnesses | complete |
-| R7-4 | One validator-local implementation per common receipt invariant (A1) | R7-1 | Partial/readiness/terminal corruption matrix and independent oracle controls | pending |
+| R7-4 | One validator-local implementation per common receipt invariant (A1) | R7-1 | Partial/readiness/terminal corruption matrix and independent oracle controls | complete |
 | R7-5 | One producer-local receipt publication operation (A2) | R7-4 | Publication/index interruption matrix; independent validator accepts/refuses exact artifacts | pending |
 | R7-6 | One browser admission-replay state machine (A4) | Implementation authorization | Real bridge retry matrix, transport/consumer and installed headed gates | pending |
 | R7-7 | Avoid unused safety derivation during ID resolution (A12, partial) | Implementation authorization | Selection/service differential cases and derivation witnesses | pending |
@@ -827,8 +827,58 @@ route, stop this row for scope adjudication rather than expanding it.
 
 ### R7-4 — Consolidate common receipt validation (A1)
 
+**Delivered.** Four shared rules now each have one implementation: readiness
+receipt keys (two callers), measurement receipt keys (two), process identity
+shape/type/range (three), and sample shape/correctness/value (two). Boundary
+callers retain distinct decisions and refusal categories. A two-comparison
+forwarding helper was rejected and removed. No direct tests, producer, timed
+child, schema or historical artifacts changed. Final S55/1 skip and I1675/1 skip
+pass on SHA256 `7A5CB498048DF3C9F4D007A712588A3BAE726DF50CF0E5E9381318ADF1E5A067`.
+The 59-case public-entry corpus agrees with frozen baseline; real harmless
+process-ID variations pass, and correctness/reused-identity/maximum copied faults
+fail the unchanged equivalence assertion. Evidence and rule/entry matrix:
+`implementation/r7-4/manifest.md`. Reused independent reviewer is authorized by
+the user after fresh-agent capacity remained blocked. Q-local is corruption
+evidence, not timings; full Q-final remains pending. Pause after this checkpoint.
+
+**Expansion refreshed at `fff3136`.** Finite implementation population:
+`tests/interfaces/web/_plan_review_scale.py` and its direct
+`test_plan_review_scale.py` consumer. Owning docs: PRESENTATION, this register,
+CHANGELOG and HANDOFF. Read-only design inspected `884813d`; R7-3 changed neither
+validator nor scale tests. Preserve `_validate_children` signature for the
+retained R7-2 local evidence checker as well as public validator composition.
+Freeze the baseline module, hashes and exact finite corpus before editing under
+`implementation/r7-4/`, with its manifest defining artifact conventions.
+
+Use small readiness/measurement receipt helpers only where the same invariant
+is checked. Keep boundary-local uniqueness, collection path/order/hash and
+partial inspection, readiness completeness and terminal aggregate/membership
+checks at their current callers. Compare baseline and candidate public entries
+over the corruption corpus below, repairing enclosing hashes to reach semantic
+checks. Preserve consumed refusal categories. No new admission rule, producer
+dependency, legacy retirement or timing change is authorized. ST-5 requires
+same-level corruption detectors; historical E2 is supporting evidence only.
+S then I, public-entry equivalence and isolated correctness/identity/maximum
+fault detectors, documentation consistency and fresh independent review form
+one atomic gate. Q-local has no timed IDs because only validator/test code
+changes; full Q-final remains due at R7-G. The regression study maps each old
+check to every applicable new entry and proves valid partial evidence remains
+inspectable without terminal acceptance. Existing task stops remain binding.
+
 **Objective.** Keep one validator-local implementation of common receipt
 invariants without weakening boundary-specific evidence requirements.
+
+**Reduction gate (user clarification).** A shared helper must eliminate a
+duplicated rule or state while preserving the independent checks. Record the
+before/after rule ownership. If callers retain the same decisions and the helper
+only adds another layer to follow, reject that extraction as relocation rather
+than simplification. Keep boundary-specific decisions explicit; do not force
+them into a generalized helper merely to reduce line count.
+
+**Review and pause (user direction).** If agent slots remain unavailable after
+waiting a couple of minutes and retrying, a previous reviewing agent may review
+R7-4; a builder may not substitute. That independent reused review counts toward
+acceptance. Pause for a recap after R7-4 acceptance; do not start R7-5 implementation.
 
 **Scope and approach.** `_plan_review_scale.py`'s collection/readiness/terminal
 entry points and their direct scale tests. Extract small readiness/measurement
@@ -871,6 +921,12 @@ matrix, and verify no producer constant/algorithm supplies the expected answer.
 
 **Objective.** Remove duplicated receipt persistence/accepted-attempt transitions
 while retaining truthful interrupted collections.
+
+**Reduction gate (user clarification).** The extracted operation must own the
+duplicated publication-to-acceptance transition once. Callers must not retain
+parallel decisions or state updates for that same transition. Preserve their
+distinct readiness and measurement orchestration and independent validation;
+an additional forwarding layer alone does not satisfy this outcome.
 
 **Scope and approach.** `plan_review_benchmark.py`'s `run_readiness`, `run_gate`
 and their receipt/index helpers plus direct scale tests. Extract one local
@@ -1131,10 +1187,11 @@ experiment copies were removed; frozen P9/legacy artifacts remain untouched.
 ## Resumption block
 
 - **Current state:** execution authorized 2026-09-17; startup baseline at clean
-  `d91871f`, product/tests initially based on `5986c57`. R7-1–R7-3 complete; R7-4–R7-8 and R7-G pending.
+  `d91871f`, product/tests initially based on `5986c57`. R7-1–R7-4 complete; R7-5–R7-8 and R7-G pending.
   R7-1 unchanged S baseline is 54 passed / 1 historical-artifact skip.
-- **Next action:** verify R7-3 committed-source identity, then refresh/freeze
-  R7-4 expansion and its baseline. Existing authorization never needs repeating.
+- **Next action:** pause for the user-requested recap after R7-4 acceptance.
+  On resumption, refresh the R7-5 read-only expansion against integrated R7-4
+  before implementation; its helper must eliminate duplicated transition ownership.
 - **Commands:** S/P/B/M/T/I/WI/H/O/L above are established repository invocations;
   Q's supported CLI flags are recorded, but actual new install/artifact paths
   must be frozen before execution. Do not infer a pass from a skipped artifact test.

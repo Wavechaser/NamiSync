@@ -49,6 +49,12 @@ packaging remain open.
   interfaces pass 2,482 with one historical-artifact skip, all 12 import contracts
   pass, and 30 installed headed checks pass. Copied faults detect lost sort,
   malformed acquisition and early publication; independent review approves.
+- Consolidate validator-local receipt shape, process identity and sample rules
+  while retaining boundary-specific refusal, uniqueness and completeness checks.
+  Remove an extraction that only added a forwarding layer. Scale checks pass 55
+  and interfaces pass 1,675, each with one historical-artifact skip; public-entry
+  baseline comparison and isolated correctness/identity/maximum faults protect
+  the independent evidence checks. Full measurement acceptance remains due.
 
 #### Reduce Plan review and execution overhead (2026-09-15 – 2026-09-16)
 

@@ -311,6 +311,51 @@ def _readiness_plan(
     ]
 
 
+def _is_process_identity(process: object) -> bool:
+    return (
+        type(process) is dict
+        and set(process) == {"creation_filetime_100ns", "pid"}
+        and type(process["pid"]) is int
+        and process["pid"] > 0
+        and type(process["creation_filetime_100ns"]) is int
+        and process["creation_filetime_100ns"] > 0
+    )
+
+
+def _is_readiness_receipt(receipt: object) -> bool:
+    return type(receipt) is dict and set(receipt) == {
+        "child_id", "correctness", "headed_fixture", "headed_runtime",
+        "launch_token", "metric_ids", "process_identity", "schema", "surface",
+    }
+
+
+def _is_measurement_receipt(receipt: object) -> bool:
+    return type(receipt) is dict and set(receipt) == {
+        "child_id", "fixture_case", "headed_fixture", "headed_runtime",
+        "launch_token", "metric_id", "process_identity", "sample_kind",
+        "samples", "schema",
+    }
+
+
+def _measurement_sample_issue(
+    sample: object, iteration: int, correctness: object,
+    measured_field: str, other_field: str,
+) -> str | None:
+    if type(sample) is not dict or set(sample) != {
+        "correctness", "elapsed_ns", "iteration", "retained_bytes"
+    }:
+        return "shape"
+    if sample["iteration"] != iteration or sample["correctness"] != correctness:
+        return "correctness"
+    if (
+        type(sample[measured_field]) is not int
+        or sample[measured_field] < 0
+        or sample[other_field] is not None
+    ):
+        return "value"
+    return None
+
+
 def validate_readiness(
     contract: object,
     authority: object,
@@ -362,11 +407,7 @@ def validate_readiness(
         if (
             not _is_hex(wrapper["receipt_sha256"], _HEX64)
             or wrapper["receipt_sha256"] != canonical_sha256(receipt)
-            or type(receipt) is not dict
-            or set(receipt) != {
-                "child_id", "correctness", "headed_fixture", "headed_runtime",
-                "launch_token", "metric_ids", "process_identity", "schema", "surface",
-            }
+            or not _is_readiness_receipt(receipt)
         ):
             raise ValueError("plan-review readiness child shape is invalid")
         expected_correctness = {
@@ -388,12 +429,7 @@ def validate_readiness(
             raise ValueError("plan-review readiness child identity is invalid")
         process = receipt["process_identity"]
         if (
-            type(process) is not dict
-            or set(process) != {"creation_filetime_100ns", "pid"}
-            or type(process["pid"]) is not int
-            or process["pid"] <= 0
-            or type(process["creation_filetime_100ns"]) is not int
-            or process["creation_filetime_100ns"] <= 0
+            not _is_process_identity(process)
         ):
             raise ValueError("plan-review readiness process identity is invalid")
         process_key = (process["pid"], process["creation_filetime_100ns"])
@@ -517,11 +553,7 @@ def validate_collection_index(
             metric = next(
                 row for row in contract["metrics"] if row["id"] == item["case_id"]
             )
-            if type(receipt) is not dict or set(receipt) != {
-                "child_id", "fixture_case", "headed_fixture", "headed_runtime",
-                "launch_token", "metric_id", "process_identity", "sample_kind",
-                "samples", "schema",
-            }:
+            if not _is_measurement_receipt(receipt):
                 raise ValueError("plan-review collection measurement receipt is invalid")
             sampling = contract["sampling"][metric["sample_kind"]]
             samples = receipt["samples"]
@@ -546,25 +578,15 @@ def validate_collection_index(
                 "elapsed_ns" if measured_field == "retained_bytes" else "retained_bytes"
             )
             for iteration, sample in enumerate(samples, start=1):
-                if (
-                    type(sample) is not dict
-                    or set(sample) != {
-                        "correctness", "elapsed_ns", "iteration", "retained_bytes"
-                    }
-                    or sample["iteration"] != iteration
-                    or sample["correctness"] != metric["correctness"]
-                    or type(sample[measured_field]) is not int
-                    or sample[measured_field] < 0
-                    or sample[other_field] is not None
+                if _measurement_sample_issue(
+                    sample, iteration, metric["correctness"], measured_field,
+                    other_field,
                 ):
                     raise ValueError("plan-review collection measurement sample is invalid")
         else:
             expected_surface, expected_ids = _readiness_plan(contract)[position]
             case_matches = receipt.get("metric_ids") == expected_ids
-            if type(receipt) is not dict or set(receipt) != {
-                "child_id", "correctness", "headed_fixture", "headed_runtime",
-                "launch_token", "metric_ids", "process_identity", "schema", "surface",
-            }:
+            if not _is_readiness_receipt(receipt):
                 raise ValueError("plan-review collection readiness receipt is invalid")
             expected_correctness = {
                 metric_id: next(
@@ -600,12 +622,7 @@ def validate_collection_index(
             raise ValueError("plan-review collection receipt identity is invalid")
         process = item["process_identity"]
         if (
-            type(process) is not dict
-            or set(process) != {"creation_filetime_100ns", "pid"}
-            or type(process["pid"]) is not int
-            or process["pid"] <= 0
-            or type(process["creation_filetime_100ns"]) is not int
-            or process["creation_filetime_100ns"] <= 0
+            not _is_process_identity(process)
             or not _is_hex(receipt.get("child_id"), _HEX32)
         ):
             raise ValueError("plan-review collection process shape is invalid")
@@ -1671,11 +1688,7 @@ def _validate_children(
         receipt = wrapper["receipt"]
         if not _is_hex(wrapper["receipt_sha256"], _HEX64) or wrapper["receipt_sha256"] != canonical_sha256(receipt):
             raise ValueError("plan-review child receipt digest is invalid")
-        if type(receipt) is not dict or set(receipt) != {
-            "child_id", "fixture_case", "headed_fixture", "headed_runtime",
-            "launch_token", "metric_id", "process_identity", "sample_kind",
-            "samples", "schema",
-        }:
+        if not _is_measurement_receipt(receipt):
             raise ValueError("plan-review child receipt shape is invalid")
         if receipt["schema"] != CHILD_RECEIPT_SCHEMA:
             raise ValueError("plan-review child receipt schema is invalid")
@@ -1702,10 +1715,7 @@ def _validate_children(
         launch_tokens.add(receipt["launch_token"])
         process = receipt["process_identity"]
         if (
-            type(process) is not dict or set(process) != {"creation_filetime_100ns", "pid"}
-            or type(process["pid"]) is not int or process["pid"] <= 0
-            or type(process["creation_filetime_100ns"]) is not int
-            or process["creation_filetime_100ns"] <= 0
+            not _is_process_identity(process)
         ):
             raise ValueError("plan-review child process identity is invalid")
         process_identity = (process["pid"], process["creation_filetime_100ns"])
@@ -1731,14 +1741,16 @@ def _validate_children(
                 raise ValueError("plan-review child sample count is invalid")
             child_values = []
             for expected_iteration, sample in enumerate(samples, start=1):
-                if type(sample) is not dict or set(sample) != {
-                    "correctness", "elapsed_ns", "iteration", "retained_bytes"
-                }:
+                issue = _measurement_sample_issue(
+                    sample, expected_iteration, metric["correctness"],
+                    measured_field, other_field,
+                )
+                if issue == "shape":
                     raise ValueError("plan-review child sample shape is invalid")
-                if sample["iteration"] != expected_iteration or sample["correctness"] != metric["correctness"]:
+                if issue == "correctness":
                     raise ValueError("plan-review child correctness receipt is invalid")
                 measured = sample[measured_field]
-                if type(measured) is not int or measured < 0 or sample[other_field] is not None:
+                if issue == "value":
                     raise ValueError("plan-review child measurement is invalid")
                 child_values.append(measured)
             values.extend(child_values)
