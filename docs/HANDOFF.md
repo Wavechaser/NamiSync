@@ -29,18 +29,26 @@ Final new-artifact/scale validation passes 55 tests (28.62 s); the ordinary suit
 passes 5,158 tests with four platform skips and 30 headed deselections (262.71 s).
 Independent documentation and reconstructed endpoint reviews pass. The P8 import
 and installed Plan results remain applicable because product/test code is
-unchanged. Clean committed-source verification remains before integration.
+unchanged. Clean committed-source validation, supplemental core physical/HEAD
+identity and exact product/test accounting passed on the accepted recovery
+revision `ba31c1e`; the same checks bind the final reconstructed series.
 
-Integration uses six reconstructed outcomes: Plan/confirmation and framework
+M1-7 is complete. Integration into `milestone1` uses six reconstructed outcomes:
+Plan/confirmation and framework
 readiness; covered windows and compact Plan scale; review/selection retention;
-digest reuse; shared structure; accepted evidence/closure. Preserve original
-recovery commits unchanged in a verified bundle; only the fully verified series
-may integrate into `milestone1`. The final product/test tree must equal P8
-except the two accepted artifacts. Do not prune recovery until full accounting.
+digest reuse; shared structure; accepted evidence/closure. The final product/test
+tree equals P8 except the two accepted artifacts. Original recovery commits,
+including `cf5a00b`, remain unchanged under archive tag
+`codex/m1-7-recovery-20260916` and verified `m1-7-recovery.bundle` in the evidence
+root. The recovery and temporary integration branches are pruned only after
+verified integration. `integration-receipt.json` records both tips, exact tree
+accounting, bundle identity and cleanup; it is the operational Git receipt.
 
 Reviewed reconstructed commits: `ae3daf6` (foundation/framework), `8ffbd3a`
 (compact Plan), `5c31894` (retention), `ef2308a` (digest), `ea5f997` (structure).
-Their final tree is exactly `3c3bbbc`; the sixth commit carries this closure.
+Their final tree is exactly `3c3bbbc`; `d1ce79d` carries accepted evidence.
+This final documentation record follows the verified fast-forward and cleanup;
+the current checkout is `milestone1`. No changes were pushed.
 
-Stop after M1-7 integration for recap and GUI review. No M1-8, DOC-2, push, PR
+Stop on `milestone1` for recap and GUI review. No M1-8, DOC-2, push, PR
 or release work is authorized.

@@ -79,7 +79,7 @@ Each checkpoint is a closed register row. A new finding does not enlarge a row; 
 | M1-async | Separate bounded command admission from asynchronous completion for create/start/release/close, reusing current task/session effect owners and one shared exchange budget. | After M1-4; default before M1-5, permitted after M1-5 but before M1-6. M1-async-G passed; delivered/excluded outcomes and evidence are below. | Complete |
 | M1-5 | Give Setup and inventory one workflow-owned location-candidate pipeline with typed admission results and bounded remembered locations. | After M1-4, normally after M1-async. Verify parser refusals; leaf/reparse/placeholder and long paths; missing, offline, remount, and clone ambiguity; bounded recents; activation/slot races and purpose mismatch. Review path parsing and TOCTOU. Scanner, preflight, executor, and verifier retain fresh re-probes. | Complete |
 | M1-6 | Deliver frozen, backend-canonical Setup, typed/picker/recent inputs, standalone inventory creation, serial best-effort pair creation, and explicit Plan-again after fresh reviewed-identity resolution. | Verify bounded inputs, canonical snapshots, immediate invalidation, no global-default mutation or browser filter normalization, partial-pair refusal, mixed batches, replay/recovery, slot/plan-generation races, and headed hostile-text/picker/recent flows. Map needed command behavior in BRIDGE when this activates; do not prescribe the retired 18-command expansion. | Complete |
-| M1-7 | Deliver bounded plan review, selection, execution admission, and the full plan consumer for sibling sorting. A review remains truthful when execution never ran; an admitted attempt keeps its selection committed. | Exercise plan publication, selection and commitment freshness, stale/replayed mutation, admission-failure rollback versus post-admission preflight refusal, fresh Plan-again review after source/target changes, destructive confirmation, controls, windows/anchors/search/filter, and headed production flows. No terminal selection reopening or subset retry. BRIDGE and PRESENTATION define protocol and projection criteria. | Accepted; final integration verification pending |
+| M1-7 | Deliver bounded plan review, selection, execution admission, and the full plan consumer for sibling sorting. A review remains truthful when execution never ran; an admitted attempt keeps its selection committed. | Exercise plan publication, selection and commitment freshness, stale/replayed mutation, admission-failure rollback versus post-admission preflight refusal, fresh Plan-again review after source/target changes, destructive confirmation, controls, windows/anchors/search/filter, and headed production flows. No terminal selection reopening or subset retry. BRIDGE and PRESENTATION define protocol and projection criteria. | Complete |
 | M1-8-capacity | Distinguish recognized disk-capacity I/O failure and stop admission of later executor operations after settling the current operation. | Before M1-8, use the existing failure-policy/Stop and settlement paths; verify direct and wrapped capacity failures, ordinary I/O distinction, current-effect/recording truth, later work left unrun, terminal projection, and unchanged sharing-violation retries. Run executor plus core/workflow/interface consumers and the retained settlement oracle. No general I/O taxonomy or settlement restructuring. | Pending |
 | M1-8 | Deliver live and retained execution review with bounded item windows, exact execution overlays, task/item recording issues, terminal axes, current ledger evidence, capacity/generic-I/O messages, and informational trash location. | Test filesystem/recording combinations, overlay and omission invariants, Gap plus terminal reconciliation, navigation/re-observation, generic unrun presentation, yellow capacity without hiding known failures, bounded evidence queries, and post-copy overlay independence. Trash counts require complete outcome evidence; location-only fallback must not assert a planned count, scan all trash, or imply purge. | Pending |
 | M1-9 | Deliver bounded inventory projections, current evidence, and the full inventory consumer for sibling sorting. | Test complete or prior-complete publication, warnings outside action scope, raw evidence provenance, search/filter/collapse/window/detail behavior, replacement/races, supported sort/reset production paths, and headed witnesses. | Pending |
@@ -214,7 +214,7 @@ headed, documentation and final integration checks.
 | Review construction/staging memory | 280,768,512 bytes (267.762 MiB), within 320 MiB. This is not whole-app or paused-execution memory. |
 | Confirmed execution admission receipt | P95 54.6 ms / maximum 55.4 ms, within 100/250 ms; receipt remains after admission. |
 | Prior unchanged candidate verification | 5,157 ordinary tests, 259 checkpoint/resume/post-execution tests, 12 import contracts and installed Plan GUI passed at P8. |
-| Final closure verification | 55 artifact/scale checks and 5,158 ordinary tests pass (four platform skips; 30 headed tests deselected). Documentation and reconstructed endpoint reviews pass. Clean committed-source verification remains required before integration. |
+| Final closure verification | 55 artifact/scale checks and 5,158 ordinary tests pass (four platform skips; 30 headed tests deselected). Documentation and reconstructed endpoint reviews pass. Clean committed-source, supplemental core and exact product/test accounting pass. |
 
 Raw children, incremental indexes, readiness, authority, terminal measurements,
 independent audit and before/after identities are retained under
@@ -235,7 +235,7 @@ audit verifies both this supplemental binding and the contract-owned population.
 Collection receipt hashes are verified; per-child invocation/log hashes are not
 fields of the full-run collection contract and are not claimed.
 
-The closure series reconstructs six dependency-ordered outcomes from the
+The reviewed closure series reconstructs six dependency-ordered outcomes from the
 recovery history: reviewed Plan delivery and measurement readiness; covered
 windows and compact Plan scale; reduced review/selection retention; prepared
 selection digests; shared validated execution structure; and accepted evidence
@@ -243,8 +243,11 @@ with closure documentation. Intermediate trees preserve the historical failed
 measurements honestly; only the complete verified series is merge-ready.
 The original commits, including `cf5a00b` and `30d35f3`, are not amended or
 integrated as WIP objects. Final product/test accounting against `3c3bbbc`
-permits only the two newly accepted artifact files. A verified recovery bundle
-must account for the original history before branch pruning.
+permits only the two newly accepted artifact files. Recovery history is preserved
+by the `codex/m1-7-recovery-20260916` archive tag and the verified
+`build/m1-7/evidence/p9-full-20260916/m1-7-recovery.bundle`. The integration receipt
+in that directory records exact reconstructed and recovery commit identities,
+tree equality, merge and branch cleanup. No original commit was amended.
 
 The earlier confirmed hidden-control, state-ordering and Plan-retry defects are
 closed at their existing owners; BUGS retains their mechanisms and witnesses.
@@ -466,7 +469,7 @@ performed a product release run.
 
 ## Resumption
 
-M1-4, M1-async (`675181a`), M1-5 (`e19ed9d`), GUI-1 (`b98dce4`) and M1-6
-are delivered on `milestone1`. M1-7 has passed full quantitative acceptance;
-finish only its recorded integration verification, then stop for GUI review. HANDOFF owns current operational context; AGENTS
+M1-4, M1-async (`675181a`), M1-5 (`e19ed9d`), GUI-1 (`b98dce4`), M1-6
+and M1-7 are delivered on `milestone1`. Stop for the requested recap and GUI
+review. HANDOFF owns current operational context; AGENTS
 owns containment. No later checkpoint, halo workaround, push or PR is authorized.

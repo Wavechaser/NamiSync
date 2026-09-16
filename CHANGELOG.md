@@ -47,6 +47,9 @@ packaging remain open.
 - Activate the real-artifact validation gate: 55 scale checks and 5,158 ordinary
   tests pass, with unchanged import and installed Plan evidence. Independently
   review the reconstructed outcomes and condense the active delivery register.
+- Close M1-7 with clean committed-source evidence and integrate six coherent
+  outcomes into `milestone1`. Preserve original recovery history under an
+  archive tag and verified bundle before pruning task branches; stop for GUI review.
 
 #### Correct measurement readiness and evidence retention (2026-09-15)
 
