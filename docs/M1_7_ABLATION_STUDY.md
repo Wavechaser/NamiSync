@@ -146,7 +146,7 @@ an otherwise-required checkpoint gate.
 
 | ID | Accepted outcome | Depends on | Primary verification | Status |
 | --- | --- | --- | --- | --- |
-| R7-1 | Separate synthetic manifests from real generator observations (A3) | Implementation authorization | Full scale-test module; synthetic generator trap and live population/order faults | pending |
+| R7-1 | Separate synthetic manifests from real generator observations (A3) | Startup `ee8d861` | Full scale-test module; synthetic generator trap and live population/order faults | complete |
 | R7-2 | Replace obsolete canonical comparator with direct key (A9) | Implementation authorization | Projection/review tests; reversed-order fault and all real sort modes | pending |
 | R7-3 | Remove unused in-place full projection replacement (A9) | R7-2 | Acquisition, selection, new-view and failed-publication witnesses | pending |
 | R7-4 | One validator-local implementation per common receipt invariant (A1) | R7-1 | Partial/readiness/terminal corruption matrix and independent oracle controls | pending |
@@ -586,6 +586,24 @@ diagnostics. Complexity claims require the source-derived argument and counted
 witnesses required by DEFENSE §7, not elapsed-time assertions.
 
 ### R7-1 — Isolate synthetic fixture expectations (A3)
+
+**Delivery evidence.** Synthetic authority inputs now receive deep copies of
+cached frozen compact expectations; both live families still generate actual
+manifests, compare counts/order/retained descriptors and check actual sibling
+sorts against frozen orders. S: 55 passed / 1 historical-artifact skip. I: 1,673
+passed / 1 skip / 3,519 deselected. The skip remains unconfigured historical
+readiness, not current quantitative acceptance. Task-owned TEMP caused custody
+source-tree cache refusals; the normal external TEMP run passed without code
+changes. Isolated copied-source population, order, retained-descriptor and
+maximum-only faults fail their causal assertions; harmless metadata passes.
+The synthetic generator-trap cohort passes all 41 cases (30 named functions).
+Evidence and exact patches/commands:
+`build/m1-7-ablation/implementation/r7-1/manifest.md`. Q-local selects no timed
+case because production, generator and validator bytes are unchanged. Full
+scale acceptance remains pending R7-G. Fresh adversarial review approved the
+actual diff and corrected evidence; documentation links and diff checks pass.
+Commit: `test(presentation): Separate synthetic and live scale fixtures`
+(the commit containing this record).
 
 **Objective.** Remove full product fixture construction from synthetic validator
 and collection-failure controls, so their expected answers stay independent.
@@ -1027,10 +1045,10 @@ experiment copies were removed; frozen P9/legacy artifacts remain untouched.
 ## Resumption block
 
 - **Current state:** execution authorized 2026-09-17; startup baseline at clean
-  `d91871f`, product/tests still based on `5986c57`. R7-1–R7-8 and R7-G pending.
+  `d91871f`, product/tests still based on `5986c57`. R7-1 complete; R7-2–R7-8 and R7-G pending.
   R7-1 unchanged S baseline is 54 passed / 1 historical-artifact skip.
-- **Next action:** finish independent startup-policy review, then implement R7-1
-  within its recorded population. Existing authorization never needs repeating.
+- **Next action:** refresh/freeze the R7-2 expansion and measurement baseline
+  after R7-1 committed-source identity check. Existing authorization never needs repeating.
 - **Commands:** S/P/B/M/T/I/WI/H/O/L above are established repository invocations;
   Q's supported CLI flags are recorded, but actual new install/artifact paths
   must be frozen before execution. Do not infer a pass from a skipped artifact test.

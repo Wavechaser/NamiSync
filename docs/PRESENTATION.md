@@ -189,6 +189,13 @@ reading and checking preserved evidence. There is no legacy fixture generator,
 product-data admission path or second runtime representation; retire the legacy
 reader when its evidence is archived and no longer needs active validation.
 
+Ordinary synthetic authority, receipt and corruption tests take fresh deep
+copies of the frozen compact fixture expectations. Their expected answers do
+not invoke the live generator. Separate live tests construct both actual fixture
+families and compare population, raw-order witnesses and retained descriptors
+against those frozen expectations; actual sibling sorting is checked against
+the frozen order. These test expectations never supply measurement observations.
+
 Before measurement, freeze the finite source/instrument/validator file identities,
 actual native runtime/dependencies/profile, installed wheel and measured installed
 file hashes, exact fixture family counts and expected raw-key order witnesses.

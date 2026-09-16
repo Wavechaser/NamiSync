@@ -34,6 +34,11 @@ packaging remain open.
 - Use affected local measurement drift checks per checkpoint and one full
   current-source measurement suite at closeout; retain fixed criteria,
   independent validators and historical evidence. No new acceptance claimed.
+- Separate synthetic scale-test expectations from live generator observations;
+  retain live population/order/retained-buffer checks and independent corruption
+  detection. Focused scale tests pass 55 and interfaces pass 1,673, each with
+  one historical-artifact skip; copied-source faults are detected and all 41
+  synthetic cohort cases pass with live generation disabled.
 
 #### Reduce Plan review and execution overhead (2026-09-15 – 2026-09-16)
 

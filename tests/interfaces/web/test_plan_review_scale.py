@@ -428,11 +428,35 @@ if (removed !== 1 || coexistingCalls !== 3) {
 
 
 @cache
-def _fixture_manifests() -> dict[str, object]:
+def _frozen_fixture_manifests() -> dict[str, object]:
+    return json.loads(AUTHORITY_PATH.read_bytes())["fixture_manifests"]
+
+
+def _synthetic_fixture_manifests() -> dict[str, object]:
+    return deepcopy(_frozen_fixture_manifests())
+
+
+def _live_fixture_manifests() -> dict[str, object]:
     return {
         "base": build_fixture_manifest(information_heavy=False),
         "information-heavy": build_fixture_manifest(information_heavy=True),
     }
+
+
+def test_synthetic_fixture_manifests_are_isolated_from_live_generation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def reject_generation(**_kwargs: object) -> None:
+        raise AssertionError("synthetic authority invoked fixture generation")
+
+    monkeypatch.setattr(benchmark, "build_fixture_manifest", reject_generation)
+    monkeypatch.setattr(sys.modules[__name__], "build_fixture_manifest", reject_generation)
+    first = _synthetic_fixture_manifests()
+    first["base"]["counts"]["operations"] = 0
+    second = _synthetic_fixture_manifests()
+    assert second["base"]["counts"]["operations"] == 100_000
+    assert first["base"] is not second["base"]
+    assert _authority_inputs(_contract())["fixture_manifests"] == second
 
 
 def _authority_inputs(contract: dict[str, object]) -> dict[str, object]:
@@ -530,7 +554,7 @@ def _authority_inputs(contract: dict[str, object]) -> dict[str, object]:
         "installed_wheel_bytes": wheel_buffer.getvalue(),
         "runtime_bytes": runtime_bytes,
         "native_profile_bytes": native_profile_bytes,
-        "fixture_manifests": _fixture_manifests(),
+        "fixture_manifests": _synthetic_fixture_manifests(),
         "headed_runtime": headed_runtime,
     }
 
@@ -1173,7 +1197,11 @@ def test_failed_measurement_preserves_validated_child_and_rejects_corruption(
 
 
 def test_plan_review_fixture_realizes_exact_counts_depth_duplicates_and_orders() -> None:
-    manifests = _fixture_manifests()
+    manifests = _live_fixture_manifests()
+    expected = _synthetic_fixture_manifests()
+    for case in ("base", "information-heavy"):
+        for field in ("counts", "raw_key_witnesses", "retained_representation"):
+            assert manifests[case][field] == expected[case][field]
     base = manifests["base"]
     heavy = manifests["information-heavy"]
 
@@ -1233,7 +1261,8 @@ def test_plan_review_fixture_realizes_exact_counts_depth_duplicates_and_orders()
 def test_plan_review_fixture_expected_orders_match_actual_sibling_sort() -> None:
     artifact = build_plan_fixture(information_heavy=False)
     projection = build_plan_projection(artifact.request.request_id, artifact)
-    witnesses = _fixture_manifests()["base"]["raw_key_witnesses"]
+    witnesses = _synthetic_fixture_manifests()["base"]["raw_key_witnesses"]
+    assert build_fixture_manifest(information_heavy=False)["raw_key_witnesses"] == witnesses
     witness_ids = set(witnesses["canonical_ids"])
 
     for column in (PlanSortColumn.FILENAME, PlanSortColumn.SIZE, PlanSortColumn.MTIME):
