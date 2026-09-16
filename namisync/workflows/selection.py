@@ -14,6 +14,7 @@ from namisync.core.planning import (
     Plan,
     calculate_required_bytes,
     quarantined_operation_ids,
+    selection_digest,
 )
 from namisync.core.scalars import scalar_64_to_text
 
@@ -65,6 +66,7 @@ _SELECTION_AUTHORITY = object()
 @dataclass(frozen=True, slots=True, init=False)
 class ExecutionSelection:
     selection: frozenset[OpId]
+    selection_digest: bytes
     exclusions: tuple[OperationExclusion, ...]
     destructive_operation_counts: DestructiveOperationCounts
     irreversible_update_count: int
@@ -75,6 +77,7 @@ class ExecutionSelection:
     def __init__(
         self,
         selection: frozenset[OpId],
+        selection_digest: bytes,
         exclusions: tuple[OperationExclusion, ...],
         destructive_operation_counts: DestructiveOperationCounts,
         irreversible_update_count: int,
@@ -87,6 +90,7 @@ class ExecutionSelection:
         if _authority is not _SELECTION_AUTHORITY:
             raise TypeError("execution selection is workflow-derived authority")
         object.__setattr__(self, "selection", selection)
+        object.__setattr__(self, "selection_digest", selection_digest)
         object.__setattr__(self, "exclusions", exclusions)
         object.__setattr__(
             self, "destructive_operation_counts", destructive_operation_counts
@@ -160,6 +164,7 @@ def derive_execution_selection(
             delete_count += 1
     return ExecutionSelection(
         selection,
+        selection_digest(selection),
         tuple(
             exclusions[operation.op_id]
             for operation in plan.operations

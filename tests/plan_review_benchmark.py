@@ -399,9 +399,7 @@ def freeze_execution_scope(artifact: PlanArtifact) -> tuple[int, str]:
     """Exercise the real selection normalization and commitment-digest seams."""
 
     decision = derive_execution_selection(artifact.plan)
-    return len(decision.selection), execution_selection_digest_hex(
-        frozenset(str(item) for item in decision.selection)
-    )
+    return len(decision.selection), execution_selection_digest_hex(decision)
 
 
 def depth_32_selection_preview(artifact: PlanArtifact) -> tuple[int, int]:

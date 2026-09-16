@@ -2312,9 +2312,7 @@ class NamiSyncService:
             request_id=request_id,
             revision=state.revision,
             state=state.phase,
-            selection_digest=execution_selection_digest_hex(
-                decision.selection
-            ),
+            selection_digest=execution_selection_digest_hex(decision),
             selected_operation_ids=selected_ids,
             user_deselected=tuple(sorted(state.user_deselected)),
             requires_destructive_confirmation=(

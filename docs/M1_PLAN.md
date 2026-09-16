@@ -277,6 +277,42 @@ details. No new diagnostic or repair loop is authorized by this record.
 
 ### Integration and stop
 
+**P7 digest reuse (base `a479e58`, authorized 2026-09-16): completed; stop
+after focused measurements.** Closed population: workflow selection/runtime,
+service preview, direct workflow/service tests and the existing benchmark's
+normalization/digest helper; INTERFACES owns the behavior/retention account.
+Prepare one canonical 32-byte digest with the exact-plan/deselection-bound
+decision; reuse it for review, preview and commitment. Preserve currentness,
+revision/acknowledgment, fresh commitment time, public constructor validation and
+actual admission/custody/publication before receipt. No extra index, legacy input
+adapter, core/dispatcher change or protected contract/evidence mutation.
+
+The bounded attribution used one component probe (warmup + five observations)
+and one installed headed child (warmup + six). Headed medians: digest 51.654 ms,
+two `ExecutionSet.__post_init__` calls together 76.292 ms, other service
+admission 10.320 ms; service total 140.381 ms and browser receipt 142.700 ms.
+Separate timing domains do not establish bridge-only duration; phase medians
+need not sum. Component-only observations remain separately labeled.
+
+Verification: canonical equivalence, no repeat hashing, fresh timestamps,
+identity and mutation/replacement witnesses pass; focused workflow/service 82,
+scale contract 1, ordinary 5,153 (5 skipped / 30 deselected), imports 12, installed
+Plan 1 (2 deselected), independent source review. Receipt readiness and one
+five-child/30-sample comparison completed: p95 **121.9 ms** versus 100 ms;
+maximum **122.7 ms** versus 250 ms, improved from 170/175.4 ms.
+Range 79.8–122.7 ms; per-child maxima 112.5/122.7/104.4/121.9/114.9 ms.
+P95 remains non-passing. This is diagnostic comparison, not full acceptance.
+
+Evidence: `build/m1-7/evidence/p7-receipt-20260916/` retains raw attribution,
+source/installed/runtime identities and `comparison/` authority/child receipts.
+Independent `comparison/evidence-audit.json` verifies all six children, 30
+samples, raw links and frozen source/installed/wheel/runtime identities.
+One atomic digest-first commit includes matching tests/docs. No retry, further
+optimization, full run, threshold change, amendment, merge or pruning. The next
+proposal targets checkpoint materialization's second immutable-structure rebuild,
+preserving initial public validation and fresh mutable continuation state.
+Larger structure work remains deferred; repository stops continue to apply.
+
 **P6 resumption (base `28c7b44`, authorized 2026-09-16):** investigate and fix
 the observed busy-close cancellation-drain failure, considering ordering/timing
 and comparison with `353092b`; finish the named selection-retention evidence

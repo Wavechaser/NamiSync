@@ -141,10 +141,18 @@ artifact replacement replaces the state. Projection membership shares the
 decision's frozenset, including after selection edits through a revision-checked
 internal read. No additional wire field or command is introduced.
 
+Derivation also prepares the canonical selection digest. Review and confirmation
+reuse those bytes only with the exact decision; commitment still checks current
+artifact/selection authority and creates its timestamp at admission. Public
+`ExecutionSet` construction and admission-time validation remain unchanged, and
+the typed receipt follows actual admission, attachment and publication.
+
 Retention follows the existing plan lifecycle: replacement, exact retirement and
 service close release the state-owned decision. Its selected membership and
 exclusions are bounded by the admitted plan's operations; count/scalar facts are
-fixed-size fields. Preview operation DTOs are constructed for each response,
+fixed-size fields, including one 32-byte digest and its object/slot overhead per
+decision. No sorted digest input, encoded payload or additional operation index
+is retained. Preview operation DTOs are constructed for each response,
 not stored in the decision cache. Exclusions remain newly retained state even
 when membership is shared; the projection-only memory fixture does not measure
 this service retention. Owner tests account for sharing and invalidation rather

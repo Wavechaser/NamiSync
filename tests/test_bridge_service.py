@@ -14,6 +14,7 @@ import pytest
 
 import namisync.interfaces.service as service_module
 import namisync.workflows.sync as sync_workflow_module
+import namisync.workflows.selection as selection_module
 from namisync.core.integrity import RecordDisposition
 from namisync.core.models import EntryKind, ScanWarning, ScanWarningCode, VolumeId
 from namisync.core.pathing import to_extended_length_path
@@ -583,7 +584,9 @@ def test_br_g_14_revision_conflict_noop_and_digest_cycle_are_distinct() -> None:
     assert restored.preview.selection_digest == original.selection_digest
 
 
-def test_selection_decision_is_revision_bound_reused_and_released() -> None:
+def test_selection_decision_is_revision_bound_reused_and_released(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     first = operation(
         OperationKind.COPY,
         source_path="first.txt",
@@ -603,11 +606,18 @@ def test_selection_decision_is_revision_bound_reused_and_released() -> None:
     initial_state = service._plan_selections[REQUEST_ID]
     initial_decision = initial_state.selection_decision
     assert initial_decision is not None
+    assert initial.selection_digest == initial_decision.selection_digest.hex()
     assert (
         service.get_plan_selection_membership(REQUEST_ID, initial.revision)
         is initial_decision.selection
     )
-    assert service.preview_selection(REQUEST_ID) is not initial
+    with monkeypatch.context() as patch:
+        patch.setattr(
+            selection_module,
+            "selection_digest",
+            lambda *_args: pytest.fail("retained selection was rehashed"),
+        )
+        assert service.preview_selection(REQUEST_ID) is not initial
     assert initial_state.selection_decision is initial_decision
 
     changed = service.mutate_selection(
@@ -617,6 +627,8 @@ def test_selection_decision_is_revision_bound_reused_and_released() -> None:
     ).preview
     changed_decision = initial_state.selection_decision
     assert changed_decision is not None and changed_decision is not initial_decision
+    assert changed.selection_digest == changed_decision.selection_digest.hex()
+    assert changed_decision.selection_digest != initial_decision.selection_digest
     assert (
         service.get_plan_selection_membership(REQUEST_ID, changed.revision)
         is changed_decision.selection
@@ -630,6 +642,7 @@ def test_selection_decision_is_revision_bound_reused_and_released() -> None:
     assert replacement_state is not initial_state
     assert replacement_state.selection_decision is not changed_decision
     assert replaced.revision > changed.revision
+    assert replaced.selection_digest == replacement_state.selection_decision.selection_digest.hex()
 
     runtime.drop_plan = lambda request_id: None
     service.drop_plan(REQUEST_ID)

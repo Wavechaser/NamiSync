@@ -39,7 +39,6 @@ from namisync.core.planning import (
     PreservationPolicy,
     SyncOptions,
     calculate_required_bytes,
-    selection_digest,
 )
 from namisync.core.recording import (
     FinishRunCommand,
@@ -210,10 +209,10 @@ _INTEGRITY_KINDS = {
 }
 
 
-def execution_selection_digest_hex(selection: frozenset[str]) -> str:
+def execution_selection_digest_hex(decision: ExecutionSelection) -> str:
     """Return the canonical commitment digest for one effective selection."""
 
-    return selection_digest(selection).hex()
+    return decision.selection_digest.hex()
 
 
 def build_plan_node_tree(request_id: str, plan_value: Plan) -> NodeTree:
@@ -816,7 +815,7 @@ class LocalWorkflowRuntime:
                 artifact.request.options
             ),
             fingerprint=str(plan_value.fingerprint),
-            selection_digest_hex=selection_digest(decision.selection).hex(),
+            selection_digest_hex=execution_selection_digest_hex(decision),
             required_bytes=scalar_64_to_text(
                 calculate_required_bytes(
                     tuple(
@@ -904,7 +903,7 @@ class LocalWorkflowRuntime:
         _require_utc(committed, "commitment")
         commitment = Commitment(
             artifact.plan.fingerprint,
-            selection_digest(selection),
+            decision.selection_digest,
             committed,
         )
         token = run_id or uuid4().hex

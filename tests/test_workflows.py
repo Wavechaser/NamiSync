@@ -4,7 +4,7 @@ import gc
 import os
 import stat as stat_module
 from dataclasses import fields, replace
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from weakref import ref
@@ -13,6 +13,7 @@ import pytest
 
 import namisync.workflows.sync as sync_workflow
 import namisync.workflows.runtime as runtime_module
+import namisync.workflows.selection as selection_module
 import namisync.core.review as review_module
 from namisync.core.events import ItemOutcome
 from namisync.core.evidence import Outcome, RecordingStatus
@@ -754,6 +755,27 @@ def test_selection_closes_over_dependencies_of_excluded_operations() -> None:
     assert excluded[dependent.op_id].reason == ExclusionReason.BLOCKED_DEPENDENCY
 
 
+def test_derived_selection_retains_canonical_digest_for_empty_and_changed_scope() -> None:
+    first = _operation(1, OperationKind.NOOP, "first.bin")
+    second = _operation(2, OperationKind.NOOP, "second.bin")
+    plan = _plan_with((first, second))
+    pristine = derive_execution_selection(plan)
+    deselected = derive_execution_selection(
+        plan, user_deselected=frozenset({first.op_id})
+    )
+    empty = derive_execution_selection(
+        plan, user_deselected=frozenset({first.op_id, second.op_id})
+    )
+
+    for decision in (pristine, deselected, empty):
+        assert type(decision.selection_digest) is bytes
+        assert decision.selection_digest == selection_digest(decision.selection)
+        assert runtime_module.execution_selection_digest_hex(decision) == (
+            decision.selection_digest.hex()
+        )
+    assert len({item.selection_digest for item in (pristine, deselected, empty)}) == 3
+
+
 def test_incomplete_scan_keeps_guarded_work_but_withholds_destructive_and_moves() -> None:
     operations = (
         _operation(1, OperationKind.MKDIR, "folder", source="folder"),
@@ -1028,6 +1050,13 @@ def test_commit_reuses_exact_selection_without_deriving_again(
     runtime = LocalWorkflowRuntime(tmp_path / "ledger.db", tmp_path / "history.db")
     try:
         runtime.save_plan(artifact)
+        commitment_times = iter((NOW, NOW + timedelta(seconds=1)))
+        runtime.clock = SimpleNamespace(now=lambda: next(commitment_times))
+        monkeypatch.setattr(
+            selection_module,
+            "selection_digest",
+            lambda *_args: pytest.fail("selection digest was hashed twice"),
+        )
         monkeypatch.setattr(
             runtime_module,
             "derive_execution_selection",
@@ -1038,10 +1067,19 @@ def test_commit_reuses_exact_selection_without_deriving_again(
             user_deselected=user_deselected,
             selection_decision=decision,
         )
+        second_execution = runtime.commit_plan(
+            request.request_id,
+            user_deselected=user_deselected,
+            selection_decision=decision,
+        )
     finally:
         runtime.close()
 
     assert execution.execution_set.selection == frozenset({second.op_id})
+    assert execution.execution_set.commitment.selection_digest is decision.selection_digest
+    assert execution.execution_set.commitment.committed_at == NOW
+    assert second_execution.execution_set.commitment.selection_digest is decision.selection_digest
+    assert second_execution.execution_set.commitment.committed_at == NOW + timedelta(seconds=1)
 
 
 def test_commit_rejects_selection_authority_from_equal_distinct_user_intent(
@@ -1087,6 +1125,7 @@ def test_execution_selection_cannot_be_constructed_as_caller_authority() -> None
     with pytest.raises(TypeError, match="workflow-derived authority"):
         ExecutionSelection(
             frozenset(),
+            selection_digest(frozenset()),
             (),
             DestructiveOperationCounts(0, 0, 0, 0),
             0,

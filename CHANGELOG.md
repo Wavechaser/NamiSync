@@ -29,6 +29,15 @@ packaging remain open.
 
 #### Reduce Plan review and execution overhead (2026-09-15 – 2026-09-16)
 
+- Prepare the canonical selection digest with the existing review decision and
+  reuse it for preview and commitment, retaining exact identity/revision checks,
+  fresh commitment time and the receipt after actual admission. A bounded headed
+  probe identifies digest work and two execution-structure constructions;
+  checkpoint structure reuse remains deferred. Independent review, 5,153 ordinary
+  tests, 12 import contracts and installed Plan verification pass. One focused
+  30-sample round improves receipt p95/max from 170/175.4 to 121.9/122.7 ms;
+  p95 still misses 100 ms. Stop with unchanged criteria; M1-7 remains unmerged.
+
 - Derive changed sorts from cached canonical sibling order and publish generated
   compact orders without repeated public validation. Reduce projection-building
   overlap with slotted drafts, streamed warnings and earlier temporary release.
