@@ -413,6 +413,35 @@ def test_canonical_order_does_not_assume_source_preorder_is_lexical() -> None:
         order.ordered_source_positions[0] = 2  # type: ignore[index]
 
 
+def test_canonical_order_breaks_equal_path_keys_by_node_id() -> None:
+    first = operation(OperationKind.COPY, source_path="alpha.txt", target_path="alpha.txt", source=file_stat(identity_index=40))
+    second = operation(OperationKind.COPY, source_path="beta.txt", target_path="beta.txt", source=file_stat(identity_index=41))
+    projection = build_plan_projection(REQUEST_ID, _artifact(first, second))
+    tied = replace(
+        projection,
+        nodes=(projection.nodes[0], replace(projection.nodes[1], rel_path_key="same", node_id="node-z"), replace(projection.nodes[2], rel_path_key="same", node_id="node-a")),
+        position_by_node_id={projection.nodes[0].node_id: 0, "node-z": 1, "node-a": 2},
+    )
+
+    order = sort_plan_projection(tied, PlanSortColumn.PATH, SortDirection.ASCENDING)
+
+    assert tuple(order.ordered_source_positions) == (0, 2, 1)
+    assert tuple(order.order_rank_by_source_position) == (0, 2, 1)
+
+
+@pytest.mark.parametrize("count", [0, 1])
+def test_canonical_order_handles_empty_and_single_child(count: int) -> None:
+    operations = () if count == 0 else (
+        operation(OperationKind.COPY, source_path="only.txt", target_path="only.txt", source=file_stat(identity_index=42)),
+    )
+    projection = build_plan_projection(REQUEST_ID, _artifact(*operations))
+
+    order = sort_plan_projection(projection, PlanSortColumn.PATH, SortDirection.ASCENDING)
+
+    assert tuple(order.ordered_source_positions) == tuple(range(len(projection.nodes)))
+    assert tuple(order.order_rank_by_source_position) == tuple(range(len(projection.nodes)))
+
+
 def test_sort_refuses_invalid_source_tree_before_publishing_order() -> None:
     first = operation(OperationKind.COPY, source_path="alpha.txt", target_path="alpha.txt", source=file_stat(identity_index=14))
     projection = build_plan_projection(REQUEST_ID, _artifact(first))

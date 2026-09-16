@@ -1,39 +1,43 @@
 # Latest session handoff
 
-## R7-1 consolidation (2026-09-17)
+## R7 consolidation through R7-2 (2026-09-17)
 
-Startup committed as ee8d861 on milestone1 after clean d91871f baseline.
-User authorized R7-1–R7-8 and R7-G under execute-task. The
-[ablation register](M1_7_ABLATION_STUDY.md) owns the finite scope and gates;
-M1_PLAN is the parent. Deferred candidates/F1 hardening and push/PR stay excluded.
+Authorized batch: R7-1–R7-8 and R7-G under execute-task; deferred items/F1
+hardening, push and PR excluded. Parent M1_PLAN and detailed
+[ablation register](M1_7_ABLATION_STUDY.md) own scope/gates.
+Startup baseline/policy: ee8d861. R7-1: efb5dc7, synthetic/live fixture split,
+S55/I1673 (one historical-artifact skip each), 41-case generation-trap cohort
+and copied-source faults passed. Clean committed identity verified.
 
-R7-1 separates frozen synthetic expectations from actual generator observations
-in test_plan_review_scale.py; production, generator, validator and historical
-artifact bytes are unchanged. PRESENTATION records the provider distinction.
-S passed 55 with one historical-artifact skip; I passed 1,673 with one skip
-and 3,519 deselected. The skip lacks NAMISYNC_M1_7_READINESS_PATH and is not Q.
-The initial task-owned TEMP workaround triggered custody's source-tree cache
-refusal; normal external TEMP with escalated test execution passed. Use external
-TEMP for broad gates; do not change custody guards to accommodate sandbox paths.
+R7-2 is the commit containing this handoff, titled
+`refactor(workflows): Simplify canonical Plan ordering`. It replaces the sole
+canonical comparator with the direct path/node key and removes orphan branches,
+helper and import. The separate real-sort implementation is unchanged. Three
+new edge cases pass against old source too; candidate four-node control passes,
+and a copied reversed-key mutant fails the intended order assertion.
+P169, WI2480/1 historical-artifact skip, L12 contracts pass. Fresh independent
+review approved the actual diff, local measurement provenance and controls.
 
-Copied-source population/order/retained descriptor and maximum-only validator
-faults each fail causal assertions; harmless metadata passes. The 30-function
-synthetic cohort passes all 41 cases with both generator symbols trapped.
-Evidence: build/m1-7-ablation/implementation/r7-1/manifest.md. Initial in-memory
-controls are supplementary; the later copied-source controls satisfy the gate.
-Fresh independent review approved the actual diff and corrected evidence.
-Documentation link/diff checks pass. R7-1 is the commit containing this handoff:
-`test(presentation): Separate synthetic and live scale fixtures`.
+Q-local memory/staging: baseline five-child max 278835200 bytes, range 2371584;
+candidate max 285605888 bytes, range 2609152; fixed budget 335544320 bytes.
+Candidate maximum increased; no memory improvement claimed. Both phase authority
+before/after, source/wheel/install/runtime/profile and supplemental execution
+bindings pass. Raw evidence and exact commands live under
+build/m1-7-ablation/implementation/r7-2/. Native freeze required desktop-capable
+execution; pip installation used no cache after a permission failure. A task
+checker hash-case correction revalidated the same baseline receipts, without
+rerunning children. These were setup/checker issues, not product regressions.
 
-Measurement policy: affected Q-local Tier 1 guards per checkpoint, one full
-Q-final at R7-G. Local passes do not renew full acceptance or pool children.
-Keep budgets, full validator and P9/legacy bytes unchanged. R7-1 has no timed
-code changes. Next: verify R7-1 committed-source identity, then refresh and freeze R7-2 scope
-and baseline. Read-only R7-2 design is in the startup evidence directory;
-only memory/staging sampling includes its comparator path, not cold-build or
-warm-sort timers. Baseline P passed 166 at unchanged product bytes.
+Measurement policy remains affected Tier 1 local guards per checkpoint and one
+full Q-final at R7-G. Local passes do not renew acceptance, pool children or
+rewrite P9/legacy artifacts. Use normal external TEMP with escalated verification
+when needed; repository-local TEMP trips custody's intentional cache guard.
+Historical-artifact skip lacks NAMISYNC_M1_7_READINESS_PATH and is never Q.
 
-Preserve original study/E1/E2 under build/m1-7-ablation/, P9 under
-build/m1-7/evidence/p9-full-20260916/, and recovery archive/bundle in M1_PLAN.
-All task-owned controls remain under ignored implementation/checkpoint roots.
-Apply AGENTS mandatory stops, recurrence, and recovery; latent defects report-only.
+Next: verify R7-2 committed-source hashes, refresh R7-3 read-only expansion
+against its canonical constructor seam, then remove only unused replace_projection
+and migrate its four test consumers. No benchmark calls that route, so predeclare
+no Q-local timed IDs if the deletion stays narrow; H remains required. Draft
+is under implementation/startup/r7-3-expansion.md. Continue authorized batch;
+AGENTS stops/recurrence/recovery remain binding, latent defects report-only.
+Preserve all original/P9 evidence and task-owned control copies through closeout.

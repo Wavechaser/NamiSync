@@ -147,7 +147,7 @@ an otherwise-required checkpoint gate.
 | ID | Accepted outcome | Depends on | Primary verification | Status |
 | --- | --- | --- | --- | --- |
 | R7-1 | Separate synthetic manifests from real generator observations (A3) | Startup `ee8d861` | Full scale-test module; synthetic generator trap and live population/order faults | complete |
-| R7-2 | Replace obsolete canonical comparator with direct key (A9) | Implementation authorization | Projection/review tests; reversed-order fault and all real sort modes | pending |
+| R7-2 | Replace obsolete canonical comparator with direct key (A9) | Startup ee8d861 | Projection/review tests; reversed-order fault and all real sort modes | complete |
 | R7-3 | Remove unused in-place full projection replacement (A9) | R7-2 | Acquisition, selection, new-view and failed-publication witnesses | pending |
 | R7-4 | One validator-local implementation per common receipt invariant (A1) | R7-1 | Partial/readiness/terminal corruption matrix and independent oracle controls | pending |
 | R7-5 | One producer-local receipt publication operation (A2) | R7-4 | Publication/index interruption matrix; independent validator accepts/refuses exact artifacts | pending |
@@ -541,7 +541,7 @@ observations. Existing full contract and historical artifacts remain immutable.
 | Row | Q-local dependency neighborhood (freeze exact cases before edits) |
 | --- | --- |
 | R7-1 | Synthetic/live provider isolation, live population/order/retained-buffer and maximum-only controls; no changed timed code. |
-| R7-2 | Component projection construction and canonical-order consumers, including changed sort/window cases. |
+| R7-2 | `projection_incremental_retained_memory_staging_overlap`, five fresh children; canonical construction is outside cold-build and warm-sort timers. Real-sort behavior remains covered by P. |
 | R7-3 | Construction/staging memory and view/selection consumers affected by route removal; prove excluded routes have no measured callers. |
 | R7-4 | Public partial/readiness/terminal corruption equivalence against baseline validator; no changed timed child code. |
 | R7-5 | Real receipt/index publication failure matrix and independent validation; no changed timed child code. |
@@ -662,6 +662,49 @@ and that the fault controls do not modify both sides of a comparison.
 `test(presentation): Separate synthetic and live scale fixtures`.
 
 ### R7-2 — Remove obsolete canonical comparator (A9, first outcome)
+
+**Delivery evidence.** Canonical siblings now use the direct
+`(rel_path_key, node_id)` key; the unused comparator branches, helper and import
+are removed. Real-sort code and public validation are unchanged. P: 169 passed;
+WI: 2,480 passed / 1 historical-artifact skip; L: all 12 contracts kept.
+Q-local independently validates five fresh memory/staging children per revision:
+baseline maximum 278,835,200 bytes, candidate maximum 285,605,888 bytes against
+335,544,320 bytes. Across-child ranges are 2,371,584 and 2,609,152 bytes.
+The candidate maximum is higher; this is a fixed-budget drift pass, not a memory
+improvement claim. Before/after authority and supplemental execution bindings
+match in each phase. Sandbox native-probe and pip-cache setup issues occurred
+before samples; bounded desktop-capable execution and no-cache installation
+resolved them. A checker hash-case mismatch was corrected and the same raw
+baseline receipts revalidated, without recollection or budget changes.
+Evidence: `build/m1-7-ablation/implementation/r7-2/manifest.md`. Copied old
+source passes the three new edge cases; candidate passes four controls; the
+reversed-key mutant fails its canonical-order assertion with loaded-copy identity
+recorded. Fresh adversarial review approves code, documentation and actual
+evidence. Commit: `refactor(workflows): Simplify canonical Plan ordering`
+(the commit containing this record).
+
+**Expansion refreshed at `efb5dc7`.** Production population:
+`namisync/workflows/plan_projection.py` only. Tests: existing projection/review/
+drain family, with `tests/test_plan_projection.py` additions only for uncovered
+tie/empty/single-child behavior. Docs: this register, CHANGELOG and HANDOFF;
+PRESENTATION only if mechanism prose changes. Direct consumers are the workflow
+facade, `PlanReviewState` acquisition/replacement and the benchmark's construction
+helpers. No caller of the removed comparator exists outside its sole canonical
+sort adapter. E1 is historical support; repeat its causal reversed-key mutant.
+The unchanged P baseline is 166 passed in 1.85 s. Preserve real-sort implementation
+and topology validation; gate P + WI + L, reversed-order control and Q-local,
+then independent review and the single commit below. R7-1 changed only the recorded scale test and docs; all product/benchmark seams
+remain identical to the inspected revision. Its edit cannot authorize population expansion.
+
+Q-local samples only `projection_incremental_retained_memory_staging_overlap`:
+the memory interval includes canonical state construction. Cold metrics time
+`build_plan_projection` without sorting; warm sort factories construct canonical
+state outside timing, then use the untouched cached/real-sort path. No claim
+about their timing follows from this removal. Baseline/candidate installations,
+resolved commands and manifests must be frozen under
+`build/m1-7-ablation/implementation/r7-2/measurement/{baseline,candidate}/` before
+editing; each owns its wheel, clean venv, five raw child receipts and checker
+result. `--installed-root` means the venv's `Lib/site-packages`, not the venv root.
 
 **Objective.** Express the sole canonical PATH/ASCENDING order directly without
 an unused multipurpose comparison implementation.
@@ -1045,10 +1088,10 @@ experiment copies were removed; frozen P9/legacy artifacts remain untouched.
 ## Resumption block
 
 - **Current state:** execution authorized 2026-09-17; startup baseline at clean
-  `d91871f`, product/tests still based on `5986c57`. R7-1 complete; R7-2–R7-8 and R7-G pending.
+  `d91871f`, product/tests still based on `5986c57`. R7-1/R7-2 complete; R7-3–R7-8 and R7-G pending.
   R7-1 unchanged S baseline is 54 passed / 1 historical-artifact skip.
-- **Next action:** refresh/freeze the R7-2 expansion and measurement baseline
-  after R7-1 committed-source identity check. Existing authorization never needs repeating.
+- **Next action:** verify R7-2 committed-source identity, then refresh/freeze
+  R7-3 expansion and its baseline. Existing authorization never needs repeating.
 - **Commands:** S/P/B/M/T/I/WI/H/O/L above are established repository invocations;
   Q's supported CLI flags are recorded, but actual new install/artifact paths
   must be frozen before execution. Do not infer a pass from a skipped artifact test.

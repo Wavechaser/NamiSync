@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass, replace
 from enum import StrEnum
-from functools import cmp_to_key
 from hashlib import blake2b
 from types import MappingProxyType
 from typing import Mapping
@@ -396,13 +395,8 @@ def sort_plan_projection(
     for index, node in enumerate(nodes[1:], 1):
         assert node.parent_index is not None
         children.setdefault(node.parent_index, []).append(index)
-    canonical_key = cmp_to_key(
-        lambda left, right: _compare_nodes(
-            nodes[left], nodes[right], PlanSortColumn.PATH, SortDirection.ASCENDING
-        )
-    )
     for siblings in children.values():
-        siblings.sort(key=canonical_key)
+        siblings.sort(key=lambda index: (nodes[index].rel_path_key, nodes[index].node_id))
     canonical = _publish_plan_projection_order(projection, children)
     return (
         canonical
@@ -912,31 +906,6 @@ def _operation_risk(operation: PlanOperation, plan: Plan) -> str:
     if operation.kind is OperationKind.DELETE:
         return "irreversible"
     return "none"
-
-
-def _compare_nodes(left: PlanProjectionNode, right: PlanProjectionNode, column: PlanSortColumn, direction: SortDirection) -> int:
-    if column is PlanSortColumn.PATH:
-        result = _compare((left.rel_path_key, left.node_id), (right.rel_path_key, right.node_id))
-        return result
-    if column is PlanSortColumn.FILENAME:
-        left_value: object | None = left.filename_key
-        right_value: object | None = right.filename_key
-    elif column is PlanSortColumn.SIZE:
-        left_value, right_value = left.size, right.size
-    else:
-        left_value, right_value = left.mtime_ns, right.mtime_ns
-    if left_value is None or right_value is None:
-        if left_value is None and right_value is None:
-            return _compare((left.rel_path_key, left.node_id), (right.rel_path_key, right.node_id))
-        return 1 if left_value is None else -1
-    result = _compare(left_value, right_value)
-    if direction is SortDirection.DESCENDING:
-        result = -result
-    return result or _compare((left.rel_path_key, left.node_id), (right.rel_path_key, right.node_id))
-
-
-def _compare(left: object, right: object) -> int:
-    return (left > right) - (left < right)
 
 
 def _basename(path: str) -> str:

@@ -39,6 +39,11 @@ packaging remain open.
   detection. Focused scale tests pass 55 and interfaces pass 1,673, each with
   one historical-artifact skip; copied-source faults are detected and all 41
   synthetic cohort cases pass with live generation disabled.
+- Replace the unused general canonical comparator with a direct path/node key,
+  preserving the separate real-sort algorithm. Ordering checks pass 169;
+  workflow/interface checks pass 2,480 with one historical-artifact skip, and
+  all 12 import contracts pass. Five-child baseline/candidate memory guards pass
+  the existing 320 MiB maximum; no memory improvement is claimed.
 
 #### Reduce Plan review and execution overhead (2026-09-15 – 2026-09-16)
 
