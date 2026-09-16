@@ -1,64 +1,46 @@
 # Latest session handoff
 
-## M1-7 P8: shared execution structure (2026-09-16)
+## M1-7 full acceptance and closure (2026-09-16)
 
-Base `90d9469` on `codex/wip-20260914-1600-m1-7`. The user authorized
-sharing validated execution structure through checkpoint materialization and
-updated measurements. This round ends after one focused receipt comparison;
-no full run, threshold change, amendment, integration or pruning.
+The user authorized one full measurement run on P8 (`3c3bbbc`), followed by
+M1-7 closure if it passed, with multiple coherent integration commits rather
+than a single squash. Product and measurement code stayed unchanged.
 
-### Change and preserved guarantees
+P9 passed all 35 readiness cases in 15 children and all 35 fixed quantitative
+criteria across 175 fresh children / 775 samples, without retries. Independent
+terminal, collection, process identity and source/installed/wheel/runtime audit
+passed. Changed-sort p95s are 0.756–1.109 s (largest max 1.192 s); review memory
+is 280,768,512 bytes / 267.762 MiB; execution admission receipt is 54.6 ms p95,
+55.4 ms max. The original 1.5/3 s, 320 MiB and 100/250 ms criteria are unchanged.
+Receipt timing still follows actual admission. Memory does not measure the
+shared index's extended paused-execution lifetime, documented in ARCHITECTURE.
 
-Core `ExecutionSetCheckpoint` captures the existing construction-validated
-structure and detached execution-authority baseline after validating the source.
-Materialization shares that structure, copies the status, recording-reason and
-publication-evidence dictionaries, checks the exact plan/selection/deselection
-references, and validates the fresh continuation. The workflow uses this seam
-for execute and verify checkpoints, including resume. Initial public
-`ExecutionSet` construction still validates and builds the index.
+Evidence root: `build/m1-7/evidence/p9-full-20260916/`. It includes fresh
+authority, readiness, all raw child receipts, incremental collection indexes,
+terminal measurements, `evidence-audit.json`, and supplemental before/after
+core execution identities. Canonical compact authority/measurement artifacts
+are updated; previous bytes are preserved in the evidence directory and Git.
+No legacy contract or historical legacy artifact is changed. M1_PLAN records
+artifact hashes, supplemental binding, scope and integration requirements.
 
-Generic callback authority snapshots remain unchanged and nonvalidating;
-dispatcher, service admission, commitment time and receipt placement are
-unchanged. No new review-time index or legacy runtime representation was added.
+Prior unchanged P8 checks passed: 5,157 ordinary tests, 259 focused checkpoint/
+resume/post-execution tests, 12 import contracts and the installed Plan flow.
+Final new-artifact/scale validation passes 55 tests (28.62 s); the ordinary suite
+passes 5,158 tests with four platform skips and 30 headed deselections (262.71 s).
+Independent documentation and reconstructed endpoint reviews pass. The P8 import
+and installed Plan results remain applicable because product/test code is
+unchanged. Clean committed-source verification remains before integration.
 
-One immutable operation index now survives while the checkpoint is paused and
-is shared with reopened invocations. It disappears with its last owner.
-Mutable overlays remain detached. ARCHITECTURE records both retained fields and
-reachable mapping families; this is an extended index lifetime, not a claim of
-zero memory cost. The plan-review memory fixture does not measure paused
-execution retention.
+Integration uses six reconstructed outcomes: Plan/confirmation and framework
+readiness; covered windows and compact Plan scale; review/selection retention;
+digest reuse; shared structure; accepted evidence/closure. Preserve original
+recovery commits unchanged in a verified bundle; only the fully verified series
+may integrate into `milestone1`. The final product/test tree must equal P8
+except the two accepted artifacts. Do not prune recovery until full accounting.
 
-### Verification and measurement
+Reviewed reconstructed commits: `ae3daf6` (foundation/framework), `8ffbd3a`
+(compact Plan), `5c31894` (retention), `ef2308a` (digest), `ea5f997` (structure).
+Their final tree is exactly `3c3bbbc`; the sixth commit carries this closure.
 
-Focused checkpoint/bridge-resume/post-execution corpus: 259 passed (7.39 s).
-The tests cover both phases, sharing without constructor/index reconstruction,
-mutable isolation, malformed or mismatched state and public validation.
-Independent source/retention review and 12 import contracts pass.
-Ordinary suite: 5,157 passed, 5 skipped / 30 deselected (267.91 s).
-Fresh installed Plan GUI: 1 passed / 2 deselected (59.14 s).
-Receipt readiness passed, then five fresh measurement processes completed
-30 warm samples without retry. **P95 is 72.0 ms; maximum is 72.9 ms** against
-the unchanged **100/250 ms** limits: both pass. The previous result was
-121.9/122.7 ms, so p95 fell 49.9 ms (40.9%). Samples range from 43.5 to 72.9 ms;
-per-child maxima are 58.2, 66.6, 72.0, 72.0 and 72.9 ms. These are focused
-diagnostic results, not a fresh full M1-7 acceptance run. Stop after this round.
-Independent `comparison/evidence-audit.json` passes: six unique child/process/
-token identities, all raw receipt/invocation/log hashes, 42 declared source files,
-38 installed/wheel members, 14 runtime files and the supplemental core execution
-source/installed/wheel triplet. The audit independently recomputes the statistics.
-
-### Evidence and operational context
-
-Evidence root: `build/m1-7/evidence/p8-structure-20260916/`. It contains
-focused verification, check scripts and the reviewed receipt-only driver.
-The driver retains fresh authority and incremental child receipts under
-`comparison/`, including a supplemental source/installed/wheel-member hash
-triplet for `core/execution.py`, absent from the historical contract's file list.
-Protected contracts and historical evidence were not edited.
-
-The immediate comparison baseline is P7 p95/max **121.9/122.7 ms**, against
-unchanged **100/250 ms** limits; raw evidence remains under
-`build/m1-7/evidence/p7-receipt-20260916/`. Earlier P6 sorts and review memory
-passed their focused checks, but those results are not a fresh full M1-7 run.
-Keep `cf5a00b`, `30d35f3`, `28c7b44`, `a479e58` and `90d9469` unchanged.
-`milestone1` remains `40ca76f`; M1-7 stays unmerged on the recovery branch.
+Stop after M1-7 integration for recap and GUI review. No M1-8, DOC-2, push, PR
+or release work is authorized.

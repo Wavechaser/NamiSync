@@ -29,78 +29,24 @@ packaging remain open.
 
 #### Reduce Plan review and execution overhead (2026-09-15 – 2026-09-16)
 
-- Share the validated execution structure through checkpoint materialization,
-  retaining one operation index and reopening detached mutable state. Preserve
-  initial public validation, fresh admission checks and receipt guarantees;
-  document the index's extended paused lifetime. Focused tests, independent
-  review, 5,157 ordinary tests, 12 import contracts and installed Plan pass.
-  One 30-sample receipt round reaches p95/max **72.0/72.9 ms**, down from
-  121.9/122.7 ms; both unchanged 100/250 ms limits pass. Stop after the focused
-  round, with no full measurement run or merge.
-
-- Prepare the canonical selection digest with the existing review decision and
-  reuse it for preview and commitment, retaining exact identity/revision checks,
-  fresh commitment time and the receipt after actual admission. A bounded headed
-  probe identifies digest work and two execution-structure constructions;
-  checkpoint structure reuse remains deferred. Independent review, 5,153 ordinary
-  tests, 12 import contracts and installed Plan verification pass. One focused
-  30-sample round improves receipt p95/max from 170/175.4 to 121.9/122.7 ms;
-  p95 still misses 100 ms. Stop with unchanged criteria; M1-7 remains unmerged.
-
-- Derive changed sorts from cached canonical sibling order and publish generated
-  compact orders without repeated public validation. Reduce projection-building
-  overlap with slotted drafts, streamed warnings and earlier temporary release.
-  Reuse revision-bound workflow selection decisions for preview and admission,
-  sharing projection membership through initial construction and selection edits.
-  Preserve external contracts and admission checks. Correct the busy-close test
-  to observe asynchronous adapter delivery instead of requiring cancellation in
-  the next batch; the exercised product path is unchanged from `353092b`.
-  Complete service-level selection sharing, exclusion facts and close-release
-  evidence. Independent review, 5,152 ordinary tests, 12 import contracts and
-  installed Plan verification pass. One focused comparison round passes all six
-  sorts (p95 0.728–0.751 s) and memory (266.785 MiB versus 320 MiB). Execution
-  receipt improves to p95/max 170/175.4 ms; p95 still misses 100 ms. Stop after
-  the round with unchanged criteria and preserved evidence; M1-7 stays unmerged.
-
-- Investigate the remaining eight budget failures without product/test changes
-  or measurement reruns. Propose canonical-order sort reuse, smaller projection
-  construction intermediates and shared reviewed selection facts; retain all
-  criteria and stop for discussion before implementation.
-
-- Correct the installed confirmation fixture's transient-closing race with
-  paused, effect-free animation barriers and a durable native acknowledgment.
-  Product admission and animation behavior stay unchanged. Focused/interfaces
-  and installed Plan gates pass; changed-search p95/max reach 0.152/0.154 s.
-  Full readiness passes and the single 175-child measurement run completes:
-  27 of 35 metrics meet budgets; six changed sorts, retained memory and the
-  execution-start receipt remain over budget. Preserve the result and stop;
-  no further fixes, measurements or integration.
-
-- Keep projection nodes stable across display sorts; cache compact canonical/current
-  orders and derive accessibility metadata for bounded windows. Preserve sparse
-  matching and rebind selection-only updates without revalidating unchanged indexes.
-  Version the evidence around actual retained buffers; legacy support only reads
-  historical evidence. Independent review, 100 owner tests, 5,140 ordinary tests
-  and 12 import contracts pass. The installed Plan GUI gate fails at
-  `page_plan_review_plan_ack`; the generic-tree gate passes. Stop and preserve
-  before readiness, latency comparison or full measurements; M1-7 stays unmerged.
-- Fuse changed-view matching/ancestor retention, add Unicode-safe ASCII and
-  empty-search shortcuts, and pass Plan filters through compact positional
-  masks. Owner/department checks, independent review, both installed GUI gates
-  and 21 untimed readiness cases pass. The single 30-sample comparison improves
-  changed-search p95 to 2.296 s but still misses 1.5 s; maximum 2.318 s meets 3 s.
-  Stopped and preserved this correction separately; M1-7 remains unmerged.
-- Implemented projection construction/order reuse and execution selection/
-  structural-validation reuse while retaining input, revision, acknowledgement
-  and mutable-overlay checks. Focused/consumer tests, independent review and
-  21-case component readiness pass. The first targeted comparison still fails:
-  changed-search p95 2.721 s versus 1.5 s; maximum 2.846 s versus 3 s. Preserved
-  the corrections and stopped before other metrics or another optimization pass.
-- Avoid redundant Plan window reads and whole-review pending flashes during
-  scrolling. Coalesce uncovered ranges, reject stale replies, and preserve
-  unchanged row controls; reconcile task switches and viewport resizing while
-  retaining the 256-row bound. Executable renderer/app probes and both installed
-  Plan/generic-tree GUI gates pass. M1-7 remains on its recovery branch.
+- Avoid covered-window refetches and whole-card pending flashes. Fuse matching
+  and ancestor retention, preserve Unicode casefold semantics, and fast-path
+  empty queries. Keep projection nodes stable while sorting compact position
+  buffers; derive bounded accessibility metadata without global object graphs.
+- Reduce construction overlap and reuse exact revision-bound selection facts
+  and prepared digests. Share validated execution structure through checkpoints
+  while detaching mutable overlays and retaining public validation, fresh
+  commitment time and receipts after actual admission. ARCHITECTURE records the
+  shared index's extended paused lifetime.
+- Complete the single P9 full run: all 35 fixed criteria pass across 175 fresh
+  children and 775 samples after all 35 readiness cases. Six changed-sort p95s
+  are 0.756–1.109 s; review memory is 267.762 MiB; execution admission p95/max is
+  54.6/55.4 ms. Independent provenance and budget validation pass. Criteria and
+  historical evidence remain unchanged; M1_PLAN and HANDOFF record final closure
+  checks and the reconstructed integration series.
+- Activate the real-artifact validation gate: 55 scale checks and 5,158 ordinary
+  tests pass, with unchanged import and installed Plan evidence. Independently
+  review the reconstructed outcomes and condense the active delivery register.
 
 #### Correct measurement readiness and evidence retention (2026-09-15)
 

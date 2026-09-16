@@ -192,6 +192,12 @@ reader when its evidence is archived and no longer needs active validation.
 Before measurement, freeze the finite source/instrument/validator file identities,
 actual native runtime/dependencies/profile, installed wheel and measured installed
 file hashes, exact fixture family counts and expected raw-key order witnesses.
+For the completed P9 candidate, the historical file population is supplemented
+by a before/after source/installed/wheel-member binding for `core/execution.py`;
+M1_PLAN records its digest and raw evidence. This covers the shared execution
+structure without changing the fixed contract or claiming that review memory
+measures a paused execution index. Final integration checks the supplemental
+physical bytes and Git-clean HEAD identity as well as the named population.
 The separately reviewed authority manifest admits those exact values; syntactic
 hash validity or a self-reported profile is insufficient. The candidate may be
 frozen by immutable file/blob hashes before its final atomic commit; no unverified

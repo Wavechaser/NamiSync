@@ -275,7 +275,8 @@ work area while preserving tasks; the rail scrolls independently. The exact
 event-v5/data-epoch-7 protocol cut is active. Plan review adds bounded hierarchy,
 search/filter/sort, authoritative selection, snapshot-bound destructive confirmation and
 same-task execution with live controls. Close fences new admission while keeping
-terminal release and retained review distinct. Execution-result/inventory review and beta
+terminal release and retained review distinct. M1-7's fixed Plan-scale and
+interaction criteria pass on the reference profile. Execution-result/inventory review and beta
 packaging remain open.
 
 ### M1 Consolidation
