@@ -1223,6 +1223,10 @@ def _valid_file_list_evidence(
     expected_cases: frozenset[str],
     expected_headers: list[str],
 ) -> bool:
+    column_count = len(expected_headers)
+    resize_columns = ["selection", "name", "size", "primary", "secondary"]
+    if column_count == 7:
+        resize_columns.append("modified")
     keys = {
         "table_role",
         "header_role",
@@ -1385,12 +1389,11 @@ def _valid_file_list_evidence(
         or value["master_deselects_all"] is not True
         or type(value["master_label"]) is not str
         or not value["master_label"].startswith("Select all ")
-        or value["resize_handle_count"] != 5
-        or value["resize_handle_columns"]
-        != ["selection", "name", "size", "primary", "secondary"]
-        or value["resize_handle_roles"] != ["separator"] * 5
+        or value["resize_handle_count"] != column_count - 1
+        or value["resize_handle_columns"] != resize_columns
+        or value["resize_handle_roles"] != ["separator"] * (column_count - 1)
         or type(value["resize_handle_labels"]) is not list
-        or len(value["resize_handle_labels"]) != 5
+        or len(value["resize_handle_labels"]) != column_count - 1
         or not all(
             type(label) is str and label.startswith("Resize ")
             for label in value["resize_handle_labels"]
@@ -1440,7 +1443,7 @@ def _valid_file_list_evidence(
         or value["viewport_resize_amount"] <= 0
         or any(
             type(value[name]) is not list
-            or len(value[name]) != 6
+            or len(value[name]) != column_count
             or not all(
                 type(item) in {int, float} and math.isfinite(item)
                 for item in value[name]
@@ -1481,9 +1484,9 @@ def _valid_file_list_evidence(
         or type(value["header_background"]) is not str
         or not value["header_background"]
         or value["header_texts"] != expected_headers
-        or value["header_cell_roles"] != ["columnheader"] * 6
+        or value["header_cell_roles"] != ["columnheader"] * column_count
         or value["selection_header_label"] != "Selection"
-        or value["column_count"] != 6
+        or value["column_count"] != column_count
         or value["row_count"] != expected_count
         or value["body_child_count"] != expected_count
         or value["checkbox_count"] != expected_count
@@ -1531,7 +1534,7 @@ def _valid_file_list_evidence(
         if (
             type(row["case"]) is not str
             or row["role"] != "row"
-            or row["cell_roles"] != ["cell"] * 6
+            or row["cell_roles"] != ["cell"] * column_count
             or type(row["checkbox_label"]) is not str
             or not row["checkbox_label"]
             or type(row["checkbox_checked"]) is not bool
@@ -1675,7 +1678,7 @@ def _valid_file_list_evidence(
                 )
             )
             or type(row["cell_backgrounds"]) is not list
-            or len(row["cell_backgrounds"]) != 6
+            or len(row["cell_backgrounds"]) != column_count
             or not all(
                 type(background) is str and bool(background)
                 for background in row["cell_backgrounds"]
@@ -1686,7 +1689,7 @@ def _valid_file_list_evidence(
             )
             or row["cells_transparent"] is not True
             or type(row["column_lefts"]) is not list
-            or len(row["column_lefts"]) != 6
+            or len(row["column_lefts"]) != column_count
             or not all(
                 type(position) in {int, float} and math.isfinite(position)
                 for position in row["column_lefts"]
@@ -1716,6 +1719,7 @@ def _valid_plan_evidence(value: object) -> bool:
             "Size",
             "Operation / status",
             "Checksum",
+            "Modified",
             "Notes",
         ],
     ):

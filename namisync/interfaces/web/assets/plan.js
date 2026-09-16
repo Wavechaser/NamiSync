@@ -8,6 +8,7 @@ const STRING_FIELDS = Object.freeze([
   "intentText",
   "intentKey",
   "checksumText",
+  "modifiedText",
   "notesText",
 ]);
 const INTENT_KEYS = Object.freeze(new Set([
@@ -101,9 +102,12 @@ export function renderPlanRow(element, rowView) {
 
   const checksum = createCell(ownerDocument, "nami-plan-row__checksum", "secondary");
   renderText(checksum, rowView.checksumText);
+  const modified = createCell(ownerDocument, "nami-plan-row__modified", "secondary");
+  renderText(modified, rowView.modifiedText);
+  modified.title = rowView.modifiedText;
 
   renderFileRow(element, rowView, {
     className: "nami-plan-row",
-    cells: [intent, checksum],
+    cells: [intent, checksum, modified],
   });
 }

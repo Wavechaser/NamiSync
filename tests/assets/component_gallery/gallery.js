@@ -707,11 +707,13 @@ async function reportFailure(error) {
     list.setAttribute("role", "table");
     list.setAttribute("aria-label", label);
     const grid = document.createElement("div");
-    grid.className = "nami-file-list__grid nami-table-layout";
+    grid.className = `nami-file-list__grid nami-table-layout${caseName === "plan" ? " nami-file-list__grid--plan" : ""}`;
     const header = document.createElement("div");
     header.className = "nami-file-list__header nami-table__header";
     header.setAttribute("role", "row");
-    const columnNames = ["selection", "name", "size", "primary", "secondary", "notes"];
+    const columnNames = headers.length === 7
+      ? ["selection", "name", "size", "primary", "secondary", "modified", "notes"]
+      : ["selection", "name", "size", "primary", "secondary", "notes"];
     const rootFontSize = parseFloat(
       getComputedStyle(document.documentElement).fontSize,
     );
@@ -724,6 +726,7 @@ async function reportFailure(error) {
       rootFontSize * 5,
       rootFontSize * 8,
       rootFontSize * 7,
+      ...(headers.length === 7 ? [rootFontSize * 7] : []),
       rootFontSize * 14,
     ];
     let masterCheckbox = null;
@@ -763,7 +766,10 @@ async function reportFailure(error) {
     body.setAttribute("role", "rowgroup");
     for (const definition of definitions) {
       const row = document.createElement("div");
-      renderer(row, definition.rowView);
+      const rowView = caseName === "plan"
+        ? { ...definition.rowView, modifiedText: definition.rowView.modifiedText ?? "2026-09-17 12:34" }
+        : definition.rowView;
+      renderer(row, rowView);
       row.dataset.galleryCase = definition.key;
       row.dataset.galleryList = caseName;
       if (definition.parentKey !== undefined) {
@@ -881,20 +887,26 @@ async function reportFailure(error) {
         `--nami-file-column-size: ${widths[2].toFixed(3)}px`,
         `--nami-file-column-primary: ${widths[3].toFixed(3)}px`,
         `--nami-file-column-secondary: ${widths[4].toFixed(3)}px`,
-        `--nami-file-column-notes: ${widths[5].toFixed(3)}px`,
+        ...(headerCells.length === 7
+          ? [`--nami-file-column-modified: ${widths[5].toFixed(3)}px`]
+          : []),
+        ...(headerCells.length === 7
+          ? [`--nami-file-column-notes: ${widths[6].toFixed(3)}px`]
+          : [`--nami-file-column-notes: ${widths[5].toFixed(3)}px`]),
       ].join("; ");
       grid.dataset.columnsFrozen = "true";
     };
     const refreshResizerValues = () => {
+      const notesIndex = headerCells.length - 1;
       const notesWidth = resizeState.frozen
-        ? resizeState.widths[5]
-        : headerCells[5].getBoundingClientRect().width;
+        ? resizeState.widths[notesIndex]
+        : headerCells[notesIndex].getBoundingClientRect().width;
       for (const resizer of resizers) {
         const index = Number(resizer.dataset.columnIndex);
         const current = headerCells[index].getBoundingClientRect().width;
         const maximum = current + Math.max(
           0,
-          notesWidth - columnMinimums[5],
+          notesWidth - columnMinimums[headerCells.length - 1],
         );
         resizer.setAttribute(
           "aria-valuemin",
@@ -924,7 +936,8 @@ async function reportFailure(error) {
       const minimumDelta = index === 1
         ? columnMinimums[1] - startNameWidth
         : columnMinimums[index] - startWidths[index];
-      const maximumDelta = startWidths[5] - columnMinimums[5];
+      const notesIndex = headerCells.length - 1;
+      const maximumDelta = startWidths[notesIndex] - columnMinimums[notesIndex];
       const delta = Math.max(
         minimumDelta,
         Math.min(maximumDelta, requestedDelta),
@@ -933,7 +946,7 @@ async function reportFailure(error) {
       if (index !== 1) {
         nextWidths[index] = startWidths[index] + delta;
       }
-      nextWidths[5] = startWidths[5] - delta;
+      nextWidths[notesIndex] = startWidths[notesIndex] - delta;
       resizeState.widths = nextWidths;
       applyFrozenLayout();
       refreshResizerValues();
@@ -941,7 +954,7 @@ async function reportFailure(error) {
     };
     for (const resizer of resizers) {
       const index = Number(resizer.dataset.columnIndex);
-      if (!Number.isInteger(index) || index < 0 || index > 4) {
+      if (!Number.isInteger(index) || index < 0 || index >= headerCells.length - 1) {
         throw new TypeError("gallery column resizer is invalid");
       }
       resizer.addEventListener("pointerdown", (event) => {
@@ -991,7 +1004,7 @@ async function reportFailure(error) {
   const planSpecimen = createFileList(
     "Projected sync plan rows",
     "Projected sync plan specimen",
-    ["", "Filename", "Size", "Operation / status", "Checksum", "Notes"],
+    ["", "Filename", "Size", "Operation / status", "Checksum", "Modified", "Notes"],
     PLAN_ROW_CASES,
     renderPlanRow,
     "plan",
@@ -1422,8 +1435,9 @@ async function reportFailure(error) {
     const pointerGeometry = geometry();
     const resizedColumnsAlign = columnsAlign();
     const resizeDelta = pointerGeometry.widths[1] - frozenGeometry.widths[1];
-    const notesResizeDelta = pointerGeometry.widths[5]
-      - frozenGeometry.widths[5];
+    const notesIndex = header.children.length - 1;
+    const notesResizeDelta = pointerGeometry.widths[notesIndex]
+      - frozenGeometry.widths[notesIndex];
     const columnResizeChangesWidth = Math.abs(resizeDelta) > 0.5;
 
     selectionResizer.dispatchEvent(new KeyboardEvent("keydown", {
@@ -1433,8 +1447,8 @@ async function reportFailure(error) {
     const keyboardGeometry = geometry();
     const keyboardResizeDelta = keyboardGeometry.widths[0]
       - pointerGeometry.widths[0];
-    const keyboardNotesDelta = keyboardGeometry.widths[5]
-      - pointerGeometry.widths[5];
+    const keyboardNotesDelta = keyboardGeometry.widths[notesIndex]
+      - pointerGeometry.widths[notesIndex];
 
     const availableNameWidth = keyboardGeometry.widths[1] - rootFontSize * 12;
     const viewportResizeAmount = Math.min(32, Math.max(0, availableNameWidth / 2));
@@ -1493,7 +1507,7 @@ async function reportFailure(error) {
           || inlineProgress instanceof HTMLElement
         )
         || !(notes instanceof HTMLElement)
-        || cells.length !== 6
+        || cells.length !== header.children.length
         || !cells.every((cell) => cell instanceof HTMLElement)
       ) {
         throw new TypeError("gallery file row structure is unavailable");
@@ -1606,7 +1620,7 @@ async function reportFailure(error) {
     const lastRow = renderedRows[renderedRows.length - 1];
     if (
       !(lastRow instanceof HTMLElement)
-      || headerCells.length !== 6
+      || headerCells.length !== header.children.length
       || !headerCells.every((cell) => cell instanceof HTMLElement)
     ) {
       throw new TypeError("gallery file list structure is unavailable");

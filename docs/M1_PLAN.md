@@ -48,17 +48,25 @@ inventory tables are comparison references, not mutation targets.
 
 | ID | Accepted outcome and atomic boundary | Named gate | Status |
 | --- | --- | --- | --- |
-| GUI-P1 | Put frozen paths and semantic options in a Plan card, summary counts in a Status card, and search/filter, gallery-shaped table and execution controls in one card; merge dependency count into notes; add Modified right of Checksum at equal width in gallery and production; carry gallery pointer/keyboard column resizing into production; retain virtual rows and header-free scrollbar with Setup thinning. | Plan component probe, frontend static checks, installed headed Plan geometry/resize witness, UI docs and diff review. | Pending |
-| GUI-P2 | Use gallery filter pills and header sort cycle (ascending, descending, canonical reset), with catalog chevrons; switching columns starts ascending. No browser-side row ordering or durable preference. | Component probe for every transition, backend view-contract and installed headed sort/filter witness. | Pending |
-| GUI-P3 | Format status required bytes and row sizes in exact binary units without altering raw numeric sort or wire values. | Boundary/large-integer formatter tests, Plan component probe, installed headed display witness. | Pending |
+| GUI-P1 | Put frozen paths and semantic options in a Plan card, summary counts in a Status card, and search/filter, gallery-shaped table and execution controls in one card; merge dependency count into notes; add Modified right of Checksum at equal width in gallery and production; carry gallery pointer/keyboard column resizing into production; retain virtual rows and header-free scrollbar with Setup thinning. | Plan component probe, frontend static checks, installed headed Plan geometry/resize witness, UI docs and diff review. | Complete |
+| GUI-P2 | Use gallery filter pills and header sort cycle (ascending, descending, canonical reset), with catalog chevrons; switching columns starts ascending. No browser-side row ordering or durable preference. | Component probe for every transition, backend view-contract and installed headed sort/filter witness. | Complete |
+| GUI-P3 | Format status required bytes and row sizes in exact binary units without altering raw numeric sort or wire values. | Boundary/large-integer formatter tests, Plan component probe, installed headed display witness. | Complete |
 
 Task-specific stops: any change to execution/selection authority, projection
 representation or supported sort semantics outside the named gestures requires
 scope review. A lost virtual-window bound or clipped header/body alignment
 blocks completion. The regression study covers stale review gestures, pending
 control disablement, hostile path text, extreme signed-64 sizes, forced colors,
-and Setup table geometry. Each row closes in its own reviewed commit with tests
-and matching docs; the final integrated pass rechecks direct consumers.
+and Setup table geometry. The register and exact byte utility are separate
+small commits; the interacting table/layout/sort behaviors close in one
+reviewed surface commit with direct-consumer checks and matching docs.
+
+GUI-P1–P3 verification: 86 focused interface tests passed (five headed tests
+deselected); installed task-shell Plan interaction and installed light/dark/
+forced-color gallery witnesses passed. The formatter boundary probe passed.
+The M1-7 quantitative receipts remain valid historical evidence for their
+original source and instrument bytes; this GUI pass did not rerun or claim
+current-source scale certification.
 
 ### Completed GUI and documentation work
 

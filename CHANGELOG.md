@@ -27,6 +27,15 @@ and remembered locations, bounded Plan review/selection/sorting and same-task
 execution with live controls. Execution-result/inventory review and beta
 packaging remain open.
 
+#### Refine Plan review table and controls (2026-09-17)
+
+- Rehouse frozen Plan settings, status, search/filter, seven-column table and
+  execution controls in clear cards. Bring gallery-style pointer/keyboard
+  column resizing and header/body scrollbar alignment to production.
+- Add a Modified column to the gallery and production Plan table, put
+  dependencies in Notes, use filter pills and catalog chevrons for the
+  three-state header sort cycle, and display exact byte counts in binary units.
+
 #### Consolidate the delivered Plan shell (2026-09-17)
 
 - Reassess the goal after R7-4: suspend remaining implementation and investigate

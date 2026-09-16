@@ -1240,10 +1240,20 @@ through a fresh guarded server anchor.
 
 The Plan review renders its current bounded window in the compact file-row grid
 with exact 24-CSS-pixel rows and matching leading/trailing spacer offsets; the
-generic `tree.js` renderer keeps its separate 28-pixel contract. The 48rem
-table's final column and control layout remain eligible for later GUI tuning,
-while production commands, validators, state, raw row facts, and window/anchor
-behavior are active. Status/progress sorting, global
+generic `tree.js` renderer keeps its separate 28-pixel contract. A Plan card
+shows frozen paths and semantic options, a Status card shows selected/risk/byte
+facts, and one table card owns search, gallery filter pills, the grid and
+execution controls. The Plan grid retains the gallery's Checksum column and
+adds an equal-width Modified column immediately after it; dependency counts
+appear in Notes. Its separate header and body share the Setup table's stable
+gutter and thin-to-wide scrollbar styling, so the scrollbar does not overlay
+the header. Production columns use the gallery's constrained pointer/keyboard
+resizing, with Notes yielding width. Name, Size and Modified headers cycle
+ascending, descending, canonical path order with catalog chevrons; a different
+header starts ascending. Status and row
+byte labels use binary units, while sort keys remain raw backend facts.
+Production commands, validators, state, raw row facts, and window/anchor
+behavior remain active. Status/progress sorting, global
 flat sorting, and durable preferences are excluded from M1. Exact rules and
 acceptance live in [Bridge DR-BR-15](PRESENTATION.md#search-filters-sorting-and-follow);
 the existing shell/tree witness does not close this new work. The active M1

@@ -2768,19 +2768,21 @@ def _headed_probe_script(metric_id: str, *, readiness: bool = False) -> str:
   const samples = [];
 
   if (metric === "ui_update_plan_view_click_feedback") {
-    const review = await selectTask(0, rows[0].source_path, "plan-sort");
-    const sort = review.querySelector('[data-action="plan-sort"]');
-    sort.value = "filename";
-    sort.dispatchEvent(new Event("change", { bubbles: true }));
+    const review = await selectTask(0, rows[0].source_path);
+    const filenameSort = await until(
+      () => review.querySelector('[data-sort-column="filename"]:not(:disabled)'),
+      "filename sort control",
+    );
+    const sort = review.querySelector('[data-sort-column="size"]');
+    filenameSort.click();
     await until(() => review.dataset.pending === "", "sort warmup settlement");
-    sort.value = "size";
     const started = performance.now();
-    sort.dispatchEvent(new Event("change", { bubbles: true }));
+    sort.click();
     await nextFrame();
     const elapsed = Math.round((performance.now() - started) * 1000000);
     if (review.dataset.pending !== "view") throw new Error("sort pending frame missing");
     await until(
-      () => review.dataset.pending === "" && sort.value === "size",
+      () => review.dataset.pending === "" && sort.parentElement?.ariaSort === "ascending",
       "sort command settlement",
     );
     samples.push(sample(1, elapsed, { pending_frame: true, action: "sort" }));

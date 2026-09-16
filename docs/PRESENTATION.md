@@ -53,6 +53,10 @@ The implemented Plan review surface lets users inspect a complete stable view of
 The Plan summary displays workflow-derived selected required bytes and destructive
 operation count; each row exposes its server-provided risk alongside its reason
 or notice. Filtering and windowing cannot redefine those selection facts.
+The browser formats those exact decimal byte facts into binary display units
+without feeding the labels back into size sorting. Plan header gestures cycle a
+chosen sibling sort from ascending to descending to canonical path order;
+switching headers begins ascending, and the backend remains the sole sort owner.
 DESKTOP_UI owns the blocking confirmation interaction and BRIDGE owns exact
 request/revision admission and recovery.
 

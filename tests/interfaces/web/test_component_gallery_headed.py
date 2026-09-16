@@ -800,7 +800,7 @@ def test_component_gallery_report_parser_is_exact_and_nested(
             {
                 "case": case,
                 "role": "row",
-                "cell_roles": ["cell"] * 6,
+                "cell_roles": ["cell"] * 7,
                 "checkbox_label": f"Select {case}",
                 "checkbox_checked": False,
                 "checkbox_disabled": case in {"error", "unsupported", "blocked"},
@@ -847,9 +847,9 @@ def test_component_gallery_report_parser_is_exact_and_nested(
                 "primary_alias_background": primary_background,
                 "secondary_color": "rgb(0, 0, 0)",
                 "secondary_alias_color": "rgb(0, 0, 0)",
-                "cell_backgrounds": ["rgba(0, 0, 0, 0)"] * 6,
+                "cell_backgrounds": ["rgba(0, 0, 0, 0)"] * 7,
                 "cells_transparent": True,
-                "column_lefts": [float(index) for index in range(6)],
+                "column_lefts": [float(index) for index in range(7)],
                 "name_padding_left": 24.0 if case in {"copy", "update"} else 8.0,
                 "row_height": 24.0,
                 "font_size": 12.0,
@@ -951,7 +951,7 @@ def test_component_gallery_report_parser_is_exact_and_nested(
         )
 
     def file_list(rows: list[dict[str, object]], headers: list[str]) -> dict[str, object]:
-        return {
+        result = {
             "table_role": "table",
             "header_role": "row",
             "body_role": "rowgroup",
@@ -1059,6 +1059,28 @@ def test_component_gallery_report_parser_is_exact_and_nested(
             "scroll_width": 882.0,
             "rows": rows,
         }
+        if len(headers) == 7:
+            result["resize_handle_count"] = 6
+            result["resize_handle_columns"].append("modified")
+            result["resize_handle_roles"].append("separator")
+            result["resize_handle_labels"].append("Resize Modified column")
+            result["header_cell_roles"].append("columnheader")
+            result["column_count"] = 7
+            for name in (
+                "initial_column_widths", "frozen_column_widths",
+                "pointer_column_widths", "keyboard_column_widths",
+                "viewport_narrow_widths", "viewport_restored_widths",
+                "notes_minimum_widths", "name_minimum_widths",
+                "constrained_column_widths",
+            ):
+                result[name].insert(5, 96.0)
+            for name in (
+                "initial_column_lefts", "frozen_column_lefts",
+                "pointer_column_lefts", "keyboard_column_lefts",
+            ):
+                widths = result[name.replace("lefts", "widths")]
+                result[name] = [sum(widths[:index]) for index in range(7)]
+        return result
     report = {
         "phase": "complete",
         "mode": "light",
@@ -1200,7 +1222,7 @@ def test_component_gallery_report_parser_is_exact_and_nested(
             },
             "file_list": file_list(
                 plan_rows,
-                ["", "Filename", "Size", "Operation / status", "Checksum", "Notes"],
+                ["", "Filename", "Size", "Operation / status", "Checksum", "Modified", "Notes"],
             ),
             "integrity_list": file_list(
                 integrity_rows,
@@ -1416,7 +1438,7 @@ def test_component_gallery_script_declares_exact_required_matrix() -> None:
     assert "app.append(galleryRail.element);" in script
     assert "PLAN_ROW_CASES,\n    renderPlanRow," in script
     assert "INTEGRITY_ROW_CASES,\n    renderIntegrityRow," in script
-    assert "renderer(row, definition.rowView);" in script
+    assert "renderer(row, rowView);" in script
     assert "intentTone" not in script
     assert 'presenceStatus: "reappeared"' in script
     assert 'planSection.style.gridArea = "work";' in script
@@ -1429,7 +1451,7 @@ def test_component_gallery_script_declares_exact_required_matrix() -> None:
     assert '"--nami-file-column-name: minmax(12rem, 1fr)"' in script
     assert "grid.style.cssText = [" in script
     assert "resizeState.widths = headerCells.map(" in script
-    assert "nextWidths[5] = startWidths[5] - delta;" in script
+    assert "nextWidths[notesIndex] = startWidths[notesIndex] - delta;" in script
     assert script.count("ensureFrozen();") == 2
     assert 'data-column="notes"' in script
     assert "640" not in script
@@ -2715,6 +2737,7 @@ def _assert_plan_list_evidence(
             "Size",
             "Operation / status",
             "Checksum",
+            "Modified",
             "Notes",
         ],
         forced=forced,
@@ -2936,15 +2959,16 @@ def _assert_file_list_evidence(
     assert evidence["master_selects_all"] is True
     assert evidence["master_deselects_all"] is True
     assert evidence["master_label"].startswith("Select all ")
-    assert evidence["resize_handle_count"] == 5
+    column_count = len(expected_headers)
+    assert evidence["resize_handle_count"] == column_count - 1
     assert evidence["resize_handle_columns"] == [
         "selection",
         "name",
         "size",
         "primary",
         "secondary",
-    ]
-    assert evidence["resize_handle_roles"] == ["separator"] * 5
+    ] + (["modified"] if column_count == 7 else [])
+    assert evidence["resize_handle_roles"] == ["separator"] * (column_count - 1)
     assert all(
         label.startswith("Resize ")
         for label in evidence["resize_handle_labels"]
@@ -2979,17 +3003,18 @@ def _assert_file_list_evidence(
         -pointer_delta,
         abs=0.5,
     )
-    assert pointer_widths[5] - frozen_widths[5] == pytest.approx(
+    notes_index = column_count - 1
+    assert pointer_widths[notes_index] - frozen_widths[notes_index] == pytest.approx(
         -pointer_delta,
         abs=0.5,
     )
-    for index in (0, 2, 3, 4):
+    for index in (0, 2, 3, 4) + ((5,) if column_count == 7 else ()):
         assert pointer_widths[index] == pytest.approx(
             frozen_widths[index],
             abs=0.5,
         )
     assert pointer_lefts[:2] == pytest.approx(frozen_lefts[:2], abs=0.5)
-    for index in (2, 3, 4, 5):
+    for index in range(2, column_count):
         assert pointer_lefts[index] - frozen_lefts[index] == pytest.approx(
             pointer_delta,
             abs=0.5,
@@ -3011,7 +3036,7 @@ def _assert_file_list_evidence(
         -keyboard_delta,
         abs=0.5,
     )
-    assert keyboard_widths[5] - pointer_widths[5] == pytest.approx(
+    assert keyboard_widths[notes_index] - pointer_widths[notes_index] == pytest.approx(
         -keyboard_delta,
         abs=0.5,
     )
@@ -3058,7 +3083,7 @@ def _assert_file_list_evidence(
 
     notes_minimum_widths = evidence["notes_minimum_widths"]
     name_minimum_widths = evidence["name_minimum_widths"]
-    assert notes_minimum_widths[5] == pytest.approx(
+    assert notes_minimum_widths[notes_index] == pytest.approx(
         evidence["notes_minimum"],
         abs=0.5,
     )
@@ -3090,9 +3115,9 @@ def _assert_file_list_evidence(
         assert evidence["header_foreground"] == system_colors["HighlightText"]
         assert evidence["header_background"] == system_colors["Highlight"]
     assert evidence["header_texts"] == expected_headers
-    assert evidence["header_cell_roles"] == ["columnheader"] * 6
+    assert evidence["header_cell_roles"] == ["columnheader"] * column_count
     assert evidence["selection_header_label"] == "Selection"
-    assert evidence["column_count"] == 6
+    assert evidence["column_count"] == column_count
     assert evidence["row_count"] == len(expected_order)
     assert evidence["body_child_count"] == len(expected_order)
     assert evidence["checkbox_count"] == len(expected_order)
@@ -3139,7 +3164,7 @@ def _assert_file_list_evidence(
     expected_columns = rows[0]["column_lefts"]
     for row in rows:
         assert row["role"] == "row"
-        assert row["cell_roles"] == ["cell"] * 6
+        assert row["cell_roles"] == ["cell"] * column_count
         assert row["checkbox_label"]
         assert row["name"]
         assert row["size"]

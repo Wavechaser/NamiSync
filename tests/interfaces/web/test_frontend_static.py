@@ -260,7 +260,7 @@ def test_modules_use_only_local_explicit_js_imports(
         "integrity.js": ["./file_row.js", "./render.js"],
         "panels.js": ["./render.js", "./setup.js", "./plan_review.js"],
         "plan.js": ["./file_row.js", "./render.js"],
-        "plan_review.js": ["./plan.js", "./render.js"],
+        "plan_review.js": ["./plan.js", "./icons.js", "./render.js"],
         "rail.js": ["./icons.js", "./render.js"],
         "readiness.js": [],
         "render.js": [],
@@ -473,6 +473,7 @@ def test_plan_review_component_keeps_actions_bounded_and_generation_safe() -> No
             str(PROJECT_ROOT / "tests" / "assets" / "plan_review_probe.mjs"),
             str(assets / "plan_review.js"),
             str(assets / "render.js"),
+            str(assets / "icons.js"),
         ],
         capture_output=True,
         check=False,
@@ -692,6 +693,7 @@ def test_plan_row_renderer_is_active_and_consumes_only_projected_views(
         "intentText",
         "intentKey",
         "checksumText",
+        "modifiedText",
         "notesText",
     )
     assert _javascript_frozen_set(plan, "INTENT_KEYS") == (
@@ -788,7 +790,7 @@ def test_plan_row_renderer_is_active_and_consumes_only_projected_views(
     assert hidden_plan_review.group("body").strip() == "display: none;"
     assert ".nami-file-list__body > .nami-file-row[hidden]" in layout
     assert "display: none;" in layout
-    assert layout.count("--nami-file-column-") == 12
+    assert layout.count("--nami-file-column-") == 20
     assert ".nami-file-list__column-resizer" in layout
     assert "cursor: col-resize;" in layout
     assert "repeating-linear-gradient" not in layout
@@ -1032,6 +1034,32 @@ def test_supplemental_node_inert_text_rejects_before_coercion() -> None:
     if node is None:
         pytest.skip("Node.js is unavailable for the supplemental render probe")
     probe = PROJECT_ROOT / "tests" / "assets" / "render_text_probe.mjs"
+    renderer = (
+        PROJECT_ROOT
+        / "namisync"
+        / "interfaces"
+        / "web"
+        / "assets"
+        / "render.js"
+    )
+
+    completed = subprocess.run(
+        [str(node), str(probe), str(renderer)],
+        capture_output=True,
+        check=False,
+        text=True,
+        timeout=10,
+    )
+
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+
+
+@pytest.mark.supplemental_node
+def test_supplemental_node_byte_formatter_uses_binary_units_and_bigints() -> None:
+    node = _node_executable()
+    if node is None:
+        pytest.skip("Node.js is unavailable for the supplemental render probe")
+    probe = PROJECT_ROOT / "tests" / "assets" / "render_byte_formatter_probe.mjs"
     renderer = (
         PROJECT_ROOT
         / "namisync"

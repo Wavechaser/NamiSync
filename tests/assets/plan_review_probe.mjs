@@ -78,9 +78,16 @@ class ElementFake {
     this.listeners.set(name, listeners);
   }
 
-  dispatch(name) {
-    const event = { target: this, currentTarget: this };
+  dispatch(name, properties = {}) {
+    const event = { target: this, currentTarget: this, preventDefault() {}, ...properties };
     for (const callback of this.listeners.get(name) ?? []) callback(event);
+  }
+
+  getBoundingClientRect() {
+    const index = this.parentElement?.children.indexOf(this) ?? -1;
+    const widths = [32, 300, 100, 130, 112, 112, 300];
+    return { width: this.classList.contains("nami-file-list__header-cell")
+      ? widths[index] : 100 };
   }
 
   setAttribute(name, value) { this.attributes.set(name, String(value)); }
@@ -99,8 +106,21 @@ class ElementFake {
 class DocumentFake {
   constructor() {
     this.activeElement = null;
+    this.documentElement = new ElementFake("html", this);
     this.defaultView = {
       frames: [],
+      listeners: new Map(),
+      addEventListener(name, callback) {
+        const listeners = this.listeners.get(name) ?? [];
+        listeners.push(callback);
+        this.listeners.set(name, listeners);
+      },
+      removeEventListener(name, callback) {
+        this.listeners.set(name, (this.listeners.get(name) ?? []).filter((item) => item !== callback));
+      },
+      dispatch(name, properties = {}) {
+        for (const callback of this.listeners.get(name) ?? []) callback(properties);
+      },
       ResizeObserver: class {
         constructor(callback) { this.callback = callback; }
         observe() {}
@@ -124,6 +144,7 @@ globalThis.Element = ElementFake;
 globalThis.HTMLElement = ElementFake;
 globalThis.document = new DocumentFake();
 globalThis.window = document.defaultView;
+globalThis.getComputedStyle = () => ({ fontSize: "16px" });
 
 function moduleUrl(source) {
   return `data:text/javascript;base64,${Buffer.from(source).toString("base64")}`;
@@ -131,6 +152,7 @@ function moduleUrl(source) {
 
 const renderSource = await readFile(process.argv[3], "utf8");
 const renderUrl = moduleUrl(renderSource);
+const iconsUrl = moduleUrl(await readFile(process.argv[4], "utf8"));
 const planUrl = moduleUrl(`
   export function renderPlanRow(element, row) {
     element.className = "nami-file-row nami-plan-row";
@@ -154,6 +176,7 @@ const planUrl = moduleUrl(`
 `);
 const source = (await readFile(process.argv[2], "utf8"))
   .replace("./plan.js", planUrl)
+  .replace("./icons.js", iconsUrl)
   .replace("./render.js", renderUrl);
 const { createPlanReviewPanel } = await import(moduleUrl(source));
 
@@ -261,7 +284,19 @@ assert.equal(panel.element.dataset.pending, "");
 document.defaultView.flushAnimationFrame();
 assert.ok(findText(panel.element, hostile));
 assert.ok(findText(panel.element, "1 destructive"));
-assert.ok(findText(panel.element, "4096 B required"));
+assert.ok(findText(panel.element, "4 KiB required"));
+const grid = findByClass(panel.element, "nami-file-list__grid--plan");
+const sizeResizer = findByDataset(panel.element, "column", "size");
+assert.ok(grid && sizeResizer);
+sizeResizer.dispatch("pointerdown", { clientX: 100 });
+window.dispatch("pointermove", { clientX: 120 });
+assert.equal(grid.style.getPropertyValue("--nami-file-column-size"), "120.000px");
+assert.equal(grid.style.getPropertyValue("--nami-file-column-notes"), "280.000px");
+window.dispatch("pointerup");
+assert.equal(window.listeners.get("pointermove").length, 0);
+sizeResizer.dispatch("keydown", { key: "ArrowRight" });
+assert.equal(grid.style.getPropertyValue("--nami-file-column-size"), "128.000px");
+assert.equal(grid.style.getPropertyValue("--nami-file-column-notes"), "272.000px");
 const renderedRow = findByDataset(panel.element, "nodeId", row.node_id);
 panel.render(task);
 assert.equal(findByDataset(panel.element, "nodeId", row.node_id), renderedRow,
@@ -290,10 +325,36 @@ checkbox.checked = false;
 checkbox.dispatch("change");
 assert.deepEqual(calls.at(-1), ["onSelect", review, row, false]);
 
-const sort = findAction(panel.element, "plan-sort");
-sort.value = "size";
-sort.dispatch("change");
-assert.deepEqual(calls.at(-1), ["onViewChange", review, { sortColumn: "size" }]);
+const sizeSort = findByDataset(panel.element, "sortColumn", "size");
+const nameSort = findByDataset(panel.element, "sortColumn", "filename");
+assert.ok(sizeSort && nameSort);
+sizeSort.dispatch("click");
+assert.deepEqual(calls.at(-1), ["onViewChange", review,
+  { sortColumn: "size", sortDirection: "ascending" }]);
+review.summary = { ...review.summary, sort_column: "size", sort_direction: "ascending" };
+panel.render(task);
+sizeSort.dispatch("click");
+assert.deepEqual(calls.at(-1), ["onViewChange", review,
+  { sortColumn: "size", sortDirection: "descending" }]);
+review.summary = { ...review.summary, sort_direction: "descending" };
+panel.render(task);
+nameSort.dispatch("click");
+assert.deepEqual(calls.at(-1), ["onViewChange", review,
+  { sortColumn: "filename", sortDirection: "ascending" }]);
+review.summary = { ...review.summary, sort_column: "filename", sort_direction: "ascending" };
+panel.render(task);
+nameSort.dispatch("click");
+review.summary = { ...review.summary, sort_direction: "descending" };
+panel.render(task);
+nameSort.dispatch("click");
+assert.deepEqual(calls.at(-1), ["onViewChange", review,
+  { sortColumn: "path", sortDirection: "ascending" }]);
+
+const noticeFilter = findByDataset(panel.element, "operation", "notice");
+noticeFilter.dispatch("click");
+assert.deepEqual(calls.at(-1), ["onViewChange", review,
+  { filters: new Set(["notice"]) }]);
+assert.equal(noticeFilter.ariaPressed, "true");
 
 const search = findAction(panel.element, "plan-search");
 search.value = hostile;
@@ -415,8 +476,7 @@ search.value = "stale";
 search.dispatch("input");
 task.review = null;
 panel.render(task);
-assert.equal(findByClass(panel.element, "nami-plan-review__toolbar").hidden, true);
-assert.equal(findByClass(panel.element, "nami-plan-review__actions").hidden, true);
+assert.equal(findByClass(panel.element, "nami-plan-review__table-card").hidden, true);
 findAction(panel.element, "plan-again").dispatch("click");
 assert.equal(calls.length, beforeDispose, "loading review actions cannot reuse stale review identity");
 panel.dispose();

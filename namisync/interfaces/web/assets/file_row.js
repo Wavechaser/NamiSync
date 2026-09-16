@@ -64,7 +64,7 @@ export function renderFileRow(element, rowView, details) {
     details === null ||
     typeof details !== "object" ||
     !Array.isArray(details.cells) ||
-    details.cells.length !== 2 ||
+    details.cells.length !== 2 && details.cells.length !== 3 ||
     !details.cells.every((cell) => cell instanceof HTMLElement) ||
     typeof details.className !== "string" ||
     !details.className

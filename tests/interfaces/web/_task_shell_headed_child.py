@@ -408,7 +408,45 @@ _PLAN_REVIEW_SCRIPT = _COMMON_JS + r"""
   const topSpacer = viewport.querySelector(".nami-plan-review__spacer");
   const expectedOffset = Number(firstOffsetRow.ariaRowIndex) - 2;
   const spacerAligned = parseFloat(topSpacer.style.blockSize) === expectedOffset * 24;
-  const noticeFilter = review.querySelector('.nami-plan-review__filter-list input[value="notice"]');
+  const table = review.querySelector(".nami-plan-review__list");
+  const tableCard = review.querySelector(".nami-plan-review__table-card");
+  tableCard.style.inlineSize = "80rem";
+  const tableHeader = review.querySelector(".nami-file-list__header");
+  const tableCells = [...tableHeader.children];
+  const rowCells = [...firstOffsetRow.children];
+  const columnsAligned = tableCells.length === 7 && rowCells.length === 7
+    && tableCells.every((cell, index) => Math.abs(
+      cell.getBoundingClientRect().left - rowCells[index].getBoundingClientRect().left,
+    ) <= 0.5);
+  const headerScrollClear = getComputedStyle(tableHeader).overflowY === "hidden"
+    && getComputedStyle(viewport).overflowY === "auto"
+    && getComputedStyle(tableHeader).scrollbarGutter === "stable"
+    && getComputedStyle(viewport).scrollbarGutter === "stable";
+  const resizeHandle = review.querySelector('.nami-file-list__column-resizer[data-column="size"]');
+  const sizeBefore = tableCells[2].getBoundingClientRect().width;
+  resizeHandle.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, clientX: 100 }));
+  window.dispatchEvent(new PointerEvent("pointermove", { clientX: 108 }));
+  window.dispatchEvent(new PointerEvent("pointerup", { clientX: 108 }));
+  const pointerResizeWorked = tableCells[2].getBoundingClientRect().width > sizeBefore + 7;
+  const sizeAfterPointer = tableCells[2].getBoundingClientRect().width;
+  resizeHandle.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "ArrowRight" }));
+  const keyboardResizeWorked = tableCells[2].getBoundingClientRect().width > sizeAfterPointer + 7;
+  tableCard.style.removeProperty("inline-size");
+  const nameSort = review.querySelector('[data-sort-column="filename"]');
+  const sizeSort = review.querySelector('[data-sort-column="size"]');
+  nameSort.click();
+  await until(() => tableCells[1].ariaSort === "ascending" && review.dataset.pending === "", "ascending Plan header sort");
+  nameSort.click();
+  await until(() => tableCells[1].ariaSort === "descending" && review.dataset.pending === "", "descending Plan header sort");
+  const chevronsVisible = !nameSort.querySelector(".nami-icon--chevron-down").hidden;
+  sizeSort.click();
+  await until(() => tableCells[2].ariaSort === "ascending" && review.dataset.pending === "", "changed Plan header sort");
+  const changedSortStartsAscending = tableCells[1].ariaSort === "none";
+  sizeSort.click();
+  await until(() => tableCells[2].ariaSort === "descending" && review.dataset.pending === "", "second Size sort");
+  sizeSort.click();
+  await until(() => tableCells[2].ariaSort === "none" && review.dataset.pending === "", "canonical Plan header reset");
+  const noticeFilter = review.querySelector('.nami-plan-review__filter-list [data-operation="notice"]');
   noticeFilter.click();
   await until(() => viewport.textContent.includes("insufficient_space"), "review refusal notice");
   await control("checkpoint", "plan_notice");
@@ -424,6 +462,12 @@ _PLAN_REVIEW_SCRIPT = _COMMON_JS + r"""
     executeReady: execute instanceof HTMLButtonElement && !execute.disabled,
     rowHeight: getComputedStyle(review.querySelector("[data-node-id]")).height,
     spacerAligned,
+    columnsAligned,
+    headerScrollClear,
+    pointerResizeWorked,
+    keyboardResizeWorked,
+    chevronsVisible,
+    changedSortStartsAscending,
   };
   await control("prepare_plan_again");
   const planAgainTraceEnabled = globalThis.__namiPlanAgainTrace !== undefined;
