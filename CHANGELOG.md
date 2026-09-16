@@ -714,7 +714,7 @@ repeated machinery while preserving operational safety and boundary contracts.
 Safety, settlement, authority, and measurement work made high-risk release
 claims explicit, independently reviewable, and regression-backed.
 
-#### Study M1-7 architecture and test ablation after delivery (2026-09-16)
+#### Study and plan M1-7 ablation after delivery (2026-09-16)
 
 - Study `ae3daf6` through `5986c57` from diff/structure to selected behaviors
   and consumers. Record twelve bounded candidates covering receipt/evidence
@@ -727,9 +727,15 @@ claims explicit, independently reviewable, and regression-backed.
 - Reconcile two Codex sidecar reviews and one Opus 5 xhigh session, including a
   same-session challenge that corrects overclaims and rejects validation/API
   weakening. Preserve prompts, raw responses, usage and experiment provenance.
-- Leave production/tests and accepted measurement authority unchanged; remove
-  disposable copies and deliver the report, closed study register and handoff.
-  No implementation, benchmark rerun, commit, push or PR is included.
+- Preserve the original study in user-requested commit `dbeb7a5`, then convert
+  it into eight bounded implementation checkpoints and a final integration gate.
+  Keep A1–A12, distinguish selected portions from deferred redesign/cleanup,
+  and absorb peer-review reconciliation into the plan's actual constraints.
+- Require baseline comparison, independent fault detection, exact evidence
+  lineage and checkpoint-local acceptance. Latent product defects are report-only;
+  no product fix or lighter rerun policy is implied by test simplification.
+- Review and commit the documentation plan; production/tests and accepted
+  measurements remain unchanged. No implementation, benchmark rerun, push or PR.
 
 #### Bound task inputs, custody, and retained settlement (2026-08-27 – 2026-08-30)
 

@@ -141,9 +141,10 @@ This discovery-only pass studies `ae3daf6^..5986c57`, starting from a clean
 `5986c57` checkout. It authorizes no production/test changes, new acceptance
 criteria, M1-8 work, push or PR. Work proceeds from diff/structure inventories
 to selected behavioral seams and direct consumers, not exhaustive line review.
-The [completed report](M1_7_ABLATION_STUDY.md) distinguishes observed redundancy,
-bounded experimental support and design proposals; no recommendation is
-implementation authorization.
+The original report, committed in `dbeb7a5`, distinguishes observed redundancy,
+bounded experimental support and design proposals. Its successor
+[implementation plan](M1_7_ABLATION_STUDY.md) retains that evidence and candidate
+register; neither discovery nor plan preparation authorizes implementation.
 
 | ID | Accepted study outcome | Named verification | Status |
 | --- | --- | --- | --- |
@@ -166,8 +167,37 @@ Both E1/E2 experiments used disposable copies and retained their exact plans,
 patches and control/ablation/fault logs. E2's cohort-only patch is not suitable
 for direct integration: any implementation must separate synthetic controls
 from live-generator coverage. No full benchmark rerun, product/test edit or
-commit was performed. Review session and usage, caveats and recommendation
-dispositions are in the report. Further implementation awaits user-selected scope.
+commit was performed during discovery. The subsequent user-requested snapshot
+commit is `dbeb7a5`; it preserves the original review reconciliation and usage.
+
+### Post-delivery ablation implementation plan (2026-09-16)
+
+The user requested converting the study into an actionable subtractive plan,
+then reviewing and committing that documentation. Product/tests remain unchanged.
+[M1_7_ABLATION_STUDY.md](M1_7_ABLATION_STUDY.md#checkpoint-register) is this
+register's detailed maintenance subregister: R7-1–R7-8 and R7-G are the finite
+proposed completion denominator, all pending implementation authorization.
+Its candidate register preserves A1–A12 and explicitly separates selected
+portions from deferred work. This does not reopen M1-7 product acceptance or
+authorize M1-8, a policy change, push or PR.
+
+The selected scope is synthetic/live fixture separation, canonical-comparator
+and unused replacement-route removal, independent-validator receipt checks,
+producer publication bookkeeping, browser admission replay, lazy ID resolver
+work and the tracer's mirrored test oracle. A5/A6/A7/A8/A10 remain deferred;
+A4 read retries, broader A12 safety reuse and A11 tracer retirement are excluded.
+A7 may be ratified later in ARCHITECTURE/PRESENTATION and this register.
+
+Every row names its bounded behavioral population, protected guarantees,
+product seams, detector-quality controls and atomic commit gate. Existing
+product behavior is the baseline; green rewritten tests alone cannot prove
+detector quality. Log/report latent product defects without fixing them in this
+refactor. Introduced regressions remain checkpoint obligations; AGENTS stops
+and DEFENSE consequence/evidence policy apply. Required current-source evidence
+must close before affected commits; the plan grants no lighter rerun policy.
+HANDOFF records the documentation review and next operational step.
+
+### Delivered product scope and P9 closure
 
 The user authorized M1-7, the closing-race correction, snapshot-bound destructive
 confirmation, aggregate/breakdown facts, an inert gallery preview, and confirmed

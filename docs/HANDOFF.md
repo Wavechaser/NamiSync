@@ -1,55 +1,52 @@
 # Latest session handoff
 
-## M1-7 ablation study (2026-09-16)
+## M1-7 ablation plan revision (2026-09-16)
 
-The user requested a coarse-to-fine ablation study of delivered commits
-`ae3daf6` through `5986c57`, including an independent single Opus 5 xhigh review.
-The checkout remains on `milestone1` at `5986c57`. Production and test paths
-are unchanged; only study/report/index/changelog/handoff documentation is edited.
-No commit, push, PR, M1-8 work or product implementation was performed.
+The user requested a commit of the existing study, conversion to an actionable
+subtractive plan, review, and a second documentation commit. The first commit is
+`dbeb7a5` (`docs(presentation): Record M1-7 ablation study`) on `milestone1`.
+The follow-up commit contains this handoff and the reviewed plan; locate its
+identity with `git log -1`. Product/tests still match `5986c57`.
 
-[M1_7_ABLATION_STUDY.md](M1_7_ABLATION_STUDY.md) is the final report.
-[M1_PLAN.md](M1_PLAN.md#post-delivery-ablation-study-2026-09-16) closes AB7-1–AB7-4.
-The report contains twelve candidates with source evidence, retained guarantees,
-falsifying gates and sequencing. Recommendations are not implementation authority.
+[M1_7_ABLATION_STUDY.md](M1_7_ABLATION_STUDY.md) retains A1–A12 and defines
+R7-1–R7-8 plus R7-G, all pending implementation authorization. M1_PLAN is the
+parent delivery authority. Selected outcomes are synthetic/live fixture
+separation, comparator and unused replacement-route removal, validator receipt
+checks, producer publication bookkeeping, browser admission replay, lazy ID
+resolver work and the mirrored tracer test oracle.
 
-Strong candidates consolidate independent-validator receipt checks, producer
-publication bookkeeping, browser retries and selection admission; separate
-synthetic validator fixtures from live scale construction; remove test ordinal/
-source-count coupling and unused mechanisms; and avoid four repeated safety
-derivations on a successful selection mutation. Public preview compatibility and
-workflow authority must survive. A larger selection-overlay representation needs
-hotspot evidence; legacy-reader and diagnostic-tracer retirements need explicit
-dispositions. Do not merge all recommendations into another oversized checkpoint.
+A5/A6/A7/A8/A10 are deferred; so are read-retry extraction, full workflow safety
+reuse and tracer retirement. A7 can be ratified later in the subject owners and
+M1_PLAN. The former Claude reconciliation table is absorbed into the actual
+constraints; the original report/usage record remains in `dbeb7a5`.
 
-E1 in a disposable copy: 33 focused projection/review tests passed before and
-after a canonical-comparator simplification; intentional reverse ordering failed
-the retained nonlexical-order assertion. E2: five synthetic validator controls
-passed before and after substituting frozen manifests with live generation
-forced to raise; intentionally removing maximum-budget rejection failed the
-existing maximum-only control. E2 is a cohort-only diagnostic patch, not an
-integration-ready replacement for shared live-fixture helpers. Both copies were
-removed after their absolute paths were checked. No full ordinary/headed suite
-or 175-child scale run was repeated; no performance acceptance is claimed.
+The plan distinguishes normative guarantees, replaceable mechanisms and immutable
+historical evidence. It requires independent fault detection in addition to
+green product behavior. Classify new red tests against the unchanged baseline;
+log/report latent product defects without fixing them in this refactor. Correct
+introduced regressions within scope and retain AGENTS stops/recovery rules.
 
-Two Codex sidecars reviewed measurement and frontend/harness families, followed
-by adversarial checks. Claude used Opus 5 xhigh in session
-`bfd6b79e-d74d-4714-a0cc-38bdafe5b5e2`, then resumed that exact session for a
-targeted challenge. Both invocations report zero Claude subagents. The reviewer
-accepted corrections to census, map copying, membership cost, public DTO and
-constructor-validation contracts, fake-DOM assumptions and rerun-policy claims.
-The final report records each disposition and separate per-model usage; total
-CLI-reported cost is $9.483037, including $0.001508 auxiliary Haiku usage.
+Current PRESENTATION policy requires new source-bound acceptance after changed
+measured inputs. Each triggered Q must close before its affected mergeable
+commit; no reduced rerun policy or deferred checkpoint gate is approved.
+The plan records supported commands; new artifact/install paths must be frozen
+before implementation. P9 and legacy accepted/failed artifacts remain untouched.
 
-Evidence: ignored `build/m1-7-ablation/` holds the inventory, prompts, raw JSON,
-review tool audit, original-state preservation receipt, experiment manifests,
-scripts, exact patches and six control/ablation/fault logs. Review-start tracked
-diff/status stayed unchanged through Claude's work. Documentation/link/diff
-checks and product/test identity against `5986c57` close this delivery.
+F1 records an unproven task-ID validation concern in `validateExecutionAdmission`;
+no supported-path misrouting was demonstrated. It is excluded from retry
+consolidation and needs separate investigation, not an opportunistic fix.
 
-M1-7 acceptance remains the prior P9 result at
-`build/m1-7/evidence/p9-full-20260916/`, with canonical committed artifacts and
-supplemental core binding recorded in M1_PLAN. This study neither replaces nor
-revalidates those measurements. Recovery ancestry remains under
-`codex/m1-7-recovery-20260916` and its verified bundle. Next action is discussion
-and selection of bounded simplification scope, not automatic implementation.
+Used the user-invoked plan-work skill and two read-only Codex probes followed by
+adversarial plan review. No new Claude session, implementation, ordinary/headed
+test run or quantitative run was performed. Documentation verification covers
+links, checkpoint/candidate consistency, named paths/tests, diff cleanliness,
+and unchanged product/test/evidence bytes. Review/verification artifacts are in
+ignored `build/m1-7-ablation/`; preserve the original review and E1/E2 logs there.
+
+P9 acceptance remains at `build/m1-7/evidence/p9-full-20260916/`, with committed
+artifacts and supplemental core binding recorded in M1_PLAN. Recovery ancestry
+remains under `codex/m1-7-recovery-20260916` and its verified bundle.
+
+Next action: implementation scope authorization, then R7-1 baseline and evidence
+lineage preparation. This task authorizes only documentation and its commits;
+no push, PR, M1-8 work, deferred cleanup or policy change is included.
