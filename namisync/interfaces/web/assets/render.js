@@ -8,6 +8,47 @@ export function renderText(element, text) {
   element.textContent = text;
 }
 
+const BYTE_UNITS = Object.freeze(["B", "KiB", "MiB", "GiB", "TiB", "PiB", "EiB"]);
+
+function byteCountInteger(value) {
+  if (typeof value === "bigint") {
+    if (value < 0n) throw new RangeError("byte count must be non-negative");
+    return value;
+  }
+  if (typeof value === "number") {
+    if (!Number.isSafeInteger(value) || value < 0) {
+      throw new RangeError("byte count must be a non-negative safe integer");
+    }
+    return BigInt(value);
+  }
+  if (typeof value !== "string" || !/^\d+$/.test(value)) {
+    throw new TypeError("byte count must be a decimal integer");
+  }
+  return BigInt(value);
+}
+
+export function formatByteCount(value) {
+  const bytes = byteCountInteger(value);
+  let unitIndex = 0;
+  let unit = 1n;
+  while (unitIndex < BYTE_UNITS.length - 1 && bytes >= unit * 1024n) {
+    unit *= 1024n;
+    unitIndex += 1;
+  }
+  if (unitIndex === 0) return `${bytes} B`;
+
+  const whole = bytes / unit;
+  const decimals = whole < 10n ? 2 : whole < 100n ? 1 : 0;
+  const scale = 10n ** BigInt(decimals);
+  const rounded = (bytes * scale + unit / 2n) / unit;
+  const integer = rounded / scale;
+  const fraction = decimals === 0
+    ? ""
+    : `.${(rounded % scale).toString().padStart(decimals, "0")}`
+      .replace(/0+$/, "").replace(/\.$/, "");
+  return `${integer}${fraction} ${BYTE_UNITS[unitIndex]}`;
+}
+
 const FILESYSTEM_LAYOUT_CONTROL =
   /[\u0000-\u001f\u007f-\u009f\u00ad\u061c\u200b\u200e-\u200f\u2028-\u202e\u2060-\u206f\ufeff\u27e6-\u27e7]/gu;
 
