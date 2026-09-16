@@ -38,6 +38,28 @@ The prior aggregate complete-owner-graph model and BR-G-45 are retired. No futur
 
 ## Remaining checkpoints
 
+### Plan-surface refinement register (2026-09-17)
+
+This post-M1-7 GUI pass changes presentation only. Frozen plan facts, server-owned
+selection, raw sort keys, window bounds, execution admission and domain policy
+remain unchanged. The finite population is the Plan review component, its
+shared table/chip styling and direct frontend/installed witnesses; Setup and
+inventory tables are comparison references, not mutation targets.
+
+| ID | Accepted outcome and atomic boundary | Named gate | Status |
+| --- | --- | --- | --- |
+| GUI-P1 | Put frozen paths and semantic options in a Plan card, summary counts in a Status card, and search/filter, gallery-shaped table and execution controls in one card; merge dependency count into notes; add Modified right of Checksum at equal width in gallery and production; carry gallery pointer/keyboard column resizing into production; retain virtual rows and header-free scrollbar with Setup thinning. | Plan component probe, frontend static checks, installed headed Plan geometry/resize witness, UI docs and diff review. | Pending |
+| GUI-P2 | Use gallery filter pills and header sort cycle (ascending, descending, canonical reset), with catalog chevrons; switching columns starts ascending. No browser-side row ordering or durable preference. | Component probe for every transition, backend view-contract and installed headed sort/filter witness. | Pending |
+| GUI-P3 | Format status required bytes and row sizes in exact binary units without altering raw numeric sort or wire values. | Boundary/large-integer formatter tests, Plan component probe, installed headed display witness. | Pending |
+
+Task-specific stops: any change to execution/selection authority, projection
+representation or supported sort semantics outside the named gestures requires
+scope review. A lost virtual-window bound or clipped header/body alignment
+blocks completion. The regression study covers stale review gestures, pending
+control disablement, hostile path text, extreme signed-64 sizes, forced colors,
+and Setup table geometry. Each row closes in its own reviewed commit with tests
+and matching docs; the final integrated pass rechecks direct consumers.
+
 ### Completed GUI and documentation work
 
 Completed records are condensed here; CHANGELOG and Git history through
