@@ -891,8 +891,9 @@ is stored separately from semantic settings and never persists authority.
 `interfaces/web/plan_review.py` retains only canonical and current display orders
 for the current projection. View-only changes reuse ordering; selection-only
 replacement may rebind it through the workflow's topology/key preservation
-guarantee, while full projection replacement invalidates it. Publication remains
-atomic. `interfaces/web/visible_sequence.py` owns compact visibility indexes and
+guarantee. Fresh acquisition owns new orders; there is no in-place full projection
+replacement route. Supported view/selection publication remains atomic.
+`interfaces/web/visible_sequence.py` owns compact visibility indexes and
 derives bounded-window accessibility values from them; these indexes cannot
 reinterpret domain membership or selection. See `PRESENTATION.md` for the
 window contract, retention coverage and quantitative verification procedure.

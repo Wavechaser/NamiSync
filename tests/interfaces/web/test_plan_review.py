@@ -120,14 +120,21 @@ def test_plan_review_state_refreshes_selection_without_resetting_view_gestures()
         search_query="alpha",
         filters=frozenset({"delete"}),
         sort_column=PlanSortColumn.FILENAME,
-        sort_direction=SortDirection.ASCENDING,
-        collapse_node_id=None,
-        collapsed=None,
+        sort_direction=SortDirection.DESCENDING,
+        collapse_node_id="folder",
+        collapsed=True,
     )
-    state.replace_projection(
-        _projection(),
+    state.replace_selection(
+        selected_operation_ids=frozenset({"1" * 32}),
+        exclusion_reasons={"2" * 32: "user-deselected"},
         selection_revision=1,
         selection_state="reviewing",
+        requires_destructive_confirmation=False,
+        irreversible_update_count=0,
+        destructive_operation_count=0,
+        irreversible_operation_count=0,
+        destructive_operation_counts={"update": 0, "move_update": 0, "trash": 0, "delete": 0},
+        required_bytes="3",
     )
 
     summary = state.summary()
@@ -136,6 +143,12 @@ def test_plan_review_state_refreshes_selection_without_resetting_view_gestures()
     assert summary["search_query"] == "alpha"
     assert summary["filters"] == ["delete"]
     assert summary["sort_column"] == "filename"
+    assert summary["sort_direction"] == "descending"
+    assert summary["collapsed_count"] == 1
+    assert summary["selected_operation_count"] == 1
+    rows = state.window(expected_revision=2, offset=0, limit=256)["rows"]
+    assert [row["node_id"] for row in rows] == ["root", "delete"]
+    assert rows[1]["selection"] == "unselected"
 
 
 def test_plan_review_state_replaces_authoritative_execution_facts() -> None:
@@ -261,17 +274,6 @@ def test_plan_review_validates_projection_structure_at_acquisition(changes) -> N
     with pytest.raises((TypeError, ValueError)):
         PlanReviewState("task-" + "1" * 32, "a" * 32, malformed, 0,
                         "reviewing", "source", "target")
-
-    state = PlanReviewState("task-" + "1" * 32, "a" * 32, projection, 0,
-                            "reviewing", "source", "target")
-    before = state.summary()
-    window = state.window(expected_revision=0, offset=0, limit=256)
-    with pytest.raises((TypeError, ValueError)):
-        state.replace_projection(malformed, selection_revision=1,
-                                 selection_state="reviewing")
-    assert state.projection is projection
-    assert state.summary() == before
-    assert state.window(expected_revision=0, offset=0, limit=256) == window
 
 
 def test_plan_review_uses_the_private_validated_visible_path(monkeypatch) -> None:
@@ -469,19 +471,44 @@ def test_plan_review_selection_rebinds_cached_orders_with_one_projection_clone(m
     assert state.current_sequence.nodes is state.projection.nodes
 
 
-def test_plan_review_full_replacement_invalidates_orders_even_for_same_request() -> None:
+def test_plan_review_selection_transform_failure_preserves_complete_view(monkeypatch) -> None:
     state = PlanReviewState("task-" + "1" * 32, "a" * 32, _projection(), 0, "reviewing", "source", "target")
-    old_canonical = state.canonical_order
-    old_current = state.current_order
+    before = state.summary()
+    before_window = state.window(expected_revision=0, offset=0, limit=256)
 
-    state.replace_projection(_projection(), selection_revision=1, selection_state="reviewing")
+    def fail_selection(*_args, **_kwargs):
+        raise RuntimeError("selection transform failed")
 
-    assert state.canonical_order is not old_canonical
-    assert state.current_order is not old_current
-    assert state.current_order.projection is state.projection
+    monkeypatch.setattr(plan_review_module, "apply_plan_projection_selection", fail_selection)
+    with pytest.raises(RuntimeError, match="selection transform failed"):
+        state.replace_selection(
+            selected_operation_ids=frozenset({"1" * 32}),
+            exclusion_reasons={"2" * 32: "user-deselected"},
+            selection_revision=1,
+            selection_state="reviewing",
+            requires_destructive_confirmation=False,
+            irreversible_update_count=0,
+            destructive_operation_count=0,
+            irreversible_operation_count=0,
+            destructive_operation_counts={"update": 0, "move_update": 0, "trash": 0, "delete": 0},
+            required_bytes="3",
+        )
+
+    assert state.summary() == before
+    assert state.window(expected_revision=0, offset=0, limit=256) == before_window
 
 
-def test_plan_review_state_refuses_revision_exhaustion_before_replacement() -> None:
+def test_plan_review_fresh_acquisition_has_independent_orders() -> None:
+    first = PlanReviewState("task-" + "1" * 32, "a" * 32, _projection(), 0, "reviewing", "source", "target")
+    second = PlanReviewState("task-" + "1" * 32, "a" * 32, _projection(), 0, "reviewing", "source", "target")
+
+    assert second.canonical_order is not first.canonical_order
+    assert second.current_order is not first.current_order
+    assert second.current_sequence is not first.current_sequence
+    assert second.current_order.projection is second.projection
+
+
+def test_plan_review_state_refuses_revision_exhaustion_before_selection() -> None:
     state = PlanReviewState(
         "task-" + "1" * 32,
         "a" * 32,
@@ -493,12 +520,49 @@ def test_plan_review_state_refuses_revision_exhaustion_before_replacement() -> N
         view_revision=MAX_JAVASCRIPT_SAFE_INTEGER,
     )
     before = state.summary()
+    before_window = state.window(expected_revision=MAX_JAVASCRIPT_SAFE_INTEGER, offset=0, limit=256)
 
     with pytest.raises(OverflowError, match="revision is exhausted"):
-        state.replace_projection(
-            _projection(),
+        state.replace_selection(
+            selected_operation_ids=frozenset({"1" * 32}),
+            exclusion_reasons={"2" * 32: "user-deselected"},
             selection_revision=1,
             selection_state="reviewing",
+            requires_destructive_confirmation=False,
+            irreversible_update_count=0,
+            destructive_operation_count=0,
+            irreversible_operation_count=0,
+            destructive_operation_counts={"update": 0, "move_update": 0, "trash": 0, "delete": 0},
+            required_bytes="3",
         )
 
     assert state.summary() == before
+    assert state.window(expected_revision=MAX_JAVASCRIPT_SAFE_INTEGER, offset=0, limit=256) == before_window
+
+
+def test_plan_review_state_refuses_revision_exhaustion_before_view_or_commit() -> None:
+    state = PlanReviewState(
+        "task-" + "1" * 32, "a" * 32, _projection(), 0,
+        "reviewing", "source", "target",
+        view_revision=MAX_JAVASCRIPT_SAFE_INTEGER,
+    )
+    before = state.summary()
+    before_window = state.window(expected_revision=MAX_JAVASCRIPT_SAFE_INTEGER, offset=0, limit=256)
+
+    with pytest.raises(OverflowError, match="revision is exhausted"):
+        state.update(
+            expected_revision=MAX_JAVASCRIPT_SAFE_INTEGER,
+            search_query="alpha",
+            filters=frozenset({"delete"}),
+            sort_column=PlanSortColumn.FILENAME,
+            sort_direction=SortDirection.ASCENDING,
+            collapse_node_id="folder",
+            collapsed=True,
+        )
+    assert state.summary() == before
+    assert state.window(expected_revision=MAX_JAVASCRIPT_SAFE_INTEGER, offset=0, limit=256) == before_window
+
+    with pytest.raises(OverflowError, match="revision is exhausted"):
+        state.mark_selection_committed()
+    assert state.summary() == before
+    assert state.window(expected_revision=MAX_JAVASCRIPT_SAFE_INTEGER, offset=0, limit=256) == before_window

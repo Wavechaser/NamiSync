@@ -104,7 +104,7 @@ peers are assigned before final nodes are built; consumed drafts are released
 before publication. Source nodes remain stable across display sorts. Real sorts produce
 compact source-position permutations and inverse ranks, preserving exact sibling
 comparison and subtree contiguity without cloning projection nodes or identity
-maps. PlanReviewState validates structure on acquisition/staged replacement and
+maps. PlanReviewState validates structure on acquisition and
 retains only canonical and current orders. Search, filters and collapse reuse the
 current order; reset can reuse canonical order.
 Real sorts derive siblings from canonical order, stable-sort available raw
@@ -113,8 +113,9 @@ Internally generated orders use trusted publication; public construction still
 validates malformed topology and permutations. No extra per-sort cache is kept.
 Selection-only updates rebind orders to the new projection under the owner's
 structural/key guarantee, so old
-projection nodes are not kept alive by cached order references. Full replacement
-invalidates orders even for an equal request ID. Public malformed structure/order
+projection nodes are not kept alive by cached order references. Fresh acquisition
+owns new orders even for an equal request ID; no in-place full replacement route
+is exposed. Public malformed structure/order
 rejection remains intact; trusted derivation reuses already validated inputs.
 
 Changed-view matching retains each direct match and its parent chain, stopping

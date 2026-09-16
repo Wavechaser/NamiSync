@@ -231,51 +231,6 @@ class PlanReviewState:
                 self.view_revision = next_revision
             return self._summary(disposition="applied" if changed else "noop")
 
-    def replace_projection(
-        self,
-        projection: PlanProjection,
-        *,
-        selection_revision: int,
-        selection_state: str,
-    ) -> None:
-        with self._lock:
-            if projection.request_id != self.request_id:
-                raise ValueError("plan projection changed its request")
-            _validate_structure(projection.nodes)
-            collapsed_node_ids = frozenset(
-                node_id
-                for node_id in self.collapsed_node_ids
-                if node_id in projection.position_by_node_id
-                and projection.node_for_id(node_id).is_container
-            )
-            next_revision = _next_revision(self.view_revision)
-            canonical_order = sort_plan_projection(
-                projection, PlanSortColumn.PATH, SortDirection.ASCENDING
-            )
-            order = (
-                canonical_order
-                if self.sort_column is PlanSortColumn.PATH
-                else _sort_plan_projection_from_canonical(
-                    canonical_order, self.sort_column, self.sort_direction
-                )
-            )
-            visible = _derive_view(
-                order,
-                search_query=self.search_query,
-                filters=self.filters,
-                sort_column=self.sort_column,
-                sort_direction=self.sort_direction,
-                collapsed_node_ids=collapsed_node_ids,
-            )
-            self.projection = projection
-            self.selection_revision = selection_revision
-            self.selection_state = selection_state
-            self.collapsed_node_ids = collapsed_node_ids
-            self._canonical_order = canonical_order
-            self._order = order
-            self._visible = visible
-            self.view_revision = next_revision
-
     def replace_selection(
         self,
         *,

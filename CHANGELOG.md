@@ -44,6 +44,11 @@ packaging remain open.
   workflow/interface checks pass 2,480 with one historical-artifact skip, and
   all 12 import contracts pass. Five-child baseline/candidate memory guards pass
   the existing 320 MiB maximum; no memory improvement is claimed.
+- Retire unused in-place projection replacement while preserving constructor,
+  selection and view-publication checks. Focused checks pass 171, workflows and
+  interfaces pass 2,482 with one historical-artifact skip, all 12 import contracts
+  pass, and 30 installed headed checks pass. Copied faults detect lost sort,
+  malformed acquisition and early publication; independent review approves.
 
 #### Reduce Plan review and execution overhead (2026-09-15 – 2026-09-16)
 

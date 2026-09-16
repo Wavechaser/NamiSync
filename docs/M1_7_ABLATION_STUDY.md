@@ -148,7 +148,7 @@ an otherwise-required checkpoint gate.
 | --- | --- | --- | --- | --- |
 | R7-1 | Separate synthetic manifests from real generator observations (A3) | Startup `ee8d861` | Full scale-test module; synthetic generator trap and live population/order faults | complete |
 | R7-2 | Replace obsolete canonical comparator with direct key (A9) | Startup ee8d861 | Projection/review tests; reversed-order fault and all real sort modes | complete |
-| R7-3 | Remove unused in-place full projection replacement (A9) | R7-2 | Acquisition, selection, new-view and failed-publication witnesses | pending |
+| R7-3 | Remove unused in-place full projection replacement (A9) | R7-2 | Acquisition, selection, new-view and failed-publication witnesses | complete |
 | R7-4 | One validator-local implementation per common receipt invariant (A1) | R7-1 | Partial/readiness/terminal corruption matrix and independent oracle controls | pending |
 | R7-5 | One producer-local receipt publication operation (A2) | R7-4 | Publication/index interruption matrix; independent validator accepts/refuses exact artifacts | pending |
 | R7-6 | One browser admission-replay state machine (A4) | Implementation authorization | Real bridge retry matrix, transport/consumer and installed headed gates | pending |
@@ -542,7 +542,7 @@ observations. Existing full contract and historical artifacts remain immutable.
 | --- | --- |
 | R7-1 | Synthetic/live provider isolation, live population/order/retained-buffer and maximum-only controls; no changed timed code. |
 | R7-2 | `projection_incremental_retained_memory_staging_overlap`, five fresh children; canonical construction is outside cold-build and warm-sort timers. Real-sort behavior remains covered by P. |
-| R7-3 | Construction/staging memory and view/selection consumers affected by route removal; prove excluded routes have no measured callers. |
+| R7-3 | No timed IDs: deleted route has no product/benchmark caller, import precedes the memory baseline, and measured acquisition/update/selection bodies remain unchanged. P/WI/L/H and three copied faults remain required. |
 | R7-4 | Public partial/readiness/terminal corruption equivalence against baseline validator; no changed timed child code. |
 | R7-5 | Real receipt/index publication failure matrix and independent validation; no changed timed child code. |
 | R7-6 | Installed headed Execute feedback/receipt; include other bridge consumers if their measured path changes. |
@@ -740,6 +740,49 @@ branches and verifies comparator retirement removed no live behavior.
 `refactor(workflows): Simplify canonical Plan ordering`.
 
 ### R7-3 — Retire unused in-place full projection replacement (A9, second outcome)
+
+**Delivered.** Only the unused method was removed. Four test consumers were
+migrated to selection refresh, fresh acquisition and surviving exhaustion paths;
+failed selection transformation preserves the complete prior view. Final P171,
+WI2482/1 historical-artifact skip, L12 and installed H30 pass. Four copied
+candidate controls pass; reset sort, malformed text, malformed topology and early
+publication faults fail their named retained assertions. Independent review
+approved source, assertions and evidence hashes. Exact commands, patches, loaded
+paths and raw logs are in `implementation/r7-3/manifest.md`. No timed child body
+changed, so Q-local uses the declared no-timing decision; Q-final remains open.
+
+**Expansion refreshed at `884813d`.** Product population is only
+`namisync/interfaces/web/plan_review.py`; tests only
+`tests/interfaces/web/test_plan_review.py`. The four direct test calls are
+gesture refresh, malformed acquisition/replacement, order invalidation and
+revision exhaustion. No production/benchmark caller exists. Inspect
+`TaskRegistry.open_plan_view` (fresh state before guarded publication) and its
+`replace_selection` consumer without changing the registry. Docs: ARCHITECTURE
+and PRESENTATION mechanism wording, this register, CHANGELOG and HANDOFF.
+R7-2 changed only the canonical sort key and added edge tests; constructor and
+registry seams remain otherwise identical to the read-only `efb5dc7` study.
+Baseline P169 and WI2480/1 skip from the identical integrated candidate remain
+valid; R7-2 committed-source check passed. Existing malformed constructor,
+failed update and selection tests preserve same-level detectors under ST-5;
+E1 is not a substitute for these active-route checks.
+
+Migrate gesture assertions to actual selection changes, retaining search,
+filter, chosen sort, collapse, selection/window facts and both revisions. Keep
+malformed-constructor assertions and retire only the unsupported replacement
+half. Replace old order-invalidation test with fresh-state order/view identity.
+Migrate exhaustion to selection and check other surviving revision transitions;
+refusal preserves summary and window. Keep failed-update publication and add a
+focused failed-selection-transform witness if absent. Copied-source faults must
+reset selection sort, admit malformed acquisition and publish before a forced
+transform failure, each failing the named ordinary assertion. Freeze exact
+nodes/patches/commands in `implementation/r7-3/manifest.md` before editing.
+
+Q-local has no timed IDs: benchmark `make_plan_review_state` and memory staging
+construct fresh states, then use active update/window paths; none calls the
+removed method. Its class code is imported before the memory baseline. This
+decision applies only to strict deletion plus test migration. Gate P + WI + L + H,
+the retained/migrated detectors and three isolated fault controls, subject-doc
+checks and fresh review close one atomic R7-3 commit. Full Q-final remains due.
 
 **Objective.** Remove an unused state publication route while preserving every
 currently supported acquisition, selection and view-update guarantee.
@@ -1088,10 +1131,10 @@ experiment copies were removed; frozen P9/legacy artifacts remain untouched.
 ## Resumption block
 
 - **Current state:** execution authorized 2026-09-17; startup baseline at clean
-  `d91871f`, product/tests still based on `5986c57`. R7-1/R7-2 complete; R7-3–R7-8 and R7-G pending.
+  `d91871f`, product/tests initially based on `5986c57`. R7-1–R7-3 complete; R7-4–R7-8 and R7-G pending.
   R7-1 unchanged S baseline is 54 passed / 1 historical-artifact skip.
-- **Next action:** verify R7-2 committed-source identity, then refresh/freeze
-  R7-3 expansion and its baseline. Existing authorization never needs repeating.
+- **Next action:** verify R7-3 committed-source identity, then refresh/freeze
+  R7-4 expansion and its baseline. Existing authorization never needs repeating.
 - **Commands:** S/P/B/M/T/I/WI/H/O/L above are established repository invocations;
   Q's supported CLI flags are recorded, but actual new install/artifact paths
   must be frozen before execution. Do not infer a pass from a skipped artifact test.
