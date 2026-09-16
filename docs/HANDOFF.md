@@ -20,8 +20,8 @@ boundary probe and `git diff --check` passed. One earlier headed task-shell run
 had a dialog focus-containment failure; the immediate repeat with the same
 product change passed, so no production focus change was made.
 
-Commits for this task begin with `f2fc1aa` (register) and `27f1a6b`
-(formatter); the integrated surface commit follows. The M1-7 quantitative
+Commits for this task are `f2fc1aa` (register), `27f1a6b`
+(formatter) and `4053a53` (integrated surface). The M1-7 quantitative
 receipts remain historical to their original source/instrument bytes; this GUI
 pass does not recertify current-source scale performance. The separate R7
 test/evidence machinery proposal remains in [M1_7_ABLATION_STUDY.md](M1_7_ABLATION_STUDY.md)
