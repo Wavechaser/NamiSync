@@ -277,6 +277,37 @@ details. No new diagnostic or repair loop is authorized by this record.
 
 ### Integration and stop
 
+**P8 shared structure (base `90d9469`, authorized 2026-09-16): completed;
+stop after focused measurements.** Core `ExecutionSetCheckpoint` and workflow
+checkpoint materialization share the constructor-validated immutable structure
+while reopening fresh mutable overlays. Public constructor and admission checks,
+exact plan/selection/deselection identity, verify/resume state, commitment time
+and receipt-after-admission remain intact. Generic callback authority snapshots
+stay cheap/nonvalidating. No duplicate index, review cache, dispatcher change or
+legacy model; ARCHITECTURE accounts for the index's extended paused lifetime.
+
+Closed population: `core/execution.py`, `workflows/models.py`, direct domain
+checkpoint tests and bridge-resume/post-execution consumers; matching
+ARCHITECTURE/INTERFACES notes, HANDOFF and CHANGELOG. Sharing/non-reconstruction,
+mutable isolation, malformed/mismatched state and public refusal witnesses pass.
+Focused corpus: 259; ordinary: 5,157 passed (5 skipped / 30 deselected); imports:
+12 kept; installed Plan: 1 passed (2 deselected); independent source review passes.
+
+One receipt readiness child and five fresh measurement children completed
+30 samples: p95 **72.0 ms**, maximum **72.9 ms**, passing unchanged 100/250 ms
+limits. Previous p95/max: 121.9/122.7 ms. Range 43.5–72.9 ms; per-child maxima
+58.2/66.6/72.0/72.0/72.9 ms. Evidence remains diagnostic, not full M1-7 acceptance.
+Raw receipts and source/installed/runtime identities are retained under
+`build/m1-7/evidence/p8-structure-20260916/`. Supplemental provenance freezes
+the changed `core/execution.py` source/installed/wheel triplet outside the
+historical contract's file list; protected contracts/evidence remain untouched.
+Independent `comparison/evidence-audit.json` verifies all six children, raw
+links, statistics and declared/supplemental source, build and runtime identities.
+
+One atomic verified commit preserves this outcome. Stop after this round:
+no retry, further profiling/optimization, full run, threshold change, amendment,
+merge or pruning. Prior recovery history remains unchanged.
+
 **P7 digest reuse (base `a479e58`, authorized 2026-09-16): completed; stop
 after focused measurements.** Closed population: workflow selection/runtime,
 service preview, direct workflow/service tests and the existing benchmark's
@@ -307,11 +338,9 @@ Evidence: `build/m1-7/evidence/p7-receipt-20260916/` retains raw attribution,
 source/installed/runtime identities and `comparison/` authority/child receipts.
 Independent `comparison/evidence-audit.json` verifies all six children, 30
 samples, raw links and frozen source/installed/wheel/runtime identities.
-One atomic digest-first commit includes matching tests/docs. No retry, further
-optimization, full run, threshold change, amendment, merge or pruning. The next
-proposal targets checkpoint materialization's second immutable-structure rebuild,
-preserving initial public validation and fresh mutable continuation state.
-Larger structure work remains deferred; repository stops continue to apply.
+One atomic digest-first commit includes matching tests/docs. That round stopped
+without retry, further optimization, full run, threshold change, amendment,
+merge or pruning. P8 above owns the subsequent checkpoint structure-sharing work.
 
 **P6 resumption (base `28c7b44`, authorized 2026-09-16):** investigate and fix
 the observed busy-close cancellation-drain failure, considering ordering/timing

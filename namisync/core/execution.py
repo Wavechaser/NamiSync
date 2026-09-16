@@ -736,6 +736,52 @@ def snapshot_execution_set_authority(value: object) -> ExecutionSetAuthority:
     )
 
 
+@dataclass(frozen=True, slots=True, init=False)
+class ExecutionSetCheckpoint:
+    """Detached overlay and validated structure for a paused execution."""
+
+    _structure: _ExecutionStructure
+    _authority: ExecutionSetAuthority
+
+    def __init__(self, value: ExecutionSet) -> None:
+        validate_execution_set(value)
+        object.__setattr__(self, "_structure", value._structure)
+        object.__setattr__(self, "_authority", snapshot_execution_set_authority(value))
+
+    def materialize(self) -> ExecutionSet:
+        """Reopen independent mutable state without rebuilding plan structure."""
+
+        structure = self._structure
+        authority = self._authority
+        if (
+            type(structure) is not _ExecutionStructure
+            or type(authority) is not ExecutionSetAuthority
+        ):
+            raise TypeError("execution checkpoint has the wrong shape")
+        if (
+            authority.plan is not structure.plan
+            or authority.selection is not structure.selection
+            or authority.user_deselected is not structure.user_deselected
+        ):
+            raise ValueError("execution checkpoint changed validated structure")
+        value = object.__new__(ExecutionSet)
+        value.plan = authority.plan
+        value.selection = authority.selection
+        value.run_id = authority.run_id
+        value.commitment = authority.commitment
+        value.user_deselected = authority.user_deselected
+        value.status = dict(authority.status)
+        value.recording_reasons = dict(authority.recording_reasons)
+        value.published_evidence = dict(authority.published_evidence)
+        value.recording_issues = authority.recording_issues
+        value.omitted_detail_count = authority.omitted_detail_count
+        value.bytes_done_high_water = authority.bytes_done_high_water
+        value._selected_bytes_bound = structure.selected_bytes_bound
+        value._structure = structure
+        validate_execution_set(value)
+        return value
+
+
 def revalidate_execution_set_authority(
     value: object,
     authority: object,

@@ -18,6 +18,7 @@ from namisync.core.evidence import (
 from namisync.core.execution import (
     Commitment,
     ExecutionSet,
+    ExecutionSetCheckpoint,
     ItemRecordingReason,
     PublishedCopyEvidence,
     RecordedCopyIdentity,
@@ -790,3 +791,62 @@ def test_execution_checkpoint_detaches_and_reopens_independent_state(
 
     assert second == expected
     assert checkpoint.materialize() == expected
+
+
+@pytest.mark.parametrize("phase", ("execute", "verify"))
+def test_checkpoint_reuses_validated_structure_without_reconstructing_execution_set(
+    phase: str, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request = _request(phase)
+    checkpoint = ExecutionCheckpoint(request)
+    structure = request.execution_set._structure
+
+    def forbid_constructor(_self: ExecutionSet) -> None:
+        raise AssertionError("checkpoint rebuilt execution structure")
+
+    monkeypatch.setattr(ExecutionSet, "__post_init__", forbid_constructor)
+    first = checkpoint.materialize()
+    second = checkpoint.materialize()
+
+    assert first.execution_set._structure is structure
+    assert second.execution_set._structure is structure
+    assert first.execution_set._structure.operations is structure.operations
+    assert first.execution_set.status is not second.execution_set.status
+    validate_execution_set(first.execution_set)
+    validate_execution_set(second.execution_set)
+
+
+def test_checkpoint_structure_authority_rejects_foreign_or_malformed_state() -> None:
+    request = _request("execute")
+    retained = ExecutionSetCheckpoint(request.execution_set)
+    foreign = ExecutionSetCheckpoint(_request("execute").execution_set)
+
+    object.__setattr__(retained, "_structure", foreign._structure)
+    with pytest.raises(ValueError, match="changed validated structure"):
+        retained.materialize()
+
+    retained = ExecutionSetCheckpoint(request.execution_set)
+    bad_status = {"not-an-operation": Outcome.SUCCEEDED}
+    object.__setattr__(
+        retained,
+        "_authority",
+        replace(retained._authority, status=bad_status),
+    )
+    with pytest.raises(TypeError, match="operation identities"):
+        retained.materialize()
+
+    retained = ExecutionSetCheckpoint(request.execution_set)
+    object.__setattr__(
+        retained,
+        "_authority",
+        replace(retained._authority, run_id=object()),
+    )
+    with pytest.raises(TypeError, match="run id"):
+        retained.materialize()
+
+
+def test_checkpoint_constructor_still_validates_public_execution_set() -> None:
+    request = _request("execute")
+    request.execution_set.selection = frozenset()
+    with pytest.raises(ValueError, match="selection changed"):
+        ExecutionSetCheckpoint(request.execution_set)

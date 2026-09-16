@@ -29,6 +29,15 @@ packaging remain open.
 
 #### Reduce Plan review and execution overhead (2026-09-15 – 2026-09-16)
 
+- Share the validated execution structure through checkpoint materialization,
+  retaining one operation index and reopening detached mutable state. Preserve
+  initial public validation, fresh admission checks and receipt guarantees;
+  document the index's extended paused lifetime. Focused tests, independent
+  review, 5,157 ordinary tests, 12 import contracts and installed Plan pass.
+  One 30-sample receipt round reaches p95/max **72.0/72.9 ms**, down from
+  121.9/122.7 ms; both unchanged 100/250 ms limits pass. Stop after the focused
+  round, with no full measurement run or merge.
+
 - Prepare the canonical selection digest with the existing review decision and
   reuse it for preview and commitment, retaining exact identity/revision checks,
   fresh commitment time and the receipt after actual admission. A bounded headed

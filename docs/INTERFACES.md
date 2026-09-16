@@ -74,6 +74,11 @@ It wires workflow-owned constructors and materializers to the detachment
 contract in [DISPATCHER.md](DISPATCHER.md#public-contract). Constructors
 establish the built-in checkpoints' ownership; public tests prove it. The
 service adds no checkpoint certification or authority/adoption wrapper.
+Execution checkpoints share their construction-validated immutable operation
+index through the core execution snapshot while reopening detached mutable state.
+This changes neither service admission nor receipt timing guarantees; the
+[architecture retention account](ARCHITECTURE.md#35-plan-and-execution-types)
+describes the paused-index lifetime.
 
 Every admitted execution, inventory, baseline, verify, or rebaseline session
 also receives one exact process-local detail owner: the dispatcher session id

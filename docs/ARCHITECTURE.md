@@ -466,6 +466,7 @@ that depend on absence or stable identity.
 | `Commitment` | Binding from human approval to plan fingerprint and selection digest. |
 | `ExecutionSet` | Plan, authoritative selection, commitment, operation status, sparse item recording reasons, ordered task recording issues, continuation evidence, and validated aggregate byte high-water. |
 | `ExecutionSetAuthority` | Canonical immutable execution references plus detached prior mutable-overlay baselines; it carries no duplicate plan fingerprint or operation-fact graph. |
+| `ExecutionSetCheckpoint` | Execution-specific detached overlay plus the public constructor's validated immutable structure, shared when reopening fresh invocation state. |
 | `ExecutionReview` | Frozen read-only projection of plan, selection, run id, and privately copied status supplied to observation and judgment. |
 | `RecordingSpec` | Frozen shallow projection of plan, selection, run id, and commitment supplied at run-recording boundaries without exposing mutable execution continuation. |
 | `ObservedWorld` | Fresh, scoped filesystem facts whose mappings and frozen leaves are deeply read-only for pure preflight judgment. |
@@ -477,6 +478,27 @@ checkpoint validation binds those same immutable references and revalidates the
 mutable continuation overlay; replacing structural public fields requires a new
 execution set. This reuse is not cached filesystem authority: fresh root and
 preflight checks remain at their existing admission/outcome boundaries.
+
+Workflow execution checkpoints retain that validated structure through the core
+`ExecutionSetCheckpoint`. Capture validates the current execution set; reopening
+copies mutable overlays, checks exact plan/selection/deselection identity and
+validates the resulting continuation without rebuilding the operation index.
+The public `ExecutionSet` constructor still validates new inputs fully. Generic
+`ExecutionSetAuthority` snapshots remain nonvalidating callback baselines; they
+do not independently authorize this reconstruction path.
+
+The checkpoint retains two fields: `_structure` shares the immutable plan,
+selection, user deselection, read-only operation-id index and selected-byte bound;
+`_authority` retains the existing fixed references, run id, commitment, detached
+status/recording-reason/publication-evidence mappings, immutable recording issues
+and omission/byte scalars. Each mapping is bounded by the referenced plan's
+operation population; immutable operation/evidence leaves are shared, not copied.
+Reopened sets share the one index and own fresh overlay dictionaries. The workflow
+checkpoint's start time and execute/verify delta remain unchanged, including
+detached verification progress. The index now survives while paused and is
+released with its last checkpoint/invocation owner; there is no global or review
+cache. This extends index lifetime, rather than establishing zero retained-memory
+cost. Plan-review memory measurements do not measure paused execution retention.
 
 Observed free space is not stored in a plan. Capacity need is a pure property of
 operations and capabilities; available capacity is observed at review and

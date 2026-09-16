@@ -9,9 +9,7 @@ from typing import TYPE_CHECKING, ClassVar, Mapping, TypeAlias
 
 from namisync.core.execution import (
     ExecutionSet,
-    ExecutionSetAuthority,
-    snapshot_execution_set_authority,
-    validate_execution_set,
+    ExecutionSetCheckpoint,
 )
 from namisync.core.evidence import Outcome, RecordingStatus
 from namisync.core.integrity import (
@@ -312,7 +310,7 @@ _ExecutionDelta: TypeAlias = _ExecuteDelta | _VerifyDelta
 class ExecutionCheckpoint:
     """Detached semantic state retained while an execution is not running."""
 
-    _execution: ExecutionSetAuthority
+    _execution: ExecutionSetCheckpoint
     _started_at: datetime | None
     _delta: _ExecutionDelta
 
@@ -322,12 +320,9 @@ class ExecutionCheckpoint:
                 "execution checkpoint requires an exact ExecutionRequest"
             )
         continuation = request.continuation
-        validate_execution_set(continuation.execution_set)
+        execution = ExecutionSetCheckpoint(continuation.execution_set)
         if isinstance(continuation, VerifyContinuation):
             continuation = _exact_verify_continuation(continuation)
-        execution = snapshot_execution_set_authority(
-            continuation.execution_set
-        )
         if isinstance(continuation, ExecuteContinuation):
             delta: _ExecutionDelta = _ExecuteDelta(
                 continuation.verify_after_execute,
@@ -348,20 +343,7 @@ class ExecutionCheckpoint:
     def materialize(self) -> ExecutionRequest:
         """Create fresh mutable continuation state for one invocation."""
 
-        retained = self._execution
-        execution_set = ExecutionSet(
-            plan=retained.plan,
-            selection=retained.selection,
-            run_id=retained.run_id,
-            commitment=retained.commitment,
-            user_deselected=retained.user_deselected,
-            status=dict(retained.status),
-            recording_reasons=dict(retained.recording_reasons),
-            published_evidence=dict(retained.published_evidence),
-            recording_issues=retained.recording_issues,
-            omitted_detail_count=retained.omitted_detail_count,
-            bytes_done_high_water=retained.bytes_done_high_water,
-        )
+        execution_set = self._execution.materialize()
         delta = self._delta
         if isinstance(delta, _ExecuteDelta):
             continuation: ExecutionContinuation = ExecuteContinuation(
