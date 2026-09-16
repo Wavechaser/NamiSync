@@ -1,52 +1,30 @@
 # Latest session handoff
 
-## M1-7 ablation plan revision (2026-09-16)
+## R7 consolidation startup (2026-09-17)
 
-The user requested a commit of the existing study, conversion to an actionable
-subtractive plan, review, and a second documentation commit. The first commit is
-`dbeb7a5` (`docs(presentation): Record M1-7 ablation study`) on `milestone1`.
-The follow-up commit contains this handoff and the reviewed plan; locate its
-identity with `git log -1`. Product/tests still match `5986c57`.
+User authorized R7-1–R7-8 and R7-G execution using execute-task, with baseline
+and working-set preparation before implementation. Start: clean milestone1
+at d91871f; product/tests match delivered 5986c57. No other worktree.
+The [ablation register](M1_7_ABLATION_STUDY.md) owns scope and gates; M1_PLAN is
+the parent. Deferred candidates and F1 hardening remain excluded; no push/PR.
 
-[M1_7_ABLATION_STUDY.md](M1_7_ABLATION_STUDY.md) retains A1–A12 and defines
-R7-1–R7-8 plus R7-G, all pending implementation authorization. M1_PLAN is the
-parent delivery authority. Selected outcomes are synthetic/live fixture
-separation, comparator and unused replacement-route removal, validator receipt
-checks, producer publication bookkeeping, browser admission replay, lazy ID
-resolver work and the mirrored tracer test oracle.
+User-approved policy: affected Q-local Tier 1 checks at checkpoint commits;
+one full Q-final at closeout. Existing terminal validator remains full-only.
+Local evidence cannot renew full acceptance, pool partial children, alter fixed
+budgets or rewrite P9/legacy artifacts. PRESENTATION and the register now agree.
 
-A5/A6/A7/A8/A10 are deferred; so are read-retry extraction, full workflow safety
-reuse and tracer retirement. A7 can be ratified later in the subject owners and
-M1_PLAN. The former Claude reconciliation table is absorbed into the actual
-constraints; the original report/usage record remains in `dbeb7a5`.
+Read-only R7-1 baseline using the project venv: scale module passed 54 with one
+historical-artifact skip in 30.61 s. NAMISYNC_M1_7_READINESS_PATH was unset;
+this is not Q evidence. Python is 3.13.14; Node is available on PATH.
+R7-1 exact population and surviving detector map are recorded before edits.
+No product/test implementation or new quantitative acceptance yet.
 
-The plan distinguishes normative guarantees, replaceable mechanisms and immutable
-historical evidence. It requires independent fault detection in addition to
-green product behavior. Classify new red tests against the unchanged baseline;
-log/report latent product defects without fixing them in this refactor. Correct
-introduced regressions within scope and retain AGENTS stops/recovery rules.
+Startup evidence: build/m1-7-ablation/implementation/startup/manifest.md.
+First finish startup policy review, then R7-1 builder, neighborhood/fault gates,
+fresh independent review and atomic commit. Continue through accepted rows
+under existing authorization. Classify baseline discrepancies and apply AGENTS
+mandatory stops/recurrence/recovery; do not fix latent defects.
 
-Current PRESENTATION policy requires new source-bound acceptance after changed
-measured inputs. Each triggered Q must close before its affected mergeable
-commit; no reduced rerun policy or deferred checkpoint gate is approved.
-The plan records supported commands; new artifact/install paths must be frozen
-before implementation. P9 and legacy accepted/failed artifacts remain untouched.
-
-F1 records an unproven task-ID validation concern in `validateExecutionAdmission`;
-no supported-path misrouting was demonstrated. It is excluded from retry
-consolidation and needs separate investigation, not an opportunistic fix.
-
-Used the user-invoked plan-work skill and two read-only Codex probes followed by
-adversarial plan review. No new Claude session, implementation, ordinary/headed
-test run or quantitative run was performed. Documentation verification covers
-links, checkpoint/candidate consistency, named paths/tests, diff cleanliness,
-and unchanged product/test/evidence bytes. Review/verification artifacts are in
-ignored `build/m1-7-ablation/`; preserve the original review and E1/E2 logs there.
-
-P9 acceptance remains at `build/m1-7/evidence/p9-full-20260916/`, with committed
-artifacts and supplemental core binding recorded in M1_PLAN. Recovery ancestry
-remains under `codex/m1-7-recovery-20260916` and its verified bundle.
-
-Next action: implementation scope authorization, then R7-1 baseline and evidence
-lineage preparation. This task authorizes only documentation and its commits;
-no push, PR, M1-8 work, deferred cleanup or policy change is included.
+Preserve original study/review/E1/E2 under build/m1-7-ablation/, accepted P9
+under build/m1-7/evidence/p9-full-20260916/, and recovery archive/bundle recorded
+in M1_PLAN. New evidence uses checkpoint directories and manifests only.

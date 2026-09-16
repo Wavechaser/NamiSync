@@ -293,3 +293,18 @@ receipts use the installed headed production path; projection-only measurements
 do not establish either. Deterministic structure/permutation and bounded-work
 witnesses remain separate from elapsed time. Rerun after changes to any measured
 source, key, comparator, index, publication, retention or admitted profile.
+
+For the user-authorized R7 consolidation batch, affected checkpoint checks are
+Tier 1 drift guards; run the full 35-case gate once at R7-G on the integrated
+candidate. Freeze each checkpoint's dependency-based case selection before
+editing. Selected noisy cases retain full fixture populations, five fresh
+children, existing warm counts, independent receipt/correctness checking and
+unchanged P95/maximum budgets. Test/parent/validator-only changes use affected
+live-fixture, corruption and publication controls when no timed child changes.
+Record the exclusion rationale rather than treating tests-only as an exemption.
+Local evidence must bind source/instrument/validator/runtime and installed bytes;
+it never satisfies the full terminal validator or renews P9 acceptance. Failed
+local guards block the checkpoint. Do not pool slices or reuse their children in
+the final full run. The [ablation register](M1_7_ABLATION_STUDY.md) owns checkpoint
+commands and lineage; full acceptance remains pending until both terminal and
+committed-source validation pass at closeout. Historical evidence is immutable.

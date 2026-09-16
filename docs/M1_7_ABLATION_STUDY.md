@@ -8,11 +8,12 @@ Remove two unused Plan-review mechanisms and unnecessary selection-resolution
 work. Deliver small, independently reviewable checkpoints; leave admission,
 representation and archival redesigns deferred.
 
-Plan revision: 2026-09-16. The original study is committed in `dbeb7a5`;
+Plan revision: 2026-09-17. The original study is committed in `dbeb7a5`;
 its product/test baseline is `5986c57`. Study corpus: inclusive `ae3daf6..5986c57`
-(diff base `40ca76f`). This revision authorizes documentation work only.
-**Deliver now** below means included in the proposed implementation scope,
-not permission to execute it. [M1_PLAN](M1_PLAN.md) is the parent delivery
+(diff base `40ca76f`). The user authorized consolidation on 2026-09-17,
+including localized checkpoint measurements and one full run at closeout.
+**Deliver now** below is the authorized implementation scope.
+[M1_PLAN](M1_PLAN.md) is the parent delivery
 authority; this document supplies its bounded maintenance subregister.
 
 ## Scope and decisions
@@ -429,6 +430,31 @@ or one-derivation-per-mutation result is promised.
 
 ## Detailed checkpoints
 
+### Startup baseline and working-set rules (2026-09-17)
+
+Start from clean `milestone1` at `d91871f`, the sole checkout. The diff from
+`5986c57` contains documentation only; product, tests and frozen evidence are
+unchanged. Python is the project venv's 3.13.14; Node is available on PATH.
+Historical 5,158 ordinary passes and P9 are reference evidence, not new runs.
+Baseline each checkpoint's named neighborhood before its first implementation;
+run the ordinary suite once at integrated closeout, or earlier if impact becomes
+broad or uncertain. Keep checkpoint department, fault-control and headed gates.
+
+The working set is the eight accepted rows and final sweep; deferred candidates,
+F1 hardening, M1-8, push and PR remain excluded. Startup documentation owns this
+plan, M1_PLAN, PRESENTATION, CHANGELOG and HANDOFF. Expand each implementation
+row's exact files and consumer/detector map before edits. No product changes
+precede startup baseline classification and measurement-policy review.
+
+New evidence belongs only under ignored
+`build/m1-7-ablation/implementation/<checkpoint>/`; `startup` owns baseline and
+policy review. Each directory begins with `manifest.md` naming base/candidate,
+permitted artifacts, commands and cleanup. Use descriptive `.txt` logs, `.json`
+receipts, `.patch` fault controls and disposable `control-*` source copies.
+Preserve all pre-existing evidence; retain new raw evidence through closeout.
+Remove only positively identified disposable copies after results and patches
+are retained. No permanent generic measurement or mutation framework is added.
+
 ### Shared execution and evidence rules
 
 Each row names a bounded behavioral family, not an exhaustive edit list. Its
@@ -481,18 +507,47 @@ and unexpected skips. Department ownership comes only from `tests/_departments.p
 .\.venv\Scripts\lint-imports.exe
 ```
 
-**Q — current-source measurement gate.** Under PRESENTATION's existing rerun
-rule, changes to frozen source/instrument/validator inputs cannot inherit P9
-acceptance. R7-1 through R7-7 touch known measured inputs; R7-8 must compare its
-exact test/fixture diff with the frozen population and direct dependencies before
-claiming no quantitative consequence. Tests-only is not an exemption. Apply the
-existing fresh authority, readiness, 35-case/175-child measurement and independent
-terminal-validation procedure wherever Q is triggered, before that checkpoint's
-commit's precommit gate. The budgets, profile, full populations, maximum and P95 remain
-unchanged. Do not postpone a required gate to R7-G or merge unrelated checkpoints
-to hide the cost. A narrower evidence treatment requires explicit policy
-adjudication before implementation; this plan neither grants nor requires that
-policy change.
+**Q — localized checkpoints, full closeout.** User-approved on 2026-09-17:
+R7-1–R7-8 use Q-local, a DEFENSE §7 Tier 1 current-source drift guard, before
+each commit. R7-G runs Q-final once: the existing full fresh authority, readiness,
+35-case/175-child measurement and independent terminal-validation procedure.
+Local passes permit checkpoint commits but do not renew full scale acceptance.
+P9 remains historical evidence for its original bytes. Full acceptance stays
+pending until Q-final; partial runs are never pooled into its terminal artifact.
+Budgets, profile, fixture populations, five fresh children per selected metric,
+warm sample counts, maximum and P95 are unchanged. Failed guards block their row;
+do not retry away a failure, narrow the selected set after observing results,
+or defer an introduced regression to closeout.
+
+Before each row, freeze its affected metric IDs and dependency rationale,
+baseline/candidate hashes, exact commands, installed wheel/source byte bindings,
+runtime/profile, raw output paths and independent checking procedure. Run only
+the cases whose measured execution changes, including direct consumers. If the
+change affects only synthetic controls or parent/validator bookkeeping, run the
+affected live fixture, corruption and publication controls; explicitly record
+why timing cases are unaffected. Tests-only is not an automatic exemption.
+
+The current full validator admits no subsets. Q-local therefore uses existing
+`--component-child` / `--headed-child` commands for selected fixed metric IDs
+with unique launch tokens and output paths. A bounded task-owned script may
+select those metric definitions in memory and call the independent validator's
+`_validate_children` with actual hashed receipts and frozen headed runtime.
+It must check exact selected membership, counts, correctness, identity, maximum
+and P95; retain raw receipts and dispersion. It is not a terminal validator or a
+new permanent contract family. Validate source/wheel/install and profile identity
+separately before and after collection. Never pass synthetic receipts as measured
+observations. Existing full contract and historical artifacts remain immutable.
+
+| Row | Q-local dependency neighborhood (freeze exact cases before edits) |
+| --- | --- |
+| R7-1 | Synthetic/live provider isolation, live population/order/retained-buffer and maximum-only controls; no changed timed code. |
+| R7-2 | Component projection construction and canonical-order consumers, including changed sort/window cases. |
+| R7-3 | Construction/staging memory and view/selection consumers affected by route removal; prove excluded routes have no measured callers. |
+| R7-4 | Public partial/readiness/terminal corruption equivalence against baseline validator; no changed timed child code. |
+| R7-5 | Real receipt/index publication failure matrix and independent validation; no changed timed child code. |
+| R7-6 | Installed headed Execute feedback/receipt; include other bridge consumers if their measured path changes. |
+| R7-7 | Installed headed selection gesture; direct depth-32 helper does not measure service ID resolution. |
+| R7-8 | Diff against frozen inputs and trace consumers; no timing run when only independent ordinary oracle changes. |
 
 Record a new immutable authority/result lineage and preserve the accepted P9 and
 legacy bytes at their original meanings. Freeze candidate hashes before running;
@@ -512,13 +567,14 @@ confirmation; readiness adds `--authority`, measurement adds `--authority` and
 `--authority`, `--readiness`, `--measurements`, `--source-root`,
 `--installed-root`, `--installed-wheel`. Record the fully resolved command lines
 in the row before execution, including the supported installed Python runtime.
-Q has two phases: freeze and validate candidate observations before creating the
-checkpoint commit; then use `validate_committed_source_workspace` to check that
+Q-final has two phases: freeze and validate candidate observations before creating the
+closeout commit; then use `validate_committed_source_workspace` to check that
 commit's clean HEAD/source/evidence identity before integration, dependent
 implementation or marking the row complete. Also check source/wheel/installed
 physical bytes and Git-clean identity, including P9's supplemental
-`core/execution.py` binding. Commit gates below require Q's precommit phase;
-their completion also requires its postcommit phase. On mismatch preserve the
+`core/execution.py` binding. Checkpoint gates below mean Q-local; check their
+recorded source hashes against committed HEAD after each commit. R7-G requires
+both Q-final phases. On mismatch preserve the
 exact commit, artifacts and discrepancy, stop dependent work, and classify it
 under the failure/scope policy. Never amend away the evidence or use a later row
 to certify different bytes. The existing real-artifact pytest gate targets its
@@ -533,6 +589,21 @@ witnesses required by DEFENSE §7, not elapsed-time assertions.
 
 **Objective.** Remove full product fixture construction from synthetic validator
 and collection-failure controls, so their expected answers stay independent.
+
+**Startup expansion.** Base `d91871f`; production/producer/validator population
+is empty. Edit only `tests/interfaces/web/test_plan_review_scale.py` plus this
+register, PRESENTATION, CHANGELOG and HANDOFF. `_fixture_manifests` has exactly
+three direct consumers: `_authority_inputs` and the two live gates below.
+Synthetic `_authority` consumers cover readiness, collection failure, authority
+and terminal corruption. Preserve their assertions through a fresh-copy provider;
+keep the live gates on actual generated manifests. The frozen compact authority
+is an input oracle, never an output to rewrite. ST-5's same-level detector rule
+and E2's shared-provider exclusion remain binding. The unchanged S baseline is
+54 passed / 1 skipped (30.61 s); the real-artifact skip lacks configured readiness
+and is not Q. Q-local has no timed metric: only this ordinary test helper changes.
+Gate: S + I, generator trap/copy isolation, three independent live drift faults,
+maximum-only public-validator fault and harmless structural variation, then fresh
+review. One atomic R7-1 commit owns all provider changes and evidence mapping.
 
 **Scope and approach.** In `test_plan_review_scale.py`, split the manifest provider
 used by `_authority_inputs` and its synthetic authority/readiness/artifact/
@@ -890,7 +961,7 @@ and L on the final candidate; run H against the final installed product because
 R7-3/R7-6/R7-7 affect desktop paths. Earlier identical final-byte evidence may
 be reused only with a recorded dependency/identity justification; do not rerun
 unchanged gates reflexively or claim intermediate bytes certify later changes.
-Close every triggered Q for the final measured bytes and verify committed-source
+Run Q-final once for all 35 cases on the final measured bytes and verify committed-source
 identity after the final atomic commit. Record all commands, results and skips.
 
 Review one integrated user flow: open fresh Plan review; search/filter/collapse/
@@ -955,18 +1026,17 @@ experiment copies were removed; frozen P9/legacy artifacts remain untouched.
 
 ## Resumption block
 
-- **Current state:** planning revision only; R7-1–R7-8 and R7-G are pending.
-  Initial study committed as `dbeb7a5`, product/tests still based on `5986c57`.
-  No implementation or new quantitative acceptance has occurred.
-- **Next action:** obtain implementation scope authorization; then revalidate
-  checkout/base, start R7-1 and record its baseline, exact consumer map and Q
-  lineage/commands before edits. Existing authorization never needs repeating.
+- **Current state:** execution authorized 2026-09-17; startup baseline at clean
+  `d91871f`, product/tests still based on `5986c57`. R7-1–R7-8 and R7-G pending.
+  R7-1 unchanged S baseline is 54 passed / 1 historical-artifact skip.
+- **Next action:** finish independent startup-policy review, then implement R7-1
+  within its recorded population. Existing authorization never needs repeating.
 - **Commands:** S/P/B/M/T/I/WI/H/O/L above are established repository invocations;
   Q's supported CLI flags are recorded, but actual new install/artifact paths
   must be frozen before execution. Do not infer a pass from a skipped artifact test.
-- **Open cost decision:** current policy requires Q at each affected atomic
-  checkpoint. No lighter provenance/rerun policy is approved by this plan.
-  Ratifying a different policy or deferred A7 design is separate work.
+- **Measurement decision:** Q-local affected Tier 1 checks before each checkpoint
+  commit; Q-final full suite once at closeout. Full acceptance remains pending.
+  Deferred A7 design is still separate work.
 - **Preserve:** current user changes, committed study, original review/E1/E2
   evidence and P9/legacy bytes. New diagnostic files use the checkpoint-specific
   ignored directory and a manifest; no ad hoc files elsewhere or accepted-file

@@ -27,6 +27,14 @@ and remembered locations, bounded Plan review/selection/sorting and same-task
 execution with live controls. Execution-result/inventory review and beta
 packaging remain open.
 
+#### Consolidate the delivered Plan shell (2026-09-17)
+
+- Record the clean baseline and first checkpoint's provider/consumer working set
+  for the authorized R7-1–R7-8 consolidation and R7-G closeout.
+- Use affected local measurement drift checks per checkpoint and one full
+  current-source measurement suite at closeout; retain fixed criteria,
+  independent validators and historical evidence. No new acceptance claimed.
+
 #### Reduce Plan review and execution overhead (2026-09-15 – 2026-09-16)
 
 - Avoid covered-window refetches and whole-card pending flashes. Fuse matching

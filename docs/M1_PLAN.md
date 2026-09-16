@@ -170,16 +170,16 @@ from live-generator coverage. No full benchmark rerun, product/test edit or
 commit was performed during discovery. The subsequent user-requested snapshot
 commit is `dbeb7a5`; it preserves the original review reconciliation and usage.
 
-### Post-delivery ablation implementation plan (2026-09-16)
+### Post-delivery ablation implementation (2026-09-16 – 2026-09-17)
 
-The user requested converting the study into an actionable subtractive plan,
-then reviewing and committing that documentation. Product/tests remain unchanged.
+The user first requested a reviewed subtractive plan, then authorized execution
+on 2026-09-17 after baseline and working-set preparation.
 [M1_7_ABLATION_STUDY.md](M1_7_ABLATION_STUDY.md#checkpoint-register) is this
 register's detailed maintenance subregister: R7-1–R7-8 and R7-G are the finite
-proposed completion denominator, all pending implementation authorization.
+accepted completion denominator; implementation rows remain pending at startup.
 Its candidate register preserves A1–A12 and explicitly separates selected
 portions from deferred work. This does not reopen M1-7 product acceptance or
-authorize M1-8, a policy change, push or PR.
+authorize M1-8, deferred redesigns, push or PR.
 
 The selected scope is synthetic/live fixture separation, canonical-comparator
 and unused replacement-route removal, independent-validator receipt checks,
@@ -193,9 +193,11 @@ product seams, detector-quality controls and atomic commit gate. Existing
 product behavior is the baseline; green rewritten tests alone cannot prove
 detector quality. Log/report latent product defects without fixing them in this
 refactor. Introduced regressions remain checkpoint obligations; AGENTS stops
-and DEFENSE consequence/evidence policy apply. Required current-source evidence
-must close before affected commits; the plan grants no lighter rerun policy.
-HANDOFF records the documentation review and next operational step.
+and DEFENSE consequence/evidence policy apply. The user-approved measurement
+policy uses affected local Tier 1 checks before checkpoint commits and one full
+current-source measurement suite at R7-G. Local checks do not renew full scale
+acceptance; frozen budgets and historical artifacts remain unchanged.
+PRESENTATION owns this scoped rerun policy; the subregister records exact gates.
 
 ### Delivered product scope and P9 closure
 
