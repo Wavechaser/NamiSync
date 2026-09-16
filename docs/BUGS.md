@@ -745,6 +745,20 @@ defect, and move implementation-level test choreography out of the log.
 
 ## INTERFACES
 
+### Plan review windowing
+
+- MODERATE - FIXED (2026-09-15). Redundant viewport publication. Rapid Plan
+  scrolling could refetch an already covered viewport, disable review actions
+  and flash the card as unchanged rows were remounted. The renderer compared
+  requested offsets rather than coverage, while window reads used mutation
+  pending state and rendered before and after transport. Coverage-based frame
+  reconciliation now coalesces one in-flight read, discards superseded results
+  and preserves unchanged controls; task switches and resizing reconcile the
+  retained window. Executable renderer/app probes cover reversal and stale
+  mutable-action replies; installed Plan and generic-tree GUI gates pass.
+  The browser still retains at most 256 rows, with new uncovered windows fetched
+  from the authoritative server view.
+
 ### Plan review confirmation
 
 - MODERATE - FIXED (2026-09-14). Missing recovery dispatch. A failed Plan load

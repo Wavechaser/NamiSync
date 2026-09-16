@@ -3,6 +3,9 @@ from __future__ import annotations
 from dataclasses import replace
 from types import SimpleNamespace
 
+import pytest
+
+import namisync.workflows.plan_projection as projection_module
 from namisync.core.models import EntryKind, ScanWarning, ScanWarningCode
 from namisync.core.planning import OperationKind
 from namisync.core.preflight import Refusal, RefusalCode, Verdict
@@ -19,6 +22,10 @@ from _db_fixtures import file_stat, operation, plan
 
 
 REQUEST_ID = "1" * 32
+
+
+def _ordered_nodes(order):
+    return tuple(order.projection.nodes[position] for position in order.ordered_source_positions)
 
 
 def _artifact(*operations, warnings=(), refusals=()) -> PlanArtifact:
@@ -80,6 +87,37 @@ def test_plan_projection_preserves_groups_selection_and_move_old_path_ancestry()
     assert any(
         node.row_kind == "prior-folder" and node.display == "old"
         for node in projection.nodes
+    )
+
+
+def test_move_peers_are_assigned_before_node_materialization(monkeypatch) -> None:
+    moved = operation(
+        OperationKind.MOVE,
+        source_path=r"source\new.txt",
+        target_path=r"new\name.txt",
+        prior_target_path=r"old\name.txt",
+        target=file_stat(identity_index=12),
+    )
+    replacements = 0
+    original = projection_module.replace
+
+    def observed(value, **changes):
+        nonlocal replacements
+        replacements += 1
+        return original(value, **changes)
+
+    monkeypatch.setattr(projection_module, "replace", observed)
+
+    projection = build_plan_projection(REQUEST_ID, _artifact(moved))
+    moved_node = projection.node_for_id(
+        projection.operation_node_id_by_id[str(moved.op_id)]
+    )
+
+    assert replacements == 0
+    assert moved_node.move_peer_id is not None
+    assert (
+        projection.node_for_id(moved_node.move_peer_id).move_peer_id
+        == moved_node.node_id
     )
 
 
@@ -147,8 +185,8 @@ def test_plan_projection_keeps_notices_and_raw_sort_facts_distinct() -> None:
         PlanSortColumn.SIZE,
         SortDirection.DESCENDING,
     )
-    ascending_root = [node.display for node in ascending.nodes if node.parent_index == 0]
-    descending_root = [node.display for node in descending.nodes if node.parent_index == 0]
+    ascending_root = [node.display for node in _ordered_nodes(ascending) if node.parent_index == 0]
+    descending_root = [node.display for node in _ordered_nodes(descending) if node.parent_index == 0]
     assert ascending_root[:2] == ["small.txt", "large.txt"]
     assert descending_root[:2] == ["large.txt", "small.txt"]
     unavailable = {
@@ -161,7 +199,7 @@ def test_plan_projection_keeps_notices_and_raw_sort_facts_distinct() -> None:
     assert all(
         node.subtree_end > node.position
         and (node.parent_index is None or node.parent_index < node.position)
-        for node in descending.nodes
+        for node in _ordered_nodes(descending)
     )
 
 
@@ -242,7 +280,117 @@ def test_filename_sort_uses_raw_basename_casefold_before_path_normalization() ->
         PlanSortColumn.FILENAME,
         SortDirection.ASCENDING,
     )
-    assert [node.display for node in ordered.nodes if node.parent_index == 0] == [
+    assert [node.display for node in _ordered_nodes(ordered) if node.parent_index == 0] == [
         "j.txt",
         "ı.txt",
     ]
+
+
+def test_canonical_sort_reuses_source_nodes_and_returns_inverse_ranks() -> None:
+    first = operation(
+        OperationKind.COPY,
+        source_path="alpha.txt",
+        target_path="alpha.txt",
+        source=file_stat(identity_index=8),
+    )
+    second = operation(
+        OperationKind.COPY,
+        source_path="beta.txt",
+        target_path="beta.txt",
+        source=file_stat(identity_index=9),
+    )
+    projection = build_plan_projection(REQUEST_ID, _artifact(first, second))
+
+    canonical = sort_plan_projection(projection, PlanSortColumn.PATH, SortDirection.ASCENDING)
+    assert canonical.projection is projection
+    assert tuple(canonical.ordered_source_positions) == tuple(range(len(projection.nodes)))
+    reversed_projection = sort_plan_projection(
+        projection,
+        PlanSortColumn.FILENAME,
+        SortDirection.DESCENDING,
+    )
+    restored = sort_plan_projection(
+        projection,
+        PlanSortColumn.PATH,
+        SortDirection.ASCENDING,
+    )
+    assert restored.projection.nodes is projection.nodes
+    assert [node.display for node in _ordered_nodes(restored) if node.parent_index == 0] == [
+        "alpha.txt",
+        "beta.txt",
+    ]
+
+
+def test_real_sort_clones_no_source_nodes(monkeypatch) -> None:
+    first = operation(
+        OperationKind.COPY,
+        source_path="alpha.txt",
+        target_path="alpha.txt",
+        source=file_stat(size=1, identity_index=10),
+    )
+    second = operation(
+        OperationKind.COPY,
+        source_path="beta.txt",
+        target_path="beta.txt",
+        source=file_stat(size=2, identity_index=11),
+    )
+    projection = build_plan_projection(REQUEST_ID, _artifact(first, second))
+    original = projection_module.replace
+    calls = 0
+
+    def observed(value, **changes):
+        nonlocal calls
+        calls += 1
+        return original(value, **changes)
+
+    monkeypatch.setattr(projection_module, "replace", observed)
+
+    ordered = sort_plan_projection(
+        projection,
+        PlanSortColumn.SIZE,
+        SortDirection.DESCENDING,
+    )
+
+    assert calls == 0
+    assert ordered.projection.nodes is projection.nodes
+    assert [node.display for node in _ordered_nodes(ordered) if node.parent_index == 0] == [
+        "beta.txt",
+        "alpha.txt",
+    ]
+
+
+def test_canonical_order_does_not_assume_source_preorder_is_lexical() -> None:
+    first = operation(OperationKind.COPY, source_path="alpha.txt", target_path="alpha.txt", source=file_stat(identity_index=12))
+    second = operation(OperationKind.COPY, source_path="beta.txt", target_path="beta.txt", source=file_stat(identity_index=13))
+    projection = build_plan_projection(REQUEST_ID, _artifact(first, second))
+    nonlexical = replace(
+        projection,
+        nodes=(projection.nodes[0], replace(projection.nodes[1], rel_path_key="Z"), replace(projection.nodes[2], rel_path_key="A")),
+    )
+
+    order = sort_plan_projection(nonlexical, PlanSortColumn.PATH, SortDirection.ASCENDING)
+
+    assert tuple(order.ordered_source_positions) == (0, 2, 1)
+    assert tuple(order.order_rank_by_source_position) == (0, 2, 1)
+    assert order.projection.nodes is nonlexical.nodes
+    with pytest.raises(TypeError):
+        order.ordered_source_positions[0] = 2  # type: ignore[index]
+
+
+def test_sort_refuses_invalid_source_tree_before_publishing_order() -> None:
+    first = operation(OperationKind.COPY, source_path="alpha.txt", target_path="alpha.txt", source=file_stat(identity_index=14))
+    projection = build_plan_projection(REQUEST_ID, _artifact(first))
+    malformed = replace(
+        projection,
+        nodes=(replace(projection.nodes[0], is_container=False), projection.nodes[1]),
+    )
+
+    with pytest.raises(ValueError, match="leaf spans descendants"):
+        sort_plan_projection(malformed, PlanSortColumn.PATH, SortDirection.ASCENDING)
+
+    broken_parent = replace(
+        projection,
+        nodes=(projection.nodes[0], replace(projection.nodes[1], parent_index=99)),
+    )
+    with pytest.raises(ValueError, match="parent/subtree closure"):
+        sort_plan_projection(broken_parent, PlanSortColumn.SIZE, SortDirection.DESCENDING)

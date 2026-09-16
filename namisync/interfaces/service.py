@@ -1128,6 +1128,7 @@ class NamiSyncService:
                     verify_after_execute=artifact.request.verify_after_execute,
                     user_deselected=user_deselected,
                     expected_artifact=artifact,
+                    selection_decision=decision,
                 )
                 session_id, receipt = self._submit_session(
                     EXECUTION_KIND,
@@ -1309,6 +1310,7 @@ class NamiSyncService:
                 verify_after_execute=verify_after_execute,
                 user_deselected=user_deselected,
                 expected_artifact=artifact,
+                selection_decision=decision,
             )
             session_id, _receipt = self._submit_session(
                 EXECUTION_KIND,

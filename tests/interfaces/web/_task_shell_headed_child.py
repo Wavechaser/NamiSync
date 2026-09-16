@@ -551,7 +551,7 @@ _PLAN_REVIEW_SCRIPT = _COMMON_JS + r"""
   await until(() => document.querySelector("#execution-confirmation")?.open, "live destructive confirmation");
   window.__namiConfirmationStage = "live-confirm-open";
   await until(
-    () => document.querySelector("#execution-confirmation")?.dataset.closing === "true",
+    () => window.__namiConfirmationInputEvidence?.liveEnterConfirmed === true,
     "native live confirmation",
   );
   await untilAsync(async () => (await control("status")).execution_entered === true, "live execution");
@@ -1432,6 +1432,10 @@ def _drive_plan_confirmation(
           || !(background instanceof HTMLButtonElement) || !(rail instanceof HTMLElement)) {
         throw new Error("confirmation geometry is unavailable");
       }
+      window.__namiConfirmationExitBarrier = dialog.animate(
+        [], {duration: 60000},
+      );
+      window.__namiConfirmationExitBarrier.pause();
       rail.scrollTop = Math.min(120, rail.scrollHeight - rail.clientHeight);
       await new Promise((resolve) => requestAnimationFrame(resolve));
       const center = (element) => {
@@ -1582,6 +1586,8 @@ def _drive_plan_confirmation(
     dialog?.open === true && dialog.dataset.closing === "true" &&
     document.querySelector('.nami-task-card[aria-current="page"] .nami-task-card__title')
       ?.textContent === evidence.selectedBeforeBackgroundInput;
+  window.__namiConfirmationExitBarrier?.finish();
+  delete window.__namiConfirmationExitBarrier;
   return true;
 })()
 """, lambda _verified: evaluate(
@@ -1619,8 +1625,15 @@ def _drive_plan_confirmation(
 (async () => {
   for (let attempt = 0; attempt < 1200; attempt += 1) {
     if (window.__namiConfirmationStage === "live-confirm-open") {
-      const confirm = document.querySelector("[data-confirm-execution]");
-      if (!(confirm instanceof HTMLButtonElement)) throw new Error("live confirmation missing");
+      const dialog = document.querySelector("#execution-confirmation");
+      const confirm = dialog?.querySelector("[data-confirm-execution]");
+      if (!(dialog instanceof HTMLDialogElement) || !(confirm instanceof HTMLButtonElement)) {
+        throw new Error("live confirmation missing");
+      }
+      window.__namiConfirmationExitBarrier = dialog.animate(
+        [], {duration: 60000},
+      );
+      window.__namiConfirmationExitBarrier.pause();
       const rect = confirm.getBoundingClientRect();
       return {x: (rect.left + rect.right) / 2, y: (rect.top + rect.bottom) / 2};
     }
@@ -1652,6 +1665,8 @@ def _drive_plan_confirmation(
     const dialog = document.querySelector("#execution-confirmation");
     if (dialog?.dataset.closing === "true") {
       window.__namiConfirmationInputEvidence.liveEnterConfirmed = true;
+      window.__namiConfirmationExitBarrier?.finish();
+      delete window.__namiConfirmationExitBarrier;
       return true;
     }
     await new Promise((resolve) => setTimeout(resolve, 5));

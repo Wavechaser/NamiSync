@@ -73,6 +73,10 @@ def test_task_shell_child_preserves_the_production_stack_and_bounded_seams() -> 
     assert '"Input.dispatchMouseEvent"' in source
     assert '"rawKeyDown"' in source
     assert '"execution-confirmation-driver.json"' in source
+    assert source.count("window.__namiConfirmationExitBarrier = dialog.animate") == 2
+    assert source.count("window.__namiConfirmationExitBarrier.pause()") == 2
+    assert source.count("window.__namiConfirmationExitBarrier?.finish()") == 2
+    assert "window.__namiConfirmationInputEvidence?.liveEnterConfirmed === true" in source
     assert "driver_failure(error, task)" in source
     assert source.count("document.elementFromPoint(point.x, point.y) !== execute") == 3
     assert "evaluate_js" not in source

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
 import namisync.interfaces.web.plan_review as plan_review_module
@@ -241,6 +243,206 @@ def test_plan_review_state_retains_complete_view_when_update_rebuild_fails(
 
     assert state.summary() == before
     assert state.window(expected_revision=0, offset=0, limit=256) == before_window
+
+
+@pytest.mark.parametrize("changes", [
+    {"depth": -1}, {"parent_index": 3}, {"subtree_end": 5},
+    {"is_container": "yes"}, {"display": 1},
+])
+def test_plan_review_validates_projection_structure_at_acquisition(changes) -> None:
+    projection = _projection()
+    malformed = replace(
+        projection,
+        nodes=(projection.nodes[0], replace(projection.nodes[1], **changes),
+               *projection.nodes[2:]),
+    )
+    with pytest.raises((TypeError, ValueError)):
+        PlanReviewState("task-" + "1" * 32, "a" * 32, malformed, 0,
+                        "reviewing", "source", "target")
+
+    state = PlanReviewState("task-" + "1" * 32, "a" * 32, projection, 0,
+                            "reviewing", "source", "target")
+    before = state.summary()
+    window = state.window(expected_revision=0, offset=0, limit=256)
+    with pytest.raises((TypeError, ValueError)):
+        state.replace_projection(malformed, selection_revision=1,
+                                 selection_state="reviewing")
+    assert state.projection is projection
+    assert state.summary() == before
+    assert state.window(expected_revision=0, offset=0, limit=256) == window
+
+
+def test_plan_review_uses_the_private_validated_visible_path(monkeypatch) -> None:
+    def fail_revalidation(*_args, **_kwargs):
+        raise AssertionError("validated projection should not be revalidated")
+
+    monkeypatch.setattr(
+        plan_review_module.VisibleSequence,
+        "__post_init__",
+        fail_revalidation,
+    )
+
+    state = PlanReviewState(
+        "task-" + "1" * 32,
+        "a" * 32,
+        _projection(),
+        0,
+        "reviewing",
+        "source",
+        "target",
+    )
+
+    assert state.summary()["visible_row_count"] == 4
+
+
+def test_plan_review_passes_filters_as_a_positional_byte_mask(monkeypatch) -> None:
+    original = plan_review_module._derive_visible_sequence_from_validated
+    calls = []
+
+    def observed(nodes, position_by_id, parameters, **kwargs):
+        calls.append((parameters.match_counts_by_node_id, kwargs))
+        return original(nodes, position_by_id, parameters, **kwargs)
+
+    monkeypatch.setattr(
+        plan_review_module,
+        "_derive_visible_sequence_from_validated",
+        observed,
+    )
+    state = PlanReviewState(
+        "task-" + "1" * 32,
+        "a" * 32,
+        _projection(),
+        0,
+        "reviewing",
+        "source",
+        "target",
+    )
+    state.update(
+        expected_revision=0,
+        search_query="",
+        filters=frozenset({"delete"}),
+        sort_column=PlanSortColumn.FILENAME,
+        sort_direction=SortDirection.DESCENDING,
+        collapse_node_id=None,
+        collapsed=None,
+    )
+
+    assert calls[0][0] is None
+    assert calls[0][1]["match_mask_by_position"] is None
+    assert tuple(calls[0][1]["ordered_source_positions"]) == (0, 3, 1, 2)
+    filtered_counts, filtered_kwargs = calls[1]
+    assert filtered_counts is None
+    mask = filtered_kwargs["match_mask_by_position"]
+    assert type(mask) is bytes
+    assert len(mask) == len(state.current_order.projection.nodes)
+    assert [
+        node.node_id
+        for position, node in enumerate(state.current_order.projection.nodes)
+        if mask[position]
+    ] == ["delete"]
+    window = state.window(expected_revision=1, offset=0, limit=256)
+    assert [row["node_id"] for row in window["rows"]] == ["root", "delete"]
+
+
+def test_plan_review_validates_structure_once_then_reuses_it_for_view_changes(
+    monkeypatch,
+) -> None:
+    original = plan_review_module._validate_structure
+    calls = 0
+
+    def observed(nodes):
+        nonlocal calls
+        calls += 1
+        return original(nodes)
+
+    monkeypatch.setattr(plan_review_module, "_validate_structure", observed)
+    state = PlanReviewState(
+        "task-" + "1" * 32,
+        "a" * 32,
+        _projection(),
+        0,
+        "reviewing",
+        "source",
+        "target",
+    )
+    state.update(
+        expected_revision=0,
+        search_query="alpha",
+        filters=frozenset({"delete"}),
+        sort_column=PlanSortColumn.FILENAME,
+        sort_direction=SortDirection.ASCENDING,
+        collapse_node_id=None,
+        collapsed=None,
+    )
+
+    assert calls == 1
+
+
+def test_plan_review_reuses_order_for_search_filter_and_collapse(monkeypatch) -> None:
+    state = PlanReviewState("task-" + "1" * 32, "a" * 32, _projection(), 0, "reviewing", "source", "target")
+    current = state.current_order
+
+    def fail_sort(*_args, **_kwargs):
+        raise AssertionError("view-only changes must reuse the current order")
+
+    monkeypatch.setattr(plan_review_module, "sort_plan_projection", fail_sort)
+    state.update(
+        expected_revision=0,
+        search_query="beta",
+        filters=frozenset({"copy"}),
+        sort_column=PlanSortColumn.PATH,
+        sort_direction=SortDirection.ASCENDING,
+        collapse_node_id="folder",
+        collapsed=True,
+    )
+
+    assert state.current_order is current
+
+
+def test_plan_review_selection_rebinds_cached_orders_with_one_projection_clone(monkeypatch) -> None:
+    state = PlanReviewState("task-" + "1" * 32, "a" * 32, _projection(), 0, "reviewing", "source", "target")
+    original = plan_review_module.apply_plan_projection_selection
+    calls = 0
+
+    def observed(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(plan_review_module, "apply_plan_projection_selection", observed)
+    monkeypatch.setattr(
+        plan_review_module.PlanProjectionOrder,
+        "__post_init__",
+        lambda self: (_ for _ in ()).throw(AssertionError("selection revalidated order")),
+    )
+    monkeypatch.setattr(
+        plan_review_module.VisibleSequence,
+        "__post_init__",
+        lambda self: (_ for _ in ()).throw(AssertionError("selection revalidated visibility")),
+    )
+    state.replace_selection(
+        selected_operation_ids=frozenset({"1" * 32}), exclusion_reasons={"2" * 32: "user-deselected"},
+        selection_revision=1, selection_state="reviewing", requires_destructive_confirmation=False,
+        irreversible_update_count=0, destructive_operation_count=0, irreversible_operation_count=0,
+        destructive_operation_counts={"update": 0, "move_update": 0, "trash": 0, "delete": 0}, required_bytes="3",
+    )
+
+    assert calls == 1
+    assert state.current_order.projection is state.projection
+    assert state.canonical_order.projection is state.projection
+    assert state.current_sequence.nodes is state.projection.nodes
+
+
+def test_plan_review_full_replacement_invalidates_orders_even_for_same_request() -> None:
+    state = PlanReviewState("task-" + "1" * 32, "a" * 32, _projection(), 0, "reviewing", "source", "target")
+    old_canonical = state.canonical_order
+    old_current = state.current_order
+
+    state.replace_projection(_projection(), selection_revision=1, selection_state="reviewing")
+
+    assert state.canonical_order is not old_canonical
+    assert state.current_order is not old_current
+    assert state.current_order.projection is state.projection
 
 
 def test_plan_review_state_refuses_revision_exhaustion_before_replacement() -> None:

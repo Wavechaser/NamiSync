@@ -60,7 +60,12 @@ from namisync.core.session import (
 )
 from namisync.core.preflight import ObservedWorld, Refusal, RefusalCode, Verdict
 from namisync.core.root_authority import RootAuthorityError, RootAuthorityIssue
-from namisync.workflows.selection import ExclusionReason, derive_execution_selection
+from namisync.workflows.selection import (
+    DestructiveOperationCounts,
+    ExecutionSelection,
+    ExclusionReason,
+    derive_execution_selection,
+)
 from namisync.workflows.sync import run_execution, validate_sync_paths
 from namisync.workflows.models import (
     ExecuteContinuation,
@@ -971,6 +976,125 @@ def test_review_and_commit_bind_the_same_safe_selection(tmp_path: Path) -> None:
     assert execution.execution_set.commitment.selection_digest == selection_digest(
         selected
     )
+
+
+def test_commit_rejects_selection_authority_from_an_equal_plan(tmp_path: Path) -> None:
+    plan = _plan_with((_operation(1, OperationKind.NOOP, "same.bin"),))
+    request = PlanRequest("request", plan.source_root.path, plan.target_root.path)
+    artifact = PlanArtifact(
+        request,
+        SimpleNamespace(warnings=()),
+        SimpleNamespace(warnings=()),
+        replace(plan),
+        Verdict(True, (), SimpleNamespace(paths={}, free_space=1_000, reclaimable_temp_bytes=0)),
+    )
+    decision = derive_execution_selection(plan)
+    runtime = LocalWorkflowRuntime(tmp_path / "ledger.db", tmp_path / "history.db")
+    try:
+        runtime.save_plan(artifact)
+        with pytest.raises(ValueError, match="different plan"):
+            runtime.commit_plan(
+                request.request_id,
+                selection_decision=decision,
+            )
+    finally:
+        runtime.close()
+
+
+def test_commit_reuses_exact_selection_without_deriving_again(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    first = _operation(1, OperationKind.NOOP, "first.bin")
+    second = _operation(2, OperationKind.NOOP, "second.bin")
+    plan = _plan_with((first, second))
+    request = PlanRequest("request", plan.source_root.path, plan.target_root.path)
+    artifact = PlanArtifact(
+        request,
+        SimpleNamespace(warnings=()),
+        SimpleNamespace(warnings=()),
+        plan,
+        Verdict(
+            True,
+            (),
+            SimpleNamespace(paths={}, free_space=1_000, reclaimable_temp_bytes=0),
+        ),
+    )
+    user_deselected = frozenset({first.op_id})
+    decision = derive_execution_selection(
+        plan,
+        user_deselected=user_deselected,
+    )
+    runtime = LocalWorkflowRuntime(tmp_path / "ledger.db", tmp_path / "history.db")
+    try:
+        runtime.save_plan(artifact)
+        monkeypatch.setattr(
+            runtime_module,
+            "derive_execution_selection",
+            lambda *_args, **_kwargs: pytest.fail("selection was derived twice"),
+        )
+        execution = runtime.commit_plan(
+            request.request_id,
+            user_deselected=user_deselected,
+            selection_decision=decision,
+        )
+    finally:
+        runtime.close()
+
+    assert execution.execution_set.selection == frozenset({second.op_id})
+
+
+def test_commit_rejects_selection_authority_from_equal_distinct_user_intent(
+    tmp_path: Path,
+) -> None:
+    first = _operation(1, OperationKind.NOOP, "first.bin")
+    second = _operation(2, OperationKind.NOOP, "second.bin")
+    plan = _plan_with((first, second))
+    request = PlanRequest("request", plan.source_root.path, plan.target_root.path)
+    artifact = PlanArtifact(
+        request,
+        SimpleNamespace(warnings=()),
+        SimpleNamespace(warnings=()),
+        plan,
+        Verdict(
+            True,
+            (),
+            SimpleNamespace(paths={}, free_space=1_000, reclaimable_temp_bytes=0),
+        ),
+    )
+    original_intent = frozenset({first.op_id})
+    equal_intent = frozenset(set(original_intent))
+    assert equal_intent is not original_intent
+    decision = derive_execution_selection(
+        plan,
+        user_deselected=original_intent,
+    )
+    runtime = LocalWorkflowRuntime(tmp_path / "ledger.db", tmp_path / "history.db")
+    try:
+        runtime.save_plan(artifact)
+        with pytest.raises(ValueError, match="different user intent"):
+            runtime.commit_plan(
+                request.request_id,
+                user_deselected=equal_intent,
+                selection_decision=decision,
+            )
+    finally:
+        runtime.close()
+
+
+def test_execution_selection_cannot_be_constructed_as_caller_authority() -> None:
+    plan = _empty_plan()
+    with pytest.raises(TypeError, match="workflow-derived authority"):
+        ExecutionSelection(
+            frozenset(),
+            (),
+            DestructiveOperationCounts(0, 0, 0, 0),
+            0,
+            "0",
+            _authority=object(),
+            _plan=plan,
+            _user_deselected=frozenset(),
+        )
 
 
 def test_fresh_preflight_refusal_still_reports_known_exclusions() -> None:

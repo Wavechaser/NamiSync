@@ -112,8 +112,11 @@ class _PlanRuntime:
         verify_after_execute: bool = False,
         user_deselected: frozenset[str] = frozenset(),
         expected_artifact=None,
+        selection_decision=None,
     ):
         assert expected_artifact is self.artifact
+        assert selection_decision is not None
+        assert selection_decision.selection
         self.commits.append(
             (request_id, verify_after_execute, user_deselected)
         )

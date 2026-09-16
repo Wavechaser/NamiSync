@@ -59,13 +59,42 @@ class DestructiveOperationCounts:
         return self.update + self.move_update + self.trash + self.delete
 
 
-@dataclass(frozen=True, slots=True)
+_SELECTION_AUTHORITY = object()
+
+
+@dataclass(frozen=True, slots=True, init=False)
 class ExecutionSelection:
     selection: frozenset[OpId]
     exclusions: tuple[OperationExclusion, ...]
     destructive_operation_counts: DestructiveOperationCounts
     irreversible_update_count: int
     required_bytes: str
+    _plan: Plan = field(repr=False, compare=False)
+    _user_deselected: frozenset[OpId] = field(repr=False, compare=False)
+
+    def __init__(
+        self,
+        selection: frozenset[OpId],
+        exclusions: tuple[OperationExclusion, ...],
+        destructive_operation_counts: DestructiveOperationCounts,
+        irreversible_update_count: int,
+        required_bytes: str,
+        *,
+        _authority: object,
+        _plan: Plan,
+        _user_deselected: frozenset[OpId],
+    ) -> None:
+        if _authority is not _SELECTION_AUTHORITY:
+            raise TypeError("execution selection is workflow-derived authority")
+        object.__setattr__(self, "selection", selection)
+        object.__setattr__(self, "exclusions", exclusions)
+        object.__setattr__(
+            self, "destructive_operation_counts", destructive_operation_counts
+        )
+        object.__setattr__(self, "irreversible_update_count", irreversible_update_count)
+        object.__setattr__(self, "required_bytes", required_bytes)
+        object.__setattr__(self, "_plan", _plan)
+        object.__setattr__(self, "_user_deselected", _user_deselected)
 
     @property
     def destructive_operation_count(self) -> int:
@@ -151,7 +180,27 @@ def derive_execution_selection(
             ),
             "execution selection required_bytes",
         ),
+        _authority=_SELECTION_AUTHORITY,
+        _plan=plan,
+        _user_deselected=user_deselected,
     )
+
+
+def require_derived_execution_selection(
+    value: object,
+    *,
+    plan: Plan,
+    user_deselected: frozenset[OpId],
+) -> ExecutionSelection:
+    """Require selection authority for these exact immutable reviewed inputs."""
+
+    if type(value) is not ExecutionSelection:
+        raise TypeError("execution selection must be workflow-derived authority")
+    if value._plan is not plan:
+        raise ValueError("execution selection belongs to a different plan")
+    if value._user_deselected is not user_deselected:
+        raise ValueError("execution selection belongs to different user intent")
+    return value
 
 
 def apply_selection_mutation(

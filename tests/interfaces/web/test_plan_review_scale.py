@@ -34,11 +34,12 @@ from namisync.workflows.plan_projection import (
 )
 
 
-CONTRACT_PATH = Path(__file__).with_name("m1_7_plan_contract.json")
+CONTRACT_PATH = Path(__file__).with_name("m1_7_plan_compact_contract.json")
+LEGACY_CONTRACT_PATH = Path(__file__).with_name("m1_7_plan_contract.json")
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 RUNNER_PATH = REPOSITORY_ROOT / "tests" / "plan_review_benchmark.py"
-AUTHORITY_PATH = CONTRACT_PATH.with_name("m1_7_plan_authority.json")
-MEASUREMENTS_PATH = CONTRACT_PATH.with_name("m1_7_plan_measurements.json")
+AUTHORITY_PATH = CONTRACT_PATH.with_name("m1_7_plan_compact_authority.json")
+MEASUREMENTS_PATH = CONTRACT_PATH.with_name("m1_7_plan_compact_measurements.json")
 
 
 def _contract() -> dict[str, object]:
@@ -1239,9 +1240,14 @@ def test_plan_review_fixture_expected_orders_match_actual_sibling_sort() -> None
         for direction in (SortDirection.ASCENDING, SortDirection.DESCENDING):
             ordered = sort_plan_projection(projection, column, direction)
             actual = [
-                node.operation_id or node.node_id
-                for node in ordered.nodes
-                if (node.operation_id or node.node_id) in witness_ids
+                projection.nodes[source_position].operation_id
+                or projection.nodes[source_position].node_id
+                for source_position in ordered.ordered_source_positions
+                if (
+                    projection.nodes[source_position].operation_id
+                    or projection.nodes[source_position].node_id
+                )
+                in witness_ids
             ]
             assert actual == witnesses["expected_orders"][f"{column.value}-{direction.value}"]
 
@@ -1253,6 +1259,61 @@ def test_validator_hash_and_p95_oracles_are_independent_of_runner() -> None:
     assert scale.canonical_sha256(value) == runner_canonical_sha256(value)
     assert scale.git_blob_oid(b"source bytes") == runner_git_blob_oid(b"source bytes")
     assert scale.nearest_rank_p95(samples) == 28
+
+
+def test_validator_keeps_protected_legacy_contract_and_authority_valid() -> None:
+    contract = json.loads(LEGACY_CONTRACT_PATH.read_bytes())
+    authority_path = LEGACY_CONTRACT_PATH.with_name("m1_7_plan_authority.json")
+    authority = json.loads(authority_path.read_bytes())
+
+    scale._validate_contract(contract)
+    scale._validate_authority(contract, authority)
+
+    raw = json.loads(
+        LEGACY_CONTRACT_PATH.with_name("m1_7_plan_measurements.json").read_bytes()
+    )
+    with pytest.raises(ValueError, match="exceeds its fixed budget"):
+        scale.validate_artifact(
+            contract,
+            authority,
+            authority_path.read_bytes(),
+            raw["authority_receipt"]["git_blob_oid"],
+            raw,
+        )
+
+
+def test_validator_refuses_cross_family_authority() -> None:
+    compact_contract = _contract()
+    legacy_authority = json.loads(
+        LEGACY_CONTRACT_PATH.with_name("m1_7_plan_authority.json").read_bytes()
+    )
+
+    with pytest.raises(ValueError, match="authority contract"):
+        scale._validate_authority(compact_contract, legacy_authority)
+
+
+def test_validator_refuses_cross_family_raw_artifact() -> None:
+    contract = _contract()
+    authority, _inputs = _authority(contract)
+    raw, authority_bytes = _artifact(contract, authority)
+    raw["schema"] = scale.LEGACY_RAW_ARTIFACT_SCHEMA
+
+    with pytest.raises(ValueError, match="artifact schema"):
+        _validate_artifact(contract, authority, authority_bytes, raw)
+
+
+def test_current_runner_refuses_to_freeze_legacy_representation(
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(RuntimeError, match="cannot freeze legacy"):
+        benchmark.build_authority(
+            contract_path=LEGACY_CONTRACT_PATH,
+            source_root=REPOSITORY_ROOT,
+            installed_root=tmp_path,
+            installed_wheel=tmp_path / "missing.whl",
+            benchmark_root=tmp_path,
+            no_unrelated_sustained_workload=True,
+        )
 
 
 def test_source_authority_keeps_raw_bytes_distinct_from_git_filtered_identity() -> None:
@@ -1555,11 +1616,37 @@ def test_plan_review_scale_refuses_incomplete_retained_representation() -> None:
     contract = _contract()
     authority, inputs = _authority(contract)
     authority["fixture_manifests"]["base"]["retained_representation"][
-        "visible_sequence_field_population"
-    ]["positions_in_set"]["count"] = 0
+        "visible_sequence"
+    ]["sibling_ordinals"]["count"] = 0
     inputs["fixture_manifests"] = deepcopy(authority["fixture_manifests"])
 
-    with pytest.raises(ValueError, match="retained visible-sequence populations"):
+    with pytest.raises(ValueError, match="compact buffer population"):
+        scale.validate_authority_bytes(contract, authority, **inputs)
+
+
+def test_plan_review_scale_refuses_false_compact_permutation_population() -> None:
+    contract = _contract()
+    authority, inputs = _authority(contract)
+    descriptor = authority["fixture_manifests"]["base"]["retained_representation"][
+        "plan_review_state"
+    ]["current_order"]["ordered_source_positions"]
+    descriptor["unique_count"] -= 1
+    inputs["fixture_manifests"] = deepcopy(authority["fixture_manifests"])
+
+    with pytest.raises(ValueError, match="not a permutation"):
+        scale.validate_authority_bytes(contract, authority, **inputs)
+
+
+def test_plan_review_scale_refuses_visible_buffer_not_matching_current_order() -> None:
+    contract = _contract()
+    authority, inputs = _authority(contract)
+    descriptor = authority["fixture_manifests"]["base"]["retained_representation"][
+        "visible_sequence"
+    ]["visible_source_positions"]
+    descriptor["values_sha256"] = "0" * 64
+    inputs["fixture_manifests"] = deepcopy(authority["fixture_manifests"])
+
+    with pytest.raises(ValueError, match="visible order is not current"):
         scale.validate_authority_bytes(contract, authority, **inputs)
 
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass, replace
 from enum import StrEnum
 from functools import cmp_to_key
@@ -33,6 +34,58 @@ class PlanSortColumn(StrEnum):
 class SortDirection(StrEnum):
     ASCENDING = "ascending"
     DESCENDING = "descending"
+
+
+@dataclass(frozen=True, slots=True, init=False)
+class CompactUnsignedIntegers(Sequence[int]):
+    """An immutable, random-access unsigned integer buffer."""
+
+    _storage: bytes
+    byte_width: int
+    _count: int
+
+    def __init__(self, values: Sequence[int], *, maximum: int | None = None) -> None:
+        count = len(values)
+        if any(type(value) is not int or value < 0 for value in values):
+            raise ValueError("compact integers must be exact nonnegative integers")
+        largest = max(values, default=0) if maximum is None else maximum
+        if type(largest) is not int or largest < 0:
+            raise ValueError("compact integer maximum must be nonnegative")
+        if any(value > largest for value in values):
+            raise ValueError("compact integer exceeds declared maximum")
+        width = 1 if largest < 2**8 else 2 if largest < 2**16 else 4 if largest < 2**32 else 8
+        if largest >= 2**64:
+            raise ValueError("compact integers exceed the supported range")
+        storage = bytearray(count * width)
+        for index, value in enumerate(values):
+            start = index * width
+            storage[start : start + width] = value.to_bytes(width, "little")
+        object.__setattr__(self, "_storage", bytes(storage))
+        object.__setattr__(self, "byte_width", width)
+        object.__setattr__(self, "_count", count)
+
+    @property
+    def byte_length(self) -> int:
+        return len(self._storage)
+
+    def __len__(self) -> int:
+        return self._count
+
+    def __getitem__(self, index: int | slice) -> int | tuple[int, ...]:
+        if isinstance(index, slice):
+            return tuple(self[position] for position in range(*index.indices(self._count)))
+        if type(index) is not int:
+            raise TypeError("compact integer index must be an integer or slice")
+        if index < 0:
+            index += self._count
+        if not 0 <= index < self._count:
+            raise IndexError(index)
+        start = index * self.byte_width
+        return int.from_bytes(self._storage[start : start + self.byte_width], "little")
+
+    def __iter__(self) -> Iterator[int]:
+        for index in range(self._count):
+            yield self[index]
 
 
 @dataclass(frozen=True, slots=True)
@@ -108,6 +161,60 @@ class PlanProjection:
             return self.nodes[self.position_by_node_id[node_id]]
         except KeyError:
             raise KeyError(node_id) from None
+
+
+@dataclass(frozen=True, slots=True)
+class PlanProjectionOrder:
+    """One sibling sort expressed as source positions and inverse ranks."""
+
+    projection: PlanProjection
+    ordered_source_positions: CompactUnsignedIntegers
+    order_rank_by_source_position: CompactUnsignedIntegers
+
+    def __post_init__(self) -> None:
+        if type(self.projection) is not PlanProjection:
+            raise TypeError("ordered projection must use an exact PlanProjection")
+        if type(self.ordered_source_positions) is not CompactUnsignedIntegers:
+            raise TypeError("ordered source positions must be compact integers")
+        if type(self.order_rank_by_source_position) is not CompactUnsignedIntegers:
+            raise TypeError("order ranks must be compact integers")
+        _validate_projection_topology(self.projection)
+        count = len(self.projection.nodes)
+        if len(self.ordered_source_positions) != count or len(self.order_rank_by_source_position) != count:
+            raise ValueError("plan order must cover every source node")
+        seen = bytearray(count)
+        for rank, source_position in enumerate(self.ordered_source_positions):
+            if source_position >= count or seen[source_position]:
+                raise ValueError("plan order must be a permutation")
+            seen[source_position] = 1
+            if self.order_rank_by_source_position[source_position] != rank:
+                raise ValueError("plan order ranks must invert the permutation")
+        if count and self.ordered_source_positions[0] != 0:
+            raise ValueError("plan order must begin with the source root")
+        open_ancestors: list[int] = []
+        for source_position in self.ordered_source_positions:
+            node = self.projection.nodes[source_position]
+            while len(open_ancestors) > node.depth:
+                open_ancestors.pop()
+            if node.depth == 0:
+                if source_position != 0 or open_ancestors:
+                    raise ValueError("plan order has an invalid root")
+            elif len(open_ancestors) != node.depth or open_ancestors[-1] != node.parent_index:
+                raise ValueError("plan order breaks source parent/subtree closure")
+            open_ancestors.append(source_position)
+
+    def _rebind_selection(self, projection: PlanProjection) -> PlanProjectionOrder:
+        """Rebind after the owner-preserving selection transform."""
+
+        if type(projection) is not PlanProjection:
+            raise TypeError("selection rebind requires an exact PlanProjection")
+        if projection.request_id != self.projection.request_id or len(projection.nodes) != len(self.projection.nodes):
+            raise ValueError("selection rebind changed projection identity")
+        rebound = object.__new__(PlanProjectionOrder)
+        object.__setattr__(rebound, "projection", projection)
+        object.__setattr__(rebound, "ordered_source_positions", self.ordered_source_positions)
+        object.__setattr__(rebound, "order_rank_by_source_position", self.order_rank_by_source_position)
+        return rebound
 
 
 def build_plan_projection(
@@ -210,7 +317,11 @@ def build_plan_projection(
             )
         )
 
-    projection = _materialize_projection(
+    for target, prior in peer_pairs:
+        drafts[target]["move_peer_id"] = drafts[prior]["node_id"]
+        drafts[prior]["move_peer_id"] = drafts[target]["node_id"]
+
+    return _materialize_projection(
         request_id,
         drafts,
         selected,
@@ -221,42 +332,27 @@ def build_plan_projection(
             len(artifact.source_scan.warnings) + len(artifact.target_scan.warnings)
         ),
     )
-    if not peer_pairs:
-        return projection
-    nodes = list(projection.nodes)
-    for target, prior in peer_pairs:
-        nodes[target] = replace(nodes[target], move_peer_id=nodes[prior].node_id)
-        nodes[prior] = replace(nodes[prior], move_peer_id=nodes[target].node_id)
-    return PlanProjection(
-        request_id,
-        tuple(nodes),
-        projection.position_by_node_id,
-        projection.operation_node_id_by_id,
-        selected,
-        projection.preflight_ready,
-        projection.preflight_refusal_count,
-        projection.warning_count,
-    )
 
 
 def sort_plan_projection(
     projection: PlanProjection,
     column: PlanSortColumn,
     direction: SortDirection,
-) -> PlanProjection:
+) -> PlanProjectionOrder:
     """Sort complete sibling sets before any visible window is requested."""
 
     if type(projection) is not PlanProjection:
         raise TypeError("projection must be an exact PlanProjection")
+    _validate_projection_topology(projection)
     if type(column) is not PlanSortColumn or type(direction) is not SortDirection:
         raise TypeError("plan sort must use exact enums")
     if column is PlanSortColumn.PATH and direction is not SortDirection.ASCENDING:
         raise ValueError("canonical path sort supports ascending only")
     nodes = projection.nodes
-    children: dict[int, list[int]] = {index: [] for index in range(len(nodes))}
+    children: dict[int, list[int]] = {}
     for index, node in enumerate(nodes[1:], 1):
         assert node.parent_index is not None
-        children[node.parent_index].append(index)
+        children.setdefault(node.parent_index, []).append(index)
     key = cmp_to_key(lambda left, right: _compare_nodes(nodes[left], nodes[right], column, direction))
     for siblings in children.values():
         siblings.sort(key=key)
@@ -266,40 +362,52 @@ def sort_plan_projection(
     while stack:
         current = stack.pop()
         ordered.append(current)
-        stack.extend(reversed(children[current]))
-    remap = {old: new for new, old in enumerate(ordered)}
-    rebuilt = [
-        replace(
-            nodes[old],
-            position=new,
-            parent_index=(
-                None
-                if nodes[old].parent_index is None
-                else remap[nodes[old].parent_index]
-            ),
-            subtree_end=new + 1,
-        )
-        for new, old in enumerate(ordered)
-    ]
-    subtree_ends = [index + 1 for index in range(len(rebuilt))]
-    for index in range(len(rebuilt) - 1, 0, -1):
-        parent = rebuilt[index].parent_index
-        assert parent is not None
-        subtree_ends[parent] = max(subtree_ends[parent], subtree_ends[index])
-    rebuilt = [
-        replace(node, subtree_end=subtree_ends[index])
-        for index, node in enumerate(rebuilt)
-    ]
-    return PlanProjection(
-        projection.request_id,
-        tuple(rebuilt),
-        {node.node_id: node.position for node in rebuilt},
-        projection.operation_node_id_by_id,
-        projection.selected_operation_ids,
-        projection.preflight_ready,
-        projection.preflight_refusal_count,
-        projection.warning_count,
+        stack.extend(reversed(children.get(current, ())))
+    inverse = [0] * len(ordered)
+    for rank, source_position in enumerate(ordered):
+        inverse[source_position] = rank
+    children.clear()
+    return PlanProjectionOrder(
+        projection,
+        CompactUnsignedIntegers(ordered, maximum=max(len(nodes) - 1, 0)),
+        CompactUnsignedIntegers(inverse, maximum=max(len(nodes) - 1, 0)),
     )
+
+
+def _validate_projection_topology(projection: PlanProjection) -> None:
+    count = len(projection.nodes)
+    nodes = projection.nodes
+    if not nodes or type(nodes[0]) is not PlanProjectionNode:
+        raise ValueError("plan order requires one exact source root")
+    open_containers: list[int] = []
+    for source_position, node in enumerate(nodes):
+        if type(node) is not PlanProjectionNode or node.position != source_position:
+            raise ValueError("plan order source positions are inconsistent")
+        if (
+            type(node.position) is not int
+            or type(node.depth) is not int
+            or type(node.subtree_end) is not int
+            or (node.parent_index is not None and type(node.parent_index) is not int)
+            or type(node.is_container) is not bool
+        ):
+            raise TypeError("plan order source topology uses invalid field types")
+        if node.subtree_end <= source_position or node.subtree_end > count:
+            raise ValueError("plan order source subtree extent is invalid")
+        if not node.is_container and node.subtree_end != source_position + 1:
+            raise ValueError("plan order source leaf spans descendants")
+        while open_containers and nodes[open_containers[-1]].subtree_end <= source_position:
+            open_containers.pop()
+        if source_position == 0:
+            if node.depth != 0 or node.parent_index is not None or node.subtree_end != count:
+                raise ValueError("plan order source root is invalid")
+        else:
+            if not open_containers or node.parent_index != open_containers[-1]:
+                raise ValueError("plan order source parent/subtree closure is invalid")
+            parent = nodes[node.parent_index]
+            if node.depth != parent.depth + 1 or node.subtree_end > parent.subtree_end:
+                raise ValueError("plan order source depth/subtree closure is invalid")
+        if node.is_container and node.subtree_end > source_position + 1:
+            open_containers.append(source_position)
 
 
 def apply_plan_projection_selection(
@@ -603,8 +711,9 @@ def _materialize_projection(
     for index in range(len(drafts) - 1, 0, -1):
         parent = int(drafts[index]["parent"])
         subtree_ends[parent] = max(subtree_ends[parent], subtree_ends[index])
-    nodes = tuple(
-        PlanProjectionNode(
+    nodes: list[PlanProjectionNode] = []
+    for index, draft in enumerate(drafts):
+        nodes.append(PlanProjectionNode(
             node_id=draft["node_id"],
             display=draft["display"],
             rel_path_key=draft["rel_path_key"],
@@ -630,17 +739,20 @@ def _materialize_projection(
             notice=draft["notice"],
             selection_exclusion_reason=draft["selection_exclusion_reason"],
             filename_key=draft["filename_key"],
-        )
-        for index, draft in enumerate(drafts)
-    )
+        ))
+        drafts[index] = None  # type: ignore[list-item]
+    frozen_nodes = tuple(nodes)
+    nodes.clear()
+    drafts.clear()
+    subtree_ends.clear()
     operation_lookup = {
-        operation_id: nodes[index].node_id
+        operation_id: frozen_nodes[index].node_id
         for operation_id, index in operation_draft_by_id.items()
     }
     return PlanProjection(
         request_id,
-        nodes,
-        {node.node_id: node.position for node in nodes},
+        frozen_nodes,
+        {node.node_id: node.position for node in frozen_nodes},
         operation_lookup,
         selected,
         preflight_ready,
@@ -716,8 +828,10 @@ def _projection_id(person: bytes, *values: str) -> str:
 
 
 __all__ = [
+    "CompactUnsignedIntegers",
     "PlanProjection",
     "PlanProjectionNode",
+    "PlanProjectionOrder",
     "PlanSortColumn",
     "SortDirection",
     "apply_plan_projection_selection",

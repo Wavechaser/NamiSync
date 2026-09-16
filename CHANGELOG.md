@@ -27,8 +27,50 @@ and remembered locations, bounded Plan review/selection/sorting and same-task
 execution with live controls. Execution-result/inventory review and beta
 packaging remain open.
 
+#### Reduce Plan review and execution overhead (2026-09-15 – 2026-09-16)
+
+- Correct the installed confirmation fixture's transient-closing race with
+  paused, effect-free animation barriers and a durable native acknowledgment.
+  Product admission and animation behavior stay unchanged. Focused/interfaces
+  and installed Plan gates pass; changed-search p95/max reach 0.152/0.154 s.
+  Full readiness passes and the single 175-child measurement run completes:
+  27 of 35 metrics meet budgets; six changed sorts, retained memory and the
+  execution-start receipt remain over budget. Preserve the result and stop;
+  no further fixes, measurements or integration.
+
+- Keep projection nodes stable across display sorts; cache compact canonical/current
+  orders and derive accessibility metadata for bounded windows. Preserve sparse
+  matching and rebind selection-only updates without revalidating unchanged indexes.
+  Version the evidence around actual retained buffers; legacy support only reads
+  historical evidence. Independent review, 100 owner tests, 5,140 ordinary tests
+  and 12 import contracts pass. The installed Plan GUI gate fails at
+  `page_plan_review_plan_ack`; the generic-tree gate passes. Stop and preserve
+  before readiness, latency comparison or full measurements; M1-7 stays unmerged.
+- Fuse changed-view matching/ancestor retention, add Unicode-safe ASCII and
+  empty-search shortcuts, and pass Plan filters through compact positional
+  masks. Owner/department checks, independent review, both installed GUI gates
+  and 21 untimed readiness cases pass. The single 30-sample comparison improves
+  changed-search p95 to 2.296 s but still misses 1.5 s; maximum 2.318 s meets 3 s.
+  Stopped and preserved this correction separately; M1-7 remains unmerged.
+- Implemented projection construction/order reuse and execution selection/
+  structural-validation reuse while retaining input, revision, acknowledgement
+  and mutable-overlay checks. Focused/consumer tests, independent review and
+  21-case component readiness pass. The first targeted comparison still fails:
+  changed-search p95 2.721 s versus 1.5 s; maximum 2.846 s versus 3 s. Preserved
+  the corrections and stopped before other metrics or another optimization pass.
+- Avoid redundant Plan window reads and whole-review pending flashes during
+  scrolling. Coalesce uncovered ranges, reject stale replies, and preserve
+  unchanged row controls; reconcile task switches and viewport resizing while
+  retaining the 256-row bound. Executable renderer/app probes and both installed
+  Plan/generic-tree GUI gates pass. M1-7 remains on its recovery branch.
+
 #### Correct measurement readiness and evidence retention (2026-09-15)
 
+- Investigated the three failed measurement groups from retained evidence and
+  source only. Identified repeated view rebuilding, projection construction
+  overlap, duplicate execution admission work and accumulating fixture workers;
+  recorded bounded proposals and attribution limits. Stopped for discussion
+  without implementation changes or reruns.
 - Completed the subsequently authorized single measurement run: 175 children,
   35 metrics and 775 samples, with complete independently checked provenance.
   Fixed acceptance failed on ten changed-window latency cases, projection staging

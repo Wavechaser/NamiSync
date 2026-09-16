@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from threading import RLock
 from types import MappingProxyType
 
@@ -12,6 +12,7 @@ from namisync.interfaces.ui_state import MAX_JAVASCRIPT_SAFE_INTEGER
 from namisync.workflows import (
     PlanProjection,
     PlanProjectionNode,
+    PlanProjectionOrder,
     PlanSortColumn,
     SortDirection,
     apply_plan_projection_selection,
@@ -21,7 +22,8 @@ from namisync.workflows import (
 from .visible_sequence import (
     VisibleSequence,
     VisibleSequenceParameters,
-    derive_visible_sequence,
+    _derive_visible_sequence_from_validated,
+    _validate_structure,
     resolve_visible_anchor,
     window_visible_sequence,
 )
@@ -69,11 +71,13 @@ class PlanReviewState:
     sort_column: PlanSortColumn = PlanSortColumn.PATH
     sort_direction: SortDirection = SortDirection.ASCENDING
     collapsed_node_ids: frozenset[str] = field(default_factory=frozenset)
-    _ordered: PlanProjection | None = None
+    _canonical_order: PlanProjectionOrder | None = None
+    _order: PlanProjectionOrder | None = None
     _visible: VisibleSequence[PlanProjectionNode] | None = None
     _lock: RLock = field(default_factory=RLock, repr=False)
 
     def __post_init__(self) -> None:
+        _validate_structure(self.projection.nodes)
         self.destructive_operation_counts = _validate_execution_facts(
             self.requires_destructive_confirmation,
             self.irreversible_update_count,
@@ -82,14 +86,37 @@ class PlanReviewState:
             self.destructive_operation_counts,
             self.required_bytes,
         )
-        self._ordered, self._visible = _derive_view(
-            self.projection,
+        self._canonical_order = sort_plan_projection(
+            self.projection, PlanSortColumn.PATH, SortDirection.ASCENDING
+        )
+        self._order = (
+            self._canonical_order
+            if self.sort_column is PlanSortColumn.PATH
+            else sort_plan_projection(self.projection, self.sort_column, self.sort_direction)
+        )
+        self._visible = _derive_view(
+            self._order,
             search_query=self.search_query,
             filters=self.filters,
             sort_column=self.sort_column,
             sort_direction=self.sort_direction,
             collapsed_node_ids=self.collapsed_node_ids,
         )
+
+    @property
+    def canonical_order(self) -> PlanProjectionOrder:
+        assert self._canonical_order is not None
+        return self._canonical_order
+
+    @property
+    def current_order(self) -> PlanProjectionOrder:
+        assert self._order is not None
+        return self._order
+
+    @property
+    def current_sequence(self) -> VisibleSequence[PlanProjectionNode]:
+        assert self._visible is not None
+        return self._visible
 
     def summary(self, *, disposition: str = "current") -> dict[str, object]:
         with self._lock:
@@ -174,8 +201,15 @@ class PlanReviewState:
             )
             if changed:
                 next_revision = _next_revision(self.view_revision)
-                ordered, visible = _derive_view(
-                    self.projection,
+                assert self._order is not None and self._canonical_order is not None
+                if sort_column is self.sort_column and sort_direction is self.sort_direction:
+                    order = self._order
+                elif sort_column is PlanSortColumn.PATH:
+                    order = self._canonical_order
+                else:
+                    order = sort_plan_projection(self.projection, sort_column, sort_direction)
+                visible = _derive_view(
+                    order,
                     search_query=search_query,
                     filters=filters,
                     sort_column=sort_column,
@@ -187,7 +221,7 @@ class PlanReviewState:
                 self.sort_column = sort_column
                 self.sort_direction = sort_direction
                 self.collapsed_node_ids = frozen_collapsed
-                self._ordered = ordered
+                self._order = order
                 self._visible = visible
                 self.view_revision = next_revision
             return self._summary(disposition="applied" if changed else "noop")
@@ -202,6 +236,7 @@ class PlanReviewState:
         with self._lock:
             if projection.request_id != self.request_id:
                 raise ValueError("plan projection changed its request")
+            _validate_structure(projection.nodes)
             collapsed_node_ids = frozenset(
                 node_id
                 for node_id in self.collapsed_node_ids
@@ -209,8 +244,16 @@ class PlanReviewState:
                 and projection.node_for_id(node_id).is_container
             )
             next_revision = _next_revision(self.view_revision)
-            ordered, visible = _derive_view(
-                projection,
+            canonical_order = sort_plan_projection(
+                projection, PlanSortColumn.PATH, SortDirection.ASCENDING
+            )
+            order = (
+                canonical_order
+                if self.sort_column is PlanSortColumn.PATH
+                else sort_plan_projection(projection, self.sort_column, self.sort_direction)
+            )
+            visible = _derive_view(
+                order,
                 search_query=self.search_query,
                 filters=self.filters,
                 sort_column=self.sort_column,
@@ -221,7 +264,8 @@ class PlanReviewState:
             self.selection_revision = selection_revision
             self.selection_state = selection_state
             self.collapsed_node_ids = collapsed_node_ids
-            self._ordered = ordered
+            self._canonical_order = canonical_order
+            self._order = order
             self._visible = visible
             self.view_revision = next_revision
 
@@ -254,13 +298,17 @@ class PlanReviewState:
                 selected_operation_ids=selected_operation_ids,
                 exclusion_reasons=exclusion_reasons,
             )
-            assert self._ordered is not None and self._visible is not None
-            ordered = apply_plan_projection_selection(
-                self._ordered,
-                selected_operation_ids=selected_operation_ids,
-                exclusion_reasons=exclusion_reasons,
+            assert self._order is not None and self._canonical_order is not None and self._visible is not None
+            canonical_order = self._canonical_order._rebind_selection(projection)
+            order = (
+                canonical_order
+                if self._order is self._canonical_order
+                else self._order._rebind_selection(projection)
             )
-            visible = replace(self._visible, nodes=ordered.nodes)
+            visible = self._visible._rebind_nodes(
+                projection.nodes,
+                projection.position_by_node_id,
+            )
             self.projection = projection
             self.selection_revision = selection_revision
             self.selection_state = selection_state
@@ -272,7 +320,8 @@ class PlanReviewState:
             self.irreversible_operation_count = irreversible_operation_count
             self.destructive_operation_counts = frozen_counts
             self.required_bytes = required_bytes
-            self._ordered = ordered
+            self._canonical_order = canonical_order
+            self._order = order
             self._visible = visible
             self.view_revision = next_revision
 
@@ -397,30 +446,32 @@ def _validate_execution_facts(
 
 
 def _derive_view(
-    projection: PlanProjection,
+    order: PlanProjectionOrder,
     *,
     search_query: str,
     filters: frozenset[str],
     sort_column: PlanSortColumn,
     sort_direction: SortDirection,
     collapsed_node_ids: frozenset[str],
-) -> tuple[PlanProjection, VisibleSequence[PlanProjectionNode]]:
-    ordered = sort_plan_projection(projection, sort_column, sort_direction)
-    counts = None
+) -> VisibleSequence[PlanProjectionNode]:
+    projection = order.projection
+    match_mask = None
     if filters:
-        counts = {
-            node.node_id: _direct_filter_count(node, filters)
-            for node in ordered.nodes
-        }
-    visible = derive_visible_sequence(
-        ordered.nodes,
+        match_mask = bytes(
+            _direct_filter_count(node, filters) for node in projection.nodes
+        )
+    visible = _derive_visible_sequence_from_validated(
+        projection.nodes,
+        projection.position_by_node_id,
         VisibleSequenceParameters(
             collapsed_node_ids=collapsed_node_ids,
             search_query=search_query,
-            match_counts_by_node_id=counts,
         ),
+        ordered_source_positions=order.ordered_source_positions,
+        order_rank_by_source_position=order.order_rank_by_source_position,
+        match_mask_by_position=match_mask,
     )
-    return ordered, visible
+    return visible
 
 
 def _direct_filter_count(node: PlanProjectionNode, filters: frozenset[str]) -> int:

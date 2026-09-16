@@ -15,15 +15,33 @@ from pathlib import Path, PureWindowsPath
 from typing import Final, Mapping
 
 
-CONTRACT_SCHEMA: Final = "namisync-m1-7-plan-review-scale-contract-v4"
-AUTHORITY_SCHEMA: Final = "namisync-m1-7-plan-review-scale-authority-v3"
-RAW_ARTIFACT_SCHEMA: Final = "namisync-m1-7-plan-review-scale-run-v4"
+LEGACY_CONTRACT_SCHEMA: Final = "namisync-m1-7-plan-review-scale-contract-v4"
+LEGACY_AUTHORITY_SCHEMA: Final = "namisync-m1-7-plan-review-scale-authority-v3"
+LEGACY_RAW_ARTIFACT_SCHEMA: Final = "namisync-m1-7-plan-review-scale-run-v4"
+CONTRACT_SCHEMA: Final = "namisync-m1-7-plan-review-scale-contract-v5"
+AUTHORITY_SCHEMA: Final = "namisync-m1-7-plan-review-scale-authority-v4"
+RAW_ARTIFACT_SCHEMA: Final = "namisync-m1-7-plan-review-scale-run-v5"
 CHILD_RECEIPT_SCHEMA: Final = "namisync-m1-7-plan-review-child-v3"
 READINESS_SCHEMA: Final = "namisync-m1-7-plan-review-readiness-v1"
 READINESS_CHILD_SCHEMA: Final = "namisync-m1-7-plan-review-readiness-child-v1"
 COLLECTION_SCHEMA: Final = "namisync-m1-7-plan-review-collection-index-v1"
-FIXTURE_SCHEMA: Final = "namisync-m1-7-plan-fixture-manifest-v1"
-CONTRACT_SHA256: Final = "0c82a7044348193af2d68b25c6645263e15c4f532f4015257324c33227b930c3"
+LEGACY_FIXTURE_SCHEMA: Final = "namisync-m1-7-plan-fixture-manifest-v1"
+FIXTURE_SCHEMA: Final = "namisync-m1-7-plan-fixture-manifest-v2"
+LEGACY_CONTRACT_SHA256: Final = "0c82a7044348193af2d68b25c6645263e15c4f532f4015257324c33227b930c3"
+CONTRACT_SHA256: Final = "4cb4aeee68f4e846f2b74771fbebbdd74004d6f76162da495e1bc5a53757aa9b"
+
+
+def _contract_family(contract: Mapping[str, object]) -> tuple[str, str, str, str]:
+    if contract.get("schema") == CONTRACT_SCHEMA:
+        return CONTRACT_SHA256, AUTHORITY_SCHEMA, RAW_ARTIFACT_SCHEMA, FIXTURE_SCHEMA
+    if contract.get("schema") == LEGACY_CONTRACT_SCHEMA:
+        return (
+            LEGACY_CONTRACT_SHA256,
+            LEGACY_AUTHORITY_SCHEMA,
+            LEGACY_RAW_ARTIFACT_SCHEMA,
+            LEGACY_FIXTURE_SCHEMA,
+        )
+    raise ValueError("plan-review contract schema is invalid")
 
 _HEX32 = re.compile(r"[0-9a-f]{32}")
 _HEX40 = re.compile(r"[0-9a-f]{40}")
@@ -253,9 +271,10 @@ def validate_artifact(
         "schema",
     }:
         raise ValueError("plan-review artifact shape is invalid")
-    if raw["schema"] != RAW_ARTIFACT_SCHEMA:
+    contract_sha256, _authority_schema, raw_schema, _fixture_schema = _contract_family(contract)
+    if raw["schema"] != raw_schema:
         raise ValueError("plan-review artifact schema is invalid")
-    if raw["contract_sha256"] != CONTRACT_SHA256:
+    if raw["contract_sha256"] != contract_sha256:
         raise ValueError("plan-review artifact contract authority is invalid")
     expected_receipt = {
         "byte_length": len(authority_bytes),
@@ -314,11 +333,12 @@ def validate_readiness(
         "authority_sha256", "children", "contract_sha256", "coverage", "schema",
     }:
         raise ValueError("plan-review readiness shape is invalid")
+    contract_sha256, _authority_schema, _raw_schema, _fixture_schema = _contract_family(contract)
     if (
         readiness["schema"] != READINESS_SCHEMA
         or readiness["authority_sha256"]
         != hashlib.sha256(authority_bytes).hexdigest()
-        or readiness["contract_sha256"] != CONTRACT_SHA256
+        or readiness["contract_sha256"] != contract_sha256
     ):
         raise ValueError("plan-review readiness authority is invalid")
     plan = _readiness_plan(contract)
@@ -442,11 +462,12 @@ def validate_collection_index(
         expected_readiness_hash = None
     else:
         raise ValueError("plan-review collection kind is invalid")
+    contract_sha256, _authority_schema, _raw_schema, _fixture_schema = _contract_family(contract)
     if (
         collection["schema"] != COLLECTION_SCHEMA
         or collection["authority_sha256"]
         != hashlib.sha256(authority_bytes).hexdigest()
-        or collection["contract_sha256"] != CONTRACT_SHA256
+        or collection["contract_sha256"] != contract_sha256
         or collection["readiness_sha256"] != expected_readiness_hash
         or collection["planned_child_count"] != len(planned)
         or type(collection["accepted"]) is not list
@@ -922,9 +943,8 @@ def _validate_contract(contract: object) -> None:
         "headed_fixture", "metrics", "profile", "readiness", "sampling", "schema",
     }:
         raise ValueError("plan-review contract shape is invalid")
-    if contract["schema"] != CONTRACT_SCHEMA:
-        raise ValueError("plan-review contract schema is invalid")
-    if canonical_sha256(contract) != CONTRACT_SHA256:
+    contract_sha256, _authority_schema, _raw_schema, fixture_schema = _contract_family(contract)
+    if canonical_sha256(contract) != contract_sha256:
         raise ValueError("plan-review contract authority is not frozen")
     if contract["profile"] != _EXPECTED_PROFILE:
         raise ValueError("plan-review contract profile is invalid")
@@ -934,6 +954,22 @@ def _validate_contract(contract: object) -> None:
         raise ValueError("plan-review contract headed fixture is invalid")
     if contract["readiness"] != _EXPECTED_READINESS:
         raise ValueError("plan-review contract readiness is invalid")
+    compact = contract["schema"] == CONTRACT_SCHEMA
+    if contract["artifacts"] != {
+        "authority": (
+            "tests/interfaces/web/m1_7_plan_compact_authority.json"
+            if compact
+            else "tests/interfaces/web/m1_7_plan_authority.json"
+        ),
+        "measurements": (
+            "tests/interfaces/web/m1_7_plan_compact_measurements.json"
+            if compact
+            else "tests/interfaces/web/m1_7_plan_measurements.json"
+        ),
+    }:
+        raise ValueError("plan-review contract artifact paths are invalid")
+    if contract["authority"].get("fixture_manifest_schema") != fixture_schema:
+        raise ValueError("plan-review contract fixture authority is invalid")
     fixture = contract["fixture"]
     if (
         type(fixture) is not dict
@@ -991,7 +1027,8 @@ def _validate_authority(contract: dict[str, object], authority: object) -> None:
         "source_files",
     }:
         raise ValueError("plan-review authority shape is invalid")
-    if authority["schema"] != AUTHORITY_SCHEMA or authority["contract_sha256"] != CONTRACT_SHA256:
+    contract_sha256, authority_schema, _raw_schema, fixture_schema = _contract_family(contract)
+    if authority["schema"] != authority_schema or authority["contract_sha256"] != contract_sha256:
         raise ValueError("plan-review authority contract is invalid")
     expected_sources = set(contract["authority"]["source_paths"])
     expected_installed = set(contract["authority"]["installed_paths"])
@@ -1045,8 +1082,10 @@ def _validate_authority(contract: dict[str, object], authority: object) -> None:
     manifests = authority["fixture_manifests"]
     if type(manifests) is not dict or set(manifests) != {"base", "information-heavy"}:
         raise ValueError("plan-review authority fixture population is invalid")
-    _validate_fixture_manifest(manifests["base"], heavy=False)
-    _validate_fixture_manifest(manifests["information-heavy"], heavy=True)
+    _validate_fixture_manifest(manifests["base"], heavy=False, schema=fixture_schema)
+    _validate_fixture_manifest(
+        manifests["information-heavy"], heavy=True, schema=fixture_schema
+    )
 
 
 def _validate_source_manifest(value: object) -> None:
@@ -1132,7 +1171,7 @@ def _validate_headed_runtime(value: object, runtime_files: object) -> None:
         raise ValueError("plan-review netfx CLR identity is invalid")
 
 
-def _validate_fixture_manifest(value: object, *, heavy: bool) -> None:
+def _validate_fixture_manifest(value: object, *, heavy: bool, schema: str) -> None:
     if type(value) is not dict or set(value) != {
         "artifact_digest", "case", "counts", "depth", "operation_kind_counts",
         "plan_fingerprint", "raw_key_witnesses", "retained_representation",
@@ -1140,7 +1179,7 @@ def _validate_fixture_manifest(value: object, *, heavy: bool) -> None:
         "warning_cycle",
     }:
         raise ValueError("plan-review fixture manifest shape is invalid")
-    if value["schema"] != FIXTURE_SCHEMA or value["seed"] != 0x4E414D49:
+    if value["schema"] != schema or value["seed"] != 0x4E414D49:
         raise ValueError("plan-review fixture manifest identity is invalid")
     if not _is_hex(value["artifact_digest"], _HEX64) or not _is_hex(value["plan_fingerprint"], _HEX64):
         raise ValueError("plan-review fixture digests are invalid")
@@ -1205,7 +1244,11 @@ def _validate_fixture_manifest(value: object, *, heavy: bool) -> None:
     ):
         raise ValueError("plan-review fixture sibling distribution is invalid")
     _validate_raw_key_witnesses(value["raw_key_witnesses"])
-    _validate_retained_representation(value["retained_representation"], 240_000 if heavy else 120_000)
+    rows = 240_000 if heavy else 120_000
+    if schema == FIXTURE_SCHEMA:
+        _validate_compact_retained_representation(value["retained_representation"], rows)
+    else:
+        _validate_retained_representation(value["retained_representation"], rows)
 
 
 def _validate_raw_key_witnesses(value: object) -> None:
@@ -1407,6 +1450,140 @@ def _validate_retained_representation(value: object, rows: int) -> None:
     }
     if value["plan_projection_node_non_null_counts"] != expected_node_counts:
         raise ValueError("plan-review retained field population is invalid")
+
+
+def _validate_compact_retained_representation(value: object, rows: int) -> None:
+    if type(value) is not dict or set(value) != {
+        "plan_projection_fields", "plan_projection_node_fields",
+        "plan_review_state", "visible_sequence",
+    }:
+        raise ValueError("plan-review compact retained representation is invalid")
+    if value["plan_projection_fields"] != [
+        "request_id", "nodes", "position_by_node_id", "operation_node_id_by_id",
+        "selected_operation_ids", "preflight_ready", "preflight_refusal_count",
+        "warning_count",
+    ]:
+        raise ValueError("plan-review compact projection fields are invalid")
+    node_fields = value["plan_projection_node_fields"]
+    if node_fields != [
+        "node_id", "display", "rel_path_key", "position", "depth",
+        "parent_index", "subtree_end", "is_container", "row_kind",
+        "operation_id", "operation_kind", "reason", "blocked_reason",
+        "selection", "selectable_operation_count", "selected_operation_count",
+        "operation_count", "size", "mtime_ns", "dependency_count", "risk",
+        "move_peer_id", "notice", "selection_exclusion_reason", "filename_key",
+    ]:
+        raise ValueError("plan-review compact node fields are invalid")
+    state = value["plan_review_state"]
+    if type(state) is not dict or set(state) != {
+        "canonical_order", "current_order", "distinct_order_objects",
+        "projection_identity_shared",
+    }:
+        raise ValueError("plan-review compact state representation is invalid")
+    if state["distinct_order_objects"] is not True or state["projection_identity_shared"] is not True:
+        raise ValueError("plan-review compact state sharing is invalid")
+    canonical = _validate_compact_order(state["canonical_order"], rows)
+    current = _validate_compact_order(state["current_order"], rows)
+    if (
+        canonical["ordered_source_positions"]["values_sha256"]
+        == current["ordered_source_positions"]["values_sha256"]
+    ):
+        raise ValueError("plan-review compact current order is not realized")
+    visible = value["visible_sequence"]
+    if type(visible) is not dict or set(visible) != {
+        "filtered_item_count", "retained_direct_child_counts", "sibling_ordinals",
+        "source_position_by_node_id_count", "visible_index_by_source_position",
+        "visible_source_positions",
+    }:
+        raise ValueError("plan-review compact visible representation is invalid")
+    if visible["filtered_item_count"] is not None or visible["source_position_by_node_id_count"] != rows:
+        raise ValueError("plan-review compact visible population is invalid")
+    visible_positions = _validate_compact_buffer(
+        visible["visible_source_positions"], rows, permutation=True
+    )
+    visible_inverse = _validate_compact_buffer(
+        visible["visible_index_by_source_position"], rows, permutation=True
+    )
+    sibling_ordinals = _validate_compact_buffer(visible["sibling_ordinals"], rows)
+    child_counts = _validate_compact_buffer(
+        visible["retained_direct_child_counts"], rows
+    )
+    widest = 139_937 if rows == 240_000 else 19_937
+    if (
+        sibling_ordinals["minimum"] != 1
+        or sibling_ordinals["maximum"] != widest
+        or child_counts["minimum"] != 0
+        or child_counts["maximum"] != widest
+    ):
+        raise ValueError("plan-review compact accessibility population is invalid")
+    if (
+        visible_positions["values_sha256"]
+        != current["ordered_source_positions"]["values_sha256"]
+        or visible_inverse["values_sha256"]
+        != current["order_rank_by_source_position"]["values_sha256"]
+    ):
+        raise ValueError("plan-review compact visible order is not current")
+
+
+def _validate_compact_order(value: object, rows: int) -> dict[str, object]:
+    if type(value) is not dict or set(value) != {
+        "inverse_valid", "ordered_source_positions",
+        "order_rank_by_source_position", "projection_rows",
+    } or value["projection_rows"] != rows or value["inverse_valid"] is not True:
+        raise ValueError("plan-review compact order is invalid")
+    ordered = _validate_compact_buffer(
+        value["ordered_source_positions"], rows, permutation=True
+    )
+    inverse = _validate_compact_buffer(
+        value["order_rank_by_source_position"], rows, permutation=True
+    )
+    return {"ordered_source_positions": ordered, "order_rank_by_source_position": inverse}
+
+
+def _validate_compact_buffer(
+    value: object,
+    rows: int,
+    *,
+    permutation: bool = False,
+) -> dict[str, object]:
+    if type(value) is not dict or set(value) != {
+        "byte_length", "byte_width", "count", "maximum", "minimum",
+        "unique_count", "values_sha256",
+    }:
+        raise ValueError("plan-review compact buffer is invalid")
+    width = value["byte_width"]
+    if (
+        type(width) is not int
+        or width not in {1, 2, 4, 8}
+        or value["count"] != rows
+        or value["byte_length"] != rows * width
+        or not _is_hex(value["values_sha256"], _HEX64)
+        or type(value["minimum"]) is not int
+        or type(value["maximum"]) is not int
+        or type(value["unique_count"]) is not int
+        or value["unique_count"] < 1
+        or value["unique_count"] > rows
+        or not 0 <= value["minimum"] <= value["maximum"]
+        or value["maximum"] >= 2 ** (8 * width)
+        or width
+        != (
+            1
+            if value["maximum"] < 2**8
+            else 2
+            if value["maximum"] < 2**16
+            else 4
+            if value["maximum"] < 2**32
+            else 8
+        )
+    ):
+        raise ValueError("plan-review compact buffer population is invalid")
+    if permutation and (
+        value["minimum"] != 0
+        or value["maximum"] != rows - 1
+        or value["unique_count"] != rows
+    ):
+        raise ValueError("plan-review compact buffer is not a permutation")
+    return value
 
 
 def _validate_source_bytes(

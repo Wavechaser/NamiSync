@@ -579,8 +579,40 @@ assert.equal(planOpens.length, cachedPlanOpenCount, "selecting a current review 
 assert.equal(firstReview.summary.preflight_ready, false);
 assert.equal(firstReview.window.rows[0].row_kind, "notice");
 
+const originalWindow = firstReview.window;
+const priorRenderCount = reviewRenders.length;
+globalThis.planReviewHarness.callbacks.onWindow(firstReview, 256);
+globalThis.planReviewHarness.callbacks.onWindow(firstReview, 512);
+assert.equal(planWindows.length, 3, "scroll reads have at most one transport in flight");
+assert.equal(firstReview.pending, null, "window reads do not disable review actions");
+assert.equal(reviewRenders.length, priorRenderCount, "fetch start does not remount the review");
+planWindows[2].resolve(planWindow(refusedReview, 256));
+await until(() => planWindows.length === 4);
+assert.equal(firstReview.window, originalWindow, "superseded offset cannot publish");
+assert.deepEqual(calls.at(-1), ["plan-window", TASK_G, 0, 512, 256]);
+const latestWindow = planWindow(refusedReview, 512);
+planWindows[3].resolve(latestWindow);
+await until(() => !firstReview.windowRequestRunning);
+assert.equal(firstReview.window, latestWindow);
+assert.equal(reviewRenders.length, priorRenderCount + 1, "one current receipt renders once");
+globalThis.planReviewHarness.callbacks.onWindow(firstReview, 768);
+globalThis.planReviewHarness.callbacks.onWindow(firstReview, null);
+planWindows[4].resolve(planWindow(refusedReview, 768));
+await until(() => !firstReview.windowRequestRunning);
+assert.equal(firstReview.window, latestWindow, "return to covered rows invalidates the read");
+globalThis.planReviewHarness.callbacks.onWindow(firstReview, 0);
+planWindows[5].resolve(originalWindow);
+await until(() => !firstReview.windowRequestRunning);
+assert.equal(firstReview.window, originalWindow);
+planWindows.splice(2); // Keep the following independent gesture receipt ordinals.
+
+globalThis.planReviewHarness.callbacks.onWindow(firstReview, 768);
 globalThis.planReviewHarness.callbacks.onViewChange(firstReview, { sortColumn: "size" });
 assert.equal(firstReview.pending, "view", "view feedback is published before its receipt");
+planWindows[2].resolve(planWindow(refusedReview, 768));
+await until(() => !firstReview.windowRequestRunning);
+assert.equal(firstReview.window, originalWindow, "a newer view action invalidates old window data");
+planWindows.pop();
 taskButton("Task 6").click();
 const sortedReview = planSummary({
   disposition: "updated", view_revision: 1,

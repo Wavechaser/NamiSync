@@ -453,6 +453,31 @@ def test_execution_validation_accepts_attributed_identityless_evidence() -> None
     assert execution_set.published_evidence[first.op_id].recorded_identity is None
 
 
+@pytest.mark.parametrize(
+    ("field_name", "replacement", "message"),
+    (
+        ("run_id", "invalid", "run id"),
+        ("plan", None, "plan changed after structural validation"),
+        ("selection", None, "selection changed after structural validation"),
+    ),
+)
+def test_execution_validation_rejects_replaced_admission_structure(
+    field_name: str,
+    replacement: object | None,
+    message: str,
+) -> None:
+    execution_set = _execution_set()
+    if field_name == "plan":
+        replacement = replace(execution_set.plan)
+    elif field_name == "selection":
+        replacement = frozenset(set(execution_set.selection))
+        assert replacement is not execution_set.selection
+    setattr(execution_set, field_name, replacement)
+
+    with pytest.raises(ValueError, match=message):
+        validate_execution_set(execution_set)
+
+
 def test_execution_byte_high_water_is_bounded_and_monotonic() -> None:
     execution_set = replace(_execution_set(), bytes_done_high_water=4)
 

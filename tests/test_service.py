@@ -3191,9 +3191,11 @@ def test_service_execution_opt_in_reaches_runtime_without_changing_default() -> 
             verify_after_execute: bool = False,
             user_deselected=frozenset(),
             expected_artifact=None,
+            selection_decision=None,
         ):
             assert user_deselected == frozenset()
             assert expected_artifact is artifact
+            assert selection_decision is not None
             calls.append((request_id, verify_after_execute))
             return SimpleNamespace(
                 execution_set=SimpleNamespace(

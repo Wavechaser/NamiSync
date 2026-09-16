@@ -30,6 +30,7 @@ from namisync.interfaces.web.visible_sequence import (
     to_visible_window_view,
     window_visible_sequence,
 )
+from namisync.workflows import CompactUnsignedIntegers
 from namisync.workflows.node_tree import (
     NodeTree,
     NodeTreeKind,
@@ -130,7 +131,7 @@ def test_br_g_34_real_workflow_tree_is_used_directly_without_dto_copy(
     window = window_visible_sequence(sequence, offset=1, limit=2)
 
     assert sequence.nodes is tree.nodes
-    assert sequence.visible_positions == tuple(range(len(tree.nodes)))
+    assert tuple(sequence.visible_source_positions) == tuple(range(len(tree.nodes)))
     assert _ids(sequence) == tuple(node.node_id for node in tree.nodes)
     assert tree.nodes[0].display == "All items"
     assert tree.nodes[1].display == tree.nodes[1].rel_path
@@ -154,7 +155,7 @@ def test_br_g_34_empty_workflow_projection_keeps_its_single_root() -> None:
     assert sequence.nodes is tree.nodes
     assert _ids(sequence) == (tree.root_node_id,)
     assert tree.nodes[0].display == "All items"
-    assert sequence.has_retained_children == (False,)
+    assert tuple(sequence.retained_direct_child_counts) == (0,)
     assert window_visible_sequence(
         sequence,
         offset=0,
@@ -178,11 +179,11 @@ def test_br_g_34_cross_layer_fixture_runs_the_exact_production_chain(
         built_tree.append(tree)
         return tree
 
-    def observed_derive(nodes, parameters):
+    def observed_derive(nodes, parameters, **kwargs):
         calls.append("derive")
         assert len(built_tree) == 1
         assert nodes is built_tree[0].nodes
-        sequence = original_derive(nodes, parameters)
+        sequence = original_derive(nodes, parameters, **kwargs)
         assert sequence.nodes is built_tree[0].nodes
         return sequence
 
@@ -344,10 +345,11 @@ def test_br_g_2_stage_6_visible_core_imports_no_project_or_path_helper() -> None
         if isinstance(node, (ast.Import, ast.ImportFrom))
     ]
 
-    assert not any(
-        isinstance(node, ast.ImportFrom)
-        and node.module is not None
-        and node.module.startswith("namisync")
+    assert all(
+        not isinstance(node, ast.ImportFrom)
+        or node.module == "namisync.workflows"
+        or node.module is None
+        or not node.module.startswith("namisync")
         for node in imports
     )
     assert "path" not in source.casefold()
@@ -522,6 +524,49 @@ def test_br_g_34_search_casefolds_without_trimming_or_normalization() -> None:
         _parameters(search="bad\ud800")
 
 
+@pytest.mark.parametrize(
+    ("display", "query"),
+    [
+        ("Kelvin.txt", "\u212a"),
+        ("kelvin.txt", "\u212a"),
+        ("Long-s.txt", "\u017f"),
+        ("\u212aelvin.txt", "k"),
+        ("\u017file.txt", "s"),
+    ],
+)
+def test_br_g_34_ascii_shortcut_preserves_unicode_casefold_matches(
+    display: str,
+    query: str,
+) -> None:
+    nodes = (
+        _Node("root", "All items", 0, 0, None, 2, True),
+        _Node("leaf", display, 1, 1, 0, 2, False),
+    )
+    assert _ids(derive_visible_sequence(nodes, _parameters(search=query))) == (
+        "root",
+        "leaf",
+    )
+
+
+def test_br_g_34_nonascii_folded_query_rejects_ascii_without_folding_display(
+) -> None:
+    class _AsciiDisplay(str):
+        def casefold(self):
+            raise AssertionError("ASCII display was casefolded")
+
+    nodes = (
+        _Node("root", _AsciiDisplay("All items"), 0, 0, None, 2, True),
+        _Node("leaf", _AsciiDisplay("plain.txt"), 1, 1, 0, 2, False),
+    )
+    sequence = visible_module._derive_visible_sequence_from_validated(
+        nodes,
+        {node.node_id: node.position for node in nodes},
+        _parameters(search="\u00e9"),
+    )
+
+    assert tuple(sequence.visible_source_positions) == ()
+
+
 def test_br_g_34_filesystem_layout_controls_stay_raw_until_rendering() -> None:
     control_display = "report-\u202eabc.txt-\u200b"
     marker_display = "literal-⟦U+202E⟧.txt"
@@ -558,7 +603,7 @@ def test_br_g_34_filter_retention_precedes_collapse_and_counting() -> None:
 
     assert _ids(sequence) == ("root", "alpha", "beta", "literal")
     assert sequence.filtered_item_count == 5
-    assert "street" not in sequence.visible_index_by_node_id
+    assert sequence.visible_index_by_source_position[2] == len(sequence.nodes)
     assert sequence.source_position_by_node_id["street"] == 2
 
 
@@ -576,6 +621,166 @@ def test_br_g_34_sparse_filter_and_search_are_conjunctive() -> None:
     assert empty_filter.filtered_item_count == 0
     assert _ids(filtered) == ("root", "alpha", "street")
     assert filtered.filtered_item_count == 2
+
+
+def test_br_g_34_sparse_derivation_matches_independent_reference() -> None:
+    nodes = _nodes()
+
+    def reference(parameters: VisibleSequenceParameters):
+        query = parameters.search_query.casefold()
+        counts = parameters.match_counts_by_node_id
+        search_matches = [query in node.display.casefold() for node in nodes]
+        retained = [
+            matched and (counts is None or counts.get(node.node_id, 0) > 0)
+            for node, matched in zip(nodes, search_matches)
+        ]
+        for position in range(len(nodes) - 1, 0, -1):
+            if retained[position]:
+                parent = nodes[position].parent_index
+                assert parent is not None
+                retained[parent] = True
+        children = [False] * len(nodes)
+        for position in range(1, len(nodes)):
+            if retained[position]:
+                parent = nodes[position].parent_index
+                assert parent is not None
+                children[parent] = True
+        visible = []
+        hidden_until = 0
+        for position, node in enumerate(nodes):
+            if position >= hidden_until and retained[position]:
+                visible.append(position)
+                if node.node_id in parameters.collapsed_node_ids:
+                    hidden_until = node.subtree_end
+        filtered_count = None
+        if counts is not None:
+            filtered_count = sum(
+                counts.get(node.node_id, 0)
+                for position, node in enumerate(nodes)
+                if search_matches[position] and counts.get(node.node_id, 0) > 0
+            )
+        return tuple(visible), tuple(children[p] for p in visible), filtered_count
+
+    cases = (
+        _parameters(),
+        _parameters(search="strasse"),
+        _parameters(search="missing"),
+        _parameters(counts={}),
+        _parameters(counts={"street": 7, "literal": 2}),
+        _parameters(search="t", counts={"street": 7, "literal": 2}),
+        _parameters(collapsed={"alpha"}, counts={"street": 7, "literal": 2}),
+    )
+    for parameters in cases:
+        sequence = derive_visible_sequence(nodes, parameters)
+        visible, children, filtered_count = reference(parameters)
+        assert tuple(sequence.visible_source_positions) == visible
+        assert tuple(
+            sequence.retained_direct_child_counts[position] > 0
+            for position in sequence.visible_source_positions
+        ) == children
+        assert sequence.filtered_item_count == filtered_count
+
+
+def test_br_g_34_empty_search_reads_no_display_in_validated_derivation() -> None:
+    class _NoDisplay:
+        def __init__(self, node: _Node) -> None:
+            self._node = node
+
+        @property
+        def display(self):
+            raise AssertionError("empty-search derivation read display")
+
+        def __getattr__(self, name):
+            return getattr(self._node, name)
+
+    nodes = tuple(_NoDisplay(node) for node in _nodes())
+    sequence = visible_module._derive_visible_sequence_from_validated(
+        nodes,
+        {node.node_id: node.position for node in nodes},
+        _parameters(counts={"street": 2}),
+    )
+
+    assert tuple(sequence.visible_source_positions) == (0, 1, 2)
+    assert sequence.filtered_item_count == 2
+
+    collapsed = visible_module._derive_visible_sequence_from_validated(
+        nodes,
+        {node.node_id: node.position for node in nodes},
+        _parameters(collapsed={"alpha"}),
+    )
+    assert tuple(collapsed.visible_source_positions) == (0, 1, 4, 5)
+
+
+@pytest.mark.parametrize("node_count", [512, 1_024])
+def test_br_g_34_sparse_matching_limits_structural_reads_to_retained_chain(
+    node_count: int,
+) -> None:
+    reads: dict[str, int] = {}
+
+    class _FieldObserved:
+        def __init__(self, node: _Node) -> None:
+            self._node = node
+
+        def __getattr__(self, name):
+            reads[name] = reads.get(name, 0) + 1
+            return getattr(self._node, name)
+
+    plain = (
+        _Node("root", "All items", 0, 0, None, node_count, True),
+        *(
+            _Node(
+                f"node-{position}",
+                "needle" if position == node_count - 1 else "ordinary",
+                position,
+                1,
+                0,
+                position + 1,
+                False,
+            )
+            for position in range(1, node_count)
+        ),
+    )
+    nodes = tuple(_FieldObserved(node) for node in plain)
+    position_by_id = {node.node_id: node.position for node in nodes}
+    reads.clear()
+
+    sequence = visible_module._derive_visible_sequence_from_validated(
+        nodes,
+        position_by_id,
+        _parameters(search="needle"),
+    )
+
+    assert tuple(sequence.visible_source_positions) == (0, node_count - 1)
+    assert reads["display"] == node_count
+    assert reads["parent_index"] <= node_count + 5
+    assert reads.get("subtree_end", 0) <= 2
+
+
+@pytest.mark.parametrize(
+    ("mask", "error"),
+    [
+        ((0, 1, 0, 0, 0, 0), TypeError),
+        (b"\x00", ValueError),
+        (b"\x00\x00\x02\x00\x00\x00", ValueError),
+    ],
+)
+def test_br_g_34_private_positional_mask_is_narrowly_validated(mask, error) -> None:
+    nodes = _nodes()
+    with pytest.raises(error):
+        visible_module._derive_visible_sequence_from_validated(
+            nodes,
+            {node.node_id: node.position for node in nodes},
+            _parameters(),
+            match_mask_by_position=mask,
+        )
+
+    with pytest.raises(ValueError, match="conflicts"):
+        visible_module._derive_visible_sequence_from_validated(
+            nodes,
+            {node.node_id: node.position for node in nodes},
+            _parameters(counts={"street": 1}),
+            match_mask_by_position=bytes(len(nodes)),
+        )
 
 
 @pytest.mark.parametrize(
@@ -609,25 +814,17 @@ def test_br_g_34_active_tree_metadata_is_global_and_filter_aware() -> None:
         _parameters(search="strasse"),
     )
 
-    assert expanded.parent_visible_indexes == (None, 0, 1, 1, 0, 4)
-    assert expanded.first_child_visible_indexes == (1, 2, None, None, 5, None)
-    assert expanded.has_retained_children == (
-        True,
-        True,
-        False,
-        False,
-        True,
-        False,
-    )
-    assert expanded.positions_in_set == (1, 1, 1, 2, 2, 1)
-    assert expanded.set_sizes == (1, 2, 2, 2, 2, 1)
+    expanded_rows = window_visible_sequence(expanded, offset=0, limit=256).rows
+    assert tuple(row.parent_visible_index for row in expanded_rows) == (None, 0, 1, 1, 0, 4)
+    assert tuple(row.first_child_visible_index for row in expanded_rows) == (1, 2, None, None, 5, None)
+    assert tuple(row.position_in_set for row in expanded_rows) == (1, 1, 1, 2, 2, 1)
+    assert tuple(row.set_size for row in expanded_rows) == (1, 2, 2, 2, 2, 1)
 
-    assert collapsed.parent_visible_indexes == (None, 0, 0, 2)
-    assert collapsed.first_child_visible_indexes == (1, None, 3, None)
-    assert collapsed.has_retained_children == (True, True, True, False)
-    assert collapsed.positions_in_set == (1, 1, 2, 1)
-    assert collapsed.set_sizes == (1, 2, 2, 1)
     collapsed_rows = window_visible_sequence(collapsed, offset=0, limit=4).rows
+    assert tuple(row.parent_visible_index for row in collapsed_rows) == (None, 0, 0, 2)
+    assert tuple(row.first_child_visible_index for row in collapsed_rows) == (1, None, 3, None)
+    assert tuple(row.position_in_set for row in collapsed_rows) == (1, 1, 2, 1)
+    assert tuple(row.set_size for row in collapsed_rows) == (1, 2, 2, 1)
     assert tuple(row.expanded for row in collapsed_rows) == (
         True,
         False,
@@ -636,10 +833,10 @@ def test_br_g_34_active_tree_metadata_is_global_and_filter_aware() -> None:
     )
 
     assert _ids(filtered) == ("root", "alpha", "street")
-    assert filtered.parent_visible_indexes == (None, 0, 1)
-    assert filtered.has_retained_children == (True, True, False)
-    assert filtered.positions_in_set == (1, 1, 1)
-    assert filtered.set_sizes == (1, 1, 1)
+    filtered_rows = window_visible_sequence(filtered, offset=0, limit=3).rows
+    assert tuple(row.parent_visible_index for row in filtered_rows) == (None, 0, 1)
+    assert tuple(row.position_in_set for row in filtered_rows) == (1, 1, 1)
+    assert tuple(row.set_size for row in filtered_rows) == (1, 1, 1)
 
 
 def test_br_g_34_projected_empty_container_is_an_accessibility_end_node() -> None:
@@ -649,7 +846,7 @@ def test_br_g_34_projected_empty_container_is_an_accessibility_end_node() -> Non
     )
 
     assert _ids(sequence) == ("root", "alpha")
-    assert sequence.has_retained_children == (True, False)
+    assert tuple(sequence.retained_direct_child_counts) == (1, 0, 0, 0, 0, 0)
     rows = window_visible_sequence(sequence, offset=0, limit=2).rows
     assert tuple(row.expanded for row in rows) == (True, None)
     assert rows[1].node.is_container is True
@@ -659,22 +856,27 @@ def test_br_g_34_projected_empty_container_is_an_accessibility_end_node() -> Non
 def test_br_g_34_retained_child_metadata_rejects_invalid_shapes() -> None:
     sequence = derive_visible_sequence(_nodes(), _parameters())
 
-    with pytest.raises(ValueError, match="match visible positions"):
-        replace(sequence, has_retained_children=(True,))
-    with pytest.raises(TypeError, match="contain bools"):
+    with pytest.raises((TypeError, ValueError)):
+        replace(sequence, retained_direct_child_counts=(True,))
+    with pytest.raises(ValueError, match="visible children"):
         replace(
             sequence,
-            has_retained_children=(True, True, 0, False, True, False),
+            retained_direct_child_counts=CompactUnsignedIntegers((1, 2, 0, 0, 1, 0)),
         )
-    with pytest.raises(ValueError, match="only containers"):
+
+    collapsed = derive_visible_sequence(_nodes(), _parameters(collapsed={"alpha"}))
+    with pytest.raises(ValueError, match="collapsed container"):
         replace(
-            sequence,
-            has_retained_children=(True, True, True, False, True, False),
+            collapsed,
+            collapsed_node_ids=frozenset({"root"}),
         )
-    with pytest.raises(ValueError, match="requires a retained child"):
+
+    with pytest.raises(ValueError, match="parent/subtree closure"):
         replace(
             sequence,
-            has_retained_children=(False,) * len(sequence.visible_positions),
+            visible_source_positions=CompactUnsignedIntegers((0, 1, 4, 5, 2, 3)),
+            visible_index_by_source_position=CompactUnsignedIntegers((0, 1, 4, 5, 2, 3)),
+            sibling_ordinals=CompactUnsignedIntegers((1, 1, 2, 1, 1, 2)),
         )
 
 
@@ -694,12 +896,12 @@ def test_br_g_34_inputs_indexes_and_results_are_immutable_snapshots() -> None:
     assert dict(parameters.match_counts_by_node_id or {}) == {"street": 2}
     assert _ids(sequence) == before
     assert type(sequence.source_position_by_node_id) is MappingProxyType
-    assert type(sequence.visible_index_by_node_id) is MappingProxyType
-    assert type(sequence.has_retained_children) is tuple
+    assert type(sequence.visible_index_by_source_position).__name__ == "CompactUnsignedIntegers"
+    assert type(sequence.retained_direct_child_counts).__name__ == "CompactUnsignedIntegers"
     with pytest.raises(TypeError):
         sequence.source_position_by_node_id["new"] = 9  # type: ignore[index]
     with pytest.raises(TypeError):
-        sequence.visible_index_by_node_id["new"] = 9  # type: ignore[index]
+        sequence.visible_index_by_source_position[0] = 9  # type: ignore[index]
 
 
 def test_br_g_34_window_is_exact_bounded_and_wraps_only_requested_rows() -> None:
@@ -785,20 +987,35 @@ def test_br_g_34_window_wire_view_is_exact_bounded_and_authority_free() -> None:
         to_visible_window_view(object())  # type: ignore[arg-type]
 
 
-def test_br_g_34_sequence_metadata_is_derived_once(monkeypatch) -> None:
-    original = visible_module._derive_visible_metadata
-    calls = 0
+def test_br_g_34_sequence_retains_only_compact_global_metadata() -> None:
+    sequence = derive_visible_sequence(_nodes(), _parameters())
 
-    def observed(*args, **kwargs):
-        nonlocal calls
-        calls += 1
-        return original(*args, **kwargs)
+    assert tuple(sequence.visible_source_positions) == tuple(range(6))
+    assert tuple(sequence.visible_index_by_source_position) == tuple(range(6))
+    assert tuple(sequence.sibling_ordinals) == (1, 1, 1, 2, 2, 1)
+    assert tuple(sequence.retained_direct_child_counts) == (2, 2, 0, 0, 1, 0)
 
-    monkeypatch.setattr(visible_module, "_derive_visible_metadata", observed)
 
-    derive_visible_sequence(_nodes(), _parameters())
+def test_br_g_34_adversarial_valid_order_preserves_window_accessibility() -> None:
+    nodes = _nodes()
+    sequence = derive_visible_sequence(
+        nodes,
+        _parameters(),
+        ordered_source_positions=(0, 4, 5, 1, 3, 2),
+    )
 
-    assert calls == 1
+    assert _ids(sequence) == ("root", "beta", "literal", "alpha", "composed", "street")
+    rows = window_visible_sequence(sequence, offset=2, limit=3).rows
+    assert tuple(row.parent_visible_index for row in rows) == (1, 0, 3)
+    assert tuple(row.position_in_set for row in rows) == (1, 2, 1)
+    assert tuple(row.set_size for row in rows) == (1, 2, 2)
+    assert rows[-1].first_child_visible_index is None
+
+
+@pytest.mark.parametrize("order", [(0, 1, 2, 3, 4, 4), (0, 2, 1, 3, 4, 5)])
+def test_br_g_34_public_order_rejects_nonpermutation_or_broken_subtree(order) -> None:
+    with pytest.raises(ValueError):
+        derive_visible_sequence(_nodes(), _parameters(), ordered_source_positions=order)
 
 
 def test_br_g_34_anchor_requires_exact_deepest_to_root_chain() -> None:
@@ -897,13 +1114,10 @@ def test_br_g_34_120k_projection_populates_every_retained_family() -> None:
     assert sequence.nodes is nodes
     assert len(sequence.visible_positions) == node_count
     assert len(sequence.source_position_by_node_id) == node_count
-    assert len(sequence.visible_index_by_node_id) == node_count
-    assert len(sequence.parent_visible_indexes) == node_count
-    assert len(sequence.first_child_visible_indexes) == node_count
-    assert len(sequence.has_retained_children) == node_count
-    assert len(sequence.positions_in_set) == node_count
-    assert len(sequence.set_sizes) == node_count
-    assert sum(sequence.has_retained_children) == folder_count + 1
+    assert len(sequence.visible_index_by_source_position) == node_count
+    assert len(sequence.sibling_ordinals) == node_count
+    assert len(sequence.retained_direct_child_counts) == node_count
+    assert sum(count > 0 for count in sequence.retained_direct_child_counts) == folder_count + 1
     assert sequence.collapsed_node_ids == frozenset()
     assert sequence.filtered_item_count is None
     assert len(window.rows) == 256

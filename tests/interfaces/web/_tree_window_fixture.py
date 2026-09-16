@@ -22,6 +22,7 @@ from namisync.workflows.node_tree import (
     NodeTreeMember,
     build_node_tree,
 )
+from namisync.workflows.plan_projection import CompactUnsignedIntegers
 
 
 TREE_WINDOW_FIXTURE_SCHEMA = "namisync-tree-window-fixture-v1"
@@ -196,6 +197,10 @@ def _derive(
         VisibleSequenceParameters(
             collapsed_node_ids=frozenset(collapsed),
             match_counts_by_node_id=counts,
+        ),
+        ordered_source_positions=CompactUnsignedIntegers(
+            tuple(range(len(tree.nodes))),
+            maximum=max(len(tree.nodes) - 1, 0),
         ),
     )
     assert sequence.nodes is tree.nodes

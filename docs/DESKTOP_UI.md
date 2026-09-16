@@ -1269,6 +1269,13 @@ uncertain submission instead retains the exact retry and disables selection and
 Close until admission truth is recovered. Shared reduced-motion and
 forced-color rules apply.
 
+Closing has no minimum observable duration. The installed task-shell correctness
+scenario arms a finite tests-only animation before trusted confirmation so the
+native driver can test background input during closing, then completes that
+animation after recording the witness. This barrier does not alter product code
+or measure latency. Transient closing attributes must not be treated as durable
+readiness; the production zero-motion path may finish after a single frame.
+
 Plan-again availability follows the same app-owned eligibility rule as dispatch,
 including loaded Setup readiness, pending attempts and batch/close blockers.
 The control remains disabled while those prerequisites are unresolved; an

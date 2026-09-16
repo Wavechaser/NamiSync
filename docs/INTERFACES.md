@@ -131,6 +131,10 @@ revision, and acknowledgment in one retained intent. The adapter rejects a
 request id that no longer belongs to that task before calling the application
 lifecycle. The service then checks the monotone selection revision and workflow
 confirmation requirement before commitment or Dispatcher submission. An exact
+workflow-derived decision is reused for commitment only while bound to that same
+immutable plan and deselection snapshot; direct workflow calls still derive their
+own decision. This does not bypass the service's revision or acknowledgement
+checks. An exact
 retry recovers the retained command or application receipt; changing any snapshot
 field under the same command id is an intent conflict. In the desktop flow, changed Setup
 or explicit Plan again creates a new task, while the old plan slot stays

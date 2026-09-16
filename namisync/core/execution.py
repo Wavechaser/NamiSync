@@ -326,6 +326,17 @@ class ExecutionReview:
         return _remaining_operations(self.plan, self.selection, self.status)
 
 
+@dataclass(frozen=True, slots=True)
+class _ExecutionStructure:
+    """Construction-validated immutable facts reused by later checkpoints."""
+
+    plan: Plan
+    selection: frozenset[OpId]
+    user_deselected: frozenset[OpId]
+    operations: Mapping[OpId, PlanOperation]
+    selected_bytes_bound: int
+
+
 @dataclass(slots=True)
 class ExecutionSet:
     """A selected plan plus mutable continuation state for pause/resume."""
@@ -346,9 +357,22 @@ class ExecutionSet:
     user_deselected: frozenset[OpId] = frozenset()
     bytes_done_high_water: int = field(default=0, repr=False)
     _selected_bytes_bound: int = field(init=False, repr=False, compare=False)
+    _structure: _ExecutionStructure = field(init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
-        validated_run_id(str(self.run_id))
+        if type(self.plan) is not Plan or type(self.plan.operations) is not tuple:
+            raise TypeError("execution continuation plan has the wrong shape")
+        if any(type(operation) is not PlanOperation for operation in self.plan.operations):
+            raise TypeError("execution plan must contain exact PlanOperation values")
+        if type(self.plan.fingerprint) is not str:
+            raise TypeError("execution plan fingerprint must be exact text")
+        if type(self.selection) is not frozenset:
+            raise TypeError("execution selection must be an exact frozenset")
+        if type(self.user_deselected) is not frozenset:
+            raise TypeError("execution user deselection must be an exact frozenset")
+        if type(self.run_id) is not str:
+            raise TypeError("execution run id must be exact text")
+        validated_run_id(self.run_id)
         operations = {
             operation.op_id: operation for operation in self.plan.operations
         }
@@ -356,8 +380,6 @@ class ExecutionSet:
         unknown = self.selection - known
         if unknown:
             raise ValueError(f"selection contains unknown operation ids: {sorted(unknown)!r}")
-        if not isinstance(self.user_deselected, frozenset):
-            raise TypeError("user_deselected must be a frozenset")
         unknown_user_deselected = self.user_deselected - known
         if unknown_user_deselected:
             raise ValueError(
@@ -373,6 +395,13 @@ class ExecutionSet:
         self._validate_mutable_overlay(
             operations,
             initialize_selected_bytes_bound=True,
+        )
+        self._structure = _ExecutionStructure(
+            self.plan,
+            self.selection,
+            self.user_deselected,
+            MappingProxyType(operations),
+            self._selected_bytes_bound,
         )
 
     def _validate_mutable_overlay(
@@ -425,18 +454,20 @@ class ExecutionSet:
             OperationKind.UPDATE,
             OperationKind.MOVE_UPDATE,
         }
-        selected_bytes_bound = 0
-        for operation in operations.values():
-            if operation.op_id in self.selection and operation.kind in byte_kinds:
-                selected_bytes_bound = checked_add_signed_64(
-                    selected_bytes_bound,
-                    operation.content_bytes,
-                    "selected execution bytes",
-                )
         if initialize_selected_bytes_bound:
+            selected_bytes_bound = 0
+            for operation in operations.values():
+                if operation.op_id in self.selection and operation.kind in byte_kinds:
+                    selected_bytes_bound = checked_add_signed_64(
+                        selected_bytes_bound,
+                        operation.content_bytes,
+                        "selected execution bytes",
+                    )
             self._selected_bytes_bound = selected_bytes_bound
-        elif self._selected_bytes_bound != selected_bytes_bound:
-            raise ValueError("execution selected-byte bound changed")
+        else:
+            selected_bytes_bound = self._structure.selected_bytes_bound
+            if self._selected_bytes_bound != selected_bytes_bound:
+                raise ValueError("execution selected-byte bound changed")
         require_signed_64(
             self.bytes_done_high_water,
             "execution byte high-water",
@@ -569,8 +600,6 @@ def validate_execution_set(value: object) -> None:
         raise TypeError("execution continuation must be an exact ExecutionSet")
     if type(value.plan) is not Plan or type(value.plan.operations) is not tuple:
         raise TypeError("execution continuation plan has the wrong shape")
-    if any(type(operation) is not PlanOperation for operation in value.plan.operations):
-        raise TypeError("execution plan must contain exact PlanOperation values")
     if type(value.plan.fingerprint) is not str:
         raise TypeError("execution plan fingerprint must be exact text")
     if type(value.selection) is not frozenset:
@@ -579,6 +608,7 @@ def validate_execution_set(value: object) -> None:
         raise TypeError("execution user deselection must be an exact frozenset")
     if type(value.run_id) is not str:
         raise TypeError("execution run id must be exact text")
+    validated_run_id(value.run_id)
     if value.commitment is not None and type(value.commitment) is not Commitment:
         raise TypeError("execution commitment must have the exact public shape")
     if type(value.status) is not dict:
@@ -604,8 +634,6 @@ def validate_execution_set(value: object) -> None:
     if any(type(issue) is not TaskRecordingIssue for issue in value.recording_issues):
         raise TypeError("execution recording issues have the wrong type")
     for population in (
-        value.selection,
-        value.user_deselected,
         value.status,
         value.published_evidence,
         value.recording_reasons,
@@ -615,7 +643,33 @@ def validate_execution_set(value: object) -> None:
             for op_id in population
         ):
             raise TypeError("execution operation identities must be exact ids")
-    ExecutionSet.__post_init__(value)
+    structure = getattr(value, "_structure", None)
+    if type(structure) is not _ExecutionStructure:
+        raise TypeError("execution structural authority has the wrong type")
+    if value.plan is not structure.plan:
+        raise ValueError("execution plan changed after structural validation")
+    if value.selection is not structure.selection:
+        unknown = value.selection - structure.operations.keys()
+        if unknown:
+            raise ValueError(
+                "selection contains unknown operation ids: "
+                f"{sorted(unknown)!r}"
+            )
+        raise ValueError("execution selection changed after structural validation")
+    if value.user_deselected is not structure.user_deselected:
+        unknown = value.user_deselected - structure.operations.keys()
+        if unknown:
+            raise ValueError(
+                "user deselection contains unknown operation ids: "
+                f"{sorted(unknown)!r}"
+            )
+        raise ValueError("execution user deselection changed after structural validation")
+    if type(structure.operations) is not MappingProxyType:
+        raise TypeError("execution operation index has the wrong type")
+    value._validate_mutable_overlay(
+        structure.operations,
+        initialize_selected_bytes_bound=False,
+    )
 
 
 @dataclass(frozen=True, slots=True)

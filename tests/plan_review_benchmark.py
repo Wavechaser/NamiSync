@@ -69,8 +69,10 @@ from namisync.interfaces.web.visible_sequence import (
 )
 from namisync.workflows.models import PlanArtifact, PlanRequest
 from namisync.workflows.plan_projection import (
+    CompactUnsignedIntegers,
     PlanProjection,
     PlanProjectionNode,
+    PlanProjectionOrder,
     PlanSortColumn,
     SortDirection,
     build_plan_projection,
@@ -80,7 +82,7 @@ from namisync.workflows.runtime import execution_selection_digest_hex
 from namisync.workflows.selection import derive_execution_selection
 
 
-FIXTURE_SCHEMA: Final = "namisync-m1-7-plan-fixture-manifest-v1"
+FIXTURE_SCHEMA: Final = "namisync-m1-7-plan-fixture-manifest-v2"
 FIXTURE_SEED: Final = 0x4E414D49
 FIXTURE_OPERATIONS: Final = 100_000
 FIXTURE_STRUCTURAL_ROWS: Final = 20_000
@@ -93,13 +95,14 @@ CHILD_RECEIPT_SCHEMA: Final = "namisync-m1-7-plan-review-child-v3"
 READINESS_SCHEMA: Final = "namisync-m1-7-plan-review-readiness-v1"
 READINESS_CHILD_SCHEMA: Final = "namisync-m1-7-plan-review-readiness-child-v1"
 COLLECTION_SCHEMA: Final = "namisync-m1-7-plan-review-collection-index-v1"
-AUTHORITY_SCHEMA: Final = "namisync-m1-7-plan-review-scale-authority-v3"
+AUTHORITY_SCHEMA: Final = "namisync-m1-7-plan-review-scale-authority-v4"
+COMPACT_CONTRACT_SCHEMA: Final = "namisync-m1-7-plan-review-scale-contract-v5"
 NATIVE_PROFILE_SCHEMA: Final = "namisync-m1-7-native-profile-v1"
 CONTRACT_PATH: Final = (
     Path(__file__).resolve().parent
     / "interfaces"
     / "web"
-    / "m1_7_plan_contract.json"
+    / "m1_7_plan_compact_contract.json"
 )
 
 _META = MetadataSnapshot(0, None)
@@ -341,7 +344,9 @@ def fixture_manifest(
         "warning_code_counts": dict(sorted(code_counts.items())),
         "warning_cycle": [item.value for item in ScanWarningCode],
         "raw_key_witnesses": _raw_key_witnesses(projection),
-        "retained_representation": _retained_representation(projection),
+        "retained_representation": _compact_retained_representation(
+            artifact, projection
+        ),
     }
 
 
@@ -375,13 +380,17 @@ def component_window(
     column: PlanSortColumn = PlanSortColumn.PATH,
     direction: SortDirection = SortDirection.ASCENDING,
     parameters: VisibleSequenceParameters = VisibleSequenceParameters(),
-) -> tuple[PlanProjection, object]:
+) -> tuple[PlanProjectionOrder, object]:
     """Exercise projection, sibling order, visible sequence and 256-row window."""
 
     projection = build_plan_projection(artifact.request.request_id, artifact)
-    sorted_projection = sort_plan_projection(projection, column, direction)
-    sequence = derive_visible_sequence(sorted_projection.nodes, parameters)
-    return sorted_projection, window_visible_sequence(
+    order = sort_plan_projection(projection, column, direction)
+    sequence = derive_visible_sequence(
+        projection.nodes,
+        parameters,
+        ordered_source_positions=order.ordered_source_positions,
+    )
+    return order, window_visible_sequence(
         sequence, offset=0, limit=FIXTURE_WINDOW_LIMIT
     )
 
@@ -699,73 +708,6 @@ def _independent_witness_order(
 
 def _witness_identity(node: PlanProjectionNode) -> str:
     return node.operation_id or node.node_id
-
-
-def _retained_representation(projection: PlanProjection) -> dict[str, object]:
-    node_fields = [field.name for field in fields(PlanProjectionNode)]
-    populated = {
-        name: sum(getattr(node, name) is not None for node in projection.nodes)
-        for name in node_fields
-    }
-    sequence: VisibleSequence[PlanProjectionNode] = derive_visible_sequence(
-        projection.nodes, VisibleSequenceParameters()
-    )
-    return {
-        "plan_projection_fields": [field.name for field in fields(PlanProjection)],
-        "plan_projection_field_population": {
-            field.name: _retained_field_population(getattr(projection, field.name))
-            for field in fields(PlanProjection)
-        },
-        "plan_projection_node_non_null_counts": populated,
-        "mapping_families": {
-            "position_by_node_id": {
-                "count": len(projection.position_by_node_id),
-                "key": "node_id:str",
-                "value": "position:int",
-            },
-            "operation_node_id_by_id": {
-                "count": len(projection.operation_node_id_by_id),
-                "key": "operation_id:str",
-                "value": "node_id:str",
-            },
-            "source_position_by_node_id": {
-                "count": len(sequence.source_position_by_node_id),
-                "key": "node_id:str",
-                "value": "position:int",
-            },
-            "visible_index_by_node_id": {
-                "count": len(sequence.visible_index_by_node_id),
-                "key": "node_id:str",
-                "value": "visible_index:int",
-            },
-        },
-        "selected_operation_ids": len(projection.selected_operation_ids),
-        "visible_sequence_fields": [field.name for field in fields(VisibleSequence)],
-        "visible_sequence_field_population": {
-            field.name: _retained_field_population(getattr(sequence, field.name))
-            for field in fields(VisibleSequence)
-        },
-    }
-
-
-def _retained_field_population(value: object) -> dict[str, object]:
-    if isinstance(value, Mapping):
-        return {
-            "classification": "mapping",
-            "count": len(value),
-            "type": type(value).__name__,
-        }
-    if isinstance(value, (tuple, frozenset)):
-        return {
-            "classification": "container",
-            "count": len(value),
-            "type": type(value).__name__,
-        }
-    return {
-        "classification": "scalar",
-        "population": "intentionally-absent" if value is None else "populated",
-        "type": type(value).__name__,
-    }
 
 
 def run_component_child(
@@ -1254,11 +1196,25 @@ def _measure_projection_memory() -> tuple[dict[str, object], int]:
     if not ready.wait(5.0):
         raise RuntimeError("private-byte sampler did not start")
     try:
-        base_projection = build_plan_projection(
-            base_artifact.request.request_id, base_artifact
+        base_state = make_plan_review_state(base_artifact)
+        _apply_view(
+            base_state,
+            column=PlanSortColumn.FILENAME,
+            direction=SortDirection.DESCENDING,
         )
-        staged_projection = build_plan_projection(
-            heavy_artifact.request.request_id, heavy_artifact
+        base_window = _window(base_state)
+        staged_state = make_plan_review_state(heavy_artifact)
+        _apply_view(
+            staged_state,
+            column=PlanSortColumn.FILENAME,
+            direction=SortDirection.DESCENDING,
+        )
+        staged_window = _window(staged_state)
+        correctness = _memory_correctness(
+            base_state,
+            base_window,
+            staged_state,
+            staged_window,
         )
         samples.append(_current_private_bytes())
     finally:
@@ -1266,12 +1222,112 @@ def _measure_projection_memory() -> tuple[dict[str, object], int]:
         sampler.join(5.0)
     if sampler.is_alive():
         raise RuntimeError("private-byte sampler did not stop")
-    correctness = {
-        "base_projection_rows": len(base_projection.nodes),
-        "staged_projection_rows": len(staged_projection.nodes),
-        "simultaneously_retained": base_projection is not staged_projection,
-    }
     return correctness, max(samples) - baseline
+
+
+def _memory_correctness(
+    base_state: PlanReviewState,
+    base_window: Mapping[str, object],
+    staged_state: PlanReviewState,
+    staged_window: Mapping[str, object],
+) -> dict[str, object]:
+    def facts(state: PlanReviewState, window: Mapping[str, object]) -> dict[str, object]:
+        canonical = state.canonical_order
+        current = state.current_order
+        sequence = state.current_sequence
+        projection = canonical.projection
+        return {
+            "projection_rows": len(projection.nodes),
+            "window_rows": len(window["rows"]),
+            "window_total": window["total"],
+            "window_revision": window["view_revision"],
+            "state_revision": state.view_revision,
+            "state_projection_identity": (
+                state.projection is projection
+                and current.projection is projection
+                and sequence.nodes is projection.nodes
+            ),
+            "distinct_canonical_current_orders": canonical is not current,
+            "canonical_order": _order_memory_facts(canonical),
+            "current_order": _order_memory_facts(current),
+            "visible_buffers": {
+                "visible_source_positions": _buffer_memory_facts(sequence.visible_source_positions),
+                "visible_index_by_source_position": _buffer_memory_facts(sequence.visible_index_by_source_position),
+                "sibling_ordinals": _buffer_memory_facts(sequence.sibling_ordinals),
+                "retained_direct_child_counts": _buffer_memory_facts(sequence.retained_direct_child_counts),
+            },
+        }
+
+    base = facts(base_state, base_window)
+    staged = facts(staged_state, staged_window)
+    return {
+        "base": base,
+        "staged": staged,
+        "simultaneously_retained": base_state is not staged_state,
+        "distinct_projections": (
+            base_state.canonical_order.projection
+            is not staged_state.canonical_order.projection
+        ),
+        "no_cross_state_buffer_sharing": all(
+            base is not staged
+            for base, staged in (
+                *(
+                    (
+                        getattr(base_state.current_sequence, name),
+                        getattr(staged_state.current_sequence, name),
+                    )
+                    for name in (
+                        "visible_source_positions",
+                        "visible_index_by_source_position",
+                        "sibling_ordinals",
+                        "retained_direct_child_counts",
+                    )
+                ),
+                (
+                    base_state.canonical_order.ordered_source_positions,
+                    staged_state.canonical_order.ordered_source_positions,
+                ),
+                (
+                    base_state.canonical_order.order_rank_by_source_position,
+                    staged_state.canonical_order.order_rank_by_source_position,
+                ),
+                (
+                    base_state.current_order.ordered_source_positions,
+                    staged_state.current_order.ordered_source_positions,
+                ),
+                (
+                    base_state.current_order.order_rank_by_source_position,
+                    staged_state.current_order.order_rank_by_source_position,
+                ),
+            )
+        ),
+        "final_witness_accessed": all(
+            type(value) is int
+            for value in (
+                base_state.current_order.ordered_source_positions[-1],
+                staged_state.current_sequence.visible_source_positions[-1],
+            )
+        ),
+    }
+
+
+def _buffer_memory_facts(value: CompactUnsignedIntegers) -> dict[str, int]:
+    return {
+        "byte_length": value.byte_length,
+        "byte_width": value.byte_width,
+        "count": len(value),
+    }
+
+
+def _order_memory_facts(order: PlanProjectionOrder) -> dict[str, object]:
+    return {
+        "ordered": _buffer_memory_facts(order.ordered_source_positions),
+        "inverse": _buffer_memory_facts(order.order_rank_by_source_position),
+        "inverse_valid": all(
+            order.order_rank_by_source_position[source_position] == rank
+            for rank, source_position in enumerate(order.ordered_source_positions)
+        ),
+    }
 
 
 def _current_private_bytes() -> int:
@@ -1397,8 +1453,12 @@ def build_authority(
 
     if not no_unrelated_sustained_workload:
         raise ValueError("reference-profile workload state was not explicitly observed")
-    _require_installed_runtime(installed_root)
     contract = json.loads(contract_path.read_bytes())
+    if contract.get("schema") != COMPACT_CONTRACT_SCHEMA:
+        raise RuntimeError(
+            "the current runner cannot freeze legacy representation authority"
+        )
+    _require_installed_runtime(installed_root)
     source_paths = contract["authority"]["source_paths"]
     installed_paths = contract["authority"]["installed_paths"]
     source_files: dict[str, object] = {}
@@ -3185,6 +3245,78 @@ def _collection_error(error: BaseException) -> dict[str, object]:
     }
 
 
+def _compact_buffer_manifest(value: CompactUnsignedIntegers) -> dict[str, object]:
+    encoded = canonical_json_bytes(tuple(value))
+    return {
+        "byte_length": value.byte_length,
+        "byte_width": value.byte_width,
+        "count": len(value),
+        "maximum": max(value, default=None),
+        "minimum": min(value, default=None),
+        "unique_count": len(set(value)),
+        "values_sha256": hashlib.sha256(encoded).hexdigest(),
+    }
+
+
+def _order_manifest(order: PlanProjectionOrder) -> dict[str, object]:
+    positions = order.ordered_source_positions
+    inverse = order.order_rank_by_source_position
+    inverse_valid = all(inverse[source_position] == rank for rank, source_position in enumerate(positions))
+    return {
+        "inverse_valid": inverse_valid,
+        "ordered_source_positions": _compact_buffer_manifest(positions),
+        "order_rank_by_source_position": _compact_buffer_manifest(inverse),
+        "projection_rows": len(order.projection.nodes),
+    }
+
+
+def _compact_retained_representation(
+    artifact: PlanArtifact,
+    projection: PlanProjection,
+) -> dict[str, object]:
+    """Describe the actual orders and visible buffers retained by PlanReviewState."""
+
+    state = _state_from_projection(artifact, projection)
+    _apply_view(
+        state,
+        column=PlanSortColumn.FILENAME,
+        direction=SortDirection.DESCENDING,
+    )
+    sequence = state.current_sequence
+    canonical = state.canonical_order
+    current = state.current_order
+    return {
+        "plan_projection_fields": [field.name for field in fields(PlanProjection)],
+        "plan_projection_node_fields": [field.name for field in fields(PlanProjectionNode)],
+        "plan_review_state": {
+            "canonical_order": _order_manifest(canonical),
+            "current_order": _order_manifest(current),
+            "distinct_order_objects": canonical is not current,
+            "projection_identity_shared": (
+                canonical.projection is projection
+                and current.projection is projection
+                and sequence.nodes is projection.nodes
+            ),
+        },
+        "visible_sequence": {
+            "visible_source_positions": _compact_buffer_manifest(
+                sequence.visible_source_positions
+            ),
+            "visible_index_by_source_position": _compact_buffer_manifest(
+                sequence.visible_index_by_source_position
+            ),
+            "sibling_ordinals": _compact_buffer_manifest(sequence.sibling_ordinals),
+            "retained_direct_child_counts": _compact_buffer_manifest(
+                sequence.retained_direct_child_counts
+            ),
+            "source_position_by_node_id_count": len(
+                sequence.source_position_by_node_id
+            ),
+            "filtered_item_count": sequence.filtered_item_count,
+        },
+    }
+
+
 def run_readiness(
     *,
     contract_path: Path,
@@ -3528,7 +3660,11 @@ def run_gate(
             for name, manifest in authority["fixture_manifests"].items()
         },
         "native_profile_sha256": authority["native_profile"]["sha256"],
-        "schema": "namisync-m1-7-plan-review-scale-run-v4",
+        "schema": (
+            "namisync-m1-7-plan-review-scale-run-v5"
+            if contract.get("schema") == COMPACT_CONTRACT_SCHEMA
+            else "namisync-m1-7-plan-review-scale-run-v4"
+        ),
     }
     _write_canonical_json(output, raw_artifact)
 

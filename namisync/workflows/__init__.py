@@ -38,8 +38,10 @@ from namisync.workflows.models import (
     PlanReview,
 )
 from namisync.workflows.plan_projection import (
+    CompactUnsignedIntegers,
     PlanProjection,
     PlanProjectionNode,
+    PlanProjectionOrder,
     PlanSortColumn,
     SortDirection,
     apply_plan_projection_selection,
@@ -93,6 +95,7 @@ def integrity_request(
 
 __all__ = [
     "BASELINE_KIND",
+    "CompactUnsignedIntegers",
     "DatabasePairContract",
     "EXECUTION_KIND",
     "ExecutionDetails",
@@ -118,6 +121,7 @@ __all__ = [
     "PlanReview",
     "PlanProjection",
     "PlanProjectionNode",
+    "PlanProjectionOrder",
     "PlanSortColumn",
     "PreservationPolicy",
     "REBASELINE_KIND",

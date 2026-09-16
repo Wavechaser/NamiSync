@@ -9,6 +9,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from _executor_fixtures import _plan as executor_plan
 from namisync.core.evidence import (
     Attestation,
     ContentEvidence,
@@ -26,7 +27,7 @@ from namisync.core.execution import (
 from namisync.core.integrity import IntegrityMode, IntegrityResult
 from namisync.core.models import EntryKind, FileStat, MetadataSnapshot
 from namisync.core.pathing import normalize_relative_path
-from namisync.core.planning import OperationKind
+from namisync.core.planning import OperationKind, PlanOperation
 from namisync.core.session import Disposition, SessionState
 from tools import executor_rig
 from tools import __main__ as tools_cli
@@ -751,17 +752,17 @@ def _executor_run(kind: OperationKind = OperationKind.NOOP) -> SimpleNamespace:
     run_id = validated_run_id("b" * 32)
     target_path = "file.bin"
     outcome = Outcome.SKIPPED if kind is OperationKind.NOOP else Outcome.SUCCEEDED
-    operation = SimpleNamespace(
+    operation = PlanOperation(
         op_id=op_id,
         kind=kind,
+        source_rel_path=target_path,
         target_rel_path=target_path,
+        source_expected=None,
+        target_expected=None,
+        intended=None,
         content_bytes=0,
     )
-    plan = SimpleNamespace(
-        operations=(operation,),
-        fingerprint="plan-fingerprint",
-        policy_fingerprint="policy-fingerprint",
-    )
+    plan = executor_plan(Path(r"C:\source"), Path(r"D:\target"), (operation,))
     execution_set = ExecutionSet(plan, frozenset({op_id}), run_id)
     execution_set.status[op_id] = outcome
     if kind is not OperationKind.NOOP:

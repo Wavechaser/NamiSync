@@ -277,7 +277,238 @@ details. No new diagnostic or repair loop is authorized by this record.
 
 ### Integration and stop
 
-**Measurement authorization (2026-09-15, current):** run the fixed 175-child
+**P5 GUI repair (2026-09-16; base `1c14ccc`, full-measurement stop):** investigate
+the retained `page_plan_review_plan_ack` runtime error and fix its confirmed
+cause. Initial finite corpus: task-shell headed scenario/confirmation driver,
+existing driver and frontend tests, retained native failure/driver records, and
+production confirmation/PlanReview consumers reached by that evidence. Record
+the exact fix population before editing. Preserve reviewed execution snapshot,
+modal input blocking, backend admission and all quantitative criteria. No
+diagnostic campaign, old representation generation, unrelated optimization or
+amendment/merge/pruning. One atomic fix includes owner tests and matching docs;
+independent review and relevant ordinary/installed checks precede acceptance.
+After acceptance, run untimed component readiness and one changed-search gate
+(five children / 30 samples, p95 <= 1.5 s and max <= 3 s). Only on pass freeze
+the compact authority, run full untimed readiness and the fixed full measurements
+once; stop afterward regardless of result. Stop at the first non-passing
+verification/readiness/measurement condition, without a repair/rerun loop.
+
+Confirmed repair population: `_task_shell_headed_child.py` and its existing
+`test_task_shell_headed.py` owner guard; no product changes. The retained record
+shows committed selection, running execution and a closed dialog while the page
+stage remained `confirm-open`. Page/native polling can miss `data-closing`, which
+has no minimum duration under the product contract. Arm a finite tests-only Web
+Animations barrier before each trusted Confirm (refused and live cases); release
+after the required closing-pointer or Enter acknowledgment witness. Production
+still owns modal closure and immediate admission. Preserve the native blocked
+input assertions, zero-motion product behavior and existing 120-second scenario
+watchdog. Verify the owner/static/frontend checks, interfaces department, and
+the installed Plan gate once; retain the already passed generic-tree gate and
+ordinary product baseline when their bytes/seams remain unchanged.
+
+Result: the tests-only paused animation barriers and durable live-confirmation
+acknowledgment pass independent review, 50 focused tests, 1,667 interfaces tests
+(one pending-artifact skip), and the installed Plan gate. All 38 product files
+match source/wheel/installation; the prior ordinary/import/generic-tree gates
+remain applicable to unchanged product bytes. The 21-case untimed component
+gate passes. The single 30-sample changed-search comparison passes p95
+**151,705,000 ns** / maximum **153,806,600 ns**. Compact authority was frozen;
+all 35 readiness cases across 15 processes then passed.
+
+The one full run collected **175 children / 775 samples / 35 metrics**. Terminal
+validation rejects fixed budgets: **27 metrics pass, 8 fail**. Six changed-sort
+p95 values are 1.629–1.861 s against 1.5 s (all maxima meet 3 s); retained memory
+is 443,437,056 bytes against 335,544,320; execution-start receipt p95/max are
+283/284.1 ms against 100/250 ms. The extended compact memory workload is not an
+apples-to-apples baseline comparison with the old projection-only measurement.
+Stop after this run as requested: no further diagnosis, optimization or rerun.
+Evidence: `build/m1-7/evidence/plan-ack-fix-20260916/`, including the copied prior
+driver record, targeted comparison, readiness, complete collection and summary;
+new compact authority/raw artifacts are under `tests/interfaces/web/`. Preserve
+separately on the recovery branch; M1-7 remains unmerged.
+
+**P5 compact order/metadata (2026-09-16; base `44a6856`, GUI prerequisite stop):**
+the user approved the reviewed order/metadata redesign and corresponding
+verification migration. Deliver it as one coherent correction on the existing
+recovery branch. The production builder owns the four source/facade files and
+three owner tests named below; one workflow-owned compact-buffer value/helper
+and its facade export may support both consumers. The verification builder owns
+the benchmark, scale validator/tests, generic-tree fixture and versioned evidence
+schemas/paths; agree the API before dependent edits. Root owns shared docs and
+runs; a fresh reviewer checks the complete change and evidence before commit.
+Record exact added helper/version paths before editing. Retain prior protected
+bytes and validate versioned successors, including the actual cached orders,
+visible buffers and staging overlap. No compatibility reconstruction may hide
+the new representation from measurement. Public window/selection semantics,
+fixture populations, all 35 budgets, sample counts and aggregation remain fixed.
+
+Gate: focused owner/reference/adversarial checks, direct consumer and ordinary
+suite, import boundaries, fresh installed Plan/generic-tree gates, independent
+source/verification review, and untimed readiness before sampling. Then run one
+changed-search comparison (five fresh children / 30 samples, p95 <= 1.5 s and
+maximum <= 3 s) on matching installed bytes. If it passes, freeze the final
+versioned authority, complete all 35 readiness cases, and run the full fixed
+35-metric / 175-child measurements once; stop afterward regardless of result.
+If the targeted latency fails, investigate remaining costs read-only over the
+changed-view call chain and retained samples, then stop for discussion without
+another fix/run. Readiness or harness prerequisite failures return to discussion;
+repository safety/recurrence stops remain. No integration, pruning, amendments
+of previous commits, criterion relaxation or unrelated framework expansion.
+
+P5 agreed production API: `CompactUnsignedIntegers` and `PlanProjectionOrder`
+live in the existing workflow projection module and are facade-exported; no
+extra production file. The compact value owns immutable bytes with explicit
+width/count validation. Order values reference the current source projection
+and compact forward/inverse indexes. Cached order references must rebind on
+selection-only replacement so no earlier projection is retained accidentally.
+P5 verification successor paths are
+`tests/interfaces/web/m1_7_plan_compact_{contract,authority,measurements}.json`
+(contract v5, authority v4, raw v5). Runner/validator select the explicit family;
+legacy protected JSON remains unchanged. The generic-tree fixture and its
+conftest/frontend/headed direct consumers are in the migration population only
+where their representation assumptions change; preserve wire fixtures/schema
+where possible. The representation manifest covers actual cached orders and
+compact buffers, including sharing and construction overlap, rather than an
+old tuple representation manufactured for verification.
+Successor memory workload explicitly extends the old two-projection sample:
+retain a 120,000-row base review with canonical and filename-descending orders
+and a current 256-row window, then construct the equivalent 240,000-row heavy
+review while the base remains live. Sample through projection, order and visible
+construction; assert populations, sharing, compact buffer sizes and both windows.
+Keep the existing metric ID, five cold children, private-byte baseline/sampler,
+maximum statistic and 320 MiB limit. Only the successor declares this added
+representation coverage; earlier artifacts retain their original meaning.
+
+P5 finite population: `workflows/{plan_projection,__init__}.py`,
+`interfaces/web/{plan_review,visible_sequence}.py`, their three owner test files,
+benchmark/scale validator and tests, generic-tree fixture, and matching
+ARCHITECTURE/PRESENTATION/delivery docs. The regression study also covered
+service/drain and generic-tree headed/frontend consumers. The design review is
+preserved in `44a6856`; this implementation preserves source topology, raw sort
+keys/ties, selection semantics, public rejection, atomic publication, collapse,
+anchors and accessibility across 256-row boundaries. Independent review confirmed
+the completed code/framework correction; legacy compatibility reads historical
+evidence only, without an old generator or a second product/runtime model.
+
+P5 result: 100 owner tests, 54 scale tests (one pending-artifact skip), 123 generic
+fixture/frontend tests and 12 import contracts pass. The ordinary suite passes
+5,140 tests with 5 skips / 30 headed deselections. Fresh installed GUI checks
+return **1 failed, 1 passed, 7 deselected**: Plan fails at
+`page_plan_review_plan_ack` with `RuntimeError`; generic tree passes. The retained
+failure/final records establish the stage and host return, not the cause. This
+reaches the explicit prerequisite stop. No readiness, comparison, authority
+freeze, full measurements, failure fix or rerun followed. Preserve the separate
+P5 recovery change and `build/m1-7/evidence/compact-view-20260916/`; latency remains
+unknown for this candidate. Discuss the failed GUI prerequisite before resuming.
+
+**P4 changed-view derivation (2026-09-15, targeted-budget stop; base `b3f092d`):** the user
+authorized four scan/allocation optimizations and structural investigation as one
+atomic correction on the existing recovery branch. Population:
+`interfaces/web/{visible_sequence,plan_review}.py`, their two owner test files,
+and matching PRESENTATION, M1_PLAN, HANDOFF and CHANGELOG documentation. Builder
+and fresh reviewer roles are separate; root owns shared docs. Matching/retention
+are fused, empty/ASCII search has safe shortcuts, and Plan filters use a positional
+mask. Preserve exact Unicode folds, public validation, weighted counts, ancestor/
+collapse/accessibility semantics, ordering, selection, atomic publication and the
+256-row bound. No cache, schema, domain, admission, renderer or framework changes.
+
+Regression corpus: both owners and their tests, the workflow projection/sort
+producer, service/drain consumers, benchmark and scale harness, and generic-tree
+fixture/headed consumers; all remain unchanged. Retired cache/byte-wall recipes
+remain retired. Gate: owner/reference/Unicode/access controls, interfaces and
+projection tests, installed Plan/tree gates, independent review, 21-case untimed
+readiness, then one unchanged-budget changed-search comparison (five fresh
+children, six samples each). Stop after comparison regardless of result or earlier
+on readiness/harness failure; safety/recurrence stops apply. No full run, other
+metrics, budget relaxation, integration, pruning or amendment of earlier commits.
+
+P4 result: four corrections implemented and independently reviewed; final owner
+tests 85 passed, interfaces department 1,652 passed / one existing artifact skip,
+projection producer 7 passed, installed Plan/generic-tree GUI gates 2 passed,
+and all 21 untimed component readiness cases passed. All 38 measured product
+files match source/wheel/installation. The one comparison retained five fresh
+processes and 30 correct samples: p95 **2,295,682,100 ns** exceeds 1,500,000,000;
+maximum **2,318,180,200 ns** meets 3,000,000,000. Previous p95 was 2,721,463,000 ns.
+All measured source hashes remain unchanged. Evidence is preserved separately at
+`build/m1-7/evidence/sparse-view-20260915/`; `views/comparison.json` explicitly
+marks the group incomplete/failed, not terminal acceptance. No further metric
+or implementation followed. Preserve P4 as a separate recovery commit and
+return to discussion; earlier commits and `milestone1` remain untouched.
+
+P4 structural investigation: `PlanReviewState.update` always re-enters
+`sort_plan_projection` through `_derive_view`, even when only search, filters or
+collapse changed. Reusing the already current `_ordered` projection is the next
+bounded candidate; it must preserve selection overlays and rebuild on actual sort
+or projection replacement. This pass does not implement it. A persistent folded
+display index would add retained strings while memory acceptance is still open;
+defer it. Incremental visible metadata would require explicit invalidation for
+sibling counts, anchors and hidden retained descendants, so it is a wider design
+than these scan reductions. These are source-backed proposals, not measured
+attribution of the remaining latency.
+
+**Correction authorization (2026-09-15, stopped at targeted budget):** implement the reviewed I1–I3
+corrections and investigate/optimize rapid-scroll refresh churn, including windows
+larger than 256 rows. Base `90c26cc`; preserve prior history and failed evidence.
+
+| Row / atomic outcome | Production/test population and regression seams | Gate / status |
+| --- | --- | --- |
+| P1 projection/view allocation | `workflows/plan_projection.py`, `interfaces/web/{plan_review,visible_sequence}.py`; projection, visible-sequence and plan-review owner tests. Combine I1/I2 because materialization is shared. Preserve exact identities, peer links, raw sort/tie order, public rejection, selection and atomic replacement. | Implemented; 77 focused tests, 21 component readiness cases and review pass. First targeted metric fails p95; remaining view and memory comparisons not run. |
+| P2 execution admission work | `interfaces/service.py`, `workflows/{runtime,selection,models}.py`, `core/{execution,planning}.py` and facades/direct consumer tests. Preserve plan/revision binding, destructive acknowledgement, external validation, root freshness, rollback and admission ordering. | Implemented; focused/consumer tests and independent safety review pass. Receipt comparison not run after P1 stop. |
+| P3 scroll refresh | Packaged Plan/generic tree renderers, app window-fetch integration and their JS/Python/headed probes. Trace viewport coverage, debounce, in-flight supersession, render identity and disposal for small and multi-window populations before editing. | Complete: 48 frontend tests, deferred app callback races, 2 installed GUI gates and independent review pass; no generic-tree production change required. |
+
+Root owns shared docs; builders record any newly identified direct consumers
+before editing. P1's unchanged direct consumers are `workflows/__init__.py`,
+`interfaces/service.py`, `interfaces/web/drain.py`, `tests/plan_review_benchmark.py`,
+`tests/interfaces/web/{test_plan_review_scale,_tree_window_fixture}.py`, and
+serialized headed/JS windows; include them in regression review without changing
+their authority. P2 adds review of `workflows/sync.py`, workflow facade, direct
+selection/resume/workflow/checkpoint/post-execution/preflight/settings/CLI tests
+and their fixture helpers; retain forged-input and mutable-overlay rejection
+while reusing only owner-proven immutable facts. P3 closes over `assets/app.js`,
+`assets/plan_review.js`, `tests/assets/plan_review_probe.mjs` and
+`tests/assets/task_shell_probe.mjs`, with `tests/interfaces/web/test_frontend_static.py`;
+generic `tree.js`/its probe already
+implement coverage/generation handling and remain read-only regression consumers.
+Existing retired byte-wall/cache
+recipes remain retired. These
+are performance corrections, not authority/schema, selection-policy or inventory
+feature changes. No budget relaxation, previous-artifact replacement, broad
+diagnostic expansion, full 175-child run, merge or branch cleanup in this pass.
+Use focused owner checks during implementation and the ordinary suite plus
+appropriate headed consumer gate after integration. One bounded diagnostic per
+failed group may attribute work before targeted checks; a failed targeted budget
+check returns to discussion, without another optimization/measurement loop.
+Apply repository safety/recurrence stops; preserve any incomplete outcome here.
+
+**Correction result:** P3 is independently committed as `82d27bc`. P1/P2 remain
+quantitatively incomplete and are preserved separately. In the one attempted
+metric, five fresh children / 30 samples give changed-search p95 2,721,463,000 ns
+(limit 1,500,000,000) and maximum 2,845,864,400 ns (limit 3,000,000,000).
+The unchanged instrument's correctness checks pass. This diagnostic comparison
+does not replace the old acceptance artifact. Evidence is under
+`build/m1-7/evidence/corrections-20260915/`; no further metric, optimization,
+freeze, full run or integration followed the failed p95 check. Stop for discussion.
+
+**Investigation authorization (2026-09-15, completed; discussion stop):** inspect the three failed
+measurement groups and discuss findings before any fixes or measurement reruns.
+Use the retained run at `eb53f5b`; source and artifact inspection only. No product,
+test, instrument, authority or budget edits; no native run, benchmark or profiling.
+
+| Study | Finite corpus and outcome | Closure |
+| --- | --- | --- |
+| I1 | Ten changed-window timings: retained samples, benchmark transition/setup boundaries, PlanReviewState, visible sequence and projection direct calls. Identify shared work and compare passing cases. | Source-backed mechanism, evidence limits, proposed correction and later verification. |
+| I2 | Projection/staging memory: retained samples, accounting roots/baseline, projection and view representation, PRESENTATION/DEFENSE ownership. Distinguish retained population from accounting effects. | Same, with population/overlap accounting. |
+| I3 | Typed Execute receipt: retained samples, observer endpoint, production bridge/registry/service commitment/admission and fixture substitution. Compare passing click/control and component commitment cases. | Same, without inferring where elapsed time was spent from the total alone. |
+
+I1–I3 source/artifact studies are complete; [HANDOFF](HANDOFF.md) records findings,
+uncertainty and the consolidated correction/verification proposal. Repeated full
+view rebuilding, overlapping projection construction, and duplicate execution
+selection/validation are confirmed; exact timing/byte attribution is not. Active
+fixture workers also accumulate during receipt samples. No implementation or
+rerun followed. Stop for discussion; earlier commits and recovery branch remain
+preserved, with no integration or cleanup authorized.
+
+**Measurement authorization (2026-09-15, completed):** run the fixed 175-child
 measurements once from `325b0a6`, after verifying unchanged authority and the
 completed 35-case readiness. Use the retained
 `framework-20260915-155500/` inputs and fresh measurement children. Preserve

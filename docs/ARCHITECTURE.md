@@ -471,6 +471,13 @@ that depend on absence or stable identity.
 | `ObservedWorld` | Fresh, scoped filesystem facts whose mappings and frozen leaves are deeply read-only for pure preflight judgment. |
 | `Verdict` | Typed per-operation refusals plus the observation judged. |
 
+Execution construction validates immutable plan/selection structure once and
+retains a private read-only operation index and selected-byte bound. Later
+checkpoint validation binds those same immutable references and revalidates the
+mutable continuation overlay; replacing structural public fields requires a new
+execution set. This reuse is not cached filesystem authority: fresh root and
+preflight checks remain at their existing admission/outcome boundaries.
+
 Observed free space is not stored in a plan. Capacity need is a pure property of
 operations and capabilities; available capacity is observed at review and
 again immediately before execution.
@@ -753,6 +760,15 @@ Primary shapes are:
 Undo, repair, replay, and ingest must enter as ordinary planned workflows so
 managed user-data mutation continues through review, preflight, and execution.
 
+Plan presentation facts and sibling ordering are owned by
+`workflows/plan_projection.py` and exported through the workflow facade.
+`PlanProjection` keeps source-preorder topology independent of display order;
+`PlanProjectionOrder` binds a compact permutation and inverse to that projection.
+Sorting cannot rewrite node identities, source parent/subtree coordinates,
+selection meaning or execution order. A source preorder is not proof of lexical
+path order. Compact index values own immutable storage; their exact shape and
+validation live with the source symbols rather than a copied schema here.
+
 See `WORKFLOWS.md`.
 
 ### 4.10 Interfaces
@@ -850,6 +866,14 @@ server projections as authoritative.
 Workflow code owns hierarchy and membership; the web adapter owns generic
 flattening, filtering, windowing, and accessible presentation. Cosmetic state
 is stored separately from semantic settings and never persists authority.
+`interfaces/web/plan_review.py` retains only canonical and current display orders
+for the current projection. View-only changes reuse ordering; selection-only
+replacement may rebind it through the workflow's topology/key preservation
+guarantee, while full projection replacement invalidates it. Publication remains
+atomic. `interfaces/web/visible_sequence.py` owns compact visibility indexes and
+derives bounded-window accessibility values from them; these indexes cannot
+reinterpret domain membership or selection. See `PRESENTATION.md` for the
+window contract, retention coverage and quantitative verification procedure.
 The active typed `ui-state.json` owner provides versioned full-section reads
 and guarded replacements inside the interface layer; it does not pass through
 the service facade, workflows, database settings, plan hashing, or sync

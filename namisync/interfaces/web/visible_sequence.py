@@ -77,20 +77,21 @@ class VisibleSequence(Generic[_VisibleNodeT]):
     """One immutable derivation over the complete original node tuple."""
 
     nodes: tuple[_VisibleNodeT, ...]
-    visible_positions: tuple[int, ...]
+    visible_source_positions: Sequence[int]
     source_position_by_node_id: Mapping[str, int]
-    visible_index_by_node_id: Mapping[str, int]
-    parent_visible_indexes: tuple[int | None, ...]
-    first_child_visible_indexes: tuple[int | None, ...]
-    has_retained_children: tuple[bool, ...]
-    positions_in_set: tuple[int, ...]
-    set_sizes: tuple[int, ...]
+    visible_index_by_source_position: Sequence[int]
+    sibling_ordinals: Sequence[int]
+    retained_direct_child_counts: Sequence[int]
     collapsed_node_ids: frozenset[str]
     filtered_item_count: int | None
 
     def __post_init__(self) -> None:
         nodes = tuple(self.nodes)
-        positions = tuple(self.visible_positions)
+        from namisync.workflows import CompactUnsignedIntegers
+
+        positions = self.visible_source_positions
+        if type(positions) is not CompactUnsignedIntegers:
+            raise TypeError("visible source positions must be compact integers")
         collapsed = _snapshot_node_ids(
             self.collapsed_node_ids,
             "collapsed_node_ids",
@@ -112,69 +113,69 @@ class VisibleSequence(Generic[_VisibleNodeT]):
                     "source node lookup does not match the node array"
                 )
 
-        visible_lookup = dict(self.visible_index_by_node_id)
-        if len(visible_lookup) != len(positions):
-            raise ValueError(
-                "visible node lookup does not match visible positions"
-            )
-        previous = -1
+        inverse = self.visible_index_by_source_position
+        ordinals = self.sibling_ordinals
+        child_counts = self.retained_direct_child_counts
+        if any(type(value) is not CompactUnsignedIntegers for value in (inverse, ordinals, child_counts)):
+            raise TypeError("visible indexes and counts must be compact integers")
+        if len(inverse) != len(nodes) or len(ordinals) != len(positions) or len(child_counts) != len(nodes):
+            raise ValueError("compact visible metadata has inconsistent lengths")
+        seen: set[int] = set()
+        sibling_counts: dict[int | None, int] = {}
+        visible_ancestors: list[int] = []
         for visible_index, position in enumerate(positions):
             _require_exact_nonnegative_int(position, "visible position")
-            if position <= previous or position >= len(nodes):
-                raise ValueError(
-                    "visible positions must be ordered source indexes"
-                )
-            node_id = nodes[position].node_id
-            if node_id not in visible_lookup:
-                raise ValueError(
-                    "visible node lookup does not match visible positions"
-                )
-            lookup_index = _require_exact_nonnegative_int(
-                visible_lookup[node_id],
-                "visible lookup index",
-            )
-            if lookup_index != visible_index:
-                raise ValueError(
-                    "visible node lookup does not match visible positions"
-                )
-            previous = position
-
-        metadata = (
-            tuple(self.parent_visible_indexes),
-            tuple(self.first_child_visible_indexes),
-            tuple(self.positions_in_set),
-            tuple(self.set_sizes),
-        )
-        if any(len(values) != len(positions) for values in metadata):
-            raise ValueError("visible metadata must match visible positions")
-        _validate_visible_metadata(
-            nodes,
-            positions,
-            visible_lookup,
-            *metadata,
-        )
-        retained_child_flags = tuple(self.has_retained_children)
-        if len(retained_child_flags) != len(positions):
-            raise ValueError(
-                "retained-child metadata must match visible positions"
-            )
-        for visible_index, has_retained_children in enumerate(
-            retained_child_flags
-        ):
-            if type(has_retained_children) is not bool:
-                raise TypeError("retained-child metadata must contain bools")
-            node = nodes[positions[visible_index]]
-            if has_retained_children and not node.is_container:
-                raise ValueError(
-                    "only containers may have retained children"
-                )
-            if (
-                metadata[1][visible_index] is not None
-                and not has_retained_children
+            if position >= len(nodes) or position in seen or inverse[position] != visible_index:
+                raise ValueError("visible source positions and inverse indexes disagree")
+            seen.add(position)
+            parent = nodes[position].parent_index
+            while len(visible_ancestors) > nodes[position].depth:
+                visible_ancestors.pop()
+            if nodes[position].depth == 0:
+                if visible_index != 0 or position != 0 or visible_ancestors:
+                    raise ValueError("visible order has an invalid root")
+            elif (
+                len(visible_ancestors) != nodes[position].depth
+                or visible_ancestors[-1] != parent
             ):
-                raise ValueError(
-                    "visible child metadata requires a retained child"
-                )
+                raise ValueError("visible order breaks parent/subtree closure")
+            if parent is not None:
+                parent_visible = inverse[parent]
+                if parent_visible >= visible_index:
+                    raise ValueError("a visible node must retain its preceding parent")
+            expected_ordinal = sibling_counts.get(parent, 0) + 1
+            sibling_counts[parent] = expected_ordinal
+            if ordinals[visible_index] != expected_ordinal:
+                raise ValueError("sibling ordinals are inconsistent")
+            visible_ancestors.append(position)
+        sentinel = len(nodes)
+        if any(inverse[position] != sentinel for position in range(len(nodes)) if position not in seen):
+            raise ValueError("hidden source positions must use the inverse sentinel")
+        source_child_counts = [0] * len(nodes)
+        for node in nodes[1:]:
+            assert node.parent_index is not None
+            source_child_counts[node.parent_index] += 1
+        for position, count in enumerate(child_counts):
+            if count and not nodes[position].is_container:
+                raise ValueError("only containers may retain direct children")
+            if count > source_child_counts[position]:
+                raise ValueError("retained child count exceeds source children")
+        for parent, visible_count in sibling_counts.items():
+            if parent is not None and visible_count > child_counts[parent]:
+                raise ValueError("visible children exceed the retained child count")
+        visible_child_counts: dict[int, int] = {}
+        for source_position in positions:
+            parent = nodes[source_position].parent_index
+            if parent is not None:
+                visible_child_counts[parent] = visible_child_counts.get(parent, 0) + 1
+        for source_position in positions:
+            visible_count = visible_child_counts.get(source_position, 0)
+            retained_count = child_counts[source_position]
+            if nodes[source_position].node_id in collapsed:
+                if visible_count:
+                    raise ValueError("a collapsed container cannot expose visible children")
+            elif visible_count != retained_count:
+                raise ValueError("expanded child metadata must equal visible children")
         for node_id in collapsed:
             try:
                 node = nodes[source_lookup[node_id]]
@@ -189,27 +190,40 @@ class VisibleSequence(Generic[_VisibleNodeT]):
             )
 
         object.__setattr__(self, "nodes", nodes)
-        object.__setattr__(self, "visible_positions", positions)
+        object.__setattr__(self, "visible_source_positions", positions)
         object.__setattr__(
             self,
             "source_position_by_node_id",
             MappingProxyType(source_lookup),
         )
-        object.__setattr__(
-            self,
-            "visible_index_by_node_id",
-            MappingProxyType(visible_lookup),
-        )
-        object.__setattr__(self, "parent_visible_indexes", metadata[0])
-        object.__setattr__(self, "first_child_visible_indexes", metadata[1])
-        object.__setattr__(
-            self,
-            "has_retained_children",
-            retained_child_flags,
-        )
-        object.__setattr__(self, "positions_in_set", metadata[2])
-        object.__setattr__(self, "set_sizes", metadata[3])
         object.__setattr__(self, "collapsed_node_ids", collapsed)
+
+    @property
+    def visible_positions(self) -> Sequence[int]:
+        return self.visible_source_positions
+
+    def _rebind_nodes(
+        self,
+        nodes: tuple[_VisibleNodeT, ...],
+        source_position_by_node_id: Mapping[str, int],
+    ) -> VisibleSequence[_VisibleNodeT]:
+        """Rebind after an owner-proven topology-preserving replacement."""
+
+        if type(nodes) is not tuple or len(nodes) != len(self.nodes):
+            raise ValueError("visible node rebind changed source topology")
+        rebound = object.__new__(VisibleSequence)
+        for name, value in (
+            ("nodes", nodes),
+            ("visible_source_positions", self.visible_source_positions),
+            ("source_position_by_node_id", MappingProxyType(dict(source_position_by_node_id))),
+            ("visible_index_by_source_position", self.visible_index_by_source_position),
+            ("sibling_ordinals", self.sibling_ordinals),
+            ("retained_direct_child_counts", self.retained_direct_child_counts),
+            ("collapsed_node_ids", self.collapsed_node_ids),
+            ("filtered_item_count", self.filtered_item_count),
+        ):
+            object.__setattr__(rebound, name, value)
+        return rebound
 
 
 @dataclass(frozen=True, slots=True)
@@ -302,6 +316,8 @@ class VisibleAnchor:
 def derive_visible_sequence(
     nodes: Sequence[_VisibleNodeT],
     parameters: VisibleSequenceParameters,
+    *,
+    ordered_source_positions: Sequence[int] | None = None,
 ) -> VisibleSequence[_VisibleNodeT]:
     """Validate and derive one visible sequence without retaining state."""
 
@@ -312,10 +328,66 @@ def derive_visible_sequence(
     _require_search(parameters.search_query)
     original_nodes = tuple(nodes)
     _validate_structure(original_nodes)
+    from namisync.workflows import CompactUnsignedIntegers
+
+    order = CompactUnsignedIntegers(
+        tuple(range(len(original_nodes))) if ordered_source_positions is None else tuple(ordered_source_positions),
+        maximum=max(len(original_nodes) - 1, 0),
+    )
+    _validate_order(original_nodes, order)
+    inverse_values = [0] * len(original_nodes)
+    for rank, source_position in enumerate(order):
+        inverse_values[source_position] = rank
+    inverse_order = CompactUnsignedIntegers(
+        inverse_values, maximum=max(len(original_nodes) - 1, 0)
+    )
 
     position_by_id = {
         node.node_id: node.position for node in original_nodes
     }
+    return _derive_visible_sequence_from_validated(
+        original_nodes,
+        position_by_id,
+        parameters,
+        ordered_source_positions=order,
+        order_rank_by_source_position=inverse_order,
+    )
+
+
+def _derive_visible_sequence_from_validated(
+    nodes: tuple[_VisibleNodeT, ...],
+    position_by_id: Mapping[str, int],
+    parameters: VisibleSequenceParameters,
+    *,
+    ordered_source_positions: Sequence[int] | None = None,
+    order_rank_by_source_position: Sequence[int] | None = None,
+    match_mask_by_position: bytes | None = None,
+) -> VisibleSequence[_VisibleNodeT]:
+    """Derive from exact immutable structure already validated by its owner."""
+
+    if type(nodes) is not tuple:
+        raise TypeError("validated nodes must be an exact tuple")
+    if type(parameters) is not VisibleSequenceParameters:
+        raise TypeError("parameters must be VisibleSequenceParameters")
+    _require_search(parameters.search_query)
+    from namisync.workflows import CompactUnsignedIntegers
+
+    if ordered_source_positions is None:
+        ordered_source_positions = CompactUnsignedIntegers(
+            tuple(range(len(nodes))), maximum=max(len(nodes) - 1, 0)
+        )
+    if type(ordered_source_positions) is not CompactUnsignedIntegers:
+        raise TypeError("validated order must be compact integers")
+    if order_rank_by_source_position is None:
+        inverse_values = [0] * len(nodes)
+        for rank, source_position in enumerate(ordered_source_positions):
+            inverse_values[source_position] = rank
+        order_rank_by_source_position = CompactUnsignedIntegers(
+            inverse_values, maximum=max(len(nodes) - 1, 0)
+        )
+    if type(order_rank_by_source_position) is not CompactUnsignedIntegers:
+        raise TypeError("validated inverse order must be compact integers")
+    original_nodes = nodes
     collapsed_positions: set[int] = set()
     for node_id in parameters.collapsed_node_ids:
         try:
@@ -327,76 +399,115 @@ def derive_visible_sequence(
         collapsed_positions.add(position)
 
     counts = parameters.match_counts_by_node_id
+    if match_mask_by_position is not None:
+        if type(match_mask_by_position) is not bytes:
+            raise TypeError("positional match mask must be exact bytes or None")
+        if counts is not None:
+            raise ValueError("positional match mask conflicts with id counts")
+        if len(match_mask_by_position) != len(original_nodes):
+            raise ValueError("positional match mask must match the node array")
+        if any(value not in (0, 1) for value in match_mask_by_position):
+            raise ValueError("positional match mask must contain only zero or one")
     if counts is not None:
         unknown_ids = counts.keys() - position_by_id.keys()
         if unknown_ids:
             raise ValueError("match-count node id is unknown")
 
     query = parameters.search_query.casefold()
-    search_matches = tuple(
-        query in node.display.casefold() for node in original_nodes
+    folded_query_is_ascii = query.isascii()
+    filtered_item_count = (
+        0 if counts is not None or match_mask_by_position is not None else None
     )
-    direct_matches = tuple(
-        search_matches[position]
-        and (counts is None or counts.get(node.node_id, 0) > 0)
-        for position, node in enumerate(original_nodes)
+    all_nodes_retained = (
+        not query and counts is None and match_mask_by_position is None
     )
-    retained = list(direct_matches)
-    for position in range(len(original_nodes) - 1, 0, -1):
-        if retained[position]:
-            parent = original_nodes[position].parent_index
-            assert parent is not None
-            retained[parent] = True
+    retained_positions: set[int] = set()
+    retained_direct_child_counts = [0] * len(original_nodes)
+    if not all_nodes_retained:
+        for position, node in enumerate(original_nodes):
+            if counts is not None:
+                weight = counts.get(node.node_id, 0)
+            elif match_mask_by_position is not None:
+                weight = match_mask_by_position[position]
+            else:
+                weight = 1
+            if weight == 0:
+                continue
+            if not query:
+                search_match = True
+            else:
+                display = node.display
+                if display.isascii():
+                    if not folded_query_is_ascii:
+                        continue
+                    folded_display = (
+                        display if display.islower() else display.lower()
+                    )
+                else:
+                    folded_display = display.casefold()
+                search_match = query in folded_display
+            if not search_match:
+                continue
+            if filtered_item_count is not None:
+                filtered_item_count += weight
+            retained_position: int | None = position
+            while (
+                retained_position is not None
+                and retained_position not in retained_positions
+            ):
+                retained_positions.add(retained_position)
+                parent = original_nodes[retained_position].parent_index
+                if parent is not None:
+                    retained_direct_child_counts[parent] += 1
+                retained_position = parent
 
-    has_retained_children = [False] * len(original_nodes)
-    for position in range(1, len(original_nodes)):
-        if retained[position]:
-            parent = original_nodes[position].parent_index
-            assert parent is not None
-            has_retained_children[parent] = True
+    if all_nodes_retained:
+        for node in original_nodes[1:]:
+            assert node.parent_index is not None
+            retained_direct_child_counts[node.parent_index] += 1
 
     visible_positions: list[int] = []
-    hidden_until = 0
-    for position, node in enumerate(original_nodes):
-        if position < hidden_until or not retained[position]:
+    collapsed_depth: int | None = None
+    sibling_counts: dict[int | None, int] = {}
+    sibling_ordinals: list[int] = []
+    visible_candidates = (
+        ordered_source_positions
+        if all_nodes_retained
+        else sorted(retained_positions, key=order_rank_by_source_position.__getitem__)
+    )
+    for position in visible_candidates:
+        node = original_nodes[position]
+        if collapsed_depth is not None:
+            if node.depth > collapsed_depth:
+                continue
+            collapsed_depth = None
+        if not all_nodes_retained and position not in retained_positions:
             continue
         visible_positions.append(position)
+        ordinal = sibling_counts.get(node.parent_index, 0) + 1
+        sibling_counts[node.parent_index] = ordinal
+        sibling_ordinals.append(ordinal)
         if position in collapsed_positions:
-            hidden_until = node.subtree_end
+            collapsed_depth = node.depth
 
-    positions = tuple(visible_positions)
-    visible_lookup = {
-        original_nodes[position].node_id: visible_index
-        for visible_index, position in enumerate(positions)
-    }
-    metadata = _derive_visible_metadata(
-        original_nodes,
-        positions,
-        visible_lookup,
-    )
-    filtered_item_count = None
-    if counts is not None:
-        filtered_item_count = sum(
-            counts.get(node.node_id, 0)
-            for position, node in enumerate(original_nodes)
-            if search_matches[position] and counts.get(node.node_id, 0) > 0
-        )
-
-    return VisibleSequence(
-        nodes=original_nodes,
-        visible_positions=positions,
-        source_position_by_node_id=position_by_id,
-        visible_index_by_node_id=visible_lookup,
-        parent_visible_indexes=metadata[0],
-        first_child_visible_indexes=metadata[1],
-        has_retained_children=tuple(
-            has_retained_children[position] for position in positions
-        ),
-        positions_in_set=metadata[2],
-        set_sizes=metadata[3],
-        collapsed_node_ids=parameters.collapsed_node_ids,
-        filtered_item_count=filtered_item_count,
-    )
+    positions = CompactUnsignedIntegers(visible_positions, maximum=max(len(original_nodes), 0))
+    sentinel = len(original_nodes)
+    inverse = [sentinel] * len(original_nodes)
+    for visible_index, position in enumerate(positions):
+        inverse[position] = visible_index
+    sequence = object.__new__(VisibleSequence)
+    for name, value in (
+        ("nodes", original_nodes),
+        ("visible_source_positions", positions),
+        ("source_position_by_node_id", MappingProxyType(position_by_id)),
+        ("visible_index_by_source_position", CompactUnsignedIntegers(inverse, maximum=sentinel)),
+        ("sibling_ordinals", CompactUnsignedIntegers(sibling_ordinals, maximum=max(sibling_ordinals, default=0))),
+        ("retained_direct_child_counts", CompactUnsignedIntegers(retained_direct_child_counts, maximum=max(retained_direct_child_counts, default=0))),
+        ("collapsed_node_ids", parameters.collapsed_node_ids),
+        ("filtered_item_count", filtered_item_count),
+    ):
+        object.__setattr__(sequence, name, value)
+    return sequence
 
 
 def window_visible_sequence(
@@ -415,26 +526,33 @@ def window_visible_sequence(
     if not 1 <= limit <= _MAX_WINDOW_ROWS:
         raise ValueError("limit must be from 1 through 256")
 
-    total = len(sequence.visible_positions)
+    total = len(sequence.visible_source_positions)
     stop = min(offset + limit, total)
     rows: list[VisibleWindowRow[_VisibleNodeT]] = []
     for visible_index in range(min(offset, total), stop):
-        node = sequence.nodes[sequence.visible_positions[visible_index]]
+        source_position = sequence.visible_source_positions[visible_index]
+        node = sequence.nodes[source_position]
+        parent_source = node.parent_index
+        parent_visible = None if parent_source is None else sequence.visible_index_by_source_position[parent_source]
+        next_index = visible_index + 1
+        first_child = (
+            next_index
+            if next_index < total
+            and sequence.nodes[sequence.visible_source_positions[next_index]].parent_index == source_position
+            else None
+        )
+        retained_children = sequence.retained_direct_child_counts[source_position]
         rows.append(
             VisibleWindowRow(
                 node=node,
                 visible_index=visible_index,
-                parent_visible_index=(
-                    sequence.parent_visible_indexes[visible_index]
-                ),
-                first_child_visible_index=(
-                    sequence.first_child_visible_indexes[visible_index]
-                ),
-                position_in_set=sequence.positions_in_set[visible_index],
-                set_size=sequence.set_sizes[visible_index],
+                parent_visible_index=parent_visible,
+                first_child_visible_index=first_child,
+                position_in_set=sequence.sibling_ordinals[visible_index],
+                set_size=(1 if parent_source is None else sequence.retained_direct_child_counts[parent_source]),
                 expanded=(
                     node.node_id not in sequence.collapsed_node_ids
-                    if sequence.has_retained_children[visible_index]
+                    if retained_children
                     else None
                 ),
             )
@@ -498,124 +616,32 @@ def resolve_visible_anchor(
     if sequence.nodes[positions[-1]].parent_index is not None:
         raise ValueError("anchor candidate chain must end at the root")
 
-    for node_id in candidates:
-        visible_index = sequence.visible_index_by_node_id.get(node_id)
-        if visible_index is not None:
+    sentinel = len(sequence.nodes)
+    for node_id, source_position in zip(candidates, positions):
+        visible_index = sequence.visible_index_by_source_position[source_position]
+        if visible_index != sentinel:
             return VisibleAnchor(node_id=node_id, index=visible_index)
     return None
 
 
-def _derive_visible_metadata(
-    nodes: tuple[_VisibleNodeT, ...],
-    visible_positions: tuple[int, ...],
-    visible_index_by_node_id: Mapping[str, int],
-) -> tuple[
-    tuple[int | None, ...],
-    tuple[int | None, ...],
-    tuple[int, ...],
-    tuple[int, ...],
-]:
-    parent_indexes: list[int | None] = []
-    first_child_indexes: list[int | None] = [None] * len(visible_positions)
-    sibling_counts: dict[int | None, int] = {}
-    for visible_index, source_position in enumerate(visible_positions):
+def _validate_order(nodes: tuple[_VisibleNodeT, ...], order: Sequence[int]) -> None:
+    if len(order) != len(nodes):
+        raise ValueError("ordered source positions must cover every node")
+    seen = bytearray(len(nodes))
+    ancestors: list[int] = []
+    for source_position in order:
+        if type(source_position) is not int or source_position < 0 or source_position >= len(nodes) or seen[source_position]:
+            raise ValueError("ordered source positions must be a permutation")
+        seen[source_position] = 1
         node = nodes[source_position]
-        if node.parent_index is None:
-            parent_visible_index = None
-        else:
-            parent_id = nodes[node.parent_index].node_id
-            try:
-                parent_visible_index = visible_index_by_node_id[parent_id]
-            except KeyError as error:
-                raise ValueError("a visible node must retain its parent") from error
-            if first_child_indexes[parent_visible_index] is None:
-                first_child_indexes[parent_visible_index] = visible_index
-        parent_indexes.append(parent_visible_index)
-        sibling_counts[parent_visible_index] = (
-            sibling_counts.get(parent_visible_index, 0) + 1
-        )
-
-    seen_siblings: dict[int | None, int] = {}
-    positions_in_set: list[int] = []
-    set_sizes: list[int] = []
-    for parent_visible_index in parent_indexes:
-        position_in_set = seen_siblings.get(parent_visible_index, 0) + 1
-        seen_siblings[parent_visible_index] = position_in_set
-        positions_in_set.append(position_in_set)
-        set_sizes.append(sibling_counts[parent_visible_index])
-
-    return (
-        tuple(parent_indexes),
-        tuple(first_child_indexes),
-        tuple(positions_in_set),
-        tuple(set_sizes),
-    )
-
-
-def _validate_visible_metadata(
-    nodes: tuple[_VisibleNodeT, ...],
-    visible_positions: tuple[int, ...],
-    visible_index_by_node_id: Mapping[str, int],
-    parent_visible_indexes: tuple[int | None, ...],
-    first_child_visible_indexes: tuple[int | None, ...],
-    positions_in_set: tuple[int, ...],
-    set_sizes: tuple[int, ...],
-) -> None:
-    sibling_counts: dict[int | None, int] = {}
-    for visible_index, source_position in enumerate(visible_positions):
-        node = nodes[source_position]
-        supplied_parent = parent_visible_indexes[visible_index]
-        if supplied_parent is not None:
-            _require_exact_nonnegative_int(
-                supplied_parent,
-                "parent visible index",
-            )
-        supplied_child = first_child_visible_indexes[visible_index]
-        if supplied_child is not None:
-            _require_exact_nonnegative_int(
-                supplied_child,
-                "first child visible index",
-            )
-        if node.parent_index is None:
-            expected_parent = None
-        else:
-            parent_id = nodes[node.parent_index].node_id
-            try:
-                expected_parent = visible_index_by_node_id[parent_id]
-            except KeyError as error:
-                raise ValueError("a visible node must retain its parent") from error
-        if supplied_parent != expected_parent:
-            raise ValueError("visible accessibility metadata is inconsistent")
-
-        expected_child = None
-        if visible_index + 1 < len(visible_positions):
-            next_source_position = visible_positions[visible_index + 1]
-            if nodes[next_source_position].parent_index == source_position:
-                expected_child = visible_index + 1
-        if supplied_child != expected_child:
-            raise ValueError("visible accessibility metadata is inconsistent")
-
-        _require_exact_nonnegative_int(
-            positions_in_set[visible_index],
-            "position in set",
-        )
-        _require_exact_nonnegative_int(
-            set_sizes[visible_index],
-            "set size",
-        )
-        sibling_counts[expected_parent] = (
-            sibling_counts.get(expected_parent, 0) + 1
-        )
-
-    sibling_positions: dict[int | None, int] = {}
-    for visible_index, parent_visible_index in enumerate(parent_visible_indexes):
-        expected_position = sibling_positions.get(parent_visible_index, 0) + 1
-        sibling_positions[parent_visible_index] = expected_position
-        if (
-            positions_in_set[visible_index] != expected_position
-            or set_sizes[visible_index] != sibling_counts[parent_visible_index]
-        ):
-            raise ValueError("visible accessibility metadata is inconsistent")
+        while len(ancestors) > node.depth:
+            ancestors.pop()
+        if node.depth == 0:
+            if source_position != 0 or ancestors:
+                raise ValueError("ordered source positions must start at the root")
+        elif len(ancestors) != node.depth or ancestors[-1] != node.parent_index:
+            raise ValueError("ordered source positions break parent/subtree closure")
+        ancestors.append(source_position)
 
 
 def _validate_structure(nodes: tuple[_VisibleNodeT, ...]) -> None:

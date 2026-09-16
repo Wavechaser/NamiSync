@@ -157,7 +157,12 @@ from .sync import (
     settle_canceled_execution as settle_canceled_sync_execution,
 )
 from .node_tree import NodeTree, NodeTreeKind, NodeTreeMember, build_node_tree
-from .selection import SELECTION_EXCLUSION_REASONS, derive_execution_selection
+from .selection import (
+    SELECTION_EXCLUSION_REASONS,
+    ExecutionSelection,
+    derive_execution_selection,
+    require_derived_execution_selection,
+)
 from .views import (
     PreservationSettingsView,
     RecordingIssueView,
@@ -873,16 +878,26 @@ class LocalWorkflowRuntime:
         verify_after_execute: bool = False,
         user_deselected: frozenset[str] = frozenset(),
         expected_artifact: object | None = None,
+        selection_decision: ExecutionSelection | None = None,
     ) -> ExecutionRequest:
         artifact = self.get_plan(request_id)
         if expected_artifact is not None and artifact is not expected_artifact:
             raise ValueError("plan changed before selection commitment")
         if not artifact.verdict.ok:
             raise ValueError("a refused plan cannot be committed")
-        selection = derive_execution_selection(
-            artifact.plan,
-            user_deselected=user_deselected,
-        ).selection
+        decision = (
+            derive_execution_selection(
+                artifact.plan,
+                user_deselected=user_deselected,
+            )
+            if selection_decision is None
+            else require_derived_execution_selection(
+                selection_decision,
+                plan=artifact.plan,
+                user_deselected=user_deselected,
+            )
+        )
+        selection = decision.selection
         if not selection:
             raise ValueError("Nothing is selected to synchronize")
         committed = committed_at or self.clock.now()

@@ -774,6 +774,9 @@ async function loadPlanReview(task, force = false) {
       pending: null,
       message,
       actionRevision: 0,
+      windowRequestRevision: 0,
+      windowRequestOffset: null,
+      windowRequestRunning: false,
     };
     task.reviewSessionId = sessionId;
     task.error = null;
@@ -869,33 +872,60 @@ async function changePlanView(review, patch) {
 
 async function loadPlanWindow(review, offset) {
   const task = currentReviewTask(review);
-  if (task === null || review.pending !== null) return;
-  const action = ++review.actionRevision;
-  review.pending = "window";
-  review.message = "Loading more operations…";
-  renderTasks();
+  if (task === null) return;
+  if (offset !== null && review.pending !== null) return;
+  review.windowRequestRevision += 1;
+  review.windowRequestOffset = offset;
+  if (offset === null || review.windowRequestRunning) return;
+
+  review.windowRequestRunning = true;
   try {
-    const window = await getPlanWindow(
-      task.taskId,
-      review.summary.view_revision,
-      offset,
-      256,
-    );
-    if (
-      retainedReviewTask(review) !== task || review.actionRevision !== action
-      || window.disposition !== "current"
-    ) return;
-    review.window = window;
-    review.message = "";
-  } catch (_error) {
-    if (retainedReviewTask(review) === task && review.actionRevision === action) {
-      review.message = "More operations could not be loaded. Scroll to retry.";
+    while (review.windowRequestOffset !== null) {
+      const requestedOffset = review.windowRequestOffset;
+      const request = review.windowRequestRevision;
+      const action = review.actionRevision;
+      const viewRevision = review.summary.view_revision;
+      try {
+        const window = await getPlanWindow(
+          task.taskId,
+          viewRevision,
+          requestedOffset,
+          256,
+        );
+        if (retainedReviewTask(review) !== task) return;
+        if (
+          review.actionRevision !== action
+          || review.summary.view_revision !== viewRevision
+        ) {
+          review.windowRequestOffset = null;
+          return;
+        }
+        if (
+          review.windowRequestRevision !== request
+          || review.windowRequestOffset !== requestedOffset
+        ) continue;
+        review.windowRequestOffset = null;
+        if (
+          window.disposition !== "current"
+          || window.view_revision !== viewRevision
+        ) return;
+        review.window = window;
+        review.message = "";
+        renderTasks();
+      } catch (_error) {
+        if (
+          retainedReviewTask(review) === task
+          && review.windowRequestRevision === request
+          && review.windowRequestOffset === requestedOffset
+        ) {
+          review.windowRequestOffset = null;
+          review.message = "More operations could not be loaded. Scroll to retry.";
+          renderTasks();
+        }
+      }
     }
   } finally {
-    if (retainedReviewTask(review) === task && review.actionRevision === action) {
-      review.pending = null;
-      renderTasks();
-    }
+    review.windowRequestRunning = false;
   }
 }
 

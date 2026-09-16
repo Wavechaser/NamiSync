@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
+const ROW_HEIGHT = 24;
+
 class ClassList {
   constructor(owner) { this.owner = owner; this.values = new Set(); }
   add(...values) { for (const value of values) this.values.add(value); }
@@ -34,6 +36,7 @@ class ElementFake {
     this.checked = false;
     this.indeterminate = false;
     this.scrollTop = 0;
+    this.clientHeight = 0;
   }
 
   append(...values) {
@@ -94,7 +97,25 @@ class ElementFake {
 }
 
 class DocumentFake {
-  constructor() { this.activeElement = null; }
+  constructor() {
+    this.activeElement = null;
+    this.defaultView = {
+      frames: [],
+      ResizeObserver: class {
+        constructor(callback) { this.callback = callback; }
+        observe() {}
+        disconnect() { this.disconnected = true; }
+      },
+      requestAnimationFrame: (callback) => {
+        this.defaultView.frames.push(callback);
+        return this.defaultView.frames.length;
+      },
+      flushAnimationFrame: () => {
+        const callbacks = this.defaultView.frames.splice(0);
+        for (const callback of callbacks) callback();
+      },
+    };
+  }
   createElement(tagName) { return new ElementFake(tagName, this); }
   createDocumentFragment() { return new ElementFake("#fragment", this); }
 }
@@ -102,6 +123,7 @@ class DocumentFake {
 globalThis.Element = ElementFake;
 globalThis.HTMLElement = ElementFake;
 globalThis.document = new DocumentFake();
+globalThis.window = document.defaultView;
 
 function moduleUrl(source) {
   return `data:text/javascript;base64,${Buffer.from(source).toString("base64")}`;
@@ -236,10 +258,15 @@ review.window.rows.push(notice);
 
 panel.render(task);
 assert.equal(panel.element.dataset.pending, "");
+document.defaultView.flushAnimationFrame();
 assert.ok(findText(panel.element, hostile));
 assert.ok(findText(panel.element, "1 destructive"));
 assert.ok(findText(panel.element, "4096 B required"));
 const renderedRow = findByDataset(panel.element, "nodeId", row.node_id);
+panel.render(task);
+assert.equal(findByDataset(panel.element, "nodeId", row.node_id), renderedRow,
+  "unchanged review rendering preserves row controls and focus");
+document.defaultView.flushAnimationFrame();
 assert.equal(renderedRow.dataset.folder, "false", "operation groups remain non-folder rows");
 assert.equal(renderedRow.textContent, hostile);
 assert.ok(findText(renderedRow, "Risk: none"));
@@ -329,6 +356,40 @@ panel.render(task);
 findAction(panel.element, "cancel").dispatch("click");
 assert.deepEqual(calls.at(-1), ["onControl", review, "cancel"]);
 
+const viewport = findByClass(panel.element, "nami-plan-review__rows");
+viewport.clientHeight = ROW_HEIGHT - 1;
+viewport.scrollTop = ROW_HEIGHT * 10;
+const coveredWindowCallCount = calls.filter(([name]) => name === "onWindow").length;
+viewport.dispatch("scroll");
+viewport.scrollTop = ROW_HEIGHT * 10 + 1;
+viewport.dispatch("scroll");
+assert.equal(document.defaultView.frames.length, 1, "rapid scrolls share one frame");
+document.defaultView.flushAnimationFrame();
+assert.equal(
+  calls.filter(([name]) => name === "onWindow").length,
+  coveredWindowCallCount,
+  "a covered viewport does not refetch",
+);
+
+viewport.scrollTop = ROW_HEIGHT * 300;
+viewport.dispatch("scroll");
+viewport.scrollTop = ROW_HEIGHT * 400;
+viewport.dispatch("scroll");
+document.defaultView.flushAnimationFrame();
+assert.deepEqual(calls.at(-1), ["onWindow", review, 368]);
+const windowCallCount = calls.filter(([name]) => name === "onWindow").length;
+viewport.dispatch("scroll");
+document.defaultView.flushAnimationFrame();
+assert.equal(
+  calls.filter(([name]) => name === "onWindow").length,
+  windowCallCount,
+  "the same uncovered range is requested once",
+);
+viewport.scrollTop = ROW_HEIGHT * 10;
+viewport.dispatch("scroll");
+document.defaultView.flushAnimationFrame();
+assert.deepEqual(calls.at(-1), ["onWindow", review, null]);
+
 review.pending = "selection";
 panel.render(task);
 assert.equal(panel.element.dataset.pending, "selection");
@@ -337,6 +398,19 @@ assert.equal(findAction(panel.element, "pause").disabled, true);
 review.pending = null;
 panel.render(task);
 const beforeDispose = calls.length;
+viewport.scrollTop = ROW_HEIGHT * 400;
+const nextReview = { ...review, window: { ...review.window, offset: 0 } };
+task.review = nextReview;
+panel.render(task);
+assert.equal(viewport.scrollTop, 0, "switching reviews starts within retained rows");
+document.defaultView.flushAnimationFrame();
+assert.equal(calls.length, beforeDispose, "task switch does not fetch the old viewport");
+viewport.clientHeight = ROW_HEIGHT * 400;
+panel.render(task);
+document.defaultView.flushAnimationFrame();
+panel.render(task);
+document.defaultView.flushAnimationFrame();
+assert.equal(calls.length, beforeDispose, "tall viewport does not refetch the same bounded window");
 search.value = "stale";
 search.dispatch("input");
 task.review = null;

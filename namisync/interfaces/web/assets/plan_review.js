@@ -188,7 +188,10 @@ export function createPlanReviewPanel(callbacks) {
 
   let current = null;
   let searchTimer = null;
-  let scrollTimer = null;
+  let scrollFramePending = false;
+  let scrollGeneration = 0;
+  let pendingWindowOffset = null;
+  let renderedRows = null;
   const viewChange = (patch) => {
     if (current !== null) callbacks.onViewChange(current, patch);
   };
@@ -212,15 +215,50 @@ export function createPlanReviewPanel(callbacks) {
     searchQuery: "", filters: new Set(), sortColumn: "path", sortDirection: "ascending",
   }));
   body.addEventListener("scroll", () => {
-    if (scrollTimer !== null) clearTimeout(scrollTimer);
-    const scheduledReview = current;
-    scrollTimer = setTimeout(() => {
-      scrollTimer = null;
-      if (current === null || current !== scheduledReview) return;
-      const offset = Math.max(0, Math.floor(body.scrollTop / ROW_HEIGHT) - 32);
-      if (offset !== current.window.offset) callbacks.onWindow(current, offset);
-    }, 75);
+    scheduleViewportCheck();
   });
+  const resizeObserver = new window.ResizeObserver(scheduleViewportCheck);
+  resizeObserver.observe(body);
+
+  function scheduleViewportCheck() {
+    if (current === null || scrollFramePending) return;
+    const generation = scrollGeneration;
+    scrollFramePending = true;
+    window.requestAnimationFrame(() => {
+      scrollFramePending = false;
+      if (current !== null && generation === scrollGeneration) reconcileViewport();
+    });
+  }
+
+  function reconcileViewport() {
+    if (body.clientHeight <= 0 || current.window.total <= 0) return;
+    const viewportTop = Math.max(body.scrollTop, 0);
+    const firstIndex = Math.min(
+      Math.floor(viewportTop / ROW_HEIGHT),
+      current.window.total - 1,
+    );
+    const lastIndex = Math.min(
+      Math.max(
+        Math.ceil((viewportTop + body.clientHeight) / ROW_HEIGHT) - 1,
+        firstIndex,
+      ),
+      current.window.total - 1,
+    );
+    const windowEnd = current.window.offset + current.window.rows.length;
+    if (firstIndex >= current.window.offset && lastIndex < windowEnd) {
+      if (pendingWindowOffset !== null) {
+        pendingWindowOffset = null;
+        callbacks.onWindow(current, null);
+      }
+      return;
+    }
+    const offset = Math.max(0, firstIndex - 32);
+    if (offset === current.window.offset) return;
+    if (offset !== pendingWindowOffset) {
+      pendingWindowOffset = offset;
+      callbacks.onWindow(current, offset);
+    }
+  }
   execute.addEventListener("click", () => {
     if (current !== null) callbacks.onExecute(current, execute);
   });
@@ -232,17 +270,21 @@ export function createPlanReviewPanel(callbacks) {
   cancel.addEventListener("click", () => current !== null && callbacks.onControl(current, "cancel"));
 
   function renderRows(review, task) {
+    const disabled = review.pending !== null || task.executionAttempt !== null;
+    const committed = review.summary.selection_state !== "reviewing";
+    if (renderedRows?.review === review && renderedRows.window === review.window
+        && renderedRows.disabled === disabled && renderedRows.committed === committed) return;
+    renderedRows = { review, window: review.window, disabled, committed };
     const fragment = document.createDocumentFragment();
     const top = document.createElement("div");
     top.className = "nami-plan-review__spacer";
     top.style.setProperty("block-size", `${review.window.offset * ROW_HEIGHT}px`);
     fragment.append(top);
-    const committed = review.summary.selection_state !== "reviewing";
     for (const row of review.window.rows) {
       const element = document.createElement("div");
       renderPlanRow(element, rowView(
         row,
-        review.pending !== null || task.executionAttempt !== null,
+        disabled,
         committed,
       ));
       element.dataset.nodeId = row.node_id;
@@ -271,21 +313,26 @@ export function createPlanReviewPanel(callbacks) {
   function render(task) {
     if (current !== task.review) {
       if (searchTimer !== null) clearTimeout(searchTimer);
-      if (scrollTimer !== null) clearTimeout(scrollTimer);
       searchTimer = null;
-      scrollTimer = null;
+      scrollGeneration += 1;
+      scrollFramePending = false;
+      pendingWindowOffset = null;
+      body.scrollTop = (task.review?.window.offset ?? 0) * ROW_HEIGHT;
     }
+    const previousWindow = renderedRows?.window ?? null;
     current = task.review;
     if (current === null) {
       delete element.dataset.pending;
       renderText(paths, "Loading reviewed plan…");
       renderText(facts, task.error ?? "Waiting for the completed plan to become available.");
       body.replaceChildren();
+      renderedRows = null;
       toolbar.hidden = true;
       footer.hidden = true;
       return;
     }
     const review = current;
+    if (review.window !== previousWindow) pendingWindowOffset = null;
     element.dataset.pending = review.pending ?? "";
     list.ariaRowCount = String(review.window.total + 1);
     toolbar.hidden = false;
@@ -325,14 +372,18 @@ export function createPlanReviewPanel(callbacks) {
     cancel.disabled = review.pending !== null || task.executionControlState === "canceling";
     renderText(status, review.message ?? "");
     renderRows(review, task);
+    scheduleViewportCheck();
   }
 
   function dispose() {
+    resizeObserver.disconnect();
     if (searchTimer !== null) clearTimeout(searchTimer);
-    if (scrollTimer !== null) clearTimeout(scrollTimer);
     searchTimer = null;
-    scrollTimer = null;
+    scrollGeneration += 1;
+    scrollFramePending = false;
+    pendingWindowOffset = null;
     current = null;
+    renderedRows = null;
   }
 
   return Object.freeze({ element, render, dispose });

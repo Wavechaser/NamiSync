@@ -18,6 +18,14 @@ Selection changes batch a short user gesture and settle as one revisioned server
 
 A plan or inventory window indexes the complete post-filter visible sequence, not lexical database order. Fixed-height virtual rows and leading/trailing spacers keep scrolling stable. Window requests carry the appropriate revision, offset, and limit; a renderer requests the index it needs, commits only under its request generation, and suppresses duplicate uncovered-range requests. Changing search, collapse, filters, sorting, task detail, publication state, or retirement advances the local generation. Stale responses and queued animation frames are inert. `dispose()` disconnects observers/listeners and invalidates pending work before a root is removed.
 
+Plan scrolling within the loaded viewport coverage performs no fetch. An uncovered
+viewport coalesces to its latest intent with at most one window read in flight;
+returning to covered rows invalidates an obsolete result. Window reads do not
+disable the whole review or remount unchanged rows. View/selection/execute actions
+retain their separate pending and revision guards, so a later window response
+cannot restore older interactive facts. The retained browser window stays bounded
+to 256 rows, including when the total population is larger.
+
 **Future surface.** Inventory projections remain service-owned and coherent for live readers. Retention must be bounded, with truthful refusal when capacity is unavailable; publication must not expose partially rebuilt state. Acknowledgment, restore, and terminal changes refresh affected facts without invalidating a live reader silently. Cache topology, pinning, and patch/rebuild mechanisms are reopened implementation choices. History belongs to `HISTORY.md` and pages in the database.
 
 ## Search, filters, sorting, and follow
@@ -90,12 +98,90 @@ target into acceptance.
 
 ## M1-7 plan measurement procedure
 
+Projection construction assigns move peers before final node materialization and
+releases consumed row drafts before publishing the final projection. Source
+nodes remain stable across display sorts. Real sorts produce
+compact source-position permutations and inverse ranks, preserving exact sibling
+comparison and subtree contiguity without cloning projection nodes or identity
+maps. PlanReviewState validates structure on acquisition/staged replacement and
+retains only canonical and current orders. Search, filters and collapse reuse the
+current order; reset can reuse canonical order. Selection-only updates rebind
+orders to the new projection under the owner's structural/key guarantee, so old
+projection nodes are not kept alive by cached order references. Full replacement
+invalidates orders even for an equal request ID. Public malformed structure/order
+rejection remains intact; trusted derivation reuses already validated inputs.
+
+Changed-view matching retains each direct match and its parent chain, stopping
+at an already retained ancestor. Visibility and accessibility metadata are then
+derived from retained positions rather than repeated complete-array passes.
+Empty, unfiltered search retains all rows without reading display text. Nonempty
+search still uses literal Unicode casefolded
+substring semantics: only a query that remains non-ASCII after casefolding can
+skip ASCII displays; lowercase ASCII displays need no folded copy. Plan filters
+use a private immutable positional 0/1 byte mask aligned with the source
+projection. Public node-ID filters retain validation and weighted counts,
+including matches hidden by collapse. These changes introduce no persistent
+folded-text search cache.
+
+Visible state retains compact source positions, inverse visible indexes and
+sibling ordinals, plus retained direct-child counts. Counts are computed after
+matching/ancestor retention and before collapse, preserving collapsed-parent
+expandability. Each requested row derives its parent through the source-parent
+inverse, its first child through the next global visible entry, its sibling size
+through its parent's count, and expanded state through its retained-child count
+and collapse state. Lookahead may read one entry beyond the 256-row window;
+it never scans an entire sibling set. Ordinals and inverse indexes remain global
+to keep arbitrary windows and deepest-visible-ancestor lookup bounded. Compact
+values own immutable bytes, not read-only aliases of mutable buffers.
+
+For a validated N-row structure retaining R rows and exposing V rows, filtered
+or nonempty search examines at most N candidates, visits each retained ancestor
+once, orders R positions, and derives metadata over V rows: O(N + R log R + V)
+work excluding text lengths. Compact inverse/count populations and the Plan mask
+add linear source-index storage; public filter-map validation retains its own
+costs. Empty search skips display reads; all-retained derivation walks the cached
+order, suppressing collapsed descendants. Creating fresh dense inverse/count
+buffers also has a source-population cost.
+Public structure validation and real sorting remain separate costs. Window reads
+use O(limit) work and anchor resolution O(depth), independent of sibling width.
+Named access/reference tests witness these distinctions; timing does not prove
+complexity or waive the M1-7 budgets below.
+
+The execution receipt path may reuse a workflow-derived selection only for the
+exact checked plan and user-intent snapshot. Its construction-owned structural
+cache retains references to the immutable plan, selected and deselected sets,
+one operation-id-to-existing-operation index, and a scalar selected-byte bound;
+it introduces no copied operation graph. The 100,000-operation receipt fixture
+populates that index and selected set; its pristine deselection set is empty.
+The separate projection memory case does not construct this execution cache.
+These corrections invalidate prior source authority for a new acceptance run;
+they do not change the budgets, old raw artifact or the fixture worker workload.
+
 The M1-7 plan projection, gesture and receipt budgets above are independently
 predeclared, profile-scoped **Tier 2** SLOs under DEFENSE §7. Crossing workflow,
 bridge and browser layers within the plan slice is not a cross-slice operation
 gate. This evidence closes no setup/execution/inventory/integrity aggregate or
 release-resource criterion; it derives no ceiling from calibration. Preserve
 the budgets and fixed reference profile rather than tuning thresholds to runs.
+
+The compact representation uses the successor
+`tests/interfaces/web/m1_7_plan_compact_contract.json`, with separately frozen
+compact authority and measurement files. The legacy contract/authority/results
+remain preserved under their original names and meaning. The successor records
+the actual source projection, cached canonical/current orders, compact buffer
+widths and populations, and reference sharing. Its memory case retains a complete
+120,000-row base review while constructing a 240,000-row heavy review; both
+realize canonical and filename-descending orders and current 256-row windows.
+Baseline follows artifact construction but precedes review construction; sampling
+continues through both reviews, sort/window work and final retained-state checks.
+This includes the original projection-construction overlap and added order/visible
+storage, without changing the existing metric ID, 320 MiB maximum or five cold
+children. It makes no six-view or whole-headed-process memory claim. The current
+producer cannot label this representation as legacy evidence; validators reject
+mixed contract/authority/artifact families. Legacy compatibility is confined to
+reading and checking preserved evidence. There is no legacy fixture generator,
+product-data admission path or second runtime representation; retire the legacy
+reader when its evidence is archived and no longer needs active validation.
 
 Before measurement, freeze the finite source/instrument/validator file identities,
 actual native runtime/dependencies/profile, installed wheel and measured installed
