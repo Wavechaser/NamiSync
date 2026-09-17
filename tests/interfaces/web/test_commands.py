@@ -297,6 +297,14 @@ class _Service:
         self.calls.append(("mutate-plan-scope", task_id, kwargs))
         return {"disposition": "applied", "task_id": task_id}
 
+    def mutate_plan_highlight(self, task_id, **kwargs):
+        self.calls.append(("mutate-plan-highlight", task_id, kwargs))
+        return {"disposition": "applied", "task_id": task_id}
+
+    def mutate_plan_highlighted_selection(self, task_id, **kwargs):
+        self.calls.append(("mutate-plan-highlighted-selection", task_id, kwargs))
+        return {"disposition": "applied", "task_id": task_id}
+
     def start_execution(self, task_id, **kwargs):
         self.calls.append(("start-execution", task_id, kwargs))
         return ExecutionAdmissionView("confirmation-required", 0, "reviewing")
@@ -490,6 +498,8 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
         "get_plan_anchor",
         "mutate_plan_selection",
         "mutate_plan_scope",
+        "mutate_plan_highlight",
+        "mutate_plan_highlighted_selection",
         "start_execution",
         "control_execution",
         "next_events",
@@ -841,6 +851,50 @@ def test_plan_scope_command_has_constant_size_and_refuses_operation_id_lists() -
     with pytest.raises(CommandPayloadError):
         _invoke(commands["mutate_plan_scope"], {
             **payload, "expected_view_revision": -1,
+        })
+
+
+def test_plan_highlight_command_is_bounded_and_revisioned() -> None:
+    import json
+
+    commands, _slots, service = _commands()
+    node_id = "node-" + "4" * 32
+    payload = {
+        "task_id": TASK_ID, "expected_view_revision": 7,
+        "expected_highlight_revision": 4, "gesture": "extend",
+        "node_id": node_id,
+    }
+    assert len(json.dumps(payload).encode("utf-8")) < 256
+    assert _invoke(commands["mutate_plan_highlight"], payload)["disposition"] == "applied"
+    assert service.calls[-1][2]["expected_highlight_revision"] == 4
+    for invalid in (
+        {**payload, "node_ids": [node_id] * 300},
+        {**payload, "expected_highlight_revision": -1},
+        {**payload, "gesture": "clear"},
+        {**payload, "node_id": None},
+    ):
+        with pytest.raises(CommandPayloadError):
+            _invoke(commands["mutate_plan_highlight"], invalid)
+    assert _invoke(commands["mutate_plan_highlight"], {
+        **payload, "gesture": "clear", "node_id": None,
+    })["disposition"] == "applied"
+
+
+def test_plan_highlighted_selection_command_is_bounded_and_revisioned() -> None:
+    import json
+
+    commands, _slots, service = _commands()
+    payload = {
+        "task_id": TASK_ID, "command_id": COMMAND_ID,
+        "expected_view_revision": 7, "expected_highlight_revision": 4,
+        "expected_selection_revision": 3, "selected": True,
+    }
+    assert len(json.dumps(payload).encode("utf-8")) < 256
+    assert _invoke(commands["mutate_plan_highlighted_selection"], payload)["disposition"] == "applied"
+    assert service.calls[-1][2]["expected_highlight_revision"] == 4
+    with pytest.raises(CommandPayloadError):
+        _invoke(commands["mutate_plan_highlighted_selection"], {
+            **payload, "operation_ids": ["1" * 32] * 300,
         })
 
 

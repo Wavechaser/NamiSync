@@ -248,6 +248,154 @@ def test_plan_rootless_window_offsets_and_anchor_preserve_children() -> None:
     assert state.anchor(expected_revision=1, node_id="copy")["index"] is None
 
 
+def test_plan_highlights_are_independent_revisioned_ranges_and_window_flags() -> None:
+    state = PlanReviewState("task-" + "1" * 32, "a" * 32, _projection(),
+                            0, "reviewing", "source", "target")
+    summary = state.summary()
+    assert summary["highlight_revision"] == 0
+    assert summary["highlighted_count"] == 0
+    applied = state.mutate_highlight(
+        expected_view_revision=0, expected_highlight_revision=0,
+        gesture="replace", node_id="delete",
+    )
+    assert applied["highlight_revision"] == 1
+    assert applied["highlight_anchor_node_id"] == "delete"
+    assert applied["highlight_focus_node_id"] == "delete"
+    assert state.window(expected_revision=0, offset=0, limit=1)["rows"][0]["highlighted"]
+
+    extended = state.mutate_highlight(
+        expected_view_revision=0, expected_highlight_revision=1,
+        gesture="extend", node_id="copy",
+    )
+    assert extended["highlighted_count"] == 3
+    assert [row["highlighted"] for row in state.window(expected_revision=0, offset=0, limit=3)["rows"]] == [True, True, True]
+    assert state.mutate_highlight(
+        expected_view_revision=0, expected_highlight_revision=1,
+        gesture="toggle", node_id="copy",
+    )["disposition"] == "conflict"
+
+    toggled = state.mutate_highlight(
+        expected_view_revision=0, expected_highlight_revision=2,
+        gesture="toggle", node_id="copy",
+    )
+    assert toggled["highlighted_count"] == 2
+    added = state.mutate_highlight(
+        expected_view_revision=0, expected_highlight_revision=3,
+        gesture="add-range", node_id="copy",
+    )
+    assert added["highlighted_count"] == 3
+
+
+def test_plan_highlights_persist_through_collapse_and_clear_on_query_or_filter() -> None:
+    state = PlanReviewState("task-" + "1" * 32, "a" * 32, _projection(),
+                            0, "reviewing", "source", "target")
+    state.mutate_highlight(expected_view_revision=0, expected_highlight_revision=0,
+                           gesture="replace", node_id="copy")
+    collapsed = state.update(
+        expected_revision=0, search_query="", filters=frozenset(),
+        sort_column=PlanSortColumn.PATH, sort_direction=SortDirection.ASCENDING,
+        collapse_node_id="folder", collapsed=True,
+    )
+    assert collapsed["highlighted_count"] == 1
+    assert collapsed["highlight_focus_node_id"] == "copy"
+    assert collapsed["highlight_focus_visible_index"] is None
+    assert not state.window(expected_revision=1, offset=0, limit=256)["rows"][-1]["highlighted"]
+    reopened = state.update(
+        expected_revision=1, search_query="beta", filters=frozenset(),
+        sort_column=PlanSortColumn.PATH, sort_direction=SortDirection.ASCENDING,
+        collapse_node_id="folder", collapsed=False,
+    )
+    assert reopened["highlighted_count"] == 0
+    assert reopened["highlight_revision"] == 2
+    assert reopened["highlight_anchor_node_id"] is None
+
+
+def test_highlighted_selection_scope_deduplicates_overlapping_folder_and_operation() -> None:
+    state = PlanReviewState("task-" + "1" * 32, "a" * 32, _projection(),
+                            0, "reviewing", "source", "target")
+    state.mutate_highlight(expected_view_revision=0, expected_highlight_revision=0,
+                           gesture="replace", node_id="folder")
+    state.mutate_highlight(expected_view_revision=0, expected_highlight_revision=1,
+                           gesture="toggle", node_id="copy")
+    assert state.highlighted_selection_scope(
+        expected_view_revision=0,
+        expected_highlight_revision=2,
+        expected_selection_revision=0,
+    ) == ("1" * 32,)
+
+
+def test_highlighted_selection_scope_keeps_collapsed_off_window_descendants() -> None:
+    state = PlanReviewState("task-" + "1" * 32, "a" * 32, _projection(),
+                            0, "reviewing", "source", "target",
+                            search_query="beta", filters=frozenset({"copy"}))
+    state.mutate_highlight(expected_view_revision=0, expected_highlight_revision=0,
+                           gesture="replace", node_id="copy")
+    state.update(
+        expected_revision=0, search_query="beta", filters=frozenset({"copy"}),
+        sort_column=PlanSortColumn.PATH, sort_direction=SortDirection.ASCENDING,
+        collapse_node_id="folder", collapsed=True,
+    )
+    assert state.highlighted_selection_scope(
+        expected_view_revision=1,
+        expected_highlight_revision=1,
+        expected_selection_revision=0,
+    ) == ("1" * 32,)
+
+
+def test_highlighted_selection_scope_rejects_stale_revisions_and_empty_is_noop() -> None:
+    state = PlanReviewState("task-" + "1" * 32, "a" * 32, _projection(),
+                            0, "reviewing", "source", "target")
+    assert state.highlighted_selection_scope(
+        expected_view_revision=0,
+        expected_highlight_revision=0,
+        expected_selection_revision=0,
+    ) == ()
+    state.mutate_highlight(expected_view_revision=0, expected_highlight_revision=0,
+                           gesture="replace", node_id="delete")
+    assert state.highlighted_selection_scope(
+        expected_view_revision=1,
+        expected_highlight_revision=1,
+        expected_selection_revision=0,
+    ) is None
+    assert state.highlighted_selection_scope(
+        expected_view_revision=0,
+        expected_highlight_revision=0,
+        expected_selection_revision=0,
+    ) is None
+    assert state.highlighted_selection_scope(
+        expected_view_revision=0,
+        expected_highlight_revision=1,
+        expected_selection_revision=1,
+    ) is None
+
+
+def test_plan_highlight_arrow_gestures_seed_and_preserve_range() -> None:
+    state = PlanReviewState("task-" + "1" * 32, "a" * 32, _projection(),
+                            0, "reviewing", "source", "target")
+    first = state.mutate_highlight(
+        expected_view_revision=0, expected_highlight_revision=0,
+        gesture="move_down",
+    )
+    assert first["highlight_focus_node_id"] == "delete"
+    second = state.mutate_highlight(
+        expected_view_revision=0, expected_highlight_revision=1,
+        gesture="move_down_extend",
+    )
+    assert second["highlighted_count"] == 2
+    assert second["highlight_focus_node_id"] == "folder"
+    third = state.mutate_highlight(
+        expected_view_revision=0, expected_highlight_revision=2,
+        gesture="move_down_extend",
+    )
+    assert third["highlighted_count"] == 3
+    assert third["highlight_focus_node_id"] == "copy"
+    cleared = state.mutate_highlight(
+        expected_view_revision=0, expected_highlight_revision=3,
+        gesture="clear",
+    )
+    assert cleared["highlighted_count"] == 0
+
+
 def test_scoped_counts_use_container_own_operation_not_mixed_rollup() -> None:
     nodes = (
         replace(_node("root", "Plan", 0, None, 3, container=True),

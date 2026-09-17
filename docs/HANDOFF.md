@@ -1,27 +1,30 @@
 # Latest session handoff
 
-## Plan search and filter controls (2026-09-17)
+## Plan review presentation and highlighted rows (2026-09-17)
 
-Plan search stays enabled during an in-flight view refresh. The task shell
-retains only the newest later query and dispatches it after the current view
-receipt, preserving typing/focus and server-owned view ordering. Switching
-away from a retained review does not discard a queued query. Filter controls
-now use compact button geometry, translucent neutral rest states, opaque
-theme/category active fills and an accent All reset. All, Copy, Move, Update
-and Trash always show; remaining categories show only when their complete-plan
-counts are positive. Inactive Trash text becomes red above one item.
+The Plan review now has compact, category-colored filter buttons with ordinary
+button fills at rest; a narrower right-aligned search field; stable Plan and
+Status cards during view refresh; an ISO Modified column; and a tiered status.
+The status says **Plan ready** when a valid plan has no selected operations,
+**Ready to execute** only when preflight passes and selection is nonempty, and
+**Plan needs attention** when preflight refuses it. Execute uses the same gate.
 
-`PlanReviewState` computes a complete-plan direct-row `filter_counts` facet;
-the exact browser summary validator accepts and checks it. No selection,
-execution, bridge command, or domain operation scope changed. PRESENTATION,
-DESKTOP_UI, FEATURES, README, CHANGELOG and M1_PLAN record the contract.
+Python owns row highlights, anchor, focus and revision. Browser click/keyboard
+gestures carry endpoint IDs and revisions, not operation lists. Ranges resolve
+against the complete ordered view; window rows carry only their highlight flags.
+Search/filter changes clear highlights; sorting, collapse and scrolling do not.
+A checkbox inside the highlight applies one server-side selection mutation under
+view/highlight/selection revision guards, preserving dependency and safety rules.
 
-Focused Plan/frontend/token tests passed (85). The web department passed 1,265
-tests, with one skip and 30 headed deselections; the ordinary suite passed
-5,172 tests, with five skips and 30 headed deselections. The installed task-shell Plan
-witness passed and its confirmation screenshot in `build/evidence` shows the
-new counted controls. An initial installed failure revealed the omitted exact
-summary validator field; that was corrected before the passing run. A separate
-Setup headed witness reaches an empty completed Plan and waits for an
-operation row omitted by the earlier rootless-table delivery; it failed twice
-at that stale predicate and was not modified in this UI unit.
+The exact command catalogs, presentation/bridge/UI contracts, focused probes,
+and the installed Setup/Plan headed witness were updated together. Focused
+web/plan-review checks passed (470); the 120k highlighted-selection mutation
+cost witness passed in 1.002 seconds. With process-scoped Windows PowerShell
+execution policy set to Bypass, the ordinary suite passed: 5,181 passed,
+5 skipped, 30 headed deselected. A direct registry highlighted-selection
+revision/atomicity check passed after that suite.
+The installed headed Setup/Plan witness passed after changing its empty-plan
+predicate to require the table card instead of the removed synthetic root row.
+Its screenshot capture renders transparent cards against a white fallback in
+this host; the same artifact appears in Setup and is not evidence of a new
+Plan-only color change.

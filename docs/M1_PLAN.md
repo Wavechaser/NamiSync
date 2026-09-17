@@ -38,6 +38,33 @@ The prior aggregate complete-owner-graph model and BR-G-45 are retired. No futur
 
 ## Remaining checkpoints
 
+### Plan review density and highlighted-row interaction (2026-09-17)
+
+The finite production population is the Plan panel and style tokens, task-shell
+view rendering, Plan review state/window projection, desktop command ingress and
+bridge validation. Direct browser/server/host tests and PRESENTATION, BRIDGE,
+DESKTOP_UI, FEATURES, CHANGELOG and HANDOFF own the matching contract. Current
+execution selection stays workflow-owned; visual row highlights are a distinct
+server-owned review state and never select operations merely by navigation.
+
+| ID | Accepted outcome | Named gate | Status |
+| --- | --- | --- | --- |
+| GUI-H1 | Tighten and correct category-colored filter buttons, matching ordinary button fills when inactive; rehouse the Plan card, status tiers, search/filter toolbar and ISO Modified labels without changing view/selection semantics. | Component and token checks, installed Plan visual witness, focused interface tests. | Delivered; installed headed witness passed. |
+| GUI-H2 | Preserve Plan/Status card nodes and current rows during refresh; update changed text and swap a new row window once, without remounting rows just to disable controls. | Focus/identity and pending-state component probes, slow-response task-shell check, window/selection regressions. | Delivered; focused probes passed. |
+| GUI-H3 | Add server-owned highlighted row set and anchor with bounded revisioned click/range/focus gestures across the complete ordered view and returned-window flags. | Command payload/validation, off-window/collapsed/sort/filter/stale tests, 120k cost check, frontend keyboard/mouse probes. | Delivered; focused and 120k checks passed. |
+| GUI-H4 | Apply a checkbox gesture to the highlighted row set when its row is highlighted, via one atomic workflow execution-selection mutation; leave highlights unchanged and preserve dependency/safety rules. | Browser and server bulk-action tests, stale triple-revision refusal, hidden/operation-bearing folder cases, direct consumers and ordinary suite. | Delivered; ordinary suite and focused registry check passed. |
+
+Commit H1/H2 as independent presentation units where their shared Plan panel
+allows a coherent boundary; H3/H4 may need one cross-layer atomic commit if
+their protocol and interaction cannot be tested independently. Non-goals are
+durable highlighting, inventory behavior, new execution effect/admission or
+client-owned bulk IDs. Task-specific stops: any implicit execution-selection
+change from highlight navigation, stale gesture acceptance, out-of-view range
+mutation, unbounded bridge payload, or regressions in existing scoped gestures.
+Regression study includes quick task switching, slow view receipts, empty
+results, zero-row Plan, sort/collapse/window changes, keyboard focus inside
+checkboxes and disclosures, and selection commitment.
+
 ### Plan search and filter controls (2026-09-17)
 
 | ID | Accepted outcome | Named gate | Status |

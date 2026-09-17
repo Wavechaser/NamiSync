@@ -27,6 +27,17 @@ and remembered locations, bounded Plan review/selection/sorting and same-task
 execution with live controls. Execution-result/inventory review and beta
 packaging remain open.
 
+#### Refine Plan density, readiness and row highlighting (2026-09-17)
+
+- Tighten category filter buttons against Fluent button fills, align search on
+  the same row, preserve Plan/Status cards and loaded rows during refresh, and
+  show ISO Modified labels.
+- Distinguish **Plan ready** from **Ready to execute**; empty selections and
+  preflight refusals cannot advertise or start execution.
+- Add compact revision-guarded row-highlight gestures with complete-view range
+  resolution, keyboard navigation, window flags, and atomic highlighted-range
+  checkbox application through existing selection safety rules.
+
 #### Keep Plan search editable and count filter toggles (2026-09-17)
 
 - Keep search focused and editable through a pending view refresh; apply only

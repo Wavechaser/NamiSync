@@ -40,6 +40,8 @@ const COMMAND_POLICY_JSON = `{
   "get_plan_anchor": {"timeout": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
   "mutate_plan_selection": {"timeout": "local-5-seconds", "retry": "same-command-once", "phase": "open"},
   "mutate_plan_scope": {"timeout": "local-5-seconds", "retry": "same-command-once", "phase": "open"},
+  "mutate_plan_highlight": {"timeout": "local-5-seconds", "retry": "none", "phase": "open"},
+  "mutate_plan_highlighted_selection": {"timeout": "local-5-seconds", "retry": "same-command-once", "phase": "open"},
   "start_execution": {"timeout": "mutation-30-seconds", "retry": "same-command-once", "phase": "open"},
   "control_execution": {"timeout": "local-5-seconds", "retry": "none", "phase": "open"},
   "next_events": {"timeout": "drain-30-seconds", "retry": "none", "phase": "open"},
@@ -818,6 +820,61 @@ export function mutatePlanScope(
   });
   return dispatchAttempt(
     "mutate_plan_scope", payload, validatePlanViewSummary,
+    PLAN_VIEW_TIMEOUT_MS,
+  );
+}
+
+export function mutatePlanHighlight(
+  taskId, expectedViewRevision, expectedHighlightRevision, gesture, nodeId = null,
+) {
+  requireTaskId(taskId, "mutatePlanHighlight");
+  const endpoints = new Set(["replace", "toggle", "extend", "add-range"]);
+  const implicit = new Set([
+    "clear", "move_up", "move_down", "move_up_extend", "move_down_extend",
+  ]);
+  if (!isNonnegativeInteger(expectedViewRevision)
+      || !isNonnegativeInteger(expectedHighlightRevision)
+      || !(endpoints.has(gesture) || implicit.has(gesture))
+      || (endpoints.has(gesture) ? !isNodeId(nodeId) : nodeId !== null)) {
+    throw new TypeError("mutatePlanHighlight requires exact revisions and gesture");
+  }
+  return dispatchAttempt(
+    "mutate_plan_highlight",
+    Object.freeze({
+      task_id: taskId,
+      expected_view_revision: expectedViewRevision,
+      expected_highlight_revision: expectedHighlightRevision,
+      gesture,
+      node_id: nodeId,
+    }),
+    validatePlanViewSummary,
+    PLAN_VIEW_TIMEOUT_MS,
+  );
+}
+
+export function mutatePlanHighlightedSelection(
+  taskId, expectedViewRevision, expectedHighlightRevision,
+  expectedSelectionRevision, selected,
+) {
+  requireTaskId(taskId, "mutatePlanHighlightedSelection");
+  if (!isNonnegativeInteger(expectedViewRevision)
+      || !isNonnegativeInteger(expectedHighlightRevision)
+      || !isNonnegativeInteger(expectedSelectionRevision)
+      || typeof selected !== "boolean") {
+    throw new TypeError(
+      "mutatePlanHighlightedSelection requires exact revisions and selection",
+    );
+  }
+  const payload = Object.freeze({
+    task_id: taskId,
+    command_id: mintId(),
+    expected_view_revision: expectedViewRevision,
+    expected_highlight_revision: expectedHighlightRevision,
+    expected_selection_revision: expectedSelectionRevision,
+    selected,
+  });
+  return dispatchAttempt(
+    "mutate_plan_highlighted_selection", payload, validatePlanViewSummary,
     PLAN_VIEW_TIMEOUT_MS,
   );
 }
@@ -2816,7 +2873,10 @@ function isPlanViewGesture(value) {
 function validatePlanViewSummary(value) {
   return isExactObject(value, [
     "disposition", "task_id", "request_id", "view_revision",
-    "selection_revision", "selection_state", "source_path", "target_path",
+    "selection_revision", "selection_state", "highlight_revision",
+    "highlight_anchor_node_id", "highlight_focus_node_id",
+    "highlight_focus_visible_index", "highlighted_count",
+    "source_path", "target_path",
     "selected_operation_count", "selectable_operation_count", "operation_count",
     "filter_counts",
     "scope_selected_operation_count", "scope_selectable_operation_count",
@@ -2832,11 +2892,18 @@ function validatePlanViewSummary(value) {
     && typeof value.task_id === "string" && TASK_PATTERN.test(value.task_id)
     && typeof value.request_id === "string" && ID_PATTERN.test(value.request_id)
     && [value.view_revision, value.selection_revision,
+      value.highlight_revision, value.highlighted_count,
       value.selected_operation_count, value.selectable_operation_count,
       value.operation_count, value.scope_selected_operation_count,
       value.scope_selectable_operation_count, value.visible_row_count,
       value.collapsed_count]
       .every(isNonnegativeInteger)
+    && (value.highlight_anchor_node_id === null || isNodeId(value.highlight_anchor_node_id))
+    && (value.highlight_focus_node_id === null || isNodeId(value.highlight_focus_node_id))
+    && (value.highlight_focus_visible_index === null
+      || isNonnegativeInteger(value.highlight_focus_visible_index))
+    && (value.highlight_focus_node_id !== null
+      || value.highlight_focus_visible_index === null)
     && value.scope_selected_operation_count <= value.selected_operation_count
     && isExactObject(value.filter_counts, [
       "all", "copy", "mkdir", "move", "recase", "update", "move_update",
@@ -2885,7 +2952,7 @@ function validatePlanWindowRow(value) {
     "node_id", "display", "depth", "is_container", "visible_index",
     "parent_visible_index", "first_child_visible_index", "position_in_set",
     "set_size", "expanded", "row_kind", "operation_id", "operation_kind",
-    "reason", "blocked_reason", "selection", "selectable_operation_count",
+    "reason", "blocked_reason", "selection", "highlighted", "selectable_operation_count",
     "selected_operation_count", "operation_count", "size", "mtime_ns",
     "dependency_count", "risk", "move_peer_id", "notice",
     "selection_exclusion_reason",
@@ -2903,6 +2970,7 @@ function validatePlanWindowRow(value) {
     && (value.reason === null || typeof value.reason === "string")
     && (value.blocked_reason === null || typeof value.blocked_reason === "string")
     && ["selected", "unselected", "mixed", "disabled"].includes(value.selection)
+    && typeof value.highlighted === "boolean"
     && [value.selectable_operation_count, value.selected_operation_count,
       value.operation_count, value.dependency_count].every(isNonnegativeInteger)
     && value.selected_operation_count <= value.selectable_operation_count
@@ -2918,9 +2986,9 @@ function validatePlanWindowRow(value) {
 
 function validatePlanWindow(value) {
   return isExactObject(value, [
-    "disposition", "view_revision", "offset", "total", "rows",
+    "disposition", "view_revision", "highlight_revision", "offset", "total", "rows",
   ]) && ["current", "conflict"].includes(value.disposition)
-    && [value.view_revision, value.offset, value.total].every(isNonnegativeInteger)
+    && [value.view_revision, value.highlight_revision, value.offset, value.total].every(isNonnegativeInteger)
     && Array.isArray(value.rows) && value.rows.length <= 256
     && value.rows.every(validatePlanWindowRow);
 }

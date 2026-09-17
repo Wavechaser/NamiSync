@@ -82,6 +82,44 @@ def test_scoped_selection_120k_server_mutation_cost() -> None:
     assert elapsed < 10.0, f"120k scoped server mutation took {elapsed:.3f}s"
 
 
+def test_highlighted_selection_120k_server_mutation_cost() -> None:
+    artifact = build_plan_fixture(information_heavy=False)
+    state = benchmark.make_plan_review_state(artifact)
+    window = state.window(expected_revision=0, offset=0, limit=256)
+    row = next(row for row in window["rows"] if row["operation_id"] is not None)
+    highlighted = state.mutate_highlight(
+        expected_view_revision=0, expected_highlight_revision=0,
+        gesture="replace", node_id=row["node_id"],
+    )
+    started = perf_counter()
+    identifiers = state.highlighted_selection_scope(
+        expected_view_revision=0,
+        expected_highlight_revision=highlighted["highlight_revision"],
+        expected_selection_revision=0,
+    )
+    deselected = apply_selection_mutation(
+        artifact.plan, frozenset(), deselect=frozenset(identifiers),
+    )
+    decision = derive_execution_selection(
+        artifact.plan, user_deselected=deselected,
+    )
+    state.replace_selection(
+        selected_operation_ids=frozenset(str(identifier) for identifier in decision.selection),
+        exclusion_reasons={}, selection_revision=1, selection_state="reviewing",
+        requires_destructive_confirmation=decision.requires_destructive_confirmation,
+        irreversible_update_count=decision.irreversible_update_count,
+        destructive_operation_count=decision.destructive_operation_count,
+        irreversible_operation_count=decision.irreversible_operation_count,
+        destructive_operation_counts=benchmark._selection_count_mapping(decision),
+        required_bytes=decision.required_bytes,
+    )
+    elapsed = perf_counter() - started
+    print(f"highlight-selection-120k: {len(identifiers)} ids, {elapsed:.3f}s")
+    assert identifiers == (row["operation_id"],)
+    assert state.summary()["selection_revision"] == 1
+    assert elapsed < 10.0, f"120k highlighted mutation took {elapsed:.3f}s"
+
+
 CONTRACT_PATH = Path(__file__).with_name("m1_7_plan_compact_contract.json")
 LEGACY_CONTRACT_PATH = Path(__file__).with_name("m1_7_plan_contract.json")
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]

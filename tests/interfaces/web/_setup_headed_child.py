@@ -977,11 +977,11 @@ _INDEPENDENT_SCRIPT = r"""
   original.click();
   await until(() => {
     const review = document.querySelector(".nami-plan-review");
-    const row = review?.querySelector(".nami-plan-review__rows [data-node-id]");
+    const table = review?.querySelector(".nami-plan-review__table-card");
     return original.ariaCurrent === "page"
       && document.querySelector(".nami-work-panel")?.getAttribute("aria-label") === "Work area — Task 1"
       && review instanceof HTMLElement && review.checkVisibility()
-      && row instanceof HTMLElement && row.checkVisibility();
+      && table instanceof HTMLElement && table.checkVisibility();
   }, "original completed Plan review navigation");
   return {
     recent_activated: true,
@@ -1051,11 +1051,11 @@ _AMBIGUITY_SCRIPT = r"""
   completedTask.click();
   await until(() => {
     const review = document.querySelector(".nami-plan-review");
-    const row = review?.querySelector(".nami-plan-review__rows [data-node-id]");
+    const table = review?.querySelector(".nami-plan-review__table-card");
     return completedTask.ariaCurrent === "page"
       && document.querySelector(".nami-work-panel")?.getAttribute("aria-label") === "Work area — Task 1"
       && review instanceof HTMLElement && review.checkVisibility()
-      && row instanceof HTMLElement && row.checkVisibility();
+      && table instanceof HTMLElement && table.checkVisibility();
   }, "completed Plan review before screenshot and reload");
   return {
     picker_ambiguous: true,
@@ -1089,11 +1089,11 @@ _RELOADED_SCRIPT = r"""
   original.click();
   await until(() => {
     const review = document.querySelector(".nami-plan-review");
-    const row = review?.querySelector(".nami-plan-review__rows [data-node-id]");
+    const table = review?.querySelector(".nami-plan-review__table-card");
     return original.ariaCurrent === "page"
       && document.querySelector(".nami-work-panel")?.getAttribute("aria-label") === "Work area — Task 1"
       && review instanceof HTMLElement && review.checkVisibility()
-      && row instanceof HTMLElement && row.checkVisibility();
+      && table instanceof HTMLElement && table.checkVisibility();
   }, "reloaded completed Plan review");
   const marker = document.createElement("p");
   marker.textContent = "Setup headed gate complete";

@@ -136,6 +136,7 @@ globalThis.taskHarness = {
   openPlanView(...args) { calls.push(["open-plan", ...args]); return deferred(planOpens); },
   getPlanWindow(...args) { calls.push(["plan-window", ...args]); return deferred(planWindows); },
   updatePlanView(...args) { calls.push(["update-plan", ...args]); return deferred(planViewUpdates); },
+  mutatePlanHighlight(...args) { calls.push(["highlight-plan", ...args]); return Promise.resolve(planSummary()); },
   mutatePlanSelection(...args) { calls.push(["select-plan", ...args]); return deferred(planSelections); },
   startExecution(...args) { calls.push(["execute-plan", ...args]); return deferred(planExecutions); },
   controlExecution(...args) { calls.push(["control-execution", ...args]); return deferred(executionControls); },
@@ -246,6 +247,7 @@ const bridgeUrl = moduleUrl(`
   export const planAgain = (...args) => globalThis.taskHarness.planAgain(...args);
   export const startTaskDrain = (...args) => globalThis.taskHarness.startTaskDrain(...args);
   export const updatePlanView = (...args) => globalThis.taskHarness.updatePlanView(...args);
+  export const mutatePlanHighlight = (...args) => globalThis.taskHarness.mutatePlanHighlight(...args);
 `);
 StartPlanUncertainErrorType = (await import(bridgeUrl)).StartPlanUncertainError;
 const readinessUrl = moduleUrl(`
@@ -264,7 +266,7 @@ const themeUrl = moduleUrl(`
 let appSource = await readFile(process.argv[2], "utf8");
 appSource = appSource.replace(
   /import \{[\s\S]*?\} from "\.\/bridge\.js";/,
-  `import { acknowledgeShellReady, admitLocation, BridgeTransportError, closeTask, controlExecution, createTask, echoReadiness, getPlanAnchor, getPlanWindow, listTasks, markBridgeOperational, mutatePlanSelection, openPlanView, pickFolder, planAgain, prepareSetup, readSetup, StartPlanUncertainError, startExecution, startInventory, startPlan, startTaskDrain, TaskCreateUncertainError, updatePlanView, whenBridgeApiReady } from "${bridgeUrl}";`,
+  `import { acknowledgeShellReady, admitLocation, BridgeTransportError, closeTask, controlExecution, createTask, echoReadiness, getPlanAnchor, getPlanWindow, listTasks, markBridgeOperational, mutatePlanHighlight, mutatePlanSelection, openPlanView, pickFolder, planAgain, prepareSetup, readSetup, StartPlanUncertainError, startExecution, startInventory, startPlan, startTaskDrain, TaskCreateUncertainError, updatePlanView, whenBridgeApiReady } from "${bridgeUrl}";`,
 );
 appSource = appSource
   .replace("./readiness.js", readinessUrl)
@@ -322,6 +324,11 @@ function planSummary(overrides = {}) {
     view_revision: 0,
     selection_revision: 0,
     selection_state: "reviewing",
+    highlight_revision: 0,
+    highlight_anchor_node_id: null,
+    highlight_focus_node_id: null,
+    highlight_focus_visible_index: null,
+    highlighted_count: 0,
     source_path: "C:\\source",
     target_path: "D:\\target",
     selected_operation_count: 1,
@@ -355,6 +362,7 @@ function planWindow(summary, offset = 0) {
   return {
     disposition: "current",
     view_revision: summary.view_revision,
+    highlight_revision: summary.highlight_revision,
     offset,
     total: 1,
     rows: [{
@@ -374,6 +382,7 @@ function planWindow(summary, offset = 0) {
       reason: null,
       blocked_reason: null,
       selection: "disabled",
+      highlighted: false,
       selectable_operation_count: 0,
       selected_operation_count: 0,
       operation_count: 0,
@@ -635,7 +644,7 @@ globalThis.planReviewHarness.callbacks.onSelect(
   firstReview.window.rows[0],
   false,
 );
-assert.equal(firstReview.pending, "selection");
+await until(() => firstReview.pending === "selection");
 const selectedReview = planSummary({
   disposition: "conflict", view_revision: 2, selection_revision: 1,
   selected_operation_count: 1,

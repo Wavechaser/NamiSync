@@ -23,6 +23,18 @@ null. The header checkbox is the sole whole-view bulk control.
 
 Selection changes batch a short user gesture and settle as one revisioned server mutation. Scoped Plan gestures carry expected view and selection revisions, resolve the full query and guard both revisions under the task owner before applying one workflow mutation. A stale gesture has no effect. The UI may show pending intent but must not optimistically invent a final selection. Selection preview derives directly from the retained selection/domain facts; it does not rebuild an unrelated whole review to answer a checkbox change.
 
+Row highlighting is separate from execution selection. Plain clicks replace the
+highlighted set; Ctrl-click toggles; Shift-click extends from the retained
+anchor; Ctrl+Shift-click adds a range. Arrow keys move focus, Shift+arrows
+extend, and Escape clears. The browser sends only a compact gesture endpoint
+with expected view/highlight revisions. Python resolves ranges against the full
+ordered view, including off-window rows and collapsed descendants. Window rows
+carry highlight flags; scrolling, sorting and collapse preserve them, while
+search/filter changes clear them. Checkboxes change execution selection without
+changing highlighting, and a checkbox inside a highlighted range applies to
+that range. Highlight-driven selection also carries the execution-selection
+revision and is rejected as stale before one atomic workflow mutation.
+
 The scoped-selection cost witness in `test_plan_review_scale.py` constructs the
 existing 120,000-operation base fixture, activates the Copy filter, and times
 complete server membership resolution, workflow deselection/decision derivation,
@@ -89,6 +101,12 @@ chosen sibling sort from ascending to descending to canonical path order;
 switching headers begins ascending, and the backend remains the sole sort owner.
 DESKTOP_UI owns the blocking confirmation interaction and BRIDGE owns exact
 request/revision admission and recovery.
+
+The status tier distinguishes a valid plan from an executable selection. A
+non-empty plan with no selected executable operation reports **Plan ready**;
+only a preflight-ready plan with at least one selected executable operation
+reports **Ready to execute**. Preflight refusal, errored/inoperable selected
+items, and an empty selection never claim executable readiness.
 
 ## Focused scale acceptance
 

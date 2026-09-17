@@ -272,6 +272,8 @@ BOOTSTRAP rows, commands require OPEN.
 | `get_plan_anchor` | `{task_id:TaskId,expected_revision:SafeInt,node_id:NodeId}` | `{disposition:"current"\|"conflict",view_revision:SafeInt,node_id:null\|NodeId,index:null\|SafeInt}` | 5 s; one identical-payload retry |
 | `mutate_plan_selection` | `{task_id:TaskId,command_id:HexId,expected_view_revision:SafeInt,expected_selection_revision:SafeInt,node_id:NodeId,selected:boolean}` | `PlanViewSummary` | 5 s; one same-command replay after uncertainty |
 | `mutate_plan_scope` | `{task_id:TaskId,command_id:HexId,expected_view_revision:SafeInt,expected_selection_revision:SafeInt,selected:boolean}` | `PlanViewSummary` | 5 s; one same-command replay after uncertainty |
+| `mutate_plan_highlight` | `{task_id:TaskId,expected_view_revision:SafeInt,expected_highlight_revision:SafeInt,gesture:"clear"|"replace"|"toggle"|"extend"|"add-range"|"move_up"|"move_down",node_id:null\|NodeId}` | `PlanViewSummary` | 5 s; no automatic retry |
+| `mutate_plan_highlighted_selection` | `{task_id:TaskId,command_id:HexId,expected_view_revision:SafeInt,expected_highlight_revision:SafeInt,expected_selection_revision:SafeInt,selected:boolean}` | `PlanViewSummary` | 5 s; one same-command replay after uncertainty |
 | `start_execution` | `{task_id:TaskId,request_id:HexId,command_id:HexId,expected_revision:SafeInt,destructive_acknowledged:boolean}` | task/session start or `{disposition:"in-flight"\|"frozen"\|"conflict"\|"confirmation-required",revision:SafeInt,state:"reviewing"\|"committing"\|"committed",session:null\|{request_id:HexId,session_id:HexId}}` | async-small; 30 s; one same-command replay, then visible exact-command retry after uncertainty |
 | `control_execution` | `{task_id:TaskId,session_id:HexId,action:"pause"\|"resume"\|"cancel"}` | `{code:string,session_id:HexId,before:null\|string,after:null\|string,detail:string,accepted:boolean}` | 5 s; no automatic retry |
 | `next_events` | `{task_id:TaskId,session_id:HexId,drain_id:HexId,replay_from:null\|positive-integer}` | `{task_id:TaskId,session_id:HexId,drain_id:HexId,updates:array}` | 30 s client / 25 s server; recovery mints a new drain id |
@@ -307,6 +309,16 @@ node and Boolean state are either both null or both present.
 Plan window totals, offsets, visible/parent/first-child indexes and anchors
 exclude the synthetic projection root. Its direct children have depth zero
 and no public parent; an anchor resolving only to the root returns null.
+
+`PlanViewSummary` also carries `highlight_revision`,
+`highlight_anchor_node_id`, `highlight_focus_node_id`,
+`highlight_focus_visible_index`, and `highlighted_count`. A window carries the
+matching `highlight_revision`; each row carries a Boolean `highlighted` flag.
+Highlight commands never carry operation-id arrays. The task owner resolves a
+compact gesture or highlighted range under the expected revisions, and a stale
+request has no effect. Highlight state is presentation-only until the explicit
+highlighted-selection command applies the resulting operation set through the
+ordinary dependency and safety rules.
 
 Selection facts come from the workflow's effective selection. Required bytes use
 canonical nonnegative signed-64-bit decimal text; operation counts are SafeInts.

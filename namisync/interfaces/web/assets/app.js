@@ -12,6 +12,8 @@ import {
   markBridgeOperational,
   mutatePlanSelection,
   mutatePlanScope,
+  mutatePlanHighlight,
+  mutatePlanHighlightedSelection,
   openPlanView,
   pickFolder,
   planAgain,
@@ -144,6 +146,12 @@ const panel = createWorkPanel({
   },
   onScopeSelect: (review, selected) => {
     void changePlanSelection(review, null, selected);
+  },
+  onHighlight: (review, gesture, nodeId) => {
+    queuePlanHighlight(review, gesture, nodeId);
+  },
+  onHighlightedSelect: (review, selected) => {
+    void changePlanSelection(review, null, selected, true);
   },
   onExecute: (review, returnFocus) => {
     void executeReviewedPlan(review, returnFocus);
@@ -763,6 +771,7 @@ async function loadPlanReview(task, force = false) {
       tasks.get(task.taskId) !== task || task.reviewRevision !== request
       || task.sessionId !== sessionId || window.disposition !== "current"
       || window.view_revision !== summary.view_revision
+      || window.highlight_revision !== summary.highlight_revision
     ) return;
     task.executionStarted ||= summary.selection_state === "committed";
     const message = task.executionStarted
@@ -777,6 +786,7 @@ async function loadPlanReview(task, force = false) {
       window,
       pending: null,
       queuedSearchQuery: null,
+      highlightQueue: Promise.resolve(),
       message,
       actionRevision: 0,
       windowRequestRevision: 0,
@@ -864,6 +874,7 @@ async function changePlanView(review, patch, queued = false) {
       retainedReviewTask(review) !== task || review.actionRevision !== action
       || window.disposition !== "current"
       || window.view_revision !== summary.view_revision
+      || window.highlight_revision !== summary.highlight_revision
     ) return;
     review.summary = summary;
     review.window = window;
@@ -926,6 +937,7 @@ async function loadPlanWindow(review, offset) {
         if (
           window.disposition !== "current"
           || window.view_revision !== viewRevision
+          || window.highlight_revision !== review.summary.highlight_revision
         ) return;
         review.window = window;
         review.message = "";
@@ -947,20 +959,62 @@ async function loadPlanWindow(review, offset) {
   }
 }
 
-async function changePlanSelection(review, row, selected) {
+function queuePlanHighlight(review, gesture, nodeId) {
+  const queuedViewRevision = review.summary.view_revision;
+  const queuedActionRevision = review.actionRevision;
+  review.highlightQueue = review.highlightQueue.catch(() => {}).then(async () => {
+    const task = currentReviewTask(review);
+    if (task === null || review.pending !== null || task.executionAttempt !== null
+        || review.summary.view_revision !== queuedViewRevision
+        || review.actionRevision !== queuedActionRevision) return;
+    const action = review.actionRevision;
+    const viewRevision = review.summary.view_revision;
+    const summary = await mutatePlanHighlight(
+      task.taskId, viewRevision, review.summary.highlight_revision, gesture, nodeId,
+    );
+    if (retainedReviewTask(review) !== task || review.actionRevision !== action) return;
+    const window = await getPlanWindow(
+      task.taskId, summary.view_revision, review.window.offset, 256,
+    );
+    if (retainedReviewTask(review) !== task || review.actionRevision !== action
+        || window.disposition !== "current"
+        || window.view_revision !== summary.view_revision
+        || window.highlight_revision !== summary.highlight_revision) return;
+    review.summary = summary;
+    review.window = window;
+    renderTasks();
+  });
+  return review.highlightQueue;
+}
+
+async function changePlanSelection(review, row, selected, highlightedScope = false) {
+  if (currentReviewTask(review) === null || review.pending !== null) return;
+  const clickedViewRevision = review.summary.view_revision;
+  await review.highlightQueue.catch(() => {});
   const task = currentReviewTask(review);
   if (
     task === null || review.pending !== null
+    || review.summary.view_revision !== clickedViewRevision
     || review.summary.selection_state !== "reviewing"
     || task.executionAttempt !== null
   ) return;
+  if (!highlightedScope && row !== null
+      && review.summary.highlight_anchor_node_id !== null) {
+    await queuePlanHighlight(review, "clear", null).catch(() => {});
+    if (currentReviewTask(review) !== task) return;
+  }
   const action = ++review.actionRevision;
   const anchorNodeId = review.window.rows[0]?.node_id ?? null;
   review.pending = "selection";
   review.message = "Updating the selected operations…";
   renderTasks();
   try {
-    const summary = row === null
+    const summary = highlightedScope
+      ? await mutatePlanHighlightedSelection(
+        task.taskId, review.summary.view_revision,
+        review.summary.highlight_revision, review.summary.selection_revision, selected,
+      )
+      : row === null
       ? await mutatePlanScope(
         task.taskId, review.summary.view_revision,
         review.summary.selection_revision, selected,

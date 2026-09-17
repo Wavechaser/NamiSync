@@ -89,6 +89,10 @@ class PlanReviewState:
     sort_column: PlanSortColumn = PlanSortColumn.PATH
     sort_direction: SortDirection = SortDirection.ASCENDING
     collapsed_node_ids: frozenset[str] = field(default_factory=frozenset)
+    highlight_revision: int = 0
+    highlighted_node_ids: frozenset[str] = field(default_factory=frozenset)
+    highlight_anchor_node_id: str | None = None
+    highlight_focus_node_id: str | None = None
     _canonical_order: PlanProjectionOrder | None = None
     _order: PlanProjectionOrder | None = None
     _visible: VisibleSequence[PlanProjectionNode] | None = None
@@ -160,6 +164,11 @@ class PlanReviewState:
             "view_revision": self.view_revision,
             "selection_revision": self.selection_revision,
             "selection_state": self.selection_state,
+            "highlight_revision": self.highlight_revision,
+            "highlight_anchor_node_id": self.highlight_anchor_node_id,
+            "highlight_focus_node_id": self.highlight_focus_node_id,
+            "highlight_focus_visible_index": self._highlight_focus_visible_index(),
+            "highlighted_count": len(self.highlighted_node_ids),
             "source_path": self.source_path,
             "target_path": self.target_path,
             "selected_operation_count": root.selected_operation_count,
@@ -218,6 +227,57 @@ class PlanReviewState:
                 if bounds is None or bounds[0] <= node.position < bounds[1]
             )
 
+    def highlighted_selection_scope(
+        self,
+        *,
+        expected_view_revision: int,
+        expected_highlight_revision: int,
+        expected_selection_revision: int,
+    ) -> tuple[str, ...] | None:
+        """Resolve highlighted rows to the current selectable operation scope.
+
+        Highlighted containers contribute their complete descendant range, while
+        the active query and filters still decide which operation rows qualify.
+        The difference array makes overlapping highlighted ranges linear in the
+        projection size plus the number of highlighted rows.
+        """
+
+        with self._lock:
+            if (
+                expected_view_revision != self.view_revision
+                or expected_highlight_revision != self.highlight_revision
+                or expected_selection_revision != self.selection_revision
+            ):
+                return None
+            nodes = self.projection.nodes
+            coverage_deltas = [0] * (len(nodes) + 1)
+            for node_id in self.highlighted_node_ids:
+                position = self.projection.position_by_node_id.get(node_id)
+                if position is None:
+                    continue
+                node = nodes[position]
+                coverage_deltas[position] += 1
+                coverage_deltas[node.subtree_end] -= 1
+
+            query = self.search_query.casefold()
+            assert self._scope_selectable is not None
+            covered = 0
+            operation_ids: list[str] = []
+            seen: set[str] = set()
+            for node in nodes:
+                covered += coverage_deltas[node.position]
+                if (
+                    covered
+                    and self._scope_selectable[node.position + 1]
+                    > self._scope_selectable[node.position]
+                    and _matches_scope_query(node, query, self.filters)
+                    and node.operation_id is not None
+                    and node.operation_id not in seen
+                ):
+                    seen.add(node.operation_id)
+                    operation_ids.append(node.operation_id)
+            return tuple(operation_ids)
+
     def update(
         self,
         *,
@@ -262,6 +322,9 @@ class PlanReviewState:
                 or frozen_collapsed != self.collapsed_node_ids
             )
             if changed:
+                query_or_filter_changed = (
+                    search_query != self.search_query or filters != self.filters
+                )
                 next_revision = _next_revision(self.view_revision)
                 assert self._order is not None and self._canonical_order is not None
                 if sort_column is self.sort_column and sort_direction is self.sort_direction:
@@ -295,7 +358,111 @@ class PlanReviewState:
                 self._scope_selectable = selectable
                 self._scope_selected = selected
                 self.view_revision = next_revision
+                if query_or_filter_changed and (
+                    self.highlighted_node_ids
+                    or self.highlight_anchor_node_id is not None
+                    or self.highlight_focus_node_id is not None
+                ):
+                    self.highlighted_node_ids = frozenset()
+                    self.highlight_anchor_node_id = None
+                    self.highlight_focus_node_id = None
+                    self.highlight_revision = _next_revision(self.highlight_revision)
             return self._summary(disposition="applied" if changed else "noop")
+
+    def mutate_highlight(
+        self,
+        *,
+        expected_view_revision: int,
+        expected_highlight_revision: int,
+        gesture: str,
+        node_id: str | None = None,
+    ) -> dict[str, object]:
+        """Apply a presentation-only highlight gesture under both revisions."""
+
+        with self._lock:
+            if (
+                expected_view_revision != self.view_revision
+                or expected_highlight_revision != self.highlight_revision
+            ):
+                return self._summary(disposition="conflict")
+            if gesture not in {
+                "clear", "replace", "toggle", "extend", "add-range",
+                "move_up", "move_down", "move_up_extend", "move_down_extend",
+            }:
+                raise ValueError("highlight gesture is unknown")
+            if gesture == "clear":
+                if not self.highlighted_node_ids and self.highlight_anchor_node_id is None and self.highlight_focus_node_id is None:
+                    return self._summary(disposition="noop")
+                self.highlighted_node_ids = frozenset()
+                self.highlight_anchor_node_id = None
+                self.highlight_focus_node_id = None
+                self.highlight_revision = _next_revision(self.highlight_revision)
+                return self._summary(disposition="applied")
+            move_gesture = gesture in {"move_up", "move_down", "move_up_extend", "move_down_extend"}
+            if move_gesture:
+                current = self.highlight_focus_node_id
+                had_focus = current is not None
+                if current is None:
+                    assert self._visible is not None
+                    visible_count = len(self._visible.visible_source_positions) - 1
+                    if visible_count == 0:
+                        return self._summary(disposition="noop")
+                    next_index = 0 if gesture in {"move_down", "move_down_extend"} else visible_count - 1
+                else:
+                    current_index = self._highlight_visible_index(current)
+                    if current_index is None:
+                        return self._summary(disposition="noop")
+                    next_index = current_index + (1 if gesture in {"move_down", "move_down_extend"} else -1)
+                assert self._visible is not None
+                visible_count = len(self._visible.visible_source_positions) - 1
+                if next_index < 0 or next_index >= visible_count:
+                    return self._summary(disposition="noop")
+                node_id = self.projection.nodes[self._visible.visible_source_positions[next_index + 1]].node_id
+                gesture = "extend" if had_focus and gesture.endswith("_extend") else "replace"
+            if node_id is None or self._highlight_visible_index(node_id) is None:
+                raise ValueError("highlight node must be a visible plan row")
+            if gesture == "replace":
+                highlighted = frozenset((node_id,))
+                anchor = focus = node_id
+            elif gesture == "toggle":
+                highlighted = frozenset(
+                    self.highlighted_node_ids - {node_id}
+                    if node_id in self.highlighted_node_ids
+                    else self.highlighted_node_ids | {node_id}
+                )
+                anchor = self.highlight_anchor_node_id or node_id
+                focus = node_id
+            else:
+                anchor = self.highlight_anchor_node_id
+                anchor_index = self._highlight_visible_index(anchor)
+                focus_index = self._highlight_visible_index(node_id)
+                if anchor_index is None or focus_index is None:
+                    return self._summary(disposition="noop")
+                start, end = sorted((anchor_index, focus_index))
+                assert self._visible is not None
+                positions = self._visible.visible_source_positions
+                selected_range = frozenset(
+                    self.projection.nodes[positions[index + 1]].node_id
+                    for index in range(start, end + 1)
+                )
+                highlighted = (
+                    selected_range
+                    if gesture == "extend"
+                    else self.highlighted_node_ids | selected_range
+                )
+                focus = node_id
+            changed = (
+                highlighted != self.highlighted_node_ids
+                or anchor != self.highlight_anchor_node_id
+                or focus != self.highlight_focus_node_id
+            )
+            if not changed:
+                return self._summary(disposition="noop")
+            self.highlighted_node_ids = frozenset(highlighted)
+            self.highlight_anchor_node_id = anchor
+            self.highlight_focus_node_id = focus
+            self.highlight_revision = _next_revision(self.highlight_revision)
+            return self._summary(disposition="applied")
 
     def replace_selection(
         self,
@@ -372,6 +539,7 @@ class PlanReviewState:
                 return {
                     "disposition": "conflict",
                     "view_revision": self.view_revision,
+                    "highlight_revision": self.highlight_revision,
                     "offset": offset,
                     "total": 0,
                     "rows": [],
@@ -381,16 +549,32 @@ class PlanReviewState:
             return {
                 "disposition": "current",
                 "view_revision": self.view_revision,
+                "highlight_revision": self.highlight_revision,
                 "offset": offset,
                 "total": max(0, window.total - 1),
                 "rows": [
                     _row_view(
                         row, rootless=True,
                         selection=self._scoped_row_selection(row.node),
+                        highlighted=row.node.node_id in self.highlighted_node_ids,
                     )
                     for row in window.rows
                 ],
             }
+
+    def _highlight_visible_index(self, node_id: str | None) -> int | None:
+        if node_id is None or self._visible is None:
+            return None
+        position = self.projection.position_by_node_id.get(node_id)
+        if position is None:
+            return None
+        index = self._visible.visible_index_by_source_position[position]
+        if index == 0 or index >= len(self.projection.nodes):
+            return None
+        return index - 1
+
+    def _highlight_focus_visible_index(self) -> int | None:
+        return self._highlight_visible_index(self.highlight_focus_node_id)
 
     def _scoped_row_selection(self, node: PlanProjectionNode) -> str:
         if not self.search_query and not self.filters:
@@ -601,7 +785,13 @@ def _scope_prefixes(
     return selectable, selected
 
 
-def _row_view(row, *, rootless: bool = False, selection: str | None = None) -> dict[str, object]:
+def _row_view(
+    row,
+    *,
+    rootless: bool = False,
+    selection: str | None = None,
+    highlighted: bool = False,
+) -> dict[str, object]:
     node = row.node
     parent_visible = row.parent_visible_index
     if rootless and parent_visible == 0:
@@ -628,6 +818,7 @@ def _row_view(row, *, rootless: bool = False, selection: str | None = None) -> d
         "reason": node.reason,
         "blocked_reason": node.blocked_reason,
         "selection": node.selection if selection is None else selection,
+        "highlighted": highlighted,
         "selectable_operation_count": node.selectable_operation_count,
         "selected_operation_count": node.selected_operation_count,
         "operation_count": node.operation_count,

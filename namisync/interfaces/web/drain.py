@@ -883,6 +883,89 @@ class TaskRegistry:
             command_id=command_id,
         )
 
+    def mutate_plan_highlight(
+        self,
+        task_id: str,
+        *,
+        expected_view_revision: int,
+        expected_highlight_revision: int,
+        gesture: str,
+        node_id: str | None,
+    ) -> dict[str, object]:
+        task, view = self._require_plan_view(task_id)
+        with task.condition:
+            self._require_plan_view_locked(task, view)
+            return view.mutate_highlight(
+                expected_view_revision=expected_view_revision,
+                expected_highlight_revision=expected_highlight_revision,
+                gesture=gesture,
+                node_id=node_id,
+            )
+
+    def mutate_plan_highlighted_selection(
+        self,
+        task_id: str,
+        *,
+        expected_view_revision: int,
+        expected_highlight_revision: int,
+        expected_selection_revision: int,
+        selected: bool,
+        command_id: str,
+    ) -> dict[str, object]:
+        task, request_id = self._require_released_plan_task(task_id)
+        view_task, view = self._require_plan_view(task_id)
+        if view_task is not task:
+            raise TaskUnavailableError("task is unavailable")
+        with task.condition:
+            if (
+                task.request_id != request_id
+                or task.session_id is None
+                or not task.session_released
+                or task.transition
+                or task.retiring
+            ):
+                raise TaskUnavailableError("task is unavailable")
+            selection_ids = view.highlighted_selection_scope(
+                expected_view_revision=expected_view_revision,
+                expected_highlight_revision=expected_highlight_revision,
+                expected_selection_revision=expected_selection_revision,
+            )
+            if selection_ids is None:
+                return view.summary(disposition="conflict")
+            if not selection_ids:
+                return view.summary(disposition="noop")
+            mutation = self._lifecycle.mutate_selection(
+                request_id,
+                expected_selection_revision,
+                deselect=() if selected else selection_ids,
+                reselect=selection_ids if selected else (),
+                command_id=command_id,
+                intent_scope_revision=expected_view_revision,
+                intent_highlight_revision=expected_highlight_revision,
+            )
+            preview = mutation.preview
+            selected_operation_ids = self._lifecycle.get_plan_selection_membership(
+                request_id, preview.revision
+            )
+            view.replace_selection(
+                selected_operation_ids=selected_operation_ids,
+                exclusion_reasons={
+                    operation.operation_id: operation.reason
+                    for operation in preview.operations
+                },
+                selection_revision=preview.revision,
+                selection_state=preview.state,
+                requires_destructive_confirmation=(
+                    preview.requires_destructive_confirmation
+                ),
+                irreversible_update_count=preview.irreversible_update_count,
+                destructive_operation_count=preview.destructive_operation_count,
+                irreversible_operation_count=preview.irreversible_operation_count,
+                destructive_operation_counts=preview.destructive_operation_counts,
+                required_bytes=preview.required_bytes,
+            )
+            return view.summary(disposition=mutation.disposition)
+
     def mutate_plan_scope(
         self,
         task_id: str,

@@ -245,14 +245,60 @@ body {
   margin: 0;
 }
 
+.nami-plan-review__plan > * {
+  margin: 0;
+}
+
+.nami-plan-review__view-switcher {
+  justify-self: end;
+}
+
 .nami-plan-review__paths {
   overflow-wrap: anywhere;
   unicode-bidi: isolate;
 }
 
+.nami-plan-review__path {
+  margin: 0;
+}
+
+.nami-plan-review__status-title {
+  color: var(--color-neutral-foreground);
+  font-size: var(--font-size-title);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-title);
+  margin: 0;
+}
+
+.nami-plan-review__status-summary {
+  margin: 0;
+}
+
+.nami-plan-review__summary[data-status="ready"] .nami-plan-review__status-title,
+.nami-plan-review__summary[data-status="completed"] .nami-plan-review__status-title {
+  color: var(--integrity-positive-foreground);
+}
+
+.nami-plan-review__summary[data-status="failed"] .nami-plan-review__status-title,
+.nami-plan-review__summary[data-status="refused"] .nami-plan-review__status-title {
+  color: var(--integrity-failure-foreground);
+}
+
+.nami-plan-review__summary[data-status="attention"] .nami-plan-review__status-title {
+  color: var(--lifecycle-attention-foreground);
+}
+
+.nami-plan-review__summary[data-status="working"] .nami-plan-review__status-title {
+  color: var(--lifecycle-active-foreground);
+}
+
+.nami-plan-review__progress {
+  margin-block-start: var(--space-1);
+}
+
 .nami-plan-review__toolbar {
   align-items: end;
-  grid-template-columns: minmax(12rem, 1fr) max-content;
+  grid-template-columns: minmax(0, 1fr) minmax(10rem, 16rem);
 }
 
 .nami-plan-review__field {
@@ -261,7 +307,8 @@ body {
 }
 
 .nami-plan-review__filters {
-  grid-column: 1 / -1;
+  grid-column: 1;
+  min-inline-size: 0;
 }
 
 .nami-plan-review__filter-list {
@@ -269,6 +316,12 @@ body {
   flex-wrap: wrap;
   gap: var(--space-2);
   padding-block-start: var(--space-2);
+}
+
+.nami-plan-review__toolbar > .nami-input {
+  grid-column: 2;
+  justify-self: end;
+  inline-size: min(16rem, 100%);
 }
 
 .nami-plan-review__control-group {
@@ -366,6 +419,12 @@ body {
   .nami-plan-review__toolbar,
   .nami-plan-review__actions {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .nami-plan-review__toolbar > .nami-input {
+    inline-size: 100%;
+    justify-self: stretch;
+    grid-row: 2;
   }
 
   .nami-plan-review__control-group {
@@ -930,6 +989,10 @@ body {
     var(--nami-file-column-notes);
 }
 
+.nami-plan-review .nami-file-list__grid--plan {
+  --nami-file-column-primary: var(--plan-action-column-width);
+}
+
 .nami-file-list__header {
   background: var(--color-neutral-surface-selected);
   block-size: var(--file-row-h);
@@ -950,6 +1013,16 @@ body {
 
 .nami-file-list__body > .nami-file-row:nth-child(even) {
   background: var(--color-neutral-surface-subtle);
+}
+
+.nami-file-list__body > .nami-file-row.nami-file-row--highlighted {
+  background: var(--color-selection-highlight);
+  box-shadow: inset 3px 0 var(--color-accent-fill);
+}
+
+.nami-file-list__body > .nami-file-row.nami-file-row--highlighted:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: -2px;
 }
 
 .nami-file-list__body > .nami-file-row[hidden] {

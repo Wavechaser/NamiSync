@@ -229,12 +229,16 @@ body {
 /* Plan filters use the ordinary button class for semantics; keep the visual
    contract on the view-specific hook so the renderer need not expose a chip
    primitive. */
-.nami-plan-review__filter {
+.nami-button.nami-plan-review__filter {
   --nami-chip-active-background: var(--color-accent-fill);
   --nami-chip-active-foreground: var(--color-accent-fill-foreground);
+  align-items: center;
   border-radius: var(--radius-small);
-  min-block-size: 2rem;
-  padding: var(--space-1) var(--space-3);
+  display: inline-flex;
+  font-size: var(--font-size-caption);
+  min-block-size: 1.75rem;
+  padding: var(--space-1) var(--space-2);
+  word-spacing: var(--space-2);
 }
 
 .nami-button {
@@ -655,16 +659,16 @@ body {
 }
 
 .nami-plan-review__filter:not([aria-pressed="true"]) {
-  background: var(--color-toggle-fill-off);
+  background: var(--color-button-fill);
   color: var(--color-neutral-foreground);
 }
 
 .nami-plan-review__filter:not([aria-pressed="true"]):not(:disabled):hover {
-  background: var(--color-toggle-fill-off-hover);
+  background: var(--color-button-fill-hover);
 }
 
 .nami-plan-review__filter:not([aria-pressed="true"]):not(:disabled):active {
-  background: var(--color-toggle-fill-off-pressed);
+  background: var(--color-button-fill-pressed);
 }
 
 .nami-chip[aria-pressed="true"] {
@@ -1644,7 +1648,7 @@ body {
 
 .nami-plan-review__filter[data-operation="move"],
 .nami-plan-review__filter[data-operation="recase"] {
-  --nami-chip-active-background: var(--filter-purple-background);
+  --nami-chip-active-background: var(--filter-move-background);
   --nami-chip-active-foreground: var(--filter-purple-active-foreground);
 }
 

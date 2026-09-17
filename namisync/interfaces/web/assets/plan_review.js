@@ -18,25 +18,17 @@ function button(label, className = "nami-button") {
   return element;
 }
 
-function fieldLabel(label, control) {
-  const field = document.createElement("label");
-  field.className = "nami-plan-review__field";
-  const text = document.createElement("span");
-  text.className = "nami-field__label";
-  renderText(text, label);
-  field.append(text, control);
-  return field;
-}
-
 function rowView(row, busy, committed) {
   const notes = row.notice ?? row.blocked_reason ?? row.selection_exclusion_reason
     ?? (row.move_peer_id === null ? row.reason ?? "" : `Paired move · ${row.reason ?? ""}`);
   const risk = `Risk: ${row.risk}`;
   const intent = row.operation_kind ?? (row.row_kind === "notice" ? "notice" : "");
   const dependencies = row.dependency_count === 0 ? "" : `${row.dependency_count} deps · `;
-  const modified = row.mtime_ns === null ? "" : new Date(
-    Number(BigInt(row.mtime_ns) / 1000000n),
-  ).toLocaleString();
+  const modified = row.mtime_ns === null ? "" : (() => {
+    const date = new Date(Number(BigInt(row.mtime_ns) / 1000000n));
+    const pad = (value) => String(value).padStart(2, "0");
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  })();
   return {
     checked: row.selection === "selected",
     mixed: row.selection === "mixed",
@@ -55,6 +47,27 @@ function rowView(row, busy, committed) {
     modifiedText: modified,
     notesText: `${dependencies}${notes === "" ? risk : `${risk} · ${notes}`}`,
   };
+}
+
+function eventInControl(event, row) {
+  let target = event.target;
+  while (target !== null && target !== row) {
+    if (target.classList?.contains("nami-checkbox")
+      || target.classList?.contains("nami-file-row__disclosure")) return true;
+    target = target.parentElement;
+  }
+  return false;
+}
+
+function setHighlighted(element, highlighted) {
+  element.dataset.highlighted = String(highlighted);
+  element.classList.toggle?.("nami-file-row--highlighted", highlighted);
+  if (element.classList.toggle === undefined) {
+    const classes = new Set(element.className.split(/\s+/).filter(Boolean));
+    if (highlighted) classes.add("nami-file-row--highlighted");
+    else classes.delete("nami-file-row--highlighted");
+    element.className = [...classes].join(" ");
+  }
 }
 
 function addGroupDisclosure(element, row, onCollapse) {
@@ -78,6 +91,7 @@ function addGroupDisclosure(element, row, onCollapse) {
 export function createPlanReviewPanel(callbacks) {
   const required = [
     "onViewChange", "onWindow", "onSelect", "onScopeSelect", "onExecute", "onControl", "onPlanAgain",
+    "onHighlight", "onHighlightedSelect",
   ];
   if (callbacks === null || typeof callbacks !== "object"
       || !required.every((name) => typeof callbacks[name] === "function")) {
@@ -88,20 +102,39 @@ export function createPlanReviewPanel(callbacks) {
   element.className = "nami-plan-review";
   const header = document.createElement("div");
   header.className = "nami-card nami-plan-review__plan";
-  const heading = document.createElement("h2");
-  renderText(heading, "Plan review");
-  const paths = document.createElement("p");
+  const paths = document.createElement("div");
   paths.className = "nami-plan-review__paths";
+  const sourcePath = document.createElement("p");
+  sourcePath.className = "nami-plan-review__path nami-plan-review__path--source";
+  const targetPath = document.createElement("p");
+  targetPath.className = "nami-plan-review__path nami-plan-review__path--target";
+  paths.append(sourcePath, targetPath);
   const settings = document.createElement("p");
   settings.className = "nami-shell__guidance";
-  header.append(heading, paths, settings);
+  const viewSwitcher = document.createElement("div");
+  viewSwitcher.className = "nami-segmented nami-plan-review__view-switcher";
+  for (const [label, selected] of [["Sync", true], ["Integrity", false]]) {
+    const option = button(label, "nami-segmented__item");
+    option.ariaChecked = String(selected);
+    option.setAttribute("role", "radio");
+    option.disabled = !selected;
+    viewSwitcher.append(option);
+  }
+  header.append(viewSwitcher, paths, settings);
   const summary = document.createElement("div");
   summary.className = "nami-card nami-plan-review__summary";
-  const summaryHeading = document.createElement("h2");
-  renderText(summaryHeading, "Status");
+  const statusTitle = document.createElement("p");
+  statusTitle.className = "nami-plan-review__status-title";
+  statusTitle.setAttribute("role", "status");
   const facts = document.createElement("p");
-  facts.className = "nami-shell__guidance";
-  summary.append(summaryHeading, facts);
+  facts.className = "nami-shell__guidance nami-plan-review__status-summary";
+  const progress = document.createElement("div");
+  progress.className = "nami-progress nami-progress--inline nami-plan-review__progress";
+  progress.ariaHidden = "true";
+  const progressBar = document.createElement("div");
+  progressBar.className = "nami-progress__bar";
+  progress.append(progressBar);
+  summary.append(statusTitle, facts, progress);
 
   const tableCard = document.createElement("div");
   tableCard.className = "nami-card nami-plan-review__table-card";
@@ -113,13 +146,10 @@ export function createPlanReviewPanel(callbacks) {
   search.type = "search";
   search.placeholder = "Search this plan";
   search.autocomplete = "off";
+  search.ariaLabel = "Search this plan";
   search.dataset.action = "plan-search";
-  const reset = button("Reset view", "nami-button nami-button--secondary");
-  reset.dataset.action = "plan-reset";
   const filters = document.createElement("div");
   filters.className = "nami-plan-review__filters";
-  const filterSummary = document.createElement("span");
-  renderText(filterSummary, "Filter operations");
   const filterList = document.createElement("div");
   filterList.className = "nami-plan-review__filter-list";
   const filterButtons = new Map();
@@ -130,8 +160,8 @@ export function createPlanReviewPanel(callbacks) {
     filterList.append(filter);
     filterButtons.set(value, filter);
   }
-  filters.append(filterSummary, filterList);
-  toolbar.append(fieldLabel("Search", search), reset, filters);
+  filters.append(filterList);
+  toolbar.append(filters, search);
 
   const list = document.createElement("div");
   list.className = "nami-file-list nami-table-scroll nami-plan-review__list";
@@ -226,6 +256,13 @@ export function createPlanReviewPanel(callbacks) {
   let scrollGeneration = 0;
   let pendingWindowOffset = null;
   let renderedRows = null;
+  const renderedText = new WeakMap();
+  function updateText(node, value, filesystem = false) {
+    if (renderedText.get(node) === value) return;
+    renderedText.set(node, value);
+    if (filesystem) renderFilesystemText(node, value);
+    else renderText(node, value);
+  }
   const headerCells = [...columnHeader.children];
   const scopeCheckbox = columnHeader.querySelector(".nami-plan-review__scope-checkbox");
   const resizers = headerCells.slice(0, -1).map(
@@ -343,9 +380,6 @@ export function createPlanReviewPanel(callbacks) {
         : { sortColumn: column, sortDirection: same ? "descending" : "ascending" });
     });
   }
-  reset.addEventListener("click", () => viewChange({
-    searchQuery: "", filters: new Set(), sortColumn: "path", sortDirection: "ascending",
-  }));
   body.addEventListener("scroll", () => {
     scheduleViewportCheck();
   });
@@ -404,9 +438,34 @@ export function createPlanReviewPanel(callbacks) {
   function renderRows(review, task) {
     const disabled = review.pending !== null || task.executionAttempt !== null;
     const committed = review.summary.selection_state !== "reviewing";
+    const highlightRevision = review.summary.highlight_revision ?? review.window.highlight_revision ?? 0;
+    const focusedRow = document.activeElement?.dataset?.nodeId !== undefined;
+    const focusNodeId = review.summary.highlight_focus_node_id;
     if (renderedRows?.review === review && renderedRows.window === review.window
-        && renderedRows.disabled === disabled && renderedRows.committed === committed) return;
-    renderedRows = { review, window: review.window, disabled, committed };
+    ) {
+      if (renderedRows.disabled !== disabled || renderedRows.committed !== committed) {
+        for (const [index, checkbox] of renderedRows.checkboxes.entries()) {
+          if (checkbox !== null) checkbox.disabled = disabled || committed
+            || review.window.rows[index].selection === "disabled";
+        }
+        renderedRows.disabled = disabled;
+        renderedRows.committed = committed;
+      }
+      if (renderedRows.highlightRevision !== highlightRevision) {
+        for (const [index, row] of review.window.rows.entries()) {
+          const rendered = renderedRows.rows[index];
+          if (rendered === undefined) continue;
+          setHighlighted(rendered, row.highlighted === true);
+          rendered.ariaSelected = String(row.highlighted === true);
+          rendered.tabIndex = row.node_id === (focusNodeId ?? review.window.rows[0]?.node_id) ? 0 : -1;
+        }
+        if (focusedRow) renderedRows.rows.find((row) => row.dataset.nodeId === focusNodeId)?.focus?.();
+        renderedRows.highlightRevision = highlightRevision;
+      }
+      return;
+    }
+    const checkboxes = [];
+    const rowElements = [];
     const fragment = document.createDocumentFragment();
     const top = document.createElement("div");
     top.className = "nami-plan-review__spacer";
@@ -421,8 +480,36 @@ export function createPlanReviewPanel(callbacks) {
       ));
       element.dataset.nodeId = row.node_id;
       element.ariaRowIndex = String(row.visible_index + 2);
-      element.querySelector(".nami-checkbox")?.addEventListener("change", (event) => {
-        callbacks.onSelect(review, row, event.currentTarget.checked);
+      element.tabIndex = row.node_id === (focusNodeId ?? review.window.rows[0]?.node_id) ? 0 : -1;
+      element.ariaSelected = String(row.highlighted === true);
+      setHighlighted(element, row.highlighted === true);
+      const checkbox = element.querySelector(".nami-checkbox");
+      checkboxes.push(checkbox ?? null);
+      checkbox?.addEventListener("change", (event) => {
+        if (element.dataset.highlighted === "true") {
+          callbacks.onHighlightedSelect(review, event.currentTarget.checked);
+        } else {
+          callbacks.onSelect(review, row, event.currentTarget.checked);
+        }
+      });
+      element.addEventListener("click", (event) => {
+        if (eventInControl(event, element)) return;
+        const modified = event.ctrlKey || event.metaKey;
+        const gesture = event.shiftKey ? (modified ? "add-range" : "extend")
+          : modified ? "toggle" : "replace";
+        callbacks.onHighlight(review, gesture, row.node_id);
+        element.focus?.();
+      });
+      element.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          callbacks.onHighlight(review, "clear", null);
+        } else if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+          event.preventDefault();
+          const direction = event.key === "ArrowUp" ? "move_up" : "move_down";
+          const gesture = event.shiftKey ? `${direction}_extend` : direction;
+          callbacks.onHighlight(review, gesture, row.node_id);
+        }
       });
       element.querySelector(".nami-file-row__disclosure")?.addEventListener("click", () => {
         callbacks.onViewChange(review, {
@@ -432,6 +519,7 @@ export function createPlanReviewPanel(callbacks) {
       addGroupDisclosure(element, row, () => callbacks.onViewChange(review, {
         collapseNodeId: row.node_id, collapsed: row.expanded === true,
       }));
+      rowElements.push(element);
       fragment.append(element);
     }
     const bottom = document.createElement("div");
@@ -440,6 +528,12 @@ export function createPlanReviewPanel(callbacks) {
     bottom.style.setProperty("block-size", `${remaining * ROW_HEIGHT}px`);
     fragment.append(bottom);
     body.replaceChildren(fragment);
+    if (focusedRow) rowElements.find((row) => row.dataset.nodeId === focusNodeId)?.focus?.();
+    renderedRows = {
+      review, window: review.window, disabled, committed, checkboxes,
+      rows: rowElements,
+      highlightRevision,
+    };
   }
 
   function render(task) {
@@ -455,9 +549,14 @@ export function createPlanReviewPanel(callbacks) {
     current = task.review;
     if (current === null) {
       delete element.dataset.pending;
-      renderText(paths, "Loading reviewed plan…");
-      renderText(settings, "");
-      renderText(facts, task.error ?? "Waiting for the completed plan to become available.");
+      updateText(sourcePath, "Loading reviewed plan…");
+      updateText(targetPath, "");
+      updateText(settings, "");
+      updateText(facts, task.error ?? "Waiting for the completed plan to become available.");
+      updateText(statusTitle, task.error ? "Plan unavailable" : "Loading plan");
+      summary.dataset.status = task.error ? "attention" : "working";
+      progress.classList.remove?.("nami-progress--indeterminate");
+      progress.style.setProperty("--nami-progress-value", "0%");
       body.replaceChildren();
       renderedRows = null;
       tableCard.hidden = true;
@@ -468,24 +567,47 @@ export function createPlanReviewPanel(callbacks) {
     element.dataset.pending = review.pending ?? "";
     list.ariaRowCount = String(review.window.total + 1);
     tableCard.hidden = false;
-    renderFilesystemText(paths, `${review.summary.source_path} → ${review.summary.target_path}`);
+    updateText(sourcePath, `Source: ${review.summary.source_path}`, true);
+    updateText(targetPath, `Target: ${review.summary.target_path}`, true);
     const options = task.form?.options;
-    renderFilesystemText(settings, options === null || options === undefined
+    updateText(settings, options === null || options === undefined
       ? "Reviewed settings unavailable"
       : `Deletion: ${options.deletion_policy === "additive" ? "additive" : "trash"} · Replaced files: ${options.trash_on_update ? "trash" : "replace"} · Preserve: ${[
         options.preservation.preserve_created && "creation time",
         options.preservation.preserve_acl && "ACL",
         options.preservation.preserve_ads && "alternate streams",
-      ].filter(Boolean).join(", ") || "none"} · Source casing: ${options.propagate_source_casing ? "on" : "off"} · Verify after execution: ${options.verify_after_execute ? "on" : "off"} · Exclusions: ${options.filters.length === 0 ? "none" : options.filters.join(", ")}`);
+      ].filter(Boolean).join(", ") || "none"} · Source casing: ${options.propagate_source_casing ? "on" : "off"} · Verify after execution: ${options.verify_after_execute ? "on" : "off"} · Exclusions: ${options.filters.length === 0 ? "none" : options.filters.join(", ")}`, true);
     const verdict = review.summary.preflight_ready
       ? "Review preflight ready"
       : `${review.summary.preflight_refusal_count} review preflight refusal(s)`;
-    renderText(
+    updateText(
       facts,
       `${review.summary.selected_operation_count} of ${review.summary.selectable_operation_count} selected · ${review.summary.destructive_operation_count} destructive · ${formatByteCount(review.summary.required_bytes)} required · ${review.summary.visible_row_count} visible · ${verdict} · ${review.summary.warning_count} scan notice(s)`,
     );
+    const executionState = task.executionStarted ? task.sessionState : null;
+    const canExecuteSelection = review.summary.preflight_ready
+      && review.summary.selected_operation_count > 0
+      && review.summary.selection_state === "reviewing";
+    const statusLabel = executionState === "active" ? "Executing"
+      : executionState === "completed" ? "Complete"
+        : executionState === "failed" || executionState === "refused" ? "Error"
+          : executionState !== null ? executionState.charAt(0).toUpperCase() + executionState.slice(1)
+            : !review.summary.preflight_ready ? "Plan needs attention"
+              : canExecuteSelection ? "Ready to execute" : "Plan ready";
+    updateText(statusTitle, statusLabel);
+    summary.dataset.status = executionState ?? (!review.summary.preflight_ready
+      ? "attention" : canExecuteSelection ? "ready" : "plan");
+    const progressValue = task.executionStarted && Number.isFinite(task.executionProgress)
+      ? Math.max(0, Math.min(100, task.executionProgress))
+      : 0;
+    progress.dataset.lifecycle = executionState ?? "completed";
+    if (executionState === "active") {
+      progress.classList.add("nami-progress--indeterminate");
+    } else {
+      progress.classList.remove?.("nami-progress--indeterminate");
+    }
+    progress.style.setProperty("--nami-progress-value", `${progressValue}%`);
     if (document.activeElement !== search) search.value = review.summary.search_query;
-    reset.disabled = review.pending !== null;
     search.disabled = review.pending !== null && review.pending !== "view";
     for (const [column, { cell, sortButton, up, down }] of sortHeaders) {
       const active = review.summary.sort_column === column;
@@ -504,7 +626,7 @@ export function createPlanReviewPanel(callbacks) {
       filter.disabled = review.pending !== null;
       filter.hidden = !ALWAYS_VISIBLE_FILTERS.has(value) && count === 0;
       filter.dataset.trashAlert = String(value === "trash" && !active && count > 1);
-      renderText(filter, `${value.replaceAll("_", " ")} ${count}`);
+      updateText(filter, `${value.replaceAll("_", " ")} ${count}`);
     }
     if (scopeCheckbox instanceof HTMLInputElement) {
       const scopeSelectable = review.summary.scope_selectable_operation_count;
@@ -522,10 +644,10 @@ export function createPlanReviewPanel(callbacks) {
     const activeExecution = task.executionStarted && task.sessionState === "active";
     const retryExecution = task.executionAttempt?.state === "uncertain";
     execute.hidden = review.summary.selection_state !== "reviewing";
-    renderText(execute, retryExecution ? "Retry execute" : "Execute");
+    updateText(execute, retryExecution ? "Retry execute" : "Execute");
     execute.disabled = review.pending !== null
       || (task.executionAttempt !== null && !retryExecution)
-      || (!retryExecution && review.summary.selected_operation_count === 0);
+      || (!retryExecution && !canExecuteSelection);
     planAgain.disabled = review.pending !== null || task.canPlanAgain !== true;
     controls.hidden = !activeExecution;
     pause.hidden = task.executionControlState === "paused";
@@ -533,7 +655,7 @@ export function createPlanReviewPanel(callbacks) {
     pause.disabled = review.pending !== null || task.executionControlState !== "running";
     resume.disabled = review.pending !== null || task.executionControlState !== "paused";
     cancel.disabled = review.pending !== null || task.executionControlState === "canceling";
-    renderText(status, review.message ?? "");
+    updateText(status, review.message ?? "");
     renderRows(review, task);
     refreshResizers();
     scheduleViewportCheck();

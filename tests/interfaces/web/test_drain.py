@@ -2910,7 +2910,8 @@ def test_plan_scope_mutation_guards_both_revisions_and_keeps_hidden_selection() 
             )
 
         def mutate_selection(self, request_id, expected_revision, *, deselect,
-                             reselect, command_id, intent_scope_revision):
+                             reselect, command_id, intent_scope_revision,
+                             intent_highlight_revision=None):
             self.mutations.append((deselect, reselect, command_id))
             assert expected_revision == self.selection_revision
             assert intent_scope_revision >= 1
@@ -2974,6 +2975,34 @@ def test_plan_scope_mutation_guards_both_revisions_and_keeps_hidden_selection() 
     assert reset["selection_revision"] == 1
     assert reset["selected_operation_count"] == 1
     assert service.selected == {"2" * 32}
+    highlighted = registry.mutate_plan_highlight(
+        start.task_id, expected_view_revision=reset["view_revision"],
+        expected_highlight_revision=reset["highlight_revision"],
+        gesture="replace", node_id="node-" + "1" * 32,
+    )
+    for revisions in (
+        (reset["view_revision"], reset["highlight_revision"], 1),
+        (reset["view_revision"], highlighted["highlight_revision"], 0),
+        (0, highlighted["highlight_revision"], 1),
+    ):
+        stale = registry.mutate_plan_highlighted_selection(
+            start.task_id, expected_view_revision=revisions[0],
+            expected_highlight_revision=revisions[1],
+            expected_selection_revision=revisions[2],
+            selected=True, command_id="c" * 32,
+        )
+        assert stale["disposition"] == "conflict"
+    assert len(service.mutations) == 1
+    restored = registry.mutate_plan_highlighted_selection(
+        start.task_id, expected_view_revision=reset["view_revision"],
+        expected_highlight_revision=highlighted["highlight_revision"],
+        expected_selection_revision=1,
+        selected=True, command_id="d" * 32,
+    )
+    assert restored["disposition"] == "applied"
+    assert service.mutations[-1] == ((), ("1" * 32,), "d" * 32)
+    assert service.selected == {"1" * 32, "2" * 32}
+    assert restored["highlighted_count"] == 1
 
 
 def test_m1_7_execution_publication_failure_restores_released_plan_delivery() -> None:

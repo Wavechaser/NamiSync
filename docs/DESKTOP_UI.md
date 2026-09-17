@@ -1258,6 +1258,18 @@ resizing, with Notes yielding width. Name, Size and Modified headers cycle
 ascending, descending, canonical path order with catalog chevrons; a different
 header starts ascending. Status and row
 byte labels use binary units, while sort keys remain raw backend facts.
+
+Row highlighting is distinct from execution selection. Pointer and keyboard
+gestures replace, toggle, extend, or add ranges in the complete server-owned
+ordered view; the visible 256-row window merely paints returned highlight flags.
+Checkboxes preserve a highlight and apply to its whole range when the checked
+row is inside that range. Search/filter changes clear highlighting, while
+scrolling, sorting and disclosure changes do not. The bridge carries compact
+gesture endpoints and expected revisions rather than row or operation arrays.
+The status tier says **Plan ready** for a valid but non-executable review and
+**Ready to execute** only when preflight is ready and at least one executable
+operation is selected; empty, refused, errored or inoperable selections do not
+claim executable readiness.
 Production commands, validators, state, raw row facts, and window/anchor
 behavior remain active. Status/progress sorting, global
 flat sorting, and durable preferences are excluded from M1. Exact rules and

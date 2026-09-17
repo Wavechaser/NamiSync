@@ -266,6 +266,10 @@ class TaskAuthority(Protocol):
 
     def mutate_plan_scope(self, *args, **kwargs) -> dict[str, object]: ...
 
+    def mutate_plan_highlight(self, *args, **kwargs) -> dict[str, object]: ...
+
+    def mutate_plan_highlighted_selection(self, *args, **kwargs) -> dict[str, object]: ...
+
     def start_execution(self, *args, **kwargs) -> object: ...
 
     def control_execution(self, *args, **kwargs) -> object: ...
@@ -510,6 +514,25 @@ class _MutatePlanScopePayload:
     task_id: str
     command_id: str
     expected_view_revision: int
+    expected_selection_revision: int
+    selected: bool
+
+
+@dataclass(frozen=True, slots=True)
+class _MutatePlanHighlightPayload:
+    task_id: str
+    expected_view_revision: int
+    expected_highlight_revision: int
+    gesture: str
+    node_id: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class _MutatePlanHighlightedSelectionPayload:
+    task_id: str
+    command_id: str
+    expected_view_revision: int
+    expected_highlight_revision: int
     expected_selection_revision: int
     selected: bool
 
@@ -966,6 +989,36 @@ def production_command_specs(
                 "mutate_plan_scope command id conflicts with retained intent"
             ) from error
 
+    def mutate_plan_highlight(payload: object) -> object:
+        if type(payload) is not _MutatePlanHighlightPayload:
+            raise TypeError("mutate_plan_highlight received an unvalidated payload")
+        return registry.mutate_plan_highlight(
+            payload.task_id,
+            expected_view_revision=payload.expected_view_revision,
+            expected_highlight_revision=payload.expected_highlight_revision,
+            gesture=payload.gesture,
+            node_id=payload.node_id,
+        )
+
+    def mutate_plan_highlighted_selection(payload: object) -> object:
+        if type(payload) is not _MutatePlanHighlightedSelectionPayload:
+            raise TypeError(
+                "mutate_plan_highlighted_selection received an unvalidated payload"
+            )
+        try:
+            return registry.mutate_plan_highlighted_selection(
+                payload.task_id,
+                expected_view_revision=payload.expected_view_revision,
+                expected_highlight_revision=payload.expected_highlight_revision,
+                expected_selection_revision=payload.expected_selection_revision,
+                selected=payload.selected,
+                command_id=payload.command_id,
+            )
+        except (CommandIdConflictError, TaskIntentConflictError) as error:
+            raise CommandConflictError(
+                "mutate_plan_highlighted_selection command id conflicts with retained intent"
+            ) from error
+
     def start_execution(payload: object) -> object:
         if type(payload) is not _StartExecutionPayload:
             raise TypeError("start_execution received an unvalidated payload")
@@ -1268,6 +1321,24 @@ def production_command_specs(
             "mutate_plan_scope": CommandSpec(
                 validate_payload=_validate_mutate_plan_scope,
                 handler=mutate_plan_scope,
+                access=CommandAccess.MUTATING,
+                command_id=FieldRequirement.REQUIRED,
+                revision=FieldRequirement.REQUIRED,
+                timeout=CommandTimeout.LOCAL_5_SECONDS,
+                retry=CommandRetry.SAME_COMMAND_ONCE,
+            ),
+            "mutate_plan_highlight": CommandSpec(
+                validate_payload=_validate_mutate_plan_highlight,
+                handler=mutate_plan_highlight,
+                access=CommandAccess.READ_ONLY,
+                command_id=FieldRequirement.FORBIDDEN,
+                revision=FieldRequirement.REQUIRED,
+                timeout=CommandTimeout.LOCAL_5_SECONDS,
+                retry=CommandRetry.NONE,
+            ),
+            "mutate_plan_highlighted_selection": CommandSpec(
+                validate_payload=_validate_mutate_plan_highlighted_selection,
+                handler=mutate_plan_highlighted_selection,
                 access=CommandAccess.MUTATING,
                 command_id=FieldRequirement.REQUIRED,
                 revision=FieldRequirement.REQUIRED,
@@ -1685,6 +1756,72 @@ def _validate_mutate_plan_scope(value: object) -> _MutatePlanScopePayload:
         raise CommandPayloadError("mutate_plan_scope payload is invalid")
     return _MutatePlanScopePayload(
         task_id, command_id, view_revision, selection_revision, selected
+    )
+
+
+def _validate_mutate_plan_highlight(value: object) -> _MutatePlanHighlightPayload:
+    if type(value) is not dict or set(value) != {
+        "task_id", "expected_view_revision", "expected_highlight_revision",
+        "gesture", "node_id",
+    }:
+        raise CommandPayloadError("mutate_plan_highlight payload is invalid")
+    task_id = value["task_id"]
+    view_revision = value["expected_view_revision"]
+    highlight_revision = value["expected_highlight_revision"]
+    gesture = value["gesture"]
+    node_id = value["node_id"]
+    endpoint_gestures = {"replace", "toggle", "extend", "add-range"}
+    implicit_gestures = {
+        "clear", "move_up", "move_down", "move_up_extend", "move_down_extend",
+    }
+    if (
+        type(task_id) is not str or _TASK_ID.fullmatch(task_id) is None
+        or not _is_javascript_safe_integer(view_revision) or view_revision < 0
+        or not _is_javascript_safe_integer(highlight_revision) or highlight_revision < 0
+        or type(gesture) is not str
+        or gesture not in endpoint_gestures | implicit_gestures
+        or (
+            gesture in endpoint_gestures
+            and (type(node_id) is not str or re.fullmatch(r"node-[0-9a-f]{32}", node_id) is None)
+        )
+        or (gesture in implicit_gestures and node_id is not None)
+    ):
+        raise CommandPayloadError("mutate_plan_highlight payload is invalid")
+    return _MutatePlanHighlightPayload(
+        task_id, view_revision, highlight_revision, gesture, node_id
+    )
+
+
+def _validate_mutate_plan_highlighted_selection(
+    value: object,
+) -> _MutatePlanHighlightedSelectionPayload:
+    if type(value) is not dict or set(value) != {
+        "task_id", "command_id", "expected_view_revision",
+        "expected_highlight_revision", "expected_selection_revision", "selected",
+    }:
+        raise CommandPayloadError(
+            "mutate_plan_highlighted_selection payload is invalid"
+        )
+    task_id = value["task_id"]
+    command_id = value["command_id"]
+    view_revision = value["expected_view_revision"]
+    highlight_revision = value["expected_highlight_revision"]
+    selection_revision = value["expected_selection_revision"]
+    selected = value["selected"]
+    if (
+        type(task_id) is not str or _TASK_ID.fullmatch(task_id) is None
+        or type(command_id) is not str or _OPAQUE_ID.fullmatch(command_id) is None
+        or not _is_javascript_safe_integer(view_revision) or view_revision < 0
+        or not _is_javascript_safe_integer(highlight_revision) or highlight_revision < 0
+        or not _is_javascript_safe_integer(selection_revision) or selection_revision < 0
+        or type(selected) is not bool
+    ):
+        raise CommandPayloadError(
+            "mutate_plan_highlighted_selection payload is invalid"
+        )
+    return _MutatePlanHighlightedSelectionPayload(
+        task_id, command_id, view_revision, highlight_revision,
+        selection_revision, selected,
     )
 
 

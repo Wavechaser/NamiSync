@@ -60,6 +60,7 @@
   --file-column-name-default: minmax(12rem, 1.8fr);
   --file-column-size-default: minmax(5rem, 0.45fr);
   --file-column-primary-default: minmax(8rem, 0.7fr);
+  --plan-action-column-width: minmax(6rem, 0.55fr);
   --file-column-secondary-default: minmax(7rem, 0.65fr);
   --file-column-notes-default: minmax(14rem, 1.3fr);
   --setup-recent-columns: minmax(0, 1fr) 8rem;

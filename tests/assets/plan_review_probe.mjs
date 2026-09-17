@@ -184,6 +184,7 @@ const { createPlanReviewPanel } = await import(moduleUrl(source));
 const calls = [];
 const callbacks = Object.fromEntries([
   "onViewChange", "onWindow", "onSelect", "onScopeSelect", "onExecute", "onControl", "onPlanAgain",
+  "onHighlight", "onHighlightedSelect",
 ].map((name) => [name, (...args) => calls.push([name, ...args])]));
 const panel = createPlanReviewPanel(callbacks);
 const historicalFooter = document.createElement("div");
@@ -286,10 +287,32 @@ review.window.rows.push(notice);
 
 panel.render(task);
 assert.equal(panel.element.dataset.pending, "");
+const tierStatus = findByClass(panel.element, "nami-plan-review__status-title");
+const executeButton = findByClass(panel.element, "nami-button--primary");
+assert.equal(tierStatus.textContent, "Plan needs attention");
+assert.equal(executeButton.disabled, true);
+review.summary = { ...summary, preflight_ready: true, preflight_refusal_count: 0,
+  selected_operation_count: 0 };
+panel.render(task);
+assert.equal(tierStatus.textContent, "Plan ready");
+assert.equal(executeButton.disabled, true);
+review.summary = { ...summary, preflight_ready: true, preflight_refusal_count: 0 };
+panel.render(task);
+assert.equal(tierStatus.textContent, "Ready to execute");
+assert.equal(executeButton.disabled, false);
+review.summary = summary;
+panel.render(task);
 document.defaultView.flushAnimationFrame();
 assert.ok(findText(panel.element, hostile));
 assert.ok(findText(panel.element, "1 destructive"));
 assert.ok(findText(panel.element, "4 KiB required"));
+assert.ok(findText(panel.element, "Source:"));
+assert.ok(findText(panel.element, "Target:"));
+assert.ok(findText(panel.element, "Plan needs attention"));
+assert.ok(findByClass(panel.element, "nami-plan-review__progress"));
+assert.ok(findByClass(panel.element, "nami-plan-review__view-switcher"));
+assert.equal(findText(panel.element, "Plan review"), false);
+assert.equal(findText(panel.element, "Status"), false);
 const grid = findByClass(panel.element, "nami-file-list__grid--plan");
 const sizeResizer = findByDataset(panel.element, "column", "size");
 assert.ok(grid && sizeResizer);
@@ -303,9 +326,22 @@ sizeResizer.dispatch("keydown", { key: "ArrowRight" });
 assert.equal(grid.style.getPropertyValue("--nami-file-column-size"), "128.000px");
 assert.equal(grid.style.getPropertyValue("--nami-file-column-notes"), "272.000px");
 const renderedRow = findByDataset(panel.element, "nodeId", row.node_id);
+const planCard = findByClass(panel.element, "nami-plan-review__plan");
+const statusCard = findByClass(panel.element, "nami-plan-review__summary");
 panel.render(task);
 assert.equal(findByDataset(panel.element, "nodeId", row.node_id), renderedRow,
   "unchanged review rendering preserves row controls and focus");
+review.pending = "view";
+panel.render(task);
+assert.equal(findByDataset(panel.element, "nodeId", row.node_id), renderedRow,
+  "pending control disable does not rebuild the row window");
+assert.equal(findByClass(renderedRow, "nami-checkbox").disabled, true);
+assert.equal(findByClass(panel.element, "nami-plan-review__plan"), planCard);
+assert.equal(findByClass(panel.element, "nami-plan-review__summary"), statusCard);
+review.pending = null;
+panel.render(task);
+assert.equal(findByDataset(panel.element, "nodeId", row.node_id), renderedRow);
+assert.equal(findByClass(renderedRow, "nami-checkbox").disabled, false);
 document.defaultView.flushAnimationFrame();
 assert.equal(renderedRow.dataset.folder, "false", "operation groups remain non-folder rows");
 assert.equal(renderedRow.textContent, hostile);
@@ -324,6 +360,17 @@ assert.deepEqual(calls.at(-1)[2], {
   collapseNodeId: row.node_id,
   collapsed: true,
 });
+
+renderedRow.dispatch("click", { shiftKey: true });
+assert.deepEqual(calls.at(-1), ["onHighlight", review, "extend", row.node_id]);
+renderedRow.dispatch("click", { ctrlKey: true });
+assert.deepEqual(calls.at(-1), ["onHighlight", review, "toggle", row.node_id]);
+renderedRow.dispatch("click", { ctrlKey: true, shiftKey: true });
+assert.deepEqual(calls.at(-1), ["onHighlight", review, "add-range", row.node_id]);
+renderedRow.dispatch("keydown", { key: "ArrowDown", shiftKey: true });
+assert.deepEqual(calls.at(-1), ["onHighlight", review, "move_down_extend", row.node_id]);
+renderedRow.dispatch("keydown", { key: "Escape" });
+assert.deepEqual(calls.at(-1), ["onHighlight", review, "clear", null]);
 
 const checkbox = findByClass(renderedRow, "nami-checkbox");
 checkbox.checked = false;
