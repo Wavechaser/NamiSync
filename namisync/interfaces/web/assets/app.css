@@ -291,7 +291,7 @@ body {
 .nami-plan-review__sort {
   align-items: center;
   appearance: none;
-  background: transparent;
+  background: var(--color-semantic-transparent);
   border: 0;
   color: inherit;
   cursor: pointer;
