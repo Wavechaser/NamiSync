@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from array import array
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from threading import RLock
@@ -75,6 +76,8 @@ class PlanReviewState:
     _canonical_order: PlanProjectionOrder | None = None
     _order: PlanProjectionOrder | None = None
     _visible: VisibleSequence[PlanProjectionNode] | None = None
+    _scope_selectable: array | None = None
+    _scope_selected: array | None = None
     _lock: RLock = field(default_factory=RLock, repr=False)
 
     def __post_init__(self) -> None:
@@ -105,6 +108,9 @@ class PlanReviewState:
             sort_direction=self.sort_direction,
             collapsed_node_ids=self.collapsed_node_ids,
         )
+        self._scope_selectable, self._scope_selected = _scope_prefixes(
+            self.projection, self.search_query, self.filters
+        )
 
     @property
     def canonical_order(self) -> PlanProjectionOrder:
@@ -128,6 +134,7 @@ class PlanReviewState:
     def _summary(self, *, disposition: str) -> dict[str, object]:
         root = self.projection.nodes[0]
         assert self._visible is not None
+        assert self._scope_selectable is not None and self._scope_selected is not None
         return {
             "disposition": disposition,
             "task_id": self.task_id,
@@ -139,6 +146,8 @@ class PlanReviewState:
             "target_path": self.target_path,
             "selected_operation_count": root.selected_operation_count,
             "selectable_operation_count": root.selectable_operation_count,
+            "scope_selectable_operation_count": self._scope_selectable[-1],
+            "scope_selected_operation_count": self._scope_selected[-1],
             "operation_count": root.operation_count,
             "preflight_ready": self.projection.preflight_ready,
             "preflight_refusal_count": self.projection.preflight_refusal_count,
@@ -151,13 +160,44 @@ class PlanReviewState:
                 self.destructive_operation_counts
             ),
             "required_bytes": self.required_bytes,
-            "visible_row_count": len(self._visible.visible_positions),
+            "visible_row_count": max(0, len(self._visible.visible_positions) - 1),
             "search_query": self.search_query,
             "filters": sorted(self.filters),
             "sort_column": self.sort_column.value,
             "sort_direction": self.sort_direction.value,
             "collapsed_count": len(self.collapsed_node_ids),
         }
+
+    def selection_scope(
+        self,
+        *,
+        expected_view_revision: int,
+        expected_selection_revision: int,
+        node_id: str | None = None,
+    ) -> tuple[str, ...] | None:
+        """Resolve the complete active query under both revision guards."""
+
+        with self._lock:
+            if (
+                expected_view_revision != self.view_revision
+                or expected_selection_revision != self.selection_revision
+            ):
+                return None
+            bounds = None
+            if node_id is not None:
+                node = self.projection.node_for_id(node_id)
+                if node.position == 0:
+                    raise ValueError("synthetic Plan root is not a selectable row")
+                if node.selection == "disabled" or node.row_kind.startswith("prior-"):
+                    raise ValueError("plan row is not selectable")
+                bounds = (node.position, node.subtree_end)
+            return tuple(
+                node.operation_id
+                for node in self.projection.nodes
+                if self._scope_selectable[node.position + 1]
+                > self._scope_selectable[node.position]
+                if bounds is None or bounds[0] <= node.position < bounds[1]
+            )
 
     def update(
         self,
@@ -221,6 +261,11 @@ class PlanReviewState:
                     sort_direction=sort_direction,
                     collapsed_node_ids=frozen_collapsed,
                 )
+                selectable, selected = (
+                    (self._scope_selectable, self._scope_selected)
+                    if search_query == self.search_query and filters == self.filters
+                    else _scope_prefixes(self.projection, search_query, filters)
+                )
                 self.search_query = search_query
                 self.filters = filters
                 self.sort_column = sort_column
@@ -228,6 +273,8 @@ class PlanReviewState:
                 self.collapsed_node_ids = frozen_collapsed
                 self._order = order
                 self._visible = visible
+                self._scope_selectable = selectable
+                self._scope_selected = selected
                 self.view_revision = next_revision
             return self._summary(disposition="applied" if changed else "noop")
 
@@ -271,6 +318,9 @@ class PlanReviewState:
                 projection.nodes,
                 projection.position_by_node_id,
             )
+            selectable, selected = _scope_prefixes(
+                projection, self.search_query, self.filters
+            )
             self.projection = projection
             self.selection_revision = selection_revision
             self.selection_state = selection_state
@@ -285,6 +335,8 @@ class PlanReviewState:
             self._canonical_order = canonical_order
             self._order = order
             self._visible = visible
+            self._scope_selectable = selectable
+            self._scope_selected = selected
             self.view_revision = next_revision
 
     def mark_selection_committed(self) -> None:
@@ -306,14 +358,32 @@ class PlanReviewState:
                     "rows": [],
                 }
             assert self._visible is not None
-            window = window_visible_sequence(self._visible, offset=offset, limit=limit)
+            window = window_visible_sequence(self._visible, offset=offset + 1, limit=limit)
             return {
                 "disposition": "current",
                 "view_revision": self.view_revision,
-                "offset": window.offset,
-                "total": window.total,
-                "rows": [_row_view(row) for row in window.rows],
+                "offset": offset,
+                "total": max(0, window.total - 1),
+                "rows": [
+                    _row_view(
+                        row, rootless=True,
+                        selection=self._scoped_row_selection(row.node),
+                    )
+                    for row in window.rows
+                ],
             }
+
+    def _scoped_row_selection(self, node: PlanProjectionNode) -> str:
+        if not self.search_query and not self.filters:
+            return node.selection
+        assert self._scope_selectable is not None and self._scope_selected is not None
+        selectable = self._scope_selectable[node.subtree_end] - self._scope_selectable[node.position]
+        selected = self._scope_selected[node.subtree_end] - self._scope_selected[node.position]
+        if selectable == 0:
+            return "disabled"
+        if selected == selectable:
+            return "selected"
+        return "unselected" if selected == 0 else "mixed"
 
     def node_for_id(self, node_id: str) -> PlanProjectionNode:
         with self._lock:
@@ -338,11 +408,13 @@ class PlanReviewState:
                 chain.append(node.node_id)
                 position = node.parent_index
             anchor = resolve_visible_anchor(self._visible, chain)
+            if anchor is not None and anchor.index == 0:
+                anchor = None
             return {
                 "disposition": "current",
                 "view_revision": self.view_revision,
                 "node_id": None if anchor is None else anchor.node_id,
-                "index": None if anchor is None else anchor.index,
+                "index": None if anchor is None else anchor.index - 1,
             }
 
 
@@ -448,16 +520,59 @@ def _direct_filter_count(node: PlanProjectionNode, filters: frozenset[str]) -> i
     return int(node.operation_kind in filters)
 
 
-def _row_view(row) -> dict[str, object]:
+def _matches_scope_query(
+    node: PlanProjectionNode, query: str, filters: frozenset[str]
+) -> bool:
+    return (
+        node.operation_id is not None
+        and not node.row_kind.startswith("prior-")
+        and (not filters or bool(_direct_filter_count(node, filters)))
+        and (not query or query in node.display.casefold())
+    )
+
+
+def _scope_prefixes(
+    projection: PlanProjection,
+    search_query: str,
+    filters: frozenset[str],
+) -> tuple[array, array]:
+    nodes = projection.nodes
+    child_selectable = [0] * len(nodes)
+    child_selected = [0] * len(nodes)
+    for node in nodes[1:]:
+        assert node.parent_index is not None
+        child_selectable[node.parent_index] += node.selectable_operation_count
+        child_selected[node.parent_index] += node.selected_operation_count
+    selectable = array("Q", [0])
+    selected = array("Q", [0])
+    query = search_query.casefold()
+    for node in nodes:
+        matched = _matches_scope_query(node, query, filters)
+        direct_selectable = node.selectable_operation_count - child_selectable[node.position]
+        direct_selected = node.selected_operation_count - child_selected[node.position]
+        selectable.append(selectable[-1] + (direct_selectable if matched else 0))
+        selected.append(selected[-1] + (direct_selected if matched else 0))
+    return selectable, selected
+
+
+def _row_view(row, *, rootless: bool = False, selection: str | None = None) -> dict[str, object]:
     node = row.node
+    parent_visible = row.parent_visible_index
+    if rootless and parent_visible == 0:
+        parent_visible = None
+    elif rootless and parent_visible is not None:
+        parent_visible -= 1
     return {
         "node_id": node.node_id,
         "display": node.display,
-        "depth": node.depth,
+        "depth": node.depth - int(rootless),
         "is_container": node.is_container,
-        "visible_index": row.visible_index,
-        "parent_visible_index": row.parent_visible_index,
-        "first_child_visible_index": row.first_child_visible_index,
+        "visible_index": row.visible_index - int(rootless),
+        "parent_visible_index": parent_visible,
+        "first_child_visible_index": (
+            None if row.first_child_visible_index is None
+            else row.first_child_visible_index - int(rootless)
+        ),
         "position_in_set": row.position_in_set,
         "set_size": row.set_size,
         "expanded": row.expanded,
@@ -466,7 +581,7 @@ def _row_view(row) -> dict[str, object]:
         "operation_kind": node.operation_kind,
         "reason": node.reason,
         "blocked_reason": node.blocked_reason,
-        "selection": node.selection,
+        "selection": node.selection if selection is None else selection,
         "selectable_operation_count": node.selectable_operation_count,
         "selected_operation_count": node.selected_operation_count,
         "operation_count": node.operation_count,

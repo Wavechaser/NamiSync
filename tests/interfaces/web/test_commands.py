@@ -293,6 +293,10 @@ class _Service:
         self.calls.append(("mutate-plan-selection", task_id, kwargs))
         return {"disposition": "applied", "task_id": task_id}
 
+    def mutate_plan_scope(self, task_id, **kwargs):
+        self.calls.append(("mutate-plan-scope", task_id, kwargs))
+        return {"disposition": "applied", "task_id": task_id}
+
     def start_execution(self, task_id, **kwargs):
         self.calls.append(("start-execution", task_id, kwargs))
         return ExecutionAdmissionView("confirmation-required", 0, "reviewing")
@@ -485,6 +489,7 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
         "get_plan_window",
         "get_plan_anchor",
         "mutate_plan_selection",
+        "mutate_plan_scope",
         "start_execution",
         "control_execution",
         "next_events",
@@ -726,8 +731,19 @@ def test_m1_7_plan_commands_validate_and_reach_task_authority() -> None:
         {
             "task_id": TASK_ID,
             "command_id": COMMAND_ID,
-            "expected_revision": 0,
+            "expected_selection_revision": 0,
+            "expected_view_revision": 1,
             "node_id": node_id,
+            "selected": False,
+        },
+    )
+    scope_mutation = _invoke(
+        commands["mutate_plan_scope"],
+        {
+            "task_id": TASK_ID,
+            "command_id": "c5" * 16,
+            "expected_view_revision": 1,
+            "expected_selection_revision": 1,
             "selected": False,
         },
     )
@@ -751,6 +767,7 @@ def test_m1_7_plan_commands_validate_and_reach_task_authority() -> None:
     assert window["rows"] == []
     assert anchor["node_id"] == node_id
     assert mutation["disposition"] == "applied"
+    assert scope_mutation["disposition"] == "applied"
     assert execution.disposition == "confirmation-required"
     assert service.calls[-2] == (
         "start-execution",
@@ -776,6 +793,7 @@ def test_m1_7_plan_commands_validate_and_reach_task_authority() -> None:
         "get-plan-window",
         "get-plan-anchor",
         "mutate-plan-selection",
+        "mutate-plan-scope",
         "start-execution",
         "control-execution",
     ]
@@ -802,6 +820,28 @@ def test_m1_7_plan_commands_refuse_unbounded_or_noncanonical_payloads(command, p
     commands, _slots, _service = _commands()
     with pytest.raises(CommandPayloadError):
         _invoke(commands[command], payload)
+
+
+def test_plan_scope_command_has_constant_size_and_refuses_operation_id_lists() -> None:
+    import json
+
+    commands, _slots, service = _commands()
+    payload = {
+        "task_id": TASK_ID, "command_id": COMMAND_ID,
+        "expected_view_revision": 7, "expected_selection_revision": 4,
+        "selected": False,
+    }
+    assert len(json.dumps(payload).encode("utf-8")) < 256
+    assert _invoke(commands["mutate_plan_scope"], payload)["disposition"] == "applied"
+    assert service.calls[-1][2]["expected_selection_revision"] == 4
+    with pytest.raises(CommandPayloadError):
+        _invoke(commands["mutate_plan_scope"], {
+            **payload, "operation_ids": ["1" * 32] * 300,
+        })
+    with pytest.raises(CommandPayloadError):
+        _invoke(commands["mutate_plan_scope"], {
+            **payload, "expected_view_revision": -1,
+        })
 
 
 @pytest.mark.parametrize(

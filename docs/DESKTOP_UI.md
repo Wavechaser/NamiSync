@@ -1245,7 +1245,11 @@ shows frozen paths and semantic options, a Status card shows selected/risk/byte
 facts, and one table card owns search, gallery filter pills, the grid and
 execution controls. The Plan grid retains the gallery's Checksum column and
 adds an equal-width Modified column immediately after it; dependency counts
-appear in Notes. Its separate header and body share the Setup table's stable
+appear in Notes. The synthetic Plan root is omitted from the table. The Select
+header is the sole tri-state bulk control for all selectable operations
+matching the active search/filter query, not merely the
+loaded or expanded rows. Folder checkboxes target matching descendants;
+changing views alone never changes selection. Its separate header and body share the Setup table's stable
 gutter and thin-to-wide scrollbar styling, so the scrollbar does not overlay
 the header. Production columns use the gallery's constrained pointer/keyboard
 resizing, with Notes yielding width. Name, Size and Modified headers cycle

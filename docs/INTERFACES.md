@@ -144,7 +144,10 @@ it for previews, projection construction and commitment. A selection mutation
 derives the next decision before publishing its deselection and revision;
 artifact replacement replaces the state. Projection membership shares the
 decision's frozenset, including after selection edits through a revision-checked
-internal read. No additional wire field or command is introduced.
+internal read. Plan bulk and folder gestures additionally guard the active
+view revision, resolve matching operation membership entirely under the task
+owner, and pass one batch to the existing workflow mutation. The browser sends
+no operation-id list; navigation alone never changes selection.
 
 Derivation also prepares the canonical selection digest. Review and confirmation
 reuse those bytes only with the exact decision; commitment still checks current
@@ -235,7 +238,8 @@ close_session(session_id) -> None
 drop_plan(request_id) -> None
 preview_selection(request_id) -> SelectionPreviewView
 mutate_selection(request_id, expected_revision, *,
-                 deselect=(), reselect=(), command_id=None)
+                 deselect=(), reselect=(), command_id=None,
+                 intent_scope_revision=None)
     -> SelectionMutationView
 start_execution(request_id, *, verify_after_execute=False,
                 expected_revision=None, destructive_acknowledged=False,

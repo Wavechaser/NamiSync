@@ -12,9 +12,27 @@ Nodes retain the structural data needed by presentation—preorder position, dep
 
 ## Views, windows, and selection
 
-Plan views are server-side, opaque, immutable/revisioned projections. A response formed for a stale lifecycle, selection, result, view-state, or projection revision returns a typed conflict and does not combine old structure with new detail. The browser keeps at most its current 256-row window and treats DOM rows as disposable. Server selection remains authoritative across virtualized rows, collapse, filters, and windows: a folder choice applies to all descendants, not only visible or filtered rows. Inventory views retain this accepted contract but remain unrealized.
+Plan views are server-side, opaque, immutable/revisioned projections. A response formed for a stale lifecycle, selection, result, view-state, or projection revision returns a typed conflict and does not combine old structure with new detail. The browser keeps at most its current 256-row window and treats DOM rows as disposable. Server selection remains authoritative across virtualized rows, collapse, filters, and windows. A Plan header bulk gesture applies to all selectable operations whose own rows match the current search and operation filters; a folder gesture applies to matching descendants only. Both include matches outside the loaded window and under collapsed folders. Sorting, collapse and scroll do not change gesture membership. View changes alone never alter selection, and Execute always uses the complete current selection, including hidden operations. Workflow dependency closure can reselect an operation outside the view when a chosen operation requires it; safety exclusions remain in force. Inventory views retain their separate accepted complete-folder contract but remain unrealized.
 
-Selection changes batch a short user gesture and settle as one revisioned server mutation. The UI may show pending intent but must not optimistically invent a final selection. Selection preview derives directly from the retained selection/domain facts; it does not rebuild an unrelated whole review to answer a checkbox change.
+The synthetic Plan root remains internal to the projection and its complete-plan
+rollups, but is not a table row or a second whole-plan checkbox. Plan window
+offsets, totals, row indexes, depths, parent/child indexes and anchors are
+rootless public coordinates: the root's direct children start at index/depth
+zero with no public parent; an anchor that resolves only to the root returns
+null. The header checkbox is the sole whole-view bulk control.
+
+Selection changes batch a short user gesture and settle as one revisioned server mutation. Scoped Plan gestures carry expected view and selection revisions, resolve the full query and guard both revisions under the task owner before applying one workflow mutation. A stale gesture has no effect. The UI may show pending intent but must not optimistically invent a final selection. Selection preview derives directly from the retained selection/domain facts; it does not rebuild an unrelated whole review to answer a checkbox change.
+
+The scoped-selection cost witness in `test_plan_review_scale.py` constructs the
+existing 120,000-operation base fixture, activates the Copy filter, and times
+complete server membership resolution, workflow deselection/decision derivation,
+and Plan projection/summary refresh as one diagnostic interval. It excludes
+fixture construction, WebView transport and filesystem execution. The finite
+gate is under 10 seconds on the supported Windows test host, with exact matched
+count and post-mutation scope/selection assertions. A change to the scope
+matcher, workflow mutation or projection refresh reruns this witness; the
+historical M1-7 measurements do not certify it. On 2026-09-17 the 120,000-op
+fixture matched 16,667 operations and the interval was 1.207 seconds.
 
 A plan or inventory window indexes the complete post-filter visible sequence, not lexical database order. Fixed-height virtual rows and leading/trailing spacers keep scrolling stable. Window requests carry the appropriate revision, offset, and limit; a renderer requests the index it needs, commits only under its request generation, and suppresses duplicate uncovered-range requests. Changing search, collapse, filters, sorting, task detail, publication state, or retirement advances the local generation. Stale responses and queued animation frames are inert. `dispose()` disconnects observers/listeners and invalidates pending work before a root is removed.
 
@@ -32,7 +50,7 @@ to 256 rows, including when the total population is larger.
 
 Plan search is backend literal case-folded display matching. It has no regex, trimming, normalization, marker decoding, or path authority. The helper admits at most the 65,536-byte ingress limit; actual bridge query capacity is smaller when JSON overhead is included. A fixed 150 ms trailing debounce and last-intent-wins generation rule provide responsiveness. Client-side search is incorrect because the client owns only a window. Inventory search retains this accepted contract but remains unrealized.
 
-Filtering/collapse determine visible rows; rollups and selection retain their canonical meaning. Empty ancestors disappear from the visible sequence rather than leaving a skeletal tree. Acknowledged inventory rows hide by default but remain available through their facet; counts make the hidden population visible. Acknowledgment changes the visible sequence and refetches its window, but does not rewrite inventory rollup truth.
+Filtering/collapse determine visible rows; the Plan Status rollups and effective execution selection retain their complete-plan meaning. The Plan header and filtered folder checkbox states report the active search/filter scope so their visible state agrees with their gesture; collapse does not narrow it. Empty ancestors disappear from the visible sequence rather than leaving a skeletal tree. Acknowledged inventory rows hide by default but remain available through their facet; counts make the hidden population visible. Acknowledgment changes the visible sequence and refetches its window, but does not rewrite inventory rollup truth.
 
 New Plan views and explicit reset use ascending canonical path-key order. A user may choose filename, size, or mtime ascending or descending; descending path-key, omitted/toggle direction, unknown columns, and inferred direction refuse. Sort only immediate siblings and use casefolded raw basename for filename, raw signed-64 file size and nanosecond mtime for operation-bearing file rows, unavailable-last in both directions, and canonical path-key as the stable tie-breaker. Do not sort formatted labels, copied-work bytes, directory descendants, or invented folder timestamps. An operation-bearing directory may use only its own reviewed mtime; structural/group/notice rows have no invented numeric key. Sort is process-live view state, never durable preference; it preserves tree identity, selection, recursive action scope, execution order, rollups, and domain truth. A rebuild derives the retained chosen sort from the new immutable projection and publishes its permutation, indexes, and revisions atomically; a failed rebuild preserves the previous complete view, and window reads perform no I/O to discover sort keys. Inventory sorting retains this accepted contract but remains unrealized.
 
@@ -44,7 +62,7 @@ Windowing must bound repeated query, decode, allocation, and serialization work,
 
 The retained M1 support target for applicable plan, inventory, and standalone integrity populations is 120,000 rows. It defines the supported target, not a claim about behavior at 120,001 and not a complete-object-byte reservation. Independently enforced population/request limits remain owned by their runtime components and `DEFENSE.md`; a presentation view must surface a truthful refusal rather than publish partial authority when its own admitted population cannot be represented safely.
 
-Focused checks must catch the failures that small fixtures conceal: scope-qualified node ids, stable duplicate operation/warning identities, no path arithmetic in presentation, literal hostile display search, server-side folder selection across filtered/windows, stale-view refusal, no quadratic expansion over sibling roots, bounded visible-range work, and causal projection rebuild after terminal changes. Historical benchmark rows and fixed completion gates are in `obsolete/M1_BRIDGE.md`; they are provenance, not a substitute for a newly predeclared measurement contract.
+Focused checks must catch the failures that small fixtures conceal: scope-qualified node ids, stable duplicate operation/warning identities, no path arithmetic in presentation, literal hostile display search, server-side scoped folder/header selection across filtered/windows and collapsed folders, stale-view/selection refusal, no quadratic expansion over sibling roots, bounded visible-range work, and causal projection rebuild after terminal changes. Historical benchmark rows and fixed completion gates are in `obsolete/M1_BRIDGE.md`; they are provenance, not a substitute for a newly predeclared measurement contract.
 
 ## Implemented Plan and accepted future outcomes
 

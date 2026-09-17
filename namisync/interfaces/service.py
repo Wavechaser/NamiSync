@@ -892,14 +892,18 @@ class NamiSyncService:
         deselect: tuple[str, ...] = (),
         reselect: tuple[str, ...] = (),
         command_id: str | None = None,
+        intent_scope_revision: int | None = None,
     ) -> SelectionMutationView:
         if type(expected_revision) is not int:
             raise TypeError("expected_revision must be an int")
+        if intent_scope_revision is not None and type(intent_scope_revision) is not int:
+            raise TypeError("intent_scope_revision must be an int or None")
         state, artifact = self._selection_state(request_id)
         signature = (
             expected_revision,
             tuple(deselect),
             tuple(reselect),
+            intent_scope_revision,
         )
         try:
             claim = self._lifecycle.begin_plan_mutation(

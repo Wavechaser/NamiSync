@@ -264,6 +264,8 @@ class TaskAuthority(Protocol):
 
     def mutate_plan_selection(self, *args, **kwargs) -> dict[str, object]: ...
 
+    def mutate_plan_scope(self, *args, **kwargs) -> dict[str, object]: ...
+
     def start_execution(self, *args, **kwargs) -> object: ...
 
     def control_execution(self, *args, **kwargs) -> object: ...
@@ -497,8 +499,18 @@ class _PlanAnchorPayload:
 class _MutatePlanSelectionPayload:
     task_id: str
     command_id: str
-    expected_revision: int
+    expected_selection_revision: int
+    expected_view_revision: int
     node_id: str
+    selected: bool
+
+
+@dataclass(frozen=True, slots=True)
+class _MutatePlanScopePayload:
+    task_id: str
+    command_id: str
+    expected_view_revision: int
+    expected_selection_revision: int
     selected: bool
 
 
@@ -927,7 +939,8 @@ def production_command_specs(
         try:
             return registry.mutate_plan_selection(
                 payload.task_id,
-                expected_revision=payload.expected_revision,
+                expected_revision=payload.expected_selection_revision,
+                expected_view_revision=payload.expected_view_revision,
                 node_id=payload.node_id,
                 selected=payload.selected,
                 command_id=payload.command_id,
@@ -935,6 +948,22 @@ def production_command_specs(
         except (CommandIdConflictError, TaskIntentConflictError) as error:
             raise CommandConflictError(
                 "mutate_plan_selection command id conflicts with retained intent"
+            ) from error
+
+    def mutate_plan_scope(payload: object) -> object:
+        if type(payload) is not _MutatePlanScopePayload:
+            raise TypeError("mutate_plan_scope received an unvalidated payload")
+        try:
+            return registry.mutate_plan_scope(
+                payload.task_id,
+                expected_view_revision=payload.expected_view_revision,
+                expected_selection_revision=payload.expected_selection_revision,
+                selected=payload.selected,
+                command_id=payload.command_id,
+            )
+        except (CommandIdConflictError, TaskIntentConflictError) as error:
+            raise CommandConflictError(
+                "mutate_plan_scope command id conflicts with retained intent"
             ) from error
 
     def start_execution(payload: object) -> object:
@@ -1230,6 +1259,15 @@ def production_command_specs(
             "mutate_plan_selection": CommandSpec(
                 validate_payload=_validate_mutate_plan_selection,
                 handler=mutate_plan_selection,
+                access=CommandAccess.MUTATING,
+                command_id=FieldRequirement.REQUIRED,
+                revision=FieldRequirement.REQUIRED,
+                timeout=CommandTimeout.LOCAL_5_SECONDS,
+                retry=CommandRetry.SAME_COMMAND_ONCE,
+            ),
+            "mutate_plan_scope": CommandSpec(
+                validate_payload=_validate_mutate_plan_scope,
+                handler=mutate_plan_scope,
                 access=CommandAccess.MUTATING,
                 command_id=FieldRequirement.REQUIRED,
                 revision=FieldRequirement.REQUIRED,
@@ -1598,12 +1636,13 @@ def _validate_plan_anchor(value: object) -> _PlanAnchorPayload:
 
 def _validate_mutate_plan_selection(value: object) -> _MutatePlanSelectionPayload:
     if type(value) is not dict or set(value) != {
-        "task_id", "command_id", "expected_revision", "node_id", "selected"
+        "task_id", "command_id", "expected_selection_revision", "expected_view_revision", "node_id", "selected"
     }:
         raise CommandPayloadError("mutate_plan_selection payload is invalid")
     task_id = value["task_id"]
     command_id = value["command_id"]
-    expected_revision = value["expected_revision"]
+    expected_revision = value["expected_selection_revision"]
+    expected_view_revision = value["expected_view_revision"]
     node_id = value["node_id"]
     selected = value["selected"]
     if (
@@ -1613,13 +1652,39 @@ def _validate_mutate_plan_selection(value: object) -> _MutatePlanSelectionPayloa
         or _OPAQUE_ID.fullmatch(command_id) is None
         or not _is_javascript_safe_integer(expected_revision)
         or expected_revision < 0
+        or not _is_javascript_safe_integer(expected_view_revision)
+        or expected_view_revision < 0
         or type(node_id) is not str
         or re.fullmatch(r"node-[0-9a-f]{32}", node_id) is None
         or type(selected) is not bool
     ):
         raise CommandPayloadError("mutate_plan_selection payload is invalid")
     return _MutatePlanSelectionPayload(
-        task_id, command_id, expected_revision, node_id, selected
+        task_id, command_id, expected_revision, expected_view_revision, node_id, selected
+    )
+
+
+def _validate_mutate_plan_scope(value: object) -> _MutatePlanScopePayload:
+    if type(value) is not dict or set(value) != {
+        "task_id", "command_id", "expected_view_revision",
+        "expected_selection_revision", "selected",
+    }:
+        raise CommandPayloadError("mutate_plan_scope payload is invalid")
+    task_id = value["task_id"]
+    command_id = value["command_id"]
+    view_revision = value["expected_view_revision"]
+    selection_revision = value["expected_selection_revision"]
+    selected = value["selected"]
+    if (
+        type(task_id) is not str or _TASK_ID.fullmatch(task_id) is None
+        or type(command_id) is not str or _OPAQUE_ID.fullmatch(command_id) is None
+        or not _is_javascript_safe_integer(view_revision) or view_revision < 0
+        or not _is_javascript_safe_integer(selection_revision) or selection_revision < 0
+        or type(selected) is not bool
+    ):
+        raise CommandPayloadError("mutate_plan_scope payload is invalid")
+    return _MutatePlanScopePayload(
+        task_id, command_id, view_revision, selection_revision, selected
     )
 
 

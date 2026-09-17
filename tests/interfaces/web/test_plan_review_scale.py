@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+from time import perf_counter
 from types import SimpleNamespace
 import zipfile
 
@@ -32,6 +33,50 @@ from namisync.workflows.plan_projection import (
     build_plan_projection,
     sort_plan_projection,
 )
+from namisync.workflows import apply_selection_mutation, derive_execution_selection
+
+
+def test_scoped_selection_120k_server_mutation_cost() -> None:
+    artifact = build_plan_fixture(information_heavy=False)
+    state = benchmark.make_plan_review_state(artifact)
+    initial = state.window(expected_revision=0, offset=0, limit=256)
+    assert initial["total"] == len(state.current_sequence.visible_positions) - 1
+    assert initial["rows"][0]["node_id"] != state.projection.nodes[0].node_id
+    assert initial["rows"][0]["visible_index"] == 0
+    viewed = state.update(
+        expected_revision=0, search_query="", filters=frozenset({"copy"}),
+        sort_column=PlanSortColumn.PATH,
+        sort_direction=SortDirection.ASCENDING,
+        collapse_node_id=None, collapsed=None,
+    )
+    started = perf_counter()
+    identifiers = state.selection_scope(
+        expected_view_revision=viewed["view_revision"],
+        expected_selection_revision=0,
+    )
+    deselected = apply_selection_mutation(
+        artifact.plan, frozenset(), deselect=frozenset(identifiers),
+    )
+    decision = derive_execution_selection(
+        artifact.plan, user_deselected=deselected,
+    )
+    state.replace_selection(
+        selected_operation_ids=frozenset(str(identifier) for identifier in decision.selection),
+        exclusion_reasons={}, selection_revision=1, selection_state="reviewing",
+        requires_destructive_confirmation=decision.requires_destructive_confirmation,
+        irreversible_update_count=decision.irreversible_update_count,
+        destructive_operation_count=decision.destructive_operation_count,
+        irreversible_operation_count=decision.irreversible_operation_count,
+        destructive_operation_counts=benchmark._selection_count_mapping(decision),
+        required_bytes=decision.required_bytes,
+    )
+    elapsed = perf_counter() - started
+    print(f"scoped-selection-120k: {len(identifiers)} ids, {elapsed:.3f}s")
+    assert 0 < len(identifiers) < len(artifact.plan.operations)
+    assert len(decision.selection) < len(artifact.plan.operations)
+    assert state.summary()["selection_revision"] == 1
+    assert state.summary()["scope_selected_operation_count"] == 0
+    assert elapsed < 10.0, f"120k scoped server mutation took {elapsed:.3f}s"
 
 
 CONTRACT_PATH = Path(__file__).with_name("m1_7_plan_compact_contract.json")

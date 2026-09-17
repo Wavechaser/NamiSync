@@ -76,7 +76,7 @@ function addGroupDisclosure(element, row, onCollapse) {
 
 export function createPlanReviewPanel(callbacks) {
   const required = [
-    "onViewChange", "onWindow", "onSelect", "onExecute", "onControl", "onPlanAgain",
+    "onViewChange", "onWindow", "onSelect", "onScopeSelect", "onExecute", "onControl", "onPlanAgain",
   ];
   if (callbacks === null || typeof callbacks !== "object"
       || !required.every((name) => typeof callbacks[name] === "function")) {
@@ -150,7 +150,16 @@ export function createPlanReviewPanel(callbacks) {
     const cell = document.createElement("div");
     cell.className = "nami-file-list__header-cell";
     cell.setAttribute("role", "columnheader");
-    if (column === null) {
+    if (index === 0) {
+      const selectAll = document.createElement("input");
+      selectAll.className = "nami-checkbox nami-plan-review__scope-checkbox";
+      selectAll.type = "checkbox";
+      selectAll.ariaLabel = "Select all operations in the current view";
+      cell.append(selectAll);
+      selectAll.addEventListener("change", () => {
+        if (current !== null) callbacks.onScopeSelect(current, selectAll.checked);
+      });
+    } else if (column === null) {
       renderText(cell, label);
     } else {
       const sortButton = button("", "nami-plan-review__sort");
@@ -217,6 +226,7 @@ export function createPlanReviewPanel(callbacks) {
   let pendingWindowOffset = null;
   let renderedRows = null;
   const headerCells = [...columnHeader.children];
+  const scopeCheckbox = columnHeader.querySelector(".nami-plan-review__scope-checkbox");
   const resizers = headerCells.slice(0, -1).map(
     (cell) => cell.querySelector(".nami-file-list__column-resizer"),
   );
@@ -479,6 +489,19 @@ export function createPlanReviewPanel(callbacks) {
     for (const [value, filter] of filterButtons) {
       filter.ariaPressed = String(review.summary.filters.includes(value));
       filter.disabled = review.pending !== null;
+    }
+    if (scopeCheckbox instanceof HTMLInputElement) {
+      const scopeSelectable = review.summary.scope_selectable_operation_count;
+      const scopeSelected = review.summary.scope_selected_operation_count;
+      const scopeAvailable = Number.isSafeInteger(scopeSelectable)
+        && Number.isSafeInteger(scopeSelected)
+        && scopeSelectable > 0;
+      scopeCheckbox.disabled = review.pending !== null
+        || review.summary.selection_state !== "reviewing"
+        || !scopeAvailable;
+      scopeCheckbox.checked = scopeAvailable && scopeSelected === scopeSelectable;
+      scopeCheckbox.indeterminate = scopeAvailable
+        && scopeSelected > 0 && scopeSelected < scopeSelectable;
     }
     const activeExecution = task.executionStarted && task.sessionState === "active";
     const retryExecution = task.executionAttempt?.state === "uncertain";

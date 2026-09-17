@@ -1,28 +1,35 @@
 # Latest session handoff
 
-## Plan review GUI refinement (2026-09-17)
+## Scoped, rootless Plan selection (2026-09-17)
 
-GUI-P1–P3 in [M1_PLAN.md](M1_PLAN.md) are complete. The Plan surface now has
-separate frozen-settings and status cards plus one table card for search,
-operation filter pills, the resizable seven-column table and execution controls.
-The gallery and production Plan table both place Modified after Checksum; the
-checksum column is blank for Plan facts without a checksum, and dependencies
-appear in Notes. Separate header/body scrolling uses the Setup table's stable
-gutter and thin-to-wide scrollbar. Name, Size and Modified sort headers cycle
-ascending, descending, then canonical path order, with existing chevron icons.
-Status and row byte labels use the exact BigInt-backed binary formatter.
+Plan bulk selection is now an explicit tri-state header checkbox. Header and
+folder gestures target selectable operations matching the server's active
+search/filter query across all windows and collapsed descendants; navigation
+alone never changes selection, and Execute still uses the complete selection.
+The bridge sends only compact intent plus expected view/selection revisions.
+The task registry resolves membership under its task lock and calls one
+workflow selection mutation; receipt identity includes the view revision.
+Safety exclusions and dependency closure remain workflow-owned. Filtered
+folder checkbox states reflect their scoped membership; Status counts remain
+complete-plan facts.
 
-The focused interface neighborhood passed 86 tests with five headed tests
-deselected. The installed task-shell Plan interaction witness passed, including
-the revised filter, sort, resizer and table geometry checks. The installed
-gallery light/dark/forced-color witness passed. The standalone byte formatter
-boundary probe and `git diff --check` passed. One earlier headed task-shell run
-had a dialog focus-containment failure; the immediate repeat with the same
-product change passed, so no production focus change was made.
+The synthetic Plan root remains internal but is omitted from public table
+windows. Public offsets, totals, row indexes/depths, parent/child indexes and
+anchors use rootless coordinates; the header is the sole whole-view control.
+The root node cannot be selected through a row gesture. BRIDGE, PRESENTATION,
+INTERFACES, FEATURES, DESKTOP_UI and the M1 delivery register reflect the new
+contract, including the retired filter-independent Plan folder rule. The
+historical M1-7 scale receipts remain tied to their original source/instrument;
+they do not recertify this change.
 
-Commits for this task are `f2fc1aa` (register), `27f1a6b`
-(formatter) and `4053a53` (integrated surface). The M1-7 quantitative
-receipts remain historical to their original source/instrument bytes; this GUI
-pass does not recertify current-source scale performance. The separate R7
-test/evidence machinery proposal remains in [M1_7_ABLATION_STUDY.md](M1_7_ABLATION_STUDY.md)
-and was not changed here.
+The 120,000-operation scoped server witness matched 16,667 Copy operations
+and completed membership resolution, workflow mutation and projection refresh
+in 1.207 seconds on this host (10-second diagnostic gate). The focused
+cross-layer neighborhood passed 531 tests before the final rootless/edge-case
+refinement. The final ordinary suite passed 5,171 tests, with five skips and
+30 headed deselections; the post-suite operation-bearing-folder assertion
+passed separately. The installed headed Plan flow passed on repeat after one
+intermittent modal focus-containment failure; no modal code changed. A
+pre-existing raw `transparent` literal in the Plan sort CSS failed the first
+ordinary-suite token guard (5,168 passed); a separate tested token correction
+was committed as `6425fa7`.

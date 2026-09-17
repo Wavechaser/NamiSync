@@ -142,6 +142,7 @@ class DocumentFake {
 
 globalThis.Element = ElementFake;
 globalThis.HTMLElement = ElementFake;
+globalThis.HTMLInputElement = ElementFake;
 globalThis.document = new DocumentFake();
 globalThis.window = document.defaultView;
 globalThis.getComputedStyle = () => ({ fontSize: "16px" });
@@ -182,7 +183,7 @@ const { createPlanReviewPanel } = await import(moduleUrl(source));
 
 const calls = [];
 const callbacks = Object.fromEntries([
-  "onViewChange", "onWindow", "onSelect", "onExecute", "onControl", "onPlanAgain",
+  "onViewChange", "onWindow", "onSelect", "onScopeSelect", "onExecute", "onControl", "onPlanAgain",
 ].map((name) => [name, (...args) => calls.push([name, ...args])]));
 const panel = createPlanReviewPanel(callbacks);
 const historicalFooter = document.createElement("div");
@@ -232,6 +233,8 @@ const summary = {
   selected_operation_count: 1,
   selectable_operation_count: 2,
   operation_count: 2,
+  scope_selected_operation_count: 1,
+  scope_selectable_operation_count: 2,
   preflight_ready: false,
   preflight_refusal_count: 1,
   warning_count: 1,
@@ -325,6 +328,13 @@ checkbox.checked = false;
 checkbox.dispatch("change");
 assert.deepEqual(calls.at(-1), ["onSelect", review, row, false]);
 
+const scopeCheckbox = findByClass(panel.element, "nami-plan-review__scope-checkbox");
+assert.ok(scopeCheckbox);
+assert.equal(scopeCheckbox.indeterminate, true);
+scopeCheckbox.checked = true;
+scopeCheckbox.dispatch("change");
+assert.deepEqual(calls.at(-1), ["onScopeSelect", review, true]);
+
 const sizeSort = findByDataset(panel.element, "sortColumn", "size");
 const nameSort = findByDataset(panel.element, "sortColumn", "filename");
 assert.ok(sizeSort && nameSort);
@@ -355,6 +365,11 @@ noticeFilter.dispatch("click");
 assert.deepEqual(calls.at(-1), ["onViewChange", review,
   { filters: new Set(["notice"]) }]);
 assert.equal(noticeFilter.ariaPressed, "true");
+assert.equal(
+  calls.filter(([name]) => name === "onScopeSelect").length,
+  1,
+  "filter navigation does not imply scoped selection",
+);
 
 const search = findAction(panel.element, "plan-search");
 search.value = hostile;

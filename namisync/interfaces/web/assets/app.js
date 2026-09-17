@@ -11,6 +11,7 @@ import {
   listTasks,
   markBridgeOperational,
   mutatePlanSelection,
+  mutatePlanScope,
   openPlanView,
   pickFolder,
   planAgain,
@@ -140,6 +141,9 @@ const panel = createWorkPanel({
   onWindow: (review, offset) => { void loadPlanWindow(review, offset); },
   onSelect: (review, row, selected) => {
     void changePlanSelection(review, row, selected);
+  },
+  onScopeSelect: (review, selected) => {
+    void changePlanSelection(review, null, selected);
   },
   onExecute: (review, returnFocus) => {
     void executeReviewedPlan(review, returnFocus);
@@ -942,12 +946,15 @@ async function changePlanSelection(review, row, selected) {
   review.message = "Updating the selected operations…";
   renderTasks();
   try {
-    const summary = await mutatePlanSelection(
-      task.taskId,
-      review.summary.selection_revision,
-      row.node_id,
-      selected,
-    );
+    const summary = row === null
+      ? await mutatePlanScope(
+        task.taskId, review.summary.view_revision,
+        review.summary.selection_revision, selected,
+      )
+      : await mutatePlanSelection(
+        task.taskId, review.summary.view_revision,
+        review.summary.selection_revision, row.node_id, selected,
+      );
     if (retainedReviewTask(review) !== task || review.actionRevision !== action) return;
     const window = await readPlanWindowAtAnchor(
       task,

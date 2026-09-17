@@ -1049,6 +1049,17 @@ def test_br_g_16_receipt_identity_mismatches_use_the_exact_typed_boundary() -> N
             command_id=_opaque_id(204),
         )
 
+    scoped_service = _service(_PlanRuntime(_artifact(plan((copied,)))))
+    scoped_service.mutate_selection(
+        REQUEST_ID, 0, deselect=(str(copied.op_id),),
+        command_id=_opaque_id(206), intent_scope_revision=3,
+    )
+    with pytest.raises(CommandIdConflictError, match="selection mutation"):
+        scoped_service.mutate_selection(
+            REQUEST_ID, 0, deselect=(str(copied.op_id),),
+            command_id=_opaque_id(206), intent_scope_revision=4,
+        )
+
     session_service = _service(SimpleNamespace())
     session_service.start_inventory(
         root_path="F:\\source-a",

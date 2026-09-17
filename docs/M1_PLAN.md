@@ -38,6 +38,42 @@ The prior aggregate complete-owner-graph model and BR-G-45 are retired. No futur
 
 ## Remaining checkpoints
 
+### Scoped Plan bulk selection register (2026-09-17)
+
+The accepted outcome is one server-owned bulk gesture over every selectable
+operation whose own row matches the active search and operation filters, across
+windows and collapsed ancestors. A folder gesture selects its matching
+descendants, not every descendant. Search/filter navigation alone never mutates
+selection. Sorting, collapse and scroll do not change bulk membership. Existing
+dependency closure and safety exclusions remain authoritative; a dependency
+outside the displayed scope may be reselected only when the workflow requires it.
+
+The finite production population is the Plan review state and task registry,
+selection lifecycle/service, desktop command ingress and browser bridge/Plan
+panel. Direct tests and BRIDGE, PRESENTATION, INTERFACES, DESKTOP_UI, FEATURES,
+CHANGELOG and HANDOFF are the documentation/verification population. Existing
+row/folder gestures and execution admission stay intact. The atomic boundary is
+one coherent command, implementation, tests and contract documentation commit.
+
+| ID | Accepted outcome | Named gate | Status |
+| --- | --- | --- | --- |
+| GUI-S1 | Add an explicit header bulk checkbox and scope folder gestures to current search/filter matches; do not infer selection from view changes or Execute. | Focused browser and server selection tests, including unchanged hidden selection and filter-only navigation; update the prior folder-ignores-filter contract and tests. | Complete |
+| GUI-S2 | Send constant-size scoped intent with both expected view and selection revisions; resolve membership and apply one atomic server mutation, rejecting stale gestures and preserving lifecycle replay/dependency/safety rules. | Bridge validation/payload bound, stale/replay/off-window/collapsed tests, mutation-cost scaling measurement and direct-consumer regression. | Complete |
+| GUI-S3 | Remove only the synthetic Plan root from the table, preserving every operation/folder row and translating Plan windows, row indexes and anchors to a rootless public table. The header checkbox remains the sole whole-view bulk control. | Rootless window/anchor/index tests, browser component and installed headed Plan witness; preserve internal projection ownership. | Complete |
+
+Task-specific stops: any changed execution effect/admission, weakened safety
+exclusion, cross-view selection mutation without a dependency reason, unbounded
+bridge payload, or superlinear scoped-mutation growth requires review before
+continuing. Regression study: exact row/folder selection, stale command replay,
+sort/collapse-only navigation, empty matches, committed/retiring tasks, and
+large plans. Historical M1-7 scale receipts are not acceptance for this code.
+The direct-consumer neighborhood passed 531 tests before the final rootless
+refinement; the final ordinary repository suite passed 5,171 with five skips
+and 30 headed deselections. The installed headed Plan flow passed on repeat
+after one intermittent modal focus-containment failure (no modal code changed).
+The 120,000-operation scoped diagnostic matched 16,667 Copy operations and
+completed the server mutation path in 1.207 seconds against its 10-second gate.
+
 ### Plan-surface refinement register (2026-09-17)
 
 This post-M1-7 GUI pass changes presentation only. Frozen plan facts, server-owned

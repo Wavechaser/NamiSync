@@ -27,6 +27,20 @@ and remembered locations, bounded Plan review/selection/sorting and same-task
 execution with live controls. Execution-result/inventory review and beta
 packaging remain open.
 
+#### Scope Plan bulk selection to the active view (2026-09-17)
+
+- Add a tri-state Plan header checkbox and make folder gestures target every
+  selectable operation matching current search/filter, including off-window
+  and collapsed descendants. Navigation alone leaves the complete selection
+  unchanged, and Execute retains hidden selections.
+- Resolve compact gestures in Python under both view and selection revisions,
+  preserving workflow dependency/safety closure and command receipt identity.
+  Add focused stale/hidden/filter/window tests and a 120,000-operation cost
+  witness; update the former filter-independent folder-selection contract.
+- Omit the synthetic Plan root row while preserving its internal rollups;
+  translate public row/window/anchor coordinates to the rootless table and
+  keep the header checkbox as the only whole-view control.
+
 #### Refine Plan review table and controls (2026-09-17)
 
 - Rehouse frozen Plan settings, status, search/filter, seven-column table and

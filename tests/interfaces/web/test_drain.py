@@ -2862,6 +2862,120 @@ def test_m1_7_reopen_retains_view_identity_and_execution_commit_revision() -> No
     assert execution.session_id == "b" * 32
 
 
+def test_plan_scope_mutation_guards_both_revisions_and_keeps_hidden_selection() -> None:
+    class Service(_Service):
+        def __init__(self) -> None:
+            super().__init__()
+            self.selected = {"1" * 32, "2" * 32}
+            self.selection_revision = 0
+            self.mutations = []
+
+        def get_plan_projection(self, request_id):
+            self.projection_calls += 1
+            root = PlanProjectionNode(
+                "node-" + "0" * 32, "Plan", "", 0, 0, None, 3, True,
+                "folder", None, None, None, None, "selected", 2, 2, 2,
+                None, None, 0, "none",
+            )
+            leaves = tuple(
+                PlanProjectionNode(
+                    "node-" + str(index) * 32, name, name, index, 1, 0,
+                    index + 1, False, "operation", str(index) * 32, kind,
+                    None, None, "selected", 1, 1, 1, None, None, 0, "none",
+                )
+                for index, (name, kind) in enumerate(
+                    (("copy.txt", "copy"), ("delete.txt", "delete")), start=1
+                )
+            )
+            nodes = (root, *leaves)
+            projection = PlanProjection(
+                request_id, nodes, {node.node_id: node.position for node in nodes},
+                {node.operation_id: node.node_id for node in leaves},
+                frozenset(self.selected),
+            )
+            return projection, self._preview(), "source", "target"
+
+        def _preview(self):
+            return SimpleNamespace(
+                revision=self.selection_revision, state="reviewing",
+                selected_operation_ids=tuple(self.selected),
+                requires_destructive_confirmation=False,
+                irreversible_update_count=0, destructive_operation_count=0,
+                irreversible_operation_count=0,
+                destructive_operation_counts={"update": 0, "move_update": 0,
+                                              "trash": 0, "delete": 0},
+                required_bytes="0",
+                operations=tuple(SimpleNamespace(operation_id=identifier, reason=None)
+                                 for identifier in ("1" * 32, "2" * 32)),
+            )
+
+        def mutate_selection(self, request_id, expected_revision, *, deselect,
+                             reselect, command_id, intent_scope_revision):
+            self.mutations.append((deselect, reselect, command_id))
+            assert expected_revision == self.selection_revision
+            assert intent_scope_revision >= 1
+            self.selected.difference_update(deselect)
+            self.selected.update(reselect)
+            self.selection_revision += 1
+            return SimpleNamespace(disposition="applied", preview=self._preview())
+
+        def get_plan_selection_membership(self, request_id, expected_revision):
+            assert expected_revision == self.selection_revision
+            return frozenset(self.selected)
+
+    service = Service()
+    registry, _ = _registry(service)
+    start = _start(registry)
+    _mark_terminal_drained(registry, start)
+    registry.release_terminal_session(start.task_id, start.session_id)
+    opened = registry.open_plan_view(start.task_id)
+    filtered = registry.update_plan_view(
+        start.task_id, expected_revision=opened["view_revision"],
+        search_query="", filters=frozenset({"copy"}),
+        sort_column=PlanSortColumn.PATH, sort_direction=SortDirection.ASCENDING,
+        collapse_node_id=None, collapsed=None,
+    )
+    assert filtered["selection_revision"] == 0
+    assert service.mutations == []
+    stale = registry.mutate_plan_scope(
+        start.task_id, expected_selection_revision=0, expected_view_revision=0,
+        selected=False, command_id="8" * 32,
+    )
+    assert stale["disposition"] == "conflict"
+    assert service.mutations == []
+    changed = registry.mutate_plan_scope(
+        start.task_id, expected_selection_revision=0, expected_view_revision=1,
+        selected=False, command_id="9" * 32,
+    )
+    assert changed["disposition"] == "applied"
+    assert service.mutations == [(("1" * 32,), (), "9" * 32)]
+    assert service.selected == {"2" * 32}
+    assert changed["scope_selected_operation_count"] == 0
+    stale_selection = registry.mutate_plan_scope(
+        start.task_id, expected_selection_revision=0,
+        expected_view_revision=changed["view_revision"],
+        selected=True, command_id="a" * 32,
+    )
+    assert stale_selection["disposition"] == "conflict"
+    assert service.selected == {"2" * 32}
+    with pytest.raises(ValueError, match="synthetic Plan root"):
+        registry.mutate_plan_selection(
+            start.task_id, expected_revision=1,
+            expected_view_revision=changed["view_revision"],
+            node_id="node-" + "0" * 32, selected=True,
+            command_id="b" * 32,
+        )
+    reset = registry.update_plan_view(
+        start.task_id, expected_revision=changed["view_revision"],
+        search_query="", filters=frozenset(),
+        sort_column=PlanSortColumn.PATH, sort_direction=SortDirection.ASCENDING,
+        collapse_node_id=None, collapsed=None,
+    )
+    assert reset["selection_revision"] == 1
+    assert reset["selected_operation_count"] == 1
+    assert service.selected == {"2" * 32}
+
+
 def test_m1_7_execution_publication_failure_restores_released_plan_delivery() -> None:
     class Service(_Service):
         def start_task_execution(self, task_id, request_id, **kwargs):
@@ -3002,6 +3116,7 @@ def test_m1_7_close_first_fences_plan_consumers_and_execution() -> None:
         lambda: registry.mutate_plan_selection(
             plan_start.task_id,
             expected_revision=0,
+            expected_view_revision=opened["view_revision"],
             node_id="node-" + "1" * 32,
             selected=False,
             command_id="6" * 32,

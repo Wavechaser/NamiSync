@@ -270,7 +270,8 @@ BOOTSTRAP rows, commands require OPEN.
 | `update_plan_view` | `{task_id:TaskId,expected_revision:SafeInt,search_query:string,filters:[PlanFilter],sort_column:"path"\|"filename"\|"size"\|"mtime",sort_direction:"ascending"\|"descending",collapse_node_id:null\|NodeId,collapsed:null\|boolean}` | `PlanViewSummary` | 5 s; no automatic retry |
 | `get_plan_window` | `{task_id:TaskId,expected_revision:SafeInt,offset:SafeInt,limit:1..256}` | `{disposition:"current"\|"conflict",view_revision:SafeInt,offset:SafeInt,total:SafeInt,rows:[PlanWindowRow]}` | 5 s; one identical-payload retry |
 | `get_plan_anchor` | `{task_id:TaskId,expected_revision:SafeInt,node_id:NodeId}` | `{disposition:"current"\|"conflict",view_revision:SafeInt,node_id:null\|NodeId,index:null\|SafeInt}` | 5 s; one identical-payload retry |
-| `mutate_plan_selection` | `{task_id:TaskId,command_id:HexId,expected_revision:SafeInt,node_id:NodeId,selected:boolean}` | `PlanViewSummary` | 5 s; one same-command replay after uncertainty |
+| `mutate_plan_selection` | `{task_id:TaskId,command_id:HexId,expected_view_revision:SafeInt,expected_selection_revision:SafeInt,node_id:NodeId,selected:boolean}` | `PlanViewSummary` | 5 s; one same-command replay after uncertainty |
+| `mutate_plan_scope` | `{task_id:TaskId,command_id:HexId,expected_view_revision:SafeInt,expected_selection_revision:SafeInt,selected:boolean}` | `PlanViewSummary` | 5 s; one same-command replay after uncertainty |
 | `start_execution` | `{task_id:TaskId,request_id:HexId,command_id:HexId,expected_revision:SafeInt,destructive_acknowledged:boolean}` | task/session start or `{disposition:"in-flight"\|"frozen"\|"conflict"\|"confirmation-required",revision:SafeInt,state:"reviewing"\|"committing"\|"committed",session:null\|{request_id:HexId,session_id:HexId}}` | async-small; 30 s; one same-command replay, then visible exact-command retry after uncertainty |
 | `control_execution` | `{task_id:TaskId,session_id:HexId,action:"pause"\|"resume"\|"cancel"}` | `{code:string,session_id:HexId,before:null\|string,after:null\|string,detail:string,accepted:boolean}` | 5 s; no automatic retry |
 | `next_events` | `{task_id:TaskId,session_id:HexId,drain_id:HexId,replay_from:null\|positive-integer}` | `{task_id:TaskId,session_id:HexId,drain_id:HexId,updates:array}` | 30 s client / 25 s server; recovery mints a new drain id |
@@ -290,6 +291,7 @@ recovery, not invented command receipts.
 `PlanViewSummary` has exactly `disposition`, `task_id`, `request_id`,
 `view_revision`, `selection_revision`, `selection_state`, `source_path`,
 `target_path`, `selected_operation_count`, `selectable_operation_count`,
+`scope_selected_operation_count`, `scope_selectable_operation_count`,
 `operation_count`, `preflight_ready`, `preflight_refusal_count`, `warning_count`,
 `requires_destructive_confirmation`, `irreversible_update_count`,
 `destructive_operation_count`, `destructive_operation_counts`,
@@ -302,6 +304,9 @@ revisions remain JavaScript-safe. `NodeId` is `node-` plus 32 lowercase hex
 digits. `PlanFilter` is one of the exact plan operation/status filter values
 validated by the command table. Path sort admits ascending only, and a collapse
 node and Boolean state are either both null or both present.
+Plan window totals, offsets, visible/parent/first-child indexes and anchors
+exclude the synthetic projection root. Its direct children have depth zero
+and no public parent; an anchor resolving only to the root returns null.
 
 Selection facts come from the workflow's effective selection. Required bytes use
 canonical nonnegative signed-64-bit decimal text; operation counts are SafeInts.
@@ -312,6 +317,13 @@ with a SafeInt for every kind including zero; their sum is the destructive total
 `irreversible_update_count` counts selected UPDATEs without trash backup, and
 `irreversible_operation_count` adds selected DELETEs. These separate facts allow
 accurate replacement, removal and recoverability wording without changing policy.
+Scoped selection commands carry no operation-id array. The task owner checks
+both revisions and resolves all selectable operations whose own rows match the
+active search/filter query, regardless of window, collapse or sort. A node
+gesture intersects that set with the node's subtree. No query change itself
+mutates selection, and an empty scope is a no-effect response. Workflow
+dependency closure and safety exclusions retain authority over the resulting
+complete selection.
 
 The browser publishes local pending feedback before awaiting view, selection,
 Execute, or control receipts. That feedback grants no authority. View and

@@ -78,7 +78,7 @@ def test_plan_review_state_derives_revisioned_filters_windows_and_anchor() -> No
         r"C:\source",
         r"D:\target",
     )
-    assert state.summary()["visible_row_count"] == 4
+    assert state.summary()["visible_row_count"] == 3
     assert state.summary()["preflight_ready"] is True
     assert state.summary()["preflight_refusal_count"] == 0
     assert state.summary()["warning_count"] == 0
@@ -95,14 +95,142 @@ def test_plan_review_state_derives_revisioned_filters_windows_and_anchor() -> No
     anchor = state.anchor(expected_revision=1, node_id="copy")
 
     assert changed["disposition"] == "applied"
-    assert [row["node_id"] for row in window["rows"]] == ["root", "folder"]
+    assert [row["node_id"] for row in window["rows"]] == ["folder"]
+    assert window["total"] == 1
+    assert window["rows"][0]["visible_index"] == 0
+    assert window["rows"][0]["parent_visible_index"] is None
+    assert window["rows"][0]["depth"] == 0
     assert anchor == {
         "disposition": "current",
         "view_revision": 1,
         "node_id": "folder",
-        "index": 1,
+        "index": 0,
     }
     assert state.window(expected_revision=0, offset=0, limit=1)["disposition"] == "conflict"
+
+
+def test_plan_selection_scope_follows_query_not_collapse_sort_or_navigation() -> None:
+    projection = _projection()
+    nodes = list(projection.nodes)
+    nodes[0] = replace(nodes[0], selection="selected", selectable_operation_count=2,
+                       selected_operation_count=2, operation_count=2)
+    nodes[1] = replace(nodes[1], selection="selected", selectable_operation_count=1,
+                       selected_operation_count=1, operation_count=1)
+    state = PlanReviewState("task-" + "1" * 32, "a" * 32,
+                            replace(projection, nodes=tuple(nodes)), 0,
+                            "reviewing", "source", "target")
+    initial = state.summary()
+    assert initial["scope_selectable_operation_count"] == 2
+    assert initial["scope_selected_operation_count"] == 2
+    state.update(expected_revision=0, search_query="BETA",
+                 filters=frozenset({"copy"}), sort_column=PlanSortColumn.SIZE,
+                 sort_direction=SortDirection.DESCENDING,
+                 collapse_node_id="folder", collapsed=True)
+    assert state.summary()["selection_revision"] == 0
+    assert [row["node_id"] for row in state.window(expected_revision=1, offset=0, limit=1)["rows"]] == ["folder"]
+    assert state.selection_scope(expected_view_revision=1, expected_selection_revision=0) == ("1" * 32,)
+    assert state.selection_scope(expected_view_revision=1, expected_selection_revision=0,
+                                 node_id="folder") == ("1" * 32,)
+    assert state.selection_scope(expected_view_revision=0, expected_selection_revision=0) is None
+    assert state.selection_scope(expected_view_revision=1, expected_selection_revision=1) is None
+    state.replace_selection(
+        selected_operation_ids=frozenset({"2" * 32}),
+        exclusion_reasons={"1" * 32: "user-deselected"},
+        selection_revision=1, selection_state="reviewing",
+        requires_destructive_confirmation=True, irreversible_update_count=0,
+        destructive_operation_count=1, irreversible_operation_count=1,
+        destructive_operation_counts={"update": 0, "move_update": 0,
+                                      "trash": 0, "delete": 1},
+        required_bytes="0",
+    )
+    assert state.summary()["selected_operation_count"] == 1
+    assert state.summary()["scope_selected_operation_count"] == 0
+    assert state.window(expected_revision=2, offset=0, limit=1)["rows"][0]["selection"] == "unselected"
+    state.update(expected_revision=2, search_query="", filters=frozenset(),
+                 sort_column=PlanSortColumn.PATH,
+                 sort_direction=SortDirection.ASCENDING,
+                 collapse_node_id=None, collapsed=None)
+    assert state.summary()["selection_revision"] == 1
+    assert state.selection_scope(expected_view_revision=3, expected_selection_revision=1,
+                                 node_id="folder") == ("1" * 32,)
+
+
+def test_plan_selection_scope_includes_off_window_matches() -> None:
+    total = 300
+    root = replace(_node("root", "Plan", 0, None, total + 1, container=True),
+                   selection="selected", selectable_operation_count=total,
+                   selected_operation_count=total, operation_count=total)
+    leaves = tuple(
+        _node(f"node-{index:032x}", f"copy-{index:03}.txt", index + 1, 0,
+              index + 2, operation_id=f"{index:032x}", kind="copy")
+        for index in range(total)
+    )
+    nodes = (root, *leaves)
+    projection = PlanProjection("a" * 32, nodes,
+                                {node.node_id: node.position for node in nodes},
+                                {node.operation_id: node.node_id for node in leaves},
+                                frozenset(node.operation_id for node in leaves))
+    state = PlanReviewState("task-" + "1" * 32, "a" * 32, projection,
+                            0, "reviewing", "source", "target")
+    assert len(state.window(expected_revision=0, offset=0, limit=256)["rows"]) == 256
+    scope = state.selection_scope(expected_view_revision=0, expected_selection_revision=0)
+    assert len(scope) == total
+    assert f"{total - 1:032x}" in scope
+
+
+def test_plan_rootless_window_offsets_and_anchor_preserve_children() -> None:
+    state = PlanReviewState("task-" + "1" * 32, "a" * 32, _projection(),
+                            0, "reviewing", "source", "target")
+    window = state.window(expected_revision=0, offset=0, limit=256)
+    assert window["total"] == 3
+    assert [row["node_id"] for row in window["rows"]] == ["delete", "folder", "copy"]
+    assert [row["visible_index"] for row in window["rows"]] == [0, 1, 2]
+    assert [row["parent_visible_index"] for row in window["rows"]] == [None, None, 1]
+    assert [row["depth"] for row in window["rows"]] == [0, 0, 1]
+    assert window["rows"][1]["first_child_visible_index"] == 2
+    assert state.window(expected_revision=0, offset=2, limit=1)["rows"][0]["node_id"] == "copy"
+    assert state.anchor(expected_revision=0, node_id="copy")["index"] == 2
+    assert state.anchor(expected_revision=0, node_id="root")["index"] is None
+    state.update(expected_revision=0, search_query="no matches",
+                 filters=frozenset(), sort_column=PlanSortColumn.PATH,
+                 sort_direction=SortDirection.ASCENDING,
+                 collapse_node_id=None, collapsed=None)
+    assert state.window(expected_revision=1, offset=0, limit=256)["total"] == 0
+    assert state.anchor(expected_revision=1, node_id="copy")["index"] is None
+
+
+def test_scoped_counts_use_container_own_operation_not_mixed_rollup() -> None:
+    nodes = (
+        replace(_node("root", "Plan", 0, None, 3, container=True),
+                selection="mixed", selectable_operation_count=2,
+                selected_operation_count=1, operation_count=2),
+        replace(_node("parent", "parent", 1, 0, 3, container=True,
+                      operation_id="1" * 32, kind="copy"),
+                selection="mixed", selectable_operation_count=2,
+                selected_operation_count=1, operation_count=2),
+        replace(_node("child", "child", 2, 1, 3,
+                      operation_id="2" * 32, kind="delete"),
+                selection="unselected", selected_operation_count=0),
+    )
+    projection = PlanProjection("a" * 32, nodes,
+                                {node.node_id: node.position for node in nodes},
+                                {"1" * 32: "parent", "2" * 32: "child"},
+                                frozenset({"1" * 32}))
+    state = PlanReviewState("task-" + "1" * 32, "a" * 32, projection,
+                            0, "reviewing", "source", "target")
+    summary = state.update(
+        expected_revision=0, search_query="", filters=frozenset({"copy"}),
+        sort_column=PlanSortColumn.PATH, sort_direction=SortDirection.ASCENDING,
+        collapse_node_id=None, collapsed=None,
+    )
+    assert summary["scope_selectable_operation_count"] == 1
+    assert summary["scope_selected_operation_count"] == 1
+    assert state.selection_scope(expected_view_revision=1,
+                                 expected_selection_revision=0) == ("1" * 32,)
+    assert state.selection_scope(expected_view_revision=1,
+                                 expected_selection_revision=0,
+                                 node_id="parent") == ("1" * 32,)
+    assert state.window(expected_revision=1, offset=0, limit=1)["rows"][0]["selection"] == "selected"
 
 
 def test_plan_review_state_refreshes_selection_without_resetting_view_gestures() -> None:
@@ -147,8 +275,8 @@ def test_plan_review_state_refreshes_selection_without_resetting_view_gestures()
     assert summary["collapsed_count"] == 1
     assert summary["selected_operation_count"] == 1
     rows = state.window(expected_revision=2, offset=0, limit=256)["rows"]
-    assert [row["node_id"] for row in rows] == ["root", "delete"]
-    assert rows[1]["selection"] == "unselected"
+    assert [row["node_id"] for row in rows] == ["delete"]
+    assert rows[0]["selection"] == "unselected"
 
 
 def test_plan_review_state_replaces_authoritative_execution_facts() -> None:
@@ -296,7 +424,7 @@ def test_plan_review_uses_the_private_validated_visible_path(monkeypatch) -> Non
         "target",
     )
 
-    assert state.summary()["visible_row_count"] == 4
+    assert state.summary()["visible_row_count"] == 3
 
 
 def test_plan_review_passes_filters_as_a_positional_byte_mask(monkeypatch) -> None:
@@ -345,7 +473,7 @@ def test_plan_review_passes_filters_as_a_positional_byte_mask(monkeypatch) -> No
         if mask[position]
     ] == ["delete"]
     window = state.window(expected_revision=1, offset=0, limit=256)
-    assert [row["node_id"] for row in window["rows"]] == ["root", "delete"]
+    assert [row["node_id"] for row in window["rows"]] == ["delete"]
 
 
 def test_plan_review_validates_structure_once_then_reuses_it_for_view_changes(

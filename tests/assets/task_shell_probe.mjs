@@ -326,6 +326,8 @@ function planSummary(overrides = {}) {
     target_path: "D:\\target",
     selected_operation_count: 1,
     selectable_operation_count: 1,
+    scope_selected_operation_count: 1,
+    scope_selectable_operation_count: 1,
     operation_count: 1,
     preflight_ready: false,
     preflight_refusal_count: 1,

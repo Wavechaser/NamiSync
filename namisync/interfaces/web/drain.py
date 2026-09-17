@@ -869,7 +869,45 @@ class TaskRegistry:
         task_id: str,
         *,
         expected_revision: int,
+        expected_view_revision: int,
         node_id: str,
+        selected: bool,
+        command_id: str,
+    ) -> dict[str, object]:
+        return self._mutate_plan_scope(
+            task_id,
+            expected_revision=expected_revision,
+            expected_view_revision=expected_view_revision,
+            node_id=node_id,
+            selected=selected,
+            command_id=command_id,
+        )
+
+    def mutate_plan_scope(
+        self,
+        task_id: str,
+        *,
+        expected_selection_revision: int,
+        expected_view_revision: int,
+        selected: bool,
+        command_id: str,
+    ) -> dict[str, object]:
+        return self._mutate_plan_scope(
+            task_id,
+            expected_revision=expected_selection_revision,
+            expected_view_revision=expected_view_revision,
+            node_id=None,
+            selected=selected,
+            command_id=command_id,
+        )
+
+    def _mutate_plan_scope(
+        self,
+        task_id: str,
+        *,
+        expected_revision: int,
+        expected_view_revision: int,
+        node_id: str | None,
         selected: bool,
         command_id: str,
     ) -> dict[str, object]:
@@ -886,16 +924,22 @@ class TaskRegistry:
                 or task.retiring
             ):
                 raise TaskUnavailableError("task is unavailable")
-            node = view.node_for_id(node_id)
-            if node.selection == "disabled" or node.row_kind.startswith("prior-"):
-                raise ValueError("plan row is not selectable")
-            selection_id = node.operation_id or node.node_id
+            selection_ids = view.selection_scope(
+                expected_view_revision=expected_view_revision,
+                expected_selection_revision=expected_revision,
+                node_id=node_id,
+            )
+            if selection_ids is None:
+                return view.summary(disposition="conflict")
+            if not selection_ids:
+                return view.summary(disposition="noop")
             mutation = self._lifecycle.mutate_selection(
                 request_id,
                 expected_revision,
-                deselect=() if selected else (selection_id,),
-                reselect=(selection_id,) if selected else (),
+                deselect=() if selected else selection_ids,
+                reselect=selection_ids if selected else (),
                 command_id=command_id,
+                intent_scope_revision=expected_view_revision,
             )
             preview = mutation.preview
             selected_operation_ids = (

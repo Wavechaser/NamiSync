@@ -39,6 +39,7 @@ const COMMAND_POLICY_JSON = `{
   "get_plan_window": {"timeout": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
   "get_plan_anchor": {"timeout": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
   "mutate_plan_selection": {"timeout": "local-5-seconds", "retry": "same-command-once", "phase": "open"},
+  "mutate_plan_scope": {"timeout": "local-5-seconds", "retry": "same-command-once", "phase": "open"},
   "start_execution": {"timeout": "mutation-30-seconds", "retry": "same-command-once", "phase": "open"},
   "control_execution": {"timeout": "local-5-seconds", "retry": "none", "phase": "open"},
   "next_events": {"timeout": "drain-30-seconds", "retry": "none", "phase": "open"},
@@ -776,21 +777,47 @@ export async function getPlanAnchor(taskId, expectedRevision, nodeId) {
   return submit();
 }
 
-export function mutatePlanSelection(taskId, expectedRevision, nodeId, selected) {
+export function mutatePlanSelection(
+  taskId, expectedViewRevision, expectedSelectionRevision, nodeId, selected,
+) {
   requireTaskId(taskId, "mutatePlanSelection");
-  if (!isNonnegativeInteger(expectedRevision) || !isNodeId(nodeId)
+  if (!isNonnegativeInteger(expectedViewRevision)
+      || !isNonnegativeInteger(expectedSelectionRevision) || !isNodeId(nodeId)
       || typeof selected !== "boolean") {
-    throw new TypeError("mutatePlanSelection requires an exact selection gesture");
+    throw new TypeError("mutatePlanSelection requires exact view and selection revisions");
   }
   const payload = Object.freeze({
     task_id: taskId,
     command_id: mintId(),
-    expected_revision: expectedRevision,
+    expected_view_revision: expectedViewRevision,
+    expected_selection_revision: expectedSelectionRevision,
     node_id: nodeId,
     selected,
   });
   return dispatchAttempt(
     "mutate_plan_selection", payload, validatePlanViewSummary,
+    PLAN_VIEW_TIMEOUT_MS,
+  );
+}
+
+export function mutatePlanScope(
+  taskId, expectedViewRevision, expectedSelectionRevision, selected,
+) {
+  requireTaskId(taskId, "mutatePlanScope");
+  if (!isNonnegativeInteger(expectedViewRevision)
+      || !isNonnegativeInteger(expectedSelectionRevision)
+      || typeof selected !== "boolean") {
+    throw new TypeError("mutatePlanScope requires exact view and selection revisions");
+  }
+  const payload = Object.freeze({
+    task_id: taskId,
+    command_id: mintId(),
+    expected_view_revision: expectedViewRevision,
+    expected_selection_revision: expectedSelectionRevision,
+    selected,
+  });
+  return dispatchAttempt(
+    "mutate_plan_scope", payload, validatePlanViewSummary,
     PLAN_VIEW_TIMEOUT_MS,
   );
 }
@@ -2791,6 +2818,7 @@ function validatePlanViewSummary(value) {
     "disposition", "task_id", "request_id", "view_revision",
     "selection_revision", "selection_state", "source_path", "target_path",
     "selected_operation_count", "selectable_operation_count", "operation_count",
+    "scope_selected_operation_count", "scope_selectable_operation_count",
     "preflight_ready", "preflight_refusal_count", "warning_count",
     "requires_destructive_confirmation", "destructive_operation_count",
     "destructive_operation_counts", "irreversible_operation_count",
@@ -2804,8 +2832,11 @@ function validatePlanViewSummary(value) {
     && typeof value.request_id === "string" && ID_PATTERN.test(value.request_id)
     && [value.view_revision, value.selection_revision,
       value.selected_operation_count, value.selectable_operation_count,
-      value.operation_count, value.visible_row_count, value.collapsed_count]
+      value.operation_count, value.scope_selected_operation_count,
+      value.scope_selectable_operation_count, value.visible_row_count,
+      value.collapsed_count]
       .every(isNonnegativeInteger)
+    && value.scope_selected_operation_count <= value.selected_operation_count
     && typeof value.preflight_ready === "boolean"
     && isNonnegativeInteger(value.preflight_refusal_count)
     && isNonnegativeInteger(value.warning_count)
@@ -2826,6 +2857,8 @@ function validatePlanViewSummary(value) {
     && ["path", "filename", "size", "mtime"].includes(value.sort_column)
     && ["ascending", "descending"].includes(value.sort_direction)
     && value.selected_operation_count <= value.selectable_operation_count
+    && value.scope_selected_operation_count <= value.scope_selectable_operation_count
+    && value.scope_selectable_operation_count <= value.selectable_operation_count
     && value.selectable_operation_count <= value.operation_count
     && value.destructive_operation_count <= value.selected_operation_count
     && Object.values(value.destructive_operation_counts)
