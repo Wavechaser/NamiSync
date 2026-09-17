@@ -48,7 +48,7 @@ to 256 rows, including when the total population is larger.
 
 ## Search, filters, sorting, and follow
 
-Plan search is backend literal case-folded display matching. It has no regex, trimming, normalization, marker decoding, or path authority. The helper admits at most the 65,536-byte ingress limit; actual bridge query capacity is smaller when JSON overhead is included. A fixed 150 ms trailing debounce and last-intent-wins generation rule provide responsiveness. Client-side search is incorrect because the client owns only a window. Inventory search retains this accepted contract but remains unrealized.
+Plan search is backend literal case-folded display matching. It has no regex, trimming, normalization, marker decoding, or path authority. The helper admits at most the 65,536-byte ingress limit; actual bridge query capacity is smaller when JSON overhead is included. A fixed 150 ms trailing debounce keeps the field editable during an in-flight view refresh; only the latest newer query is retained for sequential dispatch after the current receipt. Client-side search is incorrect because the client owns only a window. Inventory search retains its accepted literal matching contract but remains unrealized.
 
 Filtering/collapse determine visible rows; the Plan Status rollups and effective execution selection retain their complete-plan meaning. The Plan header and filtered folder checkbox states report the active search/filter scope so their visible state agrees with their gesture; collapse does not narrow it. Empty ancestors disappear from the visible sequence rather than leaving a skeletal tree. Acknowledged inventory rows hide by default but remain available through their facet; counts make the hidden population visible. Acknowledgment changes the visible sequence and refetches its window, but does not rewrite inventory rollup truth.
 
@@ -70,7 +70,19 @@ The implemented Plan review surface lets users inspect a complete stable view of
 
 The Plan summary displays workflow-derived selected required bytes and destructive
 operation count; each row exposes its server-provided risk alongside its reason
-or notice. Filtering and windowing cannot redefine those selection facts.
+or notice. `filter_counts` is a complete-plan facet mapping `all` plus every
+canonical Plan filter (`copy`, `mkdir`, `move`, `recase`, `update`,
+`move_update`, `trash`, `delete`, `noop`, `blocked`, and `notice`) to direct-row
+counts. It is independent of search, active filters, collapse, sorting, and
+the loaded window. Container rollups, prior-path context, and other structural
+rows are excluded; a blocked operation counts only as `blocked`, and `all` is
+the sum of the mutually exclusive operation and notice categories. Filtering
+and windowing cannot redefine these summary facts. All is active when no
+category filter is active; clicking it clears category filters without changing
+search, sort, or selection. Activating any other filter deactivates All. The
+All, Copy, Move, Update and Trash controls remain visible even at zero; other
+categories appear only when their count is positive. Inactive Trash text turns
+red only when its count exceeds one.
 The browser formats those exact decimal byte facts into binary display units
 without feeding the labels back into size sorting. Plan header gestures cycle a
 chosen sibling sort from ascending to descending to canonical path order;

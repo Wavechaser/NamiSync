@@ -49,7 +49,8 @@ the Fluent/accessibility foundation, process-live blank task creation,
 newest-first navigation and explicit close, frozen Setup with typed/picker/recent
 locations, compact recent-pair and batch tables with retained creation results,
 serial plan and standalone inventory starts, Plan again, bounded Plan review
-with server-owned search/filter-scoped bulk selection, sibling sorting and a
+with editable queued search, counted toggle-button filters, server-owned
+search/filter-scoped bulk selection, sibling sorting and a
 blocking Fluent confirmation
 for each destructive execution admission,
 live pause/resume/cancel controls, and a minimal Settings/About page with theme

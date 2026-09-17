@@ -247,6 +247,8 @@ const summary = {
   visible_row_count: 1000,
   search_query: "",
   filters: [],
+  filter_counts: { all: 180, copy: 100, move: 10, update: 5, trash: 2,
+    mkdir: 0, recase: 0, move_update: 0, delete: 0, noop: 0, blocked: 0, notice: 1 },
   sort_column: "path",
   sort_direction: "ascending",
   collapsed_count: 0,
@@ -361,10 +363,36 @@ assert.deepEqual(calls.at(-1), ["onViewChange", review,
   { sortColumn: "path", sortDirection: "ascending" }]);
 
 const noticeFilter = findByDataset(panel.element, "operation", "notice");
+const allFilter = findByDataset(panel.element, "operation", "all");
+const copyFilter = findByDataset(panel.element, "operation", "copy");
+const mkdirFilter = findByDataset(panel.element, "operation", "mkdir");
+const trashFilter = findByDataset(panel.element, "operation", "trash");
+assert.equal(allFilter.ariaPressed, "true");
+assert.equal(allFilter.textContent, "all 180");
+assert.equal(copyFilter.textContent, "copy 100");
+assert.equal(mkdirFilter.hidden, true);
+assert.equal(noticeFilter.hidden, false);
+assert.equal(trashFilter.hidden, false);
+assert.equal(trashFilter.dataset.trashAlert, "true");
+review.summary = {
+  ...review.summary,
+  filter_counts: { ...review.summary.filter_counts, trash: 1, notice: 0 },
+};
+panel.render(task);
+assert.equal(trashFilter.dataset.trashAlert, "false");
+assert.equal(noticeFilter.hidden, true);
+review.summary = summary;
+panel.render(task);
 noticeFilter.dispatch("click");
 assert.deepEqual(calls.at(-1), ["onViewChange", review,
   { filters: new Set(["notice"]) }]);
 assert.equal(noticeFilter.ariaPressed, "true");
+assert.equal(allFilter.ariaPressed, "false");
+allFilter.dispatch("click");
+assert.deepEqual(calls.at(-1), ["onViewChange", review,
+  { filters: new Set() }]);
+assert.equal(noticeFilter.ariaPressed, "false");
+assert.equal(allFilter.ariaPressed, "true");
 assert.equal(
   calls.filter(([name]) => name === "onScopeSelect").length,
   1,
@@ -372,6 +400,11 @@ assert.equal(
 );
 
 const search = findAction(panel.element, "plan-search");
+review.pending = "view";
+panel.render(task);
+assert.equal(search.disabled, false, "a pending view refresh keeps search editable");
+review.pending = null;
+panel.render(task);
 search.value = hostile;
 search.dispatch("input");
 await new Promise((resolve) => setTimeout(resolve, 175));

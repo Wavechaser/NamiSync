@@ -2818,6 +2818,7 @@ function validatePlanViewSummary(value) {
     "disposition", "task_id", "request_id", "view_revision",
     "selection_revision", "selection_state", "source_path", "target_path",
     "selected_operation_count", "selectable_operation_count", "operation_count",
+    "filter_counts",
     "scope_selected_operation_count", "scope_selectable_operation_count",
     "preflight_ready", "preflight_refusal_count", "warning_count",
     "requires_destructive_confirmation", "destructive_operation_count",
@@ -2837,6 +2838,15 @@ function validatePlanViewSummary(value) {
       value.collapsed_count]
       .every(isNonnegativeInteger)
     && value.scope_selected_operation_count <= value.selected_operation_count
+    && isExactObject(value.filter_counts, [
+      "all", "copy", "mkdir", "move", "recase", "update", "move_update",
+      "trash", "delete", "noop", "blocked", "notice",
+    ])
+    && Object.values(value.filter_counts).every(isNonnegativeInteger)
+    && value.filter_counts.all === Object.entries(value.filter_counts)
+      .filter(([category]) => category !== "all")
+      .reduce((total, [, count]) => total + count, 0)
+    && value.operation_count <= value.filter_counts.all
     && typeof value.preflight_ready === "boolean"
     && isNonnegativeInteger(value.preflight_refusal_count)
     && isNonnegativeInteger(value.warning_count)

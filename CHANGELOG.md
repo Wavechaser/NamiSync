@@ -27,6 +27,14 @@ and remembered locations, bounded Plan review/selection/sorting and same-task
 execution with live controls. Execution-result/inventory review and beta
 packaging remain open.
 
+#### Keep Plan search editable and count filter toggles (2026-09-17)
+
+- Keep search focused and editable through a pending view refresh; apply only
+  the newest queued query after the current request settles.
+- Replace Plan filter pills with themed toggle buttons. All resets category
+  filters; complete-plan counts label each button, and less-common categories
+  appear only when present. Inactive Trash text turns red above one item.
+
 #### Scope Plan bulk selection to the active view (2026-09-17)
 
 - Add a tri-state Plan header checkbox and make folder gestures target every

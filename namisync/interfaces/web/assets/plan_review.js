@@ -3,9 +3,10 @@ import { createIcon } from "./icons.js";
 import { formatByteCount, renderFilesystemText, renderText } from "./render.js";
 
 const FILTERS = Object.freeze([
-  "copy", "mkdir", "move", "recase", "update", "move_update",
-  "trash", "delete", "noop", "blocked", "notice",
+  "all", "copy", "move", "update", "trash", "mkdir", "recase",
+  "move_update", "delete", "noop", "blocked", "notice",
 ]);
+const ALWAYS_VISIBLE_FILTERS = new Set(["all", "copy", "move", "update", "trash"]);
 const WINDOW_LIMIT = 256;
 const ROW_HEIGHT = 24;
 
@@ -123,7 +124,7 @@ export function createPlanReviewPanel(callbacks) {
   filterList.className = "nami-plan-review__filter-list";
   const filterButtons = new Map();
   for (const value of FILTERS) {
-    const filter = button(value.replaceAll("_", " "), "nami-chip");
+    const filter = button(value.replaceAll("_", " "), "nami-button nami-plan-review__filter");
     filter.dataset.operation = value;
     filter.ariaPressed = "false";
     filterList.append(filter);
@@ -317,12 +318,20 @@ export function createPlanReviewPanel(callbacks) {
     }, 150);
   });
   const activeFilters = () => new Set(
-    [...filterButtons].filter(([, filter]) => filter.ariaPressed === "true").map(([value]) => value),
+    [...filterButtons].filter(([value, filter]) => value !== "all" && filter.ariaPressed === "true")
+      .map(([value]) => value),
   );
-  for (const filter of filterButtons.values()) {
+  for (const [value, filter] of filterButtons) {
     filter.addEventListener("click", () => {
-      filter.ariaPressed = String(filter.ariaPressed !== "true");
-      viewChange({ filters: activeFilters() });
+      if (value === "all") {
+        for (const [key, button] of filterButtons) button.ariaPressed = String(key === "all");
+        viewChange({ filters: new Set() });
+      } else {
+        filter.ariaPressed = String(filter.ariaPressed !== "true");
+        const selected = activeFilters();
+        filterButtons.get("all").ariaPressed = String(selected.size === 0);
+        viewChange({ filters: selected });
+      }
     });
   }
   for (const [column, { sortButton }] of sortHeaders) {
@@ -477,7 +486,7 @@ export function createPlanReviewPanel(callbacks) {
     );
     if (document.activeElement !== search) search.value = review.summary.search_query;
     reset.disabled = review.pending !== null;
-    search.disabled = review.pending !== null;
+    search.disabled = review.pending !== null && review.pending !== "view";
     for (const [column, { cell, sortButton, up, down }] of sortHeaders) {
       const active = review.summary.sort_column === column;
       const direction = active ? review.summary.sort_direction : null;
@@ -487,8 +496,15 @@ export function createPlanReviewPanel(callbacks) {
       sortButton.disabled = review.pending !== null;
     }
     for (const [value, filter] of filterButtons) {
-      filter.ariaPressed = String(review.summary.filters.includes(value));
+      const active = value === "all"
+        ? review.summary.filters.length === 0
+        : review.summary.filters.includes(value);
+      const count = review.summary.filter_counts?.[value] ?? 0;
+      filter.ariaPressed = String(active);
       filter.disabled = review.pending !== null;
+      filter.hidden = !ALWAYS_VISIBLE_FILTERS.has(value) && count === 0;
+      filter.dataset.trashAlert = String(value === "trash" && !active && count > 1);
+      renderText(filter, `${value.replaceAll("_", " ")} ${count}`);
     }
     if (scopeCheckbox instanceof HTMLInputElement) {
       const scopeSelectable = review.summary.scope_selectable_operation_count;

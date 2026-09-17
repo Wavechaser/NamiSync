@@ -47,6 +47,22 @@ PLAN_FILTERS = frozenset(
     }
 )
 
+# Keep the wire order stable even though PLAN_FILTERS is intentionally a set.
+_PLAN_FILTER_COUNT_CATEGORIES = (
+    "all",
+    "copy",
+    "mkdir",
+    "move",
+    "recase",
+    "update",
+    "move_update",
+    "trash",
+    "delete",
+    "noop",
+    "blocked",
+    "notice",
+)
+
 
 @dataclass(slots=True)
 class PlanReviewState:
@@ -78,6 +94,7 @@ class PlanReviewState:
     _visible: VisibleSequence[PlanProjectionNode] | None = None
     _scope_selectable: array | None = None
     _scope_selected: array | None = None
+    _filter_counts: Mapping[str, int] = field(default_factory=dict)
     _lock: RLock = field(default_factory=RLock, repr=False)
 
     def __post_init__(self) -> None:
@@ -90,6 +107,7 @@ class PlanReviewState:
             self.destructive_operation_counts,
             self.required_bytes,
         )
+        self._filter_counts = _plan_filter_counts(self.projection)
         self._canonical_order = sort_plan_projection(
             self.projection, PlanSortColumn.PATH, SortDirection.ASCENDING
         )
@@ -149,6 +167,7 @@ class PlanReviewState:
             "scope_selectable_operation_count": self._scope_selectable[-1],
             "scope_selected_operation_count": self._scope_selected[-1],
             "operation_count": root.operation_count,
+            "filter_counts": dict(self._filter_counts),
             "preflight_ready": self.projection.preflight_ready,
             "preflight_refusal_count": self.projection.preflight_refusal_count,
             "warning_count": self.projection.warning_count,
@@ -518,6 +537,33 @@ def _direct_filter_count(node: PlanProjectionNode, filters: frozenset[str]) -> i
     if node.blocked_reason is not None:
         return int("blocked" in filters)
     return int(node.operation_kind in filters)
+
+
+def _plan_filter_counts(projection: PlanProjection) -> Mapping[str, int]:
+    """Count direct filter categories across the complete immutable plan.
+
+    Container rollups, prior-path context rows, and other structural rows are
+    not categories.  A blocked operation is counted only as ``blocked`` (not
+    again under its underlying operation kind), while each notice is counted
+    as ``notice``.  ``all`` is therefore the sum of the mutually exclusive
+    operation/notice categories.
+    """
+
+    counts = {category: 0 for category in _PLAN_FILTER_COUNT_CATEGORIES}
+    for node in projection.nodes:
+        if node.row_kind == "notice":
+            category = "notice"
+        elif node.row_kind.startswith("prior-") or node.operation_id is None:
+            continue
+        elif node.blocked_reason is not None:
+            category = "blocked"
+        else:
+            category = node.operation_kind
+        if category not in PLAN_FILTERS:
+            raise ValueError("plan projection contains an unknown filter category")
+        counts[category] += 1
+        counts["all"] += 1
+    return MappingProxyType(counts)
 
 
 def _matches_scope_query(

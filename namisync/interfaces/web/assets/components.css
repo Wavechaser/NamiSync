@@ -226,6 +226,17 @@ body {
   color: var(--color-neutral-surface);
 }
 
+/* Plan filters use the ordinary button class for semantics; keep the visual
+   contract on the view-specific hook so the renderer need not expose a chip
+   primitive. */
+.nami-plan-review__filter {
+  --nami-chip-active-background: var(--color-accent-fill);
+  --nami-chip-active-foreground: var(--color-accent-fill-foreground);
+  border-radius: var(--radius-small);
+  min-block-size: 2rem;
+  padding: var(--space-1) var(--space-3);
+}
+
 .nami-button {
   border-radius: var(--radius-small);
   min-block-size: 2rem;
@@ -643,6 +654,19 @@ body {
   padding: var(--space-1) var(--space-3);
 }
 
+.nami-plan-review__filter:not([aria-pressed="true"]) {
+  background: var(--color-toggle-fill-off);
+  color: var(--color-neutral-foreground);
+}
+
+.nami-plan-review__filter:not([aria-pressed="true"]):not(:disabled):hover {
+  background: var(--color-toggle-fill-off-hover);
+}
+
+.nami-plan-review__filter:not([aria-pressed="true"]):not(:disabled):active {
+  background: var(--color-toggle-fill-off-pressed);
+}
+
 .nami-chip[aria-pressed="true"] {
   background: var(--nami-chip-active-background);
   color: var(--nami-chip-active-foreground);
@@ -656,6 +680,19 @@ body {
 .nami-chip[aria-pressed="true"]:active {
   background: var(--color-accent-fill-pressed);
   color: var(--nami-chip-active-foreground);
+}
+
+.nami-plan-review__filter[aria-pressed="true"] {
+  background: var(--nami-chip-active-background);
+  color: var(--nami-chip-active-foreground);
+}
+
+.nami-plan-review__filter[aria-pressed="true"]:not(:disabled):hover {
+  filter: brightness(0.94);
+}
+
+.nami-plan-review__filter[aria-pressed="true"]:not(:disabled):active {
+  filter: brightness(0.87);
 }
 
 .nami-icon-button {
@@ -1586,6 +1623,61 @@ body {
   color: var(--nami-chip-active-foreground);
 }
 
+/* The production Plan renderer exposes this hook instead of nami-chip. */
+.nami-plan-review__filter[data-operation] {
+  --nami-chip-active-foreground: var(--filter-active-foreground);
+}
+
+.nami-plan-review__filter[data-operation="all"] {
+  --nami-chip-active-foreground: var(--color-accent-fill-foreground);
+}
+
+.nami-plan-review__filter[data-operation="copy"],
+.nami-plan-review__filter[data-operation="mkdir"] {
+  --nami-chip-active-background: var(--filter-copy-background);
+}
+
+.nami-plan-review__filter[data-operation="update"],
+.nami-plan-review__filter[data-operation="move_update"] {
+  --nami-chip-active-background: var(--filter-update-background);
+}
+
+.nami-plan-review__filter[data-operation="move"],
+.nami-plan-review__filter[data-operation="recase"] {
+  --nami-chip-active-background: var(--filter-purple-background);
+  --nami-chip-active-foreground: var(--filter-purple-active-foreground);
+}
+
+.nami-plan-review__filter[data-operation="trash"],
+.nami-plan-review__filter[data-operation="delete"],
+.nami-plan-review__filter[data-operation="blocked"] {
+  --nami-chip-active-background: var(--filter-trash-background);
+}
+
+.nami-plan-review__filter[data-operation="notice"] {
+  --nami-chip-active-background: var(--filter-update-background);
+}
+
+.nami-plan-review__filter[data-operation="delete"] {
+  --nami-chip-active-foreground: var(--filter-delete-active-foreground);
+}
+
+.nami-plan-review__filter[data-operation="noop"] {
+  --nami-chip-active-background: var(--filter-noop-background);
+  --nami-chip-active-foreground: var(--filter-noop-foreground);
+}
+
+.nami-plan-review__filter[data-operation="trash"][data-trash-alert="true"]:not([aria-pressed="true"]) {
+  color: var(--filter-delete-foreground);
+}
+
+.nami-plan-review__filter:disabled,
+.nami-plan-review__filter[data-operation="trash"][data-trash-alert="true"]:not([aria-pressed="true"]):disabled {
+  background: var(--color-neutral-disabled-background);
+  color: var(--color-neutral-foreground-disabled);
+  filter: none;
+}
+
 [data-intent="copy"] .nami-state-cue::before {
   content: "C";
 }
@@ -1906,6 +1998,7 @@ body {
   }
 
   .nami-button--primary:not(:disabled):active,
+  .nami-plan-review__filter[aria-pressed="true"]:is(:hover, :active),
   .nami-segmented__item[aria-checked="true"]:not(:disabled):active {
     filter: none;
   }
@@ -1967,6 +2060,7 @@ body {
   .nami-button:not(:disabled):hover,
   .nami-button:not(:disabled):active,
   .nami-chip[data-operation][aria-pressed="true"]:not(:disabled),
+  .nami-plan-review__filter[aria-pressed="true"]:not(:disabled),
   .nami-segmented__item[aria-checked="true"]:not(:disabled),
   .nami-task-card:not([aria-disabled="true"]):hover,
   .nami-task-card:not([aria-disabled="true"]):active {

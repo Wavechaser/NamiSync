@@ -223,7 +223,9 @@ normal-text target on pale zebra rows. Dark relocating text therefore uses
 purple-light while Light retains purple-main. These are explicit text-form
 exceptions, not accessible-color claims. The inactive Delete filter
 is the same kind of explicit red-main foreground exception on its neutral
-resting fill. Selected filter pills retain contrast-safe neutral labels. Filled
+resting fill. Plan uses button-shaped filters instead: inactive Trash text is
+red only when its count exceeds one; active categories use opaque family fills
+and All uses the accent fill. Filled
 semantic forms deliberately pair main-colored text with a supporting family
 surface; the Light red/yellow pairs are authored visual exceptions below the
 normal-text target for this review pass. Their words carry meaning independently
@@ -1242,7 +1244,7 @@ The Plan review renders its current bounded window in the compact file-row grid
 with exact 24-CSS-pixel rows and matching leading/trailing spacer offsets; the
 generic `tree.js` renderer keeps its separate 28-pixel contract. A Plan card
 shows frozen paths and semantic options, a Status card shows selected/risk/byte
-facts, and one table card owns search, gallery filter pills, the grid and
+facts, and one table card owns search, toggle-button filters, the grid and
 execution controls. The Plan grid retains the gallery's Checksum column and
 adds an equal-width Modified column immediately after it; dependency counts
 appear in Notes. The synthetic Plan root is omitted from the table. The Select
@@ -1573,12 +1575,13 @@ Filter/search state never changes the underlying plan or inventory selection;
 changing a location or plan option invalidates only the state that semantically
 depends on it.
 
-The first real plan/inventory search owner uses a fixed 150 ms trailing
-debounce. Every search, filter, or collapse intent invalidates earlier response
-generations immediately; only the final search in a burst is dispatched, stale
-successes and failures are ignored, and the current valid page remains visible
-while pending. The pure Slice 4 helper therefore admits the documented bounded
-literal query rather than substituting an arbitrary responsiveness limit.
+Plan search uses a fixed 150 ms trailing debounce and remains editable during
+view refresh. If a query arrives while a view request is in flight, the task
+retains only the newest query and dispatches it after that request settles;
+switching tasks does not discard a queued query for a retained review. Search
+and filter navigation never mutates selection. Stale successes and failures do
+not replace the current valid page. The pure Slice 4 helper admits the
+documented bounded literal query rather than an arbitrary responsiveness limit.
 
 Use accessible text and non-color outcome cues, stable layouts, and full-path
 accessibility text for elided paths. Empty, unavailable, ambiguous, blocked,

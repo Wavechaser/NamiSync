@@ -38,6 +38,33 @@ The prior aggregate complete-owner-graph model and BR-G-45 are retired. No futur
 
 ## Remaining checkpoints
 
+### Plan search and filter controls (2026-09-17)
+
+| ID | Accepted outcome | Named gate | Status |
+| --- | --- | --- | --- |
+| GUI-F1 | Keep Plan search focused and editable during a view refresh; apply the newest queued query after the in-flight refresh, without losing intermediate typing or changing selection. | Browser component and task-shell slow-receipt tests, direct view-regression tests. | Complete |
+| GUI-F2 | Present operation filters as WinUI-style toggle buttons with theme-aware neutral/active colors, an accent-colored All reset, category counts and canonical/conditional visibility. | Component state/count/visibility tests, CSS token/static checks, installed Plan witness. | Complete |
+
+The finite population is Plan view summary counts, Plan panel and task-shell
+refresh scheduling, their CSS and direct tests, plus PRESENTATION, DESKTOP_UI,
+CHANGELOG and HANDOFF. The default All state means no operation filter; a
+non-All activation removes All. Counts describe the complete reviewed plan,
+independent of view search, filtering, collapse or window. Search queuing is
+limited to the current review and is cleared by its disposal. No selection,
+execution, bridge command shape, or unrelated table behavior changes. Regression
+study: slow/stale view receipts, task switching, filter-only navigation,
+zero-count categories, theme/hover/pressed states and large-plan summary cost.
+The two rows share the Plan panel, probes and view contract, so commit them as
+one coherent reviewed UI unit. Stop for review on a lost search edit, implicit selection mutation, changed
+operation scope, or unbounded bridge/state growth.
+The web department passed 1,265 tests with one skip and 30 headed
+deselections; the ordinary suite passed 5,172 with five skips and 30 headed
+deselections. The installed task-shell Plan witness passed after its exact
+summary validator learned `filter_counts`. The separate Setup headed witness
+still waits for an operation row in an empty rootless completed Plan; that
+pre-existing witness contract is not evidence against this filter delivery
+and remains for a separate test-maintenance unit.
+
 ### Scoped Plan bulk selection register (2026-09-17)
 
 The accepted outcome is one server-owned bulk gesture over every selectable

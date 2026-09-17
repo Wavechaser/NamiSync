@@ -109,6 +109,55 @@ def test_plan_review_state_derives_revisioned_filters_windows_and_anchor() -> No
     assert state.window(expected_revision=0, offset=0, limit=1)["disposition"] == "conflict"
 
 
+def test_plan_summary_filter_counts_are_complete_direct_categories() -> None:
+    nodes = list(_projection().nodes)
+    nodes[0] = replace(nodes[0], subtree_end=5)
+    nodes[3] = replace(nodes[3], blocked_reason="unsupported")
+    notice = replace(
+        _node("notice", "planning notice", 4, 0, 5),
+        row_kind="notice",
+        selection="disabled",
+        operation_count=0,
+        notice="insufficient space",
+    )
+    nodes.append(notice)
+    projection = PlanProjection(
+        "a" * 32,
+        tuple(nodes),
+        {node.node_id: node.position for node in nodes},
+        {"1" * 32: "copy", "2" * 32: "delete"},
+        frozenset({"1" * 32}),
+    )
+    state = PlanReviewState(
+        "task-" + "1" * 32, "a" * 32, projection, 0, "reviewing", "source", "target"
+    )
+    expected = {
+        "all": 3,
+        "copy": 1,
+        "mkdir": 0,
+        "move": 0,
+        "recase": 0,
+        "update": 0,
+        "move_update": 0,
+        "trash": 0,
+        "delete": 0,
+        "noop": 0,
+        "blocked": 1,
+        "notice": 1,
+    }
+    assert state.summary()["filter_counts"] == expected
+    state.update(
+        expected_revision=0,
+        search_query="does-not-match",
+        filters=frozenset({"copy"}),
+        sort_column=PlanSortColumn.SIZE,
+        sort_direction=SortDirection.DESCENDING,
+        collapse_node_id="folder",
+        collapsed=True,
+    )
+    assert state.summary()["filter_counts"] == expected
+
+
 def test_plan_selection_scope_follows_query_not_collapse_sort_or_navigation() -> None:
     projection = _projection()
     nodes = list(projection.nodes)

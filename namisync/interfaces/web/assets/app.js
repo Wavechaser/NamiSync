@@ -776,6 +776,7 @@ async function loadPlanReview(task, force = false) {
       summary,
       window,
       pending: null,
+      queuedSearchQuery: null,
       message,
       actionRevision: 0,
       windowRequestRevision: 0,
@@ -819,9 +820,16 @@ async function readPlanWindowAtAnchor(task, review, summary, anchorNodeId, fallb
   return getPlanWindow(task.taskId, summary.view_revision, offset, 256);
 }
 
-async function changePlanView(review, patch) {
-  const task = currentReviewTask(review);
-  if (task === null || review.pending !== null) return;
+async function changePlanView(review, patch, queued = false) {
+  const task = queued ? retainedReviewTask(review) : currentReviewTask(review);
+  if (task === null) return;
+  if (review.pending !== null) {
+    if (review.pending === "view" && Object.keys(patch).length === 1
+        && typeof patch.searchQuery === "string") {
+      review.queuedSearchQuery = patch.searchQuery;
+    }
+    return;
+  }
   const action = ++review.actionRevision;
   const anchorNodeId = review.window.rows[0]?.node_id ?? null;
   const sortColumn = patch.sortColumn ?? review.summary.sort_column;
@@ -870,6 +878,12 @@ async function changePlanView(review, patch) {
     if (retainedReviewTask(review) === task && review.actionRevision === action) {
       review.pending = null;
       renderTasks();
+      const queuedSearchQuery = review.queuedSearchQuery;
+      review.queuedSearchQuery = null;
+      if (queuedSearchQuery !== null
+          && queuedSearchQuery !== review.summary.search_query) {
+        void changePlanView(review, { searchQuery: queuedSearchQuery }, true);
+      }
     }
   }
 }

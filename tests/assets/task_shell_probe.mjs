@@ -329,6 +329,9 @@ function planSummary(overrides = {}) {
     scope_selected_operation_count: 1,
     scope_selectable_operation_count: 1,
     operation_count: 1,
+    filter_counts: { all: 1, copy: 1, mkdir: 0, move: 0, recase: 0,
+      update: 0, move_update: 0, trash: 0, delete: 0, noop: 0,
+      blocked: 0, notice: 0 },
     preflight_ready: false,
     preflight_refusal_count: 1,
     warning_count: 1,
@@ -890,6 +893,31 @@ await until(() => planAgainStarts.length === 1);
 assert.deepEqual(calls.at(-1), ["plan-again", TASK_G, null, null]);
 planAgainStarts[0].reject(new Error("simulated Plan-again refusal"));
 await until(() => postTerminalReview.pending === null);
+
+globalThis.planReviewHarness.callbacks.onViewChange(postTerminalReview, { searchQuery: "a" });
+assert.equal(postTerminalReview.pending, "view");
+globalThis.planReviewHarness.callbacks.onViewChange(postTerminalReview, { searchQuery: "ab" });
+globalThis.planReviewHarness.callbacks.onViewChange(postTerminalReview, { searchQuery: "abc" });
+assert.equal(planViewUpdates.length, 2, "typing during a slow refresh does not overlap requests");
+const firstSearch = planSummary({
+  ...committedReview, disposition: "applied", view_revision: 4, search_query: "a",
+});
+planViewUpdates[1].resolve(firstSearch);
+await until(() => planWindows.length === 7);
+planWindows[6].resolve(planWindow(firstSearch));
+await until(() => planViewUpdates.length === 3);
+assert.deepEqual(calls.at(-1), ["update-plan", TASK_G, 4, {
+  searchQuery: "abc", filters: [], sortColumn: "path", sortDirection: "ascending",
+  collapseNodeId: null, collapsed: null,
+}], "only the latest queued query follows the completed refresh");
+const finalSearch = planSummary({
+  ...committedReview, disposition: "applied", view_revision: 5, search_query: "abc",
+});
+planViewUpdates[2].resolve(finalSearch);
+await until(() => planWindows.length === 8);
+planWindows[7].resolve(planWindow(finalSearch));
+await until(() => postTerminalReview.pending === null);
+assert.equal(postTerminalReview.summary.search_query, "abc");
 
 const retainedBeforeCapacityRefusal = taskButtons();
 createButton().click();

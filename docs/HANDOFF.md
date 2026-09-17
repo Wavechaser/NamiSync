@@ -1,35 +1,27 @@
 # Latest session handoff
 
-## Scoped, rootless Plan selection (2026-09-17)
+## Plan search and filter controls (2026-09-17)
 
-Plan bulk selection is now an explicit tri-state header checkbox. Header and
-folder gestures target selectable operations matching the server's active
-search/filter query across all windows and collapsed descendants; navigation
-alone never changes selection, and Execute still uses the complete selection.
-The bridge sends only compact intent plus expected view/selection revisions.
-The task registry resolves membership under its task lock and calls one
-workflow selection mutation; receipt identity includes the view revision.
-Safety exclusions and dependency closure remain workflow-owned. Filtered
-folder checkbox states reflect their scoped membership; Status counts remain
-complete-plan facts.
+Plan search stays enabled during an in-flight view refresh. The task shell
+retains only the newest later query and dispatches it after the current view
+receipt, preserving typing/focus and server-owned view ordering. Switching
+away from a retained review does not discard a queued query. Filter controls
+now use compact button geometry, translucent neutral rest states, opaque
+theme/category active fills and an accent All reset. All, Copy, Move, Update
+and Trash always show; remaining categories show only when their complete-plan
+counts are positive. Inactive Trash text becomes red above one item.
 
-The synthetic Plan root remains internal but is omitted from public table
-windows. Public offsets, totals, row indexes/depths, parent/child indexes and
-anchors use rootless coordinates; the header is the sole whole-view control.
-The root node cannot be selected through a row gesture. BRIDGE, PRESENTATION,
-INTERFACES, FEATURES, DESKTOP_UI and the M1 delivery register reflect the new
-contract, including the retired filter-independent Plan folder rule. The
-historical M1-7 scale receipts remain tied to their original source/instrument;
-they do not recertify this change.
+`PlanReviewState` computes a complete-plan direct-row `filter_counts` facet;
+the exact browser summary validator accepts and checks it. No selection,
+execution, bridge command, or domain operation scope changed. PRESENTATION,
+DESKTOP_UI, FEATURES, README, CHANGELOG and M1_PLAN record the contract.
 
-The 120,000-operation scoped server witness matched 16,667 Copy operations
-and completed membership resolution, workflow mutation and projection refresh
-in 1.207 seconds on this host (10-second diagnostic gate). The focused
-cross-layer neighborhood passed 531 tests before the final rootless/edge-case
-refinement. The final ordinary suite passed 5,171 tests, with five skips and
-30 headed deselections; the post-suite operation-bearing-folder assertion
-passed separately. The installed headed Plan flow passed on repeat after one
-intermittent modal focus-containment failure; no modal code changed. A
-pre-existing raw `transparent` literal in the Plan sort CSS failed the first
-ordinary-suite token guard (5,168 passed); a separate tested token correction
-was committed as `6425fa7`.
+Focused Plan/frontend/token tests passed (85). The web department passed 1,265
+tests, with one skip and 30 headed deselections; the ordinary suite passed
+5,172 tests, with five skips and 30 headed deselections. The installed task-shell Plan
+witness passed and its confirmation screenshot in `build/evidence` shows the
+new counted controls. An initial installed failure revealed the omitted exact
+summary validator field; that was corrected before the passing run. A separate
+Setup headed witness reaches an empty completed Plan and waits for an
+operation row omitted by the earlier rootless-table delivery; it failed twice
+at that stale predicate and was not modified in this UI unit.
