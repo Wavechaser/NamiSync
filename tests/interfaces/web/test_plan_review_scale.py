@@ -33,7 +33,10 @@ from namisync.workflows.plan_projection import (
     build_plan_projection,
     sort_plan_projection,
 )
-from namisync.workflows import apply_selection_mutation, derive_execution_selection
+from namisync.workflows.selection import (
+    apply_selection_mutation,
+    derive_execution_selection,
+)
 
 
 def test_scoped_selection_120k_server_mutation_cost() -> None:
