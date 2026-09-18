@@ -1081,11 +1081,23 @@ def _valid_control_contract(value: object) -> bool:
             "mixed_foreground",
             "mixed_border",
             "mixed_border_width",
+            "mixed_mask",
+            "mixed_size",
+            "checked_mask",
+            "checked_size",
         }
         and tri_state["aria_checked"] == "mixed"
         and tri_state["indeterminate"] is True
         and type(tri_state["cue_content"]) is str
         and tri_state["cue_content"] not in {"", "none", "normal"}
+        and type(tri_state["mixed_mask"]) is str
+        and type(tri_state["mixed_size"]) is str
+        and type(tri_state["checked_mask"]) is str
+        and type(tri_state["checked_size"]) is str
+        and tri_state["mixed_size"] == "12px 12px"
+        and tri_state["checked_size"] == "12px 12px"
+        and "subtract_16_regular.svg" in tri_state["mixed_mask"]
+        and "checkmark_16_regular.svg" in tri_state["checked_mask"]
         and all(
             type(tri_state[name]) is str and bool(tri_state[name])
             for name in (
@@ -1194,7 +1206,7 @@ def _valid_control_contract(value: object) -> bool:
             "rest_marker_content",
             "selected_marker_background",
         }
-        and task_rail["card_count"] == 3
+        and task_rail["card_count"] == 4
         and task_rail["outside_content_card"] is True
         and task_rail["left_of_work"] is True
         and task_rail["selected_count"] == 1
@@ -1204,11 +1216,11 @@ def _valid_control_contract(value: object) -> bool:
         and type(task_rail["selected_marker_width"]) in {int, float}
         and 2.5 <= task_rail["selected_marker_width"] <= 3.5
         and type(task_rail["selected_marker_height"]) in {int, float}
-        and 23.5 <= task_rail["selected_marker_height"] <= 24.5
+        and 31.5 <= task_rail["selected_marker_height"] <= 32.5
         and type(task_rail["current_marker_width"]) in {int, float}
         and 2.5 <= task_rail["current_marker_width"] <= 3.5
         and type(task_rail["current_marker_height"]) in {int, float}
-        and 23.5 <= task_rail["current_marker_height"] <= 24.5
+        and 31.5 <= task_rail["current_marker_height"] <= 32.5
         and task_rail["rest_marker_content"] in {"none", "normal"}
         and type(task_rail["selected_marker_background"]) is str
         and bool(task_rail["selected_marker_background"])
@@ -1224,7 +1236,11 @@ def _valid_file_list_evidence(
     expected_headers: list[str],
 ) -> bool:
     column_count = len(expected_headers)
-    resize_columns = ["selection", "name", "size", "primary", "secondary"]
+    resize_columns = (
+        ["selection", "name", "primary", "secondary", "size"]
+        if column_count == 7
+        else ["selection", "name", "size", "primary", "secondary"]
+    )
     if column_count == 7:
         resize_columns.append("modified")
     keys = {
@@ -1715,10 +1731,10 @@ def _valid_plan_evidence(value: object) -> bool:
         expected_cases=_PLAN_ROW_CASE_KEYS,
         expected_headers=[
             "",
-            "Filename",
-            "Size",
-            "Operation / status",
+            "Name",
+            "Action",
             "Checksum",
+            "Size",
             "Modified",
             "Notes",
         ],

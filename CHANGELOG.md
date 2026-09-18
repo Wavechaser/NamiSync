@@ -29,6 +29,9 @@ packaging remain open.
 
 #### Refine Plan density, readiness and row highlighting (2026-09-17 – 2026-09-18)
 
+- Align checkbox glyphs and disabled strokes, Light button elevation, Plan
+  spacing, status progress and switcher corners with the shared control design;
+  refresh the gallery using production Plan controls and task cards.
 - Restore server-owned arrow navigation across row windows and keep modified
   pointer clicks distinct from keyboard focus-ring activation.
 - Format shared byte labels with four significant digits and retained zeros,

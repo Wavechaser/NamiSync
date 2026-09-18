@@ -573,19 +573,27 @@ body {
   border-color: var(--color-accent-fill-pressed);
 }
 
-.nami-checkbox:checked::after {
+.nami-checkbox:checked::after,
+.nami-checkbox:indeterminate::after,
+.nami-checkbox[aria-checked="mixed"]::after {
   background-color: currentColor;
-  block-size: var(--icon-size-sm);
+  block-size: var(--space-4);
   content: "";
-  inline-size: var(--icon-size-sm);
+  inline-size: var(--space-4);
+}
+
+.nami-checkbox:checked::after {
   mask: url("./icons/checkmark_16_regular.svg") center / contain no-repeat;
   -webkit-mask: url("./icons/checkmark_16_regular.svg") center / contain no-repeat;
+  filter: drop-shadow(0.25px 0 0 currentColor) drop-shadow(-0.25px 0 0 currentColor)
+    drop-shadow(0 0.25px 0 currentColor) drop-shadow(0 -0.25px 0 currentColor);
 }
 
 .nami-checkbox:indeterminate::after,
 .nami-checkbox[aria-checked="mixed"]::after {
-  content: "\2212";
-  font-weight: var(--font-weight-semibold);
+  mask: url("./icons/subtract_16_regular.svg") center / contain no-repeat;
+  -webkit-mask: url("./icons/subtract_16_regular.svg") center / contain no-repeat;
+  filter: none;
 }
 
 .nami-toggle {
@@ -1365,7 +1373,7 @@ body {
 .nami-segmented {
   background: var(--color-neutral-surface-selected);
   border: 0;
-  border-radius: var(--radius-small);
+  border-radius: calc(var(--radius-small) + var(--space-1));
   display: inline-flex;
   padding: var(--space-1);
 }
@@ -1951,6 +1959,7 @@ body {
 
 .nami-checkbox:disabled:not(:checked):not(:indeterminate):not([aria-checked="mixed"]) {
   background: var(--color-checkbox-fill-off-disabled);
+  border-color: var(--color-checkbox-stroke-disabled);
 }
 
 .nami-checkbox:disabled:is(:checked, :indeterminate, [aria-checked="mixed"]) {

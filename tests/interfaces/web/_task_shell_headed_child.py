@@ -542,6 +542,20 @@ _PLAN_REVIEW_SCRIPT = _COMMON_JS + r"""
   await control("checkpoint", "plan_again");
   await control("track_review_task");
   const fresh = document.querySelector(".nami-plan-review");
+  const styleValue = (selector, property) =>
+    getComputedStyle(document.querySelector(selector))[property];
+  for (const [selector, property, expected] of [
+    [".nami-plan-review__progress", "height", "8px"],
+    [".nami-task-card__progress", "height", "4px"],
+    [".nami-plan-review__summary", "paddingTop", "16px"],
+    [".nami-plan-review__table-card", "paddingTop", "16px"],
+    [".nami-plan-review__view-switcher", "borderTopLeftRadius", "6px"],
+    [".nami-task-rail__row .nami-task-card", "paddingLeft", "20px"],
+  ]) {
+    if (styleValue(selector, property) !== expected) {
+      throw new Error(`Plan geometry mismatch: ${selector} ${property}`);
+    }
+  }
   const selectionFacts = () => fresh.querySelector(".nami-plan-review__status-summary").textContent;
   const selectedBefore = Number(selectionFacts().split(" ")[0]);
   const selectableRow = [...fresh.querySelectorAll('.nami-plan-review__rows [data-node-id]')]
@@ -625,6 +639,10 @@ _PLAN_REVIEW_SCRIPT = _COMMON_JS + r"""
   await control("checkpoint", "plan_ack");
   window.__namiConfirmationStage = "execute-ready";
   await until(() => document.querySelector("#execution-confirmation")?.open, "destructive confirmation");
+  if (styleValue(".nami-execution-confirmation > p", "marginTop") !== "16px"
+      || styleValue(".nami-execution-confirmation__actions", "marginTop") !== "24px") {
+    throw new Error("Destructive confirmation spacing mismatch");
+  }
   window.__namiConfirmationStage = "cancel-open";
   await until(() => !document.querySelector("#execution-confirmation")?.open, "native Escape cancellation");
   window.__namiConfirmationInputEvidence.escapeReturnedFocus =

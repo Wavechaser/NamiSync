@@ -189,7 +189,7 @@ async function reportFailure(error) {
     dispatchInteractive,
     readCosmeticSection,
     replaceCosmeticSection,
-  }, { renderText }, iconModule, { renderPlanRow }, { renderIntegrityRow }, { createTaskRail }, { createExecutionConfirmation }] = await Promise.all([
+  }, { renderText }, iconModule, { renderPlanRow }, { renderIntegrityRow }, { createTaskRail }, { createExecutionConfirmation }, { createPlanReviewPanel }] = await Promise.all([
     import("/bridge.js"),
     import("/render.js"),
     import("/icons.js"),
@@ -197,6 +197,7 @@ async function reportFailure(error) {
     import("/integrity.js"),
     import("/rail.js"),
     import("/execution_confirmation.js"),
+    import("/plan_review.js"),
   ]);
   const { createIcon, ICON_NAMES } = iconModule;
   if (
@@ -204,6 +205,7 @@ async function reportFailure(error) {
     || !Array.isArray(ICON_NAMES)
     || typeof renderPlanRow !== "function"
     || typeof renderIntegrityRow !== "function"
+    || typeof createPlanReviewPanel !== "function"
   ) {
     throw new TypeError("installed icon registry has an invalid public shape");
   }
@@ -361,39 +363,30 @@ async function reportFailure(error) {
     onClose() {},
     onSettings() {},
   });
-  galleryRail.render([], null, false);
-  const taskSlot = galleryRail.element.querySelector(
-    ".nami-task-rail__empty-slot",
-  );
-  if (!(taskSlot instanceof HTMLElement)) {
-    throw new TypeError("gallery task rail slot is unavailable");
-  }
-  taskSlot.classList.remove("nami-card", "nami-task-rail__empty-slot");
-  taskSlot.classList.add("nami-task-rail__specimens");
-  taskSlot.replaceChildren();
-  for (const definition of [
-    { label: "Current sync", state: "selected_current", lifecycle: "executing", form: "text", status: "Executing" },
-    { label: "Paused verification", state: "rest", lifecycle: "paused", form: "text", status: "Paused" },
-    { label: "Canceled sync", state: "rest", lifecycle: "canceled", form: "fill", status: "Canceled" },
-  ]) {
-    const task = document.createElement("button");
-    task.className = "nami-task-card";
-    task.type = "button";
-    task.dataset.galleryTask = definition.lifecycle;
-    if (definition.state === "selected_current") {
-      task.setAttribute("aria-selected", "true");
-      task.setAttribute("aria-current", "true");
-    }
-    const label = document.createElement("span");
-    renderText(label, definition.label);
-    const state = document.createElement("span");
-    state.className = "nami-status-pill";
-    state.dataset.lifecycle = definition.lifecycle;
-    state.dataset.form = definition.form;
-    renderText(state, definition.status);
-    task.append(label, state);
-    taskSlot.append(task);
-  }
+  galleryRail.render([
+    {
+      taskId: "task-gallery-executing", label: "Current sync", review: null,
+      form: { source: { text: "C:\\source" }, target: { text: "D:\\target" } },
+      sessionState: "active", executionStarted: true, executionControlState: "running",
+      progressState: { progress: { items_done: 4, items_total: 10 }, phase: "sync" },
+      error: null, closePending: false, executionAttempt: null,
+    },
+    {
+      taskId: "task-gallery-paused", label: "Paused verification", review: null,
+      form: { source: { text: "C:\\source" }, target: { text: "D:\\target" } },
+      sessionState: "active", executionStarted: true, executionControlState: "paused",
+      progressState: { progress: { items_done: 7, items_total: 10 }, phase: "verify" },
+      error: null, closePending: false, executionAttempt: null,
+    },
+    {
+      taskId: "task-gallery-canceled", label: "Canceled sync", review: null,
+      form: { source: { text: "C:\\source" }, target: { text: "D:\\target" } },
+      sessionState: "canceled", executionStarted: true, executionControlState: "running",
+      progressState: null, error: null, closePending: false, executionAttempt: null,
+    },
+  ], "task-gallery-executing", false);
+  galleryRail.element.querySelector('.nami-task-card[aria-current="page"]')
+    ?.setAttribute("aria-selected", "true");
   app.append(galleryRail.element);
 
   function icon(name, size = "md") {
@@ -703,7 +696,12 @@ async function reportFailure(error) {
     const heading = document.createElement("h2");
     renderText(heading, title);
     const list = document.createElement("div");
-    list.className = "nami-file-list nami-table-scroll";
+    list.className = `nami-file-list nami-table-scroll${caseName === "plan" ? " nami-plan-review" : ""}`;
+    if (caseName === "plan") {
+      list.style.display = "block";
+      list.style.blockSize = "auto";
+      list.style.gridTemplateRows = "none";
+    }
     list.setAttribute("role", "table");
     list.setAttribute("aria-label", label);
     const grid = document.createElement("div");
@@ -712,7 +710,9 @@ async function reportFailure(error) {
     header.className = "nami-file-list__header nami-table__header";
     header.setAttribute("role", "row");
     const columnNames = headers.length === 7
-      ? ["selection", "name", "size", "primary", "secondary", "modified", "notes"]
+      ? (caseName === "plan"
+        ? ["selection", "name", "primary", "secondary", "size", "modified", "notes"]
+        : ["selection", "name", "size", "primary", "secondary", "modified", "notes"])
       : ["selection", "name", "size", "primary", "secondary", "notes"];
     const rootFontSize = parseFloat(
       getComputedStyle(document.documentElement).fontSize,
@@ -723,9 +723,9 @@ async function reportFailure(error) {
     const columnMinimums = [
       rootFontSize * 2,
       rootFontSize * 12,
-      rootFontSize * 5,
-      rootFontSize * 8,
-      rootFontSize * 7,
+      ...(caseName === "plan"
+        ? [rootFontSize * 6, rootFontSize * 7, rootFontSize * 5]
+        : [rootFontSize * 5, rootFontSize * 8, rootFontSize * 7]),
       ...(headers.length === 7 ? [rootFontSize * 7] : []),
       rootFontSize * 14,
     ];
@@ -770,6 +770,14 @@ async function reportFailure(error) {
         ? { ...definition.rowView, modifiedText: definition.rowView.modifiedText ?? "2026-09-17 12:34" }
         : definition.rowView;
       renderer(row, rowView);
+      if (caseName === "plan") {
+        row.insertBefore(row.querySelector(".nami-file-row__size"),
+          row.querySelector(".nami-plan-row__modified"));
+        if ([...row.children].map((cell) => cell.dataset.fileColumn).join(",")
+            !== "selection,name,primary,secondary,size,secondary,notes") {
+          throw new Error("Gallery Plan cells do not match their headers");
+        }
+      }
       row.dataset.galleryCase = definition.key;
       row.dataset.galleryList = caseName;
       if (definition.parentKey !== undefined) {
@@ -884,9 +892,9 @@ async function reportFailure(error) {
       grid.style.cssText = [
         `--nami-file-column-selection: ${widths[0].toFixed(3)}px`,
         "--nami-file-column-name: minmax(12rem, 1fr)",
-        `--nami-file-column-size: ${widths[2].toFixed(3)}px`,
-        `--nami-file-column-primary: ${widths[3].toFixed(3)}px`,
-        `--nami-file-column-secondary: ${widths[4].toFixed(3)}px`,
+        `--nami-file-column-size: ${widths[caseName === "plan" ? 4 : 2].toFixed(3)}px`,
+        `--nami-file-column-primary: ${widths[caseName === "plan" ? 2 : 3].toFixed(3)}px`,
+        `--nami-file-column-secondary: ${widths[caseName === "plan" ? 3 : 4].toFixed(3)}px`,
         ...(headerCells.length === 7
           ? [`--nami-file-column-modified: ${widths[5].toFixed(3)}px`]
           : []),
@@ -1004,7 +1012,7 @@ async function reportFailure(error) {
   const planSpecimen = createFileList(
     "Projected sync plan rows",
     "Projected sync plan specimen",
-    ["", "Filename", "Size", "Operation / status", "Checksum", "Modified", "Notes"],
+    ["", "Name", "Action", "Checksum", "Size", "Modified", "Notes"],
     PLAN_ROW_CASES,
     renderPlanRow,
     "plan",
@@ -1020,6 +1028,51 @@ async function reportFailure(error) {
   app.append(planSection);
   planSpecimen.refreshResizerValues();
   integritySpecimen.refreshResizerValues();
+  const planReviewPanel = createPlanReviewPanel(Object.fromEntries([
+    "onViewChange", "onWindow", "onSelect", "onScopeSelect", "onExecute", "onControl",
+    "onPlanAgain", "onHighlight", "onHighlightedSelect",
+  ].map((name) => [name, () => {}])));
+  planReviewPanel.element.dataset.gallerySection = "plan_review_controls";
+  planReviewPanel.element.style.blockSize = "480px";
+  planReviewPanel.element.style.gridColumn = "1 / -1";
+  app.append(planReviewPanel.element);
+  planReviewPanel.render({
+    review: {
+      summary: {
+        source_path: "C:\\source",
+        target_path: "D:\\target",
+        selected_operation_count: 12,
+        selectable_operation_count: 21,
+        preflight_ready: true,
+        preflight_refusal_count: 0,
+        warning_count: 0,
+        required_bytes: "5368709120",
+        search_query: "",
+        filters: ["update", "move_update"],
+        filter_counts: {
+          all: 21, copy: 4, mkdir: 1, move: 3, recase: 1, update: 2,
+          move_update: 1, trash: 2, delete: 1, noop: 2, error: 0,
+          unsupported: 1, blocked: 2, notice: 1,
+        },
+        sort_column: "path", sort_direction: "ascending",
+        selection_state: "reviewing", scope_selectable_operation_count: 21,
+        scope_selected_operation_count: 12,
+      },
+      window: { disposition: "current", view_revision: 0, offset: 0, total: 0, rows: [] },
+      pending: null,
+      message: "",
+    },
+    error: null,
+    canPlanAgain: true,
+    executionStarted: false,
+    sessionState: "completed",
+    executionControlState: "running",
+    closePending: false,
+    executionAttempt: null,
+    form: { options: { verify_after_execute: true, deletion_policy: "trash" } },
+  });
+  planReviewPanel.element.querySelector('[data-filter="update"]')?.parentElement
+    ?.querySelector(".nami-plan-filter-split__arrow")?.click();
   galleryStage = "control_matrix";
   const controlsSection = document.createElement("section");
   controlsSection.className = "nami-card";
@@ -1050,6 +1103,12 @@ async function reportFailure(error) {
   uncheckedCheckbox.type = "checkbox";
   uncheckedCheckbox.setAttribute("aria-label", "Unchecked checkbox specimen");
   controlsSection.append(uncheckedCheckbox);
+  const checkedCheckbox = document.createElement("input");
+  checkedCheckbox.className = "nami-checkbox";
+  checkedCheckbox.type = "checkbox";
+  checkedCheckbox.checked = true;
+  checkedCheckbox.setAttribute("aria-label", "Checked checkbox specimen");
+  controlsSection.append(checkedCheckbox);
 
   const hdrIsolation = document.createElement("section");
   hdrIsolation.className = "nami-card";
@@ -1956,12 +2015,12 @@ async function reportFailure(error) {
   const selectedBounds = selectedThemeOption.getBoundingClientRect();
   const triggerStyle = getComputedStyle(themeTrigger);
   const popupStyle = getComputedStyle(themePopup);
-  const taskCards = [...taskSlot.querySelectorAll(".nami-task-card")];
+  const taskCards = [...galleryRail.element.querySelectorAll(".nami-task-card")];
   const selectedTaskCard = galleryRail.element.querySelector(
     '.nami-task-card[aria-selected="true"]',
   );
   const currentTaskCard = galleryRail.element.querySelector(
-    '.nami-task-card[aria-current="true"]',
+    '.nami-task-card[aria-current="page"]',
   );
   if (
     !(selectedTaskCard instanceof HTMLElement)
@@ -1998,6 +2057,10 @@ async function reportFailure(error) {
       mixed_foreground: mixedCheckboxStyle.color,
       mixed_border: mixedCheckboxStyle.borderColor,
       mixed_border_width: mixedCheckboxStyle.borderWidth,
+      mixed_mask: mixedStyle.maskImage,
+      mixed_size: `${mixedStyle.width} ${mixedStyle.height}`,
+      checked_mask: getComputedStyle(checkedCheckbox, "::after").maskImage,
+      checked_size: `${getComputedStyle(checkedCheckbox, "::after").width} ${getComputedStyle(checkedCheckbox, "::after").height}`,
     },
     dialog_exit: dialogExit,
     confirmation_preview: confirmationPreviewEvidence,
@@ -2073,7 +2136,7 @@ async function reportFailure(error) {
         '.nami-task-card[aria-selected="true"]',
       ).length,
       current_count: galleryRail.element.querySelectorAll(
-        '.nami-task-card[aria-current="true"]',
+        '.nami-task-card[aria-current="page"]',
       ).length,
       selected_current_same_card: selectedTaskCard === currentTaskCard,
       transparent_boundaries: taskCards.every((task) => {

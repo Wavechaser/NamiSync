@@ -277,13 +277,14 @@ AUTHORED_CONTROL_VALUES = {
         "--color-toggle-fill-off-hover": "#0000000F",
         "--color-toggle-fill-off-pressed": "#00000018",
         "--color-control-border": "#e5e5e5",
-        "--color-button-edge-start": "#00000029",
-        "--color-button-edge-end": "#0000000F",
+        "--color-button-edge-start": "#0000000F",
+        "--color-button-edge-end": "#00000029",
         "--color-button-edge-flat": "#0000000F",
         "--color-accent-button-edge-start": "#FFFFFF14",
         "--color-accent-button-edge-end": "#00000066",
         "--color-accent-button-edge-flat": "var(--color-semantic-transparent)",
         "--color-control-strong-stroke": "#00000072",
+        "--color-checkbox-stroke-disabled": "#00000037",
         "--color-toggle-thumb-off": "#0000009E",
         "--color-toggle-fill-disabled-off": "var(--color-semantic-transparent)",
         "--color-toggle-fill-disabled-on": "#00000037",
@@ -318,6 +319,7 @@ AUTHORED_CONTROL_VALUES = {
         "--color-accent-button-edge-end": "#00000023",
         "--color-accent-button-edge-flat": "var(--color-semantic-transparent)",
         "--color-control-strong-stroke": "#FFFFFF8B",
+        "--color-checkbox-stroke-disabled": "#FFFFFF28",
         "--color-toggle-thumb-off": "#FFFFFFC5",
         "--color-toggle-fill-disabled-off": "var(--color-semantic-transparent)",
         "--color-toggle-fill-disabled-on": "#FFFFFF28",
@@ -1537,9 +1539,13 @@ def test_sh_g_11_components_cover_controls_states_and_non_color_cues() -> None:
 
     assert HEX_LITERAL.search(source) is None
     assert "--palette-" not in source
-    checked_checkbox = _block(source, ".nami-checkbox:checked::after")
+    checked_checkbox = _block(source, ".nami-checkbox:checked::after ")
     assert 'url("./icons/checkmark_16_regular.svg")' in checked_checkbox
-    assert 'content: "";' in checked_checkbox
+    assert "drop-shadow" in checked_checkbox
+    glyph_styles = source[source.index(".nami-checkbox:checked::after "):]
+    mixed_checkbox = _block(glyph_styles, '.nami-checkbox[aria-checked="mixed"]::after')
+    assert 'url("./icons/subtract_16_regular.svg")' in mixed_checkbox
+    assert 'content: "\\2212";' not in source
 
     forced = _block(source, "@media (forced-colors: active)")
     assert "outline: 2px solid var(--color-focus-ring);" in forced

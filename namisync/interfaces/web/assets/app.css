@@ -125,7 +125,7 @@ body {
   inline-size: 100%;
   min-inline-size: 0;
   padding-inline-end: var(--space-3);
-  padding-inline-start: var(--space-6);
+  padding-inline-start: calc(var(--space-5) + var(--space-2));
   text-align: start;
 }
 
@@ -304,8 +304,12 @@ body {
 }
 
 .nami-plan-review__view-switcher {
-  border-radius: var(--radius-medium);
   justify-self: start;
+}
+
+.nami-plan-review__summary,
+.nami-plan-review__table-card {
+  padding-block-start: var(--space-5);
 }
 
 .nami-plan-review__paths {
@@ -391,7 +395,7 @@ body {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
-  padding-block-start: var(--space-2);
+  padding-block-start: 0;
 }
 
 .nami-plan-review__search {
@@ -503,8 +507,12 @@ body {
   margin: 0;
 }
 
-.nami-execution-confirmation > * + * {
-  margin-block-start: var(--space-4);
+.nami-execution-confirmation > :is(p, .nami-execution-confirmation__actions) {
+  margin-block-start: var(--space-5);
+}
+
+.nami-execution-confirmation > .nami-execution-confirmation__actions {
+  margin-block-start: var(--space-6);
 }
 
 .nami-execution-confirmation__count {

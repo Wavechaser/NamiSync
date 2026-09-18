@@ -382,7 +382,7 @@ In CSS RGBA order, Dark rest/hover/press/disabled use `#ffffff0f`,
 share these control-fill roles. Focused textboxes use the native input-active
 role: `#1e1e1eb3` in Dark and opaque white in Light. Alpha applies to the fill,
 not the whole element, so text and glyphs retain their own contrast.
-Light ordinary-button borders retain black 29 on the top/sides and 0F below;
+Light ordinary-button borders retain black 0F on the top/sides and 29 below;
 Dark uses white 18 on the top/sides and 12 below, flattening to black 0F or
 white 12 when pressed or disabled (hex alpha).
 Accent buttons use white 14 over black 66 in Light and white 14 over black 23
@@ -484,8 +484,13 @@ Unchecked checkboxes use a 1.2px neutral Fluent
 Dark in WinUI ARGB notation, authored as CSS RGBA hex). Their selected fill and
 boundary become semantic accent states while retaining the 16 px outer
 geometry. Selected checkboxes use the pinned local Fluent
-`checkmark_16_regular.svg` mask rather than a font glyph. Textboxes use a
-separate subtle 2 px control
+`checkmark_16_regular.svg` mask rather than a font glyph, centered as a roughly
+12 px check with a small authored dilation; mixed state uses the pinned
+`subtract_16_regular.svg` mask. Disabled unchecked boxes use the dedicated
+theme stroke (`#00000037` Light, `#FFFFFF28` Dark, and `GrayText` in forced
+colors), following the native
+[CheckBox resources](https://github.com/microsoft/microsoft-ui-xaml/blob/main/controls/dev/CommonStyles/CheckBox_themeresources.xaml).
+Textboxes use a separate subtle 2 px control
 boundary and a stronger neutral bottom stroke at rest; focus changes only that
 underline to the semantic accent fill. Mouse focus therefore does not gain a
 keyboard ring, while `:focus-visible` composes the accented underline with the
@@ -617,7 +622,11 @@ markers and gallery code are absent from the wheel. No temporary command, fake
 begins at validated Python projection → existing bridge → the local renderers,
 without a temporary data channel to preserve or remove.
 
-The same gallery gives every lifecycle case its own task-card/status specimen
+The gallery keeps the rail, Plan review controls, status card, and row fixtures
+visually and semantically parallel with production; its gallery-only callbacks
+perform no domain-backend writes and its plan data remains presentation-owned.
+The same gallery
+gives every lifecycle case its own task-card/status specimen
 and separately exercises active, resumed, paused, and canceled progress.
 Lifecycle cases do not become file rows. All fixtures pass exact display-ready
 presentation values directly to production components/renderers; they do not
@@ -1247,7 +1256,9 @@ shows the switcher at left, frozen source/target paths in two middle rows and
 Verify on/off and Trash/Additive in two lines aligned with the paths at right.
 A Status card shows selected/byte/planning-issue
 facts, and one table card owns search, toggle-button filters, the grid and
-execution controls. At default (1280×800) and larger window sizes the natural-height
+execution controls. Status and table cards use a 16 px top inset. The status
+progress bar is 8 px thick; the rail's progress remains 4 px. The Plan view switcher has
+a 6 px outer radius. At default (1280×800) and larger window sizes the natural-height
 Plan and Status cards leave the remaining work-panel height to the table card;
 the table body scrolls rather than the page. Search is a narrower right-aligned
 box with inset submit and Clear icons styled like Setup path-box controls.
@@ -1294,7 +1305,7 @@ binary bytes), source/target paths or `-`, and an aggregate progress track.
 The title is semibold. Detail and path text uses compact caption line spacing;
 those rows and progress extend below the upper-right close button, aligned
 with its right edge. Progress has matching space above and below. Live task
-selection markers are 2rem, Settings is 1rem; gallery markers are unchanged.
+selection markers are 2rem, Settings is 1rem; the production-rail gallery shares them.
 Internal task identity is unchanged. Plan progress remains inert; live progress
 comes only from the accepted progress reducer, never from selected rows.
 Production commands, validators, state, raw row facts, and window/anchor
@@ -1307,6 +1318,7 @@ delivery plan owns sequencing.
 Execute opens a Fluent smoke confirmation dialog whenever the workflow reports
 selected destructive operations. The dialog states the replacement/removal
 consequence and selected count, with Cancel and Confirm and execute actions.
+Its paragraphs use a 16 px separation and the action row uses a 24 px separation.
 There is no persistent consent checkbox. Non-destructive selections submit
 immediately. Request/revision binding and admission recovery are owned by
 [BRIDGE](BRIDGE.md); the dialog grants no separate lasting authority.
@@ -1388,7 +1400,9 @@ command or synthetic domain state. Slice 5 remains the first real plan surface.
 The window bounds the shell to its viewport. Task items scroll independently
 between the rail header and the full-width Settings button at the bottom;
 work content has its own scrolling area. The compact New task icon is centered
-beside the Tasks heading. Task text has additional left padding.
+beside the Tasks heading. Live task text has a 20 px leading inset, while the
+Settings control keeps its own 16 px inset. Task text has additional left
+padding.
 
 Settings is an ordinary work-area page, not a modal. Its Settings card contains
 the existing Theme selector; About initially contains `0.1.0 "Gertrud"`.
@@ -1403,8 +1417,8 @@ A resting unselected task card is fully transparent. Hover and selected/current
 rest use the same neutral selection overlay; press temporarily weakens it. The
 live rail's selected navigation button exposes `aria-current="page"`; the
 gallery's `aria-current="true"` and `aria-selected="true"` variants retain the
-same component treatment. Selected/current cards retain a 3 px wide, 1.5 rem tall
-(24 CSS px at the default root size) sampled-accent marker,
+same component treatment. Live selected/current cards retain a 3 px wide, 2 rem tall
+(32 CSS px at the default root size) sampled-accent marker,
 so hover never erases selection. Task cards have no painted border or elevation
 in ordinary themes. Each live card spans the rail column with a dismiss icon
 inset at the right; selection and dismissal remain sibling buttons, never nested

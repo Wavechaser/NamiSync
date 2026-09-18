@@ -137,7 +137,7 @@ export function createPlanReviewPanel(callbacks) {
   const facts = document.createElement("p");
   facts.className = "nami-shell__guidance nami-plan-review__status-summary";
   const progress = document.createElement("div");
-  progress.className = "nami-progress nami-progress--inline nami-plan-review__progress";
+  progress.className = "nami-progress nami-plan-review__progress";
   progress.ariaHidden = "true";
   const progressBar = document.createElement("div");
   progressBar.className = "nami-progress__bar";

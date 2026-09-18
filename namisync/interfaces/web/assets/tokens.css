@@ -147,13 +147,14 @@
   --color-toggle-fill-off-hover: #0000000F;
   --color-toggle-fill-off-pressed: #00000018;
   --color-control-border: #e5e5e5;
-  --color-button-edge-start: #00000029;
-  --color-button-edge-end: #0000000F;
+  --color-button-edge-start: #0000000F;
+  --color-button-edge-end: #00000029;
   --color-button-edge-flat: #0000000F;
   --color-accent-button-edge-start: #FFFFFF14;
   --color-accent-button-edge-end: #00000066;
   --color-accent-button-edge-flat: var(--color-semantic-transparent);
   --color-control-strong-stroke: #00000072;
+  --color-checkbox-stroke-disabled: #00000037;
   --color-toggle-thumb-off: #0000009E;
   --color-toggle-fill-disabled-off: var(--color-semantic-transparent);
   --color-toggle-fill-disabled-on: #00000037;
@@ -302,6 +303,7 @@
   --color-accent-button-edge-end: #00000023;
   --color-accent-button-edge-flat: var(--color-semantic-transparent);
   --color-control-strong-stroke: #FFFFFF8B;
+  --color-checkbox-stroke-disabled: #FFFFFF28;
   --color-toggle-thumb-off: #FFFFFFC5;
   --color-toggle-fill-disabled-off: var(--color-semantic-transparent);
   --color-toggle-fill-disabled-on: #FFFFFF28;
@@ -399,6 +401,7 @@
     --color-accent-button-edge-end: #00000023;
     --color-accent-button-edge-flat: var(--color-semantic-transparent);
     --color-control-strong-stroke: #FFFFFF8B;
+    --color-checkbox-stroke-disabled: #FFFFFF28;
     --color-toggle-thumb-off: #FFFFFFC5;
     --color-toggle-fill-disabled-off: var(--color-semantic-transparent);
     --color-toggle-fill-disabled-on: #FFFFFF28;
@@ -503,6 +506,7 @@
     --color-toggle-thumb-disabled-on: GrayText;
     --color-control-border: ButtonBorder;
     --color-control-strong-stroke: ButtonBorder;
+    --color-checkbox-stroke-disabled: GrayText;
     --color-textbox-border: ButtonBorder;
     --color-textbox-disabled-border: ButtonBorder;
     --color-textbox-underline: CanvasText;

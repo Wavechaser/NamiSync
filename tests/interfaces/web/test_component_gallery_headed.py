@@ -269,7 +269,7 @@ _CONTROL_FILL_RGB = {
     },
 }
 _BUTTON_EDGE_ALPHA = {
-    "light": {"start": 0x29 / 0xFF, "end": 0x0F / 0xFF},
+    "light": {"start": 0x0F / 0xFF, "end": 0x29 / 0xFF},
     "dark": {"start": 0x18 / 0xFF, "end": 0x12 / 0xFF},
 }
 _CHECKBOX_STRONG_STROKE = {
@@ -966,18 +966,16 @@ def test_component_gallery_report_parser_is_exact_and_nested(
             "master_deselects_all": True,
             "master_label": "Select all projected rows",
             "resize_handle_count": 5,
-            "resize_handle_columns": [
-                "selection",
-                "name",
-                "size",
-                "primary",
-                "secondary",
-            ],
+            "resize_handle_columns": (
+                ["selection", "name", "primary", "secondary", "size"]
+                if len(headers) == 7
+                else ["selection", "name", "size", "primary", "secondary"]
+            ),
             "resize_handle_roles": ["separator"] * 5,
             "resize_handle_labels": [
                 "Resize selection column",
-                "Resize Filename column",
-                "Resize Size column",
+                "Resize Name column",
+                "Resize Action column",
                 "Resize status column",
                 "Resize Checksum column",
             ],
@@ -1158,6 +1156,10 @@ def test_component_gallery_report_parser_is_exact_and_nested(
                 "mixed_foreground": "rgb(255, 255, 255)",
                 "mixed_border": "rgb(0, 103, 192)",
                 "mixed_border_width": "1px",
+                "mixed_mask": "url(\"/icons/subtract_16_regular.svg\")",
+                "mixed_size": "12px 12px",
+                "checked_mask": "url(\"/icons/checkmark_16_regular.svg\")",
+                "checked_size": "12px 12px",
             },
             "dialog_exit": {
                 "opened": True,
@@ -1206,7 +1208,7 @@ def test_component_gallery_report_parser_is_exact_and_nested(
                 "selected_pill_background": "rgb(0, 120, 212)",
             },
             "task_rail": {
-                "card_count": 3,
+                "card_count": 4,
                 "outside_content_card": True,
                 "left_of_work": True,
                 "selected_count": 1,
@@ -1214,15 +1216,15 @@ def test_component_gallery_report_parser_is_exact_and_nested(
                 "selected_current_same_card": True,
                 "transparent_boundaries": True,
                 "selected_marker_width": 3.0,
-                "selected_marker_height": 24.0,
+                "selected_marker_height": 32.0,
                 "current_marker_width": 3.0,
-                "current_marker_height": 24.0,
+                "current_marker_height": 32.0,
                 "rest_marker_content": "none",
                 "selected_marker_background": "rgb(0, 120, 212)",
             },
             "file_list": file_list(
                 plan_rows,
-                ["", "Filename", "Size", "Operation / status", "Checksum", "Modified", "Notes"],
+                ["", "Name", "Action", "Checksum", "Size", "Modified", "Notes"],
             ),
             "integrity_list": file_list(
                 integrity_rows,
@@ -1433,12 +1435,16 @@ def test_component_gallery_script_declares_exact_required_matrix() -> None:
     assert 'import("/plan.js")' in script
     assert 'import("/integrity.js")' in script
     assert 'import("/rail.js")' in script
+    assert 'import("/plan_review.js")' in script
     assert "const galleryRail = createTaskRail({" in script
-    assert "galleryRail.render([], null, false);" in script
+    assert 'galleryRail.render([' in script
     assert "app.append(galleryRail.element);" in script
     assert "PLAN_ROW_CASES,\n    renderPlanRow," in script
     assert "INTEGRITY_ROW_CASES,\n    renderIntegrityRow," in script
     assert "renderer(row, rowView);" in script
+    assert "checkedCheckbox.checked = true;" in script
+    assert 'checked_mask: getComputedStyle(checkedCheckbox, "::after").maskImage' in script
+    assert 'checked_size: `${getComputedStyle(checkedCheckbox, "::after").width}' in script
     assert "intentTone" not in script
     assert 'presenceStatus: "reappeared"' in script
     assert 'planSection.style.gridArea = "work";' in script
@@ -1471,7 +1477,7 @@ def test_component_gallery_script_declares_exact_required_matrix() -> None:
     assert "sessionStorage" not in script
     assert not any(
         name in script
-        for name in ("SyncPlan", "start_plan", "workflow", "dispatcher", "session")
+        for name in ("SyncPlan", "start_plan", "workflow", "dispatcher")
     )
     assert "const PSEUDO_STATE_SETTLE_MS = 350;" in script
     assert "setTimeout(resolve, PSEUDO_STATE_SETTLE_MS)" in script
@@ -2399,6 +2405,9 @@ def _run_gallery_mode(
         "get_plan_anchor",
         "get_plan_window",
         "list_tasks",
+        "mutate_plan_highlight",
+        "mutate_plan_highlighted_selection",
+        "mutate_plan_scope",
         "mutate_plan_selection",
         "next_events",
         "open_plan_view",
@@ -2733,10 +2742,10 @@ def _assert_plan_list_evidence(
         expected_order=expected_order,
         expected_headers=[
             "",
-            "Filename",
-            "Size",
-            "Operation / status",
+            "Name",
+            "Action",
             "Checksum",
+            "Size",
             "Modified",
             "Notes",
         ],
@@ -2961,13 +2970,11 @@ def _assert_file_list_evidence(
     assert evidence["master_label"].startswith("Select all ")
     column_count = len(expected_headers)
     assert evidence["resize_handle_count"] == column_count - 1
-    assert evidence["resize_handle_columns"] == [
-        "selection",
-        "name",
-        "size",
-        "primary",
-        "secondary",
-    ] + (["modified"] if column_count == 7 else [])
+    assert evidence["resize_handle_columns"] == (
+        ["selection", "name", "primary", "secondary", "size"]
+        if column_count == 7
+        else ["selection", "name", "size", "primary", "secondary"]
+    ) + (["modified"] if column_count == 7 else [])
     assert evidence["resize_handle_roles"] == ["separator"] * (column_count - 1)
     assert all(
         label.startswith("Resize ")
@@ -3293,7 +3300,7 @@ def _assert_complete_gallery_matrix(report: dict[str, object]) -> None:
     combobox = report["control_contract"]["combobox"]
     task_rail = report["control_contract"]["task_rail"]
     assert task_rail == {
-        "card_count": 3,
+        "card_count": 4,
         "outside_content_card": True,
         "left_of_work": True,
         "selected_count": 1,
@@ -3301,9 +3308,9 @@ def _assert_complete_gallery_matrix(report: dict[str, object]) -> None:
         "selected_current_same_card": True,
         "transparent_boundaries": True,
         "selected_marker_width": 3.0,
-        "selected_marker_height": 24.0,
+        "selected_marker_height": 32.0,
         "current_marker_width": 3.0,
-        "current_marker_height": 24.0,
+        "current_marker_height": 32.0,
         "rest_marker_content": "none",
         "selected_marker_background": combobox["selected_pill_background"],
     }
