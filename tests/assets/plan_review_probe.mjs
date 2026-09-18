@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 
 const ROW_HEIGHT = 24;
 
@@ -18,6 +19,12 @@ class Style {
 }
 
 class ElementFake {
+  get textContent() { return this._textContent ?? ""; }
+  set textContent(value) {
+    this._textContent = value;
+    for (const child of this.children ?? []) child.parentElement = null;
+    this.children = [];
+  }
   constructor(tagName, ownerDocument) {
     this.tagName = tagName.toUpperCase();
     this.ownerDocument = ownerDocument;
@@ -51,6 +58,9 @@ class ElementFake {
       }
     }
   }
+
+  focus() { this.ownerDocument.activeElement = this; }
+  contains(value) { return value === this || this.children.some((child) => child.contains(value)); }
 
   replaceChildren(...values) {
     for (const child of this.children) child.parentElement = null;
@@ -154,6 +164,8 @@ function moduleUrl(source) {
 const renderSource = await readFile(process.argv[3], "utf8");
 const renderUrl = moduleUrl(renderSource);
 const iconsUrl = moduleUrl(await readFile(process.argv[4], "utf8"));
+const taskStatusUrl = moduleUrl((await readFile(join(dirname(process.argv[2]), "task_status.js"), "utf8"))
+  .replace("./render.js", renderUrl));
 const planUrl = moduleUrl(`
   export function renderPlanRow(element, row) {
     element.className = "nami-file-row nami-plan-row";
@@ -178,6 +190,7 @@ const planUrl = moduleUrl(`
 const source = (await readFile(process.argv[2], "utf8"))
   .replace("./plan.js", planUrl)
   .replace("./icons.js", iconsUrl)
+  .replace("./task_status.js", taskStatusUrl)
   .replace("./render.js", renderUrl);
 const { createPlanReviewPanel } = await import(moduleUrl(source));
 
@@ -249,7 +262,8 @@ const summary = {
   search_query: "",
   filters: [],
   filter_counts: { all: 180, copy: 100, move: 10, update: 5, trash: 2,
-    mkdir: 0, recase: 0, move_update: 0, delete: 0, noop: 0, blocked: 0, notice: 1 },
+    mkdir: 0, recase: 0, move_update: 0, delete: 0, noop: 0, blocked: 0,
+    error: 0, unsupported: 0, notice: 1 },
   sort_column: "path",
   sort_direction: "ascending",
   collapsed_count: 0,
@@ -289,7 +303,7 @@ panel.render(task);
 assert.equal(panel.element.dataset.pending, "");
 const tierStatus = findByClass(panel.element, "nami-plan-review__status-title");
 const executeButton = findByClass(panel.element, "nami-button--primary");
-assert.equal(tierStatus.textContent, "Plan needs attention");
+assert.equal(tierStatus.textContent, "Plan ready");
 assert.equal(executeButton.disabled, true);
 review.summary = { ...summary, preflight_ready: true, preflight_refusal_count: 0,
   selected_operation_count: 0 };
@@ -298,7 +312,7 @@ assert.equal(tierStatus.textContent, "Plan ready");
 assert.equal(executeButton.disabled, true);
 review.summary = { ...summary, preflight_ready: true, preflight_refusal_count: 0 };
 panel.render(task);
-assert.equal(tierStatus.textContent, "Ready to execute");
+assert.equal(tierStatus.textContent, "Plan ready");
 assert.equal(executeButton.disabled, false);
 review.summary = summary;
 panel.render(task);
@@ -308,7 +322,7 @@ assert.ok(findText(panel.element, "1 destructive"));
 assert.ok(findText(panel.element, "4 KiB required"));
 assert.ok(findText(panel.element, "Source:"));
 assert.ok(findText(panel.element, "Target:"));
-assert.ok(findText(panel.element, "Plan needs attention"));
+assert.ok(findText(panel.element, "Plan ready"));
 assert.ok(findByClass(panel.element, "nami-plan-review__progress"));
 assert.ok(findByClass(panel.element, "nami-plan-review__view-switcher"));
 assert.equal(findText(panel.element, "Plan review"), false);
@@ -325,6 +339,12 @@ assert.equal(window.listeners.get("pointermove").length, 0);
 sizeResizer.dispatch("keydown", { key: "ArrowRight" });
 assert.equal(grid.style.getPropertyValue("--nami-file-column-size"), "128.000px");
 assert.equal(grid.style.getPropertyValue("--nami-file-column-notes"), "272.000px");
+const actionResizer = findByDataset(panel.element, "column", "primary");
+actionResizer.dispatch("pointerdown", { clientX: 200 });
+window.dispatch("pointermove", { clientX: 0 });
+assert.equal(grid.style.getPropertyValue("--nami-file-column-primary"), "96.000px",
+  "dragging Action respects the same 6rem minimum as its default track");
+window.dispatch("pointerup");
 const renderedRow = findByDataset(panel.element, "nodeId", row.node_id);
 const planCard = findByClass(panel.element, "nami-plan-review__plan");
 const statusCard = findByClass(panel.element, "nami-plan-review__summary");
@@ -412,15 +432,51 @@ assert.deepEqual(calls.at(-1), ["onViewChange", review,
 const noticeFilter = findByDataset(panel.element, "operation", "notice");
 const allFilter = findByDataset(panel.element, "operation", "all");
 const copyFilter = findByDataset(panel.element, "operation", "copy");
-const mkdirFilter = findByDataset(panel.element, "operation", "mkdir");
+const mkdirFilter = findByDataset(panel.element, "filterDetail", "mkdir");
 const trashFilter = findByDataset(panel.element, "operation", "trash");
 assert.equal(allFilter.ariaPressed, "true");
 assert.equal(allFilter.textContent, "all 180");
 assert.equal(copyFilter.textContent, "copy 100");
-assert.equal(mkdirFilter.hidden, true);
+assert.equal(mkdirFilter.textContent, "mkdir 0");
 assert.equal(noticeFilter.hidden, false);
 assert.equal(trashFilter.hidden, false);
 assert.equal(trashFilter.dataset.trashAlert, "true");
+copyFilter.dispatch("click");
+assert.deepEqual(calls.at(-1), ["onViewChange", review,
+  { filters: new Set(["copy", "mkdir"]) }]);
+mkdirFilter.dispatch("click");
+assert.deepEqual(calls.at(-1), ["onViewChange", review,
+  { filters: new Set(["mkdir"]) }]);
+for (const [group, members] of Object.entries({
+  update: ["update", "move_update"], move: ["move", "recase"],
+  copy: ["copy", "mkdir"], remove: ["trash", "delete"],
+  error: ["error", "unsupported", "blocked"],
+})) {
+  const main = findByDataset(panel.element, "filter", group);
+  const split = main.parentElement;
+  const arrow = findByClass(split, "nami-plan-filter-split__arrow");
+  const menu = findByClass(split, "nami-plan-filter-split__menu");
+  const beforeOpen = calls.length;
+  arrow.dispatch("click");
+  assert.equal(menu.hidden, false);
+  assert.equal(calls.length, beforeOpen, "opening a detail menu never filters");
+  menu.dispatch("keydown", { key: "End" });
+  assert.equal(document.activeElement.dataset.filterDetail, members.at(-1));
+  menu.dispatch("keydown", { key: "Escape" });
+  assert.equal(menu.hidden, true);
+  assert.equal(document.activeElement, arrow);
+  review.summary = { ...summary, filters: ["notice", members.at(-1)] };
+  panel.render(task);
+  main.dispatch("click");
+  assert.deepEqual(calls.at(-1)[2].filters, new Set(["notice", ...members]));
+  review.summary = { ...summary, filters: ["notice", ...members] };
+  panel.render(task);
+  main.dispatch("click");
+  assert.deepEqual(calls.at(-1)[2].filters, new Set(["notice"]));
+  findByDataset(menu, "filterDetail", "all").dispatch("click");
+  assert.deepEqual(calls.at(-1)[2].filters, new Set(["notice", ...members]));
+}
+review.summary = summary;
 review.summary = {
   ...review.summary,
   filter_counts: { ...review.summary.filter_counts, trash: 1, notice: 0 },
@@ -433,11 +489,14 @@ panel.render(task);
 noticeFilter.dispatch("click");
 assert.deepEqual(calls.at(-1), ["onViewChange", review,
   { filters: new Set(["notice"]) }]);
+review.summary = { ...review.summary, filters: ["notice"] };
+panel.render(task);
 assert.equal(noticeFilter.ariaPressed, "true");
-assert.equal(allFilter.ariaPressed, "false");
 allFilter.dispatch("click");
 assert.deepEqual(calls.at(-1), ["onViewChange", review,
   { filters: new Set() }]);
+review.summary = { ...review.summary, filters: [] };
+panel.render(task);
 assert.equal(noticeFilter.ariaPressed, "false");
 assert.equal(allFilter.ariaPressed, "true");
 assert.equal(
@@ -456,6 +515,16 @@ search.value = hostile;
 search.dispatch("input");
 await new Promise((resolve) => setTimeout(resolve, 175));
 assert.deepEqual(calls.at(-1), ["onViewChange", review, { searchQuery: hostile }]);
+search.value = "immediate";
+search.dispatch("input");
+search.dispatch("keydown", { key: "Enter" });
+assert.deepEqual(calls.at(-1), ["onViewChange", review, { searchQuery: "immediate" }]);
+const immediateCount = calls.length;
+findAction(panel.element, "plan-search-submit").dispatch("click");
+search.dispatch("keydown", { key: "Enter" });
+assert.equal(calls.length, immediateCount, "manual search uses one shared repeat guard");
+await new Promise((resolve) => setTimeout(resolve, 175));
+assert.equal(calls.length, immediateCount, "manual search cancels the trailing input timer");
 
 assert.equal(
   findByDataset(panel.element, "action", "destructive-confirmation"),
@@ -567,11 +636,24 @@ document.defaultView.flushAnimationFrame();
 panel.render(task);
 document.defaultView.flushAnimationFrame();
 assert.equal(calls.length, beforeDispose, "tall viewport does not refetch the same bounded window");
+task.review = { ...review, window: { ...review.window, total: 0, rows: [] },
+  summary: { ...summary, filter_counts: { ...summary.filter_counts, all: 0 } } };
+panel.render(task);
+assert.ok(findText(panel.element, "Plan is empty"));
+task.review = { ...review, window: { ...review.window, total: 0, rows: [] } };
+panel.render(task);
+assert.ok(findText(panel.element, "No items match these filters."));
 search.value = "stale";
 search.dispatch("input");
 task.review = null;
 panel.render(task);
 assert.equal(findByClass(panel.element, "nami-plan-review__table-card").hidden, true);
+task.review = review;
+panel.render(task);
+assert.equal(findByClass(panel.element, "nami-plan-review__settings").children.length, 2,
+  "loading must not detach the two semantic-setting rows");
+task.review = null;
+panel.render(task);
 findAction(panel.element, "plan-again").dispatch("click");
 assert.equal(calls.length, beforeDispose, "loading review actions cannot reuse stale review identity");
 panel.dispose();

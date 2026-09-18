@@ -57,7 +57,7 @@ def test_task_shell_child_preserves_the_production_stack_and_bounded_seams() -> 
     assert "host.run_desktop(" in source
     assert "registry.create_task_shell" in source
     assert 'const freedTaskTitle = "Task 1";' in source
-    assert 'freedTaskStatus !== "Not started"' in source
+    assert 'freedTaskStatus !== "New task"' in source
     assert 'rows().length === 48 && rowByTitle("Task 49") !== undefined' in source
     assert 'if key == "Enter":' in source
     assert '"type": "keyDown", "text": "\\r", "unmodifiedText": "\\r"' in source
@@ -135,11 +135,13 @@ def test_task_shell_failure_records_do_not_expose_private_text(tmp_path: Path) -
 
 
 @pytest.mark.headed
+@pytest.mark.parametrize("large_window", [False, True], ids=["default", "larger"])
 def test_m1_4_installed_task_shell_navigation_closure_and_recovery(
     headed_installed_wheel: HeadedInstalledWheel,
     tmp_path: Path,
+    large_window: bool,
 ) -> None:
-    result = _run_task_shell_scenario(headed_installed_wheel, tmp_path)
+    result = _run_task_shell_scenario(headed_installed_wheel, tmp_path, large_window=large_window)
     report = result["report"]
 
     assert report["initial"] == {
@@ -222,7 +224,7 @@ def test_m1_4_installed_task_shell_navigation_closure_and_recovery(
         "requiredBytesVisible": True,
         "rowRiskVisible": True,
         "persistentAcknowledgmentAbsent": True,
-        "executeReady": True,
+        "executeReady": False,
             "rowHeight": "24px",
             "spacerAligned": True,
             "columnsAligned": True,
@@ -231,6 +233,13 @@ def test_m1_4_installed_task_shell_navigation_closure_and_recovery(
             "keyboardResizeWorked": True,
             "chevronsVisible": True,
             "changedSortStartsAscending": True,
+            "planGeometry": {
+                "documentFitsViewport": True,
+                "workBodyFitsViewport": True,
+                "tableAbsorbsHeight": True,
+                "footerVisible": True,
+                "semanticSettingsVisible": True,
+            },
     }
     assert plan_review["confirmationInput"] == {
         "nativeModal": True,
@@ -268,7 +277,7 @@ def test_m1_4_installed_task_shell_navigation_closure_and_recovery(
     assert plan_review["planAgainChangedTarget"] is True
     assert plan_review["capacitySlot"] == {
         "closedTitle": "Task 1",
-        "closedStatus": "Not started",
+        "closedStatus": "New task",
         "closedWasSelected": False,
         "closedIdentityRemoved": True,
         "retainedSelectedTask": True,
@@ -279,11 +288,21 @@ def test_m1_4_installed_task_shell_navigation_closure_and_recovery(
     assert plan_review["paused"] is True
     assert plan_review["resumed"] is True
     assert plan_review["canceled"] is True
+    assert plan_review["emptyPlanMessage"] is True
+    assert plan_review["emptyPlanGeometry"] == {
+        "documentFitsViewport": True,
+        "workBodyFitsViewport": True,
+        "tableAbsorbsHeight": True,
+        "footerVisible": True,
+        "semanticSettingsVisible": True,
+    }
 
 
 def _run_task_shell_scenario(
     installed: HeadedInstalledWheel,
     root: Path,
+    *,
+    large_window: bool = False,
 ) -> dict[str, object]:
     deadline = scenario_deadline(120.0)
     root = require_absolute_local_test_root(root)
@@ -321,7 +340,7 @@ def _run_task_shell_scenario(
             "--source", source,
             "--target", target,
             "--screenshot", screenshot,
-        ) + (("--plan-again-trace",) if trace_enabled else ())
+        ) + (("--plan-again-trace",) if trace_enabled else ()) + (("--large-window",) if large_window else ())
         process = start_headed_process(
             child_arguments, cwd=installed.root,
             environment=clean_child_environment(), deadline=deadline,

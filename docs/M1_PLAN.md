@@ -11,6 +11,44 @@ do not add, defer, or reinterpret an M1 product outcome.
 
 ## Main objectives and current boundary
 
+### Plan controls, viewport and task digest (2026-09-18)
+
+Finite population: Plan renderer/styles, task rail and its presentation data,
+existing server filter categories, column resize constraints, and their direct
+component/bridge/headed test consumers. PRESENTATION and DESKTOP_UI own behavior.
+Baseline is `218866b`; preceding GUI-H work is retained except where this request
+explicitly changes sizes, readiness labels and layout. No execution policy,
+selection authority, inventory implementation or durable state changes.
+
+| ID | Accepted outcome and atomic unit | Verification | State |
+| --- | --- | --- | --- |
+| GUI-J1 | Ordinary-size grouped split filters with counted detail menus; immediate throttled search and strict-empty-plan message. | Filter/search component and Python category checks; interfaces department. | Delivered |
+| GUI-J2 | Compact Plan card, neutral Plan ready status, available-height table, consistent resize minima and right-aligned footer. | Component resize checks and installed empty/populated viewport witness at default/larger sizes. | Delivered |
+| GUI-J3 | Shared task/Plan status digest with paths and aggregate progress in taller task tabs. | Lifecycle/task-shell probes and installed task navigation witness; interfaces department. | Delivered |
+
+Regression study covers hidden selection, queued search, range highlighting,
+column resizing, empty versus filtered-empty views, long paths, task switching,
+and execution control states. Stop for changes to domain filter meaning or
+missing authoritative lifecycle data that would require inventing progress.
+Direct consumers discovered during implementation are added before editing.
+Direct consumers include the exact packaged asset/import catalogs, Setup and
+task-shell headed drivers, and `plan_review_benchmark.py` task identity lookup.
+These retain internal Task N identity through `data-task-label` while visible
+titles become state digests. Plan `unsupported` derives from the existing
+blocked reason; `error` has zero members until authoritative error rows exist.
+
+GUI-J1–J3 share one integrated renderer/digest commit boundary. Final focused
+frontend/token/headed-helper checks passed (63), with Python category and Plan
+component coverage also passing. The interfaces department passed 1,692 with one
+skip; its remaining fast-refused-execution test failed root admission using the
+sandboxed external fixture, then passed natively against an external fixture
+(and inside the repository sandbox fixture). No domain code was changed for it.
+Installed task-shell checks passed at default and larger native sizes (2), each
+covering populated and empty plans, visible settings/footer, no page overflow,
+and execution confirmation/pause/resume/cancel. Screenshot review caught and
+corrected loading detaching the settings labels; final component and installed
+checks include that regression. HANDOFF records the final evidence directories.
+
 [REDUCTION_FOLLOWUP.md](REDUCTION_FOLLOWUP.md) owns the accepted narrow
 immutable-value, scan-validation, history encoding/projection, and executor
 simplification follow-up under M1-12. Its NR-0–NR-9 register and migrated RF-E/RF-X

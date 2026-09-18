@@ -1,12 +1,17 @@
 import { renderPlanRow } from "./plan.js";
 import { createIcon } from "./icons.js";
 import { formatByteCount, renderFilesystemText, renderText } from "./render.js";
+import { taskStatusDigest } from "./task_status.js";
 
 const FILTERS = Object.freeze([
-  "all", "copy", "move", "update", "trash", "mkdir", "recase",
-  "move_update", "delete", "noop", "blocked", "notice",
+  "all", "copy", "move", "update", "remove", "error", "noop", "notice",
 ]);
-const ALWAYS_VISIBLE_FILTERS = new Set(["all", "copy", "move", "update", "trash"]);
+const FILTER_GROUPS = Object.freeze({
+  copy: ["copy", "mkdir"], move: ["move", "recase"],
+  update: ["update", "move_update"], remove: ["trash", "delete"],
+  error: ["error", "unsupported", "blocked"],
+});
+const ALWAYS_VISIBLE_FILTERS = new Set(["all", "copy", "move", "update", "remove"]);
 const WINDOW_LIMIT = 256;
 const ROW_HEIGHT = 24;
 
@@ -109,8 +114,11 @@ export function createPlanReviewPanel(callbacks) {
   const targetPath = document.createElement("p");
   targetPath.className = "nami-plan-review__path nami-plan-review__path--target";
   paths.append(sourcePath, targetPath);
-  const settings = document.createElement("p");
-  settings.className = "nami-shell__guidance";
+  const settings = document.createElement("div");
+  settings.className = "nami-shell__guidance nami-plan-review__settings";
+  const verifySetting = document.createElement("span");
+  const deletionSetting = document.createElement("span");
+  settings.append(verifySetting, deletionSetting);
   const viewSwitcher = document.createElement("div");
   viewSwitcher.className = "nami-segmented nami-plan-review__view-switcher";
   for (const [label, selected] of [["Sync", true], ["Integrity", false]]) {
@@ -148,20 +156,56 @@ export function createPlanReviewPanel(callbacks) {
   search.autocomplete = "off";
   search.ariaLabel = "Search this plan";
   search.dataset.action = "plan-search";
+  const searchBox = document.createElement("div");
+  searchBox.className = "nami-plan-review__search";
+  const searchSubmit = button("", "nami-icon-button nami-plan-review__search-submit");
+  searchSubmit.ariaLabel = "Search now";
+  searchSubmit.dataset.action = "plan-search-submit";
+  searchSubmit.append(createIcon(document, "search", "sm"));
+  searchBox.append(search, searchSubmit);
   const filters = document.createElement("div");
   filters.className = "nami-plan-review__filters";
   const filterList = document.createElement("div");
   filterList.className = "nami-plan-review__filter-list";
   const filterButtons = new Map();
+  const filterMenus = new Map();
   for (const value of FILTERS) {
-    const filter = button(value.replaceAll("_", " "), "nami-button nami-plan-review__filter");
-    filter.dataset.operation = value;
+    const filter = button(value, "nami-button nami-plan-review__filter");
+    filter.dataset.operation = value === "remove" ? "trash" : value === "error" ? "blocked" : value;
+    filter.dataset.filter = value;
     filter.ariaPressed = "false";
-    filterList.append(filter);
+    const members = FILTER_GROUPS[value];
+    if (members === undefined) {
+      filterList.append(filter);
+    } else {
+      const split = document.createElement("div");
+      split.className = "nami-plan-filter-split";
+      const dropdown = button("", "nami-button nami-plan-review__filter nami-plan-filter-split__arrow");
+      dropdown.dataset.operation = filter.dataset.operation;
+      dropdown.ariaLabel = `${value} filters`;
+      dropdown.ariaHasPopup = "menu";
+      dropdown.ariaExpanded = "false";
+      dropdown.append(createIcon(document, "chevron-down", "sm"));
+      const menu = document.createElement("div");
+      menu.className = "nami-menu nami-plan-filter-split__menu";
+      menu.setAttribute("role", "menu");
+      menu.hidden = true;
+      const choices = new Map();
+      for (const key of ["all", ...members]) {
+        const item = button("", "nami-menu__item");
+        item.setAttribute("role", "menuitemradio");
+        item.dataset.filterDetail = key;
+        menu.append(item);
+        choices.set(key, item);
+      }
+      split.append(filter, dropdown, menu);
+      filterList.append(split);
+      filterMenus.set(value, { split, dropdown, menu, choices });
+    }
     filterButtons.set(value, filter);
   }
   filters.append(filterList);
-  toolbar.append(filters, search);
+  toolbar.append(filters, searchBox);
 
   const list = document.createElement("div");
   list.className = "nami-file-list nami-table-scroll nami-plan-review__list";
@@ -252,6 +296,7 @@ export function createPlanReviewPanel(callbacks) {
 
   let current = null;
   let searchTimer = null;
+  let lastSearchSubmit = -Infinity;
   let scrollFramePending = false;
   let scrollGeneration = 0;
   let pendingWindowOffset = null;
@@ -268,7 +313,7 @@ export function createPlanReviewPanel(callbacks) {
   const resizers = headerCells.slice(0, -1).map(
     (cell) => cell.querySelector(".nami-file-list__column-resizer"),
   );
-  const columnMinimums = [2, 12, 5, 8, 7, 7, 14];
+  const columnMinimums = [2, 12, 5, 6, 7, 7, 14];
   let columnWidths = null;
   let finishResize = null;
 
@@ -354,20 +399,72 @@ export function createPlanReviewPanel(callbacks) {
       if (current === scheduledReview) viewChange({ searchQuery: search.value });
     }, 150);
   });
-  const activeFilters = () => new Set(
-    [...filterButtons].filter(([value, filter]) => value !== "all" && filter.ariaPressed === "true")
-      .map(([value]) => value),
-  );
+  function submitSearch() {
+    const now = Date.now();
+    if (now - lastSearchSubmit < 150) return;
+    lastSearchSubmit = now;
+    if (searchTimer !== null) clearTimeout(searchTimer);
+    searchTimer = null;
+    viewChange({ searchQuery: search.value });
+  }
+  search.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      submitSearch();
+    }
+  });
+  searchSubmit.addEventListener("click", submitSearch);
+  function closeFilterMenus() {
+    for (const { dropdown, menu } of filterMenus.values()) {
+      menu.hidden = true;
+      dropdown.ariaExpanded = "false";
+    }
+  }
+  function selectFilterGroup(value, detail = null) {
+    if (current === null || current.pending !== null) return;
+    closeFilterMenus();
+    const selected = new Set(current.summary.filters);
+    if (value === "all") selected.clear();
+    else {
+      const members = FILTER_GROUPS[value] ?? [value];
+      const active = members.every((member) => selected.has(member));
+      for (const member of members) selected.delete(member);
+      if (detail !== null || !active) {
+        for (const member of detail === null || detail === "all" ? members : [detail]) selected.add(member);
+      }
+    }
+    viewChange({ filters: selected });
+  }
   for (const [value, filter] of filterButtons) {
-    filter.addEventListener("click", () => {
-      if (value === "all") {
-        for (const [key, button] of filterButtons) button.ariaPressed = String(key === "all");
-        viewChange({ filters: new Set() });
-      } else {
-        filter.ariaPressed = String(filter.ariaPressed !== "true");
-        const selected = activeFilters();
-        filterButtons.get("all").ariaPressed = String(selected.size === 0);
-        viewChange({ filters: selected });
+    filter.addEventListener("click", () => selectFilterGroup(value));
+  }
+  for (const [value, { split, dropdown, menu, choices }] of filterMenus) {
+    dropdown.addEventListener("click", () => {
+      const open = menu.hidden;
+      closeFilterMenus();
+      menu.hidden = !open;
+      dropdown.ariaExpanded = String(open);
+      if (open) choices.get("all").focus();
+    });
+    for (const [key, item] of choices) item.addEventListener("click", () => {
+      selectFilterGroup(value, key);
+      dropdown.focus();
+    });
+    split.addEventListener("focusout", (event) => {
+      if (!split.contains(event.relatedTarget)) closeFilterMenus();
+    });
+    menu.addEventListener("keydown", (event) => {
+      const items = [...choices.values()];
+      const index = items.indexOf(document.activeElement);
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeFilterMenus();
+        dropdown.focus();
+      } else if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
+        event.preventDefault();
+        const next = event.key === "Home" ? 0 : event.key === "End" ? items.length - 1
+          : (index + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
+        items[next].focus();
       }
     });
   }
@@ -471,6 +568,13 @@ export function createPlanReviewPanel(callbacks) {
     top.className = "nami-plan-review__spacer";
     top.style.setProperty("block-size", `${review.window.offset * ROW_HEIGHT}px`);
     fragment.append(top);
+    if (review.window.total === 0) {
+      const empty = document.createElement("p");
+      empty.className = "nami-shell__guidance nami-plan-review__empty";
+      renderText(empty, review.summary.filter_counts?.all === 0
+        ? "Plan is empty" : "No items match these filters.");
+      fragment.append(empty);
+    }
     for (const row of review.window.rows) {
       const element = document.createElement("div");
       renderPlanRow(element, rowView(
@@ -551,7 +655,8 @@ export function createPlanReviewPanel(callbacks) {
       delete element.dataset.pending;
       updateText(sourcePath, "Loading reviewed plan…");
       updateText(targetPath, "");
-      updateText(settings, "");
+      updateText(verifySetting, "");
+      updateText(deletionSetting, "");
       updateText(facts, task.error ?? "Waiting for the completed plan to become available.");
       updateText(statusTitle, task.error ? "Plan unavailable" : "Loading plan");
       summary.dataset.status = task.error ? "attention" : "working";
@@ -569,14 +674,13 @@ export function createPlanReviewPanel(callbacks) {
     tableCard.hidden = false;
     updateText(sourcePath, `Source: ${review.summary.source_path}`, true);
     updateText(targetPath, `Target: ${review.summary.target_path}`, true);
+    sourcePath.title = review.summary.source_path;
+    targetPath.title = review.summary.target_path;
     const options = task.form?.options;
-    updateText(settings, options === null || options === undefined
-      ? "Reviewed settings unavailable"
-      : `Deletion: ${options.deletion_policy === "additive" ? "additive" : "trash"} · Replaced files: ${options.trash_on_update ? "trash" : "replace"} · Preserve: ${[
-        options.preservation.preserve_created && "creation time",
-        options.preservation.preserve_acl && "ACL",
-        options.preservation.preserve_ads && "alternate streams",
-      ].filter(Boolean).join(", ") || "none"} · Source casing: ${options.propagate_source_casing ? "on" : "off"} · Verify after execution: ${options.verify_after_execute ? "on" : "off"} · Exclusions: ${options.filters.length === 0 ? "none" : options.filters.join(", ")}`, true);
+    updateText(verifySetting, options == null ? "-"
+      : options.verify_after_execute ? "Verify after execution" : "No verification");
+    updateText(deletionSetting, options == null ? "-"
+      : options.deletion_policy === "additive" ? "Additive" : "Trash");
     const verdict = review.summary.preflight_ready
       ? "Review preflight ready"
       : `${review.summary.preflight_refusal_count} review preflight refusal(s)`;
@@ -588,20 +692,12 @@ export function createPlanReviewPanel(callbacks) {
     const canExecuteSelection = review.summary.preflight_ready
       && review.summary.selected_operation_count > 0
       && review.summary.selection_state === "reviewing";
-    const statusLabel = executionState === "active" ? "Executing"
-      : executionState === "completed" ? "Complete"
-        : executionState === "failed" || executionState === "refused" ? "Error"
-          : executionState !== null ? executionState.charAt(0).toUpperCase() + executionState.slice(1)
-            : !review.summary.preflight_ready ? "Plan needs attention"
-              : canExecuteSelection ? "Ready to execute" : "Plan ready";
-    updateText(statusTitle, statusLabel);
-    summary.dataset.status = executionState ?? (!review.summary.preflight_ready
-      ? "attention" : canExecuteSelection ? "ready" : "plan");
-    const progressValue = task.executionStarted && Number.isFinite(task.executionProgress)
-      ? Math.max(0, Math.min(100, task.executionProgress))
-      : 0;
+    const digest = taskStatusDigest(task);
+    updateText(statusTitle, digest.title);
+    summary.dataset.status = digest.state;
+    const progressValue = digest.progress.value;
     progress.dataset.lifecycle = executionState ?? "completed";
-    if (executionState === "active") {
+    if (digest.progress.indeterminate) {
       progress.classList.add("nami-progress--indeterminate");
     } else {
       progress.classList.remove?.("nami-progress--indeterminate");
@@ -609,6 +705,7 @@ export function createPlanReviewPanel(callbacks) {
     progress.style.setProperty("--nami-progress-value", `${progressValue}%`);
     if (document.activeElement !== search) search.value = review.summary.search_query;
     search.disabled = review.pending !== null && review.pending !== "view";
+    searchSubmit.disabled = search.disabled;
     for (const [column, { cell, sortButton, up, down }] of sortHeaders) {
       const active = review.summary.sort_column === column;
       const direction = active ? review.summary.sort_direction : null;
@@ -618,15 +715,31 @@ export function createPlanReviewPanel(callbacks) {
       sortButton.disabled = review.pending !== null;
     }
     for (const [value, filter] of filterButtons) {
+      const members = FILTER_GROUPS[value] ?? [value];
       const active = value === "all"
         ? review.summary.filters.length === 0
-        : review.summary.filters.includes(value);
-      const count = review.summary.filter_counts?.[value] ?? 0;
+        : members.some((member) => review.summary.filters.includes(member));
+      const count = members.reduce((total, member) => total + (review.summary.filter_counts?.[member] ?? 0), 0);
       filter.ariaPressed = String(active);
       filter.disabled = review.pending !== null;
-      filter.hidden = !ALWAYS_VISIBLE_FILTERS.has(value) && count === 0;
-      filter.dataset.trashAlert = String(value === "trash" && !active && count > 1);
+      const hidden = !ALWAYS_VISIBLE_FILTERS.has(value) && count === 0;
+      filter.hidden = hidden;
+      filter.dataset.trashAlert = String(value === "remove" && !active && count > 1);
       updateText(filter, `${value.replaceAll("_", " ")} ${count}`);
+      const grouped = filterMenus.get(value);
+      if (grouped !== undefined) {
+        grouped.split.hidden = hidden;
+        grouped.dropdown.disabled = filter.disabled;
+        grouped.dropdown.ariaPressed = String(active);
+        for (const [key, item] of grouped.choices) {
+          const itemCount = key === "all" ? count : review.summary.filter_counts?.[key] ?? 0;
+          const label = key === "all" ? `All ${value === "copy" ? "copies" : value === "remove" ? "removals" : `${value}s`}` : key.replaceAll("_", " ");
+          updateText(item, `${label} ${itemCount}`);
+          item.ariaChecked = String(key === "all"
+            ? members.every((member) => review.summary.filters.includes(member))
+            : review.summary.filters.includes(key) && members.filter((member) => review.summary.filters.includes(member)).length === 1);
+        }
+      }
     }
     if (scopeCheckbox instanceof HTMLInputElement) {
       const scopeSelectable = review.summary.scope_selectable_operation_count;
@@ -662,6 +775,7 @@ export function createPlanReviewPanel(callbacks) {
   }
 
   function dispose() {
+    closeFilterMenus();
     finishResize?.();
     resizeObserver.disconnect();
     if (searchTimer !== null) clearTimeout(searchTimer);

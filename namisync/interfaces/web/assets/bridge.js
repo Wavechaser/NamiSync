@@ -2852,7 +2852,7 @@ function isNodeId(value) {
 function isPlanViewGesture(value) {
   const filters = new Set([
     "copy", "mkdir", "move", "recase", "update", "move_update",
-    "trash", "delete", "noop", "blocked", "notice",
+    "trash", "delete", "noop", "blocked", "error", "unsupported", "notice",
   ]);
   return isExactObject(value, [
     "searchQuery", "filters", "sortColumn", "sortDirection",
@@ -2907,7 +2907,7 @@ function validatePlanViewSummary(value) {
     && value.scope_selected_operation_count <= value.selected_operation_count
     && isExactObject(value.filter_counts, [
       "all", "copy", "mkdir", "move", "recase", "update", "move_update",
-      "trash", "delete", "noop", "blocked", "notice",
+      "trash", "delete", "noop", "blocked", "error", "unsupported", "notice",
     ])
     && Object.values(value.filter_counts).every(isNonnegativeInteger)
     && value.filter_counts.all === Object.entries(value.filter_counts)

@@ -41,6 +41,7 @@ INITIAL_ASSETS = {
     "plan.js",
     "plan_review.js",
     "rail.js",
+    "task_status.js",
     "readiness.js",
     "render.js",
     "setup.js",

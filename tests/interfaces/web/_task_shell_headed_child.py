@@ -55,6 +55,8 @@ _FAILURE_STAGES = frozenset(
         "page_plan_review_plan_live",
         "page_plan_review_plan_paused",
         "page_plan_review_plan_resumed",
+        "page_plan_review_plan_empty_prepare",
+        "page_plan_review_plan_empty_wait",
         "child",
     }
 )
@@ -98,16 +100,35 @@ async function untilAsync(predicate, label) {
 }
 function rows() { return Array.from(document.querySelectorAll(".nami-task-rail__row")); }
 function rowByTitle(title) {
-  return rows().find((row) => row.querySelector(".nami-task-card__title")?.textContent === title);
+  return rows().find((row) => row.querySelector(".nami-task-card")?.dataset.taskLabel === title);
 }
 function selectedTitle() {
-  return document.querySelector('.nami-task-card[aria-current="page"] .nami-task-card__title')?.textContent ?? null;
+  return document.querySelector('.nami-task-card[aria-current="page"]')?.dataset.taskLabel ?? null;
 }
 function workTitle() {
   const label = document.querySelector(".nami-work-panel")?.getAttribute("aria-label") ?? "";
   return label.startsWith("Work area — ") ? label.slice("Work area — ".length) : null;
 }
-function statusFor(title) { return rowByTitle(title)?.querySelector(".nami-task-card__status")?.textContent ?? null; }
+function planGeometryFor(review) {
+  const viewport = review?.querySelector(".nami-plan-review__rows");
+  const workBody = document.querySelector(".nami-work-panel__body");
+  const planActions = review?.querySelector(".nami-plan-review__actions");
+  const settingRows = [...review.querySelectorAll(".nami-plan-review__settings > span")];
+  return {
+    documentFitsViewport: document.documentElement.scrollHeight <= innerHeight + 1,
+    workBodyFitsViewport: workBody instanceof HTMLElement
+      && workBody.scrollHeight <= workBody.clientHeight + 1,
+    tableAbsorbsHeight: viewport instanceof HTMLElement
+      && viewport.clientHeight > 0 && viewport.scrollHeight >= viewport.clientHeight,
+    footerVisible: planActions instanceof HTMLElement && planActions.checkVisibility()
+      && planActions.getBoundingClientRect().bottom <= innerHeight + 1,
+    semanticSettingsVisible: settingRows.length === 2 && settingRows.every((row) =>
+      row.textContent.length > 0 && row.getBoundingClientRect().width > 0
+      && row.getBoundingClientRect().right <= review.getBoundingClientRect().right),
+  };
+}
+function statusFor(title) { return rowByTitle(title)?.querySelector(".nami-task-card__title")?.textContent ?? null; }
+function detailFor(title) { return rowByTitle(title)?.querySelector(".nami-task-card__status")?.textContent ?? null; }
 function clickNew() { document.querySelector(".nami-task-rail__create")?.click(); }
 function clickSelect(title) { rowByTitle(title)?.querySelector(".nami-task-card")?.click(); }
 function clickClose(title) { rowByTitle(title)?.querySelector(".nami-task-rail__close")?.click(); }
@@ -211,7 +232,7 @@ _INITIAL_SCRIPT = _COMMON_JS + r"""
   await until(() => rows().length === 47, "first new task");
   clickNew();
   await until(() => rows().length === 48, "second new task");
-  const newest = rows().slice(0, 3).map((row) => row.querySelector(".nami-task-card__title")?.textContent);
+  const newest = rows().slice(0, 3).map((row) => row.querySelector(".nami-task-card")?.dataset.taskLabel);
   const setup = await until(() => {
     const value = document.querySelector(".nami-work-panel__body .nami-setup");
     return value instanceof HTMLElement && value.checkVisibility() ? value : null;
@@ -270,7 +291,7 @@ _INITIAL_SCRIPT = _COMMON_JS + r"""
   await control("arm_close_failure");
   clickClose("Task 47");
   await until(() => rowByTitle("Task 47")?.querySelector(".nami-task-rail__close")?.getAttribute("aria-label") === "Retry close for Task 47", "failed close recovery");
-  const retainedAfterFailure = rows().length === 47 && statusFor("Task 47") === "Close did not finish. Retry.";
+  const retainedAfterFailure = rows().length === 47 && detailFor("Task 47") === "Close did not finish. Retry.";
   clickClose("Task 47");
   await until(() => rows().length === 46 && rowByTitle("Task 47") === undefined, "close retry");
   await control("checkpoint", "retry");
@@ -306,7 +327,7 @@ _REINJECTED_SCRIPT = _COMMON_JS + r"""
   await until(() => rows().length === 47, "reinjected task list");
   const evidence = {
     count: rows().length,
-    newest: rows()[0]?.querySelector(".nami-task-card__title")?.textContent ?? null,
+    newest: rows()[0]?.querySelector(".nami-task-card")?.dataset.taskLabel ?? null,
     selected: selectedTitle(),
     work: workTitle(),
   };
@@ -323,9 +344,9 @@ _REINJECTED_SCRIPT = _COMMON_JS + r"""
 _BUSY_SCRIPT = _COMMON_JS + r"""
 (async () => {
   await ready();
-  await until(() => rows().length === 47 && statusFor("Task 47") === "In progress", "busy task");
+  await until(() => rows().length === 47 && statusFor("Task 47") === "Planning", "busy task");
   clickClose("Task 47");
-  await until(() => statusFor("Task 47") === "Canceling and closing…", "pending cancellation");
+  await until(() => detailFor("Task 47") === "Canceling and closing…", "pending cancellation");
   const pending = await control("status");
   const retainedPending = rows().length === 47 && rowByTitle("Task 47") !== undefined;
   await control("settle_busy");
@@ -393,13 +414,14 @@ _PLAN_REVIEW_SCRIPT = _COMMON_JS + r"""
     }, true);
   }
   await ready();
-  await until(() => rows().length === 47 && statusFor("Task 47") === "Completed", "reviewed plan task");
+  await until(() => rows().length === 47 && statusFor("Task 47") === "Plan ready", "reviewed plan task");
   await until(() => document.querySelector(".nami-plan-review"), "Plan review surface");
   await until(() => document.querySelector(".nami-plan-review__rows [data-node-id]"), "Plan review rows");
   await control("checkpoint", "plan_surface");
   const review = document.querySelector(".nami-plan-review");
   const facts = review.querySelector(".nami-plan-review__summary").textContent;
   const viewport = review.querySelector(".nami-plan-review__rows");
+  const planGeometry = planGeometryFor(review);
   viewport.scrollTop = 280 * 24;
   viewport.dispatchEvent(new Event("scroll"));
   await until(() => Number(viewport.querySelector("[data-node-id]")?.ariaRowIndex) > 2, "offset Plan window");
@@ -468,6 +490,7 @@ _PLAN_REVIEW_SCRIPT = _COMMON_JS + r"""
     keyboardResizeWorked,
     chevronsVisible,
     changedSortStartsAscending,
+    planGeometry,
   };
   await control("prepare_plan_again");
   const planAgainTraceEnabled = globalThis.__namiPlanAgainTrace !== undefined;
@@ -523,14 +546,14 @@ _PLAN_REVIEW_SCRIPT = _COMMON_JS + r"""
   window.__namiConfirmationStage = "confirm-closing";
   await until(() => !document.querySelector("#execution-confirmation")?.open, "confirmation exit");
   await control("checkpoint", "plan_execute");
-  await until(() => statusFor("Task 48") === "Refused", "post-admission preflight refusal");
+  await until(() => statusFor("Task 48") === "Error", "post-admission preflight refusal");
   await control("checkpoint", "plan_refused");
   await untilAsync(async () => (await control("status")).review_session_released === true, "refused execution release");
   await control("checkpoint", "plan_release");
   await until(() => fresh.querySelector('[data-action="execute"]').hidden, "committed selection review");
   const refused = {
     committed: fresh.querySelector('[data-action="execute"]').hidden,
-    unrun: statusFor("Task 48") === "Refused",
+    unrun: statusFor("Task 48") === "Error",
     message: fresh.querySelector(".nami-plan-review__status").textContent,
   };
 
@@ -540,7 +563,7 @@ _PLAN_REVIEW_SCRIPT = _COMMON_JS + r"""
   const freedTaskStatus = statusFor(freedTaskTitle);
   const freedTaskWasSelected = selectedTitle() === freedTaskTitle;
   if (!(freedTaskClose instanceof HTMLButtonElement) || freedTaskClose.disabled
-      || freedTaskStatus !== "Not started" || freedTaskWasSelected) {
+      || freedTaskStatus !== "New task" || freedTaskWasSelected) {
     throw new Error("unused capacity task is unavailable for close");
   }
   clickClose(freedTaskTitle);
@@ -610,6 +633,27 @@ _PLAN_REVIEW_SCRIPT = _COMMON_JS + r"""
   await control("checkpoint", "plan_resumed");
   live.querySelector('[data-action="cancel"]').click();
   await until(() => statusFor("Task 49") === "Canceled", "canceled execution");
+  await control("checkpoint", "plan_empty_prepare");
+  await until(() => !live.querySelector('[data-action="plan-again"]').disabled, "settled Plan-again eligibility");
+  const countBeforeEmptyPlanAgain = rows().length;
+  clickClose("Task 2");
+  await until(() => rows().length === 47 && rowByTitle("Task 2") === undefined, "empty Plan capacity slot");
+  await control("prepare_empty_plan");
+  live.querySelector('[data-action="plan-again"]').click();
+  await control("checkpoint", "plan_empty_wait");
+  await until(() => rows().length === 48 && rowByTitle("Task 50") !== undefined, "empty Plan-again task");
+  clickSelect("Task 50");
+  await until(() => selectedTitle() === "Task 50", "empty Plan selection");
+  const emptyReview = await until(
+    () => statusFor("Task 50") === "Plan ready" && document.querySelector(".nami-plan-review"),
+    "empty Plan review",
+  );
+  await until(
+    () => !emptyReview.querySelector(".nami-plan-review__rows [data-node-id]"),
+    "empty Plan rows",
+  );
+  const emptyPlanGeometry = planGeometryFor(emptyReview);
+  const emptyPlanMessage = emptyReview.textContent.toLowerCase().includes("empty");
   await control("record", {
     plan_review: {
       initial,
@@ -618,13 +662,15 @@ _PLAN_REVIEW_SCRIPT = _COMMON_JS + r"""
       planAgainChangedTarget: changedRows.includes("target-added.txt"),
       capacitySlot: {
         ...capacitySlot,
-        countAfterPlanAgain: rows().length,
-        newTaskTitle: rowByTitle("Task 49")?.querySelector(".nami-task-card__title")?.textContent ?? null,
+        countAfterPlanAgain: countBeforeEmptyPlanAgain,
+        newTaskTitle: rowByTitle("Task 49")?.querySelector(".nami-task-card")?.dataset.taskLabel ?? null,
       },
       confirmationInput: window.__namiConfirmationInputEvidence,
       paused: paused.length > 0,
       resumed: live.querySelector('[data-action="resume"]').hidden,
       canceled: statusFor("Task 49") === "Canceled",
+      emptyPlanGeometry,
+      emptyPlanMessage,
     },
   });
   const marker = document.createElement("p");
@@ -920,7 +966,8 @@ class _Control:
             "reinjection_wait"
             , "plan_surface", "plan_offset", "plan_notice", "plan_refused",
             "plan_release", "plan_again", "plan_live", "plan_paused",
-            "plan_resumed", "plan_force", "plan_ack", "plan_execute"
+            "plan_resumed", "plan_force", "plan_ack", "plan_execute",
+            "plan_empty_prepare", "plan_empty_wait"
         }:
             self.checkpoint = value
             return {"accepted": True}
@@ -978,6 +1025,9 @@ class _Control:
             return {"accepted": True}
         if action == "prepare_plan_again":
             self._prepare_plan_again()
+            return {"accepted": True}
+        if action == "prepare_empty_plan":
+            self._prepare_empty_plan()
             return {"accepted": True}
         if action == "refuse_execution":
             self.force_preflight_refusal = True
@@ -1107,6 +1157,21 @@ class _Control:
         self.block_execution = False
         self.execution_entered.clear()
         self.execution_release.clear()
+
+    def _prepare_empty_plan(self) -> None:
+        for root in (self.source, self.target):
+            for child in root.iterdir():
+                if child.is_dir():
+                    for nested in sorted(child.rglob("*"), reverse=True):
+                        if nested.is_file() or nested.is_symlink():
+                            nested.unlink()
+                        elif nested.is_dir():
+                            nested.rmdir()
+                    child.rmdir()
+                else:
+                    child.unlink()
+        self.force_preflight_refusal = False
+        self.block_execution = False
 
     def _registry(self) -> object:
         if self.registry is None:
@@ -1469,7 +1534,7 @@ def _drive_plan_confirmation(
       const dialog = document.querySelector("#execution-confirmation");
       const confirm = dialog?.querySelector("[data-confirm-execution]");
       const background = Array.from(document.querySelectorAll(".nami-task-rail__row"))
-        .find((row) => row.querySelector(".nami-task-card__title")?.textContent === "Task 47")
+        .find((row) => row.querySelector(".nami-task-card")?.dataset.taskLabel === "Task 47")
         ?.querySelector(".nami-task-card");
       const rail = document.querySelector(".nami-task-rail__items");
       if (!(dialog instanceof HTMLDialogElement) || !(confirm instanceof HTMLButtonElement)
@@ -1491,8 +1556,7 @@ def _drive_plan_confirmation(
         reopenCancelInitiallyFocused:
           document.activeElement === dialog.querySelector("[data-cancel-execution]"),
         selectedBeforeBackgroundInput:
-          document.querySelector('.nami-task-card[aria-current="page"] .nami-task-card__title')
-            ?.textContent ?? null,
+          document.querySelector('.nami-task-card[aria-current="page"]')?.dataset.taskLabel ?? null,
         railScrollBeforeBackgroundInput: rail.scrollTop,
       });
       return {confirm: center(confirm), background: center(background)};
@@ -1587,8 +1651,8 @@ def _drive_plan_confirmation(
   const dialog = document.querySelector("#execution-confirmation");
   const rail = document.querySelector(".nami-task-rail__items");
   evidence.backgroundPointerBlocked =
-    document.querySelector('.nami-task-card[aria-current="page"] .nami-task-card__title')
-      ?.textContent === evidence.selectedBeforeBackgroundInput;
+    document.querySelector('.nami-task-card[aria-current="page"]')?.dataset.taskLabel
+      === evidence.selectedBeforeBackgroundInput;
   evidence.backgroundWheelBlocked = rail?.scrollTop === evidence.railScrollBeforeBackgroundInput;
   evidence.focusContained = document.activeElement === dialog || dialog?.contains(document.activeElement);
   evidence.modalStayedOpen = dialog?.open === true && dialog.matches(":modal");
@@ -1607,7 +1671,7 @@ def _drive_plan_confirmation(
   for (let attempt = 0; attempt < 200; attempt += 1) {
     if (window.__namiConfirmationStage === "confirm-closing") {
       const background = Array.from(document.querySelectorAll(".nami-task-rail__row"))
-        .find((row) => row.querySelector(".nami-task-card__title")?.textContent === "Task 47")
+        .find((row) => row.querySelector(".nami-task-card")?.dataset.taskLabel === "Task 47")
         ?.querySelector(".nami-task-card");
       if (!(background instanceof HTMLButtonElement)) throw new Error("closing background missing");
       const rect = background.getBoundingClientRect();
@@ -1628,8 +1692,8 @@ def _drive_plan_confirmation(
   const dialog = document.querySelector("#execution-confirmation");
   evidence.closingPointerBlocked =
     dialog?.open === true && dialog.dataset.closing === "true" &&
-    document.querySelector('.nami-task-card[aria-current="page"] .nami-task-card__title')
-      ?.textContent === evidence.selectedBeforeBackgroundInput;
+    document.querySelector('.nami-task-card[aria-current="page"]')?.dataset.taskLabel
+      === evidence.selectedBeforeBackgroundInput;
   window.__namiConfirmationExitBarrier?.finish();
   delete window.__namiConfirmationExitBarrier;
   return true;
@@ -1791,6 +1855,7 @@ def _configure_probe(
     retained: list[object],
     screenshot: Path,
     original: Callable[..., object],
+    large_window: bool,
     *args: object,
     **kwargs: object,
 ) -> object:
@@ -1804,6 +1869,10 @@ def _configure_probe(
 
         def begin() -> None:
             try:
+                if large_window and control.stage == "initial":
+                    scale = window.native.DeviceDpi / 96
+                    window.native.Width += int(160 * scale)
+                    window.native.Height += int(100 * scale)
                 _begin_probe(window, recorder, control, retained, screenshot)
             except BaseException as error:
                 recorder.failure("page_probe", error)
@@ -1840,6 +1909,7 @@ def _parse_arguments() -> argparse.Namespace:
     parser.add_argument("--target", required=True, type=Path)
     parser.add_argument("--screenshot", required=True, type=Path)
     parser.add_argument("--plan-again-trace", action="store_true")
+    parser.add_argument("--large-window", action="store_true")
     return parser.parse_args()
 
 
@@ -1875,7 +1945,7 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
                 "_configure_window_appearance",
                 lambda window, *args, **kwargs: _configure_probe(
                     window, recorder, control, retained,
-                    arguments.screenshot.resolve(), original, *args, **kwargs
+                    arguments.screenshot.resolve(), original, arguments.large_window, *args, **kwargs
                 ),
             )
         )

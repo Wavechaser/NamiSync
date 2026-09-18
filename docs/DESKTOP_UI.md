@@ -223,7 +223,7 @@ normal-text target on pale zebra rows. Dark relocating text therefore uses
 purple-light while Light retains purple-main. These are explicit text-form
 exceptions, not accessible-color claims. The inactive Delete filter
 is the same kind of explicit red-main foreground exception on its neutral
-resting fill. Plan uses button-shaped filters instead: inactive Trash text is
+resting fill. Plan uses button-shaped filters instead: inactive Remove text is
 red only when its count exceeds one; active categories use opaque family fills
 and All uses the accent fill. Filled
 semantic forms deliberately pair main-colored text with a supporting family
@@ -1243,9 +1243,20 @@ through a fresh guarded server anchor.
 The Plan review renders its current bounded window in the compact file-row grid
 with exact 24-CSS-pixel rows and matching leading/trailing spacer offsets; the
 generic `tree.js` renderer keeps its separate 28-pixel contract. A Plan card
-shows frozen paths and semantic options, a Status card shows selected/risk/byte
+shows the switcher at left, frozen source/target paths in two middle rows and
+only verification/deletion settings in two lines at right. A Status card shows selected/risk/byte
 facts, and one table card owns search, toggle-button filters, the grid and
-execution controls. The Plan grid retains the gallery's Checksum column and
+execution controls. At default (1280×800) and larger window sizes the natural-height
+Plan and Status cards leave the remaining work-panel height to the table card;
+the table body scrolls rather than the page. Search is a narrower right-aligned
+box with an inset submit icon. Filter controls use ordinary button dimensions
+and fills, following Microsoft's [ToggleSplitButton reference](https://learn.microsoft.com/en-us/windows/apps/develop/ui/controls/buttons)
+for split toggle anatomy, with counted groups and detail menus
+as defined in PRESENTATION. Their main actions toggle groups rather than opening
+menus; ungrouped categories remain toggles. The Sync/Integrity outer corner radius
+includes its inset so it is concentric with the inner buttons. Footer actions
+have no divider and align right, Plan again before Execute.
+The Plan grid retains the gallery's Checksum column and
 adds an equal-width Modified column immediately after it; dependency counts
 appear in Notes. The synthetic Plan root is omitted from the table. The Select
 header is the sole tri-state bulk control for all selectable operations
@@ -1254,7 +1265,8 @@ loaded or expanded rows. Folder checkboxes target matching descendants;
 changing views alone never changes selection. Its separate header and body share the Setup table's stable
 gutter and thin-to-wide scrollbar styling, so the scrollbar does not overlay
 the header. Production columns use the gallery's constrained pointer/keyboard
-resizing, with Notes yielding width. Name, Size and Modified headers cycle
+resizing, with Notes yielding width. Action's 6rem minimum is shared by its
+default track and pointer/keyboard constraints. Name, Size and Modified headers cycle
 ascending, descending, canonical path order with catalog chevrons; a different
 header starts ascending. Status and row
 byte labels use binary units, while sort keys remain raw backend facts.
@@ -1266,10 +1278,16 @@ Checkboxes preserve a highlight and apply to its whole range when the checked
 row is inside that range. Search/filter changes clear highlighting, while
 scrolling, sorting and disclosure changes do not. The bridge carries compact
 gesture endpoints and expected revisions rather than row or operation arrays.
-The status tier says **Plan ready** for a valid but non-executable review and
-**Ready to execute** only when preflight is ready and at least one executable
-operation is selected; empty, refused, errored or inoperable selections do not
-claim executable readiness.
+The status tier says neutral **Plan ready** for every built, unexecuted plan.
+This is not an execution-readiness claim: Execute still requires preflight and
+a nonempty executable selection. Strictly empty plans have an explicit empty
+message, distinct from a filtered-empty view.
+Task tabs share the status digest, replacing the visible Task N title with the
+current lifecycle state. They show a shorter detail (plan item count and required
+binary bytes), source/target paths or `-`, and an aggregate progress track.
+Detail and path text is smaller; the close button stays at the upper right.
+Internal task identity is unchanged. Plan progress remains inert; live progress
+comes only from the accepted progress reducer, never from selected rows.
 Production commands, validators, state, raw row facts, and window/anchor
 behavior remain active. Status/progress sorting, global
 flat sorting, and durable preferences are excluded from M1. Exact rules and

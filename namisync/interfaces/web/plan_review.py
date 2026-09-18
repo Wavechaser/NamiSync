@@ -43,6 +43,8 @@ PLAN_FILTERS = frozenset(
         "delete",
         "noop",
         "blocked",
+        "error",
+        "unsupported",
         "notice",
     }
 )
@@ -60,6 +62,8 @@ _PLAN_FILTER_COUNT_CATEGORIES = (
     "delete",
     "noop",
     "blocked",
+    "error",
+    "unsupported",
     "notice",
 )
 
@@ -719,7 +723,10 @@ def _direct_filter_count(node: PlanProjectionNode, filters: frozenset[str]) -> i
     if node.operation_id is None:
         return 0
     if node.blocked_reason is not None:
-        return int("blocked" in filters)
+        category = (
+            "unsupported" if node.blocked_reason == "unsupported" else "blocked"
+        )
+        return int(category in filters)
     return int(node.operation_kind in filters)
 
 
@@ -727,10 +734,11 @@ def _plan_filter_counts(projection: PlanProjection) -> Mapping[str, int]:
     """Count direct filter categories across the complete immutable plan.
 
     Container rollups, prior-path context rows, and other structural rows are
-    not categories.  A blocked operation is counted only as ``blocked`` (not
-    again under its underlying operation kind), while each notice is counted
-    as ``notice``.  ``all`` is therefore the sum of the mutually exclusive
-    operation/notice categories.
+    not categories. Unsupported blocked operations are counted separately from
+    other blocked operations. Execution errors are not present in the immutable
+    plan projection, so ``error`` remains zero until an error-bearing projection
+    exists. Each notice is counted as ``notice``. ``all`` is therefore the sum
+    of the mutually exclusive operation/notice categories.
     """
 
     counts = {category: 0 for category in _PLAN_FILTER_COUNT_CATEGORIES}
@@ -740,7 +748,9 @@ def _plan_filter_counts(projection: PlanProjection) -> Mapping[str, int]:
         elif node.row_kind.startswith("prior-") or node.operation_id is None:
             continue
         elif node.blocked_reason is not None:
-            category = "blocked"
+            category = (
+                "unsupported" if node.blocked_reason == "unsupported" else "blocked"
+            )
         else:
             category = node.operation_kind
         if category not in PLAN_FILTERS:

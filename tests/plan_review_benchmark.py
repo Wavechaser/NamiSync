@@ -2459,7 +2459,7 @@ def _headed_probe_script(metric_id: str, *, readiness: bool = False) -> str:
   function taskButton(index) {
     const title = `Task ${index + 1}`;
     return Array.from(document.querySelectorAll(".nami-task-card")).find(
-      (button) => button.querySelector(".nami-task-card__title")?.textContent === title,
+      (button) => button.dataset.taskLabel === title,
     );
   }
   async function selectTask(index, expectedSource, action = null, diagnostic = null) {
@@ -2516,7 +2516,7 @@ def _headed_probe_script(metric_id: str, *, readiness: bool = False) -> str:
         expected_task_id: diagnostic.row.task_id,
         expected_target_path: diagnostic.row.target_path,
         selected_task_matches_expected: selected === button,
-        selected_task_title: selected?.querySelector(".nami-task-card__title")?.textContent ?? "",
+        selected_task_title: selected?.dataset.taskLabel ?? "",
         selected_task_status: selectedTaskStatus,
         actual_paths: paths,
         actual_facts: facts,

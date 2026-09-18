@@ -112,6 +112,7 @@ def test_plan_review_state_derives_revisioned_filters_windows_and_anchor() -> No
 def test_plan_summary_filter_counts_are_complete_direct_categories() -> None:
     nodes = list(_projection().nodes)
     nodes[0] = replace(nodes[0], subtree_end=5)
+    nodes[2] = replace(nodes[2], blocked_reason="permission")
     nodes[3] = replace(nodes[3], blocked_reason="unsupported")
     notice = replace(
         _node("notice", "planning notice", 4, 0, 5),
@@ -133,7 +134,7 @@ def test_plan_summary_filter_counts_are_complete_direct_categories() -> None:
     )
     expected = {
         "all": 3,
-        "copy": 1,
+        "copy": 0,
         "mkdir": 0,
         "move": 0,
         "recase": 0,
@@ -143,11 +144,29 @@ def test_plan_summary_filter_counts_are_complete_direct_categories() -> None:
         "delete": 0,
         "noop": 0,
         "blocked": 1,
+        "error": 0,
+        "unsupported": 1,
         "notice": 1,
     }
     assert state.summary()["filter_counts"] == expected
+    for revision, (category, expected_node) in enumerate(
+        (("blocked", nodes[2].node_id), ("unsupported", nodes[3].node_id), ("error", None))
+    ):
+        state.update(
+            expected_revision=revision,
+            search_query="",
+            filters=frozenset({category}),
+            sort_column=PlanSortColumn.PATH,
+            sort_direction=SortDirection.ASCENDING,
+            collapse_node_id=None,
+            collapsed=None,
+        )
+        window = state.window(expected_revision=revision + 1, offset=0, limit=256)
+        matching = [row["node_id"] for row in window["rows"] if row["operation_id"] is not None]
+        assert matching == ([] if expected_node is None else [expected_node])
+        assert state.summary()["filter_counts"] == expected
     state.update(
-        expected_revision=0,
+        expected_revision=3,
         search_query="does-not-match",
         filters=frozenset({"copy"}),
         sort_column=PlanSortColumn.SIZE,

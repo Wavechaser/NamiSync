@@ -235,10 +235,42 @@ body {
   align-items: center;
   border-radius: var(--radius-small);
   display: inline-flex;
-  font-size: var(--font-size-caption);
-  min-block-size: 1.75rem;
-  padding: var(--space-1) var(--space-2);
   word-spacing: var(--space-2);
+}
+
+.nami-plan-filter-split {
+  display: inline-flex;
+  position: relative;
+}
+
+.nami-plan-filter-split > .nami-plan-review__filter:first-child {
+  border-start-end-radius: 0;
+  border-end-end-radius: 0;
+}
+
+.nami-plan-filter-split > .nami-plan-filter-split__arrow {
+  border-start-start-radius: 0;
+  border-end-start-radius: 0;
+  margin-inline-start: -1px;
+  padding-inline: var(--space-2);
+}
+
+.nami-plan-filter-split__menu {
+  position: absolute;
+  inset-block-start: calc(100% + var(--space-1));
+  inset-inline-start: 0;
+  min-inline-size: 11rem;
+  z-index: 10;
+}
+
+.nami-plan-filter-split__menu .nami-menu__item {
+  display: block;
+  inline-size: 100%;
+  text-align: start;
+}
+
+.nami-plan-filter-split__menu [aria-checked="true"] {
+  background: var(--color-neutral-surface-selected);
 }
 
 .nami-button {

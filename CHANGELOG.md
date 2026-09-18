@@ -27,7 +27,7 @@ and remembered locations, bounded Plan review/selection/sorting and same-task
 execution with live controls. Execution-result/inventory review and beta
 packaging remain open.
 
-#### Refine Plan density, readiness and row highlighting (2026-09-17)
+#### Refine Plan density, readiness and row highlighting (2026-09-17 – 2026-09-18)
 
 - Tighten category filter buttons against Fluent button fills, align search on
   the same row, preserve Plan/Status cards and loaded rows during refresh, and
@@ -37,6 +37,13 @@ packaging remain open.
 - Add compact revision-guarded row-highlight gestures with complete-view range
   resolution, keyboard navigation, window flags, and atomic highlighted-range
   checkbox application through existing selection safety rules.
+- Restore ordinary button sizes and group filters into counted split toggles;
+  retain detail filtering and add guarded immediate search submission.
+- Fit the compact Plan/Status cards and remaining-height table inside the work
+  panel, align footer actions right, and align Action's drag/default minima.
+- Supersede the earlier readiness labels with neutral **Plan ready** for every
+  built, unexecuted plan; keep execution admission independent. Distinguish
+  truly empty plans and share state, short detail, paths and progress with task tabs.
 
 #### Keep Plan search editable and count filter toggles (2026-09-17)
 

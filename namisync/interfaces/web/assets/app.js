@@ -259,6 +259,7 @@ function adoptTask(summary) {
       executionAttempt: null,
       executionControlState: "running",
       executionControlRevision: 0,
+      progressState: null,
     };
     nextTaskNumber += 1;
     tasks.set(task.taskId, task);
@@ -298,7 +299,7 @@ function attachTaskDrain(task) {
   task.stopDrain = startTaskDrain(
     task.taskId,
     sessionId,
-    (update) => acceptTaskUpdate(task, sessionId, update),
+    (update, progressState) => acceptTaskUpdate(task, sessionId, update, progressState),
     () => acceptTaskRefusal(task, sessionId),
     {
       terminal: task.sessionState !== "active",
@@ -308,10 +309,11 @@ function attachTaskDrain(task) {
   );
 }
 
-function acceptTaskUpdate(task, sessionId, update) {
+function acceptTaskUpdate(task, sessionId, update, progressState = null) {
   if (tasks.get(task.taskId) !== task || task.sessionId !== sessionId) {
     return;
   }
+  if (progressState !== null) task.progressState = progressState;
   if (
     update.update_type === "event"
     && update.event?.body_type === "StateChanged"
@@ -342,6 +344,8 @@ function acceptTaskUpdate(task, sessionId, update) {
     if (["completed", "failed", "canceled", "refused"].includes(task.sessionState)) {
       void loadTaskSetup(task);
     }
+  } else {
+    renderTasks();
   }
 }
 

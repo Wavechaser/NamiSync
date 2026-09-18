@@ -1,25 +1,6 @@
 import { createIcon } from "./icons.js";
-import { renderText } from "./render.js";
-
-function taskStatus(task) {
-  if (task.closePending) {
-    return task.sessionId === null ? "Closing…" : "Canceling and closing…";
-  }
-  if (task.error !== null) {
-    return task.error;
-  }
-  if (task.sessionState === null) {
-    return "Not started";
-  }
-  const labels = {
-    active: "In progress",
-    completed: "Completed",
-    failed: "Failed",
-    canceled: "Canceled",
-    refused: "Refused",
-  };
-  return labels[task.sessionState];
-}
+import { renderFilesystemText, renderText } from "./render.js";
+import { taskStatusDigest } from "./task_status.js";
 
 export function createTaskRail({ onCreate, onSelect, onClose, onSettings }) {
   if (![onCreate, onSelect, onClose, onSettings].every((callback) => typeof callback === "function")) {
@@ -94,7 +75,20 @@ export function createTaskRail({ onCreate, onSelect, onClose, onSettings }) {
         title.classList.add("nami-task-card__title");
         const status = document.createElement("span");
         status.classList.add("nami-task-card__status");
-        select.append(title, status);
+        const paths = document.createElement("span");
+        paths.classList.add("nami-task-card__paths");
+        const source = document.createElement("span");
+        const target = document.createElement("span");
+        paths.append(source, target);
+        const progress = document.createElement("span");
+        progress.classList.add("nami-progress", "nami-progress--inline", "nami-task-card__progress");
+        progress.setAttribute("role", "progressbar");
+        progress.ariaValueMin = "0";
+        progress.ariaValueMax = "100";
+        const progressBar = document.createElement("span");
+        progressBar.classList.add("nami-progress__bar");
+        progress.append(progressBar);
+        select.append(title, status, paths, progress);
         select.addEventListener("click", () => onSelect(task.taskId));
         const close = document.createElement("button");
         close.classList.add("nami-icon-button", "nami-task-rail__close");
@@ -102,12 +96,30 @@ export function createTaskRail({ onCreate, onSelect, onClose, onSettings }) {
         close.append(createIcon(document, "dismiss", "sm"));
         close.addEventListener("click", () => onClose(task.taskId));
         row.append(select, close);
-        entry = { row, select, title, status, close };
+        entry = { row, select, title, status, source, target, progress, close };
         entries.set(task.taskId, entry);
       }
       entry.select.ariaCurrent = !settingsVisible && task.taskId === selectedTaskId ? "page" : "false";
-      renderText(entry.title, task.label);
-      renderText(entry.status, taskStatus(task));
+      const digest = taskStatusDigest(task);
+      renderText(entry.title, digest.title);
+      const closeStatus = task.closePending
+        ? task.sessionId === null ? "Closing…" : "Canceling and closing…"
+        : digest.detail;
+      renderText(entry.status, closeStatus);
+      renderFilesystemText(entry.source, `Source: ${digest.sourcePath}`);
+      renderFilesystemText(entry.target, `Target: ${digest.targetPath}`);
+      entry.source.title = digest.sourcePath;
+      entry.target.title = digest.targetPath;
+      entry.select.dataset ??= {};
+      entry.select.dataset.taskLabel = task.label;
+      entry.select.ariaLabel = `${task.label}: ${digest.title}`;
+      entry.select.dataset.status = digest.state;
+      if (typeof entry.progress.classList.toggle === "function") {
+        entry.progress.classList.toggle("nami-progress--indeterminate", digest.progress.indeterminate);
+      }
+      if (digest.progress.indeterminate) entry.progress.removeAttribute?.("aria-valuenow");
+      else entry.progress.ariaValueNow = String(digest.progress.value);
+      entry.progress.style?.setProperty("--nami-progress-value", `${digest.progress.value}%`);
       const batchCloseReason = typeof task.batchCloseReason === "string" ? task.batchCloseReason : null;
       entry.close.disabled = task.closePending || batchCloseReason !== null;
       entry.close.ariaLabel = batchCloseReason ?? `${task.error === null ? "Close" : "Retry close for"} ${task.label}`;

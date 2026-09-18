@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 
 class ClassList {
   constructor() { this.values = new Set(); }
@@ -178,14 +179,39 @@ function moduleUrl(source) {
 }
 
 const renderUrl = moduleUrl(
-  'export const renderText = (element, text) => { element.textContent = text; };',
+  'export const renderText = (element, text) => { element.textContent = text; }; export const renderFilesystemText = (element, text) => { element.textContent = text; };',
 );
 const iconsUrl = moduleUrl(`
   export const createIcon = (document) => document.createElement("svg");
 `);
+const digestRenderUrl = moduleUrl(await readFile(join(dirname(process.argv[3]), "render.js"), "utf8"));
+const taskStatusUrl = moduleUrl((await readFile(join(dirname(process.argv[3]), "task_status.js"), "utf8"))
+  .replace("./render.js", digestRenderUrl));
+const { taskStatusDigest } = await import(taskStatusUrl);
+assert.equal(taskStatusDigest({}).title, "New task");
+assert.equal(taskStatusDigest({}).progress.indeterminate, false);
+assert.equal(taskStatusDigest({ sessionState: "completed", review: { summary: {
+  filter_counts: { all: 2 }, required_bytes: "1024", operation_count: 2,
+} } }).title, "Plan ready");
+assert.equal(taskStatusDigest({ executionStarted: true, sessionState: "active",
+  executionControlState: "paused" }).title, "Paused");
+assert.equal(taskStatusDigest({ executionStarted: true, sessionState: "active",
+  progressState: { phase: "verify", progress: { items_done: 2, items_total: 4 } } }).progress.value, 50);
+assert.equal(taskStatusDigest({ sessionState: "completed", review: { summary: {
+  filter_counts: { all: 180 }, required_bytes: "5368709120", selected_operation_count: 0,
+  preflight_ready: false,
+} } }).detail, "180 items, 5 GiB required.");
+assert.equal(taskStatusDigest({ sessionState: "completed", review: { summary: {
+  filter_counts: { all: 0 }, required_bytes: "0",
+} } }).detail, "Plan is empty.");
+assert.equal(taskStatusDigest({ executionStarted: true, sessionState: "active",
+  progressState: { phase: "verify", progress: null } }).title, "Verifying");
+assert.equal(taskStatusDigest({ executionStarted: true, sessionState: "refused" }).title, "Error");
+assert.equal(taskStatusDigest({ form: { source: { text: "source" }, target: { text: "" } } }).targetPath, "-");
 const railSource = (await readFile(process.argv[3], "utf8"))
   .replace("./icons.js", iconsUrl)
-  .replace("./render.js", renderUrl);
+  .replace("./render.js", renderUrl)
+  .replace("./task_status.js", taskStatusUrl);
 const panelSource = (await readFile(process.argv[4], "utf8"))
   .replace("./render.js", renderUrl);
 const setupUrl = moduleUrl(`
@@ -282,6 +308,7 @@ function walk(root) {
 }
 
 function byText(text) {
+  if (/^Task \d+$/.test(text)) return taskButton(text);
   return walk(app).find((element) => element.textContent === text);
 }
 
@@ -291,8 +318,7 @@ function createButton() {
 
 function taskButton(label) {
   return walk(app).find(
-    (element) => element.tagName === "BUTTON" &&
-      element.children.some((child) => child.textContent === label),
+    (element) => element.tagName === "BUTTON" && element.dataset?.taskLabel === label,
   );
 }
 
@@ -338,7 +364,7 @@ function planSummary(overrides = {}) {
     operation_count: 1,
     filter_counts: { all: 1, copy: 1, mkdir: 0, move: 0, recase: 0,
       update: 0, move_update: 0, trash: 0, delete: 0, noop: 0,
-      blocked: 0, notice: 0 },
+      blocked: 0, unsupported: 0, error: 0, notice: 0 },
     preflight_ready: false,
     preflight_refusal_count: 1,
     warning_count: 1,
@@ -409,7 +435,7 @@ await turns();
 
 assert.equal(taskButton("Task 3")?.ariaCurrent, "page");
 assert.deepEqual(
-  taskButtons().map((button) => button.children[0].textContent),
+  taskButtons().map((button) => button.dataset.taskLabel),
   ["Task 3", "Task 2", "Task 1"],
   "task rail must be newest-first",
 );

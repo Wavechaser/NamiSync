@@ -972,7 +972,7 @@ _INDEPENDENT_SCRIPT = r"""
   clearBatch.click();
   await until(() => !document.querySelector(".nami-setup__batch").checkVisibility(), "cleared settled batch");
   const original = Array.from(document.querySelectorAll(".nami-task-card"))
-    .find((button) => button.querySelector(".nami-task-card__title")?.textContent === "Task 1");
+    .find((button) => button.dataset.taskLabel === "Task 1");
   if (!(original instanceof HTMLButtonElement)) throw new Error("original completed task is unavailable");
   original.click();
   await until(() => {
@@ -1046,7 +1046,7 @@ _AMBIGUITY_SCRIPT = r"""
   mounts[1].click();
   await until(() => source.dataset.state === "resolved" && !start.disabled, "continued picker choice");
   const completedTask = Array.from(document.querySelectorAll(".nami-task-card"))
-    .find((button) => button.querySelector(".nami-task-card__title")?.textContent === "Task 1");
+    .find((button) => button.dataset.taskLabel === "Task 1");
   if (!(completedTask instanceof HTMLButtonElement)) throw new Error("completed task is unavailable before reload");
   completedTask.click();
   await until(() => {
@@ -1084,7 +1084,7 @@ _RELOADED_SCRIPT = r"""
   await until(() => document.querySelectorAll(".nami-task-rail__row").length === __TASK_COUNT__, "reloaded task identities");
   const cards = Array.from(document.querySelectorAll(".nami-task-rail__items .nami-task-card"));
   const original = cards.find((card) =>
-    card.querySelector(".nami-task-card__title")?.textContent === "Task 1");
+    card.dataset.taskLabel === "Task 1");
   if (!(original instanceof HTMLButtonElement)) throw new Error("reloaded completed task is unavailable");
   original.click();
   await until(() => {

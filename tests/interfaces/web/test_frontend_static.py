@@ -260,8 +260,9 @@ def test_modules_use_only_local_explicit_js_imports(
         "integrity.js": ["./file_row.js", "./render.js"],
         "panels.js": ["./render.js", "./setup.js", "./plan_review.js"],
         "plan.js": ["./file_row.js", "./render.js"],
-        "plan_review.js": ["./plan.js", "./icons.js", "./render.js"],
-        "rail.js": ["./icons.js", "./render.js"],
+        "plan_review.js": ["./plan.js", "./icons.js", "./render.js", "./task_status.js"],
+        "rail.js": ["./icons.js", "./render.js", "./task_status.js"],
+        "task_status.js": ["./render.js"],
         "readiness.js": [],
         "render.js": [],
         "setup.js": ["./icons.js", "./render.js"],
@@ -1388,7 +1389,7 @@ def test_sh_g_7_shell_layout_reflows_without_fixed_viewport_clipping(
     assert "height: 100vh" not in app_css
     for selector, declarations in re.findall(r"([^{}]+)\{([^{}]*)\}", app_css.split(".nami-tree", 1)[0]):
         if "overflow: hidden" in declarations:
-            assert selector.strip() in {"#app", ".nami-task-rail", ".nami-setup__recent", ".nami-setup__pair-path-value,\n.nami-setup__batch-path-value", ".nami-setup__batch-settings > span", ".nami-setup__batch-status"}
+            assert selector.strip().replace("\r\n", "\n") in {"#app", ".nami-task-rail", ".nami-task-card__paths > span", ".nami-plan-review__paths", ".nami-plan-review__path", ".nami-plan-review__settings > span", ".nami-work-panel:has(.nami-plan-review)", ".nami-setup__recent", ".nami-setup__pair-path-value,\n.nami-setup__batch-path-value", ".nami-setup__batch-settings > span", ".nami-setup__batch-status"}
     assert "grid-template-rows: auto minmax(0, 1fr);" in app_css
     assert "grid-template-rows: auto minmax(0, 1fr) auto;" in app_css
     assert "--palette-" not in app_css

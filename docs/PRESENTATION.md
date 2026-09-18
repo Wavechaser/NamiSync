@@ -84,17 +84,26 @@ The Plan summary displays workflow-derived selected required bytes and destructi
 operation count; each row exposes its server-provided risk alongside its reason
 or notice. `filter_counts` is a complete-plan facet mapping `all` plus every
 canonical Plan filter (`copy`, `mkdir`, `move`, `recase`, `update`,
-`move_update`, `trash`, `delete`, `noop`, `blocked`, and `notice`) to direct-row
+`move_update`, `trash`, `delete`, `noop`, `blocked`, `unsupported`, `error`, and `notice`) to direct-row
 counts. It is independent of search, active filters, collapse, sorting, and
 the loaded window. Container rollups, prior-path context, and other structural
-rows are excluded; a blocked operation counts only as `blocked`, and `all` is
+rows are excluded; unsupported blocked operations count as `unsupported`, other
+blocked operations as `blocked`. Immutable plans contain no execution errors,
+so `error` is zero. `all` is
 the sum of the mutually exclusive operation and notice categories. Filtering
 and windowing cannot redefine these summary facts. All is active when no
 category filter is active; clicking it clears category filters without changing
 search, sort, or selection. Activating any other filter deactivates All. The
-All, Copy, Move, Update and Trash controls remain visible even at zero; other
-categories appear only when their count is positive. Inactive Trash text turns
-red only when its count exceeds one.
+All, Copy, Move, Update and Remove controls remain visible even at zero; other
+categories appear only when their count is positive. Group toggles combine
+Copy/Mkdir, Move/Recase, Update/Move update, Trash/Delete (Remove), and
+Error/Unsupported/Blocked (Error). Their main buttons toggle the whole group;
+only the arrow opens a counted detail menu. A detail choice replaces that group's
+facets, leaving other groups alone; the menu's All choice restores the whole
+group. All, Noop and Notice remain ordinary toggles. Inactive Remove text turns
+red only when its count exceeds one. Search keeps its 150 ms trailing debounce;
+Enter or the inset search button submits immediately with a shared 150 ms guard
+against repeated manual gestures. Pending refreshes retain the newest query.
 The browser formats those exact decimal byte facts into binary display units
 without feeding the labels back into size sorting. Plan header gestures cycle a
 chosen sibling sort from ascending to descending to canonical path order;
@@ -102,11 +111,11 @@ switching headers begins ascending, and the backend remains the sole sort owner.
 DESKTOP_UI owns the blocking confirmation interaction and BRIDGE owns exact
 request/revision admission and recovery.
 
-The status tier distinguishes a valid plan from an executable selection. A
-non-empty plan with no selected executable operation reports **Plan ready**;
-only a preflight-ready plan with at least one selected executable operation
-reports **Ready to execute**. Preflight refusal, errored/inoperable selected
-items, and an empty selection never claim executable readiness.
+Every successfully built, unexecuted plan reports neutral **Plan ready**, not
+executable readiness. Execute independently requires preflight readiness and a
+nonempty executable selection. A strictly empty plan says **Plan is empty**;
+a nonempty plan with no search/filter matches says **No items match these filters**.
+Neither navigation nor these labels change execution eligibility or selection.
 
 ## Focused scale acceptance
 
