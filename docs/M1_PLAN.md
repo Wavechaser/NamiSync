@@ -11,6 +11,28 @@ do not add, defer, or reinterpret an M1 product outcome.
 
 ## Main objectives and current boundary
 
+### Plan presentation polish (2026-09-18)
+
+Baseline `44a5d49`. Finite population: shared browser byte formatter and direct
+display/tests; Plan header/rows/search/status and grid constraints; task digest,
+rail styling and direct component/installed witnesses. DESKTOP_UI and PRESENTATION
+own these presentation contracts. No backend selection, progress, safety or
+execution-policy changes; no unrelated gallery redesign. Preserve the preceding
+GUI-J viewport, filtered selection and queued-search contracts.
+
+| ID | Atomic outcome | Gate | State |
+| --- | --- | --- | --- |
+| GUI-K1 | Four-significant-digit binary byte labels with significant zeros and exact sub-1000-byte labels. | Formatter boundary/large-value and direct display consumers. | Delivered |
+| GUI-K2 | Plan columns/header click targets, inset search controls, spacing, semantic settings and concise status; selected-count task digest and rail spacing/markers. | Component/token checks, interfaces department and installed default/larger populated/empty layout. | Pending |
+
+Regression study: unit rounding boundaries, retained zeros, exact byte sort keys,
+column DOM/header/resize alignment, search clear/focus/debounce, settings after
+loading, selected versus scanned counts, empty plans and visible footer/close.
+Stop if issue counting needs new domain classification or execution authority.
+Planning issues means existing preflight-refusal count plus scan-notice count.
+The in-turn footer clarification retains actionable warnings/errors and live
+states on the buttons' row, while removing idle and successful messages.
+
 ### Plan controls, viewport and task digest (2026-09-18)
 
 Finite population: Plan renderer/styles, task rail and its presentation data,

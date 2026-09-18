@@ -319,7 +319,7 @@ panel.render(task);
 document.defaultView.flushAnimationFrame();
 assert.ok(findText(panel.element, hostile));
 assert.ok(findText(panel.element, "1 destructive"));
-assert.ok(findText(panel.element, "4 KiB required"));
+assert.ok(findText(panel.element, "4.000 KiB required"));
 assert.ok(findText(panel.element, "Source:"));
 assert.ok(findText(panel.element, "Target:"));
 assert.ok(findText(panel.element, "Plan ready"));

@@ -29,6 +29,8 @@ packaging remain open.
 
 #### Refine Plan density, readiness and row highlighting (2026-09-17 – 2026-09-18)
 
+- Format shared byte labels with four significant digits and retained zeros,
+  preserving exact small-byte labels and backend numeric sort facts.
 - Tighten category filter buttons against Fluent button fills, align search on
   the same row, preserve Plan/Status cards and loaded rows during refresh, and
   show ISO Modified labels.

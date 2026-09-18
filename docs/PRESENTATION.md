@@ -105,7 +105,9 @@ red only when its count exceeds one. Search keeps its 150 ms trailing debounce;
 Enter or the inset search button submits immediately with a shared 150 ms guard
 against repeated manual gestures. Pending refreshes retain the newest query.
 The browser formats those exact decimal byte facts into binary display units
-without feeding the labels back into size sorting. Plan header gestures cycle a
+with four significant digits, retaining trailing zeros; byte-sized values use
+exact integers (including values below 1000 B). Integer rounding may promote a
+label to the next unit, without feeding labels back into size sorting. Plan header gestures cycle a
 chosen sibling sort from ascending to descending to canonical path order;
 switching headers begins ascending, and the backend remains the sole sort owner.
 DESKTOP_UI owns the blocking confirmation interaction and BRIDGE owns exact
