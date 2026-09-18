@@ -168,7 +168,7 @@ def test_m1_4_installed_task_shell_navigation_closure_and_recovery(
             "current": "page",
             "persistentFill": True,
             "markerWidth": "3px",
-            "markerHeight": "24px",
+            "markerHeight": "32px",
             "markerAccent": True,
             "closeLabel": "Close Task 47",
             "closeEnabled": True,
@@ -177,7 +177,7 @@ def test_m1_4_installed_task_shell_navigation_closure_and_recovery(
             "current": "page",
             "persistentFill": True,
             "markerWidth": "3px",
-            "markerHeight": "24px",
+            "markerHeight": "32px",
             "markerAccent": True,
             "closeLabel": "Close Task 48",
             "closeEnabled": True,
@@ -218,9 +218,9 @@ def test_m1_4_installed_task_shell_navigation_closure_and_recovery(
 
     plan_review = report["plan_review"]
     assert plan_review["initial"] == {
-        "negativePreflight": True,
+        "planningIssuesVisible": True,
         "refusalNotice": True,
-        "destructiveCountVisible": True,
+        "redundantStatusCountsAbsent": True,
         "requiredBytesVisible": True,
         "rowRiskVisible": True,
         "persistentAcknowledgmentAbsent": True,
@@ -228,6 +228,8 @@ def test_m1_4_installed_task_shell_navigation_closure_and_recovery(
             "rowHeight": "24px",
             "spacerAligned": True,
             "columnsAligned": True,
+            "columnOrder": "selection,name,primary,secondary,size,secondary,notes",
+            "sortTargetFillsCell": True,
             "headerScrollClear": True,
             "pointerResizeWorked": True,
             "keyboardResizeWorked": True,
@@ -238,7 +240,10 @@ def test_m1_4_installed_task_shell_navigation_closure_and_recovery(
                 "workBodyFitsViewport": True,
                 "tableAbsorbsHeight": True,
                 "footerVisible": True,
+                "footerSharesRow": True,
                 "semanticSettingsVisible": True,
+                "semanticSettingsAligned": True,
+                "searchButtonInset": True,
             },
     }
     assert plan_review["confirmationInput"] == {
@@ -294,7 +299,10 @@ def test_m1_4_installed_task_shell_navigation_closure_and_recovery(
         "workBodyFitsViewport": True,
         "tableAbsorbsHeight": True,
         "footerVisible": True,
+        "footerSharesRow": True,
         "semanticSettingsVisible": True,
+        "semanticSettingsAligned": True,
+        "searchButtonInset": True,
     }
 
 

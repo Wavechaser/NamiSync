@@ -31,6 +31,11 @@ packaging remain open.
 
 - Format shared byte labels with four significant digits and retained zeros,
   preserving exact small-byte labels and backend numeric sort facts.
+- Polish Plan column order, full-cell sorting, inset search/Clear controls,
+  aligned semantic settings and compact planning-issue status. Keep actionable
+  footer feedback beside the right-aligned actions without idle/success noise.
+- Tighten task-tab text and progress spacing, adjust selection markers, and
+  report selected operations rather than all scanned items in the short digest.
 - Tighten category filter buttons against Fluent button fills, align search on
   the same row, preserve Plan/Status cards and loaded rows during refresh, and
   show ISO Modified labels.

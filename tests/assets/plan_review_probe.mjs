@@ -59,6 +59,13 @@ class ElementFake {
     }
   }
 
+  insertBefore(value, reference) {
+    value.remove();
+    const index = this.children.indexOf(reference);
+    this.children.splice(index, 0, value);
+    value.parentElement = this;
+  }
+
   focus() { this.ownerDocument.activeElement = this; }
   contains(value) { return value === this || this.children.some((child) => child.contains(value)); }
 
@@ -95,7 +102,7 @@ class ElementFake {
 
   getBoundingClientRect() {
     const index = this.parentElement?.children.indexOf(this) ?? -1;
-    const widths = [32, 300, 100, 130, 112, 112, 300];
+    const widths = [32, 300, 130, 112, 100, 112, 300];
     return { width: this.classList.contains("nami-file-list__header-cell")
       ? widths[index] : 100 };
   }
@@ -175,8 +182,12 @@ const planUrl = moduleUrl(`
     checkbox.className = "nami-checkbox";
     checkbox.checked = row.checked;
     checkbox.disabled = row.selectionDisabled;
+    const selection = document.createElement("div");
+    selection.dataset.fileColumn = "selection";
+    selection.append(checkbox);
     const name = document.createElement("div");
     name.className = "nami-file-row__name";
+    name.dataset.fileColumn = "name";
     const disclosure = document.createElement(row.folder ? "button" : "span");
     disclosure.className = row.folder
       ? "nami-file-row__disclosure"
@@ -184,7 +195,14 @@ const planUrl = moduleUrl(`
     name.append(disclosure);
     const notes = document.createElement("span");
     notes.textContent = row.notesText;
-    element.append(checkbox, name, notes);
+    notes.dataset.fileColumn = "notes";
+    const cells = ["size", "primary", "secondary", "modified"].map((column) => {
+      const cell = document.createElement("div");
+      cell.dataset.fileColumn = column === "modified" ? "secondary" : column;
+      cell.className = column === "size" ? "nami-file-row__size" : "nami-plan-row__" + column;
+      return cell;
+    });
+    element.append(selection, name, ...cells, notes);
   }
 `);
 const source = (await readFile(process.argv[2], "utf8"))
@@ -318,8 +336,9 @@ review.summary = summary;
 panel.render(task);
 document.defaultView.flushAnimationFrame();
 assert.ok(findText(panel.element, hostile));
-assert.ok(findText(panel.element, "1 destructive"));
+assert.equal(findText(panel.element, "1 destructive"), false);
 assert.ok(findText(panel.element, "4.000 KiB required"));
+assert.ok(findText(panel.element, "planning issues"));
 assert.ok(findText(panel.element, "Source:"));
 assert.ok(findText(panel.element, "Target:"));
 assert.ok(findText(panel.element, "Plan ready"));
@@ -346,8 +365,18 @@ assert.equal(grid.style.getPropertyValue("--nami-file-column-primary"), "96.000p
   "dragging Action respects the same 6rem minimum as its default track");
 window.dispatch("pointerup");
 const renderedRow = findByDataset(panel.element, "nodeId", row.node_id);
+assert.deepEqual(renderedRow.children.map((cell) => cell.dataset.fileColumn),
+  ["selection", "name", "primary", "secondary", "size", "secondary", "notes"]);
 const planCard = findByClass(panel.element, "nami-plan-review__plan");
 const statusCard = findByClass(panel.element, "nami-plan-review__summary");
+const footerMessage = findByClass(panel.element, "nami-plan-review__status");
+assert.equal(footerMessage.hidden, false, "actionable warnings remain visible");
+review.message = null;
+panel.render(task);
+assert.equal(footerMessage.hidden, true, "idle footer text takes no room");
+review.message = "Updating this view…";
+panel.render(task);
+assert.equal(footerMessage.hidden, false, "in-flight feedback remains visible");
 panel.render(task);
 assert.equal(findByDataset(panel.element, "nodeId", row.node_id), renderedRow,
   "unchanged review rendering preserves row controls and focus");
@@ -525,6 +554,15 @@ search.dispatch("keydown", { key: "Enter" });
 assert.equal(calls.length, immediateCount, "manual search uses one shared repeat guard");
 await new Promise((resolve) => setTimeout(resolve, 175));
 assert.equal(calls.length, immediateCount, "manual search cancels the trailing input timer");
+const clearSearch = findAction(panel.element, "plan-search-clear");
+search.value = "clear this";
+search.dispatch("input");
+assert.equal(clearSearch.hidden, false);
+clearSearch.dispatch("click");
+assert.equal(search.value, "");
+assert.equal(document.activeElement, search);
+assert.equal(clearSearch.hidden, true);
+assert.deepEqual(calls.at(-1), ["onViewChange", review, { searchQuery: "" }]);
 
 assert.equal(
   findByDataset(panel.element, "action", "destructive-confirmation"),

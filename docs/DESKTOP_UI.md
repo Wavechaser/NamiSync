@@ -1244,20 +1244,25 @@ The Plan review renders its current bounded window in the compact file-row grid
 with exact 24-CSS-pixel rows and matching leading/trailing spacer offsets; the
 generic `tree.js` renderer keeps its separate 28-pixel contract. A Plan card
 shows the switcher at left, frozen source/target paths in two middle rows and
-only verification/deletion settings in two lines at right. A Status card shows selected/risk/byte
+Verify on/off and Trash/Additive in two lines aligned with the paths at right.
+A Status card shows selected/byte/planning-issue
 facts, and one table card owns search, toggle-button filters, the grid and
 execution controls. At default (1280×800) and larger window sizes the natural-height
 Plan and Status cards leave the remaining work-panel height to the table card;
 the table body scrolls rather than the page. Search is a narrower right-aligned
-box with an inset submit icon. Filter controls use ordinary button dimensions
+box with inset submit and Clear icons styled like Setup path-box controls.
+Clear restores input focus and immediately clears the query. Filter controls use ordinary button dimensions
 and fills, following Microsoft's [ToggleSplitButton reference](https://learn.microsoft.com/en-us/windows/apps/develop/ui/controls/buttons)
 for split toggle anatomy, with counted groups and detail menus
 as defined in PRESENTATION. Their main actions toggle groups rather than opening
 menus; ungrouped categories remain toggles. The Sync/Integrity outer corner radius
 includes its inset so it is concentric with the inner buttons. Footer actions
-have no divider and align right, Plan again before Execute.
-The Plan grid retains the gallery's Checksum column and
-adds an equal-width Modified column immediately after it; dependency counts
+have no divider and align right, Plan again before Execute. Actionable warnings,
+errors and in-flight feedback share that row at the left; idle and successful
+messages take no space.
+The production Plan grid orders Select, Name, Action, Checksum (empty), Size,
+Modified and Notes; Checksum and Modified share their default width. The
+gallery's original order is unchanged. Dependency counts
 appear in Notes. The synthetic Plan root is omitted from the table. The Select
 header is the sole tri-state bulk control for all selectable operations
 matching the active search/filter query, not merely the
@@ -1268,7 +1273,8 @@ the header. Production columns use the gallery's constrained pointer/keyboard
 resizing, with Notes yielding width. Action's 6rem minimum is shared by its
 default track and pointer/keyboard constraints. Name, Size and Modified headers cycle
 ascending, descending, canonical path order with catalog chevrons; a different
-header starts ascending. Status and row
+header starts ascending. Sort buttons fill the padded header cell, with the
+active chevron aligned right. Status and row
 byte labels use binary units, while sort keys remain raw backend facts.
 
 Row highlighting is distinct from execution selection. Pointer and keyboard
@@ -1283,9 +1289,12 @@ This is not an execution-readiness claim: Execute still requires preflight and
 a nonempty executable selection. Strictly empty plans have an explicit empty
 message, distinct from a filtered-empty view.
 Task tabs share the status digest, replacing the visible Task N title with the
-current lifecycle state. They show a shorter detail (plan item count and required
+current lifecycle state. They show a shorter detail (selected operation count and required
 binary bytes), source/target paths or `-`, and an aggregate progress track.
-Detail and path text is smaller; the close button stays at the upper right.
+The title is semibold. Detail and path text uses compact caption line spacing;
+those rows and progress extend below the upper-right close button, aligned
+with its right edge. Progress has matching space above and below. Live task
+selection markers are 2rem, Settings is 1rem; gallery markers are unchanged.
 Internal task identity is unchanged. Plan progress remains inert; live progress
 comes only from the accepted progress reducer, never from selected rows.
 Production commands, validators, state, raw row facts, and window/anchor

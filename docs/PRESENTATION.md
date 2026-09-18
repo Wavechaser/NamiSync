@@ -80,9 +80,11 @@ Focused checks must catch the failures that small fixtures conceal: scope-qualif
 
 The implemented Plan review surface lets users inspect a complete stable view of immutable review facts, inert notices, current server-owned selection and destructive intent without letting stale UI actions acquire authority. It preserves prior-path ancestry and paired move annotations, while operation groups remain non-folder membership containers. Its renderer retains only the current `1..256` row window and uses exact 24 px rows and matching virtual spacers. The generic `tree.js` inventory foundation retains its separate exact 28 px row contract. Inventory review, follow mode and later result-detail projection remain accepted future outcomes; their DTO layout, caching topology and intermediate delivery sequence remain open until implementation.
 
-The Plan summary displays workflow-derived selected required bytes and destructive
-operation count; each row exposes its server-provided risk alongside its reason
-or notice. `filter_counts` is a complete-plan facet mapping `all` plus every
+The Plan summary displays workflow-derived selected/eligible counts, selected
+required bytes, and planning issues (preflight refusals plus scan notices).
+The short task-tab digest uses selected operations, not scanned items; zero
+selected items does not make a nonempty plan empty. Each row exposes its
+server-provided risk alongside its reason or notice. `filter_counts` is a complete-plan facet mapping `all` plus every
 canonical Plan filter (`copy`, `mkdir`, `move`, `recase`, `update`,
 `move_update`, `trash`, `delete`, `noop`, `blocked`, `unsupported`, `error`, and `notice`) to direct-row
 counts. It is independent of search, active filters, collapse, sorting, and

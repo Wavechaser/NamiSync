@@ -791,7 +791,7 @@ def test_plan_row_renderer_is_active_and_consumes_only_projected_views(
     assert hidden_plan_review.group("body").strip() == "display: none;"
     assert ".nami-file-list__body > .nami-file-row[hidden]" in layout
     assert "display: none;" in layout
-    assert layout.count("--nami-file-column-") == 21
+    assert layout.count("--nami-file-column-") == 29
     assert "--nami-file-column-primary: var(--plan-action-column-width);" in layout
     assert "--plan-action-column-width: minmax(6rem, 0.55fr);" in assets["tokens.css"]
     assert ".nami-file-list__column-resizer" in layout

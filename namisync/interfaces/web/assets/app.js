@@ -334,7 +334,7 @@ function acceptTaskUpdate(task, sessionId, update, progressState = null) {
     task.sessionState = update.record.state;
     if (task.form !== null) task.form.sessionState = task.sessionState;
     if (task.executionStarted && task.review !== null) {
-      task.review.message = `Execution ${task.sessionState}.`;
+      task.review.message = task.sessionState === "completed" ? null : `Execution ${task.sessionState}.`;
     }
     if (task.closePending) {
       task.closePending = false;
@@ -781,9 +781,9 @@ async function loadPlanReview(task, force = false) {
     const message = task.executionStarted
       ? task.sessionState === "active"
         ? executionControlMessage(task.executionControlState)
-        : `Execution ${task.sessionState}.`
+        : task.sessionState === "completed" ? null : `Execution ${task.sessionState}.`
       : summary.preflight_ready
-        ? "Review the selected operations, then execute."
+        ? null
         : "This plan did not pass review preflight. Inspect its notices and create a fresh plan.";
     task.review = {
       summary,
@@ -884,7 +884,7 @@ async function changePlanView(review, patch, queued = false) {
     review.window = window;
     review.message = summary.disposition === "conflict"
       ? "The plan view changed. The current view has been restored."
-      : "View updated.";
+      : null;
   } catch (_error) {
     if (retainedReviewTask(review) === task && review.actionRevision === action) {
       review.message = "The view could not be updated. Try again.";
@@ -1042,12 +1042,12 @@ async function changePlanSelection(review, row, selected, highlightedScope = fal
     review.summary = summary;
     review.window = window;
     review.message = summary.disposition === "applied"
-      ? "Selection updated."
+      ? null
       : summary.disposition === "conflict"
         ? "Selection changed elsewhere. The current selection is shown."
         : summary.disposition === "frozen" || summary.disposition === "in-flight"
           ? "Selection is already committed to execution."
-          : "Selection is unchanged.";
+          : null;
   } catch (_error) {
     if (retainedReviewTask(review) === task && review.actionRevision === action) {
       review.message = "Selection status was uncertain. Reloading the authoritative review…";
@@ -1121,7 +1121,7 @@ function cancelReviewedExecution(task, attempt) {
   task.executionAttempt = null;
   if (task.review === attempt.review) {
     attempt.review.pending = null;
-    attempt.review.message = "Execution was not submitted. The selection remains editable.";
+    attempt.review.message = null;
   }
   renderTasks();
 }
@@ -1162,7 +1162,7 @@ async function submitReviewedExecution(task, attempt) {
       task.reviewSessionId = result.session_id;
       attachTaskDrain(task);
       if (task.review === attempt.review) {
-        attempt.review.message = "Execution started.";
+        attempt.review.message = executionControlMessage(task.executionControlState);
         attempt.review.pending = null;
       }
       renderTasks();
@@ -1281,7 +1281,7 @@ async function planAgainFromReview(review) {
   if (retainedReviewTask(review) === task && review.actionRevision === action) {
     review.pending = null;
     review.message = dispatched
-      ? task.form?.actionMessage ?? "Fresh plan request finished."
+      ? task.form?.actionMessage ?? null
       : "Wait for this task's current action to finish, then try Plan again.";
     renderTasks();
   }

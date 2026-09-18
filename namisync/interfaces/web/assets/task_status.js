@@ -28,7 +28,8 @@ export function taskStatusDigest(task) {
     progress.determinate = true;
     progress.indeterminate = false;
   }
-  const planItemCount = summary?.filter_counts?.all ?? summary?.operation_count ?? 0;
+  const planItemCount = summary?.selected_operation_count ?? 0;
+  const planHasItems = (summary?.filter_counts?.all ?? 0) > 0;
   let title = "New task";
   let state = "new";
   if (task?.error !== null && task?.error !== undefined) [title, state] = ["Error", "error"];
@@ -45,7 +46,7 @@ export function taskStatusDigest(task) {
   }
   let detail;
   if (typeof task?.error === "string") detail = task.error;
-  else if (summary !== null && !task?.executionStarted) detail = planItemCount === 0 ? "Plan is empty."
+  else if (summary !== null && !task?.executionStarted) detail = planItemCount === 0 && !planHasItems ? "Plan is empty."
     : `${planItemCount} items, ${formatByteCount(summary.required_bytes)} required.`;
   else if (["completed", "failed", "refused", "canceled"].includes(executionState)) detail = `${title}.`;
   else if (summary === null && task?.executionStarted) detail = progress.total === undefined

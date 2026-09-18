@@ -158,11 +158,16 @@ export function createPlanReviewPanel(callbacks) {
   search.dataset.action = "plan-search";
   const searchBox = document.createElement("div");
   searchBox.className = "nami-plan-review__search";
-  const searchSubmit = button("", "nami-icon-button nami-plan-review__search-submit");
+  const searchSubmit = button("", "nami-button nami-button--clear nami-button--icon nami-plan-review__search-submit");
   searchSubmit.ariaLabel = "Search now";
   searchSubmit.dataset.action = "plan-search-submit";
   searchSubmit.append(createIcon(document, "search", "sm"));
-  searchBox.append(search, searchSubmit);
+  const searchClear = button("", "nami-button nami-button--clear nami-button--icon nami-plan-review__search-clear");
+  searchClear.ariaLabel = "Clear search";
+  searchClear.dataset.action = "plan-search-clear";
+  searchClear.append(createIcon(document, "dismiss", "sm"));
+  searchClear.hidden = true;
+  searchBox.append(search, searchClear, searchSubmit);
   const filters = document.createElement("div");
   filters.className = "nami-plan-review__filters";
   const filterList = document.createElement("div");
@@ -217,10 +222,10 @@ export function createPlanReviewPanel(callbacks) {
   columnHeader.className = "nami-file-list__header nami-table__header";
   columnHeader.setAttribute("role", "row");
   const sortHeaders = new Map();
-  const columnNames = ["selection", "name", "size", "primary", "secondary", "modified", "notes"];
+  const columnNames = ["selection", "name", "primary", "secondary", "size", "modified", "notes"];
   for (const [index, [label, column]] of [
-    ["Select", null], ["Name", "filename"], ["Size", "size"],
-    ["Action", null], ["Checksum", null], ["Modified", "mtime"], ["Notes", null],
+    ["Select", null], ["Name", "filename"], ["Action", null],
+    ["Checksum", null], ["Size", "size"], ["Modified", "mtime"], ["Notes", null],
   ].entries()) {
     const cell = document.createElement("div");
     cell.className = "nami-file-list__header-cell";
@@ -290,7 +295,7 @@ export function createPlanReviewPanel(callbacks) {
   const primary = document.createElement("div");
   primary.className = "nami-plan-review__control-group";
   primary.append(planAgain, execute);
-  footer.append(controls, primary, status);
+  footer.append(status, controls, primary);
   tableCard.append(toolbar, list, footer);
   element.append(header, summary, tableCard);
 
@@ -313,7 +318,7 @@ export function createPlanReviewPanel(callbacks) {
   const resizers = headerCells.slice(0, -1).map(
     (cell) => cell.querySelector(".nami-file-list__column-resizer"),
   );
-  const columnMinimums = [2, 12, 5, 6, 7, 7, 14];
+  const columnMinimums = [2, 12, 6, 7, 5, 7, 14];
   let columnWidths = null;
   let finishResize = null;
 
@@ -392,6 +397,7 @@ export function createPlanReviewPanel(callbacks) {
     if (current !== null) callbacks.onViewChange(current, patch);
   };
   search.addEventListener("input", () => {
+    searchClear.hidden = search.value.length === 0;
     if (searchTimer !== null) clearTimeout(searchTimer);
     const scheduledReview = current;
     searchTimer = setTimeout(() => {
@@ -414,6 +420,15 @@ export function createPlanReviewPanel(callbacks) {
     }
   });
   searchSubmit.addEventListener("click", submitSearch);
+  searchClear.addEventListener("pointerdown", (event) => event.preventDefault());
+  searchClear.addEventListener("click", () => {
+    if (searchTimer !== null) clearTimeout(searchTimer);
+    searchTimer = null;
+    search.value = "";
+    searchClear.hidden = true;
+    search.focus();
+    viewChange({ searchQuery: "" });
+  });
   function closeFilterMenus() {
     for (const { dropdown, menu } of filterMenus.values()) {
       menu.hidden = true;
@@ -582,6 +597,8 @@ export function createPlanReviewPanel(callbacks) {
         disabled,
         committed,
       ));
+      element.insertBefore(element.querySelector(".nami-file-row__size"),
+        element.querySelector(".nami-plan-row__modified"));
       element.dataset.nodeId = row.node_id;
       element.ariaRowIndex = String(row.visible_index + 2);
       element.tabIndex = row.node_id === (focusNodeId ?? review.window.rows[0]?.node_id) ? 0 : -1;
@@ -678,15 +695,13 @@ export function createPlanReviewPanel(callbacks) {
     targetPath.title = review.summary.target_path;
     const options = task.form?.options;
     updateText(verifySetting, options == null ? "-"
-      : options.verify_after_execute ? "Verify after execution" : "No verification");
+      : options.verify_after_execute ? "Verify on" : "Verify off");
     updateText(deletionSetting, options == null ? "-"
       : options.deletion_policy === "additive" ? "Additive" : "Trash");
-    const verdict = review.summary.preflight_ready
-      ? "Review preflight ready"
-      : `${review.summary.preflight_refusal_count} review preflight refusal(s)`;
+    const planningIssues = review.summary.preflight_refusal_count + review.summary.warning_count;
     updateText(
       facts,
-      `${review.summary.selected_operation_count} of ${review.summary.selectable_operation_count} selected · ${review.summary.destructive_operation_count} destructive · ${formatByteCount(review.summary.required_bytes)} required · ${review.summary.visible_row_count} visible · ${verdict} · ${review.summary.warning_count} scan notice(s)`,
+      `${review.summary.selected_operation_count} of ${review.summary.selectable_operation_count} selected · ${formatByteCount(review.summary.required_bytes)} required · ${planningIssues} planning issues`,
     );
     const executionState = task.executionStarted ? task.sessionState : null;
     const canExecuteSelection = review.summary.preflight_ready
@@ -704,8 +719,10 @@ export function createPlanReviewPanel(callbacks) {
     }
     progress.style.setProperty("--nami-progress-value", `${progressValue}%`);
     if (document.activeElement !== search) search.value = review.summary.search_query;
+    searchClear.hidden = search.value.length === 0;
     search.disabled = review.pending !== null && review.pending !== "view";
     searchSubmit.disabled = search.disabled;
+    searchClear.disabled = search.disabled;
     for (const [column, { cell, sortButton, up, down }] of sortHeaders) {
       const active = review.summary.sort_column === column;
       const direction = active ? review.summary.sort_direction : null;
@@ -769,6 +786,7 @@ export function createPlanReviewPanel(callbacks) {
     resume.disabled = review.pending !== null || task.executionControlState !== "paused";
     cancel.disabled = review.pending !== null || task.executionControlState === "canceling";
     updateText(status, review.message ?? "");
+    status.hidden = !review.message;
     renderRows(review, task);
     refreshResizers();
     scheduleViewportCheck();

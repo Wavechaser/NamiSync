@@ -23,7 +23,7 @@ GUI-J viewport, filtered selection and queued-search contracts.
 | ID | Atomic outcome | Gate | State |
 | --- | --- | --- | --- |
 | GUI-K1 | Four-significant-digit binary byte labels with significant zeros and exact sub-1000-byte labels. | Formatter boundary/large-value and direct display consumers. | Delivered |
-| GUI-K2 | Plan columns/header click targets, inset search controls, spacing, semantic settings and concise status; selected-count task digest and rail spacing/markers. | Component/token checks, interfaces department and installed default/larger populated/empty layout. | Pending |
+| GUI-K2 | Plan columns/header click targets, inset search controls, spacing, semantic settings and concise status; selected-count task digest and rail spacing/markers. | Component/token checks, interfaces department and installed default/larger populated/empty layout. | Delivered |
 
 Regression study: unit rounding boundaries, retained zeros, exact byte sort keys,
 column DOM/header/resize alignment, search clear/focus/debounce, settings after
@@ -32,6 +32,14 @@ Stop if issue counting needs new domain classification or execution authority.
 Planning issues means existing preflight-refusal count plus scan-notice count.
 The in-turn footer clarification retains actionable warnings/errors and live
 states on the buttons' row, while removing idle and successful messages.
+
+Verification: interfaces department 1,693 passed, one skipped; final focused
+frontend/token/helper checks 63 passed; installed default/larger checks two
+passed, each covering empty/populated plans, column order, full-cell sort
+targets, inset icons, aligned settings and same-row footer feedback. Final
+focused/installed reruns cover the footer clarification and settings-margin
+correction after the department run. No domain code changed. Screenshot and
+adversarial review completed; the full repository suite was not required.
 
 ### Plan controls, viewport and task digest (2026-09-18)
 

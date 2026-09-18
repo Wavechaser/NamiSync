@@ -200,7 +200,10 @@ assert.equal(taskStatusDigest({ executionStarted: true, sessionState: "active",
 assert.equal(taskStatusDigest({ sessionState: "completed", review: { summary: {
   filter_counts: { all: 180 }, required_bytes: "5368709120", selected_operation_count: 0,
   preflight_ready: false,
-} } }).detail, "180 items, 5.000 GiB required.");
+} } }).detail, "0 items, 5.000 GiB required.");
+assert.equal(taskStatusDigest({ sessionState: "completed", review: { summary: {
+  filter_counts: { all: 180 }, selected_operation_count: 3, required_bytes: "1024",
+} } }).detail, "3 items, 1.000 KiB required.");
 assert.equal(taskStatusDigest({ sessionState: "completed", review: { summary: {
   filter_counts: { all: 0 }, required_bytes: "0",
 } } }).detail, "Plan is empty.");
@@ -600,6 +603,7 @@ await until(() => planWindows.length === 2);
 planWindows[1].resolve(planWindow(refusedReview));
 await until(() => reviewRenders.at(-1)?.review?.summary === refusedReview);
 const firstReview = reviewRenders.at(-1).review;
+assert.match(firstReview.message, /did not pass review preflight/, "actionable warnings remain");
 assert.equal(reviewRenders.at(-1).error, null, "a successful selection retry clears the rail error");
 assert.equal(reviewRenders.at(-1).canPlanAgain, false, "Plan again waits for task setup readiness");
 globalThis.planReviewHarness.callbacks.onPlanAgain(firstReview);
@@ -664,6 +668,7 @@ planWindows[2].resolve(planWindow(sortedReview));
 await until(() => firstReview.pending === null);
 taskButton("Task 7").click();
 assert.equal(firstReview.summary.sort_column, "size");
+assert.equal(firstReview.message, null, "successful view refresh adds no footer noise");
 
 globalThis.planReviewHarness.callbacks.onSelect(
   firstReview,
@@ -899,6 +904,7 @@ executionDrain.acceptUpdate({ update_type: "record", record: { state: "refused" 
 await turns();
 assert.equal(reviewRenders.at(-1).sessionState, "refused");
 const terminalMessage = liveReview.message;
+assert.equal(terminalMessage, "Execution refused.", "terminal errors remain actionable feedback");
 executionControls[5].resolve({
   code: "accepted", session_id: executionSession, before: "pausing",
   after: "pausing", detail: "Cancel will settle after the pause drain.", accepted: true,
