@@ -977,8 +977,18 @@ function queuePlanHighlight(review, gesture, nodeId) {
       task.taskId, viewRevision, review.summary.highlight_revision, gesture, nodeId,
     );
     if (retainedReviewTask(review) !== task || review.actionRevision !== action) return;
+    const moving = gesture === "move_up" || gesture === "move_down"
+      || gesture === "move_up_extend" || gesture === "move_down_extend";
+    const focusIndex = summary.highlight_focus_visible_index;
+    const currentEnd = review.window.offset + review.window.rows.length;
+    const targetOutsideWindow = moving
+      && Number.isSafeInteger(focusIndex)
+      && (focusIndex < review.window.offset || focusIndex >= currentEnd);
     const window = await getPlanWindow(
-      task.taskId, summary.view_revision, review.window.offset, 256,
+      task.taskId,
+      summary.view_revision,
+      targetOutsideWindow ? focusIndex : review.window.offset,
+      256,
     );
     if (retainedReviewTask(review) !== task || review.actionRevision !== action
         || window.disposition !== "current"

@@ -11,6 +11,29 @@ do not add, defer, or reinterpret an M1 product outcome.
 
 ## Main objectives and current boundary
 
+### WinUI control alignment and Plan keyboard follow-up (2026-09-18)
+
+Baseline `0584707`; closed population: shared checkbox/button tokens and CSS,
+Plan/status/task-tab/dialog spacing, Sync/Integrity geometry, the test-owned
+gallery and its direct witnesses; Plan row gesture/focus/render handling and
+browser bridge consumers. DESKTOP_UI owns visual contracts, PRESENTATION owns
+navigation. Preserve selection safety/revisions/window bounds and GUI-K fixes.
+No sync, OneDrive, execution-policy or performance redesign; no icon catalog
+replacement beyond an explicitly needed fixed checkbox glyph variant.
+
+| ID | Atomic outcome | Verification | State |
+| --- | --- | --- | --- |
+| GUI-L1 | Match WinUI checkbox glyph/disabled strokes and Light button elevation; requested spacing, 8px status progress, 20px rail inset and 6px switcher radius; gallery parity. | Token/component/icon checks, interfaces department, installed Light/Dark/forced gallery and Plan layout. | Pending |
+| GUI-L2 | Restore arrow/Shift-arrow row navigation and preserve pointer modality for modified clicks. | Real bridge gesture probe, off-window/focus/modifier regressions; installed navigation passed at both sizes; interfaces and focused consumer reruns. | Delivered |
+
+Regression study: checked/mixed/unchecked disabled states in both themes and
+forced colors; single-painted translucent fills; ordinary/active filter state
+parity; retained rail progress thickness; no default-size page overflow; arrow
+gestures remain compact and server-owned, keyboard focus crosses row windows,
+Ctrl/Shift pointer clicks do not acquire keyboard rings, Tab/arrow use still
+does. Stop on any necessary safety, membership, or protocol ownership change.
+For the switcher use the user's 6px outer-radius option, retaining its inset.
+
 ### Plan presentation polish (2026-09-18)
 
 Follow-up GUI-K3 (delivered): reproduce and repair the reported select/deselect

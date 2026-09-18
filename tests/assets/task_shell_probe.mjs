@@ -108,6 +108,7 @@ const reviewRenders = [];
 const confirmationRequests = [];
 const executeInvoker = new HTMLElement("button");
 let StartPlanUncertainErrorType = null;
+let nextHighlightSummary = null;
 
 function deferred(collection) {
   let resolve;
@@ -137,7 +138,12 @@ globalThis.taskHarness = {
   openPlanView(...args) { calls.push(["open-plan", ...args]); return deferred(planOpens); },
   getPlanWindow(...args) { calls.push(["plan-window", ...args]); return deferred(planWindows); },
   updatePlanView(...args) { calls.push(["update-plan", ...args]); return deferred(planViewUpdates); },
-  mutatePlanHighlight(...args) { calls.push(["highlight-plan", ...args]); return Promise.resolve(planSummary()); },
+  mutatePlanHighlight(...args) {
+    calls.push(["highlight-plan", ...args]);
+    const result = nextHighlightSummary ?? planSummary();
+    nextHighlightSummary = null;
+    return Promise.resolve(result);
+  },
   mutatePlanSelection(...args) { calls.push(["select-plan", ...args]); return deferred(planSelections); },
   startExecution(...args) { calls.push(["execute-plan", ...args]); return deferred(planExecutions); },
   controlExecution(...args) { calls.push(["control-execution", ...args]); return deferred(executionControls); },
@@ -670,6 +676,57 @@ taskButton("Task 7").click();
 assert.equal(firstReview.summary.sort_column, "size");
 assert.equal(firstReview.message, null, "successful view refresh adds no footer noise");
 
+const retainedHighlightOffset = firstReview.window.offset;
+const offWindowHighlight = planSummary({
+  view_revision: firstReview.summary.view_revision,
+  highlight_revision: firstReview.summary.highlight_revision,
+  highlight_focus_node_id: firstReview.window.rows[0].node_id,
+  highlight_focus_visible_index: retainedHighlightOffset + 256,
+});
+nextHighlightSummary = offWindowHighlight;
+globalThis.planReviewHarness.callbacks.onHighlight(
+  firstReview,
+  "move_down",
+  null,
+);
+await until(() => planWindows.length === 4);
+assert.equal(
+  calls.at(-1)[0],
+  "plan-window",
+  "an off-window arrow refreshes the visible window",
+);
+assert.equal(
+  calls.at(-1)[3],
+  retainedHighlightOffset + 256,
+  "an off-window arrow anchors at the authoritative focus index",
+);
+planWindows[3].resolve(planWindow(offWindowHighlight, retainedHighlightOffset + 256));
+await until(() => firstReview.pending === null);
+assert.equal(firstReview.window.offset, retainedHighlightOffset + 256);
+
+const pointerWindowOffset = firstReview.window.offset;
+const retainedPointerHighlight = planSummary({
+  view_revision: firstReview.summary.view_revision,
+  highlight_revision: firstReview.summary.highlight_revision,
+  highlight_focus_node_id: firstReview.window.rows[0].node_id,
+  highlight_focus_visible_index: pointerWindowOffset,
+});
+nextHighlightSummary = retainedPointerHighlight;
+globalThis.planReviewHarness.callbacks.onHighlight(
+  firstReview,
+  "replace",
+  firstReview.window.rows[0].node_id,
+);
+await until(() => planWindows.length === 5);
+assert.equal(
+  calls.at(-1)[3],
+  pointerWindowOffset,
+  "a pointer highlight refreshes the retained window offset",
+);
+planWindows[4].resolve(planWindow(retainedPointerHighlight, pointerWindowOffset));
+await until(() => firstReview.pending === null);
+assert.equal(firstReview.window.offset, pointerWindowOffset);
+
 globalThis.planReviewHarness.callbacks.onSelect(
   firstReview,
   firstReview.window.rows[0],
@@ -681,8 +738,8 @@ const selectedReview = planSummary({
   selected_operation_count: 1,
 });
 planSelections[0].resolve(selectedReview);
-await until(() => planWindows.length === 4);
-planWindows[3].resolve(planWindow(selectedReview));
+await until(() => planWindows.length === 6);
+planWindows[5].resolve(planWindow(selectedReview));
 await until(() => firstReview.pending === null);
 
 firstReview.summary = planSummary({
@@ -843,8 +900,8 @@ const committedReview = planSummary({
   preflight_ready: true, preflight_refusal_count: 0, warning_count: 0,
 });
 planOpens[3].resolve(committedReview);
-await until(() => planWindows.length === 5);
-planWindows[4].resolve(planWindow(committedReview));
+await until(() => planWindows.length === 7);
+planWindows[6].resolve(planWindow(committedReview));
 await turns();
 taskButton("Task 7").click();
 const liveTask = reviewRenders.at(-1);
@@ -920,8 +977,8 @@ liveTask.reviewSessionId = null;
 executionDrain.acceptRelease(TASK_G, executionSession);
 await until(() => planOpens.length === 5);
 planOpens[4].resolve(committedReview);
-await until(() => planWindows.length === 6);
-planWindows[5].resolve(planWindow(committedReview));
+await until(() => planWindows.length === 8);
+planWindows[7].resolve(planWindow(committedReview));
 await until(() => reviewRenders.at(-1).review !== liveReview);
 const postTerminalReview = reviewRenders.at(-1).review;
 assert.equal(
@@ -944,8 +1001,8 @@ const firstSearch = planSummary({
   ...committedReview, disposition: "applied", view_revision: 4, search_query: "a",
 });
 planViewUpdates[1].resolve(firstSearch);
-await until(() => planWindows.length === 7);
-planWindows[6].resolve(planWindow(firstSearch));
+await until(() => planWindows.length === 9);
+planWindows[8].resolve(planWindow(firstSearch));
 await until(() => planViewUpdates.length === 3);
 assert.deepEqual(calls.at(-1), ["update-plan", TASK_G, 4, {
   searchQuery: "abc", filters: [], sortColumn: "path", sortDirection: "ascending",
@@ -955,8 +1012,8 @@ const finalSearch = planSummary({
   ...committedReview, disposition: "applied", view_revision: 5, search_query: "abc",
 });
 planViewUpdates[2].resolve(finalSearch);
-await until(() => planWindows.length === 8);
-planWindows[7].resolve(planWindow(finalSearch));
+await until(() => planWindows.length === 10);
+planWindows[9].resolve(planWindow(finalSearch));
 await until(() => postTerminalReview.pending === null);
 assert.equal(postTerminalReview.summary.search_query, "abc");
 

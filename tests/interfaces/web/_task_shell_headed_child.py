@@ -573,6 +573,50 @@ _PLAN_REVIEW_SCRIPT = _COMMON_JS + r"""
   fresh.querySelector(`[data-node-id="${selectionNode}"]`).dispatchEvent(
     new KeyboardEvent("keydown", {key: "Escape", bubbles: true}));
   await until(() => !fresh.querySelector('[data-highlighted="true"]'), "clear fixture highlight");
+  const hasKeyboardOutline = (element) => {
+    const style = getComputedStyle(element);
+    return style.outlineStyle !== "none" && parseFloat(style.outlineWidth) > 0;
+  };
+  const focusLifecycleRow = fresh.querySelector(`[data-node-id="${selectionNode}"]`);
+  focusLifecycleRow.focus({focusVisible: true});
+  focusLifecycleRow.dispatchEvent(
+    new KeyboardEvent("keydown", {key: "ArrowDown", shiftKey: true, bubbles: true}));
+  await until(
+    () => document.activeElement?.dataset?.nodeId
+      && document.activeElement.dataset.nodeId !== selectionNode
+      && fresh.dataset.pending === "",
+    "Shift-ArrowDown from focused row",
+  );
+  const rowArrowFocusedNode = document.activeElement?.dataset?.nodeId ?? null;
+  const childArrowRow = fresh.querySelector(`[data-node-id="${selectionNode}"]`);
+  childArrowRow.querySelector('input[type="checkbox"]')?.focus({focusVisible: true});
+  childArrowRow.querySelector('input[type="checkbox"]')?.dispatchEvent(
+    new KeyboardEvent("keydown", {key: "ArrowDown", bubbles: true}));
+  await until(
+    () => document.activeElement?.dataset?.nodeId
+      && document.activeElement.dataset.nodeId !== selectionNode
+      && fresh.dataset.pending === "",
+    "ArrowDown from child checkbox",
+  );
+  const childArrowFocusedNode = document.activeElement?.dataset?.nodeId ?? null;
+  const pointerNode = childArrowFocusedNode ?? rowArrowFocusedNode ?? selectionNode;
+  let pointerRow = fresh.querySelector(`[data-node-id="${pointerNode}"]`)
+    ?? fresh.querySelector(`[data-node-id="${selectionNode}"]`);
+  pointerRow.querySelector('.nami-file-row__name').dispatchEvent(
+    new MouseEvent("click", {bubbles: true, ctrlKey: true, shiftKey: true}));
+  await until(() => {
+    pointerRow = fresh.querySelector(`[data-node-id="${pointerNode}"]`)
+      ?? fresh.querySelector(`[data-node-id="${selectionNode}"]`);
+    return pointerRow?.dataset.highlighted === "true" && fresh.dataset.pending === "";
+  }, "pointer focus row");
+  const pointerFocusSuppressed = !hasKeyboardOutline(pointerRow);
+  pointerRow.blur();
+  pointerRow.focus({focusVisible: true});
+  await until(() => hasKeyboardOutline(pointerRow), "keyboard focus re-entry ring");
+  const keyboardFocusRestored = hasKeyboardOutline(pointerRow);
+  if (!pointerFocusSuppressed || !keyboardFocusRestored) {
+    throw new Error("Plan row pointer focus ring modality did not transition correctly");
+  }
   const changedRows = fresh.querySelector(".nami-plan-review__rows").textContent;
   const freshExecute = fresh.querySelector('[data-action="execute"]');
   await control("refuse_execution");

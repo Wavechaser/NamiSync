@@ -412,12 +412,19 @@ assert.deepEqual(calls.at(-1)[2], {
 
 renderedRow.dispatch("click", { shiftKey: true });
 assert.deepEqual(calls.at(-1), ["onHighlight", review, "extend", row.node_id]);
+assert.equal(renderedRow.dataset.namiFocusOrigin, "pointer");
+renderedRow.dispatch("focusout");
+assert.equal(renderedRow.dataset.namiFocusOrigin, undefined);
+renderedRow.dataset.namiFocusOrigin = "pointer";
+renderedRow.dispatch("focusin");
+assert.equal(renderedRow.dataset.namiFocusOrigin, undefined);
 renderedRow.dispatch("click", { ctrlKey: true });
 assert.deepEqual(calls.at(-1), ["onHighlight", review, "toggle", row.node_id]);
 renderedRow.dispatch("click", { ctrlKey: true, shiftKey: true });
 assert.deepEqual(calls.at(-1), ["onHighlight", review, "add-range", row.node_id]);
 renderedRow.dispatch("keydown", { key: "ArrowDown", shiftKey: true });
-assert.deepEqual(calls.at(-1), ["onHighlight", review, "move_down_extend", row.node_id]);
+assert.equal(renderedRow.dataset.namiFocusOrigin, undefined);
+assert.deepEqual(calls.at(-1), ["onHighlight", review, "move_down_extend", null]);
 renderedRow.dispatch("keydown", { key: "Escape" });
 assert.deepEqual(calls.at(-1), ["onHighlight", review, "clear", null]);
 

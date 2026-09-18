@@ -31,14 +31,19 @@ eligibility cannot authorize an unavailable parent operation.
 Row highlighting is separate from execution selection. Plain clicks replace the
 highlighted set; Ctrl-click toggles; Shift-click extends from the retained
 anchor; Ctrl+Shift-click adds a range. Arrow keys move focus, Shift+arrows
-extend, and Escape clears. The browser sends only a compact gesture endpoint
-with expected view/highlight revisions. Python resolves ranges against the full
-ordered view, including off-window rows and collapsed descendants. Window rows
-carry highlight flags; scrolling, sorting and collapse preserve them, while
-search/filter changes clear them. Checkboxes change execution selection without
-changing highlighting, and a checkbox inside a highlighted range applies to
-that range. Highlight-driven selection also carries the execution-selection
-revision and is rejected as stale before one atomic workflow mutation.
+extend, and Escape clears. Arrow navigation sends `node_id: null`, which the
+server resolves relative to its retained focus; it is not a deselection gesture.
+The browser sends only a compact gesture endpoint with expected view/highlight revisions. Python
+resolves ranges against the full ordered view, including off-window rows and
+collapsed descendants; when a target is outside the retained window, the
+browser requests that window before painting the returned focus/highlight flags.
+Window rows carry highlight flags; scrolling, sorting and collapse preserve them,
+while search/filter changes clear them. Pointer highlighting does not request a
+keyboard focus ring; `:focus-visible` remains the keyboard-only ring. Checkboxes
+change execution selection without changing highlighting, and a checkbox inside
+a highlighted range applies to that range. Highlight-driven selection also
+carries the execution-selection revision and is rejected as stale before one
+atomic workflow mutation.
 
 The scoped-selection cost witness in `test_plan_review_scale.py` constructs the
 existing 120,000-operation base fixture, activates the Copy filter, and times

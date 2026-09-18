@@ -1146,9 +1146,13 @@ body {
   box-shadow: inset 3px 0 var(--color-accent-fill);
 }
 
-.nami-file-list__body > .nami-file-row.nami-file-row--highlighted:focus-visible {
+.nami-file-list__body > .nami-file-row.nami-file-row--highlighted:focus-visible:not([data-nami-focus-origin="pointer"]) {
   outline: 2px solid var(--color-focus-ring);
   outline-offset: -2px;
+}
+
+.nami-file-list__body > .nami-file-row[data-nami-focus-origin="pointer"] {
+  outline: none;
 }
 
 .nami-file-list__body > .nami-file-row[hidden] {

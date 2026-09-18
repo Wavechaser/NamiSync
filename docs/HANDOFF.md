@@ -1,57 +1,38 @@
 # Latest session handoff
 
-## Plan presentation polish (2026-09-18)
+## WinUI controls and Plan keyboard follow-up (2026-09-18)
 
-Follow-up: the user reported selection failures, initially correlated with
-OneDrive/long paths. Dev logs confirmed internal errors in all three mutation
-commands. A short local nested-directory fixture reproduced the cause:
-`apply_plan_projection_selection` compared subtree eligibility against one for
-an operation-bearing directory. It now subtracts immediate-child rollups before
-validating own eligibility. No cloud/path/safety policy changes were made.
-Focused projection/Plan checks pass (52); workflows+interfaces pass (2,503,
-one skipped), including the 120,000-operation scoped-mutation witness. Installed
-checkbox coverage now includes nested directories and individual, whole-view,
-and highlighted selection roundtrips. The dev app needs a restart to load the
-Python correction. The user confirmed selection now works on the reported
-Optics plan, with a remaining noticeable refresh delay. This was not profiled
-on that real plan and is not claimed fixed. A diagnostic rerun on the existing
-120,000-row fixture measured scoped mutation at 1.205 s and highlighted mutation
-at 1.053 s; these are fixture observations, not real-plan latency guarantees.
-Installed nested-plan checks passed at both sizes (two). A prior completed
-run failed the native second-Tab focus assertion; unchanged repeat passed,
-with the assertion retained. New test setup also corrected a stale row DOM
-reference after highlight refresh. Follow-up evidence directories are
-`k-selection-neighborhood` and `k-selection-native-repeat` under the root below.
+GUI-L2 is verified for its separate keyboard-navigation commit. GUI-L1 remains
+in the working tree while the gallery fixture migration finishes verification.
 
-Shared byte labels retain four significant digits and trailing zeros, with
-exact small-byte integers and integer-safe unit rounding. GUI-K1 is committed
-as `4ef526e`; numeric sort facts are unchanged.
+GUI-L1 aligns shared checkboxes with smaller, thickened pinned checkmarks and
+the pinned subtract glyph for mixed state. Disabled unchecked boxes use native
+theme-specific strokes. Light ordinary buttons now have the darker bottom edge.
+Dialog paragraphs/actions have 16/24px spacing; status progress is 8px while
+task progress stays 4px. Plan filters/status start 16px below their card tops,
+live task text starts at 20px, and the switcher uses concentric 6/4px corners.
+The gallery reuses production Plan controls and task cards.
 
-Production Plan columns now read Select, Name, Action, Checksum, Size, Modified,
-Notes. Sort targets fill padded header cells with right-aligned chevrons.
-Search/Clear use compact Setup-style inset controls. The details card aligns
-Verify on/off and Trash/Additive with the two path rows. Status detail shows
-selected counts, required bytes and combined planning issues.
+GUI-L2 fixes the arrow gesture's invalid row endpoint: relative navigation sends
+null and Python resolves the retained focus. Off-window arrow targets fetch a
+new window; pointer gestures retain their current window. Row focus survives
+replacement and arrows from child controls. Pointer modality survives refresh
+but clears on keyboard entry, preventing modified-click keyboard rings.
 
-Footer idle/success text is hidden. Warnings, errors and in-flight feedback
-remain on the same row, left of Plan again/Execute. Task tabs show selected
-operation counts, semibold state, compact detail/path spacing, roomier progress
-spacing and adjusted markers (live tasks 2rem, Settings 1rem). Detail/path/
-progress fields extend under the close button; title keeps its reserved space.
-
-Verification: interfaces department 1,693 passed, one skipped. Final focused
-frontend/token/helper checks: 63 passed. Installed default/larger checks: two
-passed, each covering empty and populated plans, aligned semantic settings,
-column order, full-cell sorting, inset icons and same-row footer feedback.
-Final focused/installed reruns cover the footer clarification and settings
-margin correction after the department run. Screenshot inspection and separate
-adversarial review found no remaining regression. Full repository suite was
-not run for these presentation-only changes.
+Verification: installed Plan checks passed at default and larger window sizes
+(two), including real bridge arrows, modifier-click/keyboard focus transitions,
+and exact progress/padding/radius/dialog measurements. Focused frontend, token,
+icon and gallery-contract checks passed (82). Interfaces department passed
+1,692 with one skipped; its one stale gallery report fixture was corrected and
+passed in the focused rerun. Installed gallery validation is being finalized.
+Independent review found no remaining production regression. No full repository
+suite was run for this presentation-only boundary.
 
 Evidence root:
-`C:/Users/Spectrum/.codex/visualizations/2026/09/18/01a0b2ed-22b3-7083-a3e1-21f00596391d/`
-contains `k-interfaces` and `k-headed-final`. Local focused results are under
-`build/pytest-gui-k-focus3`; screenshot is
-`build/evidence/execution-confirmation.png`. Selection, safety, execution
-admission, gallery order, M1-8 execution results and M1-9 inventory review are
-unchanged/out of scope. GUI-K is recorded in M1_PLAN.
+`C:/Users/Spectrum/.codex/visualizations/2026/09/18/01a0b2ed-22b3-7083-a3e1-21f00596391d/`.
+Directories include `l-interfaces-final`, `l-plan-verified` and `l-plan-geometry`;
+local focused results are in `build/pytest-gui-l-final-focused`.
+
+The prior Optics selection correction is committed as `0584707` and confirmed
+working by the user. Its remaining refresh latency is unprofiled and outside
+this task. No sync behavior, execution-selection safety or bridge schema changes.

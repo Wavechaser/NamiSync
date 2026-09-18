@@ -747,6 +747,15 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Plan review windowing
 
+- MODERATE - FIXED (2026-09-18). Gesture contract mismatch. Plan row arrows
+  sent a row endpoint even though relative keyboard gestures require a null
+  endpoint, causing bridge rejection instead of navigation. The browser now
+  leaves relative resolution to the server and fetches an off-window focus
+  target without shifting the retained window for pointer gestures. Focus is
+  restored after row replacement, including arrows from child controls;
+  pointer modality is retained across refresh and cleared on keyboard entry.
+  Renderer/app probes and installed bridge navigation cover the correction.
+
 - MODERATE - FIXED (2026-09-15). Redundant viewport publication. Rapid Plan
   scrolling could refetch an already covered viewport, disable review actions
   and flash the card as unchanged rows were remounted. The renderer compared

@@ -29,6 +29,8 @@ packaging remain open.
 
 #### Refine Plan density, readiness and row highlighting (2026-09-17 – 2026-09-18)
 
+- Restore server-owned arrow navigation across row windows and keep modified
+  pointer clicks distinct from keyboard focus-ring activation.
 - Format shared byte labels with four significant digits and retained zeros,
   preserving exact small-byte labels and backend numeric sort facts.
 - Polish Plan column order, full-cell sorting, inset search/Clear controls,

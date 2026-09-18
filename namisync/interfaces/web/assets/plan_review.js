@@ -551,7 +551,12 @@ export function createPlanReviewPanel(callbacks) {
     const disabled = review.pending !== null || task.executionAttempt !== null;
     const committed = review.summary.selection_state !== "reviewing";
     const highlightRevision = review.summary.highlight_revision ?? review.window.highlight_revision ?? 0;
-    const focusedRow = document.activeElement?.dataset?.nodeId !== undefined;
+    const activeElement = document.activeElement;
+    const activeRow = activeElement?.dataset?.nodeId !== undefined
+      ? activeElement
+      : activeElement?.closest?.("[data-node-id]");
+    const focusedRow = activeRow?.dataset?.nodeId !== undefined;
+    const focusOrigin = focusedRow ? activeRow.dataset.namiFocusOrigin ?? null : null;
     const focusNodeId = review.summary.highlight_focus_node_id;
     if (renderedRows?.review === review && renderedRows.window === review.window
     ) {
@@ -571,7 +576,13 @@ export function createPlanReviewPanel(callbacks) {
           rendered.ariaSelected = String(row.highlighted === true);
           rendered.tabIndex = row.node_id === (focusNodeId ?? review.window.rows[0]?.node_id) ? 0 : -1;
         }
-        if (focusedRow) renderedRows.rows.find((row) => row.dataset.nodeId === focusNodeId)?.focus?.();
+        if (focusedRow) {
+          const focused = renderedRows.rows.find((row) => row.dataset.nodeId === focusNodeId);
+          if (focused !== undefined) {
+            focused.focus?.();
+            if (focusOrigin === "pointer") focused.dataset.namiFocusOrigin = "pointer";
+          }
+        }
         renderedRows.highlightRevision = highlightRevision;
       }
       return;
@@ -620,16 +631,26 @@ export function createPlanReviewPanel(callbacks) {
           : modified ? "toggle" : "replace";
         callbacks.onHighlight(review, gesture, row.node_id);
         element.focus?.();
+        element.dataset.namiFocusOrigin = "pointer";
+      });
+      element.addEventListener("focusin", () => {
+        delete element.dataset.namiFocusOrigin;
+      });
+      element.addEventListener("focusout", () => {
+        delete element.dataset.namiFocusOrigin;
       });
       element.addEventListener("keydown", (event) => {
+        delete element.dataset.namiFocusOrigin;
         if (event.key === "Escape") {
           event.preventDefault();
           callbacks.onHighlight(review, "clear", null);
         } else if (event.key === "ArrowUp" || event.key === "ArrowDown") {
           event.preventDefault();
+          element.focus?.();
+          delete element.dataset.namiFocusOrigin;
           const direction = event.key === "ArrowUp" ? "move_up" : "move_down";
           const gesture = event.shiftKey ? `${direction}_extend` : direction;
-          callbacks.onHighlight(review, gesture, row.node_id);
+          callbacks.onHighlight(review, gesture, null);
         }
       });
       element.querySelector(".nami-file-row__disclosure")?.addEventListener("click", () => {
@@ -649,7 +670,13 @@ export function createPlanReviewPanel(callbacks) {
     bottom.style.setProperty("block-size", `${remaining * ROW_HEIGHT}px`);
     fragment.append(bottom);
     body.replaceChildren(fragment);
-    if (focusedRow) rowElements.find((row) => row.dataset.nodeId === focusNodeId)?.focus?.();
+    if (focusedRow) {
+      const focused = rowElements.find((row) => row.dataset.nodeId === focusNodeId);
+      if (focused !== undefined) {
+        focused.focus?.();
+        if (focusOrigin === "pointer") focused.dataset.namiFocusOrigin = "pointer";
+      }
+    }
     renderedRows = {
       review, window: review.window, disabled, committed, checkboxes,
       rows: rowElements,
