@@ -13,6 +13,33 @@ do not add, defer, or reinterpret an M1 product outcome.
 
 ### Plan presentation polish (2026-09-18)
 
+Follow-up GUI-K3 (delivered): reproduce and repair the reported select/deselect
+uncertain-status failure. Finite population: production checkbox/highlight
+gestures, browser mutation/summary/window validation, Python Plan adapter and
+their direct component/installed consumers. Preserve selection scope, revisions,
+dependency/safety rules and bounded payloads. One atomic selection-recovery fix;
+gate is a reproducing installed checkbox roundtrip, focused regression checks
+and the owning department. Stop on evidence of unauthorized execution or a
+required domain-policy change; no unrelated selection redesign.
+The direct workflow consumer `apply_plan_projection_selection` and
+`tests/test_plan_projection.py` are included: operation-bearing directory rows
+carry subtree rollups, so own-operation eligibility must not mistake descendant
+counts for direct membership. Regression study includes selected directory
+operations with children and an unavailable parent with an eligible child;
+gate adds workflows plus interfaces departments. No scanner/cloud-file changes.
+The short-path reproducer raised `selection contains an unavailable operation`
+before the fix; short/long-path and eligibility-isolation checks pass afterward
+(52 focused). Workflows/interfaces: 2,503 passed, one skipped. The existing
+120,000-row scoped/highlighted cost checks passed; diagnostic rerun observed
+1.205/1.053 s respectively, not a new latency promise. User retested Optics and
+confirmed selection works; its reported refresh delay remains an unprofiled
+follow-up, not a cloud/path diagnosis or optimization claim.
+Installed nested-plan roundtrips pass at default/larger sizes (two), covering
+individual, whole-view and highlighted selection. An earlier completed run
+failed the native dialog's second-Tab focus assertion; an unchanged repeat
+passed both sizes, and that assertion was not weakened. Separate adversarial
+review found no eligibility or complexity regression.
+
 Baseline `44a5d49`. Finite population: shared browser byte formatter and direct
 display/tests; Plan header/rows/search/status and grid constraints; task digest,
 rail styling and direct component/installed witnesses. DESKTOP_UI and PRESENTATION

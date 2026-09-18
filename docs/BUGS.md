@@ -1865,6 +1865,18 @@ defect, and move implementation-level test choreography out of the log.
 
 ## WORKFLOW AND CLI
 
+### Plan projection
+
+- MODERATE - FIXED (2026-09-18). Subtree/direct membership confusion.
+  Selection refresh raised an internal error whenever the retained selection
+  included a directory operation with eligible descendants. The UI reported
+  uncertain selection and reloaded the authoritative review. Cause: projection
+  validation treated a subtree eligibility rollup as a direct operation count.
+  Refresh now subtracts immediate-child rollups before checking own eligibility,
+  retaining rejection of unavailable operations. Short/long nested-path tests
+  and installed individual, bulk and highlighted checkbox roundtrips cover the
+  correction; cloud-file and path-admission policies are unchanged.
+
 ### M1 Hardening
 
 - SEVERE - FIXED (2026-08-30). Population-scaled authority revalidation.

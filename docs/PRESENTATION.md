@@ -23,6 +23,11 @@ null. The header checkbox is the sole whole-view bulk control.
 
 Selection changes batch a short user gesture and settle as one revisioned server mutation. Scoped Plan gestures carry expected view and selection revisions, resolve the full query and guard both revisions under the task owner before applying one workflow mutation. A stale gesture has no effect. The UI may show pending intent but must not optimistically invent a final selection. Selection preview derives directly from the retained selection/domain facts; it does not rebuild an unrelated whole review to answer a checkbox change.
 
+An operation-bearing directory's eligibility rollup includes descendants. The
+selection refresh validates its own operation using the direct contribution
+(rollup minus immediate-child rollups), never the subtree total. Descendant
+eligibility cannot authorize an unavailable parent operation.
+
 Row highlighting is separate from execution selection. Plain clicks replace the
 highlighted set; Ctrl-click toggles; Shift-click extends from the retained
 anchor; Ctrl+Shift-click adds a range. Arrow keys move focus, Shift+arrows

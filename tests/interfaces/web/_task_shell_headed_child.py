@@ -542,6 +542,37 @@ _PLAN_REVIEW_SCRIPT = _COMMON_JS + r"""
   await control("checkpoint", "plan_again");
   await control("track_review_task");
   const fresh = document.querySelector(".nami-plan-review");
+  const selectionFacts = () => fresh.querySelector(".nami-plan-review__status-summary").textContent;
+  const selectedBefore = Number(selectionFacts().split(" ")[0]);
+  const selectableRow = [...fresh.querySelectorAll('.nami-plan-review__rows [data-node-id]')]
+    .find((row) => row.textContent.includes("shared.txt")
+      && row.querySelector('input[type="checkbox"]:checked:not(:disabled)'));
+  const selectionNode = selectableRow.dataset.nodeId;
+  selectableRow.querySelector('input[type="checkbox"]').click();
+  await until(() => selectionFacts().startsWith(`${selectedBefore - 1} of `)
+    && fresh.dataset.pending === "", "row deselection roundtrip");
+  fresh.querySelector(`[data-node-id="${selectionNode}"] input[type="checkbox"]`).click();
+  await until(() => selectionFacts().startsWith(`${selectedBefore} of `)
+    && fresh.dataset.pending === "", "row reselection roundtrip");
+  const bulkCheckbox = fresh.querySelector('.nami-file-list__header input[type="checkbox"]');
+  bulkCheckbox.click();
+  await until(() => selectionFacts().startsWith("0 of ")
+    && fresh.dataset.pending === "", "view deselection roundtrip");
+  bulkCheckbox.click();
+  await until(() => selectionFacts().startsWith(`${selectedBefore} of `)
+    && fresh.dataset.pending === "", "view reselection roundtrip");
+  const highlightedRow = () => fresh.querySelector(`[data-node-id="${selectionNode}"]`);
+  highlightedRow().querySelector('.nami-file-row__name').click();
+  await until(() => highlightedRow()?.dataset.highlighted === "true", "row highlight roundtrip");
+  highlightedRow().querySelector('input[type="checkbox"]').click();
+  await until(() => selectionFacts().startsWith(`${selectedBefore - 1} of `)
+    && fresh.dataset.pending === "", "highlighted deselection roundtrip");
+  fresh.querySelector(`[data-node-id="${selectionNode}"] input[type="checkbox"]`).click();
+  await until(() => selectionFacts().startsWith(`${selectedBefore} of `)
+    && fresh.dataset.pending === "", "highlighted reselection roundtrip");
+  fresh.querySelector(`[data-node-id="${selectionNode}"]`).dispatchEvent(
+    new KeyboardEvent("keydown", {key: "Escape", bubbles: true}));
+  await until(() => !fresh.querySelector('[data-highlighted="true"]'), "clear fixture highlight");
   const changedRows = fresh.querySelector(".nami-plan-review__rows").textContent;
   const freshExecute = fresh.querySelector('[data-action="execute"]');
   await control("refuse_execution");
@@ -1118,6 +1149,9 @@ class _Control:
         (self.target / "shared.txt").write_text("target-before-v1", encoding="utf-8")
         for index in range(300):
             (self.source / f"z-{index:03d}.txt").write_text("fixture", encoding="utf-8")
+        nested = self.source / "nested-folder" / "child-folder"
+        nested.mkdir(parents=True)
+        (nested / "child.txt").write_text("nested fixture", encoding="utf-8")
         self.review_deps = self._service()._runtime._deps
         original_preflight = self.review_deps.preflight
         original_executor = self.review_deps.executor

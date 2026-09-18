@@ -2,6 +2,27 @@
 
 ## Plan presentation polish (2026-09-18)
 
+Follow-up: the user reported selection failures, initially correlated with
+OneDrive/long paths. Dev logs confirmed internal errors in all three mutation
+commands. A short local nested-directory fixture reproduced the cause:
+`apply_plan_projection_selection` compared subtree eligibility against one for
+an operation-bearing directory. It now subtracts immediate-child rollups before
+validating own eligibility. No cloud/path/safety policy changes were made.
+Focused projection/Plan checks pass (52); workflows+interfaces pass (2,503,
+one skipped), including the 120,000-operation scoped-mutation witness. Installed
+checkbox coverage now includes nested directories and individual, whole-view,
+and highlighted selection roundtrips. The dev app needs a restart to load the
+Python correction. The user confirmed selection now works on the reported
+Optics plan, with a remaining noticeable refresh delay. This was not profiled
+on that real plan and is not claimed fixed. A diagnostic rerun on the existing
+120,000-row fixture measured scoped mutation at 1.205 s and highlighted mutation
+at 1.053 s; these are fixture observations, not real-plan latency guarantees.
+Installed nested-plan checks passed at both sizes (two). A prior completed
+run failed the native second-Tab focus assertion; unchanged repeat passed,
+with the assertion retained. New test setup also corrected a stale row DOM
+reference after highlight refresh. Follow-up evidence directories are
+`k-selection-neighborhood` and `k-selection-native-repeat` under the root below.
+
 Shared byte labels retain four significant digits and trailing zeros, with
 exact small-byte integers and integer-safe unit rounding. GUI-K1 is committed
 as `4ef526e`; numeric sort facts are unchanged.

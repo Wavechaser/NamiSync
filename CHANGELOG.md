@@ -36,6 +36,9 @@ packaging remain open.
   footer feedback beside the right-aligned actions without idle/success noise.
 - Tighten task-tab text and progress spacing, adjust selection markers, and
   report selected operations rather than all scanned items in the short digest.
+- Fix selection refresh for operation-bearing directories with descendants;
+  validate own-operation eligibility rather than the subtree rollup. Cover
+  short/long nested paths and real row, bulk and highlighted checkbox gestures.
 - Tighten category filter buttons against Fluent button fills, align search on
   the same row, preserve Plan/Status cards and loaded rows during refresh, and
   show ISO Modified labels.

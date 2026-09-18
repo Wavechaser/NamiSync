@@ -289,6 +289,64 @@ def test_plan_projection_separates_safety_eligibility_from_current_selection() -
     )
 
 
+@pytest.mark.parametrize("folder", ["folder", "long-component-" * 12 + "\\" + "nested-" * 18])
+def test_selection_refresh_preserves_operation_bearing_directory(folder: str) -> None:
+    directory = operation(
+        OperationKind.MKDIR, source_path=folder, target_path=folder,
+        source=replace(file_stat(identity_index=20), kind=EntryKind.DIRECTORY),
+    )
+    child = operation(
+        OperationKind.COPY, source_path=folder + r"\child.txt", target_path=folder + r"\child.txt",
+        source=file_stat(identity_index=21),
+    )
+    projection = build_plan_projection(REQUEST_ID, _artifact(directory, child))
+    directory_node = projection.node_for_id(projection.operation_node_id_by_id[str(directory.op_id)])
+    assert directory_node.selectable_operation_count == 2
+    updated = apply_plan_projection_selection(
+        projection, selected_operation_ids=frozenset({str(directory.op_id)}),
+        exclusion_reasons={str(child.op_id): "user-deselected"},
+    )
+    assert updated.nodes[0].selected_operation_count == 1
+    restored = apply_plan_projection_selection(
+        updated, selected_operation_ids=projection.selected_operation_ids, exclusion_reasons={},
+    )
+    assert restored.nodes[0].selected_operation_count == 2
+
+
+def test_selection_refresh_does_not_borrow_child_eligibility_for_blocked_parent() -> None:
+    directory = operation(
+        OperationKind.MKDIR, source_path="folder", target_path="folder",
+        source=replace(file_stat(identity_index=20), kind=EntryKind.DIRECTORY),
+    )
+    child = operation(
+        OperationKind.COPY, source_path=r"folder\child.txt", target_path=r"folder\child.txt",
+        source=file_stat(identity_index=21),
+    )
+    projection = build_plan_projection(REQUEST_ID, _artifact(directory, child))
+    node = projection.node_for_id(projection.operation_node_id_by_id[str(directory.op_id)])
+    # Isolate the projection's own-operation guard from workflow quarantine:
+    # a descendant rollup must never authorize the parent's operation.
+    projection = replace(
+        projection,
+        nodes=tuple(replace(item, selectable_operation_count=1, selected_operation_count=1)
+                    if item.position in (0, node.position) else item
+                    for item in projection.nodes),
+        selected_operation_ids=frozenset({str(child.op_id)}),
+    )
+    node = projection.node_for_id(node.node_id)
+    assert node.selectable_operation_count == 1
+    with pytest.raises(ValueError, match="unavailable operation"):
+        apply_plan_projection_selection(
+            projection, selected_operation_ids=frozenset({str(directory.op_id)}),
+            exclusion_reasons={},
+        )
+    updated = apply_plan_projection_selection(
+        projection, selected_operation_ids=frozenset({str(child.op_id)}),
+        exclusion_reasons={str(directory.op_id): "unsupported"},
+    )
+    assert updated.nodes[0].selected_operation_count == 1
+
+
 def test_filename_sort_uses_raw_basename_casefold_before_path_normalization() -> None:
     dotless_i = operation(
         OperationKind.COPY,

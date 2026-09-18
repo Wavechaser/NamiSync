@@ -540,11 +540,15 @@ def apply_plan_projection_selection(
     if not set(reasons) <= known:
         raise ValueError("selection exclusions contain an unknown operation")
 
+    own_selectable = [node.selectable_operation_count for node in projection.nodes]
+    for node in projection.nodes:
+        if node.parent_index is not None:
+            own_selectable[node.parent_index] -= node.selectable_operation_count
     selected_counts = [0] * len(projection.nodes)
     for operation_id, node_id in projection.operation_node_id_by_id.items():
         node = projection.node_for_id(node_id)
         if operation_id in selected_operation_ids:
-            if node.selectable_operation_count != 1:
+            if own_selectable[node.position] != 1:
                 raise ValueError("selection contains an unavailable operation")
             selected_counts[node.position] = 1
     for position in range(len(projection.nodes) - 1, 0, -1):
