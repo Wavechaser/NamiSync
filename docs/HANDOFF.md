@@ -1,50 +1,51 @@
 # Latest session handoff
 
-## M1-8-capacity delivered; execution review next (2026-09-20)
+## M1-8 evidence read delivered; retention next (2026-09-20)
 
 Authorized batch: M1-8-capacity and M1-8, then stop for recap and GUI tweaks.
-Original baseline `2cc0083` on `milestone1` was clean. Preparation/GUI record
-condensation committed as `42ff8f2`; capacity is the following reviewed
-`feat(executor): stop on recognized capacity failure` commit. No push, PR,
-DOC-2, M1-9 or release authorization.
+Original clean baseline `2cc0083` on `milestone1`; preparation/GUI condensation
+`42ff8f2`, reviewed capacity `04947ba`. No push, PR, DOC-2, M1-9 or release.
 
-Capacity recognizes native 39/112/1295 and ENOSPC without native codes, follows
-explicit/executor-semantic causes and preserves stronger typed reasons. The
-existing Stop sweep leaves later work unrun after current settlement. A8-02
-covers capacity introduced by MKDIR start and both cleanup paths. Recorder-only
-writes remain recording degradation/continuation; prerequisites can stop.
-Deferred directory finalization and exit/recording settlement remain unchanged.
+M1-8-E implements an exact <=256-subject current-ledger read in one SQLite
+snapshot (at most three data SELECTs), with workflow-owned five-state evidence
+classification and runtime/service forwarding. Empty reads open no reader;
+closed runtime still refuses. Successful zero-byte copy-like items are eligible.
+Missing/mismatched receipt is unrecorded; incoherent/ambiguous current evidence
+is superseded. Only coherent copy/verified states expose existing xxh3_128
+content. Recording degradation stays independent. No schema, recorder, history,
+Plan hierarchy, dispatcher, web protocol or GUI changes belong to E.
 
-Verification:
+E verification: final focused module nine passed; initial direct files
+247 passed; consumer neighborhood 2,960 passed, one optional M1-7 readiness
+artifact skip. Final ordinary: 5,226 passed, five unchanged skips (four symlink
+privileges and the optional artifact), 31 headed deselections. Raw evidence:
+`build/m1-8-e-ordinary-final01.log`. Neighborhood raw result is
+`build/m1-8-e-neighborhood-02.log`; the first attempt used an invalid department
+name and collected nothing. Final source guard/closed-empty corrections are
+covered by focused tests and the final ordinary run. Twelve import contracts,
+59 local documentation links and diff checks passed. Fresh final adversarial
+review passed. E is the following `feat(workflows): classify bounded execution
+evidence` commit after `04947ba`. No protected artifact or test was retired.
 
-- Consumer neighborhood: 3,968 passed, two skipped.
-- Ordinary: 5,216 passed, five skipped, 31 headed deselected.
-- Skips: four unavailable symlink privileges; optional M1-7 readiness artifact
-  not configured. No required capacity witness skipped.
-- Latest test-only post-publication/recorder-only/MKDIR-sharing controls passed;
-  independent final focused review passed 17 cases.
-- Unchanged settlement oracle: 30 scenarios x 3 runs.
-- All 12 import contracts, 86 local documentation links, diff checks and fresh
-  adversarial review passed. No tests/oracle baselines retired.
+Next is M1-8-P1, whose finite boundary and A8-01 authority are in M1_PLAN.
+Terminal dispatcher checkpoints are always absent: capture exact core result
+before custody release, using the service's retained committed Plan/selection
+and exact task/session/run association. Item-free delivery cannot reconstruct
+it. Preserve review through partial cleanup/retry; dispose at successful Close
+and completed shutdown. Derive target ownership once from all selected target
+and move-prior touches, including failed/missing selected competitors.
+P2 adds compact windows and separate detail under existing byte limits; U adds
+GUI. Full reliable items may reach 1 MiB, so no 256-item full-detail wire dump.
 
-Final logs: `build/m1-8-capacity-neighborhood-final01.log`,
-`build/m1-8-capacity-ordinary-final01.log`,
-`build/m1-8-capacity-oracle-final.log`. Earlier logs retain failed default-temp
-permission and source-tree custody-fixture attempts; they are not passes.
-Final broad tests used fresh external native temp fixtures; no harness softened.
-
-Next: M1-8-E bounded atomic ledger evidence, then P1 retained backend review,
-P2 bounded protocol, U GUI. M1_PLAN owns finite rows and E expansion. The
-read-only E builder awaits integrated-capacity authorization. No E product code
-has started. Root owns M1_PLAN/CHANGELOG/HANDOFF; builders own named component
-code/tests/docs. No task-created worktree or branch yet; artifacts stay ignored.
+Root owns M1_PLAN/CHANGELOG/HANDOFF. The retention builder is read-only until E
+is reviewed/committed. No task-created worktree or branch; temporary evidence
+stays in ignored build. Use native external TEMP basetemp/cache for broad tests;
+source-tree temp invalidates protected custody fixtures. Capacity final gates:
+5,216 ordinary tests; 3,968 neighborhood; unchanged 30-scenario x3 oracle, imports
+and independent review. Logs remain `build/m1-8-capacity-*-final01.log` and
+`build/m1-8-capacity-oracle-final.log`.
 
 Arbiter task `01a0ba9c-b187-70f1-bf21-4f91e742eeaf` is authoritative for stops.
-A8-01 approves exact task-owned result retention before terminal release,
-idempotent partial-cleanup retry, separate linked overlay, visible Gap history,
-and close/shutdown retirement. A8-02 approves the finite capacity bypass remedy;
-its table and exclusions are in M1_PLAN. New boundaries return to that arbiter.
-
-Historical GUI-M2 recovery `af02913` and stash `93414b7` remain preserved, not
-merge units; useful changes were rebuilt in `7cf4448`. Earlier GUI evidence is
-in the condensed register, CHANGELOG and historical HANDOFF snapshots.
+A8-01 owns lifetime extension; A8-02's finite capacity bypass remedy is delivered.
+New boundaries return to that arbiter. Historical GUI recovery `af02913` and
+stash `93414b7` remain preserved, not merge units; useful changes are in `7cf4448`.

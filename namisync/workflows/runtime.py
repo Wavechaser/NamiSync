@@ -124,6 +124,10 @@ from .inventory import (
     settle_canceled_integrity,
     validate_location_candidate_pair,
 )
+from .execution_review import (
+    admit_execution_evidence_subjects,
+    read_execution_evidence as classify_execution_evidence,
+)
 from .database_pair import (
     DatabasePairContract,
     DatabasePairRefusedError,
@@ -136,6 +140,8 @@ from .models import (
     ExecuteContinuation,
     ExecutionCheckpoint,
     ExecutionDetails,
+    ExecutionEvidenceSubject,
+    ExecutionEvidenceWindow,
     ExecutionRequest,
     HistoryEventView,
     HistoryEventPageView,
@@ -924,6 +930,18 @@ class LocalWorkflowRuntime:
         with self._lock:
             details = self._execution_details.get(run_id)
         return details or ExecutionDetails(run_id)
+
+    def read_execution_evidence(
+        self,
+        run_token: str,
+        subjects: tuple[ExecutionEvidenceSubject, ...],
+    ) -> ExecutionEvidenceWindow:
+        admit_execution_evidence_subjects(run_token, subjects)
+        self._require_open()
+        if not subjects:
+            return ExecutionEvidenceWindow(run_token, ())
+        with self._ledger_read() as repository:
+            return classify_execution_evidence(repository, run_token, subjects)
 
     def drop_execution_details(self, run_id: str) -> None:
         with self._lock:

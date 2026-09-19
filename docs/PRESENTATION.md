@@ -2,6 +2,27 @@
 
 This document owns the bridge-facing representation of plan and inventory facts: tree identity, view state, windows, selection presentation, search, sorting, and scale-sensitive presentation work. `BRIDGE.md` owns wire and transport; `INTERFACES.md` owns implemented task lifecycle; workflows own the authoritative domain facts. The browser renders supplied facts and never computes a plan, path policy, selection closure, or filesystem action.
 
+## Execution evidence classification
+
+The workflow classifies a bounded retained-operation window against one atomic
+current-ledger snapshot. Only successful `copy`, `update`, and `move_update`
+items are eligible, including empty files. Eligible items are `unrecorded` when
+no matching committed successful receipt exists, and `superseded` when the
+receipt cannot be joined to unique, coherent, current same-run target evidence.
+Coherence requires exact agreement between the current observed `FileStat` and
+the attested subject, including identity and managed metadata; partial stat
+agreement cannot lend the attestation to a changed target.
+Coherent copy provenance without a verification time is `recorded-copy`;
+coherent readback or verify provenance with a verification time is
+`already-verified`. Every other item is `not-applicable`.
+
+Only `recorded-copy` and `already-verified` expose their stored `xxh3_128`
+content evidence. The workflow receives complete-run target-ownership facts
+as a trusted internal boolean; P1 will add its retained-task derivation. E has
+no browser surface, and later adapters never supply or reinterpret the bit.
+The classifier never derives uniqueness from one window. Item and task recording degradation remain separate
+axes, so the committed ledger snapshot decides whether an item has evidence.
+
 ## Tree identity and meaning
 
 Trees are pure workflow-derived projections. Node identity is deterministic, scope-qualified, and opaque. Existing plan-path identity is BLAKE2b-128 with the `NamiSyncNodeV1` personalization over length-prefixed tree kind, scope identity, and canonical path key; operation members use the corresponding `NamiSyncMemberV1` domain including operation id. A collision is a structural failure, never first-row-wins. Same relative paths in different scopes must not share an id.

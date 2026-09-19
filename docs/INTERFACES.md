@@ -276,7 +276,16 @@ get_history_items(run_token, *, after_order=0, through_order=None, limit=256)
     -> HistoryItemPageView
 get_history_events(run_token, *, after_seq=0, through_seq=None, limit=256)
     -> HistoryEventPageView
+read_execution_evidence(run_token, subjects)
+    -> ExecutionEvidenceWindow
 ```
+
+`read_execution_evidence` is a read-only forwarding surface. The runtime owns
+the reusable ledger reader and the workflow owns all five-state attribution;
+the service and later bridge consumers do not reclassify database facts. Its
+subjects are workflow-retained facts, including complete-run target-ownership
+uniqueness, rather than browser assertions. P1 owns the pending retained-task
+derivation; this read facade only accepts the already-trusted internal fact.
 
 The plan/session lifecycle deliberately has two live service surfaces. The
 session-oriented family is `start_plan`, `reobserve`, `unsubscribe`,

@@ -402,6 +402,13 @@ Workflow-owned typed checkpoints and interface wire views are not core
 contracts. Their owning workflow or interface source defines exact shape,
 subject to the meanings and invariants established here.
 
+Execution-evidence database facts are owned by
+`namisync/db/repositories.py`; the bounded subjects, five-state public result,
+and classification are owned by `namisync/workflows/models.py` and
+`namisync/workflows/execution_review.py`. Interfaces only forward that workflow
+result. Complete-run target uniqueness is retained workflow authority and is
+never inferred from a bounded window or accepted from a browser.
+
 ### 3.2 Identity and path meaning
 
 - Persisted relative paths are root-relative strings with a Windows canonical

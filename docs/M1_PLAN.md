@@ -123,8 +123,8 @@ until its predecessor closes. Initial read-only studies found no mandatory stop.
 | --- | --- | --- |
 | M1-8-D | Condense completed GUI records and register this batch; only M1_PLAN, CHANGELOG, HANDOFF. | Diff, links, outcome/limitation accounting and independent review passed; complete. |
 | M1-8-capacity | Core execution reason and executor runtime classifier/default policy; executor runtime/settlement tests and direct core event/workflow-view/service consumers; EXECUTOR, FEATURES, DESKTOP_UI. | Gate C passed; complete. |
-| M1-8-E | Bounded atomic current-ledger evidence query with read-only workflow/service facade and explicit evidence classes; existing db repository, core/workflow view contracts, runtime/service, matching repository/workflow/service tests; DATABASE, ARCHITECTURE, INTERFACES, FEATURES. No schema/recorder writes. | Exact run/operation/current-evidence coherence, ambiguity/supersession/absence, transaction consistency and bounded chunk/query witnesses; pending detailed expansion. |
-| M1-8-P1 | Backend retained execution review: exact task/Plan/session/run binding, capture before release, separate operation and automatic linked-verification indexes, bounded workflow/service reads and close/shutdown retirement; workflow models/runtime and focused review owner, service/task lifecycle/port and direct tests; PRESENTATION, INTERFACES, ARCHITECTURE. | Idempotent capture/release/Close retries, partial-cleanup failure recovery, stale identity, exact axes/omissions, bounded populations and disposal; pending detailed expansion. |
+| M1-8-E | Bounded atomic current-ledger evidence query with read-only workflow/service facade and explicit evidence classes; existing db repository, workflow view contracts, runtime/service, matching repository/workflow/service tests; DATABASE, PRESENTATION, ARCHITECTURE, INTERFACES, FEATURES. No schema/recorder writes. | Gate E passed against integrated capacity `04947ba`; complete. |
+| M1-8-P1 | Backend retained execution review: exact task/Plan/session/run binding, capture before release, separate operation and automatic linked-verification indexes, bounded workflow/service reads and close/shutdown retirement; workflow models/runtime and focused review owner, service/task lifecycle/port and direct tests; PRESENTATION, INTERFACES, ARCHITECTURE. | Finite boundary below; read-only design complete, implementation waits for E. |
 | M1-8-P2 | Bounded summary/window/detail protocol over the existing Plan hierarchy; web Plan review/drain, commands/bridge and Python/browser validators with direct tests; PRESENTATION, BRIDGE, INTERFACES. | Live/terminal/Gap reconciliation, omission truth, re-observation/reinjection, stale reads and 256-row/byte bounds; pending detailed expansion after P1. |
 | M1-8-U | Live and retained execution UI, independent recording/terminal axes, capacity/generic-I/O guidance and location-only trash information; packaged app/Plan renderer/status/styles and browser/component/installed witnesses; DESKTOP_UI, FEATURES. | Production headed flow, navigation/reinjection, hostile text, no hidden complete browser list, no masked issues; pending detailed expansion. |
 
@@ -252,6 +252,77 @@ Reader reuse/error-retirement, affected database/workflow/interface/core checks,
 ordinary suite, imports, docs/diff and fresh adversarial review close E. No
 protected evidence artifact is changed. New schema, whole-run per-window work,
 new ownership or attribution beyond these classes requires adjudication.
+
+Gate E closure: final ordinary 5,226 passed, five unchanged capability/optional
+artifact skips and 31 headed deselections; consumer neighborhood 2,960 passed,
+one optional M1-7 artifact skip. Final focused and independent nine-case review
+passed after correcting result-content validation and the closed-runtime empty
+read. Twelve import contracts, 59 local documentation links and diff checks
+passed. No protected artifact or test was retired. Raw logs:
+`build/m1-8-e-neighborhood-02.log` and `build/m1-8-e-ordinary-final01.log`.
+The initial neighborhood invocation used an invalid department name and ran no
+tests. E's internal ownership bit remains trusted input until P1 derives it;
+there is no browser evidence endpoint in this commit.
+
+### M1-8-P1 finite retention boundary
+
+Read-only study inspected `04947ba` and E's integration seams. Implementation
+waits for E's reviewed commit and revalidates its models/runtime entry point.
+This is A8-01's backend lifetime outcome, one atomic commit; P2 and U follow.
+
+Production population: `workflows/{models,execution_review,runtime,__init__}.py`
+and `interfaces/{service,task_lifecycle,task_port}.py` where the typed facade
+needs forwarding. No dispatcher, core event, database, recorder, Plan construction
+or hierarchy change. Subject owners are ARCHITECTURE, INTERFACES and PRESENTATION.
+Tests are `test_execution_review`, `test_service`, `test_task_lifecycle`,
+`test_runtime_readers` and `test_workflow_views`; the direct port fixtures in
+`test_bridge_service` and `interfaces/web/test_drain` may migrate signatures
+without changing behavior if the port changes. Root maintains this register,
+CHANGELOG and HANDOFF.
+
+Terminal dispatcher records have **no checkpoint**. Capture the exact immutable
+core `OperationResult` from reconciled dispatcher truth before observer release,
+dispatcher close, execution-detail drop or Plan retirement. Validate the exact
+task association/Plan token against the service's existing committed artifact,
+derived selection and execution session/run. The workflow retains the result
+by reference, scalar binding and bounded operation/linked-integrity indexes;
+no second hierarchy, checkpoint, observer or queue survives through this owner.
+Expose item-free summary and exact at-most-256-operation reads. These internal
+reads may share immutable item references; P2 must keep window summaries compact
+and obtain full detail separately within the existing response byte bound.
+An individual reliable event can reach 1 MiB, so blindly serializing 256 full
+item details is not an acceptable public window. Missing items
+remain unknown; emitted exclusion items retain their actual outcomes. Linked
+verification is an independent index, bounded separately by Plan membership.
+Reject foreign/duplicate result identities before publication.
+
+Derive evidence ownership once from the complete committed selection: each
+selected operation touches its canonical target; MOVE/MOVE_UPDATE also touch
+their prior target. An eligible item's target is unique only when its touch
+group contains that operation alone. Deduplicate one operation's same-key
+touches. Unselected exclusions cannot compete; selected failed or missing items
+still compete. This conservative implementation of A8-01 never infers content
+ownership from a visible window or execution byte count. It adds no state or
+effect policy to E. Record location-only trash context without filesystem reads.
+
+Capture failure leaves settlement retryable before release effects. Repeated
+capture is exact/idempotent; after partial cleanup removes dispatcher custody,
+the existing terminal digest and retained binding/result permit retry. Release
+retains review; successful task Close and completed shutdown dispose of it.
+Failures before completed cleanup preserve the review for retry. Direct non-task
+retirement stays unchanged. Do not infer a result from its item-free delivery
+view, history or a later ledger read.
+
+Gate P1: capture-order fault witnesses; stale task/session/run/token/selection
+rejection; terminal-checkpoint absence; release/replay/Close and partial cleanup
+retries; close/shutdown retirement and unchanged direct-session behavior; exact
+axes/issues/omissions; separate automatic verification; off-window competing
+targets, same-key move and excluded-versus-missing selected items; 256/first-excess
+reads and Plan-bounded indexes. Run workflow/interface consumer departments,
+ordinary suite, imports, docs/diff checks and fresh adversarial review. Existing
+Plan representation/BR-G-42 evidence is untouched. Archived reopening, manual
+verification, full browser lists, durable live results and history fallback
+remain excluded. New ownership or effect changes return to the arbiter.
 
 ### Preserved boundaries for execution review
 

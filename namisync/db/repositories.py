@@ -52,6 +52,7 @@ class InventoryPresence(StrEnum):
 
 INVENTORY_POPULATION_ROW_LIMIT = MAX_PLAN_REVIEW_ROWS
 RECENT_SYNC_ACTIVITY_LIMIT = 5
+EXECUTION_EVIDENCE_SUBJECT_LIMIT = 256
 
 
 class InventoryPopulationLimitError(ValueError):
@@ -59,6 +60,49 @@ class InventoryPopulationLimitError(ValueError):
 
     def __init__(self) -> None:
         super().__init__("inventory population exceeds the review row limit")
+
+
+class ExecutionEvidenceSubjectLimitError(ValueError):
+    """Raised before an execution-evidence read starts SQL work."""
+
+    def __init__(self) -> None:
+        super().__init__("execution evidence subjects exceed the 256-item limit")
+
+
+@dataclass(frozen=True, slots=True)
+class ExecutionEvidenceKey:
+    operation_token: str
+    target_path_key: str
+
+    def __post_init__(self) -> None:
+        if type(self.operation_token) is not str or not self.operation_token:
+            raise ValueError("execution evidence operation token is required")
+        if type(self.target_path_key) is not str:
+            raise TypeError("execution evidence target key must be text")
+        if normalize_relative_path(self.target_path_key) != self.target_path_key:
+            raise ValueError("execution evidence target key must be canonical")
+
+
+@dataclass(frozen=True, slots=True)
+class ExecutionEvidenceRunFact:
+    run_token: str
+    activity_kind: str
+    target_location_id: int | None
+
+
+@dataclass(frozen=True, slots=True)
+class ExecutionEvidenceReceiptFact:
+    operation_token: str
+    kind: str
+    target_path_key: str
+    outcome: str
+
+
+@dataclass(frozen=True, slots=True)
+class ExecutionEvidenceSnapshot:
+    run: ExecutionEvidenceRunFact | None
+    receipts: tuple[ExecutionEvidenceReceiptFact, ...]
+    inventory: tuple[InventorySnapshot, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -524,6 +568,89 @@ class LedgerRepository:
                     self._connection.rollback()
             del keys
         return tuple(snapshots)
+
+    def read_execution_evidence(
+        self,
+        run_token: str,
+        subjects: tuple[ExecutionEvidenceKey, ...],
+    ) -> ExecutionEvidenceSnapshot:
+        """Read one bounded operation window and current target evidence atomically."""
+
+        if type(run_token) is not str or not run_token:
+            raise ValueError("execution evidence run token is required")
+        if type(subjects) is not tuple:
+            raise TypeError("execution evidence subjects must be an exact tuple")
+        if len(subjects) > EXECUTION_EVIDENCE_SUBJECT_LIMIT:
+            raise ExecutionEvidenceSubjectLimitError()
+        for subject in subjects:
+            if type(subject) is not ExecutionEvidenceKey:
+                raise TypeError("execution evidence subject has the wrong type")
+        if not subjects:
+            return ExecutionEvidenceSnapshot(None, (), ())
+
+        operation_tokens = tuple(dict.fromkeys(
+            subject.operation_token for subject in subjects
+        ))
+        target_keys = tuple(sorted({subject.target_path_key for subject in subjects}))
+        self._connection.execute("BEGIN")
+        try:
+            run_row = self._connection.execute(
+                """SELECT id, run_token, activity_kind, target_location_id
+                     FROM runs
+                    WHERE run_token = ?""",
+                (run_token,),
+            ).fetchone()
+            if run_row is None:
+                return ExecutionEvidenceSnapshot(None, (), ())
+
+            run_id = int(run_row["id"])
+            target_location_id = (
+                None
+                if run_row["target_location_id"] is None
+                else int(run_row["target_location_id"])
+            )
+            operation_placeholders = ",".join("?" for _ in operation_tokens)
+            receipt_rows = self._connection.execute(
+                f"""SELECT op_token, kind, target_rel_path, outcome
+                       FROM operations
+                      WHERE run_id = ?
+                        AND op_token IN ({operation_placeholders})
+                      ORDER BY id""",
+                (run_id, *operation_tokens),
+            ).fetchall()
+
+            inventory: tuple[InventorySnapshot, ...] = ()
+            if target_location_id is not None:
+                target_placeholders = ",".join("?" for _ in target_keys)
+                inventory = tuple(
+                    _inventory_snapshot(row)
+                    for row in self._connection.execute(
+                        f"""SELECT * FROM inventory
+                              WHERE location_id = ?
+                                AND rel_path_key IN ({target_placeholders})
+                              ORDER BY rel_path_key, id""",
+                        (target_location_id, *target_keys),
+                    )
+                )
+            return ExecutionEvidenceSnapshot(
+                ExecutionEvidenceRunFact(
+                    str(run_row["run_token"]),
+                    str(run_row["activity_kind"]),
+                    target_location_id,
+                ),
+                tuple(
+                    ExecutionEvidenceReceiptFact(
+                        str(row["op_token"]),
+                        str(row["kind"]),
+                        normalize_relative_path(str(row["target_rel_path"])),
+                        str(row["outcome"]),
+                    )
+                    for row in receipt_rows
+                ),
+                inventory,
+            )
+        finally:
+            self._connection.rollback()
 
     def get_inventory_by_row_ids(
         self, location_id: int, row_ids: Iterable[str]

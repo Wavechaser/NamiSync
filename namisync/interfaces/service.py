@@ -28,6 +28,8 @@ from namisync.workflows import (
     EXECUTION_KIND,
     DeletionPolicy,
     FilterSet,
+    ExecutionEvidenceSubject,
+    ExecutionEvidenceWindow,
     HistoryEventPageView,
     HistoryItemPageView,
     HistoryRunSummaryView,
@@ -1686,6 +1688,14 @@ class NamiSyncService:
     def get_execution_details(self, run_id: str):
         self._require_open()
         return self._runtime.get_execution_details(run_id)
+
+    def read_execution_evidence(
+        self,
+        run_token: str,
+        subjects: tuple[ExecutionEvidenceSubject, ...],
+    ) -> ExecutionEvidenceWindow:
+        self._require_open()
+        return self._runtime.read_execution_evidence(run_token, subjects)
 
     def get_inventory_details(self, request_id: str) -> InventoryDetailsView:
         self._require_open()

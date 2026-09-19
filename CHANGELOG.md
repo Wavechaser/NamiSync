@@ -38,7 +38,11 @@ packaging remain open.
   Include capacity introduced by directory start and owned-temp cleanup;
   recorder-only writes remain independent recording degradation/continuation.
   Capacity passed consumer/ordinary checks, the unchanged 30-scenario repeat-3
-  settlement oracle, imports and independent review. Execution review remains pending.
+  settlement oracle, imports and independent review.
+- Add a bounded atomic ledger read and workflow classification for current
+  execution evidence, including zero-byte copies, independent recording issues,
+  stale/ambiguous evidence and stored checksum provenance. Task retention and
+  browser/GUI consumption follow in separate commits.
 
 #### Refine Plan density, readiness and row highlighting (2026-09-17 – 2026-09-20)
 

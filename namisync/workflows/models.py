@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar, Mapping, TypeAlias
 
@@ -11,7 +12,8 @@ from namisync.core.execution import (
     ExecutionSet,
     ExecutionSetCheckpoint,
 )
-from namisync.core.evidence import Outcome, RecordingStatus
+from namisync.core.evidence import ContentEvidence, Outcome, RecordingStatus
+from namisync.core.events import ItemOutcome
 from namisync.core.integrity import (
     PostCopySelection,
     PostCopySelectionAuthority,
@@ -424,6 +426,53 @@ class ExecutionDetails:
     run_id: str
     refusals: tuple[RefusalView, ...] = ()
     commitment_error: str | None = None
+
+
+class ExecutionEvidenceState(StrEnum):
+    RECORDED_COPY = "recorded-copy"
+    ALREADY_VERIFIED = "already-verified"
+    UNRECORDED = "unrecorded"
+    SUPERSEDED = "superseded"
+    NOT_APPLICABLE = "not-applicable"
+
+
+@dataclass(frozen=True, slots=True)
+class ExecutionEvidenceSubject:
+    item: ItemOutcome
+    target_owner_unique: bool
+
+    def __post_init__(self) -> None:
+        if type(self.item) is not ItemOutcome:
+            raise TypeError("execution evidence item must be an exact ItemOutcome")
+        if type(self.target_owner_unique) is not bool:
+            raise TypeError("execution evidence target ownership must be a bool")
+
+
+@dataclass(frozen=True, slots=True)
+class ExecutionEvidenceResult:
+    operation_id: str
+    state: ExecutionEvidenceState
+    content: ContentEvidence | None = None
+
+    def __post_init__(self) -> None:
+        if type(self.operation_id) is not str or not self.operation_id:
+            raise ValueError("execution evidence operation id is required")
+        if type(self.state) is not ExecutionEvidenceState:
+            raise TypeError("execution evidence state has the wrong type")
+        if self.content is not None and type(self.content) is not ContentEvidence:
+            raise TypeError("execution evidence content has the wrong type")
+        exposes_content = self.state in {
+            ExecutionEvidenceState.RECORDED_COPY,
+            ExecutionEvidenceState.ALREADY_VERIFIED,
+        }
+        if exposes_content != (type(self.content) is ContentEvidence):
+            raise ValueError("only coherent execution evidence may expose content")
+
+
+@dataclass(frozen=True, slots=True)
+class ExecutionEvidenceWindow:
+    run_token: str
+    results: tuple[ExecutionEvidenceResult, ...]
 
 
 @dataclass(frozen=True, slots=True)

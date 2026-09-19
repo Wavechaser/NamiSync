@@ -28,6 +28,10 @@ from namisync.workflows.inventory import (
 from namisync.workflows.database_pair import DatabasePairContract
 from namisync.workflows.models import (
     ExecutionDetails,
+    ExecutionEvidenceResult,
+    ExecutionEvidenceState,
+    ExecutionEvidenceSubject,
+    ExecutionEvidenceWindow,
     ExecutionRequest,
     HistoryEventView,
     HistoryEventPageView,
@@ -100,6 +104,10 @@ __all__ = [
     "DatabasePairContract",
     "EXECUTION_KIND",
     "ExecutionDetails",
+    "ExecutionEvidenceResult",
+    "ExecutionEvidenceState",
+    "ExecutionEvidenceSubject",
+    "ExecutionEvidenceWindow",
     "ExecutionRequest",
     "FilterSet",
     "HistoryEventPageView",

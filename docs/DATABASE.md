@@ -240,19 +240,22 @@ measure physical disk allocation, cleanup latency, or a maximum database size.
 
 ### Atomic execution-evidence read
 
-Status: accepted but unrealized. This section owns database evidence use; [PRESENTATION.md](PRESENTATION.md) owns the
-cross-layer execution-review contract.
+Status: implemented. This section owns database evidence use;
+[PRESENTATION.md](PRESENTATION.md) owns the cross-layer execution-review contract.
 
-The execution-evidence repository resolves one retained execution identity and
-a bounded operation window in one SQLite read transaction. It joins committed
-operation identity to current target inventory evidence through the canonical
-target key, batches keys, treats duplicate eligible operations as ambiguity,
-and never substitutes an internal row id for the textual run token.
+The execution-evidence repository admits at most 256 raw operation subjects
+before normalization or SQL. An empty request is inert. A nonempty request
+resolves the textual run token, the requested operation tokens, and the
+canonical target keys in one SQLite read transaction with at most three data
+queries. It uses the run's target location, never substitutes an internal row
+id for the textual run token, and never scans the complete run or inventory for
+one window.
 
-It returns the evidence needed for the bridge-owned recorded-copy,
-already-verified, unrecorded, superseded, and not-applicable classification;
-current-state evidence cannot silently become execution evidence. Later task
-failure does not revoke an independently committed item receipt.
+It returns raw run, receipt, and current-inventory facts. The workflow owns the
+recorded-copy, already-verified, unrecorded, superseded, and not-applicable
+classification; adapters only forward that result. Current-state evidence
+cannot silently become execution evidence. Later task failure does not revoke
+an independently committed item receipt.
 
 Manual exact handoff requires a fresh coherent snapshot, repeats the repository
 read before verifier attachment, and retains the original execution scope as
