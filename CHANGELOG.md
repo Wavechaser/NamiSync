@@ -27,6 +27,14 @@ and remembered locations, bounded Plan review/selection/sorting and same-task
 execution with live controls. Execution-result/inventory review and beta
 packaging remain open.
 
+#### Deliver execution review and capacity stopping (2026-09-20)
+
+- Condense completed Plan GUI registers into delivery/owner/commit pointers,
+  retaining unresolved limits and evidence provenance.
+- Register separate capacity, current-ledger evidence, bounded review protocol
+  and GUI outcomes; delivery stops after M1-8 for recap and GUI review.
+  Implementation and acceptance of those product outcomes remain pending.
+
 #### Refine Plan density, readiness and row highlighting (2026-09-17 – 2026-09-20)
 
 - Match actionable feedback to secondary status typography, tighten aligned

@@ -1,44 +1,26 @@
 # Latest session handoff
 
-## Final Plan typography and alignment (2026-09-20)
+## M1-8 batch preparation (2026-09-20)
 
-GUI-P completes one CSS-only presentation unit on baseline 8fd8cd0.
+Authorized scope: implement M1-8-capacity and M1-8, then stop for recap and
+GUI tweaks. Baseline `2cc0083` on `milestone1`, initially clean. No push, PR,
+DOC-2, M1-9 or later checkpoint is authorized. The user's stopping arbiter is
+task `01a0ba9c-b187-70f1-bf21-4f91e742eeaf`.
 
-- Actionable feedback shares secondary status caption size and text color.
-- Plan paths and semantic labels use 12px captions.
-- Shared Source/Target tracks shrink to 3.5em with a 2px gap; path starts
-  remain aligned in the Plan card and task rail.
-- The right-aligned semantic field shrinks to 7rem, moving its icon edge right
-  toward the Plan-again button without varying with its label text.
+M1_PLAN condenses completed GUI history and records separate atomic capacity,
+ledger-evidence, bounded execution-review protocol and UI outcomes. Existing
+subject docs remain contract owners; no executable contract changed in this
+preparation unit. The next implementation is the narrow capacity classifier
+and existing Stop policy; the later rows need detailed expansion before coding.
 
-No JavaScript production logic, selection, lifecycle, bridge or backend changes.
-DESKTOP_UI and the matching CHANGELOG task describe these refinements.
-README and AGENTS need no change: milestone and execution rules are unchanged.
+Verification: unchanged baseline settlement oracle passed 30 scenarios x 3
+runs. Condensation received independent outcome/link/diff review. Product gates
+are still pending; this preparation does not claim M1-8 acceptance. Historical
+GUI deliveries remain in CHANGELOG; intermittent headed failures remain in
+the completed register and the `2cc0083` HANDOFF snapshot.
 
-Verification:
-
-- Interfaces: 1,699 passed, one skipped, 3,534 deselected.
-- Focused frontend/token: 62 passed.
-- Installed gallery: all four light/dark/forced/reduced modes passed, including
-  new computed typography, compact path gap and optical alignment assertions.
-- Installed default and larger Plan scenarios passed on isolated retries.
-- Independent adversarial review found no defects; final diff check passed.
-
-The combined installed run passed all four gallery modes, then default Plan
-failed at page_plan_review_plan_ack. Its isolated rerun passed default but the
-first larger attempt failed at the same stage. The larger-only retry passed
-without product changes. Retained driver diagnostics for the first larger
-attempt showed wait_execute, an enabled Execute button, no trusted clicks,
-no document focus and runtime exception details; they do not establish cause.
-These failed attempts are not counted as passes. No harness gate was weakened.
-
-Evidence root:
-C:/Users/Spectrum/.codex/visualizations/2026/09/18/01a0b2ed-22b3-7083-a3e1-21f00596391d/.
-Interfaces: gui-p-interfaces. Focused: build/pytest-gui-p-focused.
-Gallery: gui-p-headed. Default Plan: gui-p-plan-retry.
-Larger Plan: gui-p-larger-retry.
-Restart the development app to reload frontend assets.
-
-Earlier GUI-M2 recovery af02913 on recovery/gui-m2-folder-totals-20260919 and
-temporary stash 93414b7 remain historical, not merge units. Their useful changes
-were rebuilt and integrated in 7cf4448; no recovery work is pending here.
+Shared checkout ownership: orchestrator edits register/CHANGELOG/HANDOFF;
+capacity builder edits only its named production/tests/component docs. No new
+worktree or branch yet. Temporary task scripts/evidence stay in ignored build/.
+Earlier GUI-M2 recovery `af02913` and stash `93414b7` are historical, not merge
+units; their useful changes were rebuilt in `7cf4448`. Preserve them.

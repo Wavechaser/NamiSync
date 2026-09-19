@@ -11,274 +11,12 @@ do not add, defer, or reinterpret an M1 product outcome.
 
 ## Main objectives and current boundary
 
-### Final Plan typography and alignment (2026-09-20)
-
-GUI-P, baseline 8fd8cd0, delivered: one atomic CSS-only polish unit. Match
-actionable status feedback to secondary status typography/color; tighten shared
-path label tracks; use caption-sized Plan paths/settings; move semantic icons
-right toward the reset-button edge. Finite population: app CSS, gallery rendered
-assertions, DESKTOP_UI, this register, CHANGELOG and HANDOFF. Gate: interfaces
-department, installed gallery modes and default/larger Plan. Regression study:
-aligned path starts, stable semantic slots, feedback visibility, narrow layout,
-forced colors. No strings, lifecycle, bridge, selection or backend changes;
-stop if those boundaries must change. Prior GUI-O remains the visual baseline.
-Verification: 1,699 interface tests passed (one skipped); 62 frontend/token
-checks passed; all four installed gallery modes passed. Default and larger
-installed Plan scenarios passed on isolated retries after confirmation-driver
-failures, retained in HANDOFF. Independent adversarial review found no defects.
-
-### Plan visual spacing and byte precision (2026-09-20)
-
-GUI-O, baseline c552537, delivered: one atomic presentation unit covering
-tertiary foreground tokens and metadata/rail consumers; separate filter label/
-counter slots with right-aligned menu counts; Setup Sync/Integrity wording;
-square reset button, button-rest progress tracks, rail trailing inset, aligned
-Source/Target label slots, and shared two-decimal binary byte formatting.
-Finite population: packaged tokens/components/app CSS, Plan/Setup/rail/render
-JS and direct frontend/gallery/installed test consumers, DESKTOP_UI, CHANGELOG,
-HANDOFF. Preserve canonical keys, scalar validation, selection, planning and
-execution authority. No backend changes or new layout abstractions. Gate:
-interfaces/tools checks, focused byte boundaries and visible filter strings,
-installed gallery themes and default/larger Plan layouts. Regression study:
-forced colors, rounding promotion, narrow layouts, stable counters/path starts,
-existing navigation/selection. Stop on safety or lifecycle authority changes.
-PRESENTATION owns shared byte precision and is a direct documentation consumer.
-Migrate the explicit ellipsis-selector test for the new path-value span and
-gallery progress-alpha expectation together with the changed visual contracts.
-Verification: interfaces/tools 2,033 passed, four skipped; final frontend/token
-checks 62 passed. All four installed gallery modes and default Plan passed;
-larger Plan passed on a fresh rerun after an initial task-setup-stage failure.
-Gallery assertions cover tertiary colors, ordinary interword filter spacing,
-right-aligned menu counters, square reset, equal path starts and 18px rail inset.
-Independent review found the two old track-token expectations; both were
-migrated. Final review/diff checks passed. No domain or bridge changes.
-
-### Plan terminology and planning feedback (2026-09-19)
-
-Baseline `7cf4448`. GUI-N is one atomic presentation-only polish unit, delivered.
-Finite population: packaged Plan/filter/action/notes strings and
-their gallery examples; task semantic-setting markup/styles and pinned Fluent
-icon catalog/generated outputs; existing shell planning-state progress digest
-and its Plan/rail consumers. Tests: frontend probes, icon/tool tests, interfaces
-department, installed gallery and Plan gates. DESKTOP_UI owns the explicit
-shown/hidden note table and semantic placement; M1_PLAN, CHANGELOG and HANDOFF
-record delivery. No bridge shape, scan, selection, execution or size policy changes.
-
-Acceptance: sentence-case friendly labels, exact allowlist hiding only redundant
-low-risk reasons (unknown notes visible); fixed semantic fields with requested
-icons/colors; indeterminate progress while planning, idle/terminal/execution
-states preserved. Regression study covers warnings and previous locations,
-filter keys/counts, both themes, changing semantic text lengths, planning start,
-completion/failure and existing row selection/navigation. Stop if presentation
-requires new backend authority or suppressing consequential facts. Archived GUI
-prototypes are not implementation authority. Review adversarially before commit.
-Direct consumer detail: `app.js` repaints the existing dispatched form-attempt
-transition before awaiting the start response; `setup_app_probe.mjs` witnesses
-that repaint while the response is held, without new lifecycle fields.
-The installed Plan-again trace helper directly matches that dispatch source;
-update its exact original/instrumented anchor together, retaining the repaint
-and its existing restoration/custody tests.
-
-Verification: interfaces/tools 2,033 passed, four skipped; final frontend 50
-passed, including the supported WebView2 API floor and unknown property-name
-notes. Pinned icon archive check passed. Installed gallery (light/dark/forced/
-reduced) and default/larger Plan checks: six passed. Gallery assertions cover
-both semantic combinations, icon-only colors, fixed field geometry and loading/
-error/ready progress transitions. Independent adversarial review passed; root
-review corrected icon-only coloring, preserved Inventory status and dispatched
-repaint, and retained the compatible own-property lookup. No backend changes.
-
-### Status composition and static folder totals (2026-09-19)
-
-Baseline `e6ee448`. Closed population: Plan status/actions/messages and shared
-progress-track tokens; Plan metadata cell presentation and gallery consumers;
-workflow Plan projection size/sort facts derived only from retained scan data,
-adapter row serialization and their focused/department/installed witnesses.
-DESKTOP_UI owns layout; PRESENTATION owns totals and sibling sorting. Preserve
-selection/dependency safety, compact bridge revisions, no-op meaning and prior
-GUI-L navigation/windowing guarantees. No filesystem rescan, execution-policy,
-inventory implementation or general performance redesign is authorized.
-
-| ID | Atomic outcome | Verification | State |
-| --- | --- | --- | --- |
-| GUI-M1 | Translucent native progress track; status-card actions/reset icon and concise feedback; table reaches card bottom; hide dependency/none-risk labels and unify subdued metadata text. | Interfaces/tools: 2,027 passed, four skipped; icon check and 49 frontend tests passed; four installed gallery modes and two default/larger Plan scenarios passed, including narrow feedback layout. Independent review passed. | Delivered |
-| GUI-M2 | Static folder byte totals from retained file facts, partial-total notes, and size sorting within fixed folder/file groups; null plus overflow note above signed-64. | Workflows/interfaces: 2,517 passed, one skipped. Scale: 58 passed, one skipped, including independent complete-folder sums and legacy-validator preservation. Exact boundary/nested/partial/dedup/view-state and browser-null checks passed; installed default/larger Plan scenarios passed. Final adversarial review passed. | Delivered |
-
-Regression study: preserve action admission/focus and full actionable warnings;
-do not bake alpha into whole controls or labels; actual computed gallery values
-must be measured. Folder aggregation must be linear in retained facts/tree
-nodes, reuse subfolder totals, avoid double-counting operation members and never
-represent an incomplete enumeration as complete. Before GUI-M2 implementation,
-record its exact source/target precedence, partial-read inputs and finite scale
-fixture/gate. Stop if truthful totals require new I/O, scan ownership changes or
-execution/selection authority changes; report the finite evidence for a decision.
-
-GUI-M2 admitted detail: user chose plan child file facts, not scanned physical
-source/target folder totals. Reuse existing per-operation `_operation_stat`
-precedence (intended, source, target, prior target). Count one identical file
-size per canonical target path; conflicting duplicate-path facts contribute no
-claimed bytes and mark ancestors partial. Exclude the separate prior-path
-annotation tree. Full-read truth requires both retained plan completeness flags;
-an incomplete/scoped scan conservatively labels folder sums partial. Keep the
-existing size-sort group order (files before folders), independent of direction;
-unknown structural/notice groups remain last. No new bridge field is required:
-reuse numeric `size` and a concise folder `notice`, preserving other diagnostics.
-Finite regression population: nested/empty folders, equal/conflicting duplicate
-members, prior moves, scoped/incomplete scans, selection/filter changes, numeric
-ties/missing values and 120,000-row/deep-chain fixtures. Exact totals and
-one reverse parent accumulation pass establish the linear-cost claim over
-projection members/nodes; timing is diagnostic, not a millisecond promise.
-User clarification: removal contributes its displayed target-file size; moves
-contribute only under their destination. Unknown represented file sizes and
-blockers mark totals partial; known blocked-file sizes still contribute.
-Static destination-tree totals never replace selected execution required bytes.
-
-GUI-M2 resumes from `70a9270`; `af02913` is recovery evidence only, not a
-merge/cherry-pick unit. User approved null plus an explicit overflow note for
-totals above MAX_SIGNED_64. Keep exact Python accumulation, check before
-publishing row size, and propagate overflow to every containing folder without
-clamping or substituting zero. Existing bridge/file/execution scalar contracts
-remain unchanged. Gate exact maximum, first excess, nested overflow, an
-unaffected sibling, and raw bridge/client acceptance of null with its note.
-Direct fixture consumers include `tests/plan_review_benchmark.py`,
-`test_plan_review_scale.py` and its frozen compact-authority JSON; migrate their
-independent size/order expectations, not measured output as expected truth.
-Directory classification must use retained `EntryKind.DIRECTORY` for both
-MKDIR and cleanup DELETE, not operation-kind special cases. The preserved
-prototype is not authority; empty/removed directory totals and within-group
-sorting require regression checks against selection/disclosure. Production and
-test population remains Plan projection, existing row serializer/client probes
-and those fixture consumers. PRESENTATION and DEFENSE document the approved
-presentation-only overflow policy. One GUI-M2 commit closes this outcome.
-Directory identity is retained internally on projection nodes for size grouping;
-it adds no wire field and must not reinterpret `is_container`, which controls
-existing tree/disclosure behavior. Recheck dataclass-construction test helpers
-and retained fixture representations as direct consumers.
-The scale fixture's independent validator in
-`tests/interfaces/web/_plan_review_scale.py` is also a direct consumer: update
-the current compact fixture's directory-size/order expectations while retaining
-the legacy fixture schema's historical acceptance unchanged. Do not rewrite
-historical measurement receipts or claim their timings certify new behavior.
-
-### WinUI control alignment and Plan keyboard follow-up (2026-09-18)
-
-Baseline `0584707`; closed population: shared checkbox/button tokens and CSS,
-Plan/status/task-tab/dialog spacing, Sync/Integrity geometry, the test-owned
-gallery and its direct witnesses; Plan row gesture/focus/render handling and
-browser bridge consumers. DESKTOP_UI owns visual contracts, PRESENTATION owns
-navigation. Preserve selection safety/revisions/window bounds and GUI-K fixes.
-No sync, OneDrive, execution-policy or performance redesign; no icon catalog
-replacement beyond an explicitly needed fixed checkbox glyph variant.
-
-| ID | Atomic outcome | Verification | State |
-| --- | --- | --- | --- |
-| GUI-L1 | Match WinUI checkbox glyph/disabled strokes and Light button elevation; requested spacing, 8px status progress, 20px rail inset and 6px switcher radius; gallery parity. | Token/component/icon checks; installed gallery four passed (Light/Dark/forced/reduced), exact Plan geometry two passed at default/larger sizes; interfaces department. | Delivered |
-| GUI-L2 | Restore arrow/Shift-arrow row navigation and preserve pointer modality for modified clicks. | Real bridge gesture probe, off-window/focus/modifier regressions; installed navigation passed at both sizes; interfaces and focused consumer reruns. | Delivered |
-
-Regression study: checked/mixed/unchecked disabled states in both themes and
-forced colors; single-painted translucent fills; ordinary/active filter state
-parity; retained rail progress thickness; no default-size page overflow; arrow
-gestures remain compact and server-owned, keyboard focus crosses row windows,
-Ctrl/Shift pointer clicks do not acquire keyboard rings, Tab/arrow use still
-does. Stop on any necessary safety, membership, or protocol ownership change.
-For the switcher use the user's 6px outer-radius option, retaining its inset.
-Gallery migration also updates semantic cell order, resize mapping/minima and
-native report expectations together; no header-only relabeling is retained.
-
-### Plan presentation polish (2026-09-18)
-
-Follow-up GUI-K3 (delivered): reproduce and repair the reported select/deselect
-uncertain-status failure. Finite population: production checkbox/highlight
-gestures, browser mutation/summary/window validation, Python Plan adapter and
-their direct component/installed consumers. Preserve selection scope, revisions,
-dependency/safety rules and bounded payloads. One atomic selection-recovery fix;
-gate is a reproducing installed checkbox roundtrip, focused regression checks
-and the owning department. Stop on evidence of unauthorized execution or a
-required domain-policy change; no unrelated selection redesign.
-The direct workflow consumer `apply_plan_projection_selection` and
-`tests/test_plan_projection.py` are included: operation-bearing directory rows
-carry subtree rollups, so own-operation eligibility must not mistake descendant
-counts for direct membership. Regression study includes selected directory
-operations with children and an unavailable parent with an eligible child;
-gate adds workflows plus interfaces departments. No scanner/cloud-file changes.
-The short-path reproducer raised `selection contains an unavailable operation`
-before the fix; short/long-path and eligibility-isolation checks pass afterward
-(52 focused). Workflows/interfaces: 2,503 passed, one skipped. The existing
-120,000-row scoped/highlighted cost checks passed; diagnostic rerun observed
-1.205/1.053 s respectively, not a new latency promise. User retested Optics and
-confirmed selection works; its reported refresh delay remains an unprofiled
-follow-up, not a cloud/path diagnosis or optimization claim.
-Installed nested-plan roundtrips pass at default/larger sizes (two), covering
-individual, whole-view and highlighted selection. An earlier completed run
-failed the native dialog's second-Tab focus assertion; an unchanged repeat
-passed both sizes, and that assertion was not weakened. Separate adversarial
-review found no eligibility or complexity regression.
-
-Baseline `44a5d49`. Finite population: shared browser byte formatter and direct
-display/tests; Plan header/rows/search/status and grid constraints; task digest,
-rail styling and direct component/installed witnesses. DESKTOP_UI and PRESENTATION
-own these presentation contracts. No backend selection, progress, safety or
-execution-policy changes; no unrelated gallery redesign. Preserve the preceding
-GUI-J viewport, filtered selection and queued-search contracts.
-
-| ID | Atomic outcome | Gate | State |
-| --- | --- | --- | --- |
-| GUI-K1 | Four-significant-digit binary byte labels with significant zeros and exact sub-1000-byte labels. | Formatter boundary/large-value and direct display consumers. | Delivered |
-| GUI-K2 | Plan columns/header click targets, inset search controls, spacing, semantic settings and concise status; selected-count task digest and rail spacing/markers. | Component/token checks, interfaces department and installed default/larger populated/empty layout. | Delivered |
-
-Regression study: unit rounding boundaries, retained zeros, exact byte sort keys,
-column DOM/header/resize alignment, search clear/focus/debounce, settings after
-loading, selected versus scanned counts, empty plans and visible footer/close.
-Stop if issue counting needs new domain classification or execution authority.
-Planning issues means existing preflight-refusal count plus scan-notice count.
-The in-turn footer clarification retains actionable warnings/errors and live
-states on the buttons' row, while removing idle and successful messages.
-
-Verification: interfaces department 1,693 passed, one skipped; final focused
-frontend/token/helper checks 63 passed; installed default/larger checks two
-passed, each covering empty/populated plans, column order, full-cell sort
-targets, inset icons, aligned settings and same-row footer feedback. Final
-focused/installed reruns cover the footer clarification and settings-margin
-correction after the department run. No domain code changed. Screenshot and
-adversarial review completed; the full repository suite was not required.
-
-### Plan controls, viewport and task digest (2026-09-18)
-
-Finite population: Plan renderer/styles, task rail and its presentation data,
-existing server filter categories, column resize constraints, and their direct
-component/bridge/headed test consumers. PRESENTATION and DESKTOP_UI own behavior.
-Baseline is `218866b`; preceding GUI-H work is retained except where this request
-explicitly changes sizes, readiness labels and layout. No execution policy,
-selection authority, inventory implementation or durable state changes.
-
-| ID | Accepted outcome and atomic unit | Verification | State |
-| --- | --- | --- | --- |
-| GUI-J1 | Ordinary-size grouped split filters with counted detail menus; immediate throttled search and strict-empty-plan message. | Filter/search component and Python category checks; interfaces department. | Delivered |
-| GUI-J2 | Compact Plan card, neutral Plan ready status, available-height table, consistent resize minima and right-aligned footer. | Component resize checks and installed empty/populated viewport witness at default/larger sizes. | Delivered |
-| GUI-J3 | Shared task/Plan status digest with paths and aggregate progress in taller task tabs. | Lifecycle/task-shell probes and installed task navigation witness; interfaces department. | Delivered |
-
-Regression study covers hidden selection, queued search, range highlighting,
-column resizing, empty versus filtered-empty views, long paths, task switching,
-and execution control states. Stop for changes to domain filter meaning or
-missing authoritative lifecycle data that would require inventing progress.
-Direct consumers discovered during implementation are added before editing.
-Direct consumers include the exact packaged asset/import catalogs, Setup and
-task-shell headed drivers, and `plan_review_benchmark.py` task identity lookup.
-These retain internal Task N identity through `data-task-label` while visible
-titles become state digests. Plan `unsupported` derives from the existing
-blocked reason; `error` has zero members until authoritative error rows exist.
-
-GUI-J1–J3 share one integrated renderer/digest commit boundary. Final focused
-frontend/token/headed-helper checks passed (63), with Python category and Plan
-component coverage also passing. The interfaces department passed 1,692 with one
-skip; its remaining fast-refused-execution test failed root admission using the
-sandboxed external fixture, then passed natively against an external fixture
-(and inside the repository sandbox fixture). No domain code was changed for it.
-Installed task-shell checks passed at default and larger native sizes (2), each
-covering populated and empty plans, visible settings/footer, no page overflow,
-and execution confirmation/pause/resume/cancel. Screenshot review caught and
-corrected loading detaching the settings labels; final component and installed
-checks include that regression. HANDOFF records the final evidence directories.
+The current authorized batch is **M1-8-capacity and M1-8**, starting at
+`2cc0083` on `milestone1`. Implement and review smaller coherent commits,
+then stop for a recap and GUI tweaks. M1-9 onward, DOC-2, push, PR and release
+remain outside this batch. The user delegated stopping/scope adjudication to
+the arbiter task `01a0ba9c-b187-70f1-bf21-4f91e742eeaf`; consult it on reached
+boundaries and record its decision before dependent work resumes.
 
 [REDUCTION_FOLLOWUP.md](REDUCTION_FOLLOWUP.md) owns the accepted narrow
 immutable-value, scan-validation, history encoding/projection, and executor
@@ -307,130 +45,10 @@ The prior aggregate complete-owner-graph model and BR-G-45 are retired. No futur
 
 ## Remaining checkpoints
 
-### Plan review density and highlighted-row interaction (2026-09-17)
-
-The finite production population is the Plan panel and style tokens, task-shell
-view rendering, Plan review state/window projection, desktop command ingress and
-bridge validation. Direct browser/server/host tests and PRESENTATION, BRIDGE,
-DESKTOP_UI, FEATURES, CHANGELOG and HANDOFF own the matching contract. Current
-execution selection stays workflow-owned; visual row highlights are a distinct
-server-owned review state and never select operations merely by navigation.
-
-| ID | Accepted outcome | Named gate | Status |
-| --- | --- | --- | --- |
-| GUI-H1 | Tighten and correct category-colored filter buttons, matching ordinary button fills when inactive; rehouse the Plan card, status tiers, search/filter toolbar and ISO Modified labels without changing view/selection semantics. | Component and token checks, installed Plan visual witness, focused interface tests. | Delivered; installed headed witness passed. |
-| GUI-H2 | Preserve Plan/Status card nodes and current rows during refresh; update changed text and swap a new row window once, without remounting rows just to disable controls. | Focus/identity and pending-state component probes, slow-response task-shell check, window/selection regressions. | Delivered; focused probes passed. |
-| GUI-H3 | Add server-owned highlighted row set and anchor with bounded revisioned click/range/focus gestures across the complete ordered view and returned-window flags. | Command payload/validation, off-window/collapsed/sort/filter/stale tests, 120k cost check, frontend keyboard/mouse probes. | Delivered; focused and 120k checks passed. |
-| GUI-H4 | Apply a checkbox gesture to the highlighted row set when its row is highlighted, via one atomic workflow execution-selection mutation; leave highlights unchanged and preserve dependency/safety rules. | Browser and server bulk-action tests, stale triple-revision refusal, hidden/operation-bearing folder cases, direct consumers and ordinary suite. | Delivered; ordinary suite and focused registry check passed. |
-
-Commit H1/H2 as independent presentation units where their shared Plan panel
-allows a coherent boundary; H3/H4 may need one cross-layer atomic commit if
-their protocol and interaction cannot be tested independently. Non-goals are
-durable highlighting, inventory behavior, new execution effect/admission or
-client-owned bulk IDs. Task-specific stops: any implicit execution-selection
-change from highlight navigation, stale gesture acceptance, out-of-view range
-mutation, unbounded bridge payload, or regressions in existing scoped gestures.
-Regression study includes quick task switching, slow view receipts, empty
-results, zero-row Plan, sort/collapse/window changes, keyboard focus inside
-checkboxes and disclosures, and selection commitment.
-
-### Plan search and filter controls (2026-09-17)
-
-| ID | Accepted outcome | Named gate | Status |
-| --- | --- | --- | --- |
-| GUI-F1 | Keep Plan search focused and editable during a view refresh; apply the newest queued query after the in-flight refresh, without losing intermediate typing or changing selection. | Browser component and task-shell slow-receipt tests, direct view-regression tests. | Complete |
-| GUI-F2 | Present operation filters as WinUI-style toggle buttons with theme-aware neutral/active colors, an accent-colored All reset, category counts and canonical/conditional visibility. | Component state/count/visibility tests, CSS token/static checks, installed Plan witness. | Complete |
-
-The finite population is Plan view summary counts, Plan panel and task-shell
-refresh scheduling, their CSS and direct tests, plus PRESENTATION, DESKTOP_UI,
-CHANGELOG and HANDOFF. The default All state means no operation filter; a
-non-All activation removes All. Counts describe the complete reviewed plan,
-independent of view search, filtering, collapse or window. Search queuing is
-limited to the current review and is cleared by its disposal. No selection,
-execution, bridge command shape, or unrelated table behavior changes. Regression
-study: slow/stale view receipts, task switching, filter-only navigation,
-zero-count categories, theme/hover/pressed states and large-plan summary cost.
-The two rows share the Plan panel, probes and view contract, so commit them as
-one coherent reviewed UI unit. Stop for review on a lost search edit, implicit selection mutation, changed
-operation scope, or unbounded bridge/state growth.
-The web department passed 1,265 tests with one skip and 30 headed
-deselections; the ordinary suite passed 5,172 with five skips and 30 headed
-deselections. The installed task-shell Plan witness passed after its exact
-summary validator learned `filter_counts`. The separate Setup headed witness
-still waits for an operation row in an empty rootless completed Plan; that
-pre-existing witness contract is not evidence against this filter delivery
-and remains for a separate test-maintenance unit.
-
-### Scoped Plan bulk selection register (2026-09-17)
-
-The accepted outcome is one server-owned bulk gesture over every selectable
-operation whose own row matches the active search and operation filters, across
-windows and collapsed ancestors. A folder gesture selects its matching
-descendants, not every descendant. Search/filter navigation alone never mutates
-selection. Sorting, collapse and scroll do not change bulk membership. Existing
-dependency closure and safety exclusions remain authoritative; a dependency
-outside the displayed scope may be reselected only when the workflow requires it.
-
-The finite production population is the Plan review state and task registry,
-selection lifecycle/service, desktop command ingress and browser bridge/Plan
-panel. Direct tests and BRIDGE, PRESENTATION, INTERFACES, DESKTOP_UI, FEATURES,
-CHANGELOG and HANDOFF are the documentation/verification population. Existing
-row/folder gestures and execution admission stay intact. The atomic boundary is
-one coherent command, implementation, tests and contract documentation commit.
-
-| ID | Accepted outcome | Named gate | Status |
-| --- | --- | --- | --- |
-| GUI-S1 | Add an explicit header bulk checkbox and scope folder gestures to current search/filter matches; do not infer selection from view changes or Execute. | Focused browser and server selection tests, including unchanged hidden selection and filter-only navigation; update the prior folder-ignores-filter contract and tests. | Complete |
-| GUI-S2 | Send constant-size scoped intent with both expected view and selection revisions; resolve membership and apply one atomic server mutation, rejecting stale gestures and preserving lifecycle replay/dependency/safety rules. | Bridge validation/payload bound, stale/replay/off-window/collapsed tests, mutation-cost scaling measurement and direct-consumer regression. | Complete |
-| GUI-S3 | Remove only the synthetic Plan root from the table, preserving every operation/folder row and translating Plan windows, row indexes and anchors to a rootless public table. The header checkbox remains the sole whole-view bulk control. | Rootless window/anchor/index tests, browser component and installed headed Plan witness; preserve internal projection ownership. | Complete |
-
-Task-specific stops: any changed execution effect/admission, weakened safety
-exclusion, cross-view selection mutation without a dependency reason, unbounded
-bridge payload, or superlinear scoped-mutation growth requires review before
-continuing. Regression study: exact row/folder selection, stale command replay,
-sort/collapse-only navigation, empty matches, committed/retiring tasks, and
-large plans. Historical M1-7 scale receipts are not acceptance for this code.
-The direct-consumer neighborhood passed 531 tests before the final rootless
-refinement; the final ordinary repository suite passed 5,171 with five skips
-and 30 headed deselections. The installed headed Plan flow passed on repeat
-after one intermittent modal focus-containment failure (no modal code changed).
-The 120,000-operation scoped diagnostic matched 16,667 Copy operations and
-completed the server mutation path in 1.207 seconds against its 10-second gate.
-
-### Plan-surface refinement register (2026-09-17)
-
-This post-M1-7 GUI pass changes presentation only. Frozen plan facts, server-owned
-selection, raw sort keys, window bounds, execution admission and domain policy
-remain unchanged. The finite population is the Plan review component, its
-shared table/chip styling and direct frontend/installed witnesses; Setup and
-inventory tables are comparison references, not mutation targets.
-
-| ID | Accepted outcome and atomic boundary | Named gate | Status |
-| --- | --- | --- | --- |
-| GUI-P1 | Put frozen paths and semantic options in a Plan card, summary counts in a Status card, and search/filter, gallery-shaped table and execution controls in one card; merge dependency count into notes; add Modified right of Checksum at equal width in gallery and production; carry gallery pointer/keyboard column resizing into production; retain virtual rows and header-free scrollbar with Setup thinning. | Plan component probe, frontend static checks, installed headed Plan geometry/resize witness, UI docs and diff review. | Complete |
-| GUI-P2 | Use gallery filter pills and header sort cycle (ascending, descending, canonical reset), with catalog chevrons; switching columns starts ascending. No browser-side row ordering or durable preference. | Component probe for every transition, backend view-contract and installed headed sort/filter witness. | Complete |
-| GUI-P3 | Format status required bytes and row sizes in exact binary units without altering raw numeric sort or wire values. | Boundary/large-integer formatter tests, Plan component probe, installed headed display witness. | Complete |
-
-Task-specific stops: any change to execution/selection authority, projection
-representation or supported sort semantics outside the named gestures requires
-scope review. A lost virtual-window bound or clipped header/body alignment
-blocks completion. The regression study covers stale review gestures, pending
-control disablement, hostile path text, extreme signed-64 sizes, forced colors,
-and Setup table geometry. The register and exact byte utility are separate
-small commits; the interacting table/layout/sort behaviors close in one
-reviewed surface commit with direct-consumer checks and matching docs.
-
-GUI-P1–P3 verification: 86 focused interface tests passed (five headed tests
-deselected); installed task-shell Plan interaction and installed light/dark/
-forced-color gallery witnesses passed. The formatter boundary probe passed.
-The M1-7 quantitative receipts remain valid historical evidence for their
-original source and instrument bytes; this GUI pass did not rerun or claim
-current-source scale certification.
-
 ### Completed GUI and documentation work
 
 Completed records are condensed here; CHANGELOG and Git history through
-`7e94598` retain individual deliveries, studies, verification and exact diffs.
+`2cc0083` retain individual deliveries, studies, verification and exact diffs.
 Active behavior belongs to the linked subject owners, not old implementation
 populations or repeated test counts.
 
@@ -443,6 +61,23 @@ populations or repeated test counts.
 | GUI-D1–D7 | Shadow/disabled-label diagnostics and batch-housing study; M2 records for native overlay scrollbars, verify-only batching and persistent presets. [BUGS](BUGS.md#desktop-material-composition), [DESKTOP_UI](DESKTOP_UI.md), [M2_PROPOSAL](M2_PROPOSAL.md). |
 | AI-1–AI-2 | Execution/containment guidance and instruction condensation; component rules routed to their owners. AGENTS remains execution authority; personal-skill edits are separately recorded in CHANGELOG. |
 | DOC-1, DOC-3 | Accepted frontend/M2 decisions reconciled across subject docs; completed history condensed and checkpoint expansion procedure established. Documentation verification did not claim product acceptance. |
+| Plan-surface GUI-P1–P3 (2026-09-17) | Plan/Status cards, resizable rootless virtual table, sibling-sort gestures and exact byte display. `27f1a6b`, `4053a53`, `6425fa7`, `db46269`; component and installed Plan/gallery checks. [DESKTOP_UI](DESKTOP_UI.md), [PRESENTATION](PRESENTATION.md). |
+| Scoped Plan GUI-S1–S3 (2026-09-17) | Revision-guarded header/folder selection over complete filtered membership, hidden selections preserved, synthetic root omitted. `f3bd84f`, helper correction `87dbd49`; ordinary/installed checks and 120,000-operation scoped-cost witness. These IDs are distinct from the earlier Setup GUI-S rows. [PRESENTATION](PRESENTATION.md), [BRIDGE](BRIDGE.md). |
+| GUI-F1–F2, GUI-H1–H4 | Editable queued search, counted filters, stable panel/row refresh, server-owned highlights and atomic highlighted selection. `ae99f54`, `218866b`; ordinary, browser, installed and 120,000-row checks. The empty-rootless Setup witness noted in GUI-F was corrected during GUI-J. [PRESENTATION](PRESENTATION.md). |
+| GUI-J1–J3, GUI-K1–K3 | Grouped filters, compact viewport/task digest, neutral Plan-ready meaning, layout and status polish; directory own-operation eligibility corrected independently of descendant rollups. `44a5d49`, `4ef526e`, `f8bc1aa`, `0584707`; focused, department and installed default/larger Plan checks. Shared byte formatting was superseded by GUI-O below. [DESKTOP_UI](DESKTOP_UI.md), [PRESENTATION](PRESENTATION.md). |
+| GUI-L1–L2 | Fluent control/gallery alignment and server-owned arrow navigation across windows, preserving pointer focus modality. `dd926b8`, `e6ee448`; component, interface and installed gallery/Plan checks. [DESKTOP_UI](DESKTOP_UI.md). |
+| GUI-M1–M2 | Status actions/feedback and static destination-tree folder totals from retained file facts; partial/overflow facts remain explicit, numeric sorting stays server-owned. `70a9270`, `7cf4448`; workflow/interface, independent scale-fixture sums, scalar boundaries and installed Plan checks. Historical scale receipts were not rewritten. [PRESENTATION](PRESENTATION.md), [DEFENSE](DEFENSE.md). |
+| GUI-N, GUI-O, GUI-P (2026-09-19–20) | Friendly labels and selective low-risk notes, fixed semantic icon slots, immediate planning feedback, exact bytes below 1 KiB/two decimals above, tertiary text and final spacing/alignment. `c552537`, `8fd8cd0`, `2cc0083`; focused/department and installed gallery/default/larger Plan checks. [DESKTOP_UI](DESKTOP_UI.md). |
+
+
+GUI delivery evidence remains in the matching CHANGELOG tasks and those commits'
+HANDOFF snapshots. Intermittent installed dialog/confirmation failures were
+retained as failed attempts; unchanged isolated reruns passed without weakened
+assertions. GUI-P's last evidence root is
+`C:/Users/Spectrum/.codex/visualizations/2026/09/18/01a0b2ed-22b3-7083-a3e1-21f00596391d/`.
+GUI-M2 recovery `af02913` and stash `93414b7` remain historical preservation,
+not merge units; useful changes were rebuilt in `7cf4448`. The reported Optics
+refresh delay remains unprofiled; no cloud/path diagnosis was established.
 
 No rendering fix was established for the WCG shadow halo or intermittent
 disabled-label blur. Mica remains required; no workaround or compositor-health
@@ -451,7 +86,7 @@ reopen evidence. Recent availability remains observation, never admission.
 The existing 48-pair bound, serial best effort, per-row options and exact
 uncertain retry remain active; clearing receipts does not close tasks.
 
-DOC-2 remains **pending, outside this M1-7 task**: the historical branch
+DOC-2 remains **pending, outside this M1-8 batch**: the historical branch
 reconciliation proposal was to remove exactly four superseded compact-plan
 commits from `milestone1`, preserve the old tip and open a draft PR from
 `milestone1-anthony`. It requires fresh divergence/remote-tip and work-preservation
@@ -476,6 +111,70 @@ Each checkpoint is a closed register row. A new finding does not enlarge a row; 
 | M1-12 | First close integrated lifecycle/retention across activated task surfaces (absorbing former M1-11), then complete adversarial, documentation, ordinary, and headed verification. | Exercise plan-only, execution-only, linked/manual verification, inventory, refused, canceled, degraded, and failed tasks across navigation, reinjection, explicit close, and shutdown. Verify existing admission bounds, stale-response suppression, exact resource release and retained result truth; no aggregate-artifact or whole-owner-graph criterion. Run applicable settlement-oracle stability, ordinary/headed suites, installed-wheel/product witnesses, import checks, `git diff --check`, active-link checks, and independent cross-component review. | Pending |
 | M1-Release | Produce beta packaging and release closure after delivery rows above are complete. | Build/test an installed artifact from a clean checkout; supply frozen specification/dependency/CI, notices and corresponding-source release material, standard-integrity host proof, and every applicable BR-G and SH-G gate. INTERFACES owns host/package and SH-G release criteria; BRIDGE owns BR-G evidence. | Pending |
 
+
+## M1-8 implementation register
+
+Study baseline: `2cc0083`. Each row is a separate reviewed commit; dependencies
+are serial. Root owns this register, CHANGELOG and HANDOFF. Builders own their
+declared code, tests and subject docs. No product work starts on a later row
+until its predecessor closes. Initial read-only studies found no mandatory stop.
+
+| ID | Atomic outcome and finite population | Acceptance / state |
+| --- | --- | --- |
+| M1-8-D | Condense completed GUI records and register this batch; only M1_PLAN, CHANGELOG, HANDOFF. | Diff, links, outcome/limitation accounting and independent review passed; complete. |
+| M1-8-capacity | Core execution reason and executor runtime classifier/default policy; executor runtime/settlement tests and direct core event/workflow-view/service consumers; EXECUTOR, FEATURES, DESKTOP_UI. | Gate C below; pending. |
+| M1-8-E | Bounded atomic current-ledger evidence query with read-only workflow/service facade and explicit evidence classes; existing db repository, core/workflow view contracts, runtime/service, matching repository/workflow/service tests; DATABASE, ARCHITECTURE, INTERFACES, FEATURES. No schema/recorder writes. | Exact run/operation/current-evidence coherence, ambiguity/supersession/absence, transaction consistency and bounded chunk/query witnesses; pending detailed expansion. |
+| M1-8-P | Retained operation-keyed execution review, independent post-copy overlay, bounded summary/window/detail protocol using the existing Plan hierarchy; workflow/runtime/service, task lifecycle, focused web review owner, commands and bridge validators with direct consumers; PRESENTATION, BRIDGE, INTERFACES. | Live/terminal/Gap reconciliation, omission and axis truth, stale reads and release/close ownership, deterministic bounds; pending detailed expansion. |
+| M1-8-U | Live and retained execution UI, independent recording/terminal axes, capacity/generic-I/O guidance and location-only trash information; packaged app/Plan renderer/status/styles and browser/component/installed witnesses; DESKTOP_UI, FEATURES. | Production headed flow, navigation/reinjection, hostile text, no hidden complete browser list, no masked issues; pending detailed expansion. |
+
+### Capacity boundary and gate C
+
+The only production files are `namisync/core/execution.py` and
+`namisync/modules/executor/runtime.py`. Add `disk-capacity` to the existing
+ExecutionReason vocabulary; event-v5 derives its closed reason set from that
+enum. Preserve event shapes/version, item-free terminal transport, independent
+recording axes and all existing effect/settlement paths. Direct consumers are
+`tests/test_executor_runtime.py`, `tests/test_executor_settlement.py`,
+`tests/core/test_session_events.py`, `tests/core/test_event_v5_consumers.py`,
+`tests/test_workflow_views.py` and `tests/test_service.py`; add witnesses only
+where they exercise a distinct seam.
+
+Recognize Win32 disk-full codes 39/112 and disk-quota code 1295, plus ENOSPC
+when a native winerror is absent. Do not classify quota 1816, permission,
+memory, socket quota or unknown errors as disk capacity. Native error codes
+take precedence over errno. Trace actual explicit/semantic causal wrappers
+with cycle protection; do not broaden sharing-violation retry classification
+as a side effect. Preserve stronger existing typed reasons; only otherwise
+generic I/O acquires the capacity label. Capacity policy uses existing Stop;
+current-effect, cleanup, recorder-prerequisite and task-recording truth remain.
+
+Regression study covers direct/wrapped capacity and native/errno precedence,
+ordinary-I/O continuation, unchanged sharing retries, current pre/post-effect
+settlement and recording combinations, and later independent/dependent work
+left unrun by the policy-stop sweep. Gate C is these focused witnesses,
+executor/core/workflows/interfaces neighborhood, ordinary suite, imports,
+unchanged settlement oracle `check --repeat 3`, docs/diff checks and fresh
+adversarial review. Baseline oracle passed 30 scenarios x 3 runs at `2cc0083`.
+The oracle, baseline and semantic pin are immutable in this row. No settlement
+redesign, native/pipeline changes, new taxonomy or frontend work belongs here.
+
+### Preserved boundaries for execution review
+
+Keep committed selection after admitted preflight refusal; Plan again is the
+recovery. Archived terminal-unrun reopening recipes do not apply. Indexed
+follow, inventory UI, manual post-copy controls, terminal retry and purge stay
+outside this batch. No history fallback, transient copy hash display, new
+schema or complete trash scan. Use location-only trash information. Existing
+automatic linked verification must remain a separate overlay.
+
+New query/window/overlay bounds need source-derived enforcement and structural
+witnesses over the admitted population, not M1-7's historical timings. Record
+the exact domain and counts in PRESENTATION/DATABASE before implementation.
+No new execution latency or memory budget is claimed. Changes to existing Plan
+construction, representation, indexing, publication or windowing reopen their
+affected BR-G-42 evidence; classify that seam before edits under DEFENSE §7.
+All AGENTS mandatory and recurrence stops apply; route reached boundaries to
+the designated arbiter with a finite proposal before dependent work resumes.
 
 ## Checkpoint expansion and scope decisions
 
@@ -934,7 +633,9 @@ performed a product release run.
 
 ## Resumption
 
-M1-4, M1-async (`675181a`), M1-5 (`e19ed9d`), GUI-1 (`b98dce4`), M1-6
-and M1-7 are delivered on `milestone1`. Stop for the requested recap and GUI
-review. HANDOFF owns current operational context; AGENTS
-owns containment. No later checkpoint, halo workaround, push or PR is authorized.
+M1-4, M1-async (`675181a`), M1-5 (`e19ed9d`), GUI-1 (`b98dce4`), M1-6,
+M1-7 and the subsequent Plan GUI work through `2cc0083` are delivered on
+`milestone1`. The active batch is M1-8-capacity followed by M1-8; stop after
+M1-8 for recap and GUI tweaks. HANDOFF owns immediate operational context;
+AGENTS owns containment. Later checkpoints, halo workarounds, DOC-2, push and
+PR remain unauthorized.
