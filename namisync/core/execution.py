@@ -951,6 +951,7 @@ class ExecutionReason(StrEnum):
     ACL_COPY_FAILED = "acl-copy-failed"
     CLEANUP_FAILED = "cleanup-failed"
     PUBLISHED_SIZE_MISMATCH = "published-size-mismatch"
+    DISK_CAPACITY = "disk-capacity"
     IO_ERROR = "io-error"
     POLICY_STOP = "policy-stop"
     CANCELED = "canceled"

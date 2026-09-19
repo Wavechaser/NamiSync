@@ -6,6 +6,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from enum import Enum, StrEnum
+import errno
 import os
 from pathlib import Path, PureWindowsPath
 import time
@@ -77,6 +78,7 @@ from .pipeline import _allocation_size, _copy_chunk_size
 
 
 _SHARING_VIOLATIONS = {32, 33}
+_DISK_CAPACITY_WINERRORS = {39, 112, 1295}
 
 
 class OperationFailure(Exception):
@@ -136,6 +138,8 @@ class BoundedFailurePolicy:
         self, operation: PlanOperation, error: Exception, attempt: int
     ) -> FailureDecision:
         del operation
+        if _is_disk_capacity_failure(error):
+            return Stop()
         winerror = _find_winerror(error)
         if winerror in _SHARING_VIOLATIONS and attempt <= self._retries:
             return Retry(self._initial_delay * (2 ** (attempt - 1)))
@@ -174,6 +178,50 @@ def _find_winerror(error: Exception) -> int | None:
             return winerror
         current = current.__cause__
     return None
+
+
+def _is_disk_capacity_failure(error: Exception) -> bool:
+    """Recognize capacity through explicit and executor-semantic causes."""
+
+    current: BaseException | None = error
+    seen: set[int] = set()
+    native_codes: list[int] = []
+    saw_enospc = False
+    while current is not None:
+        identity = id(current)
+        if identity in seen:
+            break
+        seen.add(identity)
+        winerror = getattr(current, "winerror", None)
+        if isinstance(winerror, int):
+            native_codes.append(winerror)
+        elif getattr(current, "errno", None) == errno.ENOSPC:
+            saw_enospc = True
+        if current.__cause__ is not None:
+            current = current.__cause__
+        elif isinstance(current, OperationFailure):
+            current = current.cause
+        else:
+            current = None
+    if native_codes:
+        return any(code in _DISK_CAPACITY_WINERRORS for code in native_codes)
+    return saw_enospc
+
+
+def _capacity_policy_stops(
+    policies: ExecutorPolicies,
+    operation: PlanOperation,
+    error: Exception,
+    attempt: int,
+) -> bool:
+    """Consult policy only for recognized capacity at a terminal seam."""
+
+    if not _is_disk_capacity_failure(error):
+        return False
+    return isinstance(
+        policies.failure.on_item_failed(operation, error, attempt),
+        Stop,
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -900,6 +948,7 @@ def execute(
                 )
                 continue
             if operation.kind is OperationKind.MKDIR:
+                stop_after_settlement = False
                 try:
                     _start_directory(
                         operation,
@@ -912,6 +961,25 @@ def execute(
                 except (Canceled, PauseRequested):
                     raise
                 except Exception as error:
+                    try:
+                        stop_after_settlement = _capacity_policy_stops(
+                            policies, operation, error, 1
+                        )
+                    except (Canceled, PauseRequested):
+                        raise
+                    except Exception as collaborator_error:
+                        _settle_before_collaborator_escape(
+                            xset,
+                            ctx,
+                            fs,
+                            target_root,
+                            state,
+                            progress,
+                            operation,
+                            error,
+                            collaborator_error,
+                        )
+                        raise
                     mutation_failure = _failed_durable_settlement(
                         operation,
                         error,
@@ -931,6 +999,9 @@ def execute(
                             operation,
                             mutation_failure,
                         )
+                    if stop_after_settlement:
+                        stop_requested = True
+                        state.pause_latched = False
                 else:
                     progress.defer_settlement(operation)
                 continue
@@ -1012,7 +1083,30 @@ def execute(
                             f"{logical_error_text(retry_cleanup_error)}",
                             cause=error,
                         )
-                    _settle_ordinary_failure(
+                        try:
+                            if _capacity_policy_stops(
+                                policies,
+                                operation,
+                                retry_cleanup_error,
+                                attempt,
+                            ):
+                                decision = Stop()
+                        except (Canceled, PauseRequested):
+                            raise
+                        except Exception as collaborator_error:
+                            _settle_before_collaborator_escape(
+                                xset,
+                                ctx,
+                                fs,
+                                target_root,
+                                state,
+                                progress,
+                                operation,
+                                error,
+                                collaborator_error,
+                            )
+                            raise
+                    settlement_cleanup_error = _settle_ordinary_failure(
                         xset,
                         ctx,
                         fs,
@@ -1022,6 +1116,17 @@ def execute(
                         operation,
                         error,
                     )
+                    if (
+                        not isinstance(decision, Stop)
+                        and settlement_cleanup_error is not None
+                        and _capacity_policy_stops(
+                            policies,
+                            operation,
+                            settlement_cleanup_error,
+                            attempt,
+                        )
+                    ):
+                        decision = Stop()
                     if isinstance(decision, Stop):
                         stop_requested = True
                         state.pause_latched = False
@@ -3276,7 +3381,7 @@ def _settle_ordinary_failure(
     progress: _ProgressTracker,
     operation: PlanOperation,
     error: Exception,
-) -> None:
+) -> Exception | None:
     durable_failure = _failed_durable_settlement(
         operation,
         error,
@@ -3309,20 +3414,28 @@ def _settle_ordinary_failure(
             operation,
             durable_failure,
         )
+    return cleanup_error
 
 
 def _failure_reason_and_message(
     error: Exception,
 ) -> tuple[ExecutionReason, str]:
     if isinstance(error, OperationFailure):
-        return error.reason, error.detail
+        reason = (
+            ExecutionReason.DISK_CAPACITY
+            if error.reason is ExecutionReason.IO_ERROR
+            and _is_disk_capacity_failure(error)
+            else error.reason
+        )
+        return reason, error.detail
     if isinstance(error, UnsafeExecutionPath):
         return ExecutionReason.UNSAFE_PATH, logical_error_text(error)
-    reason = (
-        ExecutionReason.SHARING_VIOLATION
-        if _find_winerror(error) in _SHARING_VIOLATIONS
-        else ExecutionReason.IO_ERROR
-    )
+    if _is_disk_capacity_failure(error):
+        reason = ExecutionReason.DISK_CAPACITY
+    elif _find_winerror(error) in _SHARING_VIOLATIONS:
+        reason = ExecutionReason.SHARING_VIOLATION
+    else:
+        reason = ExecutionReason.IO_ERROR
     return reason, logical_error_text(error)
 
 

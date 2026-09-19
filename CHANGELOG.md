@@ -33,7 +33,12 @@ packaging remain open.
   retaining unresolved limits and evidence provenance.
 - Register separate capacity, current-ledger evidence, bounded review protocol
   and GUI outcomes; delivery stops after M1-8 for recap and GUI review.
-  Implementation and acceptance of those product outcomes remain pending.
+- Recognize native disk-full/disk-quota and ENOSPC operation failures, preserving
+  stronger typed effect/recording reasons and using the existing Stop sweep.
+  Include capacity introduced by directory start and owned-temp cleanup;
+  recorder-only writes remain independent recording degradation/continuation.
+  Capacity passed consumer/ordinary checks, the unchanged 30-scenario repeat-3
+  settlement oracle, imports and independent review. Execution review remains pending.
 
 #### Refine Plan density, readiness and row highlighting (2026-09-17 – 2026-09-20)
 

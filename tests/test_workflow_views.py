@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 import pytest
 
 from namisync.core.evidence import Outcome, RecordingStatus
-from namisync.core.execution import ItemRecordingReason
+from namisync.core.execution import ExecutionReason, ItemRecordingReason
 from namisync.core.events import (
     CORE_EVENT_SCHEMA_VERSION,
     Envelope,
@@ -114,6 +114,28 @@ def test_session_event_view_preserves_expanded_progress_body() -> None:
         "item_bytes_total": "10",
     }
     assert view.schema_version == CORE_EVENT_SCHEMA_VERSION
+
+
+def test_session_event_view_preserves_disk_capacity_reason() -> None:
+    item = ItemOutcome(
+        "b" * 32,
+        "copy",
+        "full.bin",
+        Outcome.FAILED,
+        reason=ExecutionReason.DISK_CAPACITY.value,
+    )
+    envelope = Envelope(
+        SessionId("a" * 32),
+        4,
+        datetime(2026, 9, 20, tzinfo=timezone.utc),
+        CORE_EVENT_SCHEMA_VERSION,
+        item,
+    )
+
+    view = session_event_view(envelope)
+
+    assert view.body is not None
+    assert view.body["reason"] == ExecutionReason.DISK_CAPACITY.value
 
 
 def test_rowless_post_copy_integrity_view_preserves_absent_identity() -> None:

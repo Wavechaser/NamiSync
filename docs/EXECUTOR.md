@@ -667,16 +667,31 @@ copy-recording result across a same-process execute pause. If status reaches
 verification-incomplete invariant failure rather than silently omitting
 readback.
 
-Generic I/O failure already carries `ExecutionReason.IO_ERROR`; sharing
-violations are separately typed. The current default failure policy retries
-sharing violations and continues past other item failures. Accepted M1 work in
-[M1_PLAN.md](M1_PLAN.md) will distinguish recognized disk-capacity errors and
-use the existing `Stop` policy decision after current-operation settlement so
-later operations remain unrun. That behavior is not implemented yet. It requires
-classification, settled-effect/recording, later-operation, and projection
-regressions; it does not reopen settlement design. Richer I/O categories and
+Generic I/O failure carries `ExecutionReason.IO_ERROR`; sharing violations and
+recognized disk-capacity failures are separately typed. Capacity classification
+recognizes native disk-full codes 39/112 and disk-quota code 1295, or `ENOSPC`
+only when no native code is present in the explicit or executor-semantic causal
+chain. Other quota,
+permission, memory, socket and unknown failures remain generic I/O, and a typed
+executor reason stronger than generic I/O is preserved. The default failure
+policy retries sharing violations, returns the existing `Stop` decision for
+disk capacity, and continues past other item failures. Later-operation admission
+stops after current-operation settlement, and those operations settle
+`policy-stop` without running. This does
+not alter settlement, effect or recording truth. Capacity discovered while
+removing an owned temp preserves the stronger `cleanup-failed` item reason but
+still stops later admission. A recorder-only item-write failure remains a
+successful/skipped filesystem effect with independent recording degradation;
+it does not become an executor capacity stop. Destructive-prerequisite recorder
+flush failure still enters the operation policy, preserves `recorder-failed`,
+and stops later work when its cause is capacity. Richer I/O categories and
 user-invoked terminal retry remain M2 proposals. Existing bounded automatic
 retries and live pause/resume are unchanged.
+
+Deferred directory finalization, final recorder flush, recording finish/close,
+and unwind run only after ordinary admission has ended. They keep their existing
+settlement and task-recording behavior; they do not create a second capacity
+stop channel.
 
 Sharing violations use bounded retry with injected clock/backoff and checkpoints
 between attempts. COPY, UPDATE, and MOVE_UPDATE install an operation-local stage

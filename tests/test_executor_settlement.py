@@ -15,6 +15,7 @@ import namisync.modules.executor.runtime as executor_runtime
 from namisync.core.evidence import Outcome, RecordingStatus
 from namisync.core.events import ItemOutcome, Progress, Terminal, result_item_to_dict
 from namisync.core.execution import (
+    Continue,
     CopyDigest,
     ExecutionReason,
     ExecutionSet,
@@ -564,6 +565,18 @@ class RetryCleanupFailureFileSystem(MidCopySharingOnceFileSystem):
         if self.create_attempts > 0 and path.exists():
             self.cleanup_attempts += 1
             raise PermissionError("injected retry cleanup failure")
+        super().remove_owned_temp(path)
+
+
+class CapacityCleanupFailureFileSystem(MidCopySharingOnceFileSystem):
+    def __init__(self) -> None:
+        super().__init__()
+        self.cleanup_attempts = 0
+
+    def remove_owned_temp(self, path: Path) -> None:
+        if self.create_attempts > 0 and path.exists():
+            self.cleanup_attempts += 1
+            raise OSError(28, "no space left during temp cleanup")
         super().remove_owned_temp(path)
 
 
@@ -1764,6 +1777,14 @@ class ReplaceSharingAfterCommitFileSystem(NativeFileSystem):
         raise _sharing_violation("sharing report after committed replace")
 
 
+class ReplaceCapacityAfterCommitFileSystem(NativeFileSystem):
+    def replace(self, temp: Path, target: Path) -> None:
+        super().replace(temp, target)
+        error = OSError("disk full after committed replace")
+        error.winerror = 112  # type: ignore[attr-defined]
+        raise error
+
+
 def test_update_retry_recognizes_replace_that_committed_before_error(
     tmp_path: Path,
 ) -> None:
@@ -1791,6 +1812,56 @@ def test_update_retry_recognizes_replace_that_committed_before_error(
     assert (target / "file.bin").read_bytes() == b"new-version"
     assert (target / ".synctrash" / str(RUN_ID) / "file.bin").read_bytes() == b"old-version"
     assert _recorder_names(recorder) == ["updated"]
+
+
+def test_capacity_after_committed_replace_settles_effect_then_stops_later_work(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    (source / "current.bin").write_bytes(b"new-version")
+    (target / "current.bin").write_bytes(b"old-version")
+    (source / "later.bin").write_bytes(b"later")
+    fs = ReplaceCapacityAfterCommitFileSystem()
+    current_source = fs.stat(source, "current.bin")
+    current_target = fs.stat(target, "current.bin")
+    later_source = fs.stat(source, "later.bin")
+    assert current_source is not None and current_target is not None
+    assert later_source is not None
+    current = _operation(
+        1,
+        OperationKind.UPDATE,
+        source_rel_path="current.bin",
+        target_rel_path="current.bin",
+        source_expected=current_source,
+        target_expected=current_target,
+        intended=current_source,
+    )
+    later = _operation(
+        2,
+        OperationKind.COPY,
+        source_rel_path="later.bin",
+        target_rel_path="later.bin",
+        source_expected=later_source,
+        target_expected=None,
+        intended=later_source,
+    )
+
+    result, events, recorder = _run(
+        _xset(_plan(source, target, (current, later))),
+        fs=fs,
+    )
+
+    items = [event for event in events if isinstance(event, ItemOutcome)]
+    assert result.status is SessionState.FAILED
+    assert [item.outcome for item in items] == [Outcome.FAILED, Outcome.CANCELED]
+    assert items[0].reason == "disk-capacity"
+    assert items[0].recording is RecordingStatus.DEGRADED
+    assert items[0].recording_reason is ItemRecordingReason.UNRECORDED_MUTATION
+    assert items[0].detail["publish_state"] == "published"
+    assert items[1].reason == "policy-stop"
+    assert (target / "current.bin").read_bytes() == b"new-version"
+    assert not (target / "later.bin").exists()
+    assert recorder.calls == []
 
 
 @pytest.mark.parametrize("published", [False, True])
@@ -2590,6 +2661,410 @@ def test_policy_stop_suppresses_latched_pause_and_settles_remaining_work(
     assert not (target / "later.bin").exists()
 
 
+def test_default_capacity_policy_settles_current_failure_and_stops_later_work(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    (source / "full.bin").write_bytes(b"full")
+    (source / "later.bin").write_bytes(b"later")
+
+    class CapacityFileSystem(NativeFileSystem):
+        def publish_new(self, temp: Path, destination: Path) -> None:
+            if destination.name == "full.bin":
+                error = OSError("disk full")
+                error.winerror = 112  # type: ignore[attr-defined]
+                raise error
+            super().publish_new(temp, destination)
+
+    fs = CapacityFileSystem()
+    operations = []
+    for index, name in enumerate(("full.bin", "later.bin"), start=1):
+        source_stat = fs.stat(source, name)
+        assert source_stat is not None
+        operations.append(
+            _operation(
+                index,
+                OperationKind.COPY,
+                source_rel_path=name,
+                target_rel_path=name,
+                source_expected=source_stat,
+                target_expected=None,
+                intended=source_stat,
+            )
+        )
+
+    result, events, recorder = _run(
+        _xset(_plan(source, target, tuple(operations))),
+        fs=fs,
+    )
+
+    items = [event for event in events if isinstance(event, ItemOutcome)]
+    assert result.status is SessionState.FAILED
+    assert [item.outcome for item in items] == [Outcome.FAILED, Outcome.CANCELED]
+    assert [item.reason for item in items] == ["disk-capacity", "policy-stop"]
+    assert recorder.calls == []
+    assert not (target / "full.bin").exists()
+    assert not (target / "later.bin").exists()
+
+
+def test_capacity_inside_typed_recording_failure_stops_without_relabeling(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    (source / "current.bin").write_bytes(b"new")
+    (target / "current.bin").write_bytes(b"old")
+    (source / "later.bin").write_bytes(b"later")
+    fs = NativeFileSystem()
+    current_source = fs.stat(source, "current.bin")
+    current_target = fs.stat(target, "current.bin")
+    later_source = fs.stat(source, "later.bin")
+    assert current_source is not None and current_target is not None
+    assert later_source is not None
+    current = _operation(
+        1,
+        OperationKind.UPDATE,
+        source_rel_path="current.bin",
+        target_rel_path="current.bin",
+        source_expected=current_source,
+        target_expected=current_target,
+        intended=current_source,
+    )
+    later = _operation(
+        2,
+        OperationKind.COPY,
+        source_rel_path="later.bin",
+        target_rel_path="later.bin",
+        source_expected=later_source,
+        target_expected=None,
+        intended=later_source,
+    )
+
+    class CapacityRecorder(FakeRecorder):
+        def flush(self) -> None:
+            self.flushes += 1
+            raise OSError(28, "no space left while flushing records")
+
+    result, events, recorder = _run(
+        _xset(_plan(source, target, (current, later), trash_on_update=False)),
+        fs=fs,
+        recorder=CapacityRecorder(),
+    )
+
+    items = [event for event in events if isinstance(event, ItemOutcome)]
+    assert result.status is SessionState.FAILED
+    assert result.recording is RecordingStatus.DEGRADED
+    assert [item.reason for item in items] == ["recorder-failed", "policy-stop"]
+    assert items[0].recording_reason is (
+        ItemRecordingReason.RECORDING_PREREQUISITE_FAILED
+    )
+    assert (target / "current.bin").read_bytes() == b"old"
+    assert not (target / "later.bin").exists()
+    assert recorder.calls == []
+
+
+def test_capacity_mkdir_failure_stops_later_independent_and_dependent_work(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    (source / "folder").mkdir()
+    (source / "independent.bin").write_bytes(b"independent")
+
+    class CapacityMkdirFileSystem(NativeFileSystem):
+        def mkdir_new(self, path: Path) -> None:
+            if path.name == "folder":
+                error = OSError("disk full")
+                error.winerror = 112  # type: ignore[attr-defined]
+                raise error
+            super().mkdir_new(path)
+
+    fs = CapacityMkdirFileSystem()
+    folder_stat = fs.stat(source, "folder")
+    independent_stat = fs.stat(source, "independent.bin")
+    assert folder_stat is not None and independent_stat is not None
+    mkdir = _operation(
+        1,
+        OperationKind.MKDIR,
+        source_rel_path="folder",
+        target_rel_path="folder",
+        source_expected=folder_stat,
+        target_expected=None,
+        intended=folder_stat,
+    )
+    independent = _operation(
+        2,
+        OperationKind.COPY,
+        source_rel_path="independent.bin",
+        target_rel_path="independent.bin",
+        source_expected=independent_stat,
+        target_expected=None,
+        intended=independent_stat,
+    )
+    dependent = _operation(
+        3,
+        OperationKind.NOOP,
+        source_rel_path="folder",
+        target_rel_path="folder",
+        source_expected=folder_stat,
+        target_expected=None,
+        intended=folder_stat,
+        dependencies=(mkdir.op_id,),
+    )
+
+    result, events, _ = _run(
+        _xset(_plan(source, target, (mkdir, independent, dependent))),
+        fs=fs,
+    )
+
+    items = [event for event in events if isinstance(event, ItemOutcome)]
+    assert result.status is SessionState.FAILED
+    assert [item.reason for item in items] == [
+        "disk-capacity",
+        "policy-stop",
+        "policy-stop",
+    ]
+    assert not (target / "folder").exists()
+    assert not (target / "independent.bin").exists()
+
+
+def test_mkdir_sharing_failure_does_not_consult_capacity_policy_or_stop(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    (source / "folder").mkdir()
+    (source / "later.bin").write_bytes(b"later")
+
+    class SharingMkdirFileSystem(NativeFileSystem):
+        def mkdir_new(self, path: Path) -> None:
+            if path.name == "folder":
+                raise _sharing_violation("mkdir sharing violation")
+            super().mkdir_new(path)
+
+    class RefusingPolicy:
+        def on_item_failed(self, operation, error, attempt):
+            raise AssertionError("non-capacity mkdir consulted failure policy")
+
+    fs = SharingMkdirFileSystem()
+    folder_stat = fs.stat(source, "folder")
+    later_stat = fs.stat(source, "later.bin")
+    assert folder_stat is not None and later_stat is not None
+    mkdir = _operation(
+        1,
+        OperationKind.MKDIR,
+        source_rel_path="folder",
+        target_rel_path="folder",
+        source_expected=folder_stat,
+        target_expected=None,
+        intended=folder_stat,
+    )
+    later = _operation(
+        2,
+        OperationKind.COPY,
+        source_rel_path="later.bin",
+        target_rel_path="later.bin",
+        source_expected=later_stat,
+        target_expected=None,
+        intended=later_stat,
+    )
+
+    result, events, _ = _run(
+        _xset(_plan(source, target, (mkdir, later))),
+        fs=fs,
+        policies=_policies(failure=RefusingPolicy()),
+    )
+
+    items = [event for event in events if isinstance(event, ItemOutcome)]
+    assert result.status is SessionState.FAILED
+    assert [item.reason for item in items] == ["sharing-violation", None]
+    assert (target / "later.bin").read_bytes() == b"later"
+
+
+def test_pre_retry_capacity_cleanup_stops_after_cleanup_failed_settlement(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    (source / "current.bin").write_bytes(b"abcdefghijkl")
+    (source / "later.bin").write_bytes(b"later")
+    fs = CapacityCleanupFailureFileSystem()
+    current_stat = fs.stat(source, "current.bin")
+    later_stat = fs.stat(source, "later.bin")
+    assert current_stat is not None and later_stat is not None
+    current = _operation(
+        1,
+        OperationKind.COPY,
+        source_rel_path="current.bin",
+        target_rel_path="current.bin",
+        source_expected=current_stat,
+        target_expected=None,
+        intended=current_stat,
+    )
+    later = _operation(
+        2,
+        OperationKind.COPY,
+        source_rel_path="later.bin",
+        target_rel_path="later.bin",
+        source_expected=later_stat,
+        target_expected=None,
+        intended=later_stat,
+    )
+
+    result, events, _ = _run(
+        _xset(_plan(source, target, (current, later))),
+        fs=fs,
+        policies=_policies(max_chunk_size=4),
+    )
+
+    items = [event for event in events if isinstance(event, ItemOutcome)]
+    assert result.status is SessionState.FAILED
+    assert [item.reason for item in items] == ["cleanup-failed", "policy-stop"]
+    assert fs.cleanup_attempts == 1
+    assert not (target / "later.bin").exists()
+
+
+@pytest.mark.parametrize("bounded_exhaustion", (False, True))
+def test_terminal_capacity_cleanup_stops_after_continue_or_exhausted_retry(
+    tmp_path: Path,
+    bounded_exhaustion: bool,
+) -> None:
+    source, target = _roots(tmp_path)
+    (source / "current.bin").write_bytes(b"abcdefghijkl")
+    (source / "later.bin").write_bytes(b"later")
+    fs = CapacityCleanupFailureFileSystem()
+    current_stat = fs.stat(source, "current.bin")
+    later_stat = fs.stat(source, "later.bin")
+    assert current_stat is not None and later_stat is not None
+    current = _operation(
+        1,
+        OperationKind.COPY,
+        source_rel_path="current.bin",
+        target_rel_path="current.bin",
+        source_expected=current_stat,
+        target_expected=None,
+        intended=current_stat,
+    )
+    later = _operation(
+        2,
+        OperationKind.COPY,
+        source_rel_path="later.bin",
+        target_rel_path="later.bin",
+        source_expected=later_stat,
+        target_expected=None,
+        intended=later_stat,
+    )
+    decisions: list[type[Exception]] = []
+
+    class ContinueThenStopPolicy:
+        def on_item_failed(self, operation, error, attempt):
+            del operation, attempt
+            decisions.append(type(error))
+            return Stop() if getattr(error, "errno", None) == 28 else Continue()
+
+    failure = (
+        BoundedFailurePolicy(retries=0)
+        if bounded_exhaustion
+        else ContinueThenStopPolicy()
+    )
+    result, events, _ = _run(
+        _xset(_plan(source, target, (current, later))),
+        fs=fs,
+        policies=_policies(failure=failure, max_chunk_size=4),
+    )
+
+    items = [event for event in events if isinstance(event, ItemOutcome)]
+    assert result.status is SessionState.FAILED
+    assert [item.reason for item in items] == ["cleanup-failed", "policy-stop"]
+    assert fs.cleanup_attempts == 1
+    assert not (target / "later.bin").exists()
+    if not bounded_exhaustion:
+        assert decisions == [OSError, OSError]
+
+
+def test_original_stop_avoids_second_capacity_cleanup_policy_callback(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    (source / "file.bin").write_bytes(b"abcdefghijkl")
+    fs = CapacityCleanupFailureFileSystem()
+    source_stat = fs.stat(source, "file.bin")
+    assert source_stat is not None
+    operation = _operation(
+        1,
+        OperationKind.COPY,
+        source_rel_path="file.bin",
+        target_rel_path="file.bin",
+        source_expected=source_stat,
+        target_expected=None,
+        intended=source_stat,
+    )
+
+    class CountingStopPolicy:
+        calls = 0
+
+        def on_item_failed(self, operation, error, attempt):
+            del operation, error, attempt
+            self.calls += 1
+            return Stop()
+
+    failure = CountingStopPolicy()
+    result, events, _ = _run(
+        _xset(_plan(source, target, (operation,))),
+        fs=fs,
+        policies=_policies(failure=failure, max_chunk_size=4),
+    )
+
+    assert result.status is SessionState.FAILED
+    assert _item_outcome(events).reason == "cleanup-failed"
+    assert failure.calls == 1
+    assert fs.cleanup_attempts == 1
+
+
+def test_capacity_cleanup_policy_escape_keeps_single_settlement(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    (source / "file.bin").write_bytes(b"abcdefghijkl")
+    fs = CapacityCleanupFailureFileSystem()
+    source_stat = fs.stat(source, "file.bin")
+    assert source_stat is not None
+    operation = _operation(
+        1,
+        OperationKind.COPY,
+        source_rel_path="file.bin",
+        target_rel_path="file.bin",
+        source_expected=source_stat,
+        target_expected=None,
+        intended=source_stat,
+    )
+    events: list[object] = []
+
+    class EscapingPolicy:
+        calls = 0
+
+        def on_item_failed(self, operation, error, attempt):
+            del operation, attempt
+            self.calls += 1
+            if self.calls == 1:
+                return Retry(0)
+            assert error.errno == 28
+            raise RuntimeError("capacity consultation escaped")
+
+    with pytest.raises(RuntimeError, match="capacity consultation escaped"):
+        execute(
+            _xset(_plan(source, target, (operation,))),
+            RunContext(events.append, lambda: None),
+            FakeRecorder(),
+            _policies(
+                failure=EscapingPolicy(),
+                max_chunk_size=4,
+            ),
+            fs,
+        )
+
+    items = [event for event in events if isinstance(event, ItemOutcome)]
+    assert len(items) == 1
+    assert items[0].reason == "cleanup-failed"
+    assert fs.cleanup_attempts == 1
+
+
 def test_cancel_interrupts_policy_stop_settlement_sweep(tmp_path: Path) -> None:
     source, target = _roots(tmp_path)
     operations: list[PlanOperation] = []
@@ -2837,6 +3312,56 @@ def test_recording_diagnostic_failure_preserves_executor_truth(
 class MissingCopyIdentityRecorder(FakeRecorder):
     def record_copied(self, op, attestation) -> None:
         self._record("copied", op, attestation)
+
+
+class CapacityFirstCopyRecorder(FakeRecorder):
+    def __init__(self) -> None:
+        super().__init__()
+        self.attempts = 0
+
+    def record_copied(self, op, attestation):
+        self.attempts += 1
+        if self.attempts == 1:
+            raise OSError(28, "no space left writing item record")
+        return super().record_copied(op, attestation)
+
+
+def test_recorder_only_capacity_degrades_axis_and_continues_later_work(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    fs = NativeFileSystem()
+    operations = []
+    for index, name in enumerate(("first.bin", "later.bin"), start=1):
+        (source / name).write_bytes(name.encode())
+        source_stat = fs.stat(source, name)
+        assert source_stat is not None
+        operations.append(
+            _operation(
+                index,
+                OperationKind.COPY,
+                source_rel_path=name,
+                target_rel_path=name,
+                source_expected=source_stat,
+                target_expected=None,
+                intended=source_stat,
+            )
+        )
+
+    result, events, _ = _run(
+        _xset(_plan(source, target, tuple(operations))),
+        fs=fs,
+        recorder=CapacityFirstCopyRecorder(),
+    )
+
+    items = [event for event in events if isinstance(event, ItemOutcome)]
+    assert result.status is SessionState.COMPLETED
+    assert result.recording is RecordingStatus.DEGRADED
+    assert [item.outcome for item in items] == [Outcome.SUCCEEDED, Outcome.SUCCEEDED]
+    assert items[0].recording_reason is ItemRecordingReason.RECORD_WRITE_FAILED
+    assert items[1].reason is None
+    assert (target / "first.bin").read_bytes() == b"first.bin"
+    assert (target / "later.bin").read_bytes() == b"later.bin"
 
 
 def test_copy_recorder_none_return_is_degraded_not_recorded(

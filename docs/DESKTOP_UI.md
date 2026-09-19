@@ -1579,9 +1579,11 @@ visible without execution, automatic retry, or automatic close. Scan/planner
 population refusals may have no plan; review-preflight space refusal may retain
 an immutable plan with a negative verdict. They must not share a fabricated
 partial review. After resolving the cause, explicit Plan again performs fresh
-scans and review. Recognized disk-capacity failure during execution is an
-accepted, unrealized M1 stop outcome: settle the current operation, admit no
-later operation, and show the yellow capacity message. This color does not
+scans and review. Recognized operation/copy, cleanup and destructive-prerequisite
+disk-capacity failure during execution now settles the current operation and
+admits no later operation. Recorder-only item-write failure remains recording
+degradation. The pending execution
+review will show the yellow capacity message. This color does not
 erase any known failure or independent recording/integrity issue. Other I/O
 failures use the existing typed generic reason and available diagnostic detail;
 a richer I/O taxonomy is deferred to M2.

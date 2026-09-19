@@ -444,11 +444,21 @@ def test_preallocation_falls_back_only_for_explicitly_unsupported_results(
 
 
 @pytest.mark.skipif(os.name != "nt", reason="requires FileAllocationInfo")
-@pytest.mark.parametrize("winerror", [5, 87, 112, 1816, 9999])
+@pytest.mark.parametrize(
+    ("winerror", "expected_reason"),
+    [
+        (5, "io-error"),
+        (87, "io-error"),
+        (112, "disk-capacity"),
+        (1816, "io-error"),
+        (9999, "io-error"),
+    ],
+)
 def test_substantive_preallocation_failure_cleans_temp_before_copying(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     winerror: int,
+    expected_reason: str,
 ) -> None:
     source, target = _roots(tmp_path)
     source_path = source / "file.bin"
@@ -486,7 +496,7 @@ def test_substantive_preallocation_failure_cleans_temp_before_copying(
 
     assert result.status is SessionState.FAILED
     item = _item_outcome(_)
-    assert item.reason == "io-error"
+    assert item.reason == expected_reason
     assert backend.calls == 0
     assert recorder.calls == []
     assert not (target / "file.bin").exists()

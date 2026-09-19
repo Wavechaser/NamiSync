@@ -25,6 +25,7 @@ from namisync.core.execution import (
     CopyDigest,
     ExecutionReason,
     ItemRecordingReason,
+    Stop,
     validated_run_id,
 )
 from namisync.core.models import (
@@ -1459,6 +1460,66 @@ def test_executor_failure_detail_does_not_expose_native_prefix(
     assert reason is ExecutionReason.IO_ERROR
     assert "file.bin" in detail
     assert "\\\\?\\" not in detail
+
+
+@pytest.mark.parametrize("winerror", (39, 112, 1295))
+def test_disk_capacity_reason_recognizes_native_codes(winerror: int) -> None:
+    error = OSError("disk capacity exhausted")
+    error.winerror = winerror  # type: ignore[attr-defined]
+
+    reason, _ = executor_runtime._failure_reason_and_message(error)
+
+    assert reason is ExecutionReason.DISK_CAPACITY
+
+
+def test_disk_capacity_reason_traces_operation_failure_cause() -> None:
+    native = OSError("disk full")
+    native.winerror = 112  # type: ignore[attr-defined]
+    wrapped = executor_runtime.OperationFailure(
+        ExecutionReason.IO_ERROR,
+        "copy failed",
+        cause=native,
+    )
+
+    reason, detail = executor_runtime._failure_reason_and_message(wrapped)
+
+    assert reason is ExecutionReason.DISK_CAPACITY
+    assert detail == "copy failed"
+
+
+def test_disk_capacity_reason_uses_enospc_only_without_native_code() -> None:
+    import errno
+
+    capacity = OSError(errno.ENOSPC, "no space")
+    conflicting = OSError(errno.ENOSPC, "native quota is not disk capacity")
+    conflicting.winerror = 1816  # type: ignore[attr-defined]
+
+    assert executor_runtime._failure_reason_and_message(capacity)[0] is (
+        ExecutionReason.DISK_CAPACITY
+    )
+    assert executor_runtime._failure_reason_and_message(conflicting)[0] is (
+        ExecutionReason.IO_ERROR
+    )
+
+
+def test_disk_capacity_reason_preserves_stronger_typed_failure() -> None:
+    import errno
+
+    error = executor_runtime.OperationFailure(
+        ExecutionReason.RECORDER_FAILED,
+        "recording prerequisite failed",
+        cause=OSError(errno.ENOSPC, "no space"),
+    )
+
+    assert executor_runtime._failure_reason_and_message(error)[0] is (
+        ExecutionReason.RECORDER_FAILED
+    )
+    assert isinstance(
+        executor_runtime.BoundedFailurePolicy().on_item_failed(
+            object(), error, 1  # type: ignore[arg-type]
+        ),
+        Stop,
+    )
 
 
 def test_nonempty_directory_delete_refuses_without_recursive_removal(tmp_path: Path) -> None:

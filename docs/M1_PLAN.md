@@ -104,7 +104,7 @@ Each checkpoint is a closed register row. A new finding does not enlarge a row; 
 | M1-5 | Give Setup and inventory one workflow-owned location-candidate pipeline with typed admission results and bounded remembered locations. | After M1-4, normally after M1-async. Verify parser refusals; leaf/reparse/placeholder and long paths; missing, offline, remount, and clone ambiguity; bounded recents; activation/slot races and purpose mismatch. Review path parsing and TOCTOU. Scanner, preflight, executor, and verifier retain fresh re-probes. | Complete |
 | M1-6 | Deliver frozen, backend-canonical Setup, typed/picker/recent inputs, standalone inventory creation, serial best-effort pair creation, and explicit Plan-again after fresh reviewed-identity resolution. | Verify bounded inputs, canonical snapshots, immediate invalidation, no global-default mutation or browser filter normalization, partial-pair refusal, mixed batches, replay/recovery, slot/plan-generation races, and headed hostile-text/picker/recent flows. Map needed command behavior in BRIDGE when this activates; do not prescribe the retired 18-command expansion. | Complete |
 | M1-7 | Deliver bounded plan review, selection, execution admission, and the full plan consumer for sibling sorting. A review remains truthful when execution never ran; an admitted attempt keeps its selection committed. | Exercise plan publication, selection and commitment freshness, stale/replayed mutation, admission-failure rollback versus post-admission preflight refusal, fresh Plan-again review after source/target changes, destructive confirmation, controls, windows/anchors/search/filter, and headed production flows. No terminal selection reopening or subset retry. BRIDGE and PRESENTATION define protocol and projection criteria. | Complete |
-| M1-8-capacity | Distinguish recognized disk-capacity I/O failure and stop admission of later executor operations after settling the current operation. | Before M1-8, use the existing failure-policy/Stop and settlement paths; verify direct and wrapped capacity failures, ordinary I/O distinction, current-effect/recording truth, later work left unrun, terminal projection, and unchanged sharing-violation retries. Run executor plus core/workflow/interface consumers and the retained settlement oracle. No general I/O taxonomy or settlement restructuring. | Pending |
+| M1-8-capacity | Distinguish recognized disk-capacity I/O failure and stop admission of later executor operations after settling the current operation. | Gate C passed with A8-02's explicit recorder-only/finalization boundary; existing failure-policy/Stop and settlement paths, unchanged oracle. | Complete |
 | M1-8 | Deliver live and retained execution review with bounded item windows, exact execution overlays, task/item recording issues, terminal axes, current ledger evidence, capacity/generic-I/O messages, and informational trash location. | Test filesystem/recording combinations, overlay and omission invariants, Gap plus terminal reconciliation, navigation/re-observation, generic unrun presentation, yellow capacity without hiding known failures, bounded evidence queries, and post-copy overlay independence. Trash counts require complete outcome evidence; location-only fallback must not assert a planned count, scan all trash, or imply purge. | Pending |
 | M1-9 | Deliver bounded inventory projections, current evidence, and the full inventory consumer for sibling sorting. | Test complete or prior-complete publication, warnings outside action scope, raw evidence provenance, search/filter/collapse/window/detail behavior, replacement/races, supported sort/reset production paths, and headed witnesses. | Pending |
 | M1-10 | Deliver baseline, verify, and rebaseline controls plus the first same-task manual post-copy verification without persistent operation-time hashes. Rebaseline includes eligible null-evidence files and always hashes/replaces evidence; matching content is not a verified match. | Test acknowledgement admission before claim/native work; all-null and mixed rebaseline through workflow, service/CLI, and desktop; conditional-recording and supersession races; handoff classification; live pause/resume/cancel and unchanged automatic failed-read retries; and overlay/result identity boundaries. Terminal Verify-remaining/subset retry is deferred. Independently review the operation matrix and conditional-recording races. | Pending |
@@ -122,9 +122,10 @@ until its predecessor closes. Initial read-only studies found no mandatory stop.
 | ID | Atomic outcome and finite population | Acceptance / state |
 | --- | --- | --- |
 | M1-8-D | Condense completed GUI records and register this batch; only M1_PLAN, CHANGELOG, HANDOFF. | Diff, links, outcome/limitation accounting and independent review passed; complete. |
-| M1-8-capacity | Core execution reason and executor runtime classifier/default policy; executor runtime/settlement tests and direct core event/workflow-view/service consumers; EXECUTOR, FEATURES, DESKTOP_UI. | Gate C below; pending. |
+| M1-8-capacity | Core execution reason and executor runtime classifier/default policy; executor runtime/settlement tests and direct core event/workflow-view/service consumers; EXECUTOR, FEATURES, DESKTOP_UI. | Gate C passed; complete. |
 | M1-8-E | Bounded atomic current-ledger evidence query with read-only workflow/service facade and explicit evidence classes; existing db repository, core/workflow view contracts, runtime/service, matching repository/workflow/service tests; DATABASE, ARCHITECTURE, INTERFACES, FEATURES. No schema/recorder writes. | Exact run/operation/current-evidence coherence, ambiguity/supersession/absence, transaction consistency and bounded chunk/query witnesses; pending detailed expansion. |
-| M1-8-P | Retained operation-keyed execution review, independent post-copy overlay, bounded summary/window/detail protocol using the existing Plan hierarchy; workflow/runtime/service, task lifecycle, focused web review owner, commands and bridge validators with direct consumers; PRESENTATION, BRIDGE, INTERFACES. | Live/terminal/Gap reconciliation, omission and axis truth, stale reads and release/close ownership, deterministic bounds; pending detailed expansion. |
+| M1-8-P1 | Backend retained execution review: exact task/Plan/session/run binding, capture before release, separate operation and automatic linked-verification indexes, bounded workflow/service reads and close/shutdown retirement; workflow models/runtime and focused review owner, service/task lifecycle/port and direct tests; PRESENTATION, INTERFACES, ARCHITECTURE. | Idempotent capture/release/Close retries, partial-cleanup failure recovery, stale identity, exact axes/omissions, bounded populations and disposal; pending detailed expansion. |
+| M1-8-P2 | Bounded summary/window/detail protocol over the existing Plan hierarchy; web Plan review/drain, commands/bridge and Python/browser validators with direct tests; PRESENTATION, BRIDGE, INTERFACES. | Live/terminal/Gap reconciliation, omission truth, re-observation/reinjection, stale reads and 256-row/byte bounds; pending detailed expansion after P1. |
 | M1-8-U | Live and retained execution UI, independent recording/terminal axes, capacity/generic-I/O guidance and location-only trash information; packaged app/Plan renderer/status/styles and browser/component/installed witnesses; DESKTOP_UI, FEATURES. | Production headed flow, navigation/reinjection, hostile text, no hidden complete browser list, no masked issues; pending detailed expansion. |
 
 ### Capacity boundary and gate C
@@ -136,7 +137,9 @@ enum. Preserve event shapes/version, item-free terminal transport, independent
 recording axes and all existing effect/settlement paths. Direct consumers are
 `tests/test_executor_runtime.py`, `tests/test_executor_settlement.py`,
 `tests/core/test_session_events.py`, `tests/core/test_event_v5_consumers.py`,
-`tests/test_workflow_views.py` and `tests/test_service.py`; add witnesses only
+`tests/test_workflow_views.py` and `tests/test_service.py`; the direct native
+preallocation consumer `tests/test_executor_native.py` must expect disk-capacity
+for code 112 while preserving its cleanup assertions. Add witnesses only
 where they exercise a distinct seam.
 
 Recognize Win32 disk-full codes 39/112 and disk-quota code 1295, plus ENOSPC
@@ -158,6 +161,98 @@ adversarial review. Baseline oracle passed 30 scenarios x 3 runs at `2cc0083`.
 The oracle, baseline and semantic pin are immutable in this row. No settlement
 redesign, native/pipeline changes, new taxonomy or frontend work belongs here.
 
+**A8-02 — completed recurrence audit and authorized remedy.** Capacity can be
+missed where failures bypass policy or cleanup introduces a new failure after
+policy selection. Dependent edits paused; the arbiter approved this finite
+correction before resumption. Production population remains the two files above.
+
+| Reached path / owner | Consequence and disposition |
+| --- | --- |
+| MKDIR start / executor main loop | Direct settlement bypasses policy. Consult existing policy only for recognized capacity; accept Stop only, no new retries. Existing durable settlement and collaborator-escape path remain. |
+| Pre-retry cleanup / executor main loop | Cleanup can introduce capacity after Retry was selected. Consult on the actual cleanup exception, preserve cleanup-failed wrapper/original cause, settle once, then stop only on Stop. |
+| Ordinary failure cleanup / `_settle_ordinary_failure` | Continue/exhausted Retry can hide cleanup capacity. Return the transient cleanup exception after existing cleanup/settlement; only the admission-returning caller consults capacity policy. Escaping callers ignore it. |
+| Other cleanup callers / BaseException, cancel, pause, backstop | These exit admission; no new Stop or settlement mechanism. |
+| Deferred-directory finalization / executor | Already-admitted directories still settle/finalize; no new operation admission remains. |
+| Recorder-only `_record` writes | Preserve filesystem success and independent recording degradation/continuation. No new stop field or exception retention. Pre-destructive recorder-prerequisite failure remains an operation failure eligible for Stop. |
+| Final flush/restoration, workflow finish/close/open and preflight | Post-admission settlement or refusal before admission; preserve current axes and behavior. |
+
+Original Stop dominates without another policy callback. Secondary Continue or
+Retry never restarts settled work, sleeps, repeats cleanup or creates effects.
+Non-capacity callback counts and MKDIR sharing/no-retry behavior remain unchanged.
+Set stop only after successful settlement; preserve pause/cancel and callback
+escape truth through existing paths. No settlement shape/trace/schema changes.
+Add the distinct directory, ordinary/pre-retry cleanup, exhausted Retry, original
+Stop, callback escape, recorder-only/prerequisite and non-capacity control
+witnesses to Gate C. Native preallocation code-112 expectation migration is
+also covered by A8-02. New findings beyond this table require containment anew.
+
+Gate C closure: 3,968 consumer-neighborhood tests passed (two skips); 5,216
+ordinary tests passed (five skips; 31 headed deselections). The five skips are
+four unavailable symlink privileges and the unconfigured optional M1-7 readiness
+artifact, not capacity gates. Latest test-only controls also passed independent
+17-case focused review. The unchanged oracle passed 30 scenarios x 3 runs;
+12 import contracts, 86 local documentation links, diff checks and fresh
+adversarial review passed. No test or protected oracle artifact was retired.
+Raw final logs are `build/m1-8-capacity-{neighborhood,ordinary}-final01.log`
+and `build/m1-8-capacity-oracle-final.log`. Earlier temp-permission/source-tree
+fixture runs are retained as failed attempts, not acceptance. Delivery is the
+single `feat(executor): stop on recognized capacity failure` commit after
+`42ff8f2`; the frontend remains pending.
+
+### M1-8-E finite evidence boundary
+
+Read-only study inspected `2cc0083` and the capacity candidate. Revalidate the
+reason vocabulary against the integrated capacity commit before coding. E is
+one stateless read model; task retention belongs to P1, web protocol to P2.
+
+Production population: `namisync/db/repositories.py`, core evidence/execution
+contracts only where genuinely shared, `namisync/workflows/models.py`, a focused
+`namisync/workflows/execution_review.py`, runtime and workflow public exports,
+and the forwarding method in `namisync/interfaces/service.py`. Existing db
+public exports may change only as needed. No schema/index/recorder/history or
+Plan projection changes. Reuse existing inventory/stat/attestation decoders.
+Owning docs: DATABASE, PRESENTATION, FEATURES, INTERFACES and ARCHITECTURE's
+source locator, plus this register/CHANGELOG/HANDOFF. Database supplies raw
+snapshot facts; workflows classify them; interfaces do not decide attribution.
+
+Admit an exact bounded tuple of at most 256 retained-operation subjects before
+normalizing/deduplicating or opening SQL work. Resolve textual run token to its
+internal row only inside one read transaction; batch requested operation tokens
+and canonical target keys, using the run's target location. Repeated windows
+must not scan/decode the whole run or inventory. Complete-run eligibility and
+ambiguous target ownership are computed once by P1; E receives those trusted
+facts, never a browser claim of evidence ownership. P1 separately proves their
+derivation across off-window operations. No new latency/memory budget is added.
+
+Only successful COPY/UPDATE/MOVE_UPDATE outcomes are eligible; an empty file
+is eligible regardless of its zero byte count. Other outcomes/kinds are
+not-applicable. No matching committed successful operation receipt means
+unrecorded. A matching receipt without uniquely attributable coherent current
+same-run target evidence is superseded, including ambiguity, missing/currently
+absent row, changed scope, invalidation or contradictory observed/attested stat.
+Coherent copy provenance with no verification timestamp is recorded-copy;
+coherent readback/verify provenance with a verification timestamp is already-
+verified. Only those two classes expose the stored xxh3_128 digest and its
+provenance. Unsupported/incoherent combinations never borrow a digest. Preserve
+item and task recording issues independently; a later task/audit failure does
+not revoke a committed item. Do not promote failed post-publication outcomes
+to successful evidence eligibility or infer authority from byte counts.
+
+Finite verification: `tests/test_db_repositories.py`,
+`tests/test_runtime_readers.py`, `tests/test_workflow_views.py`,
+`tests/test_service.py` and a focused `tests/test_execution_review.py` assigned
+in `tests/_departments.py` if needed. Witness all five classes, zero-byte copy,
+linked readback/verify scope preservation, task recording degradation, absent
+and mismatched receipt/run/target, duplicates/invalidated/superseded evidence,
+native identity/stat coherence and no digest leakage. A trace/count witness
+checks at most one run read, one bounded operation read and one bounded inventory
+read per nonempty 256-subject window in one SQLite snapshot; first excess refuses
+before SQL/materialization. Empty request behavior must be explicit and inert.
+Reader reuse/error-retirement, affected database/workflow/interface/core checks,
+ordinary suite, imports, docs/diff and fresh adversarial review close E. No
+protected evidence artifact is changed. New schema, whole-run per-window work,
+new ownership or attribution beyond these classes requires adjudication.
+
 ### Preserved boundaries for execution review
 
 Keep committed selection after admitted preflight refusal; Plan again is the
@@ -173,6 +268,21 @@ the exact domain and counts in PRESENTATION/DATABASE before implementation.
 No new execution latency or memory budget is claimed. Changes to existing Plan
 construction, representation, indexing, publication or windowing reopen their
 affected BR-G-42 evidence; classify that seam before edits under DEFENSE §7.
+Arbiter decision **A8-01** approves the necessary review lifetime extension:
+retain the immutable core result by reference plus operation-keyed indexes in
+workflow-owned review until task close. Capture and exact identity validation
+precede custody release; capture failure cannot report release success. Repeated
+capture/release/Close and partial-cleanup retries are idempotent, including when
+dispatcher custody is already gone. Keep direct non-task retirement unchanged;
+close and shutdown free review ownership without retaining queues/observers.
+Live Gap may leave explicit uncertainty; terminal reconciliation restores only
+facts in the exact result and never erases visible transport-loss history.
+Missing/omitted facts are not invented success or unrun. P1/P2/U are separate
+only where each preserves cleanup/public behavior; capture/retirement changes
+remain atomic. DATABASE classification belongs to workflows, serialized by the
+bridge. This is scope approval, not acceptance evidence; expand finite files
+and update owning lifetime docs before P1 implementation.
+
 All AGENTS mandatory and recurrence stops apply; route reached boundaries to
 the designated arbiter with a finite proposal before dependent work resumes.
 
@@ -553,16 +663,14 @@ selection mutation. Existing core/planner tests pin operation identities,
 selection digests, and dependency closure. Preserve these behavioral witnesses
 when implementing fresh Plan again; a digest is not a filesystem snapshot.
 
-The executor already projects generic I/O reasons and accepts `Stop` after
-ordinary failure settlement, but its default policy continues non-sharing
-failures. M1-8-capacity is a separate reviewable behavior commit before its
-frontend consumer. Verify classification through the real error wrapping path,
-post-effect and recording outcomes, and the later-operation stop sweep in the
-executor runtime/settlement tests, then core/workflow/interface consumers.
-Run the ordinary suite and unchanged retained oracle; final review must reject
-any new settlement mechanism or capacity label that masks an unrelated failure.
-Update EXECUTOR, FEATURES, DESKTOP_UI, and the register with the implemented
-boundary and evidence before `feat(executor): stop on recognized capacity failure`.
+M1-8-capacity uses the existing failure-policy Stop and settlement paths for
+recognized operation, cleanup and destructive-prerequisite capacity failures.
+Recorder-only write errors retain independent degradation and continuation;
+already-admitted directory finalization remains settlement. The finite A8-02
+mechanism table and Gate C above own the implementation/verification boundary.
+The unchanged retained oracle guards settlement; no capacity label may hide
+an unrelated typed failure or recording issue. Frontend consumption follows
+in M1-8, independently of this policy change.
 
 For test cleanup, retire only unimplemented UI retry/reopening/cleanup promises
 from future acceptance lists. Keep direct-service artifact replacement,
@@ -603,9 +711,10 @@ never copies selection/authorization or changes the old artifact. Disk space
 freed by removing source/target entries is accounted for by that fresh scan,
 not by assuming that a prior selection digest binds the changed filesystem.
 
-Recognized execution-time disk-capacity failure is the narrow planned addition
-above; the current default failure policy continues past non-sharing failures.
-Generic I/O already has a typed reason and needs ordinary frontend presentation.
+Recognized operation, cleanup and destructive-prerequisite disk-capacity failure
+stops later admission after current settlement under M1-8-capacity. Recorder-only
+write failure remains recording degradation with continuation. Generic I/O keeps
+its typed reason and needs ordinary frontend presentation.
 Yellow capacity mapping uses existing DESKTOP_UI semantics and never hides
 independent known failures. Trash-location text is accepted for M1; exact
 counting is conditional on complete outcome evidence and display placement is
