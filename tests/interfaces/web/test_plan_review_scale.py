@@ -1339,7 +1339,7 @@ def test_plan_review_fixture_realizes_exact_counts_depth_duplicates_and_orders()
     assert base["siblings"]["generated_directory_child_max"] == 6
     assert len(base["raw_key_witnesses"]["rows"]) == 15
     assert any(
-        row["operation_id"] is None and row["size"] is None and row["mtime_ns"] is None
+        row["operation_id"] is None and row["size"] == 71 and row["mtime_ns"] is None
         for row in base["raw_key_witnesses"]["rows"]
     )
 
@@ -1365,6 +1365,72 @@ def test_plan_review_fixture_expected_orders_match_actual_sibling_sort() -> None
                 in witness_ids
             ]
             assert actual == witnesses["expected_orders"][f"{column.value}-{direction.value}"]
+
+
+def test_plan_review_fixture_folder_sizes_match_independent_path_facts_and_survive_selection() -> None:
+    """Finite GUI-M2 witness: one retained 120k fixture, no rescan or timing gate."""
+    started = perf_counter()
+    artifact = build_plan_fixture(information_heavy=False)
+    projection = build_plan_projection(artifact.request.request_id, artifact)
+
+    def stat_for(operation):
+        return operation.intended or operation.source_expected or operation.target_expected or operation.prior_target_expected
+
+    facts: dict[str, set[int]] = {}
+    for operation in artifact.plan.operations:
+        stat = stat_for(operation)
+        if stat is None or getattr(stat.kind, "value", stat.kind) != "file":
+            continue
+        path = operation.target_rel_path.replace("/", "\\").casefold()
+        facts.setdefault(path, set()).add(stat.size)
+
+    known_facts = {path: next(iter(sizes)) for path, sizes in facts.items() if len(sizes) == 1}
+    totals: dict[str, int] = {"": 0}
+    for path, size in known_facts.items():
+        parts = path.split("\\")[:-1]
+        for index in range(len(parts) + 1):
+            parent = "\\".join(parts[:index])
+            totals[parent] = totals.get(parent, 0) + size
+
+    folder_nodes = [
+        node for node in projection.nodes
+        if not node.row_kind.startswith("prior-") and (
+            getattr(node, "is_directory", False) or node.row_kind == "folder"
+        )
+    ]
+    assert folder_nodes
+    for node in folder_nodes:
+        expected = totals.get(node.rel_path_key.casefold().rstrip("\\"), 0)
+        if expected > 2**63 - 1:
+            assert node.size is None
+            assert "overflow" in (node.notice or "")
+        else:
+            assert node.size == expected
+    root = projection.nodes[0]
+    assert root.size is None
+    assert "overflow" in (root.notice or "")
+
+    state = benchmark.make_plan_review_state(artifact)
+    before = {
+        node.node_id: node.size for node in state.projection.nodes
+        if not node.row_kind.startswith("prior-") and (
+            getattr(node, "is_directory", False) or node.row_kind == "folder"
+        )
+    }
+    state.replace_selection(
+        selected_operation_ids=frozenset(), exclusion_reasons={},
+        selection_revision=1, selection_state="reviewing",
+        requires_destructive_confirmation=False, irreversible_update_count=0,
+        destructive_operation_count=0, irreversible_operation_count=0,
+        destructive_operation_counts={"update": 0, "move_update": 0, "trash": 0, "delete": 0},
+        required_bytes="0",
+    )
+    after = {
+        node.node_id: node.size for node in state.projection.nodes
+        if getattr(node, "is_directory", False) or node.row_kind == "folder"
+    }
+    assert after == before
+    print(f"folder-size-witness-120k: {len(known_facts)} distinct files, {perf_counter() - started:.3f}s diagnostic")
 
 
 def test_validator_hash_and_p95_oracles_are_independent_of_runner() -> None:

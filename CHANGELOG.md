@@ -29,6 +29,9 @@ packaging remain open.
 
 #### Refine Plan density, readiness and row highlighting (2026-09-17 – 2026-09-19)
 
+- Sum static folder sizes from distinct destination-oriented plan file facts,
+  independent of selection and view state. Report partial facts and null with
+  an overflow note above signed-64; keep file/folder size-sort groups stable.
 - Move execution/reset actions and concise feedback into the status card; let
   the table reach its card bottom. Match WinUI's translucent progress track,
   subdue metadata columns and omit dependency counts and neutral risk labels.

@@ -1,18 +1,25 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from types import SimpleNamespace
 
 import pytest
 
 import namisync.interfaces.web.plan_review as plan_review_module
 from namisync.interfaces.web.plan_review import PlanReviewState
 from namisync.interfaces.ui_state import MAX_JAVASCRIPT_SAFE_INTEGER
+from namisync.core.planning import OperationKind
+from namisync.core.preflight import Verdict
 from namisync.workflows import (
     PlanProjection,
     PlanProjectionNode,
     PlanSortColumn,
     SortDirection,
+    build_plan_projection,
 )
+from namisync.workflows.models import PlanArtifact, PlanRequest
+
+from _db_fixtures import file_stat, operation, plan
 
 
 def _node(
@@ -66,6 +73,101 @@ def _projection() -> PlanProjection:
         {"1" * 32: "copy", "2" * 32: "delete"},
         frozenset({"1" * 32, "2" * 32}),
     )
+
+
+def _file_fact_state(operations, *, complete=True) -> PlanReviewState:
+    value = replace(plan(tuple(operations)), source_complete=complete)
+    request = PlanRequest("b" * 32, value.source_root.path, value.target_root.path)
+    artifact = PlanArtifact(
+        request, SimpleNamespace(warnings=()), SimpleNamespace(warnings=()),
+        value, Verdict(True, (), SimpleNamespace()),
+    )
+    return PlanReviewState(
+        "task-" + "1" * 32, "a" * 32,
+        build_plan_projection(request.request_id, artifact),
+        0, "reviewing", "source", "target",
+    )
+
+
+@pytest.mark.parametrize("extra", [1, 2])
+def test_folder_size_boundary_survives_row_serialization(extra: int) -> None:
+    maximum = (1 << 63) - 1
+    state = _file_fact_state([
+        operation(OperationKind.NOOP, target_path=r"outer\inner\large.bin",
+                  source=file_stat(size=maximum - 1)),
+        operation(OperationKind.NOOP, target_path=r"outer\inner\small.bin",
+                  source=file_stat(size=extra, identity_index=2)),
+        operation(OperationKind.NOOP, target_path=r"sibling\ok.bin",
+                  source=file_stat(size=5, identity_index=3)),
+    ])
+    rows = state.window(expected_revision=0, offset=0, limit=256)["rows"]
+    for name in ("outer", "inner"):
+        row = next(row for row in rows if row["display"] == name)
+        assert row["size"] == (str(maximum) if extra == 1 else None)
+        if extra == 1:
+            assert row["notice"] is None
+        else:
+            assert "overflow" in row["notice"].lower()
+    sibling = next(row for row in rows if row["display"] == "sibling")
+    assert sibling["size"] == "5"
+    assert sibling["notice"] is None
+    large = next(row for row in rows if row["display"] == "large.bin")
+    assert large["size"] == str(maximum - 1)
+
+
+def test_partial_folder_size_keeps_known_bytes_in_window() -> None:
+    state = _file_fact_state([
+        operation(OperationKind.COPY, target_path=r"folder\known.bin",
+                  source=file_stat(size=13)),
+    ], complete=False)
+    folder = state.window(expected_revision=0, offset=0, limit=256)["rows"][0]
+    assert folder["display"] == "folder"
+    assert folder["size"] == "13"
+    assert "partial" in folder["notice"].lower()
+
+
+def test_folder_size_ignores_selection_query_collapse_and_window() -> None:
+    state = _file_fact_state([
+        operation(OperationKind.COPY, source_path=rf"folder\{index:03}.bin",
+                  target_path=rf"folder\{index:03}.bin",
+                  source=file_stat(size=index + 1, identity_index=index + 1))
+        for index in range(300)
+    ] + [operation(OperationKind.UPDATE, target_path=r"folder\hidden.bin",
+                   source=file_stat(size=7, identity_index=301))])
+    total = str(sum(range(1, 301)) + 7)
+    first_window = state.window(expected_revision=0, offset=0, limit=256)
+    folder = first_window["rows"][0]
+    assert first_window["total"] == 302
+    assert len(first_window["rows"]) == 256
+    assert folder["size"] == total
+    assert len(state.window(expected_revision=0, offset=256, limit=256)["rows"]) == 46
+    state.replace_selection(
+        selected_operation_ids=frozenset(), exclusion_reasons={},
+        selection_revision=1, selection_state="reviewing",
+        requires_destructive_confirmation=False, irreversible_update_count=0,
+        destructive_operation_count=0, irreversible_operation_count=0,
+        destructive_operation_counts={"update": 0, "move_update": 0, "trash": 0, "delete": 0},
+        required_bytes="0",
+    )
+    for query, filters, collapsed in [
+        ("", frozenset({"copy"}), True),
+        ("000.bin", frozenset({"copy"}), False),
+        ("", frozenset(), False),
+    ]:
+        result = state.update(
+            expected_revision=state.view_revision, search_query=query, filters=filters,
+            sort_column=PlanSortColumn.SIZE, sort_direction=SortDirection.DESCENDING,
+            collapse_node_id=folder["node_id"], collapsed=collapsed,
+        )
+        assert result["disposition"] == "applied"
+        rows = state.window(expected_revision=state.view_revision, offset=0, limit=256)["rows"]
+        assert rows[0]["size"] == total
+        assert rows[0]["notice"] is None
+        assert result["selected_operation_count"] == 0
+        if collapsed:
+            assert len(rows) == 1
+        elif query:
+            assert len(rows) == 2
 
 
 def test_plan_review_state_derives_revisioned_filters_windows_and_anchor() -> None:

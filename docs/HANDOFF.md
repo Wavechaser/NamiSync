@@ -1,48 +1,53 @@
 # Latest session handoff
 
-## Status composition and folder-total boundary (2026-09-19)
+## Static Plan folder totals (2026-09-19)
 
-GUI-M1 moves execution controls and icon-only Plan again into the status card's
-title row. Concise actionable feedback shares the digest row; both stack and
-wrap at narrow card widths. Full feedback remains in a tooltip. The table has
-no footer. Size/Modified/Notes share subdued text; dependencies and Risk: none
-are omitted without hiding real risk, blockers or notices.
+GUI-M2 completes the folder-total work on top of status-card commit 70a9270.
+Totals use each distinct canonical destination file path's displayed retained
+fact once, including hidden/deselected children and target-file removal sizes.
+Moves contribute only at their destination, not prior annotations. One reverse
+parent pass reuses child totals without nested double counting; selection
+overlays do not rebuild these immutable size facts.
 
-Progress tracks use WinUI's ControlStrongStrokeColorDefault, keeping
-translucency local to the background and preserving forced-color Canvas.
-The reset glyph comes from the pinned Microsoft catalog, with native 20px
-fallback for the small icon slot. Status/rail progress thickness is unchanged.
+Unknown, conflicting or blocked facts and incomplete scans carry partial notes.
+Known blocked bytes still contribute. At the user's direction, totals above
+MAX_SIGNED_64 publish null plus an explicit overflow note, including ancestors;
+unaffected siblings remain exact. File and execution scalar domains and the
+bridge contract are unchanged. Empty directories display zero. Internal
+directory identity handles cleanup DELETE as well as MKDIR without changing
+the existing container/disclosure flag. Size sorts keep files before folders
+and unavailable values last inside each group; other sorts are unchanged.
 
-Verification: icon generation check passed; frontend static suite 49 passed.
-Installed gallery passed four modes (Light/Dark/forced/reduced); installed Plan
-passed default/larger layouts, warning-row wrapping, control placement, metadata
-colors and existing selection/keyboard/confirmation roundtrips. Independent
-read-only review found no introduced GUI-M1 regression. Final isolated
-interfaces/tools department gate: 2,027 passed, four skipped.
+Verification: 64 focused projection/adapter tests passed, including maximum,
+first excess, nested overflow, unaffected siblings, duplicate paths, unknown
+members, and real 300-row filter/collapse/selection/window invariance. Browser
+probes verify null/notes, blank size rendering, exact maximum and rejection of
+above-domain wire sizes. Installed Plan checks passed at default/larger sizes
+after the final production corrections. Independent review identified two
+introduced edge cases (directory disclosure flag and non-monotonic unknown
+member tracking); both are corrected and regression-tested.
+Final workflows/interfaces: 2,517 passed, one skipped. Complete scale fixture
+gate: 58 passed, one skipped. Final read-only review of fixture/validator changes
+found no requirement drift or historical weakening. Diff checks passed.
 
-GUI-M2 is NOT delivered. The user defined destination-oriented, distinct-file
-static totals, including hidden/deselected children and removal target sizes,
-excluding moved prior aliases and nested double counting. Prototype projection,
-tests and independent scale manifests are preserved separately while the
-numeric-boundary decision is pending. The current bridge only accepts signed-64
-row sizes; execution-space admission does not bound all-file totals. Proposed
-exact extension affects only Plan row size, bounded by 120,000 × MAX_SIGNED_64.
-Alternative: null plus an explicit overflow note. Neither is yet authorized.
-Do not merge the prototype or send its larger totals through the current bridge.
-Recovery branch: `recovery/gui-m2-folder-totals-20260919`. Its recovery-only
-commit is not a merge/cherry-pick unit. Rebuild useful changes into a verified
-atomic GUI-M2 commit after the decision; original baseline is `e6ee448`.
-M1_PLAN owns scope and resumption; PRESENTATION remains the delivered contract
-until a complete reviewed GUI-M2 unit is rebuilt and verified.
-Directory classification also needs finishing: retained EntryKind.DIRECTORY
-covers both MKDIR and cleanup DELETE. The prototype only handles MKDIR.
-Verify empty/removed directory totals and stable folder grouping without changing
-selection or disclosure rules; do not add operation-kind special cases.
+Current compact scale-fixture expectations and their independent validator were
+updated together; legacy schema validation and historical measurement receipts
+are untouched. The independent prefix-sum oracle covers every folder in the
+100,000-operation/120,000-row fixture and selection invariance. Its elapsed time
+includes fixture construction and is diagnostic, not a new performance promise.
+The first neighborhood run had a concurrent wheel-build error and stale
+fixture-validator failures; sequential packaging passed, and final gate reruns
+supersede that run. No full repository suite was needed for this neighborhood.
+
+Recovery af02913 on recovery/gui-m2-folder-totals-20260919 was inspected and
+rebuilt, not merged/cherry-picked. Its useful production/tests were integrated
+with the approved overflow policy and corrected directory/grouping behavior;
+its unfinished HANDOFF and old assumptions are superseded by this document.
+The recovery ref and temporary stash 93414b7 remain historical, not merge units.
 
 Evidence root:
 C:/Users/Spectrum/.codex/visualizations/2026/09/18/01a0b2ed-22b3-7083-a3e1-21f00596391d/.
-Directories: gui-m-headed (four gallery passes, then obsolete risk-label
-expectation failure), gui-m-headed-plan (two Plan passes),
-gui-m1-isolated (final ordinary gate). Initial mixed-tree ordinary run had
-2,029 passes and two stale GUI-M2 scale-manifest failures; independent fixture
-corrections passed both focused witnesses. No full repository suite was run.
+Final native evidence: gui-m2-headed-final; sequential packaging: gui-m2-wheel;
+final ordinary neighborhood: gui-m2-neighborhood-final. Focused projection/
+adapter evidence is build/pytest-gui-m2-reviewed; complete fixture checks are
+build/pytest-gui-m2-scale-final2.

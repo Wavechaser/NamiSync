@@ -688,20 +688,34 @@ def _independent_witness_order(
             return node.size
         return node.mtime_ns
 
-    available = [node for node in nodes if primary(node) is not None]
-    unavailable = [node for node in nodes if primary(node) is None]
-    available.sort(key=lambda node: primary(node), reverse=direction is SortDirection.DESCENDING)
-    start = 0
-    while start < len(available):
-        end = start + 1
-        while end < len(available) and primary(available[end]) == primary(available[start]):
-            end += 1
-        available[start:end] = sorted(
-            available[start:end], key=lambda node: canonical[_witness_identity(node)]
-        )
-        start = end
-    unavailable.sort(key=lambda node: canonical[_witness_identity(node)])
-    return tuple((*available, *unavailable))
+    if column is not PlanSortColumn.SIZE:
+        groups = {0: list(nodes), 1: [], 2: []}
+    else:
+        groups = {0: [], 1: [], 2: [], 3: []}
+        for node in nodes:
+            directory = bool(getattr(node, "is_directory", False)) or node.row_kind == "folder"
+            if directory:
+                groups[2 if primary(node) is not None else 3].append(node)
+            else:
+                groups[0 if primary(node) is not None else 1].append(node)
+    ordered: list[PlanProjectionNode] = []
+    for bucket in range(len(groups)):
+        values = groups[bucket]
+        available = [node for node in values if primary(node) is not None]
+        unavailable = [node for node in values if primary(node) is None]
+        available.sort(key=lambda node: primary(node), reverse=direction is SortDirection.DESCENDING)
+        start = 0
+        while start < len(available):
+            end = start + 1
+            while end < len(available) and primary(available[end]) == primary(available[start]):
+                end += 1
+            available[start:end] = sorted(
+                available[start:end], key=lambda node: canonical[_witness_identity(node)]
+            )
+            start = end
+        unavailable.sort(key=lambda node: canonical[_witness_identity(node)])
+        ordered.extend((*available, *unavailable))
+    return tuple(ordered)
 
 
 def _witness_identity(node: PlanProjectionNode) -> str:

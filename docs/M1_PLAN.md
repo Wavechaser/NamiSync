@@ -25,7 +25,7 @@ inventory implementation or general performance redesign is authorized.
 | ID | Atomic outcome | Verification | State |
 | --- | --- | --- | --- |
 | GUI-M1 | Translucent native progress track; status-card actions/reset icon and concise feedback; table reaches card bottom; hide dependency/none-risk labels and unify subdued metadata text. | Interfaces/tools: 2,027 passed, four skipped; icon check and 49 frontend tests passed; four installed gallery modes and two default/larger Plan scenarios passed, including narrow feedback layout. Independent review passed. | Delivered |
-| GUI-M2 | Static folder byte totals from retained file facts, partial-total notes, and size sorting within fixed folder/file groups. | Exact nested/empty/partial/duplicate-path totals; selection/filter independence; ascending/descending grouping, bridge numeric/notes checks; workflows+interfaces and focused scale witness. | Pending |
+| GUI-M2 | Static folder byte totals from retained file facts, partial-total notes, and size sorting within fixed folder/file groups; null plus overflow note above signed-64. | Workflows/interfaces: 2,517 passed, one skipped. Scale: 58 passed, one skipped, including independent complete-folder sums and legacy-validator preservation. Exact boundary/nested/partial/dedup/view-state and browser-null checks passed; installed default/larger Plan scenarios passed. Final adversarial review passed. | Delivered |
 
 Regression study: preserve action admission/focus and full actionable warnings;
 do not bake alpha into whole controls or labels; actual computed gallery values
@@ -48,7 +48,7 @@ unknown structural/notice groups remain last. No new bridge field is required:
 reuse numeric `size` and a concise folder `notice`, preserving other diagnostics.
 Finite regression population: nested/empty folders, equal/conflicting duplicate
 members, prior moves, scoped/incomplete scans, selection/filter changes, numeric
-ties/missing values and 120,000-operation/deep-chain fixtures. Exact totals and
+ties/missing values and 120,000-row/deep-chain fixtures. Exact totals and
 one reverse parent accumulation pass establish the linear-cost claim over
 projection members/nodes; timing is diagnostic, not a millisecond promise.
 User clarification: removal contributes its displayed target-file size; moves
@@ -56,18 +56,32 @@ contribute only under their destination. Unknown represented file sizes and
 blockers mark totals partial; known blocked-file sizes still contribute.
 Static destination-tree totals never replace selected execution required bytes.
 
-GUI-M2 numeric boundary decision is pending: the existing execution-space
-admission excludes move/no-op/removal/blocked file facts, so it does not bound
-the new all-file total to signed-64. Python addition and the byte formatter
-preserve larger integers, but `validatePlanWindowRow.size` currently refuses
-them. Proposed narrow extension: only Plan row size accepts a canonical decimal
-bounded by 120,000 times MAX_SIGNED_64 (25 digits); execution counters and file
-facts retain their existing domain. Alternative: null plus an explicit overflow
-note. Neither alternative is authorized yet; no overflow path is merge-ready.
+GUI-M2 resumes from `70a9270`; `af02913` is recovery evidence only, not a
+merge/cherry-pick unit. User approved null plus an explicit overflow note for
+totals above MAX_SIGNED_64. Keep exact Python accumulation, check before
+publishing row size, and propagate overflow to every containing folder without
+clamping or substituting zero. Existing bridge/file/execution scalar contracts
+remain unchanged. Gate exact maximum, first excess, nested overflow, an
+unaffected sibling, and raw bridge/client acceptance of null with its note.
+Direct fixture consumers include `tests/plan_review_benchmark.py`,
+`test_plan_review_scale.py` and its frozen compact-authority JSON; migrate their
+independent size/order expectations, not measured output as expected truth.
 Directory classification must use retained `EntryKind.DIRECTORY` for both
 MKDIR and cleanup DELETE, not operation-kind special cases. The preserved
-prototype handles only MKDIR; empty/removed directory totals and within-group
-sorting still need completion and regression checks against selection/disclosure.
+prototype is not authority; empty/removed directory totals and within-group
+sorting require regression checks against selection/disclosure. Production and
+test population remains Plan projection, existing row serializer/client probes
+and those fixture consumers. PRESENTATION and DEFENSE document the approved
+presentation-only overflow policy. One GUI-M2 commit closes this outcome.
+Directory identity is retained internally on projection nodes for size grouping;
+it adds no wire field and must not reinterpret `is_container`, which controls
+existing tree/disclosure behavior. Recheck dataclass-construction test helpers
+and retained fixture representations as direct consumers.
+The scale fixture's independent validator in
+`tests/interfaces/web/_plan_review_scale.py` is also a direct consumer: update
+the current compact fixture's directory-size/order expectations while retaining
+the legacy fixture schema's historical acceptance unchanged. Do not rewrite
+historical measurement receipts or claim their timings certify new behavior.
 
 ### WinUI control alignment and Plan keyboard follow-up (2026-09-18)
 

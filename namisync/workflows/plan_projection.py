@@ -12,6 +12,7 @@ from typing import Mapping
 from namisync.core.models import EntryKind, FileStat
 from namisync.core.pathing import fold_validated_path
 from namisync.core.planning import OpId, OperationKind, Plan, PlanOperation
+from namisync.core.scalars import MAX_SIGNED_64
 
 from .models import PlanArtifact
 from .node_tree import (
@@ -118,6 +119,7 @@ class PlanProjectionNode:
     notice: str | None = None
     selection_exclusion_reason: str | None = None
     filename_key: str | None = None
+    is_directory: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -245,6 +247,7 @@ class _PlanProjectionDraft:
     notice: str | None = None
     selection_exclusion_reason: str | None = None
     filename_key: str | None = None
+    is_directory: bool = False
 
 
 def build_plan_projection(
@@ -430,6 +433,29 @@ def _sort_plan_projection_from_canonical(
         assert parent is not None
         children.setdefault(parent, []).append(source_position)
     for parent, siblings in children.items():
+        if column is PlanSortColumn.SIZE:
+            buckets: tuple[list[int], list[int], list[int]] = ([], [], [])
+            for source_position in siblings:
+                node = nodes[source_position]
+                if node.row_kind == "notice" or node.row_kind.startswith("prior-"):
+                    bucket = 2
+                elif node.row_kind == "folder" or node.is_directory:
+                    bucket = 1
+                else:
+                    bucket = 0
+                buckets[bucket].append(source_position)
+            ordered: list[int] = []
+            for bucket in buckets[:2]:
+                available = [position for position in bucket if nodes[position].size is not None]
+                unavailable = [position for position in bucket if nodes[position].size is None]
+                available.sort(
+                    key=lambda position: nodes[position].size,
+                    reverse=direction is SortDirection.DESCENDING,
+                )
+                ordered.extend((*available, *unavailable))
+            ordered.extend(buckets[2])
+            children[parent] = ordered
+            continue
         available: list[int] = []
         unavailable: list[int] = []
         for source_position in siblings:
@@ -641,6 +667,10 @@ def _append_operation_tree(
     subtree_selectable = [0] * len(tree.nodes)
     subtree_selected = [0] * len(tree.nodes)
     subtree_operations = [0] * len(tree.nodes)
+    subtree_sizes = [0] * len(tree.nodes)
+    subtree_partial = [False] * len(tree.nodes)
+    direct_sizes: list[int | None] = [None] * len(tree.nodes)
+    direct_conflict = [False] * len(tree.nodes)
     for node in tree.nodes:
         ids = node.member_ids
         direct_selectable[node.position] = sum(item in selectable for item in ids)
@@ -648,12 +678,40 @@ def _append_operation_tree(
         subtree_selectable[node.position] = direct_selectable[node.position]
         subtree_selected[node.position] = direct_selected[node.position]
         subtree_operations[node.position] = len(ids)
+        if row_prefix == "":
+            file_facts: set[int] = set()
+            kinds: set[EntryKind] = set()
+            unknown = False
+            blocked = False
+            for operation_id in ids:
+                operation = operations[operation_id]
+                stat = _operation_stat(operation)
+                blocked = blocked or operation.blocked
+                if stat is None:
+                    unknown = unknown or operation.kind is not OperationKind.MKDIR
+                else:
+                    kinds.add(stat.kind)
+                    if stat.kind is EntryKind.FILE:
+                        file_facts.add(stat.size)
+            direct_conflict[node.position] = (
+                len(file_facts) > 1
+                or (bool(file_facts) and EntryKind.DIRECTORY in kinds)
+            )
+            if len(file_facts) == 1 and not direct_conflict[node.position]:
+                direct_sizes[node.position] = next(iter(file_facts))
+            subtree_sizes[node.position] = direct_sizes[node.position] or 0
+            subtree_partial[node.position] = (
+                unknown or blocked or direct_conflict[node.position]
+            )
     for position in range(len(tree.nodes) - 1, 0, -1):
         parent = tree.nodes[position].parent_index
         assert parent is not None
         subtree_selectable[parent] += subtree_selectable[position]
         subtree_selected[parent] += subtree_selected[position]
         subtree_operations[parent] += subtree_operations[position]
+        if row_prefix == "":
+            subtree_sizes[parent] += subtree_sizes[position]
+            subtree_partial[parent] = subtree_partial[parent] or subtree_partial[position]
 
     for node in tree.nodes[start_position:]:
         if node.parent_index is None:
@@ -664,6 +722,17 @@ def _append_operation_tree(
             parent = draft_by_tree_position[node.parent_index]
         member_ids = node.member_ids
         singular = operations[member_ids[0]] if len(member_ids) == 1 else None
+        singular_stat = None if singular is None else _operation_stat(singular)
+        singular_is_directory = (
+            singular is not None
+            and (
+                singular.kind is OperationKind.MKDIR
+                or (
+                    singular_stat is not None
+                    and singular_stat.kind is EntryKind.DIRECTORY
+                )
+            )
+        )
         draft_index = len(drafts)
         draft_by_tree_position[node.position] = draft_index
         drafts.append(
@@ -695,6 +764,27 @@ def _append_operation_tree(
                 None if singular is None else excluded.get(str(singular.op_id)),
             )
         )
+        if row_prefix == "":
+            draft = drafts[draft_index]
+            draft.is_directory = singular_is_directory
+            if draft.row_kind == "folder" or singular_is_directory:
+                draft.size = (
+                    None
+                    if subtree_sizes[node.position] > MAX_SIGNED_64
+                    else subtree_sizes[node.position]
+                )
+                if subtree_sizes[node.position] > MAX_SIGNED_64:
+                    draft.notice = "Partial size: overflow exceeds supported range"
+                elif subtree_partial[node.position] or not (
+                    plan.source_complete and plan.target_complete
+                ):
+                    draft.notice = "Partial size: incomplete file facts"
+            elif draft.row_kind == "operation-group":
+                draft.size = direct_sizes[node.position]
+                if direct_conflict[node.position]:
+                    draft.notice = "Partial size: conflicting facts"
+                elif subtree_partial[node.position]:
+                    draft.notice = "Partial size: incomplete file facts"
         if singular is not None:
             operation_draft_by_id[str(singular.op_id)] = draft_index
         if len(member_ids) > 1:
@@ -866,6 +956,7 @@ def _materialize_projection(
             notice=draft.notice,
             selection_exclusion_reason=draft.selection_exclusion_reason,
             filename_key=draft.filename_key,
+            is_directory=draft.is_directory,
         ))
         drafts[index] = None  # type: ignore[list-item]
     frozen_nodes = tuple(nodes)

@@ -1260,7 +1260,7 @@ def _validate_fixture_manifest(value: object, *, heavy: bool, schema: str) -> No
         or siblings["widest"] < 19_000
     ):
         raise ValueError("plan-review fixture sibling distribution is invalid")
-    _validate_raw_key_witnesses(value["raw_key_witnesses"])
+    _validate_raw_key_witnesses(value["raw_key_witnesses"], folder_totals=schema == FIXTURE_SCHEMA)
     rows = 240_000 if heavy else 120_000
     if schema == FIXTURE_SCHEMA:
         _validate_compact_retained_representation(value["retained_representation"], rows)
@@ -1268,7 +1268,7 @@ def _validate_fixture_manifest(value: object, *, heavy: bool, schema: str) -> No
         _validate_retained_representation(value["retained_representation"], rows)
 
 
-def _validate_raw_key_witnesses(value: object) -> None:
+def _validate_raw_key_witnesses(value: object, *, folder_totals: bool = False) -> None:
     if type(value) is not dict or set(value) != {
         "canonical_ids", "expected_orders", "operation_value_cases", "rows"
     }:
@@ -1292,7 +1292,7 @@ def _validate_raw_key_witnesses(value: object) -> None:
     for column in ("filename", "size", "mtime"):
         for direction in ("ascending", "descending"):
             expected_orders[f"{column}-{direction}"] = _independent_row_order(
-                rows, identities, column, direction
+                rows, identities, column, direction, folder_totals=folder_totals
             )
     if value["expected_orders"] != expected_orders:
         raise ValueError("plan-review fixture expected raw-key order is invalid")
@@ -1307,7 +1307,7 @@ def _validate_raw_key_witnesses(value: object) -> None:
         or cases[f"{6:032x}"]["kind"] != "noop"
         or cases[f"{10:032x}"]["kind"] != "mkdir"
         or any(cases[f"{index:032x}"]["size"] in {None, 0} for index in (0, 5, 6))
-        or cases[f"{10:032x}"]["size"] is not None
+        or cases[f"{10:032x}"]["size"] != (0 if folder_totals else None)
     ):
         raise ValueError("plan-review fixture operation value cases are invalid")
 
@@ -1317,6 +1317,8 @@ def _independent_row_order(
     identities: list[str],
     column: str,
     direction: str,
+    *,
+    folder_totals: bool = False,
 ) -> list[str]:
     canonical = {identity: ordinal for ordinal, identity in enumerate(identities)}
 
@@ -1339,7 +1341,15 @@ def _independent_row_order(
         available[start:end] = sorted(available[start:end], key=lambda row: canonical[identity(row)])
         start = end
     unavailable.sort(key=lambda row: canonical[identity(row)])
-    return [identity(row) for row in (*available, *unavailable)]
+    ordered = [*available, *unavailable]
+    if column == "size" and folder_totals:
+        # This fixed witness has one structural folder and operation 10 is MKDIR.
+        # Partition independently of the production projection's directory flag.
+        folders = {identity(row) for row in rows
+                   if row["operation_id"] in {None, f"{10:032x}"}}
+        ordered = ([row for row in ordered if identity(row) not in folders]
+                   + [row for row in ordered if identity(row) in folders])
+    return [identity(row) for row in ordered]
 
 
 def _validate_retained_representation(value: object, rows: int) -> None:
@@ -1489,6 +1499,7 @@ def _validate_compact_retained_representation(value: object, rows: int) -> None:
         "selection", "selectable_operation_count", "selected_operation_count",
         "operation_count", "size", "mtime_ns", "dependency_count", "risk",
         "move_peer_id", "notice", "selection_exclusion_reason", "filename_key",
+        "is_directory",
     ]:
         raise ValueError("plan-review compact node fields are invalid")
     state = value["plan_review_state"]

@@ -200,6 +200,7 @@ const planUrl = moduleUrl(`
       const cell = document.createElement("div");
       cell.dataset.fileColumn = column === "modified" ? "secondary" : column;
       cell.className = column === "size" ? "nami-file-row__size" : "nami-plan-row__" + column;
+      if (column === "size") cell.textContent = row.sizeText;
       return cell;
     });
     element.append(selection, name, ...cells, notes);
@@ -313,10 +314,10 @@ const notice = {
   selectable_operation_count: 0,
   selected_operation_count: 0,
   operation_count: 0,
-  notice: hostile,
+  notice: "Partial size: overflow",
   risk: "irreversible",
   blocked_reason: "unsupported",
-  selection_exclusion_reason: "dependency unavailable",
+  selection_exclusion_reason: hostile,
 };
 review.window.rows.push(notice);
 
@@ -408,9 +409,11 @@ assert.equal(findText(renderedRow, "deps"), false);
 const renderedNotice = findByDataset(panel.element, "nodeId", notice.node_id);
 assert.equal(renderedNotice.dataset.folder, "false");
 assert.ok(findText(renderedNotice, hostile), "notice context renders as inert text");
+assert.ok(findText(renderedNotice, "Partial size: overflow"), "overflow note remains visible");
 assert.ok(findText(renderedNotice, "Risk: irreversible"));
 assert.ok(findText(renderedNotice, "unsupported"), "notices do not hide blockers");
-assert.ok(findText(renderedNotice, "dependency unavailable"), "selection guidance remains");
+assert.equal(findByClass(renderedNotice, "nami-file-row__size").textContent, "",
+  "overflow rows do not render a clamped or zero size");
 assert.equal(
   findByClass(renderedRow, "nami-plan-review__spacer"),
   null,
