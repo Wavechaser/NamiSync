@@ -773,6 +773,9 @@ def test_sh_g_11_channel_semantic_aliases_are_complete_and_disjoint() -> None:
 def test_sh_g_11_channel_mappings_use_theme_secondary_badges() -> None:
     source = TOKENS.read_text(encoding="utf-8")
     light, dark, automatic_dark = _theme_variables(source)
+    assert light["--color-neutral-foreground-tertiary"] == "#616161"
+    assert dark["--color-neutral-foreground-tertiary"] == "#adadad"
+    assert automatic_dark["--color-neutral-foreground-tertiary"] == "#adadad"
 
     shared_aliases = {
         "--intent-additive-foreground": "var(--palette-blue-main)",
@@ -791,7 +794,7 @@ def test_sh_g_11_channel_mappings_use_theme_secondary_badges() -> None:
         "--progress-active-fill": "var(--color-accent-fill)",
         "--progress-paused-fill": "var(--palette-yellow-main)",
         "--progress-canceled-fill": "var(--color-neutral-foreground-secondary)",
-        "--progress-track-background": "var(--color-control-strong-stroke)",
+        "--progress-track-background": "var(--color-button-fill)",
     }
     for theme in (light, dark, automatic_dark):
         assert shared_aliases.items() <= theme.items()
@@ -1634,7 +1637,7 @@ def test_sh_g_11_solid_controls_and_operation_filters_follow_tuned_states() -> N
             "--color-neutral-foreground-secondary", theme
         )
         assert _resolve("--progress-track-background", theme) == _resolve(
-            "--color-control-strong-stroke", theme
+            "--color-button-fill", theme
         )
         assert _contrast(
             _resolve("--color-neutral-foreground", theme),

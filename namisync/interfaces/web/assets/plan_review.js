@@ -50,6 +50,16 @@ function button(label, className = "nami-button") {
   return element;
 }
 
+function countedButton(label, className) {
+  const element = button("", className);
+  const text = document.createElement("span");
+  renderText(text, label);
+  const count = document.createElement("span");
+  count.className = "nami-filter-count";
+  element.append(text, count);
+  return element;
+}
+
 function rowView(row, busy, committed) {
   const hideReason = row.risk === "none" && row.blocked_reason === null
     && row.selection_exclusion_reason === null && HIDDEN_REASONS.has(row.reason);
@@ -145,6 +155,15 @@ export function createPlanReviewPanel(callbacks) {
   sourcePath.className = "nami-plan-review__path nami-plan-review__path--source";
   const targetPath = document.createElement("p");
   targetPath.className = "nami-plan-review__path nami-plan-review__path--target";
+  const sourceValue = document.createElement("span");
+  const targetValue = document.createElement("span");
+  for (const [row, value, label] of [[sourcePath, sourceValue, "Source:"], [targetPath, targetValue, "Target:"]]) {
+    const caption = document.createElement("span");
+    renderText(caption, label);
+    row.classList.add("nami-labeled-path");
+    value.className = "nami-labeled-path__value";
+    row.append(caption, value);
+  }
   paths.append(sourcePath, targetPath);
   const settings = document.createElement("div");
   settings.className = "nami-shell__guidance nami-plan-review__settings";
@@ -219,7 +238,7 @@ export function createPlanReviewPanel(callbacks) {
   const filterButtons = new Map();
   const filterMenus = new Map();
   for (const value of FILTERS) {
-    const filter = button(displayLabel(value), "nami-button nami-plan-review__filter");
+    const filter = countedButton(displayLabel(value), "nami-button nami-plan-review__filter");
     filter.dataset.operation = value === "remove" ? "trash" : value === "error" ? "blocked" : value;
     filter.dataset.filter = value;
     filter.ariaPressed = "false";
@@ -241,7 +260,7 @@ export function createPlanReviewPanel(callbacks) {
       menu.hidden = true;
       const choices = new Map();
       for (const key of ["all", ...members]) {
-        const item = button("", "nami-menu__item");
+        const item = countedButton("", "nami-menu__item");
         item.setAttribute("role", "menuitemradio");
         item.dataset.filterDetail = key;
         menu.append(item);
@@ -749,8 +768,8 @@ export function createPlanReviewPanel(callbacks) {
     current = task.review;
     if (current === null) {
       delete element.dataset.pending;
-      updateText(sourcePath, "Loading reviewed plan…");
-      updateText(targetPath, "");
+      updateText(sourceValue, "Loading reviewed plan…");
+      updateText(targetValue, "");
       updateSetting(verifySetting, verifyIcon, verifyLabel, "arrow-sync", "", "muted");
       updateSetting(deletionSetting, deletionIcon, deletionLabel, "delete", "", "muted");
       updateText(facts, task.error ?? "Waiting for the completed plan to become available.");
@@ -769,8 +788,8 @@ export function createPlanReviewPanel(callbacks) {
     element.dataset.pending = review.pending ?? "";
     list.ariaRowCount = String(review.window.total + 1);
     tableCard.hidden = false;
-    updateText(sourcePath, `Source: ${review.summary.source_path}`, true);
-    updateText(targetPath, `Target: ${review.summary.target_path}`, true);
+    updateText(sourceValue, review.summary.source_path, true);
+    updateText(targetValue, review.summary.target_path, true);
     sourcePath.title = review.summary.source_path;
     targetPath.title = review.summary.target_path;
     const options = task.form?.options;
@@ -832,7 +851,9 @@ export function createPlanReviewPanel(callbacks) {
       const hidden = !ALWAYS_VISIBLE_FILTERS.has(value) && count === 0;
       filter.hidden = hidden;
       filter.dataset.trashAlert = String(value === "remove" && !active && count > 1);
-      updateText(filter, `${displayLabel(value)} ${count}`);
+      updateText(filter.children[0], displayLabel(value));
+      updateText(filter.children[1], String(count));
+      filter.ariaLabel = `${displayLabel(value)} ${count}`;
       const grouped = filterMenus.get(value);
       if (grouped !== undefined) {
         grouped.split.hidden = hidden;
@@ -841,7 +862,9 @@ export function createPlanReviewPanel(callbacks) {
         for (const [key, item] of grouped.choices) {
           const itemCount = key === "all" ? count : review.summary.filter_counts?.[key] ?? 0;
           const label = key === "all" ? `All ${value === "copy" ? "copies" : value === "remove" ? "removals" : `${value}s`}` : displayLabel(key);
-          updateText(item, `${label} ${itemCount}`);
+          updateText(item.children[0], label);
+          updateText(item.children[1], String(itemCount));
+          item.ariaLabel = `${label} ${itemCount}`;
           item.ariaChecked = String(key === "all"
             ? members.every((member) => review.summary.filters.includes(member))
             : review.summary.filters.includes(key) && members.filter((member) => review.summary.filters.includes(member)).length === 1);

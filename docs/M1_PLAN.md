@@ -11,6 +11,32 @@ do not add, defer, or reinterpret an M1 product outcome.
 
 ## Main objectives and current boundary
 
+### Plan visual spacing and byte precision (2026-09-20)
+
+GUI-O, baseline c552537, delivered: one atomic presentation unit covering
+tertiary foreground tokens and metadata/rail consumers; separate filter label/
+counter slots with right-aligned menu counts; Setup Sync/Integrity wording;
+square reset button, button-rest progress tracks, rail trailing inset, aligned
+Source/Target label slots, and shared two-decimal binary byte formatting.
+Finite population: packaged tokens/components/app CSS, Plan/Setup/rail/render
+JS and direct frontend/gallery/installed test consumers, DESKTOP_UI, CHANGELOG,
+HANDOFF. Preserve canonical keys, scalar validation, selection, planning and
+execution authority. No backend changes or new layout abstractions. Gate:
+interfaces/tools checks, focused byte boundaries and visible filter strings,
+installed gallery themes and default/larger Plan layouts. Regression study:
+forced colors, rounding promotion, narrow layouts, stable counters/path starts,
+existing navigation/selection. Stop on safety or lifecycle authority changes.
+PRESENTATION owns shared byte precision and is a direct documentation consumer.
+Migrate the explicit ellipsis-selector test for the new path-value span and
+gallery progress-alpha expectation together with the changed visual contracts.
+Verification: interfaces/tools 2,033 passed, four skipped; final frontend/token
+checks 62 passed. All four installed gallery modes and default Plan passed;
+larger Plan passed on a fresh rerun after an initial task-setup-stage failure.
+Gallery assertions cover tertiary colors, ordinary interword filter spacing,
+right-aligned menu counters, square reset, equal path starts and 18px rail inset.
+Independent review found the two old track-token expectations; both were
+migrated. Final review/diff checks passed. No domain or bridge changes.
+
 ### Plan terminology and planning feedback (2026-09-19)
 
 Baseline `7cf4448`. GUI-N is one atomic presentation-only polish unit, delivered.

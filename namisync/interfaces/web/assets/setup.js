@@ -290,7 +290,7 @@ export function createSetupPanel(callbacks) {
   mode.classList.add("nami-segmented", "nami-setup__mode");
   mode.setAttribute("role", "radiogroup");
   mode.ariaLabel = "Task type";
-  [["sync-plan", "Sync plan"], ["inventory", "Inventory"]].forEach(([value, text]) => {
+  [["sync-plan", "Sync"], ["inventory", "Integrity"]].forEach(([value, text]) => {
     const button = createButton(text, "nami-segmented__item");
     button.setAttribute("role", "radio");
     button.dataset.value = value;

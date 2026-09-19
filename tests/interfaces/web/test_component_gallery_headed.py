@@ -2612,7 +2612,7 @@ def _assert_lifecycle_progress(report: dict[str, object]) -> None:
         assert row["track_background"] != row["fill_background"]
         if not forced:
             assert _color_alpha(row["track_background"]) == pytest.approx(
-                (0x8B if report["media"]["dark"] else 0x72) / 0xFF,
+                (0x0F if report["media"]["dark"] else 0xB3) / 0xFF,
                 abs=0.002,
             )
         if forced:

@@ -235,7 +235,7 @@ body {
   align-items: center;
   border-radius: var(--radius-small);
   display: inline-flex;
-  word-spacing: var(--space-2);
+  gap: var(--space-3);
 }
 
 .nami-plan-filter-split {
@@ -264,9 +264,16 @@ body {
 }
 
 .nami-plan-filter-split__menu .nami-menu__item {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-5);
   inline-size: 100%;
   text-align: start;
+}
+
+.nami-filter-count {
+  font-variant-numeric: tabular-nums;
 }
 
 .nami-plan-filter-split__menu [aria-checked="true"] {

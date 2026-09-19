@@ -1,53 +1,49 @@
 # Latest session handoff
 
-## Plan terminology and planning feedback (2026-09-19)
+## Plan spacing and byte precision (2026-09-20)
 
-GUI-N completes a presentation-only polish unit on baseline 7cf4448.
-Plan actions, filters and detail menus use sentence-case friendly names while
-canonical bridge/filter keys remain unchanged. DESKTOP_UI owns the explicit
-shown/hidden Notes table: hide five redundant low-risk operation reasons only
-without risk, blockers or selection exclusions. Keep consequential details,
-free-form/unknown notes (including inherited-property-shaped names), and moved
-files' prior-location hierarchy. No scan, selection or execution policy changed.
+GUI-O completes one presentation-only polish unit on baseline c552537.
 
-Semantic fields reserve an 8rem settings slot and fixed icon/text columns.
-Verify on uses accent arrow-sync-checkmark; Verify off uses gray arrow-sync;
-Trash uses gray delete; Additive uses accent document-add. Only icons change
-color. Document-add was added through the pinned Microsoft Fluent icon tool;
-registry, native SVGs and provenance are generated, not hand-edited.
+- Tertiary foreground is #616161 Light and #adadad Dark (including automatic
+  dark), with CanvasText in forced colors. Size/Modified/Notes and rail paths
+  consume it; status text and primary content keep their existing roles.
+- Filter label/count spans use a dedicated gap instead of word-spacing;
+  menu counts align right and controls retain accessible combined labels.
+- Setup says Sync/Integrity without changing inventory behavior or mode keys.
+- Status-card Plan again is square. Progress tracks use button-rest fill,
+  preserving active fill and forced-color behavior.
+- Task detail/path/progress endpoints move inward 10px to an 18px right inset.
+  Plan and task-rail paths use equal-width Source/Target label slots.
+- Shared byte formatting uses exact integer bytes below 1 KiB and two fixed
+  decimals from KiB upward, including trailing zeroes. BigInt rounding and
+  unit promotion remain exact; raw facts and sorting are unchanged.
 
-The shared task digest shows indeterminate planning during a dispatched start,
-active planning without a summary, and completed-review loading. The dispatch
-transition repaints before awaiting the response. The loading Plan status card
-uses the same digest. Ready plans and failures stop animation; Inventory and
-execution retain their own states. The existing Plan-again trace helper was
-updated at its exact dispatch anchor without weakening restoration checks.
+DESKTOP_UI and PRESENTATION describe the changed visual/precision contracts.
+No scan, selection, lifecycle, execution, bridge or filesystem policy changed.
 
 Verification:
 
 - Interfaces/tools: 2,033 passed, four skipped, 3,197 deselected.
-- Final frontend: 50 passed, including supported WebView2 API-floor checks,
-  notes visibility and the held-response dispatch repaint witness.
-- Pinned icon archive check and 34 focused icon tests passed.
-- Installed WebView2: six passed, 18 deselected; four gallery modes plus
-  default/larger Plan scenarios. Gallery checks toggle all requested semantic
-  icons/colors without moving field bounds, and exercise planning/error/ready
-  progress. Existing selection/navigation/layout checks remain green.
-- Independent read-only adversarial review and final diff checks passed.
+- Final frontend/token checks: 62 passed, including decimal rounding/promotion.
+- Installed gallery: light/dark/forced/reduced passed. Added rendered checks
+  for tertiary metadata/path colors, normal interword spacing, menu count
+  alignment, square reset, path starts and 18px task-detail endpoints.
+- Installed Plan: default passed; larger passed on fresh rerun.
+- Independent review and final diff checks passed.
 
-The first broad attempt used a repository-local temp root refused by the
-custody harness; rerun used the external evidence root. The next attempt found
-the stale Plan-again trace anchor; final broad checks pass after its migration.
-A final unknown-note guard initially used a newer JS API; the compatible
-own-property equivalent passed all 50 frontend checks. That equivalent lookup
-was the only production change after the installed wheel had been built; it
-does not change layout or state behavior.
+The first broad run encountered old progress-track expectations; they were
+migrated with the changed token contract, then the full gate passed. Initial
+gallery failure was a new test selector including Settings (which has no task
+paths); it now checks actual task tabs. The combined installed run passed all
+gallery checks and default Plan, but larger failed at page_initial_ready.
+Its log showed no layout cause; one fresh larger-only rerun passed without a
+product change. The failed evidence is retained rather than called a pass.
 
 Evidence root:
 C:/Users/Spectrum/.codex/visualizations/2026/09/18/01a0b2ed-22b3-7083-a3e1-21f00596391d/.
-Broad checks: gui-n-departments-final; installed checks: gui-n-headed.
-Final frontend: build/pytest-gui-n-frontend-compat.
-Restart the development app to reload packaged frontend assets.
+Broad gate: gui-o-departments-final. Frontend/token: build/pytest-gui-o-visual-final.
+Installed gallery/default: gui-o-headed-final; larger: gui-o-larger-retry.
+Restart the development app to reload frontend assets.
 
 Earlier GUI-M2 recovery af02913 on recovery/gui-m2-folder-totals-20260919 and
 temporary stash 93414b7 remain historical, not merge units. Their useful changes

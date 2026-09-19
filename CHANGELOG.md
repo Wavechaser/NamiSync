@@ -27,7 +27,12 @@ and remembered locations, bounded Plan review/selection/sorting and same-task
 execution with live controls. Execution-result/inventory review and beta
 packaging remain open.
 
-#### Refine Plan density, readiness and row highlighting (2026-09-17 – 2026-09-19)
+#### Refine Plan density, readiness and row highlighting (2026-09-17 – 2026-09-20)
+
+- Add tertiary metadata/path text, dedicated filter counters with right-aligned
+  menu counts, aligned path-label slots, square reset action and lighter progress
+  tracks. Align Setup's Sync/Integrity labels and task-detail endpoints; show
+  exact integer bytes below 1 KiB and two decimal places for larger byte labels.
 
 - Use friendly sentence-case Plan/filter labels and an explicit low-risk Notes
   hiding policy; preserve unknown notes, warnings and previous-location context.

@@ -79,7 +79,15 @@ export function createTaskRail({ onCreate, onSelect, onClose, onSettings }) {
         paths.classList.add("nami-task-card__paths");
         const source = document.createElement("span");
         const target = document.createElement("span");
-        paths.append(source, target);
+        for (const [value, label] of [[source, "Source:"], [target, "Target:"]]) {
+          const pathRow = document.createElement("span");
+          pathRow.classList.add("nami-labeled-path");
+          const caption = document.createElement("span");
+          renderText(caption, label);
+          value.classList.add("nami-labeled-path__value");
+          pathRow.append(caption, value);
+          paths.append(pathRow);
+        }
         const progress = document.createElement("span");
         progress.classList.add("nami-progress", "nami-progress--inline", "nami-task-card__progress");
         progress.setAttribute("role", "progressbar");
@@ -106,8 +114,8 @@ export function createTaskRail({ onCreate, onSelect, onClose, onSettings }) {
         ? task.sessionId === null ? "Closing…" : "Canceling and closing…"
         : digest.detail;
       renderText(entry.status, closeStatus);
-      renderFilesystemText(entry.source, `Source: ${digest.sourcePath}`);
-      renderFilesystemText(entry.target, `Target: ${digest.targetPath}`);
+      renderFilesystemText(entry.source, digest.sourcePath);
+      renderFilesystemText(entry.target, digest.targetPath);
       entry.source.title = digest.sourcePath;
       entry.target.title = digest.targetPath;
       entry.select.dataset ??= {};

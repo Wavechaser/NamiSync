@@ -1054,7 +1054,8 @@ selectors, ZWNJ/ZWJ, and long labels remain exact.
 
 ### Setup and location flow
 
-Setup selects Sync plan or Inventory before folder admission. The selected mode
+Setup labels its modes Sync and Integrity before folder admission; the latter
+retains the existing standalone inventory behavior. The selected mode
 sets the picker purpose; changing it invalidates prior folder authority. Inventory
 uses one root and shows that exact frozen root after admission. Sync Setup exposes
 trash/additive deletion, trash-on-update, filters, creation-time and ACL
@@ -1278,10 +1279,9 @@ Concise actionable warnings, errors and in-flight feedback share the second row
 with the status digest; idle and successful messages take no space. At ordinary
 widths both texts stay on one line, with full feedback available in its tooltip;
 at narrow card widths both use a stacked, wrapping layout.
-The progress track follows Microsoft's
-[ProgressBar resources](https://github.com/microsoft/microsoft-ui-xaml/blob/main/controls/dev/ProgressBar/ProgressBar_themeresources.xaml):
-`ControlStrongStrokeColorDefault`, a translucent neutral stroke over the card,
-not opacity on the whole control. Forced colors retain the Canvas track.
+The progress track deliberately uses the ordinary button-rest translucent fill
+instead of Microsoft's stronger ProgressBar stroke resource. It composites over
+the card, without opacity on the whole control. Forced colors retain Canvas.
 Dispatched planning and loading its completed review use indeterminate progress
 in the shared task digest and loading status card; no scan percentage is invented.
 Pre-admission folder checks and ready, unexecuted plans remain idle. Errors stop
@@ -1290,7 +1290,8 @@ The production Plan grid orders Select, Name, Action, Checksum (empty), Size,
 Modified and Notes; Checksum and Modified share their default width. The
 gallery shares that column order. Dependency counts and `Risk: none` are omitted
 from Notes; actual risks and diagnostics remain. Size, Modified and Notes use
-the same subdued text color. The synthetic Plan root is omitted from the table. The Select
+the same tertiary text color (#616161 Light, #adadad Dark, CanvasText in forced
+colors); task-rail paths share it. The synthetic Plan root is omitted from the table. The Select
 header is the sole tri-state bulk control for all selectable operations
 matching the active search/filter query, not merely the
 loaded or expanded rows. Folder checkboxes target matching descendants;
@@ -1302,7 +1303,13 @@ default track and pointer/keyboard constraints. Name, Size and Modified headers 
 ascending, descending, canonical path order with catalog chevrons; a different
 header starts ascending. Sort buttons fill the padded header cell, with the
 active chevron aligned right. Status and row
-byte labels use binary units, while sort keys remain raw backend facts.
+byte labels use binary units with two fixed decimals from 1 KiB upward and exact
+integer bytes below it, while sort keys remain raw backend facts.
+Filter labels and counters occupy separate spans with a dedicated gap, never
+expanded word spacing. Menu counters align to the right edge. The Plan-again
+icon button is square. Plan and task-tab Source/Target labels use equal-width
+slots so path starts align. Task-tab details, paths and progress end 18px inside
+the tab's right edge; title and close-button positioning remain unchanged.
 
 Plan action/filter labels use sentence case and friendly names without changing
 canonical transport keys: `noop` is **No change**, `mkdir` is **Create folder**,
@@ -1340,10 +1347,11 @@ Task tabs share the status digest, replacing the visible Task N title with the
 current lifecycle state. They show a shorter detail (selected operation count and required
 binary bytes), source/target paths or `-`, and an aggregate progress track.
 The title is semibold. Detail and path text uses compact caption line spacing;
-those rows and progress extend below the upper-right close button, aligned
-with its right edge. Progress has matching space above and below. Live task
+those rows and progress extend below the upper-right close button, ending at
+an 18px right inset to align optically with its icon. Progress has matching space above and below. Live task
 selection markers are 2rem, Settings is 1rem; the production-rail gallery shares them.
-Internal task identity is unchanged. Plan progress remains inert; live progress
+Internal task identity is unchanged. Ready-plan progress remains inert; planning
+uses the indeterminate state described above. Execution progress
 comes only from the accepted progress reducer, never from selected rows.
 Production commands, validators, state, raw row facts, and window/anchor
 behavior remain active. Status/progress sorting, global

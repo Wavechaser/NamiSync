@@ -156,7 +156,7 @@ body {
 }
 
 .nami-task-card__paths {
-  color: var(--color-neutral-foreground-secondary);
+  color: var(--color-neutral-foreground-tertiary);
   display: grid;
   font-size: var(--font-size-caption);
   gap: 0;
@@ -171,8 +171,36 @@ body {
 }
 
 .nami-task-card__progress {
-  inline-size: 100%;
+  inline-size: auto;
   margin-block-start: calc(var(--space-4) - var(--space-1));
+}
+
+.nami-task-card__status,
+.nami-task-card__paths,
+.nami-task-card__progress {
+  margin-inline-end: 0.625rem;
+}
+
+.nami-labeled-path {
+  display: grid;
+  grid-template-columns: 4em minmax(0, 1fr);
+  column-gap: var(--space-2);
+}
+
+.nami-labeled-path__value {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nami-plan-review [data-action="plan-again"] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 2rem;
+  block-size: 2rem;
+  padding: 0;
 }
 
 .nami-task-rail__row .nami-task-card[aria-selected="true"]::before,
@@ -1347,7 +1375,7 @@ body {
 }
 
 .nami-file-row__size {
-  color: var(--color-neutral-foreground-secondary);
+  color: var(--color-neutral-foreground-tertiary);
   font-variant-numeric: tabular-nums;
   justify-content: flex-end;
 }
@@ -1396,12 +1424,12 @@ body {
 }
 
 .nami-plan-row__modified {
-  color: var(--color-neutral-foreground-secondary);
+  color: var(--color-neutral-foreground-tertiary);
   font-size: var(--font-size-caption);
 }
 
 .nami-file-row__notes {
-  color: var(--color-neutral-foreground-secondary);
+  color: var(--color-neutral-foreground-tertiary);
   font-size: var(--font-size-caption);
   overflow-wrap: anywhere;
 }

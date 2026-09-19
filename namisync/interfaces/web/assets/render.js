@@ -38,21 +38,9 @@ export function formatByteCount(value) {
   if (unitIndex === 0) return `${bytes} B`;
 
   while (true) {
-    const whole = bytes / unit;
-    let decimals = Math.max(0, 4 - whole.toString().length);
-    let scale = 10n ** BigInt(decimals);
-    let rounded = (bytes * scale + unit / 2n) / unit;
-    let integer = rounded / scale;
-
-    // Rounding can add a significant digit (for example, 9.9995 -> 10.00).
-    // Re-round at the resulting precision so trailing zeroes remain visible.
-    const adjustedDecimals = Math.max(0, 4 - integer.toString().length);
-    if (adjustedDecimals !== decimals) {
-      decimals = adjustedDecimals;
-      scale = 10n ** BigInt(decimals);
-      rounded = (bytes * scale + unit / 2n) / unit;
-      integer = rounded / scale;
-    }
+    const scale = 100n;
+    const rounded = (bytes * scale + unit / 2n) / unit;
+    const integer = rounded / scale;
 
     if (rounded >= 1024n * scale && unitIndex < BYTE_UNITS.length - 1) {
       unit *= 1024n;
@@ -60,9 +48,7 @@ export function formatByteCount(value) {
       continue;
     }
 
-    const fraction = decimals === 0
-      ? ""
-      : `.${(rounded % scale).toString().padStart(decimals, "0")}`;
+    const fraction = `.${(rounded % scale).toString().padStart(2, "0")}`;
     return `${integer}${fraction} ${BYTE_UNITS[unitIndex]}`;
   }
 }

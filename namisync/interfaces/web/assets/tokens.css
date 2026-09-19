@@ -112,6 +112,7 @@
   --color-selection-highlight-pressed: rgba(0,0,0,0.02);
   --color-neutral-foreground: #242424;
   --color-neutral-foreground-secondary: #424242;
+  --color-neutral-foreground-tertiary: #616161;
   --color-neutral-foreground-disabled: #bdbdbd;
   --color-neutral-border: #616161;
   --color-neutral-border-hover: #575757;
@@ -238,7 +239,7 @@
   --progress-active-fill: var(--color-accent-fill);
   --progress-paused-fill: var(--palette-yellow-main);
   --progress-canceled-fill: var(--color-neutral-foreground-secondary);
-  --progress-track-background: var(--color-control-strong-stroke);
+  --progress-track-background: var(--color-button-fill);
 }
 
 :root[data-window-material="mica"] {
@@ -260,6 +261,7 @@
   --color-selection-highlight-pressed: rgba(255,255,255,0.04);
   --color-neutral-foreground: #ffffff;
   --color-neutral-foreground-secondary: #d6d6d6;
+  --color-neutral-foreground-tertiary: #adadad;
   --color-neutral-foreground-disabled: #5c5c5c;
   --color-scrollbar-thumb: rgba(255,255,255,0.4);
   --color-neutral-border: #adadad;
@@ -358,6 +360,7 @@
     --color-selection-highlight-pressed: rgba(255,255,255,0.04);
     --color-neutral-foreground: #ffffff;
     --color-neutral-foreground-secondary: #d6d6d6;
+    --color-neutral-foreground-tertiary: #adadad;
     --color-neutral-foreground-disabled: #5c5c5c;
     --color-scrollbar-thumb: rgba(255,255,255,0.4);
     --color-neutral-border: #adadad;
@@ -459,6 +462,7 @@
     --color-selection-highlight-pressed: Highlight;
     --color-neutral-foreground: CanvasText;
     --color-neutral-foreground-secondary: CanvasText;
+    --color-neutral-foreground-tertiary: CanvasText;
     --color-neutral-foreground-disabled: GrayText;
     --color-neutral-border: ButtonBorder;
     --color-neutral-border-hover: Highlight;

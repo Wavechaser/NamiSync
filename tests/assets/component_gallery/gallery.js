@@ -1073,6 +1073,18 @@ async function reportFailure(error) {
   };
   planReviewPanel.render(planReviewTask);
   const semanticSettings = planReviewPanel.element.querySelector(".nami-plan-review__settings");
+  const filterSpecimen = planReviewPanel.element.querySelector('[data-filter="noop"]');
+  if (filterSpecimen.children[0].textContent !== "No change"
+      || filterSpecimen.children[1].textContent !== "2"
+      || getComputedStyle(filterSpecimen).wordSpacing !== "0px") {
+    throw new Error("filter label/count spacing must not stretch words");
+  }
+  const pathValues = [...planReviewPanel.element.querySelectorAll(".nami-labeled-path__value")];
+  if (Math.abs(pathValues[0].getBoundingClientRect().left - pathValues[1].getBoundingClientRect().left) > 0.5) {
+    throw new Error("Plan path starts must align");
+  }
+  const resetBounds = planReviewPanel.element.querySelector('[data-action="plan-again"]').getBoundingClientRect();
+  if (Math.abs(resetBounds.width - resetBounds.height) > 0.5) throw new Error("Plan again must be square");
   const semanticPaths = planReviewPanel.element.querySelector(".nami-plan-review__paths");
   const settingBounds = semanticSettings.getBoundingClientRect();
   const pathBounds = semanticPaths.getBoundingClientRect();
@@ -1103,6 +1115,11 @@ async function reportFailure(error) {
       throw new Error("semantic setting text shifted the path/setting slots");
     }
   }
+  semanticColorProbe.style.color = "var(--color-neutral-foreground-tertiary)";
+  const tertiaryColor = getComputedStyle(semanticColorProbe).color;
+  for (const cell of app.querySelectorAll(".nami-file-row__size, .nami-plan-row__modified, .nami-file-row__notes")) {
+    if (getComputedStyle(cell).color !== tertiaryColor) throw new Error("metadata must use tertiary text");
+  }
   semanticColorProbe.remove();
   planReviewPanel.render({ ...planReviewTask, review: null, sessionState: "active" });
   if (!planReviewPanel.element.querySelector(".nami-plan-review__progress")
@@ -1122,6 +1139,11 @@ async function reportFailure(error) {
   }
   planReviewPanel.element.querySelector('[data-filter="update"]')?.parentElement
     ?.querySelector(".nami-plan-filter-split__arrow")?.click();
+  const menuCounts = [...planReviewPanel.element.querySelectorAll('.nami-plan-filter-split__menu:not([hidden]) .nami-filter-count')];
+  if (menuCounts.length < 2 || menuCounts.some((count) =>
+    Math.abs(count.getBoundingClientRect().right - menuCounts[0].getBoundingClientRect().right) > 0.5)) {
+    throw new Error("filter menu counts must align right");
+  }
   galleryStage = "control_matrix";
   const controlsSection = document.createElement("section");
   controlsSection.className = "nami-card";
@@ -2065,6 +2087,20 @@ async function reportFailure(error) {
   const triggerStyle = getComputedStyle(themeTrigger);
   const popupStyle = getComputedStyle(themePopup);
   const taskCards = [...galleryRail.element.querySelectorAll(".nami-task-card")];
+  for (const card of galleryRail.element.querySelectorAll(".nami-task-rail__row .nami-task-card")) {
+    if (getComputedStyle(card.querySelector(".nami-task-card__paths")).color !== tertiaryColor) {
+      throw new Error("task paths must use tertiary text");
+    }
+    for (const field of card.querySelectorAll(".nami-task-card__status, .nami-task-card__paths, .nami-task-card__progress")) {
+      if (Math.abs(card.getBoundingClientRect().right - field.getBoundingClientRect().right - 18) > 0.5) {
+        throw new Error("task detail endpoint must be inset 18px");
+      }
+    }
+    const values = [...card.querySelectorAll(".nami-labeled-path__value")];
+    if (values.length !== 2 || Math.abs(values[0].getBoundingClientRect().left - values[1].getBoundingClientRect().left) > 0.5) {
+      throw new Error("task rail path starts must align");
+    }
+  }
   const selectedTaskCard = galleryRail.element.querySelector(
     '.nami-task-card[aria-selected="true"]',
   );

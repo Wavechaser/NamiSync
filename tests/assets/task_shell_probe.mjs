@@ -234,10 +234,10 @@ assert.equal(taskStatusDigest({ executionStarted: true, sessionState: "active",
 assert.equal(taskStatusDigest({ sessionState: "completed", review: { summary: {
   filter_counts: { all: 180 }, required_bytes: "5368709120", selected_operation_count: 0,
   preflight_ready: false,
-} } }).detail, "0 items, 5.000 GiB required.");
+} } }).detail, "0 items, 5.00 GiB required.");
 assert.equal(taskStatusDigest({ sessionState: "completed", review: { summary: {
   filter_counts: { all: 180 }, selected_operation_count: 3, required_bytes: "1024",
-} } }).detail, "3 items, 1.000 KiB required.");
+} } }).detail, "3 items, 1.00 KiB required.");
 assert.equal(taskStatusDigest({ sessionState: "completed", review: { summary: {
   filter_counts: { all: 0 }, required_bytes: "0",
 } } }).detail, "Plan is empty.");
