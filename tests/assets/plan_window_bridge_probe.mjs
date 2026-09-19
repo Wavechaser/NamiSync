@@ -51,6 +51,20 @@ const baseRow = {
   move_peer_id: null,
   notice: "Partial size: overflow",
   selection_exclusion_reason: null,
+  execution: {
+    operation: null,
+    automatic_verification: null,
+    evidence: null,
+  },
+};
+const execution = {
+  execution_revision: 0,
+  session_id: null,
+  result: null,
+  failed_operation_count: null,
+  disk_capacity_failure_count: null,
+  gap: null,
+  trash_location: null,
 };
 const baseWindow = (size) => ({
   disposition: "current",
@@ -58,6 +72,7 @@ const baseWindow = (size) => ({
   highlight_revision: 0,
   offset: 0,
   total: 1,
+  execution,
   rows: [{ ...baseRow, size }],
 });
 

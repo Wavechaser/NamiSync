@@ -1918,9 +1918,18 @@ def _summarize(
     production_names = [
         "admit_location",
         "close_task",
+        "control_execution",
         "create_task",
+        "get_execution_detail",
+        "get_plan_anchor",
+        "get_plan_window",
         "list_tasks",
+        "mutate_plan_highlight",
+        "mutate_plan_highlighted_selection",
+        "mutate_plan_scope",
+        "mutate_plan_selection",
         "next_events",
+        "open_plan_view",
         "pick_folder",
         "plan_again",
         "prepare_setup",
@@ -1931,8 +1940,10 @@ def _summarize(
         "release_terminal_session",
         "replace_cosmetic_section",
         "shell_ready",
+        "start_execution",
         "start_inventory",
         "start_plan",
+        "update_plan_view",
     ]
     combined_names = sorted(
         [*production_names, "benchmark_report", "benchmark_start"]

@@ -504,6 +504,25 @@ def test_plan_window_bridge_preserves_overflow_null_and_signed_64_boundaries() -
     assert completed.stdout == "ok\n"
 
 
+def test_execution_detail_bridge_validates_full_shape_and_request_identity() -> None:
+    node = _node_executable()
+    assert node is not None, "Node.js is required for the execution-detail witness"
+    assets = PROJECT_ROOT / "namisync" / "interfaces" / "web" / "assets"
+    completed = subprocess.run(
+        [
+            str(node),
+            str(PROJECT_ROOT / "tests" / "assets" / "execution_detail_bridge_probe.mjs"),
+            str(assets / "bridge.js"),
+        ],
+        capture_output=True,
+        check=False,
+        text=True,
+        timeout=10,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert completed.stdout == "ok\n"
+
+
 def test_execution_confirmation_keeps_smoke_and_focus_native() -> None:
     node = _node_executable()
     assert node is not None, "Node.js is required for the execution-confirmation witness"

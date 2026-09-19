@@ -1,54 +1,69 @@
 # Latest session handoff
 
-## M1-8 retained review delivered; protocol next (2026-09-20)
+## M1-8 P2 measured candidate; UI next (2026-09-20)
 
-Authorized batch: M1-8-capacity and M1-8, then stop for recap and GUI tweaks.
-Original clean baseline `2cc0083` on `milestone1`; GUI condensation/register
-`42ff8f2`, capacity `04947ba`, evidence reader `7905a1b`. No push, PR, DOC-2,
-M1-9 or release. No task-created worktree/branch or unrelated changes absorbed.
+User scope: M1-8-capacity and M1-8, then stop for recap/GUI tweaks. The latest
+instruction keeps remaining P2 and U work on `codex/wip-20260920-0526-m1-8-p2`,
+then merges verified outcome commits into `milestone1` without squashing.
+No push, PR, DOC-2, M1-9 or release. Original clean baseline `2cc0083`;
+delivered `42ff8f2` GUI condensation/register, `04947ba` capacity stopping,
+`7905a1b` current evidence and `055325b` retained review.
 
-P1 captures the exact immutable terminal core result after settlement identity
-confirmation and before custody cleanup. The workflow owns bounded separate
-operation/automatic-verification indexes until task Close or completed shutdown.
-Service validates the committed Plan token/derived selection/session/run.
-Capture failure causes no cleanup effects; exact retries survive dispatcher and
-Plan cache removal. Complete selected target/prior-target touches determine
-evidence ownership, including missing competitors. Reads remain <=256; missing
-items stay unknown. Summary reuses independent terminal axes and adds typed
-failure counts and location-only trash information. Direct sessions are unchanged.
+Original recovery `015e782a3706658685a5c4101d1f8c57d89d942e` is also protected by
+`codex/recovery-m1-8-p2-original-015e782`. Finalize that single pending P2 recovery
+commit only after final review, then add separate U commits. No unverified WIP
+may enter integration ancestry. Preserve both task refs until accounting/merge.
+Existing unrelated GUI recovery `af02913` and stash `93414b7` stay untouched;
+no task worktree or unrelated dirty work was absorbed.
 
-P1 evidence: workflow/interface neighborhood 2,532 passed, one optional artifact
-skip; final ordinary 5,232 passed, five unchanged skips (four symlink privileges,
-one unconfigured historical readiness artifact), 31 headed deselections.
-Logs: `build/m1-8-p1-neighborhood-01.log`,
-`build/m1-8-p1-ordinary-final02.log`. First ordinary run collected an intermediate
-new test with an incorrect closed-runtime expectation; corrected final run passed.
-Final independent focused review: 244 passed, followed by a reviewed test-only
-mixed-failure/axes/omissions addition (14/14 module passed). Twelve import
-contracts, local documentation links and diff checks passed. No retired tests
-or protected artifact changes. P1 is the following retained-review feature commit.
+P2 implements bounded summary/window execution overlays, separate compact live
+operation/automatic-verification maps, retained evidence, visible Gap extrema
+and exact one-operation detail. Plan hierarchy/order/selection stay unchanged.
+Current candidate has functional gates, source/control review and scoped timing
+validation; final evidence review and full postcommit binding close P2 before U.
 
-P2 is read-only until P1 commits. Its finite source/test/document/evidence scope
-and A8-03 are recorded in M1_PLAN; refresh against the integrated P1 API before
-product edits. Enrich TaskRegistry summaries/windows, leaving PlanReviewState
-and projection/order/selection untouched. Reference existing membership maps;
-separate compact live operation/verification facts, retained exact detail and E
-evidence. Preserve visible Gap loss history without replay-sensitive counting.
-Full reliable events can reach 1 MiB: never dump 256 full details into a window.
-U follows P2; stop after U closes M1-8.
+Evidence under ignored build:
 
-Arbiter `01a0ba9c-b187-70f1-bf21-4f91e742eeaf` remains authoritative for stops.
-A8-01 approves retained lifetime; A8-02 capacity bypass handling is delivered.
-A8-03 permits a separate scoped Tier-2 report for the affected Plan-window and
-execution-start receipts: unchanged fixture/profile/budgets, five fresh children
-x six samples each, independent checker and committed raw provenance/results.
-It does not renew full M1-7 acceptance. Reuse existing child/readiness/freezer
-and validator primitives; add the scoped wrapper/checker and missing dependency
-bindings. Preserve full-collection authority. Later U edits rerun affected paths.
+- `m1-8-p2-ordinary-01.log`: 5263 passed, five existing skips, 31 headed
+  deselections; neighborhood log: 2564 passed, one existing optional skip.
+- `m1-8-p2-headed-01.log`: 27 passed/four stale catalog failures. Corrected
+  eight literal sites/four consumers; `headed-02.log`: all four passed on a
+  fresh installed wheel with downstream security checks intact. Product unchanged.
+- 28 focused catalog tests; `m1-8-p2-controls-final.log`: 41 controls/department
+  tests passed (benign pytest cache warning); 12 import contracts, 53 doc links.
+- `m1-8-p2/run-01`: all 12 planned attempts completed, zero failures. Window
+  receipt p95/max 6.8/7.3 ms; execution-start 58.8/65.1 ms. Each has five fresh
+  children times six samples, unchanged 100/250 ms budgets. Two readiness
+  children preceded them. Collection index, child receipts/logs and separate
+  result validation remain. Raw SHA256:
+  `24d3a32f30d01844b775f849ced3d52371268af5d42e0491063d367a762ff57e`.
+- Full unmocked historical and supplemental workspace checks passed before and
+  after collection. Three named `m1_8_execution_receipt_{authority,receipts,result}.json`
+  artifacts were promoted byte-for-byte under tests/interfaces/web for review.
 
-Root owns M1_PLAN/CHANGELOG/HANDOFF. P2 builder may own only registered adapter/
-bridge/test/subject-doc files after START; evidence helper lane is independent
-until final installed measurement. Build logs/temporary artifacts remain ignored.
-Use isolated external TEMP basetemp/cache for native broad tests; source-tree
-temp invalidates protected custody fixtures. Historical GUI recovery `af02913`
-and stash `93414b7` remain preserved, not merge units; useful changes are `7cf4448`.
+Arbiter task `01a0ba9c-b187-70f1-bf21-4f91e742eeaf` remains authoritative.
+A8-09's environment pause was lifted after the user closed the identified apps
+and observation-04 confirmed the sustained load absent. No profile/budget was
+changed; earlier observations remain. A8-10 authorizes only newline conversion
+reconciliation: `m1-8-p2-newline-proof.json` proves exact reviewed Git identities
+and normalized bytes for all 22 non-register candidate files. Product members
+were recovered from the retained wheel on exact candidate-02 SHA matches;
+adapter/checker/control physical bytes also match that reviewed candidate.
+Fresh authority binds all final physical bytes. Candidate-02/03 manifests,
+patches and exact candidate-03 backup ZIP remain in build.
+
+Retained gate installation: `%TEMP%/namisync-m1-8-p2-headed-02/`, wheel
+`wheel0/namisync-0.1.0-py3-none-any.whl`, installed root
+`headed-installed-wheel0/venv/Lib/site-packages`. Escalated tools are required
+for access. After the finalized P2 commit run project Python with
+`build/m1-8-p2-terminal-validate.py --installed-root <that installed root>
+--installed-wheel <that wheel>`. It invokes full workspace, raw/result and named
+artifact/source clean-HEAD validation unmocked. A failure leaves P2 incomplete.
+
+Fresh P2 reviewer runs in the arbiter's tree (A8-04); root allocation is blocked.
+U is still read-only: `build/m1-8-u-study.md` and assignment draft. A8-08 approves
+advance elaboration of separate 13-case/78-attempt installed evidence with
+unchanged cold/warm budgets and controlled rootless selection-script adaptation.
+Refresh against exact finalized P2, record finite UI/evidence population, then
+request fresh GPT-5.6 builder/reviewer via arbiter. Root owns shared docs, gates,
+commits and final non-squash integration. No UI implementation before P2 closure.

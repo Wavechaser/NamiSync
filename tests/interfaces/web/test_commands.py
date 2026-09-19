@@ -285,6 +285,17 @@ class _Service:
         self.calls.append(("get-plan-window", task_id, kwargs))
         return {"disposition": "current", "rows": []}
 
+    def get_execution_detail(self, task_id, operation_id, **kwargs):
+        self.calls.append(("get-execution-detail", task_id, operation_id, kwargs))
+        return {
+            "disposition": "not-retained",
+            "execution_revision": kwargs["expected_execution_revision"],
+            "operation_id": operation_id,
+            "operation": None,
+            "automatic_verification": None,
+            "evidence": None,
+        }
+
     def get_plan_anchor(self, task_id, **kwargs):
         self.calls.append(("get-plan-anchor", task_id, kwargs))
         return {"disposition": "current", "node_id": kwargs["node_id"], "index": 0}
@@ -495,6 +506,7 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
         "open_plan_view",
         "update_plan_view",
         "get_plan_window",
+        "get_execution_detail",
         "get_plan_anchor",
         "mutate_plan_selection",
         "mutate_plan_scope",
@@ -732,6 +744,14 @@ def test_m1_7_plan_commands_validate_and_reach_task_authority() -> None:
         commands["get_plan_window"],
         {"task_id": TASK_ID, "expected_revision": 1, "offset": 0, "limit": 256},
     )
+    detail = _invoke(
+        commands["get_execution_detail"],
+        {
+            "task_id": TASK_ID,
+            "operation_id": "8" * 32,
+            "expected_execution_revision": 2,
+        },
+    )
     anchor = _invoke(
         commands["get_plan_anchor"],
         {"task_id": TASK_ID, "expected_revision": 1, "node_id": node_id},
@@ -775,6 +795,7 @@ def test_m1_7_plan_commands_validate_and_reach_task_authority() -> None:
     assert opened["disposition"] == "opened"
     assert updated["disposition"] == "applied"
     assert window["rows"] == []
+    assert detail["disposition"] == "not-retained"
     assert anchor["node_id"] == node_id
     assert mutation["disposition"] == "applied"
     assert scope_mutation["disposition"] == "applied"
@@ -801,6 +822,7 @@ def test_m1_7_plan_commands_validate_and_reach_task_authority() -> None:
         "open-plan-view",
         "update-plan-view",
         "get-plan-window",
+        "get-execution-detail",
         "get-plan-anchor",
         "mutate-plan-selection",
         "mutate-plan-scope",
@@ -813,6 +835,7 @@ def test_m1_7_plan_commands_validate_and_reach_task_authority() -> None:
     ("command", "payload"),
     (
         ("get_plan_window", {"task_id": TASK_ID, "expected_revision": 0, "offset": 0, "limit": 257}),
+        ("get_execution_detail", {"task_id": TASK_ID, "operation_id": "bad", "expected_execution_revision": 0}),
         ("update_plan_view", {"task_id": TASK_ID, "expected_revision": 0, "search_query": "x", "filters": [], "sort_column": "path", "sort_direction": "descending", "collapse_node_id": None, "collapsed": None}),
         ("mutate_plan_selection", {"task_id": TASK_ID, "command_id": COMMAND_ID, "expected_revision": 0, "node_id": "bad", "selected": False}),
         (

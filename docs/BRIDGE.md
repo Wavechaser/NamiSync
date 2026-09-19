@@ -268,7 +268,8 @@ BOOTSTRAP rows, commands require OPEN.
 | `plan_again` | `{task_id:TaskId,command_id:HexId,source_mount:null\|string,target_mount:null\|string}` | `{task_id:TaskId,request_id:HexId,session_id:HexId}` | 30 s; same-command recovery |
 | `open_plan_view` | `{task_id:TaskId}` | `PlanViewSummary` | 5 s; one identical-payload retry |
 | `update_plan_view` | `{task_id:TaskId,expected_revision:SafeInt,search_query:string,filters:[PlanFilter],sort_column:"path"\|"filename"\|"size"\|"mtime",sort_direction:"ascending"\|"descending",collapse_node_id:null\|NodeId,collapsed:null\|boolean}` | `PlanViewSummary` | 5 s; no automatic retry |
-| `get_plan_window` | `{task_id:TaskId,expected_revision:SafeInt,offset:SafeInt,limit:1..256}` | `{disposition:"current"\|"conflict",view_revision:SafeInt,offset:SafeInt,total:SafeInt,rows:[PlanWindowRow]}` | 5 s; one identical-payload retry |
+| `get_plan_window` | `{task_id:TaskId,expected_revision:SafeInt,offset:SafeInt,limit:1..256}` | `{disposition:"current"\|"conflict",view_revision:SafeInt,offset:SafeInt,total:SafeInt,execution:ExecutionSummary,rows:[PlanWindowRow]}` | 5 s; one identical-payload retry |
+| `get_execution_detail` | `{task_id:TaskId,operation_id:HexId,expected_execution_revision:SafeInt}` | `{disposition:"current"\|"conflict"\|"not-retained",execution_revision:SafeInt,operation_id:HexId,operation:null\|OperationItemView,automatic_verification:null\|IntegrityOutcomeView,evidence:null\|ExecutionEvidence}` | 5 s; one identical-payload retry |
 | `get_plan_anchor` | `{task_id:TaskId,expected_revision:SafeInt,node_id:NodeId}` | `{disposition:"current"\|"conflict",view_revision:SafeInt,node_id:null\|NodeId,index:null\|SafeInt}` | 5 s; one identical-payload retry |
 | `mutate_plan_selection` | `{task_id:TaskId,command_id:HexId,expected_view_revision:SafeInt,expected_selection_revision:SafeInt,node_id:NodeId,selected:boolean}` | `PlanViewSummary` | 5 s; one same-command replay after uncertainty |
 | `mutate_plan_scope` | `{task_id:TaskId,command_id:HexId,expected_view_revision:SafeInt,expected_selection_revision:SafeInt,selected:boolean}` | `PlanViewSummary` | 5 s; one same-command replay after uncertainty |
@@ -299,13 +300,45 @@ recovery, not invented command receipts.
 `destructive_operation_count`, `destructive_operation_counts`,
 `irreversible_operation_count`, `required_bytes`,
 `visible_row_count`, `search_query`, `filters`, `sort_column`, `sort_direction`,
-and `collapsed_count`. The view disposition is `opened|current|applied|noop|conflict|in-flight|frozen`;
+`collapsed_count`, and `execution`. The view disposition is `opened|current|applied|noop|conflict|in-flight|frozen`;
 selection state is `reviewing|committing|committed`. `PlanWindowRow` is the exact
 source-owned projection row serialized by `commands.py`; all scalar counts and
 revisions remain JavaScript-safe. `NodeId` is `node-` plus 32 lowercase hex
 digits. `PlanFilter` is one of the exact plan operation/status filter values
 validated by the command table. Path sort admits ascending only, and a collapse
 node and Boolean state are either both null or both present.
+
+`execution` is exactly `{execution_revision:SafeInt,session_id:null|HexId,
+result:null|OperationResultView,failed_operation_count:null|SafeInt,
+disk_capacity_failure_count:null|SafeInt,gap:null|{minimum_first_missed_seq:
+PositiveSafeInt,maximum_first_missed_seq:PositiveSafeInt},trash_location:null|
+string}`. Before execution every field except revision is null. A live execution
+has a session and null terminal result/count/trash fields. Only captured retained
+truth fills those terminal fields. Gap extrema describe all observed first-missed
+sequences regardless of arrival order. Gap facts may coexist with terminal truth and
+are never interpreted as a count or complete lost range.
+
+Every `PlanWindowRow` adds `execution`, which is null for a structural row and
+otherwise exactly `{operation:null|CompactOperationResult,
+automatic_verification:null|CompactIntegrityResult,evidence:null|
+ExecutionEvidence}`. Compact operation result is exactly `{result,reason,
+recording,recording_reason,detail_omitted_count}`; compact integrity result is
+exactly `{result,reason,recording,record_disposition,detail_omitted_count}`.
+Their closed enum and cross-field rules are the corresponding event-v5 rules.
+Evidence is null before retained review. Otherwise it is exactly `{state,
+content}`, where state is `recorded-copy|already-verified|unrecorded|superseded|
+not-applicable`; content is present only for the first two states and is exactly
+`{algorithm:"xxh3_128",digest:32-lowercase-hex,size:Scalar64,
+provenance:"copy"|"readback"|"verify",observed_at:UTC timestamp}`.
+
+`get_execution_detail` admits one exact operation already present in the Plan's
+immutable operation mapping. `not-retained` is the actionable live result: it
+contains null item/evidence fields and means retry after terminal session release;
+it does not invent terminal truth. `conflict` reports the current execution
+revision with null item/evidence fields. `current` is available only from the
+captured review and returns the exact full operation item, exact full automatic
+verification item and current evidence independently; a missing item remains
+null. All response variants remain inside the existing 8 MiB wall.
 Plan window totals, offsets, visible/parent/first-child indexes and anchors
 exclude the synthetic projection root. Its direct children have depth zero
 and no public parent; an anchor resolving only to the root returns null.

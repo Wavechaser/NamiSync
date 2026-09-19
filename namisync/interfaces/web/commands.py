@@ -260,6 +260,8 @@ class TaskAuthority(Protocol):
 
     def get_plan_window(self, *args, **kwargs) -> dict[str, object]: ...
 
+    def get_execution_detail(self, *args, **kwargs) -> dict[str, object]: ...
+
     def get_plan_anchor(self, *args, **kwargs) -> dict[str, object]: ...
 
     def mutate_plan_selection(self, *args, **kwargs) -> dict[str, object]: ...
@@ -490,6 +492,13 @@ class _PlanWindowPayload:
     expected_revision: int
     offset: int
     limit: int
+
+
+@dataclass(frozen=True, slots=True)
+class _ExecutionDetailPayload:
+    task_id: str
+    operation_id: str
+    expected_execution_revision: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -945,6 +954,15 @@ def production_command_specs(
             limit=payload.limit,
         )
 
+    def get_execution_detail(payload: object) -> object:
+        if type(payload) is not _ExecutionDetailPayload:
+            raise TypeError("get_execution_detail received an unvalidated payload")
+        return registry.get_execution_detail(
+            payload.task_id,
+            payload.operation_id,
+            expected_execution_revision=payload.expected_execution_revision,
+        )
+
     def get_plan_anchor(payload: object) -> object:
         if type(payload) is not _PlanAnchorPayload:
             raise TypeError("get_plan_anchor received an unvalidated payload")
@@ -1294,6 +1312,15 @@ def production_command_specs(
             "get_plan_window": CommandSpec(
                 validate_payload=_validate_plan_window,
                 handler=get_plan_window,
+                access=CommandAccess.READ_ONLY,
+                command_id=FieldRequirement.FORBIDDEN,
+                revision=FieldRequirement.REQUIRED,
+                timeout=CommandTimeout.LOCAL_5_SECONDS,
+                retry=CommandRetry.SAME_PAYLOAD_ONCE,
+            ),
+            "get_execution_detail": CommandSpec(
+                validate_payload=_validate_execution_detail,
+                handler=get_execution_detail,
                 access=CommandAccess.READ_ONLY,
                 command_id=FieldRequirement.FORBIDDEN,
                 revision=FieldRequirement.REQUIRED,
@@ -1683,6 +1710,26 @@ def _validate_plan_window(value: object) -> _PlanWindowPayload:
     ):
         raise CommandPayloadError("get_plan_window payload is invalid")
     return _PlanWindowPayload(task_id, expected_revision, offset, limit)
+
+
+def _validate_execution_detail(value: object) -> _ExecutionDetailPayload:
+    if type(value) is not dict or set(value) != {
+        "task_id", "operation_id", "expected_execution_revision"
+    }:
+        raise CommandPayloadError("get_execution_detail payload is invalid")
+    task_id = value["task_id"]
+    operation_id = value["operation_id"]
+    expected_revision = value["expected_execution_revision"]
+    if (
+        type(task_id) is not str
+        or _TASK_ID.fullmatch(task_id) is None
+        or type(operation_id) is not str
+        or _OPAQUE_ID.fullmatch(operation_id) is None
+        or not _is_javascript_safe_integer(expected_revision)
+        or expected_revision < 0
+    ):
+        raise CommandPayloadError("get_execution_detail payload is invalid")
+    return _ExecutionDetailPayload(task_id, operation_id, expected_revision)
 
 
 def _validate_plan_anchor(value: object) -> _PlanAnchorPayload:

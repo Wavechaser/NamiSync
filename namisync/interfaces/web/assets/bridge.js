@@ -37,6 +37,7 @@ const COMMAND_POLICY_JSON = `{
   "open_plan_view": {"timeout": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
   "update_plan_view": {"timeout": "local-5-seconds", "retry": "none", "phase": "open"},
   "get_plan_window": {"timeout": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
+  "get_execution_detail": {"timeout": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
   "get_plan_anchor": {"timeout": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
   "mutate_plan_selection": {"timeout": "local-5-seconds", "retry": "same-command-once", "phase": "open"},
   "mutate_plan_scope": {"timeout": "local-5-seconds", "retry": "same-command-once", "phase": "open"},
@@ -166,6 +167,42 @@ const RESULT_INTEGRITY_STATES = Object.freeze([
   "missing",
   "baselined",
   "verified",
+]);
+const OPERATION_KINDS = Object.freeze([
+  "copy", "update", "move", "move_update", "recase", "mkdir", "trash",
+  "delete", "noop",
+]);
+const ITEM_RESULTS = Object.freeze([
+  "succeeded", "skipped", "failed", "canceled", "deferred", "blocked",
+]);
+const OPERATION_REASONS = Object.freeze([
+  "noop", "already-exists", "blocked", "dependency-failed", "source-drift",
+  "target-drift", "destination-occupied", "wrong-type", "source-missing",
+  "target-missing", "trash-collision", "unsafe-path", "sharing-violation",
+  "acl-copy-failed", "cleanup-failed", "published-size-mismatch",
+  "disk-capacity", "io-error", "policy-stop", "canceled",
+  "canceled-after-publish", "canceled-after-mutation", "recorder-failed",
+  "unsupported", "case_mismatch", "case_collision", "type_collision",
+  "destination_collision", "blocked_dependency", "blocked-correspondence",
+  "blocked-dependency", "incomplete-scan", "user-deselected",
+]);
+const ITEM_RECORDING_REASONS = Object.freeze([
+  "record-write-failed", "unrecorded-mutation", "recording-prerequisite-failed",
+]);
+const INTEGRITY_RESULTS = Object.freeze([
+  "verified", "baselined", "mismatched", "modified", "missing",
+  "unsupported", "canceled", "error",
+]);
+const INTEGRITY_REASONS = Object.freeze([
+  "path-invalid", "inventory-missing", "inventory-unsupported", "not-found",
+  "unsupported-read", "stat-changed", "read-drift", "hash-mismatch",
+  "baseline-exists", "read-error", "recording-stale", "recording-conflict",
+  "recording-error", "canceled",
+]);
+const RECORD_DISPOSITIONS = Object.freeze(["applied", "noop", "stale", "conflict"]);
+const EXECUTION_EVIDENCE_STATES = Object.freeze([
+  "recorded-copy", "already-verified", "unrecorded", "superseded",
+  "not-applicable",
 ]);
 const ERROR_MESSAGES = Object.freeze({
   invalid_request: "The desktop request is invalid.",
@@ -751,6 +788,33 @@ export async function getPlanWindow(taskId, expectedRevision, offset, limit) {
   });
   const submit = () => dispatchAttempt(
     "get_plan_window", payload, validatePlanWindow, PLAN_VIEW_TIMEOUT_MS,
+  );
+  try {
+    return await submit();
+  } catch (error) {
+    if (!(error instanceof BridgeTransportError)) throw error;
+  }
+  return submit();
+}
+
+export async function getExecutionDetail(
+  taskId, operationId, expectedExecutionRevision,
+) {
+  requireTaskId(taskId, "getExecutionDetail");
+  if (typeof operationId !== "string" || !ID_PATTERN.test(operationId)
+      || !isNonnegativeInteger(expectedExecutionRevision)) {
+    throw new TypeError("getExecutionDetail requires an operation and execution revision");
+  }
+  const payload = Object.freeze({
+    task_id: taskId,
+    operation_id: operationId,
+    expected_execution_revision: expectedExecutionRevision,
+  });
+  const validateResult = (value) => (
+    validateExecutionDetail(value) && value.operation_id === operationId
+  );
+  const submit = () => dispatchAttempt(
+    "get_execution_detail", payload, validateResult, PLAN_VIEW_TIMEOUT_MS,
   );
   try {
     return await submit();
@@ -2785,6 +2849,11 @@ function isBoundedV5Text(value, nonempty) {
   );
 }
 
+function isBoundedPath(value) {
+  return typeof value === "string" && value.length > 0
+    && value.length <= 32767 && isValidUnicode(value);
+}
+
 function isNonnegativeInteger(value) {
   return Number.isSafeInteger(value) && value >= 0;
 }
@@ -2885,7 +2954,7 @@ function validatePlanViewSummary(value) {
     "destructive_operation_counts", "irreversible_operation_count",
     "irreversible_update_count", "required_bytes",
     "visible_row_count", "search_query", "filters", "sort_column",
-    "sort_direction", "collapsed_count",
+    "sort_direction", "collapsed_count", "execution",
   ])
     && ["opened", "current", "applied", "noop", "conflict", "in-flight", "frozen"]
       .includes(value.disposition)
@@ -2944,7 +3013,103 @@ function validatePlanViewSummary(value) {
     && value.irreversible_operation_count
       === value.destructive_operation_counts.delete + value.irreversible_update_count
     && value.requires_destructive_confirmation
-      === (value.destructive_operation_count > 0);
+      === (value.destructive_operation_count > 0)
+    && validateExecutionSummary(value.execution);
+}
+
+function validateExecutionSummary(value) {
+  if (!isExactObject(value, [
+    "execution_revision", "session_id", "result", "failed_operation_count",
+    "disk_capacity_failure_count", "gap", "trash_location",
+  ]) || !isNonnegativeInteger(value.execution_revision)
+      || !(value.session_id === null
+        || (typeof value.session_id === "string" && ID_PATTERN.test(value.session_id)))) {
+    return false;
+  }
+  const terminalAbsent = value.result === null
+    && value.failed_operation_count === null
+    && value.disk_capacity_failure_count === null
+    && value.trash_location === null;
+  const terminalPresent = validateOperationResultView(value.result)
+    && isNonnegativeInteger(value.failed_operation_count)
+    && isNonnegativeInteger(value.disk_capacity_failure_count)
+    && value.disk_capacity_failure_count <= value.failed_operation_count
+    && isBoundedPath(value.trash_location);
+  return (terminalAbsent || terminalPresent)
+    && (value.session_id !== null || terminalAbsent)
+    && (value.gap === null || (
+      isExactObject(value.gap, [
+        "minimum_first_missed_seq", "maximum_first_missed_seq",
+      ])
+      && isNonnegativeInteger(value.gap.minimum_first_missed_seq)
+      && value.gap.minimum_first_missed_seq > 0
+      && isNonnegativeInteger(value.gap.maximum_first_missed_seq)
+      && value.gap.maximum_first_missed_seq >= value.gap.minimum_first_missed_seq
+    ));
+}
+
+function validateItemRecording(result, recording, reason, detail) {
+  if (!RECORDING_STATES.includes(recording)) return false;
+  if (recording === "ok") {
+    return reason === null && (detail === undefined || detail === null);
+  }
+  if (!ITEM_RECORDING_REASONS.includes(reason)
+      || !(detail === undefined || detail === null || isBoundedV5Text(detail, false))) {
+    return false;
+  }
+  return reason === "record-write-failed"
+    ? ["succeeded", "skipped"].includes(result)
+    : result === "failed";
+}
+
+function validateOperationCompact(value) {
+  return isExactObject(value, [
+    "result", "reason", "recording", "recording_reason", "detail_omitted_count",
+  ]) && ITEM_RESULTS.includes(value.result)
+    && (value.reason === null || OPERATION_REASONS.includes(value.reason))
+    && validateItemRecording(
+      value.result, value.recording, value.recording_reason, undefined,
+    )
+    && isNonnegativeInteger(value.detail_omitted_count);
+}
+
+function validateIntegrityCompact(value) {
+  return isExactObject(value, [
+    "result", "reason", "recording", "record_disposition", "detail_omitted_count",
+  ]) && INTEGRITY_RESULTS.includes(value.result)
+    && (value.reason === null || INTEGRITY_REASONS.includes(value.reason))
+    && RECORDING_STATES.includes(value.recording)
+    && (value.record_disposition === null
+      || RECORD_DISPOSITIONS.includes(value.record_disposition))
+    && isNonnegativeInteger(value.detail_omitted_count);
+}
+
+function validateExecutionEvidence(value) {
+  if (!isExactObject(value, ["state", "content"])
+      || !EXECUTION_EVIDENCE_STATES.includes(value.state)) return false;
+  const exposesContent = ["recorded-copy", "already-verified"].includes(value.state);
+  if ((value.content !== null) !== exposesContent) return false;
+  if (value.content === null) return true;
+  return isExactObject(value.content, [
+    "algorithm", "digest", "size", "provenance", "observed_at",
+  ]) && value.content.algorithm === "xxh3_128"
+    && typeof value.content.digest === "string"
+    && /^[0-9a-f]{32}$/.test(value.content.digest)
+    && isScalar64(value.content.size)
+    && ["copy", "readback", "verify"].includes(value.content.provenance)
+    && isUtcTimestamp(value.content.observed_at)
+    && (value.state !== "recorded-copy" || value.content.provenance === "copy")
+    && (value.state !== "already-verified"
+      || ["readback", "verify"].includes(value.content.provenance));
+}
+
+function validateExecutionRow(value) {
+  return isExactObject(value, [
+    "operation", "automatic_verification", "evidence",
+  ]) && (value.operation === null || validateOperationCompact(value.operation))
+    && (value.automatic_verification === null
+      || validateIntegrityCompact(value.automatic_verification))
+    && (value.evidence === null || validateExecutionEvidence(value.evidence));
 }
 
 function validatePlanWindowRow(value) {
@@ -2955,7 +3120,7 @@ function validatePlanWindowRow(value) {
     "reason", "blocked_reason", "selection", "highlighted", "selectable_operation_count",
     "selected_operation_count", "operation_count", "size", "mtime_ns",
     "dependency_count", "risk", "move_peer_id", "notice",
-    "selection_exclusion_reason",
+    "selection_exclusion_reason", "execution",
   ]) && isNodeId(value.node_id) && isValidUnicode(value.display)
     && isNonnegativeInteger(value.depth) && typeof value.is_container === "boolean"
     && isNonnegativeInteger(value.visible_index)
@@ -2981,16 +3146,125 @@ function validatePlanWindowRow(value) {
     && (value.move_peer_id === null || isNodeId(value.move_peer_id))
     && (value.notice === null || isValidUnicode(value.notice))
     && (value.selection_exclusion_reason === null
-      || isValidUnicode(value.selection_exclusion_reason));
+      || isValidUnicode(value.selection_exclusion_reason))
+    && (value.execution === null || validateExecutionRow(value.execution))
+    && ((value.operation_id === null) === (value.execution === null));
 }
 
 function validatePlanWindow(value) {
   return isExactObject(value, [
-    "disposition", "view_revision", "highlight_revision", "offset", "total", "rows",
+    "disposition", "view_revision", "highlight_revision", "offset", "total",
+    "execution", "rows",
   ]) && ["current", "conflict"].includes(value.disposition)
     && [value.view_revision, value.highlight_revision, value.offset, value.total].every(isNonnegativeInteger)
+    && validateExecutionSummary(value.execution)
     && Array.isArray(value.rows) && value.rows.length <= 256
     && value.rows.every(validatePlanWindowRow);
+}
+
+function validateOperationDetail(value) {
+  if (!isPlainJsonObject(value)) return false;
+  const textKeys = new Set([
+    "backup", "backup_metadata", "backup_state", "backup_state_error",
+    "blocked_reason", "cleanup_error", "destination_state", "durable_state",
+    "error_type", "message", "mutation_durable_state", "mutation_state",
+    "mutation_state_error", "old_state_error", "publish_state", "retry_error",
+    "retry_error_type", "source_state", "state_error", "state_error_type",
+    "target_state", "target_state_error", "temp_state", "trash_state_error",
+  ]);
+  const pathKeys = new Set([
+    "backup_path", "mutation_destination", "prior_path", "published_path", "trash_path",
+  ]);
+  let leaves = 0;
+  let pathLeaves = 0;
+  for (const [key, item] of Object.entries(value)) {
+    if (!/^[\x00-\x7f]{1,64}$/.test(key)) return false;
+    if (textKeys.has(key)) {
+      if (!isBoundedV5Text(item, false)) return false;
+      leaves += 1;
+    } else if (pathKeys.has(key)) {
+      if (!isBoundedPath(item)) return false;
+      leaves += 1;
+      pathLeaves += 1;
+    } else if (key === "continued") {
+      if (typeof item !== "boolean") return false;
+      leaves += 1;
+    } else if ([
+      "durability_warnings", "incomplete_sides", "excluded_dependencies",
+    ].includes(key)) {
+      if (!Array.isArray(item) || item.length > 32) return false;
+      if (key === "incomplete_sides"
+          && !item.every((member) => ["source", "target"].includes(member))) return false;
+      if (key === "excluded_dependencies"
+          && !item.every((member) => typeof member === "string" && ID_PATTERN.test(member))) return false;
+      if (key === "durability_warnings"
+          && !item.every((member) => isBoundedV5Text(member, false))) return false;
+      leaves += item.length;
+    } else {
+      return false;
+    }
+    if (leaves > 32 || pathLeaves > 8) return false;
+  }
+  return true;
+}
+
+function validateOperationItemView(value) {
+  return isExactObject(value, [
+    "item_type", "phase", "item_id", "kind", "path", "result", "reason",
+    "detail", "recording", "recording_reason", "recording_detail",
+    "detail_omitted_count",
+  ]) && value.item_type === "operation" && value.phase === "execute"
+    && typeof value.item_id === "string" && ID_PATTERN.test(value.item_id)
+    && OPERATION_KINDS.includes(value.kind) && isBoundedPath(value.path)
+    && ITEM_RESULTS.includes(value.result)
+    && (value.reason === null || OPERATION_REASONS.includes(value.reason))
+    && validateOperationDetail(value.detail)
+    && validateItemRecording(
+      value.result, value.recording, value.recording_reason, value.recording_detail,
+    )
+    && isNonnegativeInteger(value.detail_omitted_count);
+}
+
+function validateIntegrityOutcomeView(value) {
+  return isExactObject(value, [
+    "item_type", "phase", "item_id", "row_id", "location_id", "kind", "path",
+    "result", "reason", "detail", "read_strategy", "recording",
+    "record_disposition", "detail_omitted_count",
+  ]) && value.item_type === "integrity" && value.phase === "verify"
+    && typeof value.item_id === "string" && ID_PATTERN.test(value.item_id)
+    && ((value.row_id === null && value.location_id === null)
+      || (isBoundedV5Text(value.row_id, true) && isBoundedV5Text(value.location_id, true)))
+    && value.kind === "integrity" && isBoundedPath(value.path)
+    && INTEGRITY_RESULTS.includes(value.result)
+    && (value.reason === null || INTEGRITY_REASONS.includes(value.reason))
+    && (value.detail === null || isBoundedV5Text(value.detail, false))
+    && (value.read_strategy === null || value.read_strategy === "windows-unbuffered")
+    && RECORDING_STATES.includes(value.recording)
+    && (value.record_disposition === null
+      || RECORD_DISPOSITIONS.includes(value.record_disposition))
+    && isNonnegativeInteger(value.detail_omitted_count);
+}
+
+function validateExecutionDetail(value) {
+  if (!isExactObject(value, [
+    "disposition", "execution_revision", "operation_id", "operation",
+    "automatic_verification", "evidence",
+  ]) || !["current", "conflict", "not-retained"].includes(value.disposition)
+      || !isNonnegativeInteger(value.execution_revision)
+      || typeof value.operation_id !== "string" || !ID_PATTERN.test(value.operation_id)
+      || !(value.operation === null || validateOperationItemView(value.operation))
+      || !(value.automatic_verification === null
+        || validateIntegrityOutcomeView(value.automatic_verification))
+      || !(value.evidence === null || validateExecutionEvidence(value.evidence))) {
+    return false;
+  }
+  if (value.operation !== null && value.operation.item_id !== value.operation_id) return false;
+  if (value.automatic_verification !== null
+      && value.automatic_verification.item_id !== value.operation_id) return false;
+  return value.disposition === "current"
+    || (value.operation === null
+      && value.automatic_verification === null
+      && value.evidence === null);
 }
 
 function validatePlanAnchor(value) {

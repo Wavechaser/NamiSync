@@ -2402,6 +2402,7 @@ def _run_gallery_mode(
         "close_task",
         "control_execution",
         "create_task",
+        "get_execution_detail",
         "get_plan_anchor",
         "get_plan_window",
         "list_tasks",

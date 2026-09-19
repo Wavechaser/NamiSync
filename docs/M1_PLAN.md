@@ -125,7 +125,7 @@ until its predecessor closes. Initial read-only studies found no mandatory stop.
 | M1-8-capacity | Core execution reason and executor runtime classifier/default policy; executor runtime/settlement tests and direct core event/workflow-view/service consumers; EXECUTOR, FEATURES, DESKTOP_UI. | Gate C passed; complete. |
 | M1-8-E | Bounded atomic current-ledger evidence query with read-only workflow/service facade and explicit evidence classes; existing db repository, workflow view contracts, runtime/service, matching repository/workflow/service tests; DATABASE, PRESENTATION, ARCHITECTURE, INTERFACES, FEATURES. No schema/recorder writes. | Gate E passed against integrated capacity `04947ba`; complete. |
 | M1-8-P1 | Backend retained execution review: exact task/Plan/session/run binding, capture before release, separate operation and automatic linked-verification indexes, bounded workflow/service reads and close/shutdown retirement; workflow models/runtime and focused review owner, service/task lifecycle/port and direct tests; PRESENTATION, INTERFACES, ARCHITECTURE. | Gate P1 passed after E `7905a1b`; complete. |
-| M1-8-P2 | Bounded summary/window/detail protocol over the existing Plan hierarchy; web Plan review/drain, commands/bridge and Python/browser validators with direct tests; PRESENTATION, BRIDGE, INTERFACES. | Live/terminal/Gap reconciliation, omission truth, re-observation/reinjection, stale reads and 256-row/byte bounds; pending detailed expansion after P1. |
+| M1-8-P2 | Bounded summary/window/detail protocol over the existing Plan hierarchy; web Plan review/drain, commands/bridge and Python/browser validators with direct tests; PRESENTATION, BRIDGE, INTERFACES. | Functional and scoped performance gates passed after P1 `055325b`; final evidence review and postcommit binding pending. |
 | M1-8-U | Live and retained execution UI, independent recording/terminal axes, capacity/generic-I/O guidance and location-only trash information; packaged app/Plan renderer/status/styles and browser/component/installed witnesses; DESKTOP_UI, FEATURES. | Production headed flow, navigation/reinjection, hostile text, no hidden complete browser list, no masked issues; pending detailed expansion. |
 
 ### Capacity boundary and gate C
@@ -340,8 +340,8 @@ closed-runtime assertion passed focused review and the final ordinary run.
 
 ### M1-8-P2 protocol study and affected measurement boundary
 
-Read-only study inspected E `7905a1b` and the P1 candidate; dependent product
-edits wait for integrated P1 and a refresh of its public reads and retirement.
+Read-only study inspected E `7905a1b` and the P1 candidate; product implementation
+starts after P1 `055325b`, refreshing its public reads and retirement.
 P2 enriches the adapter's existing Plan summary/window, not PlanReviewState,
 its projection, selection, ordering or visible sequence. Operation-bearing
 containers receive the same overlay as operation leaves. Exact result detail
@@ -354,7 +354,7 @@ Arm the execution epoch before returning the attach-before-start sink, preserve
 the existing rollback/recovery binding, and bound operation and automatic
 verification maps separately by Plan membership. Compact facts are replay
 idempotent; do not use a generic sequence high-water to suppress replay.
-Gap retains minimum/latest observed `first_missed_seq` values, not a count or a
+Gap retains minimum/maximum observed `first_missed_seq` values, not a count or a
 claim that every intervening sequence was lost. Terminal reconciliation uses
 P1 facts and preserves that visible transport-loss history. Missing results
 remain unknown. E alone supplies coherent stored digest/provenance.
@@ -377,6 +377,10 @@ are compatibility consumers: migrate only actual adapter stubs/catalog facts,
 never protected measurement semantics. Renderer-only legacy fixtures stay with
 U unless an actual shared validator makes them a direct P2 consumer. Record
 the final finite measurement helper/test/artifact names before their creation.
+The one-operation detail wrapper has its own executable
+`tests/assets/execution_detail_bridge_probe.mjs` witness; the existing
+`task_shell_probe.mjs` is a direct exact command-policy consumer. These add no
+renderer behavior or domain outcome.
 
 Arbiter **A8-03** authorizes a separately identified scoped Tier-2 gate, not
 renewed full M1-7/P9 acceptance. The selected metrics are
@@ -406,15 +410,16 @@ cannot close Tier 2. Final committed product bytes must match measured bytes.
 Existing contracts, budgets and historical evidence retain their meaning.
 New overlay bounds close structurally without a new timing or memory claim.
 
-The additive evidence population is
+The additive evidence population is `tests/m1_8_execution_receipt_benchmark.py`
+(the two-metric adapter/collector),
 `tests/interfaces/web/_m1_8_execution_receipt_scale.py` (independent scoped checker)
 and its matching `test_m1_8_execution_receipt_scale.py`.
 Use `m1_8_execution_receipt_{authority,receipts,result}.json` beside that checker
 for frozen provenance, verdict-free raw observations and derived result. Exact
 selected specs come from the unchanged compact M1-7 contract, not copied or
-filtered authority. Reuse existing headed readiness/child modes and the authority
-freezer without a new workload runner. Existing per-receipt/profile/byte validators
-may be reused;
+filtered authority. Reuse existing headed workload/readiness/child and authority
+freezer primitives through the scoped adapter authorized by A8-05 below. Existing
+per-receipt/profile/byte validators may be reused;
 do not duplicate the headed workload or weaken its full-collection validator.
 `tests/_departments.py` assigns the new test to interfaces. Temporary installs,
 child outputs and logs stay in ignored `build/`; promote only the named compact
@@ -429,6 +434,170 @@ gates, installed headed command compatibility, the A8-03 scoped evidence and
 fresh adversarial review before its atomic protocol commit. The evidence helper
 may be built in an independently owned lane after P1 closes; its acceptance
 remains coupled to the measured final P2 product, not a separate product claim.
+
+Arbiter **A8-04** preserves independent review despite this task's agent-allocation
+limit: a fresh GPT-5.6 Sol reviewer with no builder history runs in the arbiter's
+separate agent tree. The arbiter coordinates the stable-candidate/raw-evidence
+packet and final verdict. This is not a skill waiver or builder self-review;
+P2 commit remains gated on that verdict and all named checks. Do not repeatedly
+retry blocked allocations or disturb completed work to free slots.
+
+Arbiter **A8-05** approves the finite measurement reorganization after a paused
+three-finding review. The actual host service/registry/codec composition and
+unmodified fixture controller creation, followed by public open/window, prove
+120,000 projection nodes, 119,999 public rows and an independently derived
+`NamiSyncPriorV1` Previous paths first group. Evidence and inspected hashes are in
+`build/m1-8-rootless-controller-probe-2.log`; its script is
+`build/m1-8-rootless-controller-probe.py`. This was untimed and headless, not
+installed headed acceptance. The earlier unbound-codec setup failed before
+publication; its partial ignored root is preserved.
+
+| Finding / mechanism | Consequence and owner | Approved disposition |
+| --- | --- | --- |
+| Historical rooted fixture expectation | Old headed setup rejects the accepted rootless public surface; test fixture owner, not a product regression. | Scoped adapter and independent checker require exact source/public populations, 256-row current revision-zero/offset-zero settlement, per-plan identity and independently hashed prior-group first row. Preserve the start case's fresh unused Plan population. |
+| Arbitrary well-formed authority OID | New helper could accept false artifact provenance; scoped evidence-custody boundary. | Derive embedded authority identity from declared canonical bytes; bind named authority through repository-filtered bytes and final HEAD comparison against raw evidence. |
+| Missing durable launch/failure index | A disclosed-failure list cannot establish attempt accounting; same evidence-custody mechanism. | Publish the fixed 12-attempt plan and prelaunch state, then accepted receipt/path/hash/process or first failure/timeout/log evidence. Independently compare the final embedded index to raw observations. |
+
+A8-05 resolves the repeated provenance mechanism and conservative three-finding
+threshold together. It replaces A8-03's no-new-runner premise only for the named
+two-metric adapter/collector; no generic runner, product patch, root fabrication,
+historical producer/checker/contract/artifact edit or filtered full acceptance.
+The ordered collection is two untimed readiness children (window, start), five
+window children, then five start children. Stop on first failure; refuse restart
+or overwrite, preserve its index/logs, and obtain disposition before another
+collection. Launching, crashed, failed and incomplete indexes cannot pass. This
+is evidence custody under the trusted local collection model, not resistance to
+malicious rewriting. No acceptance children had launched at approval.
+
+Version the scoped rootless report explicitly. Freeze the new adapter/checker/
+test and product dependencies before measurement; both installed headed readiness
+cases must pass. Add wrong-root/total/first-row, wrong well-formed OID, canonical
+byte mutation, missing/reordered/duplicate/unlaunched attempt, receipt/hash
+mismatch, reuse, incomplete/failure and overwrite/restart controls alongside the
+existing sample/budget controls. Commit the compact final index with raw evidence,
+retain separate derived results, and verify final clean-HEAD bindings. Changed
+measured bytes invalidate affected observations. New findings outside this finite
+remedy and mandatory safety stops still follow AGENTS containment.
+
+The supplemental product bindings are `core/execution.py`,
+`workflows/execution_review.py` and packaged `assets/{task_status.js,components.css,
+tokens.css}`. The current start-submission render reaches task status through
+rail/Plan review, and the real page loads both stylesheets; these are absent
+from the historical compact manifest. Bind physical source, wheel member and
+installed bytes for each. The scoped adapter/checker/test are source-only
+dependencies; historical listed inputs remain fully bound.
+
+Arbiter **A8-06** applies the recurrence rule to draft protocol defects and
+authorizes this finite four-mechanism correction/review population within P2:
+
+| Mechanism / owner | Candidate correction and required evidence |
+| --- | --- |
+| Post-release generation/publication ordering; drain release | Capture the publication generation after increment; successful retained read and transient summary-read retry. Preserve physical cleanup at-most-once through P1 owner evidence, not just fake lifecycle call counts. |
+| Full detail work in compact windows; drain projection | Extract scalar operation/automatic-integrity facts without invoking or traversing full diagnostic conversion; one-operation detail still returns bounded detail and omission facts. |
+| Mutable response aliasing; drain decoration | Copy returned operation/integrity facts and nested evidence content; mutation cannot change owned maps or later reads. |
+| Valid foreign detail response; packaged bridge | Bind returned operation ID to the requested ID, including existing retry behavior; reject a structurally valid foreign response without weakening conflict/unavailable semantics. |
+
+These corrections are not accepted until direct witnesses, existing Close/
+reobserve/generation races, complete P2 gates and fresh frozen-candidate review
+pass. No P1 redesign, feature, cache layer or generic serialization framework
+is authorized. No supported data loss or false durable success was established;
+no recovery full stop was required. A8-06 resolves this declared recurrence pause
+only; another unplanned substantive instance requires renewed consolidated
+adjudication before its remedy. Independent A8-05 work remains authorized.
+
+Arbiter **A8-07** approves a test-only correction after the installed headed gate
+passed 27 tests and failed four at stale exact command catalogs. Preserve
+`build/m1-8-p2-headed-01.log`. The closed consumer audit corrects the earlier
+synthetic-fixture exclusion: the event benchmark's real checker also consumes
+its stale catalog. Update eight literal sites across
+`tests/interfaces/web/test_native_host_gates.py` (two),
+`tests/interfaces/web/test_transport_headed.py` (three),
+`tests/bridge_event_benchmark.py` (one) and
+`tests/interfaces/web/test_bridge_event_benchmark.py` (two), matching the current
+28 production commands and each named test extension. Exact equality and all
+security, origin, hostile-text, runtime and measurement assertions stay intact;
+historical raw artifacts/contracts and acceptance claims remain unchanged.
+
+The only additional control population is
+`tests/interfaces/web/test_m1_8_execution_receipt_scale.py`: independently corrupt
+synthetic-root/prior-group identity, public total and first-row semantics after
+rehashing wrappers; exercise actual supplemental source/wheel/installed bytes;
+and use real temporary Git blobs to prove clean-HEAD, dirty-source, source bytes
+and named-authority/raw binding. Supplemental unit controls may isolate the
+protected legacy parent validator, but actual freeze and terminal validation
+must run both full historical and supplemental checks unmocked. A control that
+exposes a validator defect requires adjudication before changing its helper.
+
+Run focused catalog/control and department checks, then the four failed headed
+tests on a fresh installed wheel with downstream assertions reached. Prior
+unchanged-product ordinary/neighborhood and 27 headed passes remain evidence;
+repeat broader tests only if changed shared seams invalidate them. Refresh
+candidate hashes, imports/docs/diff and independent review before freezing.
+Use a documented invocation of existing receipt/result/committed-source
+validators, including staged-source checks before commit and full clean-HEAD
+binding afterward. A failed terminal check leaves P2 incomplete. No product fix,
+new metric, framework or weakened measurement/security contract is authorized.
+
+Arbiter **A8-08** approves only advance U measurement elaboration: a separately
+versioned report for all 13 existing installed-headed cases, eight cold cases
+with five fresh single samples/max 50 ms and five warm cases with five children
+times six samples/p95 100 ms/max 250 ms. Predeclare 13 readiness followed by 65
+measurement attempts. Preserve P2 artifacts and all original endpoints/fixtures;
+the scoped selection script may adapt its single 120000 total literal to 119999
+only with an exact original-site/diff control. Component metrics remain excluded
+only if their measured code/graphs stay unchanged. U still requires final P2
+closure, refreshed finite population and fresh builder/reviewer before edits.
+
+Arbiter **A8-09** stops before authority freeze or measurement because the
+required no-unrelated-sustained-workload profile cannot currently be attested.
+Two separated observations show persistent Code/Telegram CPU activity and an
+active screensaver; this is a qualitative profile-premise conflict, not a new
+CPU budget or failed timing result. No user process was changed. The arbiter
+asked the user to quiesce the machine; the two-minute response window expired.
+Task-owned P2 work is preserved on `codex/wip-20260920-0526-m1-8-p2`, based on
+`055325b`. This recovery is not a merge unit and must not be merged/cherry-picked
+as-is. HANDOFF and the recovery commit retain exact resumption provenance.
+
+Candidate-02's 23-file manifest and patch remain in ignored `build/`, with fresh
+independent prefreeze clearance and unchanged product/collector/checker bytes.
+Ordinary 5263 passed/five existing skips; neighborhood 2564 passed/one existing
+skip; 12 import contracts, 53 links, 41 scoped controls and 28 catalog checks
+passed. Installed headed initially passed 27 and failed four stale catalogs;
+the four corrected tests then passed on a fresh wheel. Preserve both logs.
+No frozen authority, acceptance child, promoted raw/result artifact or final
+P2 approval exists. Resume the same measurement obligation after actual profile
+verification and source refresh; do not repeat unaffected passed gates or
+start dependent U implementation. Historical evidence and later work remain
+excluded. No automatic approval-review rejection caused this stop.
+
+The user resumed and closed the identified applications. Observation-04 showed
+the sustained workload absent; the arbiter lifted A8-09 on actual current
+evidence, without changing profile or budgets. Reconstruct the reviewed named
+population on `milestone1`, preserving recovery `015e782` until accounting and
+integration finish. The user's subsequent instruction keeps P2 and U on that
+recovery branch until verified, then merges the outcome series into `milestone1`
+without squashing. Safety ref `codex/recovery-m1-8-p2-original-015e782` preserves
+the original WIP; finalize only the single pending P2 commit after its gates,
+then add separate U commits. No unverified WIP enters integration ancestry.
+Arbiter **A8-10** approves the mechanical prefreeze identity refresh. The retained
+per-path proof is `build/m1-8-p2-newline-proof.json`: original/current physical
+SHA-256, reviewed/current filtered Git identities and normalized-byte equality.
+Git checkout newline conversion is explicitly reconciled:
+product bytes recover from the retained wheel only on exact reviewed SHA-256;
+source-only adapter/checker/control bytes match their reviewed hashes. Remaining
+test/doc newline-only differences retain identical filtered Git blob identities
+and receive fresh physical bindings before measurement. No prior acceptance
+children or artifacts exist to reuse.
+
+Resumed collection `build/m1-8-p2/run-01` completed all 12 predeclared attempts
+without failure: two readiness children and five fresh six-sample children per
+metric. Independent raw validation reports window p95/max 6.8/7.3 ms and start
+58.8/65.1 ms, inside the unchanged 100/250 ms limits. Full historical and
+supplemental source/wheel/installed/runtime/profile checks passed before and
+after collection. The named authority/receipts/result JSONs are promoted
+byte-for-byte for final review; neither this scoped result nor later UI work
+renews full M1-7 acceptance. Final evidence review and clean-HEAD binding remain
+the terminal gate before U implementation.
 
 ### Preserved boundaries for execution review
 

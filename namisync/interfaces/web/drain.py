@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from collections import OrderedDict, deque
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from itertools import chain, islice
 from math import isfinite
@@ -13,6 +13,7 @@ from time import monotonic
 from types import MappingProxyType
 from typing import Never
 
+from namisync.interfaces.ui_state import MAX_JAVASCRIPT_SAFE_INTEGER
 from namisync.interfaces.task_port import (
     _validate_task_observation,
     TaskCloseRequestView,
@@ -36,13 +37,24 @@ from namisync.interfaces.task_port import (
     TaskUpdateView,
 )
 from namisync.workflows.views import (
+    IntegrityOutcomeView,
+    OperationItemView,
     SessionEventView,
     SessionRecordView,
+    result_item_view,
     SetupOptionsView,
     validate_session_record_view,
 )
 from namisync.workflows.inventory import LocationCandidate, RememberedLocations
-from namisync.workflows import PlanSortColumn, SortDirection
+from namisync.workflows import (
+    ExecutionEvidenceResult,
+    ExecutionEvidenceWindow,
+    PlanSortColumn,
+    RetainedExecutionItemWindow,
+    RetainedExecutionSummary,
+    RetainedIntegrityItemWindow,
+    SortDirection,
+)
 
 from ._exception_graph import retire_exception_graph as _retire_exception_graph
 from .plan_review import PlanReviewState
@@ -187,6 +199,18 @@ class _TaskState:
     start_response_ids: set[str] = field(default_factory=set)
     prior_session_id: str | None = None
     prior_delivery: tuple[object, ...] | None = None
+    execution_revision: int = 0
+    execution_session_id: str | None = None
+    execution_summary: RetainedExecutionSummary | None = None
+    execution_operation_results: dict[str, dict[str, object]] = field(
+        default_factory=dict
+    )
+    execution_integrity_results: dict[str, dict[str, object]] = field(
+        default_factory=dict
+    )
+    execution_gap_minimum: int | None = None
+    execution_gap_maximum: int | None = None
+    execution_membership: Mapping[str, str] | None = None
 
     def sink(self, generation: int) -> Callable[[TaskDeliveryUpdate], None]:
         def accept(update: TaskDeliveryUpdate) -> None:
@@ -220,6 +244,7 @@ class _TaskState:
                 update,
                 expected_session_id=expected_session_id,
             )
+            self._offer_execution_fact(update)
             if type(update) is SessionRecordView:
                 self.terminal_record = update
                 self.terminal_pending = False
@@ -265,6 +290,73 @@ class _TaskState:
             self.queue.append(update)
             self.progress_available_at = None
             self.condition.notify_all()
+
+    def _offer_execution_fact(self, update: TaskDeliveryUpdate) -> None:
+        membership = self.execution_membership
+        if type(update) is not SessionEventView or membership is None:
+            return
+        body_type = update.body_type
+        body = update.body
+        if body_type == "Gap":
+            first_missed = body["first_missed_seq"]
+            minimum = self.execution_gap_minimum
+            maximum = self.execution_gap_maximum
+            next_minimum = (
+                first_missed if minimum is None else min(minimum, first_missed)
+            )
+            next_maximum = (
+                first_missed if maximum is None else max(maximum, first_missed)
+            )
+            changed = minimum != next_minimum or maximum != next_maximum
+            if changed:
+                next_revision = _next_execution_revision(self.execution_revision)
+                self.execution_gap_minimum = next_minimum
+                self.execution_gap_maximum = next_maximum
+                self.execution_revision = next_revision
+            return
+        if body_type == "ItemOutcome":
+            if body["phase"] != "execute":
+                raise ObservationConflictError(
+                    "execution operation result changed its phase"
+                )
+            target = self.execution_operation_results
+            fact = {
+                "result": body["result"],
+                "reason": body["reason"],
+                "recording": body["recording"],
+                "recording_reason": body["recording_reason"],
+                "detail_omitted_count": body["detail_omitted_count"],
+            }
+        elif body_type == "IntegrityOutcome":
+            if body["phase"] != "verify":
+                raise ObservationConflictError(
+                    "automatic execution verification changed its phase"
+                )
+            target = self.execution_integrity_results
+            fact = {
+                "result": body["result"],
+                "reason": body["reason"],
+                "recording": body["recording"],
+                "record_disposition": body["record_disposition"],
+                "detail_omitted_count": body["detail_omitted_count"],
+            }
+        else:
+            return
+        operation_id = body["item_id"]
+        if operation_id not in membership:
+            raise ObservationConflictError(
+                "execution result is outside the retained Plan"
+            )
+        previous = target.get(operation_id)
+        if previous is not None:
+            if previous != fact:
+                raise ObservationConflictError(
+                    "execution result replay changed its compact fact"
+                )
+            return
+        next_revision = _next_execution_revision(self.execution_revision)
+        target[operation_id] = fact
+        self.execution_revision = next_revision
 
 
 @dataclass(slots=True)
@@ -477,6 +569,40 @@ class TaskRegistry:
                 task.task_kind,
                 task.request_id,
             )
+
+    @staticmethod
+    def _execution_summary_locked(task: _TaskState) -> dict[str, object]:
+        retained = task.execution_summary
+        gap = None
+        if task.execution_gap_minimum is not None:
+            gap = {
+                "minimum_first_missed_seq": task.execution_gap_minimum,
+                "maximum_first_missed_seq": task.execution_gap_maximum,
+            }
+        return {
+            "execution_revision": task.execution_revision,
+            "session_id": task.execution_session_id,
+            "result": None if retained is None else retained.result,
+            "failed_operation_count": (
+                None if retained is None else retained.failed_operation_count
+            ),
+            "disk_capacity_failure_count": (
+                None if retained is None else retained.disk_capacity_failure_count
+            ),
+            "gap": gap,
+            "trash_location": None if retained is None else retained.trash_location,
+        }
+
+    @classmethod
+    def _decorate_plan_summary_locked(
+        cls,
+        task: _TaskState,
+        summary: dict[str, object],
+    ) -> dict[str, object]:
+        return {
+            **summary,
+            "execution": cls._execution_summary_locked(task),
+        }
 
     def start_plan(
         self,
@@ -763,7 +889,10 @@ class TaskRegistry:
                         and not retained_task.retiring
                         and self._plan_review_ready(retained_task)
                     ):
-                        return existing.summary()
+                        return self._decorate_plan_summary_locked(
+                            retained_task,
+                            existing.summary(),
+                        )
         task, request_id = self._require_plan_review_task(task_id)
         with task.condition:
             generation = task.generation
@@ -803,9 +932,15 @@ class TaskRegistry:
                     raise TaskUnavailableError("task is unavailable")
                 existing = self._plan_views.get(task_id)
                 if existing is not None:
-                    return existing.summary()
+                    return self._decorate_plan_summary_locked(
+                        task,
+                        existing.summary(),
+                    )
                 self._plan_views[task_id] = view
-        return view.summary(disposition="opened")
+                return self._decorate_plan_summary_locked(
+                    task,
+                    view.summary(disposition="opened"),
+                )
 
     def update_plan_view(
         self,
@@ -822,14 +957,17 @@ class TaskRegistry:
         task, view = self._require_plan_view(task_id)
         with task.condition:
             self._require_plan_view_locked(task, view)
-            return view.update(
-                expected_revision=expected_revision,
-                search_query=search_query,
-                filters=filters,
-                sort_column=sort_column,
-                sort_direction=sort_direction,
-                collapse_node_id=collapse_node_id,
-                collapsed=collapsed,
+            return self._decorate_plan_summary_locked(
+                task,
+                view.update(
+                    expected_revision=expected_revision,
+                    search_query=search_query,
+                    filters=filters,
+                    sort_column=sort_column,
+                    sort_direction=sort_direction,
+                    collapse_node_id=collapse_node_id,
+                    collapsed=collapsed,
+                ),
             )
 
     def get_plan_window(
@@ -843,11 +981,171 @@ class TaskRegistry:
         task, view = self._require_plan_view(task_id)
         with task.condition:
             self._require_plan_view_locked(task, view)
-            return view.window(
+            window = view.window(
                 expected_revision=expected_revision,
                 offset=offset,
                 limit=limit,
             )
+            execution_revision = task.execution_revision
+            if window["disposition"] == "conflict":
+                return {
+                    **window,
+                    "execution": self._execution_summary_locked(task),
+                }
+            operation_ids = tuple(
+                dict.fromkeys(
+                    row["operation_id"]
+                    for row in window["rows"]
+                    if row["operation_id"] is not None
+                )
+            )
+            if task.execution_summary is None:
+                return _decorate_execution_window(
+                    window,
+                    self._execution_summary_locked(task),
+                    task.execution_operation_results,
+                    task.execution_integrity_results,
+                    {},
+                )
+            expected_run_id = task.execution_summary.run_id
+            snapshot = (
+                task.session_id,
+                task.generation,
+                task.request_id,
+                view.view_revision,
+                execution_revision,
+            )
+
+        operation_window = self._lifecycle.read_task_execution_items(
+            task_id,
+            operation_ids,
+        )
+        integrity_window = self._lifecycle.read_task_integrity_items(
+            task_id,
+            operation_ids,
+        )
+        evidence_window = self._lifecycle.read_task_execution_evidence(
+            task_id,
+            operation_ids,
+        )
+        operations, integrity, evidence = _retained_execution_maps(
+            task_id,
+            expected_run_id,
+            operation_ids,
+            operation_window,
+            integrity_window,
+            evidence_window,
+        )
+        with task.condition:
+            self._require_plan_view_locked(task, view)
+            if (
+                snapshot
+                != (
+                    task.session_id,
+                    task.generation,
+                    task.request_id,
+                    view.view_revision,
+                    task.execution_revision,
+                )
+                or task.execution_summary is None
+            ):
+                conflict = view.window(
+                    expected_revision=-1,
+                    offset=offset,
+                    limit=limit,
+                )
+                return {
+                    **conflict,
+                    "execution": self._execution_summary_locked(task),
+                }
+            return _decorate_execution_window(
+                window,
+                self._execution_summary_locked(task),
+                operations,
+                integrity,
+                evidence,
+            )
+
+    def get_execution_detail(
+        self,
+        task_id: str,
+        operation_id: str,
+        *,
+        expected_execution_revision: int,
+    ) -> dict[str, object]:
+        task, view = self._require_plan_view(task_id)
+        with task.condition:
+            self._require_plan_view_locked(task, view)
+            if operation_id not in view.projection.operation_node_id_by_id:
+                raise ValueError("execution detail operation is outside the Plan")
+            if expected_execution_revision != task.execution_revision:
+                return _execution_detail_empty(
+                    "conflict",
+                    task.execution_revision,
+                    operation_id,
+                )
+            if task.execution_summary is None:
+                return _execution_detail_empty(
+                    "not-retained",
+                    task.execution_revision,
+                    operation_id,
+                )
+            expected_run_id = task.execution_summary.run_id
+            snapshot = (
+                task.session_id,
+                task.generation,
+                task.request_id,
+                view.view_revision,
+                task.execution_revision,
+            )
+
+        operation_window = self._lifecycle.read_task_execution_items(
+            task_id,
+            (operation_id,),
+        )
+        integrity_window = self._lifecycle.read_task_integrity_items(
+            task_id,
+            (operation_id,),
+        )
+        evidence_window = self._lifecycle.read_task_execution_evidence(
+            task_id,
+            (operation_id,),
+        )
+        operations, integrity, evidence = _retained_execution_maps(
+            task_id,
+            expected_run_id,
+            (operation_id,),
+            operation_window,
+            integrity_window,
+            evidence_window,
+            compact=False,
+        )
+        with task.condition:
+            self._require_plan_view_locked(task, view)
+            if (
+                snapshot
+                != (
+                    task.session_id,
+                    task.generation,
+                    task.request_id,
+                    view.view_revision,
+                    task.execution_revision,
+                )
+                or task.execution_summary is None
+            ):
+                return _execution_detail_empty(
+                    "conflict",
+                    task.execution_revision,
+                    operation_id,
+                )
+            return {
+                "disposition": "current",
+                "execution_revision": task.execution_revision,
+                "operation_id": operation_id,
+                "operation": operations.get(operation_id),
+                "automatic_verification": integrity.get(operation_id),
+                "evidence": evidence.get(operation_id),
+            }
 
     def get_plan_anchor(
         self,
@@ -895,11 +1193,14 @@ class TaskRegistry:
         task, view = self._require_plan_view(task_id)
         with task.condition:
             self._require_plan_view_locked(task, view)
-            return view.mutate_highlight(
-                expected_view_revision=expected_view_revision,
-                expected_highlight_revision=expected_highlight_revision,
-                gesture=gesture,
-                node_id=node_id,
+            return self._decorate_plan_summary_locked(
+                task,
+                view.mutate_highlight(
+                    expected_view_revision=expected_view_revision,
+                    expected_highlight_revision=expected_highlight_revision,
+                    gesture=gesture,
+                    node_id=node_id,
+                ),
             )
 
     def mutate_plan_highlighted_selection(
@@ -931,9 +1232,15 @@ class TaskRegistry:
                 expected_selection_revision=expected_selection_revision,
             )
             if selection_ids is None:
-                return view.summary(disposition="conflict")
+                return self._decorate_plan_summary_locked(
+                    task,
+                    view.summary(disposition="conflict"),
+                )
             if not selection_ids:
-                return view.summary(disposition="noop")
+                return self._decorate_plan_summary_locked(
+                    task,
+                    view.summary(disposition="noop"),
+                )
             mutation = self._lifecycle.mutate_selection(
                 request_id,
                 expected_selection_revision,
@@ -964,7 +1271,10 @@ class TaskRegistry:
                 destructive_operation_counts=preview.destructive_operation_counts,
                 required_bytes=preview.required_bytes,
             )
-            return view.summary(disposition=mutation.disposition)
+            return self._decorate_plan_summary_locked(
+                task,
+                view.summary(disposition=mutation.disposition),
+            )
 
     def mutate_plan_scope(
         self,
@@ -1013,9 +1323,15 @@ class TaskRegistry:
                 node_id=node_id,
             )
             if selection_ids is None:
-                return view.summary(disposition="conflict")
+                return self._decorate_plan_summary_locked(
+                    task,
+                    view.summary(disposition="conflict"),
+                )
             if not selection_ids:
-                return view.summary(disposition="noop")
+                return self._decorate_plan_summary_locked(
+                    task,
+                    view.summary(disposition="noop"),
+                )
             mutation = self._lifecycle.mutate_selection(
                 request_id,
                 expected_revision,
@@ -1048,7 +1364,10 @@ class TaskRegistry:
                 destructive_operation_counts=preview.destructive_operation_counts,
                 required_bytes=preview.required_bytes,
             )
-            return view.summary(disposition=mutation.disposition)
+            return self._decorate_plan_summary_locked(
+                task,
+                view.summary(disposition=mutation.disposition),
+            )
 
     def _require_released_plan_task(
         self,
@@ -1163,6 +1482,11 @@ class TaskRegistry:
         if task is None:
             raise TaskUnavailableError("task is unavailable")
         with task.condition:
+            plan_view_missing = self._plan_views.get(task_id) is None
+        if plan_view_missing:
+            self.open_plan_view(task_id)
+        with task.condition:
+            plan_view = self._plan_views.get(task_id)
             if (
                 task.task_kind != "sync-plan"
                 or task.request_id != request_id
@@ -1172,8 +1496,11 @@ class TaskRegistry:
                 or task.transition
                 or task.retiring
                 or len(task.start_response_ids) >= 2
+                or plan_view is None
+                or plan_view.request_id != request_id
             ):
                 raise TaskUnavailableError("task is unavailable")
+            execution_membership = plan_view.projection.operation_node_id_by_id
             task.transition = True
             task.condition.notify_all()
 
@@ -1203,6 +1530,9 @@ class TaskRegistry:
                     or len(task.start_response_ids) >= 2
                 ):
                     raise TaskUnavailableError("task is unavailable")
+                next_execution_revision = _next_execution_revision(
+                    task.execution_revision
+                )
                 task.prior_session_id = task.session_id
                 task.prior_delivery = (
                     tuple(task.queue),
@@ -1213,6 +1543,20 @@ class TaskRegistry:
                     task.delivered_terminal_record,
                     task.session_released,
                     task.closing,
+                    task.execution_revision,
+                    task.execution_session_id,
+                    task.execution_summary,
+                    {
+                        key: dict(value)
+                        for key, value in task.execution_operation_results.items()
+                    },
+                    {
+                        key: dict(value)
+                        for key, value in task.execution_integrity_results.items()
+                    },
+                    task.execution_gap_minimum,
+                    task.execution_gap_maximum,
+                    task.execution_membership,
                 )
                 task.generation += 1
                 task.session_id = None
@@ -1225,6 +1569,14 @@ class TaskRegistry:
                 task.session_released = False
                 task.active_drain = None
                 task.closing = False
+                task.execution_revision = next_execution_revision
+                task.execution_session_id = None
+                task.execution_summary = None
+                task.execution_operation_results.clear()
+                task.execution_integrity_results.clear()
+                task.execution_gap_minimum = None
+                task.execution_gap_maximum = None
+                task.execution_membership = execution_membership
                 return task.sink(task.generation)
 
         result: object | None = None
@@ -1341,6 +1693,18 @@ class TaskRegistry:
             task.delivered_terminal_record = prior[5]
             task.session_released = prior[6]
             task.closing = prior[7]
+            task.execution_revision = prior[8]
+            task.execution_session_id = prior[9]
+            task.execution_summary = prior[10]
+            task.execution_operation_results = {
+                key: dict(value) for key, value in prior[11].items()
+            }
+            task.execution_integrity_results = {
+                key: dict(value) for key, value in prior[12].items()
+            }
+            task.execution_gap_minimum = prior[13]
+            task.execution_gap_maximum = prior[14]
+            task.execution_membership = prior[15]
             task.prior_session_id = None
             task.prior_delivery = None
             task.transition = False
@@ -1366,6 +1730,7 @@ class TaskRegistry:
                     "task observation does not match execution"
                 )
             task.session_id = candidate.session_id
+            task.execution_session_id = candidate.session_id
             task.start_command_id = command_id
             task.start_response_ids.add(command_id)
             task.prior_session_id = None
@@ -1942,9 +2307,11 @@ class TaskRegistry:
             task.require_no_response_capture_reentry()
             if task.session_id != session_id:
                 raise TaskUnavailableError("task is unavailable")
+            execution_release = task.execution_session_id == session_id
             delivery = self._terminal_delivery_locked(task)
             task.closing = True
             task.generation += 1
+            release_generation = task.generation
             if task.active_drain is not None:
                 task.active_drain.superseded = True
             task.condition.notify_all()
@@ -1994,7 +2361,31 @@ class TaskRegistry:
         ):
             raise RuntimeError("task lifecycle returned invalid release data")
         result.__post_init__()
+        retained_summary = None
+        if execution_release:
+            retained_summary = self._lifecycle.read_task_execution_summary(task_id)
+            if (
+                type(retained_summary) is not RetainedExecutionSummary
+                or retained_summary.task_id != task_id
+            ):
+                raise RuntimeError(
+                    "task lifecycle returned invalid retained execution summary"
+                )
         with task.condition:
+            stale = (
+                task.session_id != session_id
+                or task.generation != release_generation
+                or task.execution_session_id
+                != (session_id if execution_release else None)
+            )
+            if stale and task.retiring and task.session_id == session_id:
+                return result
+            if stale:
+                raise TaskUnavailableError("task is unavailable")
+            if retained_summary is not None and task.execution_summary != retained_summary:
+                next_revision = _next_execution_revision(task.execution_revision)
+                task.execution_summary = retained_summary
+                task.execution_revision = next_revision
             task.session_released = True
             task.condition.notify_all()
         return result
@@ -2200,6 +2591,184 @@ class TaskRegistry:
             raise TaskUnavailableError("task is unavailable")
         if type(session_id) is not str or _OPAQUE_ID.fullmatch(session_id) is None:
             raise TaskUnavailableError("task is unavailable")
+
+
+def _next_execution_revision(current: int) -> int:
+    if current >= MAX_JAVASCRIPT_SAFE_INTEGER:
+        raise OverflowError("execution revision is exhausted")
+    return current + 1
+
+
+def _execution_evidence_wire(value: ExecutionEvidenceResult) -> dict[str, object]:
+    if type(value) is not ExecutionEvidenceResult:
+        raise RuntimeError("retained execution evidence has invalid data")
+    content = value.content
+    return {
+        "state": value.state.value,
+        "content": None if content is None else {
+            "algorithm": content.algorithm,
+            "digest": content.digest.hex(),
+            "size": str(content.size),
+            "provenance": content.provenance.value,
+            "observed_at": content.observed_at.isoformat(),
+        },
+    }
+
+
+def _retained_execution_maps(
+    task_id: str,
+    run_id: str,
+    expected_operation_ids: tuple[str, ...],
+    operation_window: object,
+    integrity_window: object,
+    evidence_window: object,
+    *,
+    compact: bool = True,
+) -> tuple[
+    dict[str, object],
+    dict[str, object],
+    dict[str, dict[str, object]],
+]:
+    if (
+        type(operation_window) is not RetainedExecutionItemWindow
+        or type(integrity_window) is not RetainedIntegrityItemWindow
+        or type(evidence_window) is not ExecutionEvidenceWindow
+        or operation_window.task_id != task_id
+        or integrity_window.task_id != task_id
+        or operation_window.run_id != run_id
+        or operation_window.run_id != integrity_window.run_id
+        or evidence_window.run_token != operation_window.run_id
+    ):
+        raise RuntimeError("retained execution read changed its task binding")
+    expected = frozenset(expected_operation_ids)
+    operations: dict[str, object] = {}
+    for item in operation_window.items:
+        if compact:
+            try:
+                item_id = item.item_id
+                if item.phase != "execute" or type(item_id) is not str:
+                    raise TypeError
+                value: object = {
+                    "result": item.outcome.value,
+                    "reason": item.reason,
+                    "recording": item.recording.value,
+                    "recording_reason": (
+                        None
+                        if item.recording_reason is None
+                        else item.recording_reason.value
+                    ),
+                    "detail_omitted_count": item.detail_omitted_count,
+                }
+            except (AttributeError, TypeError) as error:
+                raise RuntimeError(
+                    "retained operation item has invalid data"
+                ) from error
+        else:
+            view = result_item_view(item)
+            if type(view) is not OperationItemView:
+                raise RuntimeError("retained operation item has invalid data")
+            item_id = view.item_id
+            value = view
+        if item_id not in expected or item_id in operations:
+            raise RuntimeError("retained operation item has invalid data")
+        operations[item_id] = value
+    integrity: dict[str, object] = {}
+    for item in integrity_window.items:
+        if compact:
+            try:
+                item_id = item.item_id
+                if item.phase != "verify" or type(item_id) is not str:
+                    raise TypeError
+                value = {
+                    "result": item.result.value,
+                    "reason": None if item.reason is None else item.reason.value,
+                    "recording": item.recording.value,
+                    "record_disposition": (
+                        None
+                        if item.record_disposition is None
+                        else item.record_disposition.value
+                    ),
+                    "detail_omitted_count": item.detail_omitted_count,
+                }
+            except (AttributeError, TypeError) as error:
+                raise RuntimeError(
+                    "retained integrity item has invalid data"
+                ) from error
+        else:
+            view = result_item_view(item)
+            if type(view) is not IntegrityOutcomeView:
+                raise RuntimeError("retained integrity item has invalid data")
+            item_id = view.item_id
+            value = view
+        if item_id not in expected or item_id in integrity:
+            raise RuntimeError("retained integrity item has invalid data")
+        integrity[item_id] = value
+    evidence: dict[str, dict[str, object]] = {}
+    for result in evidence_window.results:
+        if type(result) is not ExecutionEvidenceResult:
+            raise RuntimeError("retained execution evidence has invalid data")
+        if result.operation_id not in expected or result.operation_id in evidence:
+            raise RuntimeError("retained execution evidence is duplicated")
+        evidence[result.operation_id] = _execution_evidence_wire(result)
+    return operations, integrity, evidence
+
+
+def _decorate_execution_window(
+    window: dict[str, object],
+    execution: dict[str, object],
+    operations: Mapping[str, object],
+    integrity: Mapping[str, object],
+    evidence: Mapping[str, dict[str, object]],
+) -> dict[str, object]:
+    rows = []
+    for row in window["rows"]:
+        operation_id = row["operation_id"]
+        overlay = None
+        if operation_id is not None:
+            operation = operations.get(operation_id)
+            automatic = integrity.get(operation_id)
+            current_evidence = evidence.get(operation_id)
+            overlay = {
+                "operation": (
+                    None if operation is None else dict(operation)
+                ),
+                "automatic_verification": (
+                    None if automatic is None else dict(automatic)
+                ),
+                "evidence": (
+                    None
+                    if current_evidence is None
+                    else {
+                        **current_evidence,
+                        "content": (
+                            None
+                            if current_evidence["content"] is None
+                            else dict(current_evidence["content"])
+                        ),
+                    }
+                ),
+            }
+        rows.append({**row, "execution": overlay})
+    return {
+        **window,
+        "execution": execution,
+        "rows": rows,
+    }
+
+
+def _execution_detail_empty(
+    disposition: str,
+    execution_revision: int,
+    operation_id: str,
+) -> dict[str, object]:
+    return {
+        "disposition": disposition,
+        "execution_revision": execution_revision,
+        "operation_id": operation_id,
+        "operation": None,
+        "automatic_verification": None,
+        "evidence": None,
+    }
 
 
 def _tag_update(update: TaskDeliveryUpdate) -> TaskUpdateView:

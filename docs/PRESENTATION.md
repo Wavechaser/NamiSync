@@ -11,9 +11,26 @@ axes without carrying item details. Operation and automatic linked-verification
 items have separate Plan-bounded indexes. Exact internal reads admit at most 256
 operation identities before lookup and may return the immutable item references;
 missing selected items remain unknown and emitted exclusion outcomes retain
-their actual result. A later public result window must remain compact and obtain
-full detail separately because one reliable item can approach the event-envelope
-limit.
+their actual result.
+
+The web adapter projects that truth onto the existing Plan summary and rows.
+One execution revision guards the summary, window overlays and exact detail.
+Before execution the summary has no session or terminal facts. During execution
+it identifies the current session, retains compact operation and automatic-
+verification facts separately, and exposes no ledger evidence. A terminal
+session release replaces only facts proved by the captured workflow review: its
+item-free result axes, typed failure counts, location-only trash context and
+bounded retained item/evidence reads. Missing retained items remain unknown.
+
+Every Plan row with an operation identity receives that operation's compact
+overlay, including an operation-bearing container. Structural rows remain null.
+Compact operation facts are result, reason, recording state/reason and omission
+count; compact automatic verification has its own result, reason, recording,
+record disposition and omission count. Details and paths remain absent from a
+256-row window because one reliable item can approach the event-envelope limit.
+The separate exact one-operation detail read is available only after retained
+review exists and keeps the operation item, automatic verification and current
+ledger evidence distinct.
 
 Complete committed selection owns target uniqueness. Every selected operation
 touches its canonical target; MOVE and MOVE_UPDATE also touch their prior target,
@@ -42,6 +59,23 @@ as a trusted internal boolean derived by retained task review. E has
 no browser surface, and later adapters never supply or reinterpret the bit.
 The classifier never derives uniqueness from one window. Item and task recording degradation remain separate
 axes, so the committed ledger snapshot decides whether an item has evidence.
+
+Adapter result maps are independently bounded by the immutable Plan operation
+membership already retained by the projection; they do not copy another complete
+membership set. Live replay equality compares compact facts, not an unbounded
+event body, and changes no revision for an equal replay. A `Gap` records only the
+minimum and maximum observed `first_missed_seq`;
+it is visible uncertainty, not a
+lost-item count or a claim about the entire intervening sequence range. Terminal
+reconciliation never erases that history.
+
+A result window admits at most the existing 256 Plan rows before any workflow or
+ledger read. Retained operation and automatic-verification lookups use only the
+distinct requested operation identities; current evidence uses one bounded
+workflow query over those identities. Adapter task/session/generation, Plan view
+and execution revisions are snapshotted before those external reads and exactly
+revalidated afterward. Pre-execution and live windows perform no ledger query,
+and no window or detail scans the complete run.
 
 ## Tree identity and meaning
 
@@ -146,7 +180,7 @@ Focused checks must catch the failures that small fixtures conceal: scope-qualif
 
 ## Implemented Plan and accepted future outcomes
 
-The implemented Plan review surface lets users inspect a complete stable view of immutable review facts, inert notices, current server-owned selection and destructive intent without letting stale UI actions acquire authority. It preserves prior-path ancestry and paired move annotations, while operation groups remain non-folder membership containers. Its renderer retains only the current `1..256` row window and uses exact 24 px rows and matching virtual spacers. The generic `tree.js` inventory foundation retains its separate exact 28 px row contract. Inventory review, follow mode and later result-detail projection remain accepted future outcomes; their DTO layout, caching topology and intermediate delivery sequence remain open until implementation.
+The implemented Plan review surface lets users inspect a complete stable view of immutable review facts, inert notices, current server-owned selection and destructive intent without letting stale UI actions acquire authority. It preserves prior-path ancestry and paired move annotations, while operation groups remain non-folder membership containers. Its renderer retains only the current `1..256` row window and uses exact 24 px rows and matching virtual spacers. The generic `tree.js` inventory foundation retains its separate exact 28 px row contract. Inventory review and follow mode remain accepted future outcomes; their DTO layout, caching topology and intermediate delivery sequence remain open until implementation.
 
 The Plan summary displays workflow-derived selected/eligible counts, selected
 required bytes, and planning issues (preflight refusals plus scan notices).
@@ -243,8 +277,9 @@ maximum <=250 ms; retain child identities and within/across-child dispersion.
 All failed attempts and timeouts remain recorded. This scoped acceptance does
 not renew the full 35-case collection or change its protected validator.
 
-Use existing headed child/readiness modes and authority freezing, with a separate
-scoped checker reusing independent receipt/fixture/profile/byte checks. Freeze
+Use existing headed workload/child/readiness and authority-freezing primitives
+through the A8-05 two-metric adapter/collector, with a separate scoped checker
+reusing unchanged independent receipt/profile/byte checks. Freeze
 the exact instrument/checker and additional product dependencies outside the
 historical source manifest, including `workflows/execution_review.py`. Verify
 physical source, wheel-member and installed bytes and Git-clean identities;
@@ -252,6 +287,53 @@ commit versioned raw provenance/receipts and a separate validation result.
 Require controls for missing/reused samples, wrong identities and a maximum-only
 failure. M1_PLAN names the finite files and selected-case readiness. Never filter
 the full contract to make its terminal validator accept partial evidence.
+
+A8-05 versions this scoped report for the accepted rootless surface: the unchanged
+base has 100,000 operations and 120,000 projection nodes, while its public window
+has 119,999 rows. Initial settlement requires 256 current rows at revision/offset
+zero and the independently derived `NamiSyncPriorV1` Previous paths first group.
+Retain per-plan identities and the existing fresh-unused Plan population for the
+start metric. Adapt only scoped fixture settlement/validation; preserve historical
+producer, checker, contract and artifacts without fabricating a public root.
+
+Before each launch durably publish the fixed ordered plan of two readiness
+children (window, start), five window children and five start children, plus the
+current launching state. Record accepted receipt/path/hash/process or the first
+failure/timeout and bounded error/log evidence. Refuse restart/overwrite; stop on
+first failure and obtain disposition before another collection. Independently
+validate the final index embedded in raw evidence against exact receipt membership,
+order, identities and hashes. Failed, launching or incomplete states cannot pass.
+This preserves evidence custody in the trusted local collection model, not
+protection against malicious rewriting. Both actual installed headed readiness
+cases precede timed acceptance; headless fixture probes are only compatibility
+evidence. Derive embedded authority OID from declared canonical bytes and bind
+the named authority through filtered repository bytes to final HEAD and raw
+receipts. Corruption controls cover these identities, rootless fixture premises,
+attempt custody and budgets. Freeze the new adapter/checker/test dependencies
+and verify postcommit source/evidence bindings; changed measured bytes invalidate
+affected observations.
+
+The P2 collection on 2026-09-20 completed its fixed 12 attempts with no failure.
+The named `m1_8_execution_receipt_{authority,receipts,result}.json` artifacts
+retain frozen provenance, exact attempt/sample membership and separate results.
+Window receipt p95/max is 6.8/7.3 ms; execution-start receipt is 58.8/65.1 ms.
+The full unmocked workspace validator passed before and after collection.
+Ignored `build/m1-8-p2/run-01/` retains child receipts, launch index and logs.
+These results apply to the P2 measured build; later UI edits reopen affected
+cases under their own declared evidence. Final committed-source validation is
+required in addition to receipt/result validation.
+
+For terminal reproduction from the repository root, load the three named
+artifacts and the unchanged compact contract, import
+`tests/interfaces/web/_m1_8_execution_receipt_scale.py`, and invoke
+`validate_authority_workspace` with the retained wheel/installed paths, then
+`validate_receipts`, `validate_result` and `validate_committed_sources`.
+`compact_authority` uses `plan_scale.canonical_json_bytes`; use its recorded
+receipt OID and the raw artifact's authority OID. The exact retained invocation
+is `build/m1-8-p2-terminal-validate.py --installed-root <site-packages>
+--installed-wheel <wheel>`, executed with the project Python. It calls both
+historical and supplemental checks unmocked and finishes with named-artifact
+and clean-HEAD binding. HANDOFF records the actual retained installation.
 
 Component windows, changed views, construction and projection-memory acceptance
 retain their existing premises only while PlanReviewState, projection/order/

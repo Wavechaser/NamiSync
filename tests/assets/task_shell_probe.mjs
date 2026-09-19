@@ -417,6 +417,15 @@ function planSummary(overrides = {}) {
     sort_column: "path",
     sort_direction: "ascending",
     collapsed_count: 0,
+    execution: {
+      execution_revision: 0,
+      session_id: null,
+      result: null,
+      failed_operation_count: null,
+      disk_capacity_failure_count: null,
+      gap: null,
+      trash_location: null,
+    },
     ...overrides,
   };
 }
@@ -428,6 +437,7 @@ function planWindow(summary, offset = 0) {
     highlight_revision: summary.highlight_revision,
     offset,
     total: 1,
+    execution: summary.execution,
     rows: [{
       node_id: `node-${"b".repeat(32)}`,
       display: "Source changed after planning",
@@ -456,6 +466,7 @@ function planWindow(summary, offset = 0) {
       move_peer_id: null,
       notice: "The source changed. Create a fresh plan.",
       selection_exclusion_reason: null,
+      execution: null,
     }],
   };
 }

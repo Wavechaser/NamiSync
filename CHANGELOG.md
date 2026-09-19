@@ -47,7 +47,14 @@ packaging remain open.
   Validate committed Plan/selection/session identity, preserve partial-cleanup
   retries, and dispose review at Close/shutdown. Derive complete-selection
   evidence ownership, typed failure counts and location-only trash context.
-  Browser protocol and GUI consumption follow in separate commits.
+- Add bounded live/retained execution summaries and row overlays without changing
+  the Plan hierarchy or selection. Keep automatic verification and recording
+  independent, preserve Gap history, and fetch full detail one operation at a
+  time with exact revision/request validation.
+- Validate the affected installed receipt paths with a separate frozen report:
+  window p95/max 6.8/7.3 ms and execution-start 58.8/65.1 ms, within unchanged
+  100/250 ms budgets. Preserve all 12 attempts and source/runtime provenance.
+  The temporary environment pause is resolved; GUI consumption remains pending.
 
 #### Refine Plan density, readiness and row highlighting (2026-09-17 – 2026-09-20)
 

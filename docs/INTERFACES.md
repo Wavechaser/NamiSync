@@ -546,6 +546,36 @@ compensation. The strong import contract `Web task drain cannot reach domain
 lifecycle owners` forbids both direct and indirect drain paths to those owners,
 including `SessionObserver`.
 
+For a Plan execution, the same task owner also keeps one adapter execution epoch.
+The epoch is armed inside the application delivery factory before its sink is
+returned, so a synchronous first event cannot precede overlay state. Admission
+failure restores the existing released-plan delivery and its prior execution
+state; successful publication binds the epoch to the exact execution session.
+Re-observation changes delivery generation but retains compact execution facts
+and visible Gap history. Equal compact replays are idempotent; a conflicting
+fact for the same operation and axis is an observation conflict. Operation and
+automatic linked-verification maps are separate and each admits identities only
+from the projection's immutable operation mapping.
+
+Terminal-session release captures the workflow review through the lifecycle
+owner, then the adapter reads and installs its item-free retained summary before
+publishing release locally. This step retains the terminal filesystem,
+integrity, recording, audit, disposition, cancellation, phase, byte, error,
+recording-issue and omission axes, the failed and disk-capacity counts, and the
+location-only trash context. It does not scan trash, infer an item count, or
+clear transport-loss history. Explicit task Close retires both the task and
+adapter overlay through the existing owner path.
+
+Summary decoration is centralized in `TaskRegistry`; open, view updates,
+selection/highlight mutations and their conflict/no-op results therefore expose
+one exact execution shape without changing `PlanReviewState`. Window and detail
+reads snapshot task, session, delivery generation, Plan view revision and
+execution revision while holding the task owner, perform workflow and ledger
+reads after releasing it, then require the exact snapshot before returning.
+The live and pre-execution fast paths do not call the ledger. A stale snapshot
+returns a typed conflict and never combines old Plan structure with newer
+execution facts.
+
 `interfaces/web/_exception_graph.py` intentionally keeps the small
 exception-retirement operation adapter-local because the interface import law
 bars core and the drain-specific contract bars lifecycle owners. Do not relax
