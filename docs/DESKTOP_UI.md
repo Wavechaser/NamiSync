@@ -1259,6 +1259,8 @@ These fixed-width semantic fields reserve their icon and label slots: Verify on
 uses accent `arrow-sync-checkmark`, Verify off uses muted `arrow-sync`, Trash
 uses muted `delete`, and Additive uses accent `document-add`. Text remains visible;
 the decorative icons use the pinned Microsoft Fluent assets, not substitute glyphs.
+Plan paths and semantic labels use 12px caption text. The semantic field is
+7rem wide, shifting its icon edge right to align optically with Plan again.
 A Status card shows selected/byte/planning-issue facts and execution controls;
 one table card owns search, toggle-button filters and the grid, without a footer.
 Status and table cards use a 16 px top inset. The status
@@ -1276,7 +1278,8 @@ includes its inset so it is concentric with the inner buttons. Status-card actio
 align right alongside the large status title, with an arrow-reset Plan again
 button before Execute. The icon retains its accessible name and tooltip.
 Concise actionable warnings, errors and in-flight feedback share the second row
-with the status digest; idle and successful messages take no space. At ordinary
+with the status digest; idle and successful messages take no space. Feedback
+shares the digest's caption size and secondary foreground. At ordinary
 widths both texts stay on one line, with full feedback available in its tooltip;
 at narrow card widths both use a stacked, wrapping layout.
 The progress track deliberately uses the ordinary button-rest translucent fill
@@ -1308,7 +1311,8 @@ integer bytes below it, while sort keys remain raw backend facts.
 Filter labels and counters occupy separate spans with a dedicated gap, never
 expanded word spacing. Menu counters align to the right edge. The Plan-again
 icon button is square. Plan and task-tab Source/Target labels use equal-width
-slots so path starts align. Task-tab details, paths and progress end 18px inside
+3.5em slots with a 2px gap so path starts align without excess spacing.
+Task-tab details, paths and progress end 18px inside
 the tab's right edge; title and close-button positioning remain unchanged.
 
 Plan action/filter labels use sentence case and friendly names without changing

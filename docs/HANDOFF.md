@@ -1,48 +1,42 @@
 # Latest session handoff
 
-## Plan spacing and byte precision (2026-09-20)
+## Final Plan typography and alignment (2026-09-20)
 
-GUI-O completes one presentation-only polish unit on baseline c552537.
+GUI-P completes one CSS-only presentation unit on baseline 8fd8cd0.
 
-- Tertiary foreground is #616161 Light and #adadad Dark (including automatic
-  dark), with CanvasText in forced colors. Size/Modified/Notes and rail paths
-  consume it; status text and primary content keep their existing roles.
-- Filter label/count spans use a dedicated gap instead of word-spacing;
-  menu counts align right and controls retain accessible combined labels.
-- Setup says Sync/Integrity without changing inventory behavior or mode keys.
-- Status-card Plan again is square. Progress tracks use button-rest fill,
-  preserving active fill and forced-color behavior.
-- Task detail/path/progress endpoints move inward 10px to an 18px right inset.
-  Plan and task-rail paths use equal-width Source/Target label slots.
-- Shared byte formatting uses exact integer bytes below 1 KiB and two fixed
-  decimals from KiB upward, including trailing zeroes. BigInt rounding and
-  unit promotion remain exact; raw facts and sorting are unchanged.
+- Actionable feedback shares secondary status caption size and text color.
+- Plan paths and semantic labels use 12px captions.
+- Shared Source/Target tracks shrink to 3.5em with a 2px gap; path starts
+  remain aligned in the Plan card and task rail.
+- The right-aligned semantic field shrinks to 7rem, moving its icon edge right
+  toward the Plan-again button without varying with its label text.
 
-DESKTOP_UI and PRESENTATION describe the changed visual/precision contracts.
-No scan, selection, lifecycle, execution, bridge or filesystem policy changed.
+No JavaScript production logic, selection, lifecycle, bridge or backend changes.
+DESKTOP_UI and the matching CHANGELOG task describe these refinements.
+README and AGENTS need no change: milestone and execution rules are unchanged.
 
 Verification:
 
-- Interfaces/tools: 2,033 passed, four skipped, 3,197 deselected.
-- Final frontend/token checks: 62 passed, including decimal rounding/promotion.
-- Installed gallery: light/dark/forced/reduced passed. Added rendered checks
-  for tertiary metadata/path colors, normal interword spacing, menu count
-  alignment, square reset, path starts and 18px task-detail endpoints.
-- Installed Plan: default passed; larger passed on fresh rerun.
-- Independent review and final diff checks passed.
+- Interfaces: 1,699 passed, one skipped, 3,534 deselected.
+- Focused frontend/token: 62 passed.
+- Installed gallery: all four light/dark/forced/reduced modes passed, including
+  new computed typography, compact path gap and optical alignment assertions.
+- Installed default and larger Plan scenarios passed on isolated retries.
+- Independent adversarial review found no defects; final diff check passed.
 
-The first broad run encountered old progress-track expectations; they were
-migrated with the changed token contract, then the full gate passed. Initial
-gallery failure was a new test selector including Settings (which has no task
-paths); it now checks actual task tabs. The combined installed run passed all
-gallery checks and default Plan, but larger failed at page_initial_ready.
-Its log showed no layout cause; one fresh larger-only rerun passed without a
-product change. The failed evidence is retained rather than called a pass.
+The combined installed run passed all four gallery modes, then default Plan
+failed at page_plan_review_plan_ack. Its isolated rerun passed default but the
+first larger attempt failed at the same stage. The larger-only retry passed
+without product changes. Retained driver diagnostics for the first larger
+attempt showed wait_execute, an enabled Execute button, no trusted clicks,
+no document focus and runtime exception details; they do not establish cause.
+These failed attempts are not counted as passes. No harness gate was weakened.
 
 Evidence root:
 C:/Users/Spectrum/.codex/visualizations/2026/09/18/01a0b2ed-22b3-7083-a3e1-21f00596391d/.
-Broad gate: gui-o-departments-final. Frontend/token: build/pytest-gui-o-visual-final.
-Installed gallery/default: gui-o-headed-final; larger: gui-o-larger-retry.
+Interfaces: gui-p-interfaces. Focused: build/pytest-gui-p-focused.
+Gallery: gui-p-headed. Default Plan: gui-p-plan-retry.
+Larger Plan: gui-p-larger-retry.
 Restart the development app to reload frontend assets.
 
 Earlier GUI-M2 recovery af02913 on recovery/gui-m2-folder-totals-20260919 and

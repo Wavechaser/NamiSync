@@ -183,8 +183,8 @@ body {
 
 .nami-labeled-path {
   display: grid;
-  grid-template-columns: 4em minmax(0, 1fr);
-  column-gap: var(--space-2);
+  grid-template-columns: 3.5em minmax(0, 1fr);
+  column-gap: var(--space-1);
 }
 
 .nami-labeled-path__value {
@@ -346,6 +346,7 @@ body {
 }
 
 .nami-plan-review__paths {
+  font-size: var(--font-size-caption);
   overflow: hidden;
   min-inline-size: 0;
   unicode-bidi: isolate;
@@ -361,8 +362,9 @@ body {
 
 .nami-plan-review__settings {
   display: grid;
+  font-size: var(--font-size-caption);
   gap: 0;
-  inline-size: 8rem;
+  inline-size: 7rem;
   justify-self: end;
   min-inline-size: 0;
 }
@@ -397,7 +399,9 @@ body {
   margin: 0;
 }
 
-.nami-plan-review__status-summary {
+.nami-plan-review__status-summary,
+.nami-plan-review__status {
+  color: var(--color-neutral-foreground-secondary);
   font-size: var(--font-size-caption);
   margin: 0;
 }

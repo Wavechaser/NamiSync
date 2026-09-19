@@ -29,6 +29,9 @@ packaging remain open.
 
 #### Refine Plan density, readiness and row highlighting (2026-09-17 – 2026-09-20)
 
+- Match actionable feedback to secondary status typography, tighten aligned
+  path labels, use caption-sized Plan paths/settings, and shift semantic icons
+  into optical alignment with the reset action.
 - Add tertiary metadata/path text, dedicated filter counters with right-aligned
   menu counts, aligned path-label slots, square reset action and lighter progress
   tracks. Align Setup's Sync/Integrity labels and task-detail endpoints; show

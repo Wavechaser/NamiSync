@@ -1088,6 +1088,25 @@ async function reportFailure(error) {
   const semanticPaths = planReviewPanel.element.querySelector(".nami-plan-review__paths");
   const settingBounds = semanticSettings.getBoundingClientRect();
   const pathBounds = semanticPaths.getBoundingClientRect();
+  const statusDetail = planReviewPanel.element.querySelector(".nami-plan-review__status-summary");
+  const statusFeedback = planReviewPanel.element.querySelector(".nami-plan-review__status");
+  if (getComputedStyle(statusFeedback).fontSize !== getComputedStyle(statusDetail).fontSize
+      || getComputedStyle(statusFeedback).color !== getComputedStyle(statusDetail).color) {
+    throw new Error("status feedback must share secondary status typography and color");
+  }
+  if (getComputedStyle(semanticPaths).fontSize !== "12px"
+      || getComputedStyle(semanticSettings).fontSize !== "12px") {
+    throw new Error("Plan paths and semantic settings must use caption size");
+  }
+  if (Math.abs(settingBounds.left - resetBounds.left) > 4) {
+    throw new Error("semantic icons must align optically with the Plan-again button");
+  }
+  for (const value of pathValues) {
+    const label = value.previousElementSibling;
+    if (value.getBoundingClientRect().left - label.getBoundingClientRect().right > 4.5) {
+      throw new Error("path label gap must stay compact");
+    }
+  }
   const semanticColorProbe = document.createElement("span");
   semanticSettings.append(semanticColorProbe);
   for (const [verify, deletion, glyphs, tones] of [

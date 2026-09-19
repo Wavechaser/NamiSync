@@ -11,6 +11,22 @@ do not add, defer, or reinterpret an M1 product outcome.
 
 ## Main objectives and current boundary
 
+### Final Plan typography and alignment (2026-09-20)
+
+GUI-P, baseline 8fd8cd0, delivered: one atomic CSS-only polish unit. Match
+actionable status feedback to secondary status typography/color; tighten shared
+path label tracks; use caption-sized Plan paths/settings; move semantic icons
+right toward the reset-button edge. Finite population: app CSS, gallery rendered
+assertions, DESKTOP_UI, this register, CHANGELOG and HANDOFF. Gate: interfaces
+department, installed gallery modes and default/larger Plan. Regression study:
+aligned path starts, stable semantic slots, feedback visibility, narrow layout,
+forced colors. No strings, lifecycle, bridge, selection or backend changes;
+stop if those boundaries must change. Prior GUI-O remains the visual baseline.
+Verification: 1,699 interface tests passed (one skipped); 62 frontend/token
+checks passed; all four installed gallery modes passed. Default and larger
+installed Plan scenarios passed on isolated retries after confirmation-driver
+failures, retained in HANDOFF. Independent adversarial review found no defects.
+
 ### Plan visual spacing and byte precision (2026-09-20)
 
 GUI-O, baseline c552537, delivered: one atomic presentation unit covering
