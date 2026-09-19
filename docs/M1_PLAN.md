@@ -124,7 +124,7 @@ until its predecessor closes. Initial read-only studies found no mandatory stop.
 | M1-8-D | Condense completed GUI records and register this batch; only M1_PLAN, CHANGELOG, HANDOFF. | Diff, links, outcome/limitation accounting and independent review passed; complete. |
 | M1-8-capacity | Core execution reason and executor runtime classifier/default policy; executor runtime/settlement tests and direct core event/workflow-view/service consumers; EXECUTOR, FEATURES, DESKTOP_UI. | Gate C passed; complete. |
 | M1-8-E | Bounded atomic current-ledger evidence query with read-only workflow/service facade and explicit evidence classes; existing db repository, workflow view contracts, runtime/service, matching repository/workflow/service tests; DATABASE, PRESENTATION, ARCHITECTURE, INTERFACES, FEATURES. No schema/recorder writes. | Gate E passed against integrated capacity `04947ba`; complete. |
-| M1-8-P1 | Backend retained execution review: exact task/Plan/session/run binding, capture before release, separate operation and automatic linked-verification indexes, bounded workflow/service reads and close/shutdown retirement; workflow models/runtime and focused review owner, service/task lifecycle/port and direct tests; PRESENTATION, INTERFACES, ARCHITECTURE. | Finite boundary below; read-only design complete, implementation waits for E. |
+| M1-8-P1 | Backend retained execution review: exact task/Plan/session/run binding, capture before release, separate operation and automatic linked-verification indexes, bounded workflow/service reads and close/shutdown retirement; workflow models/runtime and focused review owner, service/task lifecycle/port and direct tests; PRESENTATION, INTERFACES, ARCHITECTURE. | Gate P1 passed after E `7905a1b`; complete. |
 | M1-8-P2 | Bounded summary/window/detail protocol over the existing Plan hierarchy; web Plan review/drain, commands/bridge and Python/browser validators with direct tests; PRESENTATION, BRIDGE, INTERFACES. | Live/terminal/Gap reconciliation, omission truth, re-observation/reinjection, stale reads and 256-row/byte bounds; pending detailed expansion after P1. |
 | M1-8-U | Live and retained execution UI, independent recording/terminal axes, capacity/generic-I/O guidance and location-only trash information; packaged app/Plan renderer/status/styles and browser/component/installed witnesses; DESKTOP_UI, FEATURES. | Production headed flow, navigation/reinjection, hostile text, no hidden complete browser list, no masked issues; pending detailed expansion. |
 
@@ -267,7 +267,7 @@ there is no browser evidence endpoint in this commit.
 ### M1-8-P1 finite retention boundary
 
 Read-only study inspected `04947ba` and E's integration seams. Implementation
-waits for E's reviewed commit and revalidates its models/runtime entry point.
+starts after E `7905a1b`, revalidating its models/runtime entry point.
 This is A8-01's backend lifetime outcome, one atomic commit; P2 and U follow.
 
 Production population: `workflows/{models,execution_review,runtime,__init__}.py`
@@ -323,6 +323,112 @@ ordinary suite, imports, docs/diff checks and fresh adversarial review. Existing
 Plan representation/BR-G-42 evidence is untouched. Archived reopening, manual
 verification, full browser lists, durable live results and history fallback
 remain excluded. New ownership or effect changes return to the arbiter.
+
+P1 delivered capture/retirement and the reads above without dispatcher or Plan
+representation changes. Review corrected committed-decision reuse, linked
+verification identity checks, exclusion ownership, an interface import route
+and no-fail post-settlement retirement during shutdown. Gate: 2,532 workflow/
+interface tests passed with one optional artifact skip; final ordinary 5,232
+passed, five unchanged skips and 31 headed deselections (287.24 s). Final focused
+review passed 244 tests; a subsequent test-only mixed-failure/axes/omissions
+witness passed the 14-test review module and independent review. Twelve import
+contracts, local links and diff checks passed. No existing test was retired.
+Logs: `build/m1-8-p1-neighborhood-01.log` and
+`build/m1-8-p1-ordinary-final02.log`. The earlier ordinary run collected an
+intermediate new test expecting KeyError after runtime closing; its corrected
+closed-runtime assertion passed focused review and the final ordinary run.
+
+### M1-8-P2 protocol study and affected measurement boundary
+
+Read-only study inspected E `7905a1b` and the P1 candidate; dependent product
+edits wait for integrated P1 and a refresh of its public reads and retirement.
+P2 enriches the adapter's existing Plan summary/window, not PlanReviewState,
+its projection, selection, ordering or visible sequence. Operation-bearing
+containers receive the same overlay as operation leaves. Exact result detail
+is a separate one-operation read; a 256-row window never expands full details.
+
+Production population is `interfaces/web/{drain,commands}.py` and packaged
+`assets/bridge.js`. Reuse the existing projection operation-ID mapping by
+reference for live admission; do not copy another complete membership set.
+Arm the execution epoch before returning the attach-before-start sink, preserve
+the existing rollback/recovery binding, and bound operation and automatic
+verification maps separately by Plan membership. Compact facts are replay
+idempotent; do not use a generic sequence high-water to suppress replay.
+Gap retains minimum/latest observed `first_missed_seq` values, not a count or a
+claim that every intervening sequence was lost. Terminal reconciliation uses
+P1 facts and preserves that visible transport-loss history. Missing results
+remain unknown. E alone supplies coherent stored digest/provenance.
+
+Reads snapshot task/session/generation, Plan and execution revisions and the
+requested operation IDs under the owner lock; workflow/ledger reads occur
+outside it, followed by exact revalidation. No full-run scan per window,
+history fallback, browser-owned complete result list, or altered action scope.
+The existing 256-row and 8-MiB response walls remain; full detail keeps operation
+and automatic verification distinct. P1's location-only trash context passes
+through without filesystem reads. BRIDGE/PRESENTATION/INTERFACES own the
+protocol and lifetime description; U owns rendering and interactions.
+
+Direct tests are web `test_drain`, `test_commands`, `test_transport`,
+`test_frontend_static`, `test_cosmetic_channel`, and the packaged bridge/drain
+JavaScript probes. Exact command-catalog consumers also include `test_host`,
+`test_native_host_gates`, `test_transport_headed`, `test_component_gallery_headed`,
+`test_bridge_event_benchmark` and its root helper. Plan scale tests and benchmark
+are compatibility consumers: migrate only actual adapter stubs/catalog facts,
+never protected measurement semantics. Renderer-only legacy fixtures stay with
+U unless an actual shared validator makes them a direct P2 consumer. Record
+the final finite measurement helper/test/artifact names before their creation.
+
+Arbiter **A8-03** authorizes a separately identified scoped Tier-2 gate, not
+renewed full M1-7/P9 acceptance. The selected metrics are
+`ui_get_plan_window_one_row_receipt` and `ui_start_execution_receipt`: adapter
+enrichment and pre-receipt live-epoch setup affect these timed paths even when
+the extra work is constant. Each retains its existing installed full-base
+fixture, untimed readiness/warmup, five fresh children with six samples each,
+nearest-rank p95 <=100 ms and maximum <=250 ms. Record every failure/timeout,
+exact child/sample membership, identities and dispersion. Do not substitute
+successful retries for failed observations.
+
+Component window/changed-view, construction and projection-memory metrics
+directly own PlanReviewState paths/graphs and remain excluded only while those
+are unchanged. Control receipt paths remain excluded only while their timed
+dependencies are unchanged. Changes to those premises reopen their affected
+cases without another scope pause; a changed measurement contract returns to
+the arbiter. U must rerun any cases affected by its later measured-path edits.
+
+Freeze independently checked source/instrument/validator/fixture/runtime/profile
+and source-wheel-installed byte bindings, including newly reached dependencies,
+before measurement. A separate scoped checker may reuse unchanged independent
+validator checks; never filter the protected contract to pass its full terminal
+validator with a partial collection. Require rejection controls for missing or
+reused samples, wrong identities and max-only failure. Commit compact versioned
+raw receipts/provenance and a separate validation result; ignored logs alone
+cannot close Tier 2. Final committed product bytes must match measured bytes.
+Existing contracts, budgets and historical evidence retain their meaning.
+New overlay bounds close structurally without a new timing or memory claim.
+
+The additive evidence population is
+`tests/interfaces/web/_m1_8_execution_receipt_scale.py` (independent scoped checker)
+and its matching `test_m1_8_execution_receipt_scale.py`.
+Use `m1_8_execution_receipt_{authority,receipts,result}.json` beside that checker
+for frozen provenance, verdict-free raw observations and derived result. Exact
+selected specs come from the unchanged compact M1-7 contract, not copied or
+filtered authority. Reuse existing headed readiness/child modes and the authority
+freezer without a new workload runner. Existing per-receipt/profile/byte validators
+may be reused;
+do not duplicate the headed workload or weaken its full-collection validator.
+`tests/_departments.py` assigns the new test to interfaces. Temporary installs,
+child outputs and logs stay in ignored `build/`; promote only the named compact
+artifacts after independent verification. No new directory is needed.
+
+Gate P2 combines live/terminal/Gap, fast-event admission/rollback/replay,
+operation-bearing containers, independent verification, missing/omitted facts,
+navigation/re-observation/reinjection, stale/Close/read races, 256/first-excess
+and raw-byte bounds, no-DB preexecution fast path, literal hostile text and exact
+Python/browser validators. Run interface/consumer checks, ordinary/import/doc
+gates, installed headed command compatibility, the A8-03 scoped evidence and
+fresh adversarial review before its atomic protocol commit. The evidence helper
+may be built in an independently owned lane after P1 closes; its acceptance
+remains coupled to the measured final P2 product, not a separate product claim.
 
 ### Preserved boundaries for execution review
 

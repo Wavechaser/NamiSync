@@ -1227,6 +1227,10 @@ def test_task_lifecycle_port_surface_is_exact() -> None:
         "reobserve_task",
         "release_task_session",
         "close_task",
+        "read_task_execution_summary",
+        "read_task_execution_items",
+        "read_task_integrity_items",
+        "read_task_execution_evidence",
     }
 
 

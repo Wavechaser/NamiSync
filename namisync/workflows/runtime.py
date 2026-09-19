@@ -125,8 +125,13 @@ from .inventory import (
     validate_location_candidate_pair,
 )
 from .execution_review import (
+    RetainedExecutionReview,
     admit_execution_evidence_subjects,
+    build_retained_execution_review,
     read_execution_evidence as classify_execution_evidence,
+    read_retained_integrity_items,
+    read_retained_operation_items,
+    retained_evidence_subjects,
 )
 from .database_pair import (
     DatabasePairContract,
@@ -143,6 +148,10 @@ from .models import (
     ExecutionEvidenceSubject,
     ExecutionEvidenceWindow,
     ExecutionRequest,
+    RetainedExecutionBinding,
+    RetainedExecutionItemWindow,
+    RetainedExecutionSummary,
+    RetainedIntegrityItemWindow,
     HistoryEventView,
     HistoryEventPageView,
     HistoryItemPageView,
@@ -306,6 +315,7 @@ class LocalWorkflowRuntime:
         self._history_reader: HistoryRepository | None = None
         self._plans: dict[str, PlanArtifact] = {}
         self._execution_details: dict[str, ExecutionDetails] = {}
+        self._retained_execution_reviews: dict[str, RetainedExecutionReview] = {}
         self._inventory_details: dict[str, InventoryDetails] = {}
         self._execution_started: dict[str, datetime] = {}
         self._history_store: HistoryStore | None = None
@@ -943,6 +953,88 @@ class LocalWorkflowRuntime:
         with self._ledger_read() as repository:
             return classify_execution_evidence(repository, run_token, subjects)
 
+    def capture_execution_review(
+        self,
+        binding: RetainedExecutionBinding,
+        result: OperationResult | None,
+        *,
+        plan: Plan | None = None,
+        selection: frozenset[str] | None = None,
+    ) -> RetainedExecutionSummary:
+        """Publish or revalidate one exact task-bound terminal result."""
+
+        with self._lock:
+            self._require_open()
+            current = self._retained_execution_reviews.get(binding.task_id)
+            if current is not None:
+                if current.binding != binding:
+                    raise ValueError("retained execution binding changed")
+                if result is not None and current.result is not result:
+                    raise ValueError("retained execution result identity changed")
+                return current.summary
+            if result is None or plan is None or selection is None:
+                raise ValueError("retained execution capture authority is unavailable")
+            review = build_retained_execution_review(
+                binding,
+                result,
+                plan,
+                selection,
+            )
+            self._retained_execution_reviews[binding.task_id] = review
+            return review.summary
+
+    def read_task_execution_summary(self, task_id: str) -> RetainedExecutionSummary:
+        with self._lock:
+            self._require_open()
+            return self._retained_execution_review_locked(task_id).summary
+
+    def read_task_execution_items(
+        self,
+        task_id: str,
+        operation_ids: tuple[str, ...],
+    ) -> RetainedExecutionItemWindow:
+        with self._lock:
+            self._require_open()
+            review = self._retained_execution_review_locked(task_id)
+            return read_retained_operation_items(review, operation_ids)
+
+    def read_task_integrity_items(
+        self,
+        task_id: str,
+        operation_ids: tuple[str, ...],
+    ) -> RetainedIntegrityItemWindow:
+        with self._lock:
+            self._require_open()
+            review = self._retained_execution_review_locked(task_id)
+            return read_retained_integrity_items(review, operation_ids)
+
+    def read_task_execution_evidence(
+        self,
+        task_id: str,
+        operation_ids: tuple[str, ...],
+    ) -> ExecutionEvidenceWindow:
+        with self._lock:
+            self._require_open()
+            review = self._retained_execution_review_locked(task_id)
+            run_id = review.binding.run_id
+            subjects = retained_evidence_subjects(review, operation_ids)
+        return self.read_execution_evidence(run_id, subjects)
+
+    def retire_captured_execution_review(self, task_id: str) -> None:
+        """Idempotently release a review after its task association is retired."""
+
+        with self._lock:
+            self._retained_execution_reviews.pop(task_id, None)
+
+    def _retained_execution_review_locked(
+        self,
+        task_id: str,
+    ) -> RetainedExecutionReview:
+        review = self._retained_execution_reviews.get(task_id)
+        if review is None:
+            raise KeyError(task_id)
+        return review
+
     def drop_execution_details(self, run_id: str) -> None:
         with self._lock:
             self._execution_details.pop(run_id, None)
@@ -1165,6 +1257,7 @@ class LocalWorkflowRuntime:
             with self._lock:
                 self._plans.clear()
                 self._execution_details.clear()
+                self._retained_execution_reviews.clear()
                 self._inventory_details.clear()
                 self._execution_started.clear()
                 self._closed = True

@@ -2,7 +2,27 @@
 
 This document owns the bridge-facing representation of plan and inventory facts: tree identity, view state, windows, selection presentation, search, sorting, and scale-sensitive presentation work. `BRIDGE.md` owns wire and transport; `INTERFACES.md` owns implemented task lifecycle; workflows own the authoritative domain facts. The browser renders supplied facts and never computes a plan, path policy, selection closure, or filesystem action.
 
-## Execution evidence classification
+## Retained execution review and evidence classification
+
+The workflow retains the exact immutable core terminal result for a task-bound
+execution. Its summary preserves the filesystem, recording, audit,
+disposition, cancellation, phase, byte, error, recording-issue and omission
+axes without carrying item details. Operation and automatic linked-verification
+items have separate Plan-bounded indexes. Exact internal reads admit at most 256
+operation identities before lookup and may return the immutable item references;
+missing selected items remain unknown and emitted exclusion outcomes retain
+their actual result. A later public result window must remain compact and obtain
+full detail separately because one reliable item can approach the event-envelope
+limit.
+
+Complete committed selection owns target uniqueness. Every selected operation
+touches its canonical target; MOVE and MOVE_UPDATE also touch their prior target,
+with same-operation same-key touches deduplicated. A copy-like target is unique
+only when that operation is the sole selected toucher. Failed or missing selected
+operations still compete, while unselected exclusions do not.
+The summary also derives the informational trash location from the exact target
+root and run identity. It claims no directory existence, item count, complete
+trash scan or purge availability.
 
 The workflow classifies a bounded retained-operation window against one atomic
 current-ledger snapshot. Only successful `copy`, `update`, and `move_update`
@@ -18,7 +38,7 @@ coherent readback or verify provenance with a verification time is
 
 Only `recorded-copy` and `already-verified` expose their stored `xxh3_128`
 content evidence. The workflow receives complete-run target-ownership facts
-as a trusted internal boolean; P1 will add its retained-task derivation. E has
+as a trusted internal boolean derived by retained task review. E has
 no browser surface, and later adapters never supply or reinterpret the bit.
 The classifier never derives uniqueness from one window. Item and task recording degradation remain separate
 axes, so the committed ledger snapshot decides whether an item has evidence.
@@ -210,6 +230,39 @@ DEFENSE's lowest sufficient evidence tier; no favorable observation promotes a
 target into acceptance.
 
 ## M1-7 plan measurement procedure
+
+### Scoped M1-8 receipt revalidation
+
+M1_PLAN's arbiter A8-03 permits a separately identified Tier-2 report for
+`ui_get_plan_window_one_row_receipt` and `ui_start_execution_receipt`. Adapter
+window enrichment and live-epoch setup before the execution receipt affect
+these paths. Preserve the compact M1-7 contract, installed full-base fixture,
+reference profile, untimed readiness/warmup, five fresh children per metric and
+six samples per child. Each metric must meet nearest-rank p95 <=100 ms and
+maximum <=250 ms; retain child identities and within/across-child dispersion.
+All failed attempts and timeouts remain recorded. This scoped acceptance does
+not renew the full 35-case collection or change its protected validator.
+
+Use existing headed child/readiness modes and authority freezing, with a separate
+scoped checker reusing independent receipt/fixture/profile/byte checks. Freeze
+the exact instrument/checker and additional product dependencies outside the
+historical source manifest, including `workflows/execution_review.py`. Verify
+physical source, wheel-member and installed bytes and Git-clean identities;
+commit versioned raw provenance/receipts and a separate validation result.
+Require controls for missing/reused samples, wrong identities and a maximum-only
+failure. M1_PLAN names the finite files and selected-case readiness. Never filter
+the full contract to make its terminal validator accept partial evidence.
+
+Component windows, changed views, construction and projection-memory acceptance
+retain their existing premises only while PlanReviewState, projection/order/
+visible-sequence paths and measured retained graphs are unchanged. Live adapter
+maps reference the existing membership mapping and stay outside those graphs.
+Control receipt paths likewise require an unchanged timed dependency path.
+Changing a premise reopens affected cases; later GUI changes rerun affected
+receipts. The new execution overlay has structural population/work/byte bounds,
+not a new numeric latency or memory claim.
+
+### Existing complete-collection procedure
 
 Projection construction uses private slotted row drafts, streams warning rows,
 and releases completed tree/index intermediates before materialization. Move

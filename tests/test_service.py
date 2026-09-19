@@ -2345,6 +2345,7 @@ def test_workflow_runtime_retains_a_store_whose_close_failed() -> None:
     inventory_ref = ref(inventory_details)
     runtime._plans = {"request": plan}
     runtime._execution_details = {"run": execution_details}
+    runtime._retained_execution_reviews = {}
     runtime._inventory_details = {"request": inventory_details}
     runtime._execution_started = {"run": NOW}
     del plan, execution_details, inventory_details
@@ -2403,6 +2404,7 @@ def test_concurrent_workflow_runtime_close_waits_for_failed_attempt() -> None:
     runtime._history_store = store
     runtime._plans = {}
     runtime._execution_details = {}
+    runtime._retained_execution_reviews = {}
     runtime._inventory_details = {}
     runtime._execution_started = {}
     first_errors: list[Exception] = []
@@ -4123,6 +4125,248 @@ def test_ls_3_terminal_reconciliation_matches_dispatcher_truth() -> None:
     assert runtime.dropped == [request_id]
     with pytest.raises(LifecycleAssociationError):
         lifecycle.require_session(session_id, task_id=task_id, live=False)
+
+
+def test_p1_execution_capture_binds_committed_selection_and_supports_cleanup_retry() -> None:
+    task_id = "task-" + "a" * 32
+    request_id = "b" * 32
+    session_id = "c" * 32
+    run_id = "d" * 32
+    operation_value = operation(OperationKind.COPY)
+    plan_value = plan((operation_value,))
+    artifact = SimpleNamespace(plan=plan_value)
+    token = service_module.PlanToken(request_id, 17)
+    user_deselected = frozenset()
+    decision = service_module.derive_execution_selection(
+        plan_value, user_deselected=user_deselected
+    )
+    state = service_module._PlanSelectionState(
+        artifact,
+        token,
+        user_deselected=user_deselected,
+        phase="committed",
+        execution_session=service_module.ExecutionSession(run_id, session_id),
+        selection_decision=decision,
+    )
+    result = OperationResult(
+        SessionState.COMPLETED,
+        items=(
+            ItemOutcome(
+                str(operation_value.op_id),
+                operation_value.kind,
+                operation_value.target_rel_path,
+                Outcome.SUCCEEDED,
+            ),
+        ),
+    )
+    work = SimpleNamespace(
+        detail_owner=("execution", run_id),
+        session_id=session_id,
+    )
+    association = SimpleNamespace(
+        kind="task-execution",
+        task_id=task_id,
+        plan_token=token,
+    )
+
+    class Runtime:
+        def __init__(self) -> None:
+            self.calls = []
+
+        def capture_execution_review(self, binding, terminal, **kwargs) -> None:
+            self.calls.append((binding, terminal, kwargs))
+
+    runtime = Runtime()
+    service = make_service(runtime=runtime)
+    service._lifecycle = SimpleNamespace(
+        settlement_binding=lambda candidate: association
+    )
+    service._plan_selections = {request_id: state}
+
+    binding = service._capture_task_execution_review(work, task_id, result)
+    assert binding == service_module.RetainedExecutionBinding(
+        task_id, request_id, token.identity, session_id, run_id
+    )
+    assert runtime.calls[0][1] is result
+    assert runtime.calls[0][2] == {
+        "plan": plan_value,
+        "selection": frozenset((str(operation_value.op_id),)),
+    }
+
+    association.task_id = "task-" + "e" * 32
+    with pytest.raises(RuntimeError, match="task binding"):
+        service._capture_task_execution_review(work, task_id, result)
+    association.task_id = task_id
+    state.plan_token = service_module.PlanToken(request_id, 18)
+    with pytest.raises(RuntimeError, match="Plan binding"):
+        service._capture_task_execution_review(work, task_id, result)
+    state.plan_token = token
+    state.execution_session = service_module.ExecutionSession(run_id, "f" * 32)
+    with pytest.raises(RuntimeError, match="session binding"):
+        service._capture_task_execution_review(work, task_id, result)
+    state.execution_session = service_module.ExecutionSession(run_id, session_id)
+    state.execution_session = service_module.ExecutionSession("0" * 32, session_id)
+    with pytest.raises(RuntimeError, match="session binding"):
+        service._capture_task_execution_review(work, task_id, result)
+    state.execution_session = service_module.ExecutionSession(run_id, session_id)
+    state.selection_decision = service_module.derive_execution_selection(
+        plan_value, user_deselected=frozenset()
+    )
+    with pytest.raises(ValueError, match="different user intent"):
+        service._capture_task_execution_review(work, task_id, result)
+    state.selection_decision = decision
+
+    service._plan_selections.clear()
+    assert service._capture_task_execution_review(work, task_id, None) == binding
+    assert runtime.calls[1][1:] == (None, {"plan": None, "selection": None})
+
+
+def test_p1_capture_precedes_effects_and_close_retry_survives_retired_plan(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    task_command = "1" * 32
+    plan_session = "2" * 32
+    request_id = "3" * 32
+    execution_command = "4" * 32
+    execution_session = "5" * 32
+    run_id = "6" * 32
+    signature = ("source", "target", None)
+    lifecycle = TaskLifecycle()
+    task_id, _ = _publish_task_plan(
+        lifecycle, plan_session, task_command, request_id, signature
+    )
+    release_claim = lifecycle.begin_settlement(
+        plan_session, task_id=task_id, close_task=False
+    )
+    lifecycle.complete_settlement(
+        lifecycle.confirm_settlement(
+            release_claim,
+            terminal_digest=b"p" * 32,
+            dispatcher_truth_observed=True,
+        )
+    )
+    followup_signature = (request_id, 0, False)
+    lifecycle.begin_task_followup(
+        task_id, request_id, execution_command,
+        "task-execution", followup_signature,
+    )
+    admission = lifecycle.begin_admission(
+        "task-execution", execution_command, followup_signature,
+        task_id=task_id, detail_owner=("execution", run_id),
+    )
+    lifecycle.attach_session(admission, execution_session)
+    lifecycle.publish_start(admission, execution_session, run_id)
+    token = lifecycle.require_plan(request_id)
+
+    operation_value = operation(OperationKind.COPY)
+    plan_value = plan((operation_value,))
+    artifact = SimpleNamespace(plan=plan_value)
+    user_deselected = frozenset()
+    decision = service_module.derive_execution_selection(
+        plan_value, user_deselected=user_deselected
+    )
+    result = OperationResult(
+        SessionState.COMPLETED,
+        items=(ItemOutcome(
+            str(operation_value.op_id), operation_value.kind,
+            operation_value.target_rel_path, Outcome.SUCCEEDED,
+        ),),
+    )
+    record = SessionRecord(
+        SessionId(execution_session), "sync-execution", SessionState.COMPLETED,
+        (), None, True, 0, NOW, started_at=NOW, ended_at=NOW, result=result,
+    )
+    delivery = TaskTerminalDelivery(
+        session_record_view(record),
+        session_event_view(_envelope(
+            execution_session, 1, Terminal(TerminalSummary.from_result(result))
+        )),
+    )
+    effects: list[str] = []
+
+    class Dispatcher:
+        present = True
+
+        def get(self, candidate):
+            if not self.present:
+                raise SessionNotFound(candidate)
+            return record
+
+        def close(self, candidate):
+            effects.append("dispatcher")
+            if not self.present:
+                raise SessionNotFound(candidate)
+            self.present = False
+
+    dispatcher = Dispatcher()
+    runtime = LocalWorkflowRuntime(tmp_path / "ledger.db", tmp_path / "history.db")
+    runtime._plans[request_id] = artifact
+    original_capture = runtime.capture_execution_review
+    capture_attempts = 0
+
+    def capture(*args, **kwargs):
+        nonlocal capture_attempts
+        capture_attempts += 1
+        effects.append("capture")
+        if capture_attempts == 1:
+            raise RuntimeError("capture failed")
+        return original_capture(*args, **kwargs)
+
+    monkeypatch.setattr(runtime, "capture_execution_review", capture)
+    original_drop_details = runtime.drop_execution_details
+
+    def drop_details(candidate):
+        effects.append("details")
+        original_drop_details(candidate)
+
+    monkeypatch.setattr(runtime, "drop_execution_details", drop_details)
+    service = make_service(
+        runtime=runtime,
+        dispatcher=dispatcher,
+        observer=SimpleNamespace(release=lambda candidate: effects.append("observer")),
+    )
+    service._lifecycle = lifecycle
+    service._plan_selections = {
+        request_id: service_module._PlanSelectionState(
+            artifact, token, user_deselected=user_deselected,
+            phase="committed",
+            execution_session=service_module.ExecutionSession(
+                run_id, execution_session
+            ),
+            selection_decision=decision,
+        )
+    }
+
+    with pytest.raises(RuntimeError, match="capture failed"):
+        service.release_task_session(task_id, execution_session, delivery)
+    assert effects == ["capture"]
+
+    service.release_task_session(task_id, execution_session, delivery)
+    assert effects[1:] == ["capture", "observer", "dispatcher", "details"]
+    assert runtime.read_task_execution_summary(task_id).run_id == run_id
+
+    original_retirement = lifecycle.complete_plan_retirement
+    retirement_attempts = 0
+
+    def interrupt_retirement(claim):
+        nonlocal retirement_attempts
+        original_retirement(claim)
+        retirement_attempts += 1
+        if retirement_attempts == 1:
+            raise RuntimeError("retirement acknowledgement lost")
+
+    monkeypatch.setattr(lifecycle, "complete_plan_retirement", interrupt_retirement)
+    with pytest.raises(RuntimeError, match="acknowledgement lost"):
+        service.close_task(task_id, execution_session, delivery)
+    assert request_id not in service._plan_selections
+    assert not dispatcher.present
+    assert runtime.read_task_execution_summary(task_id).run_id == run_id
+
+    service.close_task(task_id, execution_session, delivery)
+    with pytest.raises(KeyError):
+        runtime.read_task_execution_summary(task_id)
+    runtime.close()
 
 
 def test_task_association_gates_reobserve_release_and_close_effects() -> None:

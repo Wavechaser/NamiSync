@@ -45,6 +45,10 @@ from namisync.workflows import (
     LocationBinding,
     LocalWorkflowRuntime,
     RememberedLocations,
+    RetainedExecutionBinding,
+    RetainedExecutionItemWindow,
+    RetainedExecutionSummary,
+    RetainedIntegrityItemWindow,
     SyncOptions,
     VolumeResolutionRequired,
     VolumeResolutionState,
@@ -1697,6 +1701,28 @@ class NamiSyncService:
         self._require_open()
         return self._runtime.read_execution_evidence(run_token, subjects)
 
+    def read_task_execution_summary(self, task_id: str) -> RetainedExecutionSummary:
+        self._require_open()
+        return self._runtime.read_task_execution_summary(task_id)
+
+    def read_task_execution_items(
+        self, task_id: str, operation_ids: tuple[str, ...]
+    ) -> RetainedExecutionItemWindow:
+        self._require_open()
+        return self._runtime.read_task_execution_items(task_id, operation_ids)
+
+    def read_task_integrity_items(
+        self, task_id: str, operation_ids: tuple[str, ...]
+    ) -> RetainedIntegrityItemWindow:
+        self._require_open()
+        return self._runtime.read_task_integrity_items(task_id, operation_ids)
+
+    def read_task_execution_evidence(
+        self, task_id: str, operation_ids: tuple[str, ...]
+    ) -> ExecutionEvidenceWindow:
+        self._require_open()
+        return self._runtime.read_task_execution_evidence(task_id, operation_ids)
+
     def get_inventory_details(self, request_id: str) -> InventoryDetailsView:
         self._require_open()
         details = self._runtime.get_inventory_details(request_id)
@@ -2141,15 +2167,22 @@ class NamiSyncService:
         try:
             terminal_digest: bytes | None = None
             dispatcher_truth_observed = False
+            terminal_result: object | None = None
             if delivery is not None:
                 (
                     terminal_digest,
                     dispatcher_truth_observed,
+                    terminal_result,
                 ) = self._reconcile_terminal_delivery(session_id, delivery)
             work = self._lifecycle.confirm_settlement(
                 claim,
                 terminal_digest=terminal_digest,
                 dispatcher_truth_observed=dispatcher_truth_observed,
+            )
+            review_binding = self._capture_task_execution_review(
+                work,
+                task_id,
+                terminal_result,
             )
             if not work.replay:
                 self._observer.release(work.session_id)
@@ -2171,6 +2204,10 @@ class NamiSyncService:
                         self._lifecycle.complete_plan_retirement(retirement)
                         retirement = None
             self._lifecycle.complete_settlement(work)
+            if retire_plan and review_binding is not None:
+                self._runtime.retire_captured_execution_review(
+                    review_binding.task_id
+                )
         except BaseException:
             if retirement is not None:
                 self._lifecycle.abandon_plan_retirement(retirement)
@@ -2181,7 +2218,7 @@ class NamiSyncService:
         self,
         session_id: str,
         delivery: TaskTerminalDelivery,
-    ) -> tuple[bytes, bool]:
+    ) -> tuple[bytes, bool, object | None]:
         delivered = delivery.record
         if delivered.session_id != session_id or delivered.result is None:
             raise RuntimeError(
@@ -2200,7 +2237,7 @@ class NamiSyncService:
         try:
             record = self._dispatcher.get(session_id)
         except SessionNotFound:
-            return terminal_digest, False
+            return terminal_digest, False, None
         expected = session_record_view(record)
         if delivered != expected or record.result is None:
             raise RuntimeError(
@@ -2216,7 +2253,67 @@ class NamiSyncService:
             raise RuntimeError(
                 "delivered terminal truth disagrees with dispatcher truth"
             )
-        return terminal_digest, True
+        return terminal_digest, True, record.result
+
+    def _capture_task_execution_review(
+        self,
+        work,
+        task_id: str | None,
+        result: object | None,
+    ) -> RetainedExecutionBinding | None:
+        if task_id is None or work.detail_owner is None:
+            return None
+        detail_kind, run_id = work.detail_owner
+        if detail_kind != "execution":
+            return None
+        association = self._lifecycle.settlement_binding(work)
+        if association.kind != "task-execution":
+            return None
+        if association.task_id != task_id:
+            raise RuntimeError("execution review task binding changed")
+        token = association.plan_token
+        if token is None:
+            raise RuntimeError("execution review binding is unavailable")
+        binding = RetainedExecutionBinding(
+            task_id,
+            token.request_id,
+            token.identity,
+            work.session_id,
+            run_id,
+        )
+        with self._lock:
+            state = self._plan_selections.get(token.request_id)
+            if state is None:
+                plan = None
+                selection = None
+            else:
+                if state.plan_token != token or state.phase != "committed":
+                    raise RuntimeError("execution review Plan binding changed")
+                session = state.execution_session
+                if (
+                    session is None
+                    or session.session_id != work.session_id
+                    or session.run_id != run_id
+                ):
+                    raise RuntimeError("execution review session binding changed")
+                artifact = state.artifact
+                decision = state.selection_decision
+                if decision is None:
+                    raise RuntimeError("committed execution selection is unavailable")
+                decision = require_derived_execution_selection(
+                    decision,
+                    plan=artifact.plan,
+                    user_deselected=state.user_deselected,
+                )
+                plan = artifact.plan
+                selection = frozenset(str(value) for value in decision.selection)
+        self._runtime.capture_execution_review(
+            binding,
+            result,
+            plan=plan,
+            selection=selection,
+        )
+        return binding
 
     def _drop_runtime_details(self, owner: tuple[str, str] | None) -> None:
         if owner is None:

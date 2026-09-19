@@ -778,6 +778,16 @@ calls, translate between sibling component contracts, own continuation checkpoin
 derive authoritative safe/user selections, and maintain one logical recording
 across compound phases.
 
+For task-bound execution, the workflow runtime also owns the process-live
+retained review. Settlement publishes the exact immutable core
+`OperationResult` only after the application has confirmed the matching task,
+Plan, committed selection, session and run, and before any observer, Dispatcher,
+detail or Plan cleanup. The retained review keeps bounded Plan-member operation
+and automatic linked-integrity indexes; it does not reconstruct item truth from
+the item-free terminal view, history, a checkpoint or the ledger. Terminal
+release preserves this review, while successful task Close and completed
+runtime shutdown dispose of it.
+
 Primary shapes are:
 
 - sync planning: scan → plan → observe → preflight;

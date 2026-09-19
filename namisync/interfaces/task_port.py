@@ -7,7 +7,15 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol
 
-from namisync.workflows import EXECUTION_KIND, INVENTORY_KIND, PLAN_KIND
+from namisync.workflows import (
+    EXECUTION_KIND,
+    INVENTORY_KIND,
+    PLAN_KIND,
+    ExecutionEvidenceWindow,
+    RetainedExecutionItemWindow,
+    RetainedExecutionSummary,
+    RetainedIntegrityItemWindow,
+)
 from namisync.workflows.inventory import LocationCandidate
 from namisync.workflows.views import (
     SessionEventView,
@@ -424,6 +432,20 @@ class TaskLifecyclePort(Protocol):
         session_id: str,
         delivery: TaskTerminalDelivery,
     ) -> TaskCloseView: ...
+
+    def read_task_execution_summary(self, task_id: str) -> RetainedExecutionSummary: ...
+
+    def read_task_execution_items(
+        self, task_id: str, operation_ids: tuple[str, ...]
+    ) -> RetainedExecutionItemWindow: ...
+
+    def read_task_integrity_items(
+        self, task_id: str, operation_ids: tuple[str, ...]
+    ) -> RetainedIntegrityItemWindow: ...
+
+    def read_task_execution_evidence(
+        self, task_id: str, operation_ids: tuple[str, ...]
+    ) -> ExecutionEvidenceWindow: ...
 
 
 def _validate_task_observation(

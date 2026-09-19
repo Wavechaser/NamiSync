@@ -15,6 +15,7 @@ from namisync.core.execution import (
 from namisync.core.evidence import ContentEvidence, Outcome, RecordingStatus
 from namisync.core.events import ItemOutcome
 from namisync.core.integrity import (
+    IntegrityOutcome,
     PostCopySelection,
     PostCopySelectionAuthority,
     snapshot_post_copy_selection_authority,
@@ -23,13 +24,15 @@ from namisync.core.models import ScanResult
 from namisync.core.planning import OperationKind, Plan, SyncOptions
 from namisync.core.preflight import Verdict
 from namisync.core.scalars import bounded_utf8_text, require_safe_int
-from namisync.core.session import PhaseResult, PhaseStatus, SessionState
+from namisync.core.session import OperationResult, PhaseResult, PhaseStatus, SessionState
 from namisync.workflows.views import (
+    OperationResultView,
     PhaseResultView,
     RecordingIssueView,
     ReviewFactLimitView,
     ResultItemView,
     SemanticSettingsView,
+    operation_result_view,
 )
 
 if TYPE_CHECKING:
@@ -473,6 +476,70 @@ class ExecutionEvidenceResult:
 class ExecutionEvidenceWindow:
     run_token: str
     results: tuple[ExecutionEvidenceResult, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class RetainedExecutionBinding:
+    task_id: str
+    request_id: str
+    plan_identity: int
+    session_id: str
+    run_id: str
+
+    def __post_init__(self) -> None:
+        for name, value in (
+            ("task_id", self.task_id),
+            ("request_id", self.request_id),
+            ("session_id", self.session_id),
+            ("run_id", self.run_id),
+        ):
+            if type(value) is not str or not value:
+                raise ValueError(f"retained execution {name} is required")
+        if type(self.plan_identity) is not int or self.plan_identity < 1:
+            raise ValueError("retained execution Plan identity is invalid")
+
+
+@dataclass(frozen=True, slots=True)
+class RetainedExecutionSummary:
+    task_id: str
+    run_id: str
+    result: OperationResultView
+    failed_operation_count: int
+    disk_capacity_failure_count: int
+    trash_location: str
+
+    @classmethod
+    def from_result(
+        cls,
+        binding: RetainedExecutionBinding,
+        result: OperationResult,
+        *,
+        failed_operation_count: int,
+        disk_capacity_failure_count: int,
+        trash_location: str,
+    ) -> RetainedExecutionSummary:
+        return cls(
+            binding.task_id,
+            binding.run_id,
+            operation_result_view(result),
+            failed_operation_count,
+            disk_capacity_failure_count,
+            trash_location,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class RetainedExecutionItemWindow:
+    task_id: str
+    run_id: str
+    items: tuple[ItemOutcome, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class RetainedIntegrityItemWindow:
+    task_id: str
+    run_id: str
+    items: tuple[IntegrityOutcome, ...]
 
 
 @dataclass(frozen=True, slots=True)

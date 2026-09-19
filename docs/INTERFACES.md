@@ -278,6 +278,13 @@ get_history_events(run_token, *, after_seq=0, through_seq=None, limit=256)
     -> HistoryEventPageView
 read_execution_evidence(run_token, subjects)
     -> ExecutionEvidenceWindow
+read_task_execution_summary(task_id) -> RetainedExecutionSummary
+read_task_execution_items(task_id, operation_ids)
+    -> RetainedExecutionItemWindow
+read_task_integrity_items(task_id, operation_ids)
+    -> RetainedIntegrityItemWindow
+read_task_execution_evidence(task_id, operation_ids)
+    -> ExecutionEvidenceWindow
 ```
 
 `read_execution_evidence` is a read-only forwarding surface. The runtime owns
@@ -477,13 +484,21 @@ publishing a resolved slot. It introduces no application receipt, session or
 durable activity. Exact continuation encoding, expiry and prepublication size
 admission are owned by BRIDGE.
 
-A task-bound release consumes a truthful adapter terminal-delivery fact, advances
-application settlement, confirms service-observer release, closes Dispatcher
+A task-bound execution release consumes a truthful adapter terminal-delivery
+fact and, after application settlement confirms its exact task/Plan/committed
+selection/session/run binding, retains the Dispatcher-owned immutable core
+result before any cleanup effect. The delivered view is item-free and is never
+used to reconstruct that result. Capture is exact and idempotent: a retry after
+partial cleanup can use the already-sealed terminal digest and retained binding
+when Dispatcher custody is gone. A capture error performs no release effect.
+
+The release then confirms service-observer release, closes Dispatcher
 custody, retires the exact runtime detail, and only then optionally retires the
 plan/task. The fixed cleanup owners are independently idempotent or monotone.
 Terminal-session release closes only the current delivery generation; it does
-not mark the retained task for retirement, so released Plan review and Execute
-remain available. Explicit task Close instead reserves retirement after any
+not mark the retained task for retirement: Plan review and captured execution
+review remain available. Execute still requires an eligible uncommitted Plan.
+Explicit task Close instead reserves retirement after any
 already-reserved follow-up transition settles. Execute reserves that transition
 under the task condition before application work, so Close-first refuses every
 Plan view, selection, and execution consumer, while Execute-first supersedes the

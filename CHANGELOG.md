@@ -41,8 +41,13 @@ packaging remain open.
   settlement oracle, imports and independent review.
 - Add a bounded atomic ledger read and workflow classification for current
   execution evidence, including zero-byte copies, independent recording issues,
-  stale/ambiguous evidence and stored checksum provenance. Task retention and
-  browser/GUI consumption follow in separate commits.
+  stale/ambiguous evidence and stored checksum provenance.
+- Retain the exact task-bound terminal execution result before custody cleanup,
+  with independent operation/automatic-verification indexes and bounded reads.
+  Validate committed Plan/selection/session identity, preserve partial-cleanup
+  retries, and dispose review at Close/shutdown. Derive complete-selection
+  evidence ownership, typed failure counts and location-only trash context.
+  Browser protocol and GUI consumption follow in separate commits.
 
 #### Refine Plan density, readiness and row highlighting (2026-09-17 – 2026-09-20)
 

@@ -112,6 +112,13 @@ class SettlementWork:
     replay: bool
 
 
+@dataclass(frozen=True, slots=True)
+class SettlementBinding:
+    task_id: str | None
+    kind: str
+    plan_token: PlanToken | None
+
+
 @dataclass(slots=True)
 class _TaskEffect:
     task_id: str
@@ -1164,6 +1171,28 @@ class TaskLifecycle:
                 ):
                     task.retirement_claim_id = None
             self._condition.notify_all()
+
+    def settlement_binding(self, work: SettlementWork) -> SettlementBinding:
+        """Return the exact association sealed by confirmed settlement work."""
+
+        with self._condition:
+            association = self._settlement_claim_locked(work.claim)
+            expected = SettlementWork(
+                work.claim,
+                work.claim.token.session_id,
+                association.detail_owner,
+                association.plan_token if work.claim.close_task else None,
+                not work.claim.close_task
+                and association.task_id is not None
+                and association.session_released,
+            )
+            if work != expected:
+                raise LifecycleAssociationError("settlement work is stale")
+            return SettlementBinding(
+                association.task_id,
+                association.kind,
+                association.plan_token,
+            )
 
     def close(self) -> None:
         with self._condition:
