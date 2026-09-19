@@ -11,6 +11,64 @@ do not add, defer, or reinterpret an M1 product outcome.
 
 ## Main objectives and current boundary
 
+### Status composition and static folder totals (2026-09-19)
+
+Baseline `e6ee448`. Closed population: Plan status/actions/messages and shared
+progress-track tokens; Plan metadata cell presentation and gallery consumers;
+workflow Plan projection size/sort facts derived only from retained scan data,
+adapter row serialization and their focused/department/installed witnesses.
+DESKTOP_UI owns layout; PRESENTATION owns totals and sibling sorting. Preserve
+selection/dependency safety, compact bridge revisions, no-op meaning and prior
+GUI-L navigation/windowing guarantees. No filesystem rescan, execution-policy,
+inventory implementation or general performance redesign is authorized.
+
+| ID | Atomic outcome | Verification | State |
+| --- | --- | --- | --- |
+| GUI-M1 | Translucent native progress track; status-card actions/reset icon and concise feedback; table reaches card bottom; hide dependency/none-risk labels and unify subdued metadata text. | Interfaces/tools: 2,027 passed, four skipped; icon check and 49 frontend tests passed; four installed gallery modes and two default/larger Plan scenarios passed, including narrow feedback layout. Independent review passed. | Delivered |
+| GUI-M2 | Static folder byte totals from retained file facts, partial-total notes, and size sorting within fixed folder/file groups. | Exact nested/empty/partial/duplicate-path totals; selection/filter independence; ascending/descending grouping, bridge numeric/notes checks; workflows+interfaces and focused scale witness. | Pending |
+
+Regression study: preserve action admission/focus and full actionable warnings;
+do not bake alpha into whole controls or labels; actual computed gallery values
+must be measured. Folder aggregation must be linear in retained facts/tree
+nodes, reuse subfolder totals, avoid double-counting operation members and never
+represent an incomplete enumeration as complete. Before GUI-M2 implementation,
+record its exact source/target precedence, partial-read inputs and finite scale
+fixture/gate. Stop if truthful totals require new I/O, scan ownership changes or
+execution/selection authority changes; report the finite evidence for a decision.
+
+GUI-M2 admitted detail: user chose plan child file facts, not scanned physical
+source/target folder totals. Reuse existing per-operation `_operation_stat`
+precedence (intended, source, target, prior target). Count one identical file
+size per canonical target path; conflicting duplicate-path facts contribute no
+claimed bytes and mark ancestors partial. Exclude the separate prior-path
+annotation tree. Full-read truth requires both retained plan completeness flags;
+an incomplete/scoped scan conservatively labels folder sums partial. Keep the
+existing size-sort group order (files before folders), independent of direction;
+unknown structural/notice groups remain last. No new bridge field is required:
+reuse numeric `size` and a concise folder `notice`, preserving other diagnostics.
+Finite regression population: nested/empty folders, equal/conflicting duplicate
+members, prior moves, scoped/incomplete scans, selection/filter changes, numeric
+ties/missing values and 120,000-operation/deep-chain fixtures. Exact totals and
+one reverse parent accumulation pass establish the linear-cost claim over
+projection members/nodes; timing is diagnostic, not a millisecond promise.
+User clarification: removal contributes its displayed target-file size; moves
+contribute only under their destination. Unknown represented file sizes and
+blockers mark totals partial; known blocked-file sizes still contribute.
+Static destination-tree totals never replace selected execution required bytes.
+
+GUI-M2 numeric boundary decision is pending: the existing execution-space
+admission excludes move/no-op/removal/blocked file facts, so it does not bound
+the new all-file total to signed-64. Python addition and the byte formatter
+preserve larger integers, but `validatePlanWindowRow.size` currently refuses
+them. Proposed narrow extension: only Plan row size accepts a canonical decimal
+bounded by 120,000 times MAX_SIGNED_64 (25 digits); execution counters and file
+facts retain their existing domain. Alternative: null plus an explicit overflow
+note. Neither alternative is authorized yet; no overflow path is merge-ready.
+Directory classification must use retained `EntryKind.DIRECTORY` for both
+MKDIR and cleanup DELETE, not operation-kind special cases. The preserved
+prototype handles only MKDIR; empty/removed directory totals and within-group
+sorting still need completion and regression checks against selection/disclosure.
+
 ### WinUI control alignment and Plan keyboard follow-up (2026-09-18)
 
 Baseline `0584707`; closed population: shared checkbox/button tokens and CSS,

@@ -27,8 +27,11 @@ and remembered locations, bounded Plan review/selection/sorting and same-task
 execution with live controls. Execution-result/inventory review and beta
 packaging remain open.
 
-#### Refine Plan density, readiness and row highlighting (2026-09-17 – 2026-09-18)
+#### Refine Plan density, readiness and row highlighting (2026-09-17 – 2026-09-19)
 
+- Move execution/reset actions and concise feedback into the status card; let
+  the table reach its card bottom. Match WinUI's translucent progress track,
+  subdue metadata columns and omit dependency counts and neutral risk labels.
 - Align checkbox glyphs and disabled strokes, Light button elevation, Plan
   spacing, status progress and switcher corners with the shared control design;
   refresh the gallery using production Plan controls and task cards.
@@ -38,7 +41,7 @@ packaging remain open.
   preserving exact small-byte labels and backend numeric sort facts.
 - Polish Plan column order, full-cell sorting, inset search/Clear controls,
   aligned semantic settings and compact planning-issue status. Keep actionable
-  footer feedback beside the right-aligned actions without idle/success noise.
+  feedback without idle/success noise (subsequently moved into the status card).
 - Tighten task-tab text and progress spacing, adjust selection markers, and
   report selected operations rather than all scanned items in the short digest.
 - Fix selection refresh for operation-bearing directories with descendants;

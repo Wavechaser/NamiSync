@@ -247,7 +247,7 @@ const row = {
   operation_count: 2,
   size: null,
   mtime_ns: null,
-  dependency_count: 0,
+  dependency_count: 2,
   risk: "none",
   move_peer_id: null,
   notice: null,
@@ -314,6 +314,9 @@ const notice = {
   selected_operation_count: 0,
   operation_count: 0,
   notice: hostile,
+  risk: "irreversible",
+  blocked_reason: "unsupported",
+  selection_exclusion_reason: "dependency unavailable",
 };
 review.window.rows.push(notice);
 
@@ -371,6 +374,12 @@ const planCard = findByClass(panel.element, "nami-plan-review__plan");
 const statusCard = findByClass(panel.element, "nami-plan-review__summary");
 const footerMessage = findByClass(panel.element, "nami-plan-review__status");
 assert.equal(footerMessage.hidden, false, "actionable warnings remain visible");
+const statusActions = findByClass(panel.element, "nami-plan-review__actions");
+const statusMeta = findByClass(panel.element, "nami-plan-review__status-meta");
+assert.equal(statusActions.parentElement, statusCard, "actions live in the status card");
+assert.equal(statusMeta.parentElement, statusCard, "facts and feedback live in the status card");
+assert.equal(findAction(panel.element, "plan-again").ariaLabel, "Plan again");
+assert.equal(findAction(panel.element, "plan-again").title, "Plan again");
 review.message = null;
 panel.render(task);
 assert.equal(footerMessage.hidden, true, "idle footer text takes no room");
@@ -394,10 +403,14 @@ assert.equal(findByClass(renderedRow, "nami-checkbox").disabled, false);
 document.defaultView.flushAnimationFrame();
 assert.equal(renderedRow.dataset.folder, "false", "operation groups remain non-folder rows");
 assert.equal(renderedRow.textContent, hostile);
-assert.ok(findText(renderedRow, "Risk: none"));
+assert.equal(findText(renderedRow, "Risk: none"), false);
+assert.equal(findText(renderedRow, "deps"), false);
 const renderedNotice = findByDataset(panel.element, "nodeId", notice.node_id);
 assert.equal(renderedNotice.dataset.folder, "false");
 assert.ok(findText(renderedNotice, hostile), "notice context renders as inert text");
+assert.ok(findText(renderedNotice, "Risk: irreversible"));
+assert.ok(findText(renderedNotice, "unsupported"), "notices do not hide blockers");
+assert.ok(findText(renderedNotice, "dependency unavailable"), "selection guidance remains");
 assert.equal(
   findByClass(renderedRow, "nami-plan-review__spacer"),
   null,

@@ -582,7 +582,7 @@ drains.get(TASK_G).acceptRelease(TASK_G, SESSION_G);
 await until(() => planOpens.length === 1);
 assert.deepEqual(calls.at(-1), ["open-plan", TASK_G]);
 planOpens[0].reject(new Error("simulated initial plan open failure"));
-await until(() => byText("Plan review could not be loaded. Select the task to retry.") !== undefined);
+await until(() => byText("Plan unavailable. Select the task to retry.") !== undefined);
 assert.ok(byText("Loading task setup…"), "a failed Plan load leaves the Plan surface");
 assert.equal(byText("Plan review test surface"), undefined);
 
@@ -592,7 +592,7 @@ assert.deepEqual(calls.at(-1), ["open-plan", TASK_G]);
 planOpens[1].resolve(planSummary());
 await until(() => planWindows.length === 1);
 planWindows[0].reject(new Error("simulated initial plan window failure"));
-await until(() => byText("Plan review could not be loaded. Select the task to retry.") !== undefined);
+await until(() => byText("Plan unavailable. Select the task to retry.") !== undefined);
 assert.ok(byText("Loading task setup…"));
 assert.equal(byText("Plan review test surface"), undefined);
 
@@ -609,7 +609,7 @@ await until(() => planWindows.length === 2);
 planWindows[1].resolve(planWindow(refusedReview));
 await until(() => reviewRenders.at(-1)?.review?.summary === refusedReview);
 const firstReview = reviewRenders.at(-1).review;
-assert.match(firstReview.message, /did not pass review preflight/, "actionable warnings remain");
+assert.match(firstReview.message, /Plan failed review/, "actionable warnings remain");
 assert.equal(reviewRenders.at(-1).error, null, "a successful selection retry clears the rail error");
 assert.equal(reviewRenders.at(-1).canPlanAgain, false, "Plan again waits for task setup readiness");
 globalThis.planReviewHarness.callbacks.onPlanAgain(firstReview);
@@ -945,7 +945,7 @@ executionDrain.acceptUpdate(stateUpdate("running"));
 executionControls[3].reject(new Error("simulated uncertain control receipt"));
 await until(() => liveReview.pending === null);
 assert.equal(reviewRenders.at(-1).executionControlState, "running");
-assert.equal(liveReview.message, "The pause response was uncertain. Follow the live task status.");
+assert.equal(liveReview.message, "Pause uncertain. Follow live status.");
 
 globalThis.planReviewHarness.callbacks.onControl(liveReview, "pause");
 executionDrain.acceptUpdate(stateUpdate("pausing"));

@@ -312,6 +312,11 @@ body {
   padding-block-start: var(--space-5);
 }
 
+.nami-plan-review__summary {
+  container: plan-summary / inline-size;
+  grid-template-rows: auto auto auto;
+}
+
 .nami-plan-review__paths {
   overflow: hidden;
   min-inline-size: 0;
@@ -407,6 +412,36 @@ body {
   width: min(14rem, 100%);
 }
 
+.nami-plan-review__summary > .nami-plan-review__actions {
+  align-items: center;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  padding-block-start: 0;
+}
+
+.nami-plan-review__summary > .nami-plan-review__actions > .nami-plan-review__control-group {
+  justify-self: end;
+}
+
+.nami-plan-review__status-meta {
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+  gap: var(--space-1);
+  min-inline-size: 0;
+}
+
+.nami-plan-review__status-meta > :is(p, .nami-plan-review__status) {
+  margin: 0;
+  min-inline-size: 0;
+  overflow: clip;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nami-plan-review__status-meta > .nami-plan-review__status {
+  justify-self: end;
+  text-align: end;
+}
+
 .nami-plan-review__search > .nami-input {
   inline-size: 100%;
   padding-inline-end: 4.5rem;
@@ -479,7 +514,7 @@ body {
 }
 
 .nami-plan-review__table-card {
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr);
   min-block-size: 0;
   min-inline-size: 0;
 }
@@ -1116,6 +1151,31 @@ body {
   --nami-file-column-primary: var(--plan-action-column-width);
 }
 
+@container plan-summary (max-width: 48rem) {
+  .nami-plan-review__summary > .nami-plan-review__actions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .nami-plan-review__status-meta {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .nami-plan-review__status-meta > .nami-plan-review__status {
+    justify-self: start;
+    text-align: start;
+  }
+
+  .nami-plan-review__status-meta > :is(p, .nami-plan-review__status) {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+  }
+
+  .nami-plan-review__summary > .nami-plan-review__actions > .nami-plan-review__control-group {
+    justify-self: end;
+  }
+}
+
 .nami-plan-review :is(.nami-file-list__header, .nami-file-row) {
   grid-template-columns:
     var(--nami-file-column-selection)
@@ -1322,12 +1382,23 @@ body {
   white-space: nowrap;
 }
 
+.nami-plan-row__modified {
+  color: var(--color-neutral-foreground-secondary);
+  font-size: var(--font-size-caption);
+}
+
 .nami-file-row__notes {
   color: var(--color-neutral-foreground-secondary);
+  font-size: var(--font-size-caption);
   overflow-wrap: anywhere;
 }
 
 @media (forced-colors: active) {
+  .nami-file-row__notes,
+  .nami-plan-row__modified {
+    color: var(--color-neutral-foreground);
+  }
+
   .nami-file-list__header {
     background: var(--color-accent-fill);
     color: var(--color-accent-fill-foreground);

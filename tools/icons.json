@@ -13,6 +13,7 @@
     "approvals-app",
     "archive-clock",
     "arrow-clockwise",
+    "arrow-reset",
     "arrow-sync",
     "arrow-sync-checkmark",
     "checkmark",
@@ -61,6 +62,9 @@
     "warning"
   ],
   "fallbacks": {
+    "arrow-reset": {
+      "sm": 20
+    },
     "arrow-sync-checkmark": {
       "sm": 20
     },

@@ -1254,9 +1254,9 @@ with exact 24-CSS-pixel rows and matching leading/trailing spacer offsets; the
 generic `tree.js` renderer keeps its separate 28-pixel contract. A Plan card
 shows the switcher at left, frozen source/target paths in two middle rows and
 Verify on/off and Trash/Additive in two lines aligned with the paths at right.
-A Status card shows selected/byte/planning-issue
-facts, and one table card owns search, toggle-button filters, the grid and
-execution controls. Status and table cards use a 16 px top inset. The status
+A Status card shows selected/byte/planning-issue facts and execution controls;
+one table card owns search, toggle-button filters and the grid, without a footer.
+Status and table cards use a 16 px top inset. The status
 progress bar is 8 px thick; the rail's progress remains 4 px. The Plan view switcher has
 a 6 px outer radius. At default (1280×800) and larger window sizes the natural-height
 Plan and Status cards leave the remaining work-panel height to the table card;
@@ -1267,14 +1267,22 @@ and fills, following Microsoft's [ToggleSplitButton reference](https://learn.mic
 for split toggle anatomy, with counted groups and detail menus
 as defined in PRESENTATION. Their main actions toggle groups rather than opening
 menus; ungrouped categories remain toggles. The Sync/Integrity outer corner radius
-includes its inset so it is concentric with the inner buttons. Footer actions
-have no divider and align right, Plan again before Execute. Actionable warnings,
-errors and in-flight feedback share that row at the left; idle and successful
-messages take no space.
+includes its inset so it is concentric with the inner buttons. Status-card actions
+align right alongside the large status title, with an arrow-reset Plan again
+button before Execute. The icon retains its accessible name and tooltip.
+Concise actionable warnings, errors and in-flight feedback share the second row
+with the status digest; idle and successful messages take no space. At ordinary
+widths both texts stay on one line, with full feedback available in its tooltip;
+at narrow card widths both use a stacked, wrapping layout.
+The progress track follows Microsoft's
+[ProgressBar resources](https://github.com/microsoft/microsoft-ui-xaml/blob/main/controls/dev/ProgressBar/ProgressBar_themeresources.xaml):
+`ControlStrongStrokeColorDefault`, a translucent neutral stroke over the card,
+not opacity on the whole control. Forced colors retain the Canvas track.
 The production Plan grid orders Select, Name, Action, Checksum (empty), Size,
 Modified and Notes; Checksum and Modified share their default width. The
-gallery's original order is unchanged. Dependency counts
-appear in Notes. The synthetic Plan root is omitted from the table. The Select
+gallery shares that column order. Dependency counts and `Risk: none` are omitted
+from Notes; actual risks and diagnostics remain. Size, Modified and Notes use
+the same subdued text color. The synthetic Plan root is omitted from the table. The Select
 header is the sole tri-state bulk control for all selectable operations
 matching the active search/filter query, not merely the
 loaded or expanded rows. Folder checkboxes target matching descendants;
@@ -1348,7 +1356,7 @@ including loaded Setup readiness, pending attempts and batch/close blockers.
 The control remains disabled while those prerequisites are unresolved; an
 unsubmitted gesture never displays a completed-request message.
 Plan-review layout rules honor HTML hidden state, including the loading toolbar,
-action footer and inactive execution controls. An unbound review exposes no
+status actions and inactive execution controls. An unbound review exposes no
 actionable controls.
 If a Plan load fails, the task card directs the user to select it to retry.
 Selecting that eligible task retries Plan loading as well as Setup; repeated

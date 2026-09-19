@@ -791,7 +791,7 @@ def test_sh_g_11_channel_mappings_use_theme_secondary_badges() -> None:
         "--progress-active-fill": "var(--color-accent-fill)",
         "--progress-paused-fill": "var(--palette-yellow-main)",
         "--progress-canceled-fill": "var(--color-neutral-foreground-secondary)",
-        "--progress-track-background": "var(--color-neutral-surface-pressed)",
+        "--progress-track-background": "var(--color-control-strong-stroke)",
     }
     for theme in (light, dark, automatic_dark):
         assert shared_aliases.items() <= theme.items()
@@ -1634,7 +1634,7 @@ def test_sh_g_11_solid_controls_and_operation_filters_follow_tuned_states() -> N
             "--color-neutral-foreground-secondary", theme
         )
         assert _resolve("--progress-track-background", theme) == _resolve(
-            "--color-neutral-surface-pressed", theme
+            "--color-control-strong-stroke", theme
         )
         assert _contrast(
             _resolve("--color-neutral-foreground", theme),

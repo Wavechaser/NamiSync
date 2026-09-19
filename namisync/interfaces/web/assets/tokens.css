@@ -238,7 +238,7 @@
   --progress-active-fill: var(--color-accent-fill);
   --progress-paused-fill: var(--palette-yellow-main);
   --progress-canceled-fill: var(--color-neutral-foreground-secondary);
-  --progress-track-background: var(--color-neutral-surface-pressed);
+  --progress-track-background: var(--color-control-strong-stroke);
 }
 
 :root[data-window-material="mica"] {

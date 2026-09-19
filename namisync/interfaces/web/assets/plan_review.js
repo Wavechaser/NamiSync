@@ -24,11 +24,12 @@ function button(label, className = "nami-button") {
 }
 
 function rowView(row, busy, committed) {
-  const notes = row.notice ?? row.blocked_reason ?? row.selection_exclusion_reason
-    ?? (row.move_peer_id === null ? row.reason ?? "" : `Paired move · ${row.reason ?? ""}`);
-  const risk = `Risk: ${row.risk}`;
+  const reason = row.move_peer_id === null ? row.reason : `Paired move · ${row.reason ?? ""}`;
+  const notes = [...new Set([
+    row.notice, row.blocked_reason, row.selection_exclusion_reason, reason,
+  ].filter((value) => typeof value === "string" && value !== ""))].join(" · ");
+  const risk = row.risk === "none" ? "" : `Risk: ${row.risk}`;
   const intent = row.operation_kind ?? (row.row_kind === "notice" ? "notice" : "");
-  const dependencies = row.dependency_count === 0 ? "" : `${row.dependency_count} deps · `;
   const modified = row.mtime_ns === null ? "" : (() => {
     const date = new Date(Number(BigInt(row.mtime_ns) / 1000000n));
     const pad = (value) => String(value).padStart(2, "0");
@@ -50,7 +51,7 @@ function rowView(row, busy, committed) {
       : row.row_kind === "notice" ? "" : intent,
     checksumText: "",
     modifiedText: modified,
-    notesText: `${dependencies}${notes === "" ? risk : `${risk} · ${notes}`}`,
+    notesText: notes === "" ? risk : risk === "" ? notes : `${risk} · ${notes}`,
   };
 }
 
@@ -136,13 +137,17 @@ export function createPlanReviewPanel(callbacks) {
   statusTitle.setAttribute("role", "status");
   const facts = document.createElement("p");
   facts.className = "nami-shell__guidance nami-plan-review__status-summary";
+  const statusActions = document.createElement("div");
+  statusActions.className = "nami-plan-review__actions";
+  const statusMeta = document.createElement("div");
+  statusMeta.className = "nami-plan-review__status-meta";
   const progress = document.createElement("div");
   progress.className = "nami-progress nami-plan-review__progress";
   progress.ariaHidden = "true";
   const progressBar = document.createElement("div");
   progressBar.className = "nami-progress__bar";
   progress.append(progressBar);
-  summary.append(statusTitle, facts, progress);
+  summary.append(statusActions, statusMeta, progress);
 
   const tableCard = document.createElement("div");
   tableCard.className = "nami-card nami-plan-review__table-card";
@@ -273,11 +278,12 @@ export function createPlanReviewPanel(callbacks) {
   grid.append(columnHeader, body);
   list.append(grid);
 
-  const footer = document.createElement("div");
-  footer.className = "nami-plan-review__actions";
   const execute = button("Execute", "nami-button nami-button--primary");
   execute.dataset.action = "execute";
-  const planAgain = button("Plan again", "nami-button nami-button--secondary");
+  const planAgain = button("", "nami-button nami-button--secondary nami-button--icon");
+  planAgain.append(createIcon(document, "arrow-reset", "sm"));
+  planAgain.ariaLabel = "Plan again";
+  planAgain.title = "Plan again";
   planAgain.dataset.action = "plan-again";
   const pause = button("Pause", "nami-button nami-button--secondary");
   pause.dataset.action = "pause";
@@ -295,8 +301,9 @@ export function createPlanReviewPanel(callbacks) {
   const primary = document.createElement("div");
   primary.className = "nami-plan-review__control-group";
   primary.append(planAgain, execute);
-  footer.append(status, controls, primary);
-  tableCard.append(toolbar, list, footer);
+  statusActions.append(statusTitle, controls, primary);
+  statusMeta.append(facts, status);
+  tableCard.append(toolbar, list);
   element.append(header, summary, tableCard);
 
   let current = null;
@@ -813,6 +820,7 @@ export function createPlanReviewPanel(callbacks) {
     resume.disabled = review.pending !== null || task.executionControlState !== "paused";
     cancel.disabled = review.pending !== null || task.executionControlState === "canceling";
     updateText(status, review.message ?? "");
+    status.title = review.message ?? "";
     status.hidden = !review.message;
     renderRows(review, task);
     refreshResizers();

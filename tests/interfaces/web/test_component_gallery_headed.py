@@ -2610,6 +2610,11 @@ def _assert_lifecycle_progress(report: dict[str, object]) -> None:
         assert row["expected_frozen"] is frozen
         assert row["motion_frozen"] is (frozen or reduced)
         assert row["track_background"] != row["fill_background"]
+        if not forced:
+            assert _color_alpha(row["track_background"]) == pytest.approx(
+                (0x8B if report["media"]["dark"] else 0x72) / 0xFF,
+                abs=0.002,
+            )
         if forced:
             assert row["track_background"] == system_colors["Canvas"]
             assert row["fill_background"] == system_colors["Highlight"]

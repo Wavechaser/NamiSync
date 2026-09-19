@@ -113,8 +113,11 @@ function planGeometryFor(review) {
   const viewport = review?.querySelector(".nami-plan-review__rows");
   const workBody = document.querySelector(".nami-work-panel__body");
   const planActions = review?.querySelector(".nami-plan-review__actions");
-  const footerStatus = planActions.querySelector(".nami-plan-review__status");
+  const footerStatus = review.querySelector(".nami-plan-review__status");
   const footerButtons = planActions.lastElementChild;
+  const statusCard = review.querySelector(".nami-plan-review__summary");
+  const statusTitle = review.querySelector(".nami-plan-review__status-title");
+  const statusDetail = review.querySelector(".nami-plan-review__status-summary");
   const settingRows = [...review.querySelectorAll(".nami-plan-review__settings > span")];
   const pathRows = [...review.querySelectorAll(".nami-plan-review__path")];
   const searchInput = review.querySelector('[data-action="plan-search"]').getBoundingClientRect();
@@ -125,11 +128,15 @@ function planGeometryFor(review) {
       && workBody.scrollHeight <= workBody.clientHeight + 1,
     tableAbsorbsHeight: viewport instanceof HTMLElement
       && viewport.clientHeight > 0 && viewport.scrollHeight >= viewport.clientHeight,
-    footerVisible: planActions instanceof HTMLElement && planActions.checkVisibility()
+    statusActionsVisible: planActions instanceof HTMLElement && planActions.checkVisibility()
+      && statusCard.contains(planActions)
       && planActions.getBoundingClientRect().bottom <= innerHeight + 1,
-    footerSharesRow: footerStatus.hidden || Math.abs(
-      (footerStatus.getBoundingClientRect().top + footerStatus.getBoundingClientRect().bottom) / 2
+    actionsShareTitleRow: Math.abs(
+      (statusTitle.getBoundingClientRect().top + statusTitle.getBoundingClientRect().bottom) / 2
       - (footerButtons.getBoundingClientRect().top + footerButtons.getBoundingClientRect().bottom) / 2) < 1,
+    feedbackSharesDetailRow: footerStatus.hidden || Math.abs(
+      footerStatus.getBoundingClientRect().top - statusDetail.getBoundingClientRect().top) < 1,
+    tableHasNoFooter: !review.querySelector(".nami-plan-review__table-card .nami-plan-review__actions"),
     semanticSettingsVisible: settingRows.length === 2 && settingRows.every((row) =>
       row.textContent.length > 0 && row.getBoundingClientRect().width > 0
       && row.getBoundingClientRect().right <= review.getBoundingClientRect().right),
@@ -542,6 +549,37 @@ _PLAN_REVIEW_SCRIPT = _COMMON_JS + r"""
   await control("checkpoint", "plan_again");
   await control("track_review_task");
   const fresh = document.querySelector(".nami-plan-review");
+  // Finite layout witness: feedback is presentation-only and restored before gestures.
+  const statusCard = fresh.querySelector(".nami-plan-review__summary");
+  const statusDetail = fresh.querySelector(".nami-plan-review__status-summary");
+  const feedback = fresh.querySelector(".nami-plan-review__status");
+  const savedFeedback = {text: feedback.textContent, hidden: feedback.hidden};
+  const savedDetail = statusDetail.textContent;
+  feedback.hidden = false;
+  statusDetail.textContent = "120000 of 120000 selected · 12.00 GiB required · 120000 planning issues";
+  feedback.textContent = "Review preflight failed. Resolve notices and plan again.";
+  const singleLine = (node) => node.getBoundingClientRect().height
+    <= parseFloat(getComputedStyle(node).lineHeight) + 1;
+  if (!singleLine(statusDetail) || !singleLine(feedback)
+    || Math.abs(statusDetail.getBoundingClientRect().top - feedback.getBoundingClientRect().top) > 1) {
+    throw new Error("Default status feedback must share one unwrapped row");
+  }
+  statusCard.style.inlineSize = "650px";
+  await new Promise(requestAnimationFrame);
+  if (getComputedStyle(statusDetail).whiteSpace !== "normal"
+    || getComputedStyle(feedback).whiteSpace !== "normal"
+    || Math.abs(statusDetail.getBoundingClientRect().left - feedback.getBoundingClientRect().left) > 1
+    || feedback.getBoundingClientRect().top < statusDetail.getBoundingClientRect().bottom) {
+    throw new Error("Narrow status feedback must stack and wrap together");
+  }
+  statusCard.style.removeProperty("inline-size");
+  statusDetail.textContent = savedDetail;
+  feedback.textContent = savedFeedback.text;
+  feedback.hidden = savedFeedback.hidden;
+  const metadataRow = fresh.querySelector(".nami-plan-review__rows [data-node-id]");
+  const metadataColors = [".nami-file-row__size", ".nami-plan-row__modified", ".nami-file-row__notes"]
+    .map((selector) => getComputedStyle(metadataRow.querySelector(selector)).color);
+  if (new Set(metadataColors).size !== 1) throw new Error("Plan metadata colors must agree");
   const styleValue = (selector, property) =>
     getComputedStyle(document.querySelector(selector))[property];
   for (const [selector, property, expected] of [
