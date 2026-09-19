@@ -196,6 +196,34 @@ const taskStatusUrl = moduleUrl((await readFile(join(dirname(process.argv[3]), "
 const { taskStatusDigest } = await import(taskStatusUrl);
 assert.equal(taskStatusDigest({}).title, "New task");
 assert.equal(taskStatusDigest({}).progress.indeterminate, false);
+assert.equal(taskStatusDigest({ taskKind: "inventory", sessionState: "active" }).title, "Inventory");
+assert.equal(taskStatusDigest({ taskKind: "sync-plan", sessionState: "active", error: "Planning failed." }).progress.indeterminate, false);
+assert.equal(taskStatusDigest({ form: { attempt: { kind: "sync-plan", dispatched: true, running: true } } }).detail, "Planning in progress.");
+assert.equal(taskStatusDigest({ taskKind: "sync-plan", sessionState: "active" }).progress.indeterminate, true);
+assert.equal(taskStatusDigest({ taskKind: "sync-plan", reviewLoading: true,
+  review: { summary: { filter_counts: { all: 2 }, required_bytes: "0" } },
+}).progress.indeterminate, true);
+assert.equal(taskStatusDigest({ taskKind: "sync-plan", form: {
+  attempt: { kind: "sync-plan", dispatched: true, running: true },
+} }).progress.indeterminate, true);
+assert.equal(taskStatusDigest({ taskKind: "sync-plan", form: {
+  attempt: { kind: "sync-plan", dispatched: true, running: true },
+} }).title, "Planning");
+assert.equal(taskStatusDigest({ taskKind: "sync-plan", form: {
+  attempt: { kind: "plan-again", dispatched: true, running: true },
+} }).progress.indeterminate, true);
+assert.equal(taskStatusDigest({ taskKind: "sync-plan", form: {
+  attempt: { kind: "sync-plan", dispatched: false, running: true },
+} }).progress.indeterminate, false);
+assert.equal(taskStatusDigest({ taskKind: "sync-plan", reviewLoading: true,
+  error: "Plan unavailable.",
+}).progress.indeterminate, false);
+assert.equal(taskStatusDigest({ taskKind: "sync-plan", sessionState: "active",
+  review: { summary: { filter_counts: { all: 2 }, required_bytes: "0" } },
+}).progress.indeterminate, false);
+assert.equal(taskStatusDigest({ taskKind: "sync-plan", reviewLoading: false,
+  review: { summary: { filter_counts: { all: 2 }, required_bytes: "0" } },
+}).progress.indeterminate, false);
 assert.equal(taskStatusDigest({ sessionState: "completed", review: { summary: {
   filter_counts: { all: 2 }, required_bytes: "1024", operation_count: 2,
 } } }).title, "Plan ready");

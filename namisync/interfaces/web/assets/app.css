@@ -334,14 +334,27 @@ body {
 .nami-plan-review__settings {
   display: grid;
   gap: 0;
+  inline-size: 8rem;
   justify-self: end;
   min-inline-size: 0;
 }
 
 .nami-plan-review__settings > span {
+  align-items: center;
+  display: grid;
+  grid-template-columns: var(--icon-size-sm) minmax(0, 1fr);
+  column-gap: var(--space-2);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.nami-plan-review__settings > span[data-tone="accent"] > .nami-icon {
+  color: var(--color-accent-fill);
+}
+
+.nami-plan-review__settings > span[data-tone="muted"] > .nami-icon {
+  color: var(--color-neutral-foreground-secondary);
 }
 
 .nami-plan-review__plan > .nami-plan-review__settings {

@@ -29,6 +29,10 @@ packaging remain open.
 
 #### Refine Plan density, readiness and row highlighting (2026-09-17 – 2026-09-19)
 
+- Use friendly sentence-case Plan/filter labels and an explicit low-risk Notes
+  hiding policy; preserve unknown notes, warnings and previous-location context.
+  Add fixed semantic-setting icon slots using pinned Fluent artwork, and show
+  indeterminate progress during planning with an immediate dispatch repaint.
 - Sum static folder sizes from distinct destination-oriented plan file facts,
   independent of selection and view state. Report partial facts and null with
   an overflow note above signed-64; keep file/folder size-sort groups stable.

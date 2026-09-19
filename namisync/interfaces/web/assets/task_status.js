@@ -20,9 +20,22 @@ export function taskStatusDigest(task) {
   const form = task?.form ?? null;
   const executionState = task?.sessionState ?? null;
   const active = executionState === "active" && task?.executionControlState !== "paused";
-  const progress = summary !== null && !task?.executionStarted
-    ? { value: 0, determinate: false, indeterminate: false, phase: null }
-    : progressDigest(task?.progressState, active);
+  // Planning has no item-level progress, but the shell can still tell us that
+  // it is underway. Keep the task rail animated while the start request is
+  // being admitted, while a new plan view is loading, or while an active task
+  // has not produced a plan yet. Once a plan is available, an existing active
+  // session is a ready-to-review plan rather than an indeterminate operation.
+  const planning = task?.error == null && task?.taskKind !== "inventory" && !task?.executionStarted && (
+    task?.reviewLoading === true
+    || (summary === null && executionState === "active")
+    || (["sync-plan", "plan-again"].includes(form?.attempt?.kind)
+      && form.attempt.dispatched === true && form.attempt.running === true)
+  );
+  const progress = planning
+    ? { value: 0, determinate: false, indeterminate: true, phase: "plan" }
+    : (summary !== null || task?.error != null) && !task?.executionStarted
+      ? { value: 0, determinate: false, indeterminate: false, phase: null }
+      : progressDigest(task?.progressState, active);
   if (task?.executionStarted && executionState === "completed") {
     progress.value = 100;
     progress.determinate = true;
@@ -33,6 +46,7 @@ export function taskStatusDigest(task) {
   let title = "New task";
   let state = "new";
   if (task?.error !== null && task?.error !== undefined) [title, state] = ["Error", "error"];
+  else if (planning) [title, state] = ["Planning", "planning"];
   else if (summary !== null && !task?.executionStarted) [title, state] = ["Plan ready", "plan"];
   else if (executionState === "completed") [title, state] = ["Completed", "completed"];
   else if (executionState === "failed" || executionState === "refused") [title, state] = ["Error", "error"];
@@ -46,6 +60,7 @@ export function taskStatusDigest(task) {
   }
   let detail;
   if (typeof task?.error === "string") detail = task.error;
+  else if (planning) detail = "Planning in progress.";
   else if (summary !== null && !task?.executionStarted) detail = planItemCount === 0 && !planHasItems ? "Plan is empty."
     : `${planItemCount} items, ${formatByteCount(summary.required_bytes)} required.`;
   else if (["completed", "failed", "refused", "canceled"].includes(executionState)) detail = `${title}.`;

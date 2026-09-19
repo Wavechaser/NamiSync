@@ -218,7 +218,13 @@ async function loadScenario({
       harness.railCallbacks = callbacks;
       return {
         element: {},
-        render(tasks, _selected, creating) { harness.createStates.push(creating); harness.railTasks = tasks; },
+        render(tasks, _selected, creating) {
+          harness.createStates.push(creating);
+          harness.railTasks = tasks;
+          harness.dispatchedPlanningRendered = tasks.some((task) =>
+            task.form?.attempt?.kind === "sync-plan" && task.form.attempt.dispatched
+            && task.form.attempt.running);
+        },
       };
     }
     // scenario ${scenarioId}
@@ -491,6 +497,14 @@ async function loadScenario({
     harness.calls.push(["admit", purpose, structuredClone(candidate)]);
     return Promise.resolve(choice(purpose, purpose === "target" ? "2" : "1"));
   };
+  const pendingPlan = deferred();
+  harness.startPlan = () => pendingPlan.promise;
+  callbacks.onStartPlan();
+  await until(() => firstModel.attempt?.dispatched === true, "planning dispatched");
+  assert.equal(harness.dispatchedPlanningRendered, true,
+    "planning state must repaint before the start response arrives");
+  pendingPlan.resolve({ task_id: TASK_A, request_id: "4".repeat(32), session_id: "5".repeat(32) });
+  await until(() => firstModel.attempt === null, "planning response settled");
   let planRetries = 0;
   harness.startPlan = (...values) => {
     harness.calls.push(["start-plan", ...values]);

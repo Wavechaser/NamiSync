@@ -201,6 +201,7 @@ const planUrl = moduleUrl(`
       cell.dataset.fileColumn = column === "modified" ? "secondary" : column;
       cell.className = column === "size" ? "nami-file-row__size" : "nami-plan-row__" + column;
       if (column === "size") cell.textContent = row.sizeText;
+      if (column === "primary") cell.textContent = row.intentText;
       return cell;
     });
     element.append(selection, name, ...cells, notes);
@@ -411,7 +412,7 @@ assert.equal(renderedNotice.dataset.folder, "false");
 assert.ok(findText(renderedNotice, hostile), "notice context renders as inert text");
 assert.ok(findText(renderedNotice, "Partial size: overflow"), "overflow note remains visible");
 assert.ok(findText(renderedNotice, "Risk: irreversible"));
-assert.ok(findText(renderedNotice, "unsupported"), "notices do not hide blockers");
+assert.ok(findText(renderedNotice, "Unsupported item"), "notices do not hide blockers");
 assert.equal(findByClass(renderedNotice, "nami-file-row__size").textContent, "",
   "overflow rows do not render a clamped or zero size");
 assert.equal(
@@ -487,9 +488,9 @@ const copyFilter = findByDataset(panel.element, "operation", "copy");
 const mkdirFilter = findByDataset(panel.element, "filterDetail", "mkdir");
 const trashFilter = findByDataset(panel.element, "operation", "trash");
 assert.equal(allFilter.ariaPressed, "true");
-assert.equal(allFilter.textContent, "all 180");
-assert.equal(copyFilter.textContent, "copy 100");
-assert.equal(mkdirFilter.textContent, "mkdir 0");
+assert.equal(allFilter.textContent, "All 180");
+assert.equal(copyFilter.textContent, "Copy 100");
+assert.equal(mkdirFilter.textContent, "Create folder 0");
 assert.equal(noticeFilter.hidden, false);
 assert.equal(trashFilter.hidden, false);
 assert.equal(trashFilter.dataset.trashAlert, "true");
@@ -743,4 +744,37 @@ function findText(root, text) {
   return walk(root).some((item) => item.textContent.includes(text));
 }
 
+const terminologyPanel = createPlanReviewPanel(Object.fromEntries([
+  "onViewChange", "onWindow", "onSelect", "onScopeSelect", "onExecute", "onControl",
+  "onPlanAgain", "onHighlight", "onHighlightedSelect",
+].map((name) => [name, () => {}])));
+function terminologyRow(patch) {
+  const specimen = { ...row, operation_kind: "noop", reason: null, ...patch };
+  terminologyPanel.render({ ...task, review: { ...review,
+    window: { ...review.window, rows: [specimen] } } });
+  return findByDataset(terminologyPanel.element, "nodeId", specimen.node_id);
+}
+for (const reason of ["source_only", "metadata_match", "identity_rename", "required_directory", "empty_directory"]) {
+  const rendered = terminologyRow({ reason });
+  assert.equal(findByDataset(rendered, "fileColumn", "notes").textContent, "", reason);
+  assert.ok(findText(rendered, "No change"));
+}
+for (const [reason, label] of [
+  ["metadata_changed", "File metadata changed"], ["target_only", "Only in target"],
+  ["directory_cleanup", "Remove unneeded folder"], ["case_collision", "Conflicting name casing"],
+  ["future_reason_unclassified", "future_reason_unclassified"],
+  ["constructor", "constructor"], ["__proto__", "__proto__"],
+]) assert.ok(findText(terminologyRow({ reason }), label), reason);
+assert.ok(findText(terminologyRow({ reason: "source_only", blocked_reason: "blocked_dependency" }), "Required operation is blocked"));
+assert.ok(findText(terminologyRow({ reason: "source_only", blocked_reason: "blocked_dependency" }), "Only in source"));
+assert.ok(findText(terminologyRow({ reason: "metadata_match", risk: "irreversible" }), "Metadata matches"));
+assert.ok(findText(terminologyRow({ selection_exclusion_reason: "incomplete-scan" }), "Scan incomplete"));
+assert.ok(findText(terminologyRow({ notice: "metadata_match" }), "metadata_match"), "free-form notices are never hidden or rewritten");
+assert.ok(findText(terminologyRow({ notice: hostile }), hostile), "unknown notes stay inert and visible");
+assert.ok(findText(terminologyRow({ row_kind: "prior-operation", move_peer_id: row.node_id }), "Previous location"));
+for (const [operation_kind, label] of [["mkdir", "Create folder"], ["recase", "Change name casing"],
+  ["trash", "Move to trash"], ["delete", "Delete permanently"], ["move_update", "Move + update"]]) {
+  assert.ok(findText(terminologyRow({ operation_kind }), label));
+}
+terminologyPanel.dispose();
 process.stdout.write("ok");

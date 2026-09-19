@@ -11,6 +11,41 @@ do not add, defer, or reinterpret an M1 product outcome.
 
 ## Main objectives and current boundary
 
+### Plan terminology and planning feedback (2026-09-19)
+
+Baseline `7cf4448`. GUI-N is one atomic presentation-only polish unit, delivered.
+Finite population: packaged Plan/filter/action/notes strings and
+their gallery examples; task semantic-setting markup/styles and pinned Fluent
+icon catalog/generated outputs; existing shell planning-state progress digest
+and its Plan/rail consumers. Tests: frontend probes, icon/tool tests, interfaces
+department, installed gallery and Plan gates. DESKTOP_UI owns the explicit
+shown/hidden note table and semantic placement; M1_PLAN, CHANGELOG and HANDOFF
+record delivery. No bridge shape, scan, selection, execution or size policy changes.
+
+Acceptance: sentence-case friendly labels, exact allowlist hiding only redundant
+low-risk reasons (unknown notes visible); fixed semantic fields with requested
+icons/colors; indeterminate progress while planning, idle/terminal/execution
+states preserved. Regression study covers warnings and previous locations,
+filter keys/counts, both themes, changing semantic text lengths, planning start,
+completion/failure and existing row selection/navigation. Stop if presentation
+requires new backend authority or suppressing consequential facts. Archived GUI
+prototypes are not implementation authority. Review adversarially before commit.
+Direct consumer detail: `app.js` repaints the existing dispatched form-attempt
+transition before awaiting the start response; `setup_app_probe.mjs` witnesses
+that repaint while the response is held, without new lifecycle fields.
+The installed Plan-again trace helper directly matches that dispatch source;
+update its exact original/instrumented anchor together, retaining the repaint
+and its existing restoration/custody tests.
+
+Verification: interfaces/tools 2,033 passed, four skipped; final frontend 50
+passed, including the supported WebView2 API floor and unknown property-name
+notes. Pinned icon archive check passed. Installed gallery (light/dark/forced/
+reduced) and default/larger Plan checks: six passed. Gallery assertions cover
+both semantic combinations, icon-only colors, fixed field geometry and loading/
+error/ready progress transitions. Independent adversarial review passed; root
+review corrected icon-only coloring, preserved Inventory status and dispatched
+repaint, and retained the compatible own-property lookup. No backend changes.
+
 ### Status composition and static folder totals (2026-09-19)
 
 Baseline `e6ee448`. Closed population: Plan status/actions/messages and shared

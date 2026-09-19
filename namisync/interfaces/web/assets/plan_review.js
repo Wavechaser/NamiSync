@@ -14,6 +14,33 @@ const FILTER_GROUPS = Object.freeze({
 const ALWAYS_VISIBLE_FILTERS = new Set(["all", "copy", "move", "update", "remove"]);
 const WINDOW_LIMIT = 256;
 const ROW_HEIGHT = 24;
+const DISPLAY_LABELS = Object.freeze({
+  all: "All", copy: "Copy", move: "Move", update: "Update", remove: "Remove",
+  error: "Error", noop: "No change", notice: "Notice", mkdir: "Create folder",
+  recase: "Change name casing", move_update: "Move + update", trash: "Move to trash",
+  delete: "Delete permanently", unsupported: "Unsupported", blocked: "Blocked",
+});
+const REASON_LABELS = Object.freeze({
+  source_only: "Only in source", metadata_match: "Metadata matches",
+  metadata_changed: "File metadata changed", identity_rename: "Moved file",
+  identity_rename_changed: "Moved file with changed metadata",
+  required_directory: "Required folder", empty_directory: "Empty folder",
+  target_only: "Only in target", directory_cleanup: "Remove unneeded folder",
+  unsupported: "Unsupported item", case_mismatch: "Name casing differs",
+  unicode_normalization_mismatch: "Unicode name normalization differs",
+  case_collision: "Conflicting name casing", type_collision: "File/folder conflict",
+  policy_collision: "Naming policy conflict", destination_collision: "Destination conflict",
+  blocked_dependency: "Required operation is blocked",
+  "blocked-dependency": "Required operation is blocked",
+  "blocked-correspondence": "File matching is blocked",
+  "incomplete-scan": "Scan incomplete", "user-deselected": "Deselected",
+});
+// Only redundant low-risk operation reasons are hidden; new values stay visible.
+const HIDDEN_REASONS = new Set([
+  "source_only", "metadata_match", "identity_rename", "required_directory", "empty_directory",
+]);
+const displayLabel = (value) => Object.prototype.hasOwnProperty.call(DISPLAY_LABELS, value) ? DISPLAY_LABELS[value] : value;
+const reasonLabel = (value) => Object.prototype.hasOwnProperty.call(REASON_LABELS, value) ? REASON_LABELS[value] : value;
 
 function button(label, className = "nami-button") {
   const element = document.createElement("button");
@@ -24,9 +51,13 @@ function button(label, className = "nami-button") {
 }
 
 function rowView(row, busy, committed) {
-  const reason = row.move_peer_id === null ? row.reason : `Paired move · ${row.reason ?? ""}`;
+  const hideReason = row.risk === "none" && row.blocked_reason === null
+    && row.selection_exclusion_reason === null && HIDDEN_REASONS.has(row.reason);
+  const reason = hideReason ? null : reasonLabel(row.reason);
   const notes = [...new Set([
-    row.notice, row.blocked_reason, row.selection_exclusion_reason, reason,
+    row.notice, reasonLabel(row.blocked_reason), reasonLabel(row.selection_exclusion_reason),
+    row.move_peer_id === null ? null : row.row_kind.startsWith("prior-") ? "Previous location" : "Paired move",
+    reason,
   ].filter((value) => typeof value === "string" && value !== ""))].join(" · ");
   const risk = row.risk === "none" ? "" : `Risk: ${row.risk}`;
   const intent = row.operation_kind ?? (row.row_kind === "notice" ? "notice" : "");
@@ -45,7 +76,7 @@ function rowView(row, busy, committed) {
     expanded: row.expanded ?? false,
     nameText: row.display,
     sizeText: row.size === null ? "" : formatByteCount(row.size),
-    intentText: intent.replaceAll("_", " "),
+    intentText: displayLabel(intent),
     intentKey: row.blocked_reason !== null
       ? "blocked"
       : row.row_kind === "notice" ? "" : intent,
@@ -119,6 +150,14 @@ export function createPlanReviewPanel(callbacks) {
   settings.className = "nami-shell__guidance nami-plan-review__settings";
   const verifySetting = document.createElement("span");
   const deletionSetting = document.createElement("span");
+  const verifyIcon = createIcon(document, "arrow-sync", "sm");
+  const deletionIcon = createIcon(document, "delete", "sm");
+  const verifyLabel = document.createElement("span");
+  const deletionLabel = document.createElement("span");
+  verifyIcon.ariaHidden = "true";
+  deletionIcon.ariaHidden = "true";
+  verifySetting.append(verifyIcon, verifyLabel);
+  deletionSetting.append(deletionIcon, deletionLabel);
   settings.append(verifySetting, deletionSetting);
   const viewSwitcher = document.createElement("div");
   viewSwitcher.className = "nami-segmented nami-plan-review__view-switcher";
@@ -180,7 +219,7 @@ export function createPlanReviewPanel(callbacks) {
   const filterButtons = new Map();
   const filterMenus = new Map();
   for (const value of FILTERS) {
-    const filter = button(value, "nami-button nami-plan-review__filter");
+    const filter = button(displayLabel(value), "nami-button nami-plan-review__filter");
     filter.dataset.operation = value === "remove" ? "trash" : value === "error" ? "blocked" : value;
     filter.dataset.filter = value;
     filter.ariaPressed = "false";
@@ -192,7 +231,7 @@ export function createPlanReviewPanel(callbacks) {
       split.className = "nami-plan-filter-split";
       const dropdown = button("", "nami-button nami-plan-review__filter nami-plan-filter-split__arrow");
       dropdown.dataset.operation = filter.dataset.operation;
-      dropdown.ariaLabel = `${value} filters`;
+      dropdown.ariaLabel = `${displayLabel(value)} filters`;
       dropdown.ariaHasPopup = "menu";
       dropdown.ariaExpanded = "false";
       dropdown.append(createIcon(document, "chevron-down", "sm"));
@@ -419,6 +458,12 @@ export function createPlanReviewPanel(callbacks) {
     if (searchTimer !== null) clearTimeout(searchTimer);
     searchTimer = null;
     viewChange({ searchQuery: search.value });
+  }
+  function updateSetting(node, icon, label, glyph, value, tone) {
+    node.dataset.tone = tone;
+    node.ariaLabel = value;
+    icon.className = `nami-icon nami-icon--sm nami-icon--${glyph}`;
+    updateText(label, value);
   }
   search.addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
@@ -706,13 +751,14 @@ export function createPlanReviewPanel(callbacks) {
       delete element.dataset.pending;
       updateText(sourcePath, "Loading reviewed plan…");
       updateText(targetPath, "");
-      updateText(verifySetting, "");
-      updateText(deletionSetting, "");
+      updateSetting(verifySetting, verifyIcon, verifyLabel, "arrow-sync", "", "muted");
+      updateSetting(deletionSetting, deletionIcon, deletionLabel, "delete", "", "muted");
       updateText(facts, task.error ?? "Waiting for the completed plan to become available.");
-      updateText(statusTitle, task.error ? "Plan unavailable" : "Loading plan");
-      summary.dataset.status = task.error ? "attention" : "working";
-      progress.classList.remove?.("nami-progress--indeterminate");
-      progress.style.setProperty("--nami-progress-value", "0%");
+      const digest = taskStatusDigest(task);
+      updateText(statusTitle, task.error ? "Plan unavailable" : digest.title);
+      summary.dataset.status = task.error ? "attention" : digest.state;
+      progress.classList.toggle?.("nami-progress--indeterminate", !task.error && digest.progress.indeterminate);
+      progress.style.setProperty("--nami-progress-value", `${digest.progress.value}%`);
       body.replaceChildren();
       renderedRows = null;
       tableCard.hidden = true;
@@ -728,10 +774,20 @@ export function createPlanReviewPanel(callbacks) {
     sourcePath.title = review.summary.source_path;
     targetPath.title = review.summary.target_path;
     const options = task.form?.options;
-    updateText(verifySetting, options == null ? "-"
-      : options.verify_after_execute ? "Verify on" : "Verify off");
-    updateText(deletionSetting, options == null ? "-"
-      : options.deletion_policy === "additive" ? "Additive" : "Trash");
+    const verifying = options?.verify_after_execute === true;
+    updateSetting(
+      verifySetting, verifyIcon, verifyLabel,
+      verifying ? "arrow-sync-checkmark" : "arrow-sync",
+      options == null ? "-" : verifying ? "Verify on" : "Verify off",
+      verifying ? "accent" : "muted",
+    );
+    const additive = options?.deletion_policy === "additive";
+    updateSetting(
+      deletionSetting, deletionIcon, deletionLabel,
+      additive ? "document-add" : "delete",
+      options == null ? "-" : additive ? "Additive" : "Trash",
+      additive ? "accent" : "muted",
+    );
     const planningIssues = review.summary.preflight_refusal_count + review.summary.warning_count;
     updateText(
       facts,
@@ -776,7 +832,7 @@ export function createPlanReviewPanel(callbacks) {
       const hidden = !ALWAYS_VISIBLE_FILTERS.has(value) && count === 0;
       filter.hidden = hidden;
       filter.dataset.trashAlert = String(value === "remove" && !active && count > 1);
-      updateText(filter, `${value.replaceAll("_", " ")} ${count}`);
+      updateText(filter, `${displayLabel(value)} ${count}`);
       const grouped = filterMenus.get(value);
       if (grouped !== undefined) {
         grouped.split.hidden = hidden;
@@ -784,7 +840,7 @@ export function createPlanReviewPanel(callbacks) {
         grouped.dropdown.ariaPressed = String(active);
         for (const [key, item] of grouped.choices) {
           const itemCount = key === "all" ? count : review.summary.filter_counts?.[key] ?? 0;
-          const label = key === "all" ? `All ${value === "copy" ? "copies" : value === "remove" ? "removals" : `${value}s`}` : key.replaceAll("_", " ");
+          const label = key === "all" ? `All ${value === "copy" ? "copies" : value === "remove" ? "removals" : `${value}s`}` : displayLabel(key);
           updateText(item, `${label} ${itemCount}`);
           item.ariaChecked = String(key === "all"
             ? members.every((member) => review.summary.filters.includes(member))

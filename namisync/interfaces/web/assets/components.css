@@ -896,6 +896,12 @@ body {
   --nami-icon-mask-lg: url("./icons/database_checkmark_24_regular.svg");
 }
 
+.nami-icon--document-add {
+  --nami-icon-mask-sm: url("./icons/document_add_16_regular.svg");
+  --nami-icon-mask-md: url("./icons/document_add_20_regular.svg");
+  --nami-icon-mask-lg: url("./icons/document_add_24_regular.svg");
+}
+
 .nami-icon--delete {
   --nami-icon-mask-sm: url("./icons/delete_16_regular.svg");
   --nami-icon-mask-md: url("./icons/delete_20_regular.svg");

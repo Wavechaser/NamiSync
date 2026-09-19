@@ -99,11 +99,11 @@ async function reportFailure(error) {
     { key: "copy", text: "Copy", hue: "blue", form: "text", icon: "info", shape: "arrow-right", cue: "New file" },
     { key: "mkdir", text: "Create folder", hue: "blue", form: "text", icon: "checkmark-circle", shape: "folder-plus", cue: "New folder" },
     { key: "move", text: "Move", hue: "purple", form: "text", icon: "info", shape: "paired-arrows", cue: "Relocate" },
-    { key: "recase", text: "Recase", hue: "purple", form: "text", icon: "info", shape: "letter-case", cue: "Change name case" },
+    { key: "recase", text: "Change name casing", hue: "purple", form: "text", icon: "info", shape: "letter-case", cue: "Change name casing" },
     { key: "update", text: "Update", hue: "yellow", form: "text", icon: "info", shape: "refresh", cue: "Replace content" },
     { key: "move_update", text: "Move + update", hue: "yellow", form: "text", icon: "info", shape: "paired-refresh", cue: "Relocate and replace" },
     { key: "trash", text: "Move to trash", hue: "red", form: "text", icon: "warning", shape: "trash", cue: "Recoverable removal" },
-    { key: "delete", text: "Delete", hue: "red", form: "fill", icon: "dismiss-circle", shape: "trash-x", cue: "Permanent removal" },
+    { key: "delete", text: "Delete permanently", hue: "red", form: "fill", icon: "dismiss-circle", shape: "trash-x", cue: "Permanent removal" },
     { key: "noop", text: "No change", hue: "neutral", form: "text", icon: "info", shape: "dash", cue: "No operation" },
     { key: "error", text: "Error", hue: "yellow", form: "fill", icon: "warning", shape: "triangle", cue: "Planning error" },
     { key: "unsupported", text: "Unsupported", hue: "yellow", form: "fill", icon: "warning", shape: "barrier", cue: "Unsupported entry type" },
@@ -118,9 +118,9 @@ async function reportFailure(error) {
     { key: "completed", rowView: Object.freeze({ checked: true, mixed: false, selectionDisabled: false, selectionLabel: "Select completed-copy.bin", depth: 0, folder: false, expanded: false, nameText: "completed-copy.bin", sizeText: "12 MB", intentText: "Completed", intentKey: "", lifecycleKey: "completed", checksumText: "5a2f8c10", notesText: "Projected execution completed." }) },
     { key: "move", rowView: Object.freeze({ checked: true, mixed: false, selectionDisabled: false, selectionLabel: "Select report.pdf", depth: 0, folder: false, expanded: false, nameText: "report.pdf", sizeText: "842 KB", intentText: "Move", intentKey: "move", checksumText: "3456cdef", notesText: "Relocate without replacing bytes." }) },
     { key: "move_update", rowView: Object.freeze({ checked: true, mixed: false, selectionDisabled: false, selectionLabel: "Select notes.md", depth: 0, folder: false, expanded: false, nameText: "notes.md", sizeText: "4.6 KB", intentText: "Move + update", intentKey: "move_update", checksumText: "7890abcd", notesText: "Relocate and replace content." }) },
-    { key: "recase", rowView: Object.freeze({ checked: true, mixed: false, selectionDisabled: false, selectionLabel: "Select Logo.PNG", depth: 0, folder: false, expanded: false, nameText: "Logo.PNG", sizeText: "32 KB", intentText: "Recase", intentKey: "recase", checksumText: "bcde1234", notesText: "Change only the path casing." }) },
+    { key: "recase", rowView: Object.freeze({ checked: true, mixed: false, selectionDisabled: false, selectionLabel: "Select Logo.PNG", depth: 0, folder: false, expanded: false, nameText: "Logo.PNG", sizeText: "32 KB", intentText: "Change name casing", intentKey: "recase", checksumText: "bcde1234", notesText: "Change only the path casing." }) },
     { key: "trash", rowView: Object.freeze({ checked: false, mixed: false, selectionDisabled: false, selectionLabel: "Select export.zip", depth: 0, folder: false, expanded: false, nameText: "export.zip", sizeText: "2.4 MB", intentText: "Move to trash", intentKey: "trash", checksumText: "def05678", notesText: "Recoverable removal specimen." }) },
-    { key: "delete", rowView: Object.freeze({ checked: false, mixed: false, selectionDisabled: false, selectionLabel: "Select obsolete.tmp", depth: 0, folder: false, expanded: false, nameText: "obsolete.tmp", sizeText: "128 B", intentText: "Delete", intentKey: "delete", checksumText: "1357ace0", notesText: "Permanent removal specimen." }) },
+    { key: "delete", rowView: Object.freeze({ checked: false, mixed: false, selectionDisabled: false, selectionLabel: "Select obsolete.tmp", depth: 0, folder: false, expanded: false, nameText: "obsolete.tmp", sizeText: "128 B", intentText: "Delete permanently", intentKey: "delete", checksumText: "1357ace0", notesText: "Permanent removal specimen." }) },
     { key: "noop", rowView: Object.freeze({ checked: false, mixed: false, selectionDisabled: false, selectionLabel: "Select unchanged.bin", depth: 0, folder: false, expanded: false, nameText: "unchanged.bin", sizeText: "16 MB", intentText: "No change", intentKey: "noop", checksumText: "2468bdf1", notesText: "No operation is intended." }) },
     { key: "error", rowView: Object.freeze({ checked: false, mixed: false, selectionDisabled: true, selectionLabel: "Selection unavailable for locked.dat", depth: 0, folder: false, expanded: false, nameText: "locked.dat", sizeText: "—", intentText: "Error", intentKey: "error", checksumText: "—", notesText: "The projected row reports a read error." }) },
     { key: "unsupported", rowView: Object.freeze({ checked: false, mixed: false, selectionDisabled: true, selectionLabel: "Selection unavailable for device-link", depth: 0, folder: false, expanded: false, nameText: "device-link", sizeText: "—", intentText: "Unsupported", intentKey: "unsupported", checksumText: "—", notesText: "Unsupported entry type." }) },
@@ -1036,7 +1036,7 @@ async function reportFailure(error) {
   planReviewPanel.element.style.blockSize = "480px";
   planReviewPanel.element.style.gridColumn = "1 / -1";
   app.append(planReviewPanel.element);
-  planReviewPanel.render({
+  const planReviewTask = {
     review: {
       summary: {
         source_path: "C:\\source",
@@ -1070,7 +1070,56 @@ async function reportFailure(error) {
     closePending: false,
     executionAttempt: null,
     form: { options: { verify_after_execute: true, deletion_policy: "trash" } },
-  });
+  };
+  planReviewPanel.render(planReviewTask);
+  const semanticSettings = planReviewPanel.element.querySelector(".nami-plan-review__settings");
+  const semanticPaths = planReviewPanel.element.querySelector(".nami-plan-review__paths");
+  const settingBounds = semanticSettings.getBoundingClientRect();
+  const pathBounds = semanticPaths.getBoundingClientRect();
+  const semanticColorProbe = document.createElement("span");
+  semanticSettings.append(semanticColorProbe);
+  for (const [verify, deletion, glyphs, tones] of [
+    [true, "trash", ["arrow-sync-checkmark", "delete"], ["accent", "muted"]],
+    [false, "additive", ["arrow-sync", "document-add"], ["muted", "accent"]],
+  ]) {
+    planReviewTask.form.options = { verify_after_execute: verify, deletion_policy: deletion };
+    planReviewPanel.render(planReviewTask);
+    const rows = [...semanticSettings.children].slice(0, 2);
+    for (const [index, row] of rows.entries()) {
+      const icon = row.querySelector(".nami-icon");
+      const token = tones[index] === "accent" ? "--color-accent-fill" : "--color-neutral-foreground-secondary";
+      semanticColorProbe.style.color = `var(${token})`;
+      if (!icon.classList.contains(`nami-icon--${glyphs[index]}`)
+          || getComputedStyle(icon).color !== getComputedStyle(semanticColorProbe).color
+          || getComputedStyle(row.lastElementChild).color !== getComputedStyle(row).color) {
+        throw new Error("semantic setting icon/label color mismatch");
+      }
+    }
+    const currentSettings = semanticSettings.getBoundingClientRect();
+    const currentPaths = semanticPaths.getBoundingClientRect();
+    if (Math.abs(currentSettings.left - settingBounds.left) > 0.5
+        || Math.abs(currentSettings.width - settingBounds.width) > 0.5
+        || Math.abs(currentPaths.width - pathBounds.width) > 0.5) {
+      throw new Error("semantic setting text shifted the path/setting slots");
+    }
+  }
+  semanticColorProbe.remove();
+  planReviewPanel.render({ ...planReviewTask, review: null, sessionState: "active" });
+  if (!planReviewPanel.element.querySelector(".nami-plan-review__progress")
+      .classList.contains("nami-progress--indeterminate")) {
+    throw new Error("loading Plan status must show indeterminate planning");
+  }
+  planReviewPanel.render({ ...planReviewTask, review: null, sessionState: "failed", error: "Planning failed." });
+  if (planReviewPanel.element.querySelector(".nami-plan-review__progress")
+      .classList.contains("nami-progress--indeterminate")) {
+    throw new Error("failed planning must stop indeterminate progress");
+  }
+  planReviewTask.form.options = { verify_after_execute: true, deletion_policy: "trash" };
+  planReviewPanel.render(planReviewTask);
+  if (planReviewPanel.element.querySelector(".nami-plan-review__progress")
+      .classList.contains("nami-progress--indeterminate")) {
+    throw new Error("ready Plan progress must return to idle");
+  }
   planReviewPanel.element.querySelector('[data-filter="update"]')?.parentElement
     ?.querySelector(".nami-plan-filter-split__arrow")?.click();
   galleryStage = "control_matrix";

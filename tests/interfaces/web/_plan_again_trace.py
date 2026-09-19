@@ -278,11 +278,13 @@ _APP_BEGIN_TRACE = r'''  const attempt = beginFormAttempt(task, form, "plan-agai
 
 _APP_DISPATCH_START = r'''async function dispatchFormAttempt(task, form, attempt, submit) {
   attempt.dispatched = true;
+  renderTasks();
   try {
     await submit();
 '''
 _APP_DISPATCH_START_TRACE = r'''async function dispatchFormAttempt(task, form, attempt, submit) {
   attempt.dispatched = true;
+  renderTasks();
   if (attempt.kind === "plan-again") globalThis.__namiPlanAgainTrace?.record("dispatch", "submitted");
   try {
     await submit();

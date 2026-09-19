@@ -1543,6 +1543,7 @@ function freshFormAttempt(task, form, attempt, revision) {
 
 async function dispatchFormAttempt(task, form, attempt, submit) {
   attempt.dispatched = true;
+  renderTasks();
   try {
     await submit();
   } catch (error) {

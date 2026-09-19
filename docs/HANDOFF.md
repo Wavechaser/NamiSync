@@ -1,53 +1,54 @@
 # Latest session handoff
 
-## Static Plan folder totals (2026-09-19)
+## Plan terminology and planning feedback (2026-09-19)
 
-GUI-M2 completes the folder-total work on top of status-card commit 70a9270.
-Totals use each distinct canonical destination file path's displayed retained
-fact once, including hidden/deselected children and target-file removal sizes.
-Moves contribute only at their destination, not prior annotations. One reverse
-parent pass reuses child totals without nested double counting; selection
-overlays do not rebuild these immutable size facts.
+GUI-N completes a presentation-only polish unit on baseline 7cf4448.
+Plan actions, filters and detail menus use sentence-case friendly names while
+canonical bridge/filter keys remain unchanged. DESKTOP_UI owns the explicit
+shown/hidden Notes table: hide five redundant low-risk operation reasons only
+without risk, blockers or selection exclusions. Keep consequential details,
+free-form/unknown notes (including inherited-property-shaped names), and moved
+files' prior-location hierarchy. No scan, selection or execution policy changed.
 
-Unknown, conflicting or blocked facts and incomplete scans carry partial notes.
-Known blocked bytes still contribute. At the user's direction, totals above
-MAX_SIGNED_64 publish null plus an explicit overflow note, including ancestors;
-unaffected siblings remain exact. File and execution scalar domains and the
-bridge contract are unchanged. Empty directories display zero. Internal
-directory identity handles cleanup DELETE as well as MKDIR without changing
-the existing container/disclosure flag. Size sorts keep files before folders
-and unavailable values last inside each group; other sorts are unchanged.
+Semantic fields reserve an 8rem settings slot and fixed icon/text columns.
+Verify on uses accent arrow-sync-checkmark; Verify off uses gray arrow-sync;
+Trash uses gray delete; Additive uses accent document-add. Only icons change
+color. Document-add was added through the pinned Microsoft Fluent icon tool;
+registry, native SVGs and provenance are generated, not hand-edited.
 
-Verification: 64 focused projection/adapter tests passed, including maximum,
-first excess, nested overflow, unaffected siblings, duplicate paths, unknown
-members, and real 300-row filter/collapse/selection/window invariance. Browser
-probes verify null/notes, blank size rendering, exact maximum and rejection of
-above-domain wire sizes. Installed Plan checks passed at default/larger sizes
-after the final production corrections. Independent review identified two
-introduced edge cases (directory disclosure flag and non-monotonic unknown
-member tracking); both are corrected and regression-tested.
-Final workflows/interfaces: 2,517 passed, one skipped. Complete scale fixture
-gate: 58 passed, one skipped. Final read-only review of fixture/validator changes
-found no requirement drift or historical weakening. Diff checks passed.
+The shared task digest shows indeterminate planning during a dispatched start,
+active planning without a summary, and completed-review loading. The dispatch
+transition repaints before awaiting the response. The loading Plan status card
+uses the same digest. Ready plans and failures stop animation; Inventory and
+execution retain their own states. The existing Plan-again trace helper was
+updated at its exact dispatch anchor without weakening restoration checks.
 
-Current compact scale-fixture expectations and their independent validator were
-updated together; legacy schema validation and historical measurement receipts
-are untouched. The independent prefix-sum oracle covers every folder in the
-100,000-operation/120,000-row fixture and selection invariance. Its elapsed time
-includes fixture construction and is diagnostic, not a new performance promise.
-The first neighborhood run had a concurrent wheel-build error and stale
-fixture-validator failures; sequential packaging passed, and final gate reruns
-supersede that run. No full repository suite was needed for this neighborhood.
+Verification:
 
-Recovery af02913 on recovery/gui-m2-folder-totals-20260919 was inspected and
-rebuilt, not merged/cherry-picked. Its useful production/tests were integrated
-with the approved overflow policy and corrected directory/grouping behavior;
-its unfinished HANDOFF and old assumptions are superseded by this document.
-The recovery ref and temporary stash 93414b7 remain historical, not merge units.
+- Interfaces/tools: 2,033 passed, four skipped, 3,197 deselected.
+- Final frontend: 50 passed, including supported WebView2 API-floor checks,
+  notes visibility and the held-response dispatch repaint witness.
+- Pinned icon archive check and 34 focused icon tests passed.
+- Installed WebView2: six passed, 18 deselected; four gallery modes plus
+  default/larger Plan scenarios. Gallery checks toggle all requested semantic
+  icons/colors without moving field bounds, and exercise planning/error/ready
+  progress. Existing selection/navigation/layout checks remain green.
+- Independent read-only adversarial review and final diff checks passed.
+
+The first broad attempt used a repository-local temp root refused by the
+custody harness; rerun used the external evidence root. The next attempt found
+the stale Plan-again trace anchor; final broad checks pass after its migration.
+A final unknown-note guard initially used a newer JS API; the compatible
+own-property equivalent passed all 50 frontend checks. That equivalent lookup
+was the only production change after the installed wheel had been built; it
+does not change layout or state behavior.
 
 Evidence root:
 C:/Users/Spectrum/.codex/visualizations/2026/09/18/01a0b2ed-22b3-7083-a3e1-21f00596391d/.
-Final native evidence: gui-m2-headed-final; sequential packaging: gui-m2-wheel;
-final ordinary neighborhood: gui-m2-neighborhood-final. Focused projection/
-adapter evidence is build/pytest-gui-m2-reviewed; complete fixture checks are
-build/pytest-gui-m2-scale-final2.
+Broad checks: gui-n-departments-final; installed checks: gui-n-headed.
+Final frontend: build/pytest-gui-n-frontend-compat.
+Restart the development app to reload packaged frontend assets.
+
+Earlier GUI-M2 recovery af02913 on recovery/gui-m2-folder-totals-20260919 and
+temporary stash 93414b7 remain historical, not merge units. Their useful changes
+were rebuilt and integrated in 7cf4448; no recovery work is pending here.

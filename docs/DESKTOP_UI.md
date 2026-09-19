@@ -1254,6 +1254,10 @@ with exact 24-CSS-pixel rows and matching leading/trailing spacer offsets; the
 generic `tree.js` renderer keeps its separate 28-pixel contract. A Plan card
 shows the switcher at left, frozen source/target paths in two middle rows and
 Verify on/off and Trash/Additive in two lines aligned with the paths at right.
+These fixed-width semantic fields reserve their icon and label slots: Verify on
+uses accent `arrow-sync-checkmark`, Verify off uses muted `arrow-sync`, Trash
+uses muted `delete`, and Additive uses accent `document-add`. Text remains visible;
+the decorative icons use the pinned Microsoft Fluent assets, not substitute glyphs.
 A Status card shows selected/byte/planning-issue facts and execution controls;
 one table card owns search, toggle-button filters and the grid, without a footer.
 Status and table cards use a 16 px top inset. The status
@@ -1278,6 +1282,10 @@ The progress track follows Microsoft's
 [ProgressBar resources](https://github.com/microsoft/microsoft-ui-xaml/blob/main/controls/dev/ProgressBar/ProgressBar_themeresources.xaml):
 `ControlStrongStrokeColorDefault`, a translucent neutral stroke over the card,
 not opacity on the whole control. Forced colors retain the Canvas track.
+Dispatched planning and loading its completed review use indeterminate progress
+in the shared task digest and loading status card; no scan percentage is invented.
+Pre-admission folder checks and ready, unexecuted plans remain idle. Errors stop
+planning animation, and execution retains its existing progress authority.
 The production Plan grid orders Select, Name, Action, Checksum (empty), Size,
 Modified and Notes; Checksum and Modified share their default width. The
 gallery shares that column order. Dependency counts and `Risk: none` are omitted
@@ -1295,6 +1303,27 @@ ascending, descending, canonical path order with catalog chevrons; a different
 header starts ascending. Sort buttons fill the padded header cell, with the
 active chevron aligned right. Status and row
 byte labels use binary units, while sort keys remain raw backend facts.
+
+Plan action/filter labels use sentence case and friendly names without changing
+canonical transport keys: `noop` is **No change**, `mkdir` is **Create folder**,
+`recase` is **Change name casing**, `move_update` is **Move + update**, `trash`
+is **Move to trash**, and `delete` is **Delete permanently**. Group filters retain
+All, Copy, Move, Update, Remove and Error; menus retain individual counters.
+The Notes policy is explicit and fail-visible:
+
+| Input | Display policy |
+| --- | --- |
+| Operation reason `source_only`, `metadata_match`, `identity_rename`, `required_directory`, `empty_directory` | Hide only when risk is `none` and there is no blocker or selection exclusion; action/hierarchy already conveys the low-risk explanation. |
+| Those same reasons on risky/blocked/excluded rows | Show the friendly explanation. |
+| `metadata_changed`, `identity_rename_changed`, `target_only`, `directory_cleanup` | Show changed-file, removal or cleanup context. |
+| Case, Unicode, type, policy and destination conflicts; unsupported and blocked reasons | Show friendly explanation. |
+| Selection exclusions, including incomplete scan and deselection | Show; never apply the operation-reason hiding list to them. |
+| Move peer / prior-location rows | Keep paired-move / previous-location context and the prior-path hierarchy. |
+| Non-neutral risk, free-form notices, partial/overflow totals | Show unchanged. |
+| Any unrecognized or future reason/notice | Show verbatim as inert text; hiding never follows a broad pattern. |
+
+Known reason-code labels are translated only at rendering; backend facts, search,
+selection, filter membership and execution authority remain unchanged.
 
 Row highlighting is distinct from execution selection. Pointer and keyboard
 gestures replace, toggle, extend, or add ranges in the complete server-owned
