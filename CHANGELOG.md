@@ -24,10 +24,28 @@ Stage 6 delivered the secured desktop host, command/event transport, design
 foundation with a fixed local Fluent icon vocabulary, bounded presentation core, process-live task navigation and closure,
 bounded asynchronous task commands, frozen Setup using shared location admission
 and remembered locations, bounded Plan review/selection/sorting and same-task
-execution with live controls. Execution-result/inventory review and beta
+execution with live controls and bounded live/retained result review. Inventory review and beta
 packaging remain open.
 
-#### Deliver execution review and capacity stopping (2026-09-20)
+#### Deliver execution review and capacity stopping (2026-09-20 – 2026-09-23)
+
+- Complete R0 as one reviewed commit reconstructed on P2, preserving recovery
+  ancestry separately. Stop for GUI review; R1–R3 and integration remain pending.
+- Share the Plan/live/terminal status card, with Details beside the status line,
+  row-driven planned/retained item facts, persistent collapse, safe focus and
+  local terminal completion/elapsed time from the matching session record.
+- Restore bounded follow/manual navigation, phase-aware progress and large-rate
+  display; retain exact byte values, separate result axes and stale-reply fences.
+  Keep the table usable at the unchanged native minimum with a 208px reserve.
+- Align capacity validators to the documented fill badge and migrate coupled
+  GUI witnesses to real visible content, native geometry and row interactions.
+  Preserve exact source/staging/wheel/install identity and failure diagnostics.
+  Ordinary suite, all 12 import contracts, all 33 installed headed tests,
+  required PNG inspection and independent review pass; evidence is in HANDOFF.
+- Diagnose the Node memory incident as unbounded cyclic mock-DOM assertion
+  formatting. Boolean identity diagnostics and task-local Windows Job limits
+  contain reruns; preserve the incident evidence without claiming a product
+  memory guarantee. Theme/contrast and filter/Search work remain deferred.
 
 - Condense completed Plan GUI registers into delivery/owner/commit pointers,
   retaining unresolved limits and evidence provenance.
@@ -54,7 +72,19 @@ packaging remain open.
 - Validate the affected installed receipt paths with a separate frozen report:
   window p95/max 6.8/7.3 ms and execution-start 58.8/65.1 ms, within unchanged
   100/250 ms budgets. Preserve all 12 attempts and source/runtime provenance.
-  The temporary environment pause is resolved; GUI consumption remains pending.
+  The temporary environment pause is resolved.
+- Present live and retained execution facts in the existing Plan window, with
+  separate automatic verification and current stored evidence, persistent Gap
+  diagnostics, terminal result axes and one explicitly requested operation detail.
+  Keep missing facts unknown and successful zero-byte work distinct from unrun.
+- Coalesce selected-window refreshes, refresh retained facts on release, and
+  retire stale detail across task, revision and Settings navigation. Bound long
+  diagnostics in independently scrollable regions while keeping table and
+  keyboard controls usable.
+- Show recognized capacity failures in yellow on the affected row and run
+  status, preserving literal failure and independent verification/recording
+  facts. Successful verification of earlier files does not hide the capacity
+  cause, and stale window counts cannot override a newer terminal result.
 
 #### Refine Plan density, readiness and row highlighting (2026-09-17 – 2026-09-20)
 

@@ -44,11 +44,12 @@ async function waitUntil(predicate, context) {
 const timers = new Map();
 const scheduledDelays = [];
 let nextTimer = 1;
+let holdLocalTimeout = false;
 globalThis.setTimeout = (callback, milliseconds) => {
   const token = nextTimer;
   nextTimer += 1;
   timers.set(token, callback);
-  if (milliseconds !== 30000) {
+  if (milliseconds !== 30000 && !(holdLocalTimeout && milliseconds === 5000)) {
     scheduledDelays.push(milliseconds);
     queueMicrotask(() => {
       if (timers.delete(token)) {
@@ -283,6 +284,39 @@ async function nextRequest(index) {
   assert.match(pending.request.payload.drain_id, /^[0-9a-f]{32}$/);
   return pending;
 }
+
+const operationAnchorIndex = requests.length;
+holdLocalTimeout = true;
+const operationAnchorPromise = bridge.getPlanOperationAnchor(
+  task("a"), session("b"), 7, "c".repeat(32),
+);
+await waitUntil(
+  () => requests.length > operationAnchorIndex,
+  "operation anchor request was not dispatched",
+);
+holdLocalTimeout = false;
+const operationAnchorRequest = requests[operationAnchorIndex];
+assert.equal(operationAnchorRequest.request.command, "get_plan_anchor");
+assert.deepEqual(operationAnchorRequest.request.payload, {
+  task_id: task("a"),
+  session_id: session("b"),
+  expected_revision: 7,
+  operation_id: "c".repeat(32),
+});
+operationAnchorRequest.resolve({
+  schema_version: 1,
+  request_id: operationAnchorRequest.request.request_id,
+  ok: true,
+  result: {
+    disposition: "current", view_revision: 7,
+    node_id: `node-${"d".repeat(32)}`, index: 41,
+  },
+});
+assert.deepEqual(await operationAnchorPromise, {
+  disposition: "current", view_revision: 7,
+  node_id: `node-${"d".repeat(32)}`, index: 41,
+});
+requests.splice(operationAnchorIndex, 1);
 
 // Numeric holes are legal, and bridge reincarnation recovers from the first
 // sequence after the last accepted event. A matching leading Gap remains
@@ -674,11 +708,13 @@ const executingState = acceptedReducer.at(-1).progressState;
 assert.ok(Object.isFrozen(executingState));
 assert.ok(Object.isFrozen(executingState.progress));
 assert.ok(Object.isFrozen(executingState.activeItem));
+assert.equal(executingState.progressAt, at);
 assert.deepEqual(Object.keys(executingState).sort(), [
   "activeItem",
   "phase",
   "phaseAuthority",
   "progress",
+  "progressAt",
 ]);
 assert.equal(executingState.phase, "execute");
 assert.equal(executingState.phaseAuthority, "phase_changed");
@@ -898,6 +934,7 @@ for (const { progressState } of acceptedReducer.slice(-2)) {
     phase: null,
     phaseAuthority: "unknown",
     progress: null,
+    progressAt: null,
     activeItem: null,
   });
 }
@@ -1117,6 +1154,7 @@ assert.deepEqual(acceptedGapProgress.at(-1).progressState, {
   phase: null,
   phaseAuthority: "unknown",
   progress: null,
+  progressAt: null,
   activeItem: null,
 });
 success(gapProgressRecovery, [
@@ -1620,6 +1658,7 @@ for (const progressState of terminalCallbackProgressStates) {
     phase: null,
     phaseAuthority: "unknown",
     progress: null,
+    progressAt: null,
     activeItem: null,
   });
 }

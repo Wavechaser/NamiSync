@@ -348,6 +348,33 @@ def test_plan_selection_scope_includes_off_window_matches() -> None:
     assert f"{total - 1:032x}" in scope
 
 
+def test_operation_anchor_resolves_collapsed_sorted_and_excluded_views() -> None:
+    state = PlanReviewState("task-" + "1" * 32, "a" * 32, _projection(),
+                            0, "reviewing", "source", "target")
+    assert state.operation_anchor(expected_revision=0, operation_id="1" * 32) == {
+        "disposition": "current", "view_revision": 0, "node_id": "copy", "index": 2,
+    }
+    before_selection = state.summary()["selection_revision"]
+    state.update(expected_revision=0, search_query="", filters=frozenset(),
+                 sort_column=PlanSortColumn.SIZE, sort_direction=SortDirection.DESCENDING,
+                 collapse_node_id="folder", collapsed=True)
+    assert state.operation_anchor(expected_revision=1, operation_id="1" * 32) == (
+        state.anchor(expected_revision=1, node_id="folder")
+    )
+    assert state.operation_anchor(expected_revision=0, operation_id="1" * 32) == {
+        "disposition": "conflict", "view_revision": 1, "node_id": None, "index": None,
+    }
+    state.update(expected_revision=1, search_query="no matches", filters=frozenset(),
+                 sort_column=PlanSortColumn.PATH, sort_direction=SortDirection.ASCENDING,
+                 collapse_node_id=None, collapsed=None)
+    assert state.operation_anchor(expected_revision=2, operation_id="1" * 32) == {
+        "disposition": "current", "view_revision": 2, "node_id": None, "index": None,
+    }
+    with pytest.raises(ValueError, match="operation id is unknown"):
+        state.operation_anchor(expected_revision=2, operation_id="f" * 32)
+    assert state.summary()["selection_revision"] == before_selection
+
+
 def test_plan_rootless_window_offsets_and_anchor_preserve_children() -> None:
     state = PlanReviewState("task-" + "1" * 32, "a" * 32, _projection(),
                             0, "reviewing", "source", "target")

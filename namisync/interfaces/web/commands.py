@@ -264,6 +264,8 @@ class TaskAuthority(Protocol):
 
     def get_plan_anchor(self, *args, **kwargs) -> dict[str, object]: ...
 
+    def get_plan_operation_anchor(self, *args, **kwargs) -> dict[str, object]: ...
+
     def mutate_plan_selection(self, *args, **kwargs) -> dict[str, object]: ...
 
     def mutate_plan_scope(self, *args, **kwargs) -> dict[str, object]: ...
@@ -506,6 +508,14 @@ class _PlanAnchorPayload:
     task_id: str
     expected_revision: int
     node_id: str
+
+
+@dataclass(frozen=True, slots=True)
+class _PlanOperationAnchorPayload:
+    task_id: str
+    session_id: str
+    expected_revision: int
+    operation_id: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -964,6 +974,13 @@ def production_command_specs(
         )
 
     def get_plan_anchor(payload: object) -> object:
+        if type(payload) is _PlanOperationAnchorPayload:
+            return registry.get_plan_operation_anchor(
+                payload.task_id,
+                session_id=payload.session_id,
+                expected_revision=payload.expected_revision,
+                operation_id=payload.operation_id,
+            )
         if type(payload) is not _PlanAnchorPayload:
             raise TypeError("get_plan_anchor received an unvalidated payload")
         return registry.get_plan_anchor(
@@ -1732,7 +1749,25 @@ def _validate_execution_detail(value: object) -> _ExecutionDetailPayload:
     return _ExecutionDetailPayload(task_id, operation_id, expected_revision)
 
 
-def _validate_plan_anchor(value: object) -> _PlanAnchorPayload:
+def _validate_plan_anchor(value: object) -> _PlanAnchorPayload | _PlanOperationAnchorPayload:
+    if type(value) is dict and set(value) == {
+        "task_id", "session_id", "expected_revision", "operation_id"
+    }:
+        if (
+            type(value["task_id"]) is not str
+            or _TASK_ID.fullmatch(value["task_id"]) is None
+            or not _is_javascript_safe_integer(value["expected_revision"])
+            or value["expected_revision"] < 0
+            or type(value["session_id"]) is not str
+            or _OPAQUE_ID.fullmatch(value["session_id"]) is None
+            or type(value["operation_id"]) is not str
+            or _OPAQUE_ID.fullmatch(value["operation_id"]) is None
+        ):
+            raise CommandPayloadError("get_plan_anchor payload is invalid")
+        return _PlanOperationAnchorPayload(
+            value["task_id"], value["session_id"],
+            value["expected_revision"], value["operation_id"],
+        )
     if type(value) is not dict or set(value) != {
         "task_id", "expected_revision", "node_id"
     }:

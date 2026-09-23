@@ -36,6 +36,19 @@ from _plan_again_trace import (
 _CHILD = Path(__file__).with_name("_task_shell_headed_child.py")
 
 
+def _task_shell_evidence_paths(root: Path) -> tuple[Path, Path]:
+    confirmation = require_absolute_local_test_root(root / "execution-confirmation.png")
+    return confirmation, confirmation.with_name("execution-confirmation-driver.json")
+
+
+def test_task_shell_scenarios_own_disjoint_evidence_paths(tmp_path: Path) -> None:
+    default = _task_shell_evidence_paths((tmp_path / "default" / "evidence").resolve())
+    larger = _task_shell_evidence_paths((tmp_path / "larger" / "evidence").resolve())
+    assert set(default).isdisjoint(larger)
+    assert default[0].name == larger[0].name == "execution-confirmation.png"
+    assert default[1].name == larger[1].name == "execution-confirmation-driver.json"
+
+
 def test_task_shell_child_preserves_the_production_stack_and_bounded_seams() -> None:
     source = _CHILD.read_text(encoding="utf-8")
     launch = inspect.getsource(_run_task_shell_scenario)
@@ -117,6 +130,8 @@ def test_task_shell_failure_records_do_not_expose_private_text(tmp_path: Path) -
         "execute_disabled": False,
         "execute_focused": True,
         "execute_hidden": False,
+        "live_service_state": "running", "review_pending": "",
+        "pause_disabled": False, "pause_hidden": False, "resume_hidden": True, "controls_hidden": False,
         "last_driver_step": "wait_cancel",
         "last_method": "Runtime.evaluate",
         "page_confirmation_stage": "execute-ready",
@@ -126,12 +141,19 @@ def test_task_shell_failure_records_do_not_expose_private_text(tmp_path: Path) -
         "trusted_click_count": 0,
         "trusted_keydown_count": 1,
         "trusted_keyup_count": 1,
+        "browser_async_error": {"type": "TypeError", "line": 1608},
     }
     child._write_driver_diagnostic(diagnostic_path, diagnostic)
     persisted = json.loads(diagnostic_path.read_text(encoding="utf-8"))
     assert set(persisted) == child._DRIVER_DIAGNOSTIC_KEYS
     assert persisted == diagnostic
     assert "private" not in diagnostic_path.read_text(encoding="utf-8").casefold()
+    assert child._sanitized_browser_error(
+        {"type": "TypeError", "line": 1608, "stack": r"C:\private\sentinel"}
+    ) is None
+    assert child._sanitized_browser_error({"type": "TypeError", "line": 1608}) == {
+        "type": "TypeError", "line": 1608,
+    }
 
 
 @pytest.mark.headed
@@ -280,6 +302,8 @@ def test_m1_4_installed_task_shell_navigation_closure_and_recovery(
     assert plan_review["refused"]["committed"] is True
     assert plan_review["refused"]["unrun"] is True
     assert plan_review["refused"]["message"]
+    assert plan_review["refused"]["executionHeader"] == "Execution did not start"
+    assert "Disposition: Unrun" in plan_review["refused"]["executionAxes"]
     assert plan_review["planAgainChangedSource"] is True
     assert plan_review["planAgainChangedTarget"] is True
     assert plan_review["capacitySlot"] == {
@@ -292,9 +316,14 @@ def test_m1_4_installed_task_shell_navigation_closure_and_recovery(
         "countAfterPlanAgain": 48,
         "newTaskTitle": "Task 49",
     }
+    assert plan_review["followNavigation"] == {
+        "automaticMoved": True, "nativeOverride": True, "goStayedManual": True,
+        "explicitEnable": True, "focusPreserved": True, "selectionPreserved": True,
+    }
     assert plan_review["paused"] is True
     assert plan_review["resumed"] is True
     assert plan_review["canceled"] is True
+    assert "Filesystem: Canceled" in plan_review["canceledExecutionHeader"]
     assert plan_review["emptyPlanMessage"] is True
     assert plan_review["emptyPlanGeometry"] == {
         "documentFitsViewport": True,
@@ -322,13 +351,10 @@ def _run_task_shell_scenario(
     evidence_root = require_absolute_local_test_root(root / "evidence")
     source = require_absolute_local_test_root(root / "source")
     target = require_absolute_local_test_root(root / "target")
-    screenshot = require_absolute_local_test_root(
-        Path(__file__).resolve().parents[3]
-        / "build" / "evidence" / "execution-confirmation.png"
-    )
+    screenshot, driver_diagnostic = _task_shell_evidence_paths(evidence_root)
     screenshot.parent.mkdir(parents=True, exist_ok=True)
     screenshot.unlink(missing_ok=True)
-    screenshot.with_name("execution-confirmation-driver.json").unlink(missing_ok=True)
+    driver_diagnostic.unlink(missing_ok=True)
     for directory in (root, data_root, evidence_root, source, target):
         directory.mkdir(parents=True, exist_ok=True)
     paths = EvidencePaths(evidence_root)
@@ -412,3 +438,36 @@ def _run_task_shell_scenario(
     }
     assert screenshot.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
     return initial
+
+
+@pytest.mark.parametrize("checkpoint", ["plan_surface", "plan_offset", "plan_ack"])
+def test_driver_failure_reports_actual_checkpoint(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, checkpoint: str,
+) -> None:
+    from types import SimpleNamespace
+    import sys
+
+    monkeypatch.setitem(sys.modules, "System", SimpleNamespace(Action=lambda fn: fn))
+    transport = SimpleNamespace(evaluate=lambda *_args: None)
+    monkeypatch.setattr(child, "NativeCdp", lambda *_args: transport)
+
+    def unavailable(*_args):
+        raise RuntimeError("diagnostic transport unavailable")
+
+    paths = EvidencePaths(tmp_path.resolve())
+    recorder = child._Recorder(paths)
+    control = SimpleNamespace(checkpoint=checkpoint, diagnostic_status=lambda: {})
+    fail = child._drive_plan_confirmation(
+        object(), SimpleNamespace(CallDevToolsProtocolMethodAsync=unavailable),
+        recorder, control, [], tmp_path / "capture.png",
+    )
+    fail(RuntimeError("private diagnostic must remain hidden"))
+    control.checkpoint = "plan_execute"
+    fail(ValueError("later timeout must not replace first failure"))
+    assert EvidenceReader(paths).read_failure() == {
+        "failure": {"stage": f"page_plan_review_{checkpoint}", "type": "RuntimeError"},
+    }
+    diagnostic = json.loads((tmp_path / "execution-confirmation-driver.json").read_text())
+    assert diagnostic["actual_control_checkpoint"] == checkpoint
+    assert diagnostic["last_driver_step"] == "wait_execute"
+    assert "private" not in json.dumps(diagnostic)

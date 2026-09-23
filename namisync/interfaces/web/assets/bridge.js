@@ -843,6 +843,34 @@ export async function getPlanAnchor(taskId, expectedRevision, nodeId) {
   return submit();
 }
 
+export async function getPlanOperationAnchor(
+  taskId, sessionId, expectedRevision, operationId,
+) {
+  requireTaskId(taskId, "getPlanOperationAnchor");
+  if (typeof sessionId !== "string" || !ID_PATTERN.test(sessionId)
+      || !isNonnegativeInteger(expectedRevision)
+      || typeof operationId !== "string" || !ID_PATTERN.test(operationId)) {
+    throw new TypeError(
+      "getPlanOperationAnchor requires exact session, revision, and operation identities",
+    );
+  }
+  const payload = Object.freeze({
+    task_id: taskId,
+    session_id: sessionId,
+    expected_revision: expectedRevision,
+    operation_id: operationId,
+  });
+  const submit = () => dispatchAttempt(
+    "get_plan_anchor", payload, validatePlanAnchor, PLAN_VIEW_TIMEOUT_MS,
+  );
+  try {
+    return await submit();
+  } catch (error) {
+    if (!(error instanceof BridgeTransportError)) throw error;
+  }
+  return submit();
+}
+
 export function mutatePlanSelection(
   taskId, expectedViewRevision, expectedSelectionRevision, nodeId, selected,
 ) {
@@ -2304,6 +2332,7 @@ function emptyProgressReducerState() {
     phase: null,
     phaseAuthority: "unknown",
     progress: null,
+    progressAt: null,
     activeItem: null,
   });
 }
@@ -2313,6 +2342,7 @@ function progressStateView(state) {
     phase: state.phase,
     phaseAuthority: state.phaseAuthority,
     progress: cloneJsonValue(state.progress),
+    progressAt: state.progressAt,
     activeItem: cloneJsonValue(state.activeItem),
   });
 }
@@ -2385,7 +2415,7 @@ function sameAttemptAdvances(previous, current) {
   );
 }
 
-function reduceProgressSnapshot(state, progress) {
+function reduceProgressSnapshot(state, progress, progressAt) {
   let domainState = state;
   if (
     state.phase !== null &&
@@ -2449,6 +2479,7 @@ function reduceProgressSnapshot(state, progress) {
         ? "phase_changed"
         : "progress",
     progress: cloneJsonValue(progress),
+    progressAt,
     activeItem: nextActive,
   });
 }
@@ -2479,6 +2510,7 @@ function reduceItemOutcome(state, event) {
     phase: state.phase,
     phaseAuthority: state.phaseAuthority,
     progress: state.progress,
+    progressAt: state.progressAt,
     activeItem: null,
   });
 }
@@ -2495,6 +2527,7 @@ function reduceProgressState(state, update) {
           phase: state.phase,
           phaseAuthority: "phase_changed",
           progress: state.progress,
+          progressAt: state.progressAt,
           activeItem: state.activeItem,
         });
       }
@@ -2502,10 +2535,11 @@ function reduceProgressState(state, update) {
         phase: event.body.phase,
         phaseAuthority: "phase_changed",
         progress: null,
+        progressAt: null,
         activeItem: null,
       });
     case "Progress":
-      return reduceProgressSnapshot(state, event.body);
+      return reduceProgressSnapshot(state, event.body, event.at);
     case "ItemOutcome":
     case "IntegrityOutcome":
       return reduceItemOutcome(state, event);
@@ -3020,7 +3054,7 @@ function validatePlanViewSummary(value) {
 function validateExecutionSummary(value) {
   if (!isExactObject(value, [
     "execution_revision", "session_id", "result", "failed_operation_count",
-    "disk_capacity_failure_count", "gap", "trash_location",
+    "disk_capacity_failure_count", "gap", "trash_location", "started_at", "ended_at",
   ]) || !isNonnegativeInteger(value.execution_revision)
       || !(value.session_id === null
         || (typeof value.session_id === "string" && ID_PATTERN.test(value.session_id)))) {
@@ -3029,12 +3063,16 @@ function validateExecutionSummary(value) {
   const terminalAbsent = value.result === null
     && value.failed_operation_count === null
     && value.disk_capacity_failure_count === null
-    && value.trash_location === null;
+    && value.trash_location === null
+    && value.started_at === null
+    && value.ended_at === null;
   const terminalPresent = validateOperationResultView(value.result)
     && isNonnegativeInteger(value.failed_operation_count)
     && isNonnegativeInteger(value.disk_capacity_failure_count)
     && value.disk_capacity_failure_count <= value.failed_operation_count
-    && isBoundedPath(value.trash_location);
+    && isBoundedPath(value.trash_location)
+    && (value.started_at === null || isUtcTimestamp(value.started_at))
+    && isUtcTimestamp(value.ended_at);
   return (terminalAbsent || terminalPresent)
     && (value.session_id !== null || terminalAbsent)
     && (value.gap === null || (

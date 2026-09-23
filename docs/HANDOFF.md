@@ -1,69 +1,68 @@
-# Latest session handoff
+# Latest session — M1-8-R0 complete; stop for GUI review
 
-## M1-8 P2 measured candidate; UI next (2026-09-20)
+R0 is complete on `codex/m1-8-r0-ready` in
+`F:/GitHubRepositories/NamiSync/build/m1-8-r0`. Its coherent commit is parented
+on verified P2 `4bbf943`; `build/r0-layout-20260923-01/delivery.json` records
+commit and evidence identity. No recovery ancestry is integrated. Stop here for
+the user's GUI review. R1–R3, performance acceptance, milestone integration,
+filter/Search overflow, theme remediation, push and PR remain pending.
 
-User scope: M1-8-capacity and M1-8, then stop for recap/GUI tweaks. The latest
-instruction keeps remaining P2 and U work on `codex/wip-20260920-0526-m1-8-p2`,
-then merges verified outcome commits into `milestone1` without squashing.
-No push, PR, DOC-2, M1-9 or release. Original clean baseline `2cc0083`;
-delivered `42ff8f2` GUI condensation/register, `04947ba` capacity stopping,
-`7905a1b` current evidence and `055325b` retained review.
+## Delivered
 
-Original recovery `015e782a3706658685a5c4101d1f8c57d89d942e` is also protected by
-`codex/recovery-m1-8-p2-original-015e782`. Finalize that single pending P2 recovery
-commit only after final review, then add separate U commits. No unverified WIP
-may enter integration ancestry. Preserve both task refs until accounting/merge.
-Existing unrelated GUI recovery `af02913` and stash `93414b7` stay untouched;
-no task worktree or unrelated dirty work was absorbed.
+- A shared Plan/live/terminal status card with title/action together, Details
+  beside the status line, diagnostics and an always-present item pane above
+  progress. Highlight/range focus drives planned or retained facts; explicit
+  collapse and safe keyboard focus persist. No per-row Details/Close buttons.
+- Truthful phase/progress and terminal status, local completion and valid elapsed
+  time from matching retained session records; independent verification and
+  recording outcomes remain separate. Large rates preserve exact byte handling.
+- Bounded follow/manual navigation, stale reply fencing and one focused detail;
+  automatic same-target progress does not reset scrolling. The existing 208px
+  table reserve preserves usable 24px rows at native minimum 1024×640.
+- Capacity badge validators agree on yellow/fill. Coupled native witnesses now
+  measure visible facts, actual text, usable content and native host dimensions;
+  exact report schemas and positive/negative controls remain enforced.
 
-P2 implements bounded summary/window execution overlays, separate compact live
-operation/automatic-verification maps, retained evidence, visible Gap extrema
-and exact one-operation detail. Plan hierarchy/order/selection stay unchanged.
-Current candidate has functional gates, source/control review and scoped timing
-validation; final evidence review and full postcommit binding close P2 before U.
+## Final verification
 
-Evidence under ignored build:
+Evidence root: `build/r0-layout-20260923-01/` in the candidate checkout.
 
-- `m1-8-p2-ordinary-01.log`: 5263 passed, five existing skips, 31 headed
-  deselections; neighborhood log: 2564 passed, one existing optional skip.
-- `m1-8-p2-headed-01.log`: 27 passed/four stale catalog failures. Corrected
-  eight literal sites/four consumers; `headed-02.log`: all four passed on a
-  fresh installed wheel with downstream security checks intact. Product unchanged.
-- 28 focused catalog tests; `m1-8-p2-controls-final.log`: 41 controls/department
-  tests passed (benign pytest cache warning); 12 import contracts, 53 doc links.
-- `m1-8-p2/run-01`: all 12 planned attempts completed, zero failures. Window
-  receipt p95/max 6.8/7.3 ms; execution-start 58.8/65.1 ms. Each has five fresh
-  children times six samples, unchanged 100/250 ms budgets. Two readiness
-  children preceded them. Collection index, child receipts/logs and separate
-  result validation remain. Raw SHA256:
-  `24d3a32f30d01844b775f849ced3d52371268af5d42e0491063d367a762ff57e`.
-- Full unmocked historical and supplemental workspace checks passed before and
-  after collection. Three named `m1_8_execution_receipt_{authority,receipts,result}.json`
-  artifacts were promoted byte-for-byte under tests/interfaces/web for review.
+- `ordinary-04`: 5,321 passed, five skipped, 33 headed deselected (301.70s).
+- `imports.txt`: all 12 import contracts pass; production Python imports unchanged.
+- `full-headed-03`: all 33 installed interface-headed tests pass under an 8 GiB
+  Windows Job cap. `native-03/manifest.json` preserves reports, wheels and PNGs.
+- Frozen v4 binds final source/tests; source, staging, wheel and installed package
+  identity are verified. Both short default/larger, both legacy confirmation and
+  native-minimum all-facts PNGs were inspected. Final independent P2-delta source
+  and evidence review passed; documentation links and diff checks pass.
 
-Arbiter task `01a0ba9c-b187-70f1-bf21-4f91e742eeaf` remains authoritative.
-A8-09's environment pause was lifted after the user closed the identified apps
-and observation-04 confirmed the sustained load absent. No profile/budget was
-changed; earlier observations remain. A8-10 authorizes only newline conversion
-reconciliation: `m1-8-p2-newline-proof.json` proves exact reviewed Git identities
-and normalized bytes for all 22 non-register candidate files. Product members
-were recovered from the retained wheel on exact candidate-02 SHA matches;
-adapter/checker/control physical bytes also match that reviewed candidate.
-Fresh authority binds all final physical bytes. Candidate-02/03 manifests,
-patches and exact candidate-03 backup ZIP remain in build.
+## Open observations for GUI review
 
-Retained gate installation: `%TEMP%/namisync-m1-8-p2-headed-02/`, wheel
-`wheel0/namisync-0.1.0-py3-none-any.whl`, installed root
-`headed-installed-wheel0/venv/Lib/site-packages`. Escalated tools are required
-for access. After the finalized P2 commit run project Python with
-`build/m1-8-p2-terminal-validate.py --installed-root <that installed root>
---installed-wheel <that wheel>`. It invokes full workspace, raw/result and named
-artifact/source clean-HEAD validation unmocked. A failure leaves P2 incomplete.
+Known theme/contrast concerns remain visible in native captures and were excluded
+from this checkpoint. Filter/Search overflow work remains deferred. One earlier
+short larger-window run failed its pre-click focus-or-hit guard before execution;
+the single bounded diagnostic and final full gate passed unchanged input checks.
+The failed guard's exact operand was not retained, so its cause remains unknown.
+Keep the failed receipt and diagnostic for any recurrence; no speculative fix or
+weakened input assertion was introduced.
 
-Fresh P2 reviewer runs in the arbiter's tree (A8-04); root allocation is blocked.
-U is still read-only: `build/m1-8-u-study.md` and assignment draft. A8-08 approves
-advance elaboration of separate 13-case/78-attempt installed evidence with
-unchanged cold/warm budgets and controlled rootless selection-script adaptation.
-Refresh against exact finalized P2, record finite UI/evidence population, then
-request fresh GPT-5.6 builder/reviewer via arbiter. Root owns shared docs, gates,
-commits and final non-squash integration. No UI implementation before P2 closure.
+## Preservation and resumption
+
+- Original checkout remains clean on `codex/m1-8-r0` at `4bbf943`; milestone1
+  remains `055325b`. Protected stash `93414b7...`, unrelated `af02913`, recovery
+  `8b2a0fb` and `6ada8ca`, old U/UV2/P2 evidence and `build/m1-8-uv1-parent`
+  remain untouched. No branch/worktree/evidence cleanup occurred.
+- Incoming user HANDOFF is preserved as `user-handoff.md`; detailed task decisions
+  and finite populations as `plan-before-final-closeout.md`. The user explicitly
+  approved RC1–RC4 corrections; subsequent changes completed the already declared
+  layout/fixture migration, with independent review.
+- `ordinary-01` aborted, `ordinary-02` and `full-headed-01/02` failed; these are
+  historical evidence, not acceptance. `short-diagnostic/` preserves the single
+  actual diagnostic; its first helper attempt failed before launching the child.
+- Memory incident cause/control: `build/r0-focused-01/MEMORY_INCIDENT.md`.
+  Cyclic mock-DOM assertion formatting caused the allocation blow-up. Keep the
+  boolean diagnostics and capped launcher; never rerun the old probe unrestricted.
+  Task-local process caps are not a product memory guarantee.
+
+Resume only the user-approved GUI adjustments or next checkpoint. R1/R2/R3 are
+not implicitly authorized by R0 closure, and the ready commit is not merged.

@@ -465,11 +465,19 @@ HEX_LITERAL = re.compile(r"#[0-9A-Fa-f]{3,8}\b")
 RAW_COLOR = re.compile(
     r"#[0-9A-Fa-f]{3,8}\b|"
     r"\b(?:rgb|rgba|hsl|hsla|hwb|lab|lch|oklab|oklch|color|device-cmyk|"
-    r"light-dark|color-mix)\s*\(|"
-    r"(?<![-\w])(?:transparent|Canvas|CanvasText|ButtonFace|ButtonText|"
-    r"ButtonBorder|GrayText|Highlight|HighlightText|AccentColor|"
-    r"AccentColorText)(?![-\w])",
+    r"light-dark|color-mix)\s*\(",
     re.IGNORECASE,
+)
+SYSTEM_COLOR = (
+    r"(?:transparent|Canvas|CanvasText|ButtonFace|ButtonText|ButtonBorder|"
+    r"GrayText|Highlight|HighlightText|AccentColor|AccentColorText)"
+)
+SYSTEM_COLOR_LITERAL = re.compile(
+    rf'(["\'`]){SYSTEM_COLOR}\1', re.IGNORECASE
+)
+SYSTEM_COLOR_TOKEN = re.compile(rf"(?<![-\w]){SYSTEM_COLOR}(?![-\w])", re.IGNORECASE)
+BACKGROUND_IMAGE = re.compile(
+    r"(?is)(?:^|[;{])\s*background-image\s*:\s*([^;}]+)"
 )
 COLOR_DECLARATION = re.compile(
     r"(?is)(?:^|[;{])\s*(?:color|background(?:-color)?|"
@@ -576,9 +584,16 @@ def _has_raw_color(source: str) -> bool:
             for layer in value.split(",")
         )
 
-    if RAW_COLOR.search(source) is not None or any(
+    if RAW_COLOR.search(source) is not None or SYSTEM_COLOR_LITERAL.search(source) is not None:
+        return True
+    if any(
         not allowed_color_value(match.group(1))
         for match in COLOR_DECLARATION.finditer(source)
+    ):
+        return True
+    if any(
+        "gradient(" in value.lower() and SYSTEM_COLOR_TOKEN.search(value) is not None
+        for value in BACKGROUND_IMAGE.findall(source)
     ):
         return True
     return any(
@@ -1000,6 +1015,10 @@ def test_sh_g_11_raw_color_scanner_catches_literal_and_mixed_css_escapes() -> No
         ".x { color: light-dark(red, blue); }",
         ".x { fill: device-cmyk(0 1 1 0); }",
         ".x { --surface-color: red; color: var(--surface-color); }",
+        '.x { color: Highlight; }',
+        'const color = "Highlight";',
+        'const color = `Highlight`;',
+        '.x { background-image: linear-gradient(var(--safe), Highlight); }',
     ):
         assert _has_raw_color(mutation), mutation
     for allowed in (
@@ -1009,6 +1028,8 @@ def test_sh_g_11_raw_color_scanner_catches_literal_and_mixed_css_escapes() -> No
         ".x { box-shadow: 0 0 0 2px var(--color-focus-ring); }",
         ".x { box-shadow: 0 0 0 1px var(--color-focus-inner), "
         "0 0 0 3px var(--color-focus-ring); }",
+        'const message = "Highlight an item to see details";',
+        '.x { background-image: url("./Highlight.png"); }',
     ):
         assert not _has_raw_color(allowed), allowed
 

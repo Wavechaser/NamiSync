@@ -573,6 +573,13 @@ class TaskRegistry:
     @staticmethod
     def _execution_summary_locked(task: _TaskState) -> dict[str, object]:
         retained = task.execution_summary
+        record = task.delivered_terminal_record
+        matching_record = (
+            retained is not None
+            and record is not None
+            and record.kind == "sync-execution"
+            and record.session_id == task.execution_session_id == task.session_id
+        )
         gap = None
         if task.execution_gap_minimum is not None:
             gap = {
@@ -583,6 +590,8 @@ class TaskRegistry:
             "execution_revision": task.execution_revision,
             "session_id": task.execution_session_id,
             "result": None if retained is None else retained.result,
+            "started_at": record.started_at if matching_record else None,
+            "ended_at": record.ended_at if matching_record else None,
             "failed_operation_count": (
                 None if retained is None else retained.failed_operation_count
             ),
@@ -1160,6 +1169,26 @@ class TaskRegistry:
             return view.anchor(
                 expected_revision=expected_revision,
                 node_id=node_id,
+            )
+
+    def get_plan_operation_anchor(
+        self,
+        task_id: str,
+        *,
+        session_id: str,
+        expected_revision: int,
+        operation_id: str,
+    ) -> dict[str, object]:
+        task, view = self._require_plan_view(task_id)
+        with task.condition:
+            self._require_plan_view_locked(task, view)
+            if task.session_id != session_id:
+                return {
+                    "disposition": "conflict", "view_revision": view.view_revision,
+                    "node_id": None, "index": None,
+                }
+            return view.operation_anchor(
+                expected_revision=expected_revision, operation_id=operation_id,
             )
 
     def mutate_plan_selection(

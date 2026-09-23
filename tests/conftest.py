@@ -18,6 +18,17 @@ from _departments import (
     requested_departments,
     validate_department_manifest,
 )
+from _wheel_identity import (
+    assert_installed_package,
+    assert_recorded_artifact,
+    assert_source_inputs,
+    assert_staged_inputs,
+    assert_wheel_package,
+    package_inputs,
+    source_inputs,
+    stage_source_inputs,
+    write_identity_record,
+)
 
 
 PROJECT_ROOT = Path(__file__).parents[1]
@@ -74,6 +85,10 @@ class HeadedInstalledWheel:
 @pytest.fixture(scope="session")
 def built_wheel(tmp_path_factory: pytest.TempPathFactory) -> BuiltWheel:
     wheel_dir = tmp_path_factory.mktemp("wheel")
+    staging_root = wheel_dir / "source"
+    inputs = source_inputs(PROJECT_ROOT)
+    stage_source_inputs(staging_root, inputs)
+    assert_source_inputs(PROJECT_ROOT, inputs)
     completed = subprocess.run(
         [
             sys.executable,
@@ -85,7 +100,7 @@ def built_wheel(tmp_path_factory: pytest.TempPathFactory) -> BuiltWheel:
             "--no-build-isolation",
             "--wheel-dir",
             str(wheel_dir),
-            str(PROJECT_ROOT),
+            str(staging_root),
         ],
         cwd=wheel_dir,
         capture_output=True,
@@ -93,8 +108,15 @@ def built_wheel(tmp_path_factory: pytest.TempPathFactory) -> BuiltWheel:
         timeout=180,
     )
     assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert_source_inputs(PROJECT_ROOT, inputs)
+    assert_staged_inputs(staging_root, inputs, allow_generated=True)
     wheels = tuple(wheel_dir.glob("namisync-*.whl"))
     assert len(wheels) == 1
+    assert_wheel_package(wheels[0], package_inputs(inputs))
+    write_identity_record(wheel_dir / "wheel-identity.json", inputs, wheels[0])
+    assert_source_inputs(PROJECT_ROOT, inputs)
+    assert_staged_inputs(staging_root, inputs, allow_generated=True)
+    assert_wheel_package(wheels[0], package_inputs(inputs))
     return BuiltWheel(wheels[0])
 
 
@@ -127,6 +149,20 @@ def installed_wheel(
         timeout=180,
     )
     assert completed.returncode == 0, completed.stdout + completed.stderr
+    identity_record = built_wheel.path.parent / "wheel-identity.json"
+    inputs = assert_recorded_artifact(identity_record, PROJECT_ROOT, built_wheel.path)
+    assert_wheel_package(built_wheel.path, package_inputs(inputs))
+    site_packages = root / "Lib" / "site-packages"
+    assert_installed_package(site_packages, package_inputs(inputs))
+    write_identity_record(
+        root.parent / "installed-wheel-identity.json",
+        inputs,
+        built_wheel.path,
+        site_packages=site_packages,
+    )
+    assert_recorded_artifact(identity_record, PROJECT_ROOT, built_wheel.path)
+    assert_wheel_package(built_wheel.path, package_inputs(inputs))
+    assert_installed_package(site_packages, package_inputs(inputs))
     return InstalledWheel(built_wheel.path, root, python)
 
 
@@ -167,6 +203,20 @@ def headed_installed_wheel(
         timeout=60,
     )
     assert checked.returncode == 0, checked.stdout + checked.stderr
+    identity_record = built_wheel.path.parent / "wheel-identity.json"
+    inputs = assert_recorded_artifact(identity_record, PROJECT_ROOT, built_wheel.path)
+    assert_wheel_package(built_wheel.path, package_inputs(inputs))
+    site_packages = root / "Lib" / "site-packages"
+    assert_installed_package(site_packages, package_inputs(inputs))
+    write_identity_record(
+        root.parent / "installed-wheel-identity.json",
+        inputs,
+        built_wheel.path,
+        site_packages=site_packages,
+    )
+    assert_recorded_artifact(identity_record, PROJECT_ROOT, built_wheel.path)
+    assert_wheel_package(built_wheel.path, package_inputs(inputs))
+    assert_installed_package(site_packages, package_inputs(inputs))
     return HeadedInstalledWheel(
         built_wheel.path,
         root,

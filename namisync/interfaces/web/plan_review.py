@@ -596,6 +596,20 @@ class PlanReviewState:
         with self._lock:
             return self.projection.node_for_id(node_id)
 
+    def operation_anchor(
+        self, *, expected_revision: int, operation_id: str,
+    ) -> dict[str, object]:
+        with self._lock:
+            if expected_revision != self.view_revision:
+                return {
+                    "disposition": "conflict", "view_revision": self.view_revision,
+                    "node_id": None, "index": None,
+                }
+            node_id = self.projection.operation_node_id_by_id.get(operation_id)
+            if node_id is None:
+                raise ValueError("anchor operation id is unknown")
+            return self.anchor(expected_revision=expected_revision, node_id=node_id)
+
     def anchor(self, *, expected_revision: int, node_id: str) -> dict[str, object]:
         with self._lock:
             if expected_revision != self.view_revision:

@@ -29,15 +29,54 @@ The adapter queue is bounded to 64 updates. New Progress replaces queued Progres
 
 Terminal release and explicit task close are distinct operations. Releasing an exact terminal session unsubscribes/closes that session after terminal delivery while retaining the reviewed task; closing explicitly retires the task. No uncertainty route disposes of a task implicitly. Implemented ownership and cleanup sequencing are in `INTERFACES.md`.
 
+The Plan execution summary carries nullable `started_at` and `ended_at` in the
+same strict UTC form as `SessionRecordView`. Both are null until a matching
+execution terminal record and retained result have been captured. After capture,
+`ended_at` is required while `started_at` remains null for an unrun refusal.
+The browser validates this exact shape on Plan summary and window reads;
+neither time is inferred from event receipt or a local clock.
+
+### M1-8-R0 active-operation anchor contract
+
+`get_plan_anchor` admits exactly one
+of two request shapes: the unchanged `{task_id:TaskId,expected_revision:SafeInt,
+node_id:NodeId}`, or `{task_id:TaskId,session_id:HexId,expected_revision:SafeInt,
+operation_id:HexId}`. Mixed or additional members refuse before dispatch. Both
+return the unchanged `{disposition:"current"|"conflict",view_revision:SafeInt,
+node_id:null|NodeId,index:null|SafeInt}`. The operation variant uses the retained
+Plan projection's operation-to-node index and the existing visible-ancestor
+resolver. Under the task lock, a different current session or view revision
+returns conflict with the current view revision and null target. Existing
+unavailable/retired-task refusal remains active. An operation absent from the
+retained Plan is invalid; an excluded operation with no visible ancestor returns
+current with null target. The synthetic root is never a visible target. Existing
+node-anchor callers and complete-request ingress bounds remain unchanged. No selection, filter,
+sort or execution mutation is authorized by lookup. Execution and post-copy
+verification share operation identity; standalone integrity lookup is excluded.
+The client coalesces to the latest target with bounded outstanding work and
+retires replies after manual navigation or identity/view change. This is the
+only R0 command extension; the Plan execution-summary response also carries
+the terminal record times described above. Progress timestamp retention uses
+existing event fields. PRESENTATION and DESKTOP_UI own view/interaction semantics.
+
 ### Progress reduction
+
+The derived view retains the timestamp
+of its latest accepted Progress envelope alongside that body. The wire already
+transports `at`; no schema change is needed. Body/time must advance atomically
+in reducer preflight and delivery. Non-progress updates that retain the body
+retain its time; fresh phase, Gap and terminal/reset clear both. A repeated
+same-phase PhaseChanged preserves both. Receipt/render time must not replace
+event time. DESKTOP_UI owns rate smoothing; it does not belong in this pure
+protocol reducer.
 
 Validation also preflights the applicable batch through a pure, immutable
 Progress reducer before moving the cursor or invoking a callback. Its derived
 view is supplied as the optional second `acceptUpdate(update, progressState)`
 argument, so existing one-argument consumers remain compatible. Retained state
 and the exposed view own only `phase`, `phaseAuthority` (`phase_changed`,
-`progress`, or `unknown`), the latest accepted Progress body, and the derived
-active item. `PhaseChanged` starts a fresh temporal domain only when its phase
+`progress`, or `unknown`), the latest accepted Progress body and its `progressAt`
+timestamp, and the derived active item. `PhaseChanged` starts a fresh temporal domain only when its phase
 changes; repeating the same reliable phase promotes authority without
 discarding aggregate, item, or attempt comparisons. Progress must agree with
 reliable `phase_changed` authority. After `Gap`, progress-only authority remains
@@ -270,7 +309,7 @@ BOOTSTRAP rows, commands require OPEN.
 | `update_plan_view` | `{task_id:TaskId,expected_revision:SafeInt,search_query:string,filters:[PlanFilter],sort_column:"path"\|"filename"\|"size"\|"mtime",sort_direction:"ascending"\|"descending",collapse_node_id:null\|NodeId,collapsed:null\|boolean}` | `PlanViewSummary` | 5 s; no automatic retry |
 | `get_plan_window` | `{task_id:TaskId,expected_revision:SafeInt,offset:SafeInt,limit:1..256}` | `{disposition:"current"\|"conflict",view_revision:SafeInt,offset:SafeInt,total:SafeInt,execution:ExecutionSummary,rows:[PlanWindowRow]}` | 5 s; one identical-payload retry |
 | `get_execution_detail` | `{task_id:TaskId,operation_id:HexId,expected_execution_revision:SafeInt}` | `{disposition:"current"\|"conflict"\|"not-retained",execution_revision:SafeInt,operation_id:HexId,operation:null\|OperationItemView,automatic_verification:null\|IntegrityOutcomeView,evidence:null\|ExecutionEvidence}` | 5 s; one identical-payload retry |
-| `get_plan_anchor` | `{task_id:TaskId,expected_revision:SafeInt,node_id:NodeId}` | `{disposition:"current"\|"conflict",view_revision:SafeInt,node_id:null\|NodeId,index:null\|SafeInt}` | 5 s; one identical-payload retry |
+| `get_plan_anchor` | `{task_id:TaskId,expected_revision:SafeInt,node_id:NodeId}` or `{task_id:TaskId,session_id:HexId,expected_revision:SafeInt,operation_id:HexId}` | `{disposition:"current"\|"conflict",view_revision:SafeInt,node_id:null\|NodeId,index:null\|SafeInt}` | 5 s; one identical-payload retry |
 | `mutate_plan_selection` | `{task_id:TaskId,command_id:HexId,expected_view_revision:SafeInt,expected_selection_revision:SafeInt,node_id:NodeId,selected:boolean}` | `PlanViewSummary` | 5 s; one same-command replay after uncertainty |
 | `mutate_plan_scope` | `{task_id:TaskId,command_id:HexId,expected_view_revision:SafeInt,expected_selection_revision:SafeInt,selected:boolean}` | `PlanViewSummary` | 5 s; one same-command replay after uncertainty |
 | `mutate_plan_highlight` | `{task_id:TaskId,expected_view_revision:SafeInt,expected_highlight_revision:SafeInt,gesture:"clear"|"replace"|"toggle"|"extend"|"add-range"|"move_up"|"move_down",node_id:null\|NodeId}` | `PlanViewSummary` | 5 s; no automatic retry |

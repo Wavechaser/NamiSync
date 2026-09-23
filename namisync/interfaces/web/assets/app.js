@@ -6,7 +6,9 @@ import {
   controlExecution,
   createTask,
   echoReadiness,
+  getExecutionDetail,
   getPlanAnchor,
+  getPlanOperationAnchor,
   getPlanWindow,
   listTasks,
   markBridgeOperational,
@@ -36,6 +38,7 @@ import { createExecutionConfirmation } from "./execution_confirmation.js";
 import { createWorkPanel } from "./panels.js";
 import { createTaskRail } from "./rail.js";
 import { renderText } from "./render.js";
+import { advanceProgressPresentation, rebaseProgressSampling } from "./task_status.js";
 
 const app = document.querySelector("#app");
 const status = document.querySelector("#host-status");
@@ -98,6 +101,10 @@ let recentPairProbeRevision = 0;
 let recentPairProbeRunning = false;
 let recentPairProbePending = false;
 let pageBatch = null;
+let planFollowLookupRunning = false;
+let pendingPlanFollow = null;
+let activePlanFollowKey = null;
+let activePlanFollowGeneration = null;
 
 const ACTIVE_EXECUTION_CONTROL_STATES = new Set([
   "pending",
@@ -160,6 +167,9 @@ const panel = createWorkPanel({
     void controlReviewedExecution(review, action);
   },
   onPlanAgain: (review) => { void planAgainFromReview(review); },
+  onExecutionDetail: (review, row) => { void readExecutionDetail(review, row); },
+  onFollowOverride: disablePlanFollow,
+  onNavigateCurrent: (review, enableFollow) => { queuePlanFollow(review, enableFollow, true); },
 }, settingsView);
 const rail = createTaskRail({
   onCreate: () => { void createBlankTask(); },
@@ -212,9 +222,128 @@ function renderTasks() {
 
 function showSettings() {
   if (settingsVisible) return;
+  const task = currentTask();
+  if (task?.review != null) retireExecutionDetail(task.review);
   navigationRevision += 1;
   settingsVisible = true;
   renderTasks();
+}
+
+function planFollowEligible(review) {
+  return review.summary.search_query === ""
+    && review.summary.filters.length === 0
+    && review.summary.sort_column === "path"
+    && review.summary.sort_direction === "ascending";
+}
+
+function disablePlanFollow(review) {
+  if (review?.follow == null || review.follow.programmatic === true) return;
+  review.follow.enabled = false;
+  review.follow.generation += 1;
+  renderTasks();
+}
+
+function queuePlanFollow(review, enableFollow = false, explicit = false) {
+  const task = currentReviewTask(review);
+  if (task === null || task.sessionId === null || review.follow == null) return;
+  review.follow.eligible = planFollowEligible(review);
+  const operationId = task.progressPresentation?.activeItem?.item_id ?? null;
+  review.follow.hasTarget = operationId !== null;
+  if (operationId === null) {
+    review.follow.message = "No operation is active.";
+    review.message = review.follow.message;
+    renderTasks();
+    return;
+  }
+  if (enableFollow) review.follow.enabled = review.follow.eligible;
+  const anchorKey = `${task.sessionId}:${review.summary.view_revision}:${operationId}`;
+  if (review.follow.anchorKey === anchorKey && Number.isSafeInteger(review.follow.anchorIndex)
+      && review.follow.anchorIndex >= review.window.offset
+      && review.follow.anchorIndex < review.window.offset + review.window.rows.length) {
+    if (explicit) {
+      review.follow.scrollOffset = review.follow.anchorIndex;
+      renderTasks();
+    }
+    return;
+  }
+  if (planFollowLookupRunning && activePlanFollowKey === anchorKey
+      && activePlanFollowGeneration === review.follow.generation) return;
+  const request = Object.freeze({
+    task, review, sessionId: task.sessionId, operationId,
+    viewRevision: review.summary.view_revision,
+    actionRevision: review.actionRevision,
+    anchorKey,
+    cachedIndex: review.follow.anchorKey === anchorKey ? review.follow.anchorIndex : null,
+    followGeneration: review.follow.generation,
+    navigation: navigationRevision,
+    automatic: enableFollow || review.follow.enabled,
+  });
+  pendingPlanFollow = request;
+  void drainPlanFollow();
+}
+
+async function drainPlanFollow() {
+  if (planFollowLookupRunning) return;
+  planFollowLookupRunning = true;
+  try {
+    while (pendingPlanFollow !== null) {
+      const request = pendingPlanFollow;
+      pendingPlanFollow = null;
+      const {
+        task, review, sessionId, operationId, viewRevision, actionRevision, anchorKey,
+        cachedIndex, followGeneration, navigation,
+      } = request;
+      activePlanFollowKey = anchorKey;
+      activePlanFollowGeneration = followGeneration;
+      const stillCurrent = () => currentReviewTask(review) === task
+        && !settingsVisible && navigationRevision === navigation
+        && task.sessionId === sessionId && review.summary.view_revision === viewRevision
+        && review.actionRevision === actionRevision
+        && review.follow.generation === followGeneration
+        && task.progressPresentation?.activeItem?.item_id === operationId;
+      try {
+        const anchor = Number.isSafeInteger(cachedIndex)
+          ? { disposition: "current", index: cachedIndex }
+          : await getPlanOperationAnchor(task.taskId, sessionId, viewRevision, operationId);
+        if (!stillCurrent()) continue;
+        if (anchor.disposition !== "current" || anchor.index === null) {
+          review.follow.message = "The current operation is excluded from this view.";
+          review.message = review.follow.message;
+          renderTasks();
+          continue;
+        }
+        const window = await getPlanWindow(task.taskId, viewRevision, anchor.index, 256);
+        if (!stillCurrent() || window.disposition !== "current"
+            || window.view_revision !== viewRevision
+            || window.highlight_revision !== review.summary.highlight_revision) continue;
+        adoptExecutionWindow(review, window);
+        review.follow.anchorKey = anchorKey;
+        review.follow.anchorIndex = anchor.index;
+        review.follow.scrollOffset = anchor.index;
+        review.follow.message = null;
+        if ([
+          "No operation is active.",
+          "The current operation is excluded from this view.",
+          "Current operation navigation is unavailable. Try again.",
+        ].includes(review.message)) review.message = null;
+        renderTasks();
+      } catch (_error) {
+        if (stillCurrent()) {
+          review.follow.message = "Current operation navigation is unavailable. Try again.";
+          review.message = review.follow.message;
+          renderTasks();
+        }
+      } finally {
+        activePlanFollowKey = null;
+        activePlanFollowGeneration = null;
+      }
+    }
+  } finally {
+    planFollowLookupRunning = false;
+    activePlanFollowKey = null;
+    activePlanFollowGeneration = null;
+    if (pendingPlanFollow !== null) void drainPlanFollow();
+  }
 }
 
 function selectTask(taskId) {
@@ -223,6 +352,11 @@ function selectTask(taskId) {
     return;
   }
   navigationRevision += 1;
+  const previous = selectedTaskId === null ? null : tasks.get(selectedTaskId) ?? null;
+  if (previous?.review != null) retireExecutionDetail(previous.review);
+  if (selectedTaskId !== taskId && task.progressPresentation !== null) {
+    task.progressPresentation = rebaseProgressSampling(task.progressPresentation);
+  }
   selectedTaskId = taskId;
   settingsVisible = false;
   renderTasks();
@@ -233,6 +367,7 @@ function selectTask(taskId) {
   ) {
     void loadPlanReview(task);
   }
+  if (task.executionWindowDirty) void refreshExecutionWindow(task);
 }
 
 function adoptTask(summary) {
@@ -259,7 +394,14 @@ function adoptTask(summary) {
       executionAttempt: null,
       executionControlState: "running",
       executionControlRevision: 0,
+      executionResult: null,
+      executionStartedAt: null,
+      executionEndedAt: null,
+      executionWindowDirty: false,
+      executionWindowDirtyRevision: 0,
+      executionWindowRefreshRunning: false,
       progressState: null,
+      progressPresentation: null,
     };
     nextTaskNumber += 1;
     tasks.set(task.taskId, task);
@@ -271,6 +413,11 @@ function adoptTask(summary) {
       && task.review !== null
     ) {
       task.executionStarted = true;
+      task.executionResult = null;
+      task.executionStartedAt = null;
+      task.executionEndedAt = null;
+      task.executionWindowDirty = true;
+      task.executionWindowDirtyRevision += 1;
     }
     task.sessionId = summary.session_id;
     task.sessionState = summary.session_state;
@@ -313,7 +460,16 @@ function acceptTaskUpdate(task, sessionId, update, progressState = null) {
   if (tasks.get(task.taskId) !== task || task.sessionId !== sessionId) {
     return;
   }
-  if (progressState !== null) task.progressState = progressState;
+  if (progressState !== null) {
+    task.progressState = progressState;
+    task.progressPresentation = advanceProgressPresentation(
+      task.progressPresentation, progressState, update,
+    );
+    if (task.review?.follow != null) {
+      task.review.follow.hasTarget = task.progressPresentation?.activeItem?.item_id != null;
+    }
+  }
+  if (task.executionStarted) markExecutionWindowDirty(task);
   if (
     update.update_type === "event"
     && update.event?.body_type === "StateChanged"
@@ -332,6 +488,11 @@ function acceptTaskUpdate(task, sessionId, update, progressState = null) {
     taskMutationRevision += 1;
     task.executionControlRevision += 1;
     task.sessionState = update.record.state;
+    if (update.record.kind === "sync-execution") {
+      task.executionResult = update.record.result;
+      task.executionStartedAt = update.record.started_at ?? null;
+      task.executionEndedAt = update.record.ended_at ?? null;
+    }
     if (task.form !== null) task.form.sessionState = task.sessionState;
     if (task.executionStarted && task.review !== null) {
       task.review.message = task.sessionState === "completed" ? null : `Execution ${task.sessionState}.`;
@@ -346,6 +507,10 @@ function acceptTaskUpdate(task, sessionId, update, progressState = null) {
     }
   } else {
     renderTasks();
+  }
+  if (task.review !== null && task.executionStarted && task.sessionState === "active") {
+    task.review.follow.hasTarget = task.progressPresentation?.activeItem?.item_id != null;
+    if (task.review.follow.enabled && task.review.follow.eligible) queuePlanFollow(task.review);
   }
 }
 
@@ -742,8 +907,178 @@ function editMode(mode) {
 function acceptTaskRelease(task, sessionId) {
   if (tasks.get(task.taskId) !== task || task.sessionId !== sessionId) return;
   task.sessionReleased = true;
+  task.executionWindowDirty = true;
+  task.executionWindowDirtyRevision += 1;
   renderTasks();
-  if (task.taskKind === "sync-plan") void loadPlanReview(task);
+  if (task.taskKind === "sync-plan") void loadPlanReview(task, true);
+}
+
+function retireExecutionDetail(review) {
+  if (review === null || review === undefined) return;
+  review.detailRevision = (review.detailRevision ?? 0) + 1;
+  review.executionDetail = null;
+}
+
+function adoptExecutionWindow(review, window) {
+  if (review.window?.execution?.execution_revision
+      !== window.execution.execution_revision) retireExecutionDetail(review);
+  review.window = window;
+  const focusNodeId = review.summary.highlight_focus_node_id;
+  const focusedRow = window.rows.find((row) => row.node_id === focusNodeId) ?? null;
+  if (focusNodeId === null || (review.executionDetail !== null
+      && review.executionDetail.focusNodeId !== focusNodeId)) {
+    retireExecutionDetail(review);
+  }
+  if (focusedRow?.operation_id != null && window.execution.session_id !== null
+      && (review.executionDetail?.operationId !== focusedRow.operation_id
+        || review.executionDetail?.executionRevision !== window.execution.execution_revision)) {
+    void readExecutionDetail(review, focusedRow);
+  }
+}
+
+function beginForegroundWindowRead(review) {
+  review.foregroundWindowEpoch += 1;
+  review.foregroundWindowReaders += 1;
+}
+
+function endForegroundWindowRead(review) {
+  review.foregroundWindowReaders -= 1;
+  const task = retainedReviewTask(review);
+  if (
+    task !== null && task.executionWindowDirty && review.foregroundWindowReaders === 0
+    && !task.reviewLoading
+    && selectedTaskId === task.taskId && !settingsVisible
+  ) void refreshExecutionWindow(task);
+}
+
+function markExecutionWindowDirty(task) {
+  task.executionWindowDirty = true;
+  task.executionWindowDirtyRevision += 1;
+  if (selectedTaskId === task.taskId && !settingsVisible && task.review !== null
+      && !task.reviewLoading) {
+    void refreshExecutionWindow(task);
+  }
+}
+
+async function refreshExecutionWindow(task) {
+  if (
+    tasks.get(task.taskId) !== task || selectedTaskId !== task.taskId || settingsVisible
+    || task.review === null || task.reviewLoading || task.executionWindowRefreshRunning
+    || task.review.foregroundWindowReaders > 0
+  ) return;
+  task.executionWindowRefreshRunning = true;
+  try {
+    while (task.executionWindowDirty) {
+      task.executionWindowDirty = false;
+      const review = task.review;
+      const foregroundWindowEpoch = review.foregroundWindowEpoch;
+      const reviewRevision = task.reviewRevision;
+      const sessionId = task.sessionId;
+      const requestId = review.summary.request_id;
+      const action = review.actionRevision;
+      const viewRevision = review.summary.view_revision;
+      const offset = review.window.offset;
+      const refreshStillCurrent = () => (
+        tasks.get(task.taskId) === task && selectedTaskId === task.taskId && !settingsVisible
+        && task.review === review && !task.reviewLoading && task.reviewRevision === reviewRevision
+        && task.sessionId === sessionId && review.foregroundWindowReaders === 0
+        && review.foregroundWindowEpoch === foregroundWindowEpoch
+        && review.summary.request_id === requestId && review.actionRevision === action
+        && review.summary.view_revision === viewRevision && review.window.offset === offset
+      );
+      try {
+        const window = await getPlanWindow(task.taskId, viewRevision, offset, 256);
+        if (!refreshStillCurrent()) {
+          task.executionWindowDirty = true;
+          return;
+        }
+        if (
+          window.disposition !== "current" || window.view_revision !== viewRevision
+          || window.highlight_revision !== review.summary.highlight_revision
+        ) {
+          task.executionWindowDirty = false;
+          void loadPlanReview(task, true);
+          return;
+        }
+        adoptExecutionWindow(review, window);
+        if (window.execution.result !== null) {
+          task.executionResult = window.execution.result;
+          task.executionStartedAt = window.execution.started_at ?? null;
+          task.executionEndedAt = window.execution.ended_at ?? null;
+        }
+        renderTasks();
+      } catch (_error) {
+        if (!refreshStillCurrent()) {
+          if (tasks.get(task.taskId) === task) task.executionWindowDirty = true;
+          return;
+        }
+        if (
+          tasks.get(task.taskId) === task && selectedTaskId === task.taskId
+          && task.review === review && task.sessionId === sessionId
+        ) {
+          review.message ||= "Execution status refresh delayed.";
+          renderTasks();
+        }
+        return;
+      }
+    }
+  } finally {
+    task.executionWindowRefreshRunning = false;
+    if (task.executionWindowDirty && selectedTaskId === task.taskId && !settingsVisible) {
+      void refreshExecutionWindow(task);
+    }
+  }
+}
+
+async function readExecutionDetail(review, row) {
+  if (settingsVisible) return;
+  const task = currentReviewTask(review);
+  if (task === null) return;
+  const request = ++review.detailRevision;
+  if (row === null) {
+    review.executionDetail = null;
+    renderTasks();
+    return;
+  }
+  const operationId = row.operation_id;
+  const executionRevision = review.window.execution.execution_revision;
+  const sessionId = task.sessionId;
+  const requestId = review.summary.request_id;
+  const action = review.actionRevision;
+  const navigation = navigationRevision;
+  const detail = { operationId, executionRevision, focusNodeId: row.node_id ?? null,
+    state: "loading", response: null, message: null };
+  review.executionDetail = detail;
+  renderTasks();
+  try {
+    const response = await getExecutionDetail(task.taskId, operationId, executionRevision);
+    if (
+      currentReviewTask(review) !== task || review.detailRevision !== request
+      || review.executionDetail !== detail || task.sessionId !== sessionId
+      || review.summary.request_id !== requestId || review.actionRevision !== action
+      || review.window.execution.execution_revision !== executionRevision
+      || navigationRevision !== navigation || settingsVisible
+    ) return;
+    if (response.disposition === "current") {
+      detail.state = "current";
+      detail.response = response;
+    } else if (response.disposition === "not-retained") {
+      detail.state = "not-retained";
+    } else {
+      retireExecutionDetail(review);
+      markExecutionWindowDirty(task);
+    }
+  } catch (_error) {
+    if (currentReviewTask(review) === task && review.detailRevision === request
+        && review.executionDetail === detail && navigationRevision === navigation
+        && !settingsVisible) {
+      detail.state = "error";
+      detail.message = "Highlight the item again to retry operation detail.";
+    }
+  } finally {
+    if (currentReviewTask(review) === task && review.detailRevision === request
+        && navigationRevision === navigation && !settingsVisible) renderTasks();
+  }
 }
 
 function currentReviewTask(review) {
@@ -765,6 +1100,7 @@ async function loadPlanReview(task, force = false) {
     || (!force && task.review !== null && task.reviewSessionId === task.sessionId)
   ) return;
   const request = ++task.reviewRevision;
+  const dirtyRevision = task.executionWindowDirtyRevision;
   const sessionId = task.sessionId;
   task.reviewLoading = true;
   renderTasks();
@@ -773,11 +1109,23 @@ async function loadPlanReview(task, force = false) {
     const window = await getPlanWindow(task.taskId, summary.view_revision, 0, 256);
     if (
       tasks.get(task.taskId) !== task || task.reviewRevision !== request
-      || task.sessionId !== sessionId || window.disposition !== "current"
-      || window.view_revision !== summary.view_revision
-      || window.highlight_revision !== summary.highlight_revision
+      || task.sessionId !== sessionId
     ) return;
+    if (
+      window.disposition !== "current" || window.view_revision !== summary.view_revision
+      || window.highlight_revision !== summary.highlight_revision
+    ) {
+      task.executionWindowDirty = task.executionWindowDirtyRevision !== dirtyRevision;
+      if (task.review !== null) task.review.message = "Execution status refresh delayed. Select the task to retry.";
+      else if (task.sessionState !== "active") task.error = "Plan unavailable. Select the task to retry.";
+      return;
+    }
     task.executionStarted ||= summary.selection_state === "committed";
+    if (window.execution.result !== null) {
+      task.executionResult = window.execution.result;
+      task.executionStartedAt = window.execution.started_at ?? null;
+      task.executionEndedAt = window.execution.ended_at ?? null;
+    }
     const message = task.executionStarted
       ? task.sessionState === "active"
         ? executionControlMessage(task.executionControlState)
@@ -785,6 +1133,9 @@ async function loadPlanReview(task, force = false) {
       : summary.preflight_ready
         ? null
         : "Plan failed review. Inspect notices and create a fresh plan.";
+    const retainedFollow = task.reviewSessionId === sessionId ? task.review?.follow ?? null : null;
+    const eligibleFollow = summary.search_query === "" && summary.filters.length === 0
+      && summary.sort_column === "path" && summary.sort_direction === "ascending";
     task.review = {
       summary,
       window,
@@ -796,8 +1147,23 @@ async function loadPlanReview(task, force = false) {
       windowRequestRevision: 0,
       windowRequestOffset: null,
       windowRequestRunning: false,
+      foregroundWindowReaders: 0,
+      foregroundWindowEpoch: 0,
+      executionDetail: null,
+      detailRevision: 0,
+      follow: {
+        enabled: retainedFollow === null ? task.executionStarted && eligibleFollow : retainedFollow.enabled,
+        eligible: eligibleFollow,
+        hasTarget: task.progressPresentation?.activeItem?.item_id != null,
+        message: null,
+        anchorKey: retainedFollow?.anchorKey ?? null,
+        anchorIndex: retainedFollow?.anchorIndex ?? null,
+        scrollOffset: null,
+        generation: retainedFollow?.generation ?? 0,
+      },
     };
     task.reviewSessionId = sessionId;
+    task.executionWindowDirty = task.executionWindowDirtyRevision !== dirtyRevision;
     task.error = null;
   } catch (_error) {
     if (
@@ -811,6 +1177,7 @@ async function loadPlanReview(task, force = false) {
     if (tasks.get(task.taskId) === task && task.reviewRevision === request) {
       task.reviewLoading = false;
       renderTasks();
+      if (task.executionWindowDirty) void refreshExecutionWindow(task);
     }
   }
 }
@@ -837,6 +1204,11 @@ async function readPlanWindowAtAnchor(task, review, summary, anchorNodeId, fallb
 async function changePlanView(review, patch, queued = false) {
   const task = queued ? retainedReviewTask(review) : currentReviewTask(review);
   if (task === null) return;
+  if (review.follow !== null && ["searchQuery", "filters", "sortColumn", "sortDirection"]
+      .some((key) => Object.prototype.hasOwnProperty.call(patch, key))) {
+    review.follow.enabled = false;
+    review.follow.generation += 1;
+  }
   if (review.pending !== null) {
     if (review.pending === "view" && Object.keys(patch).length === 1
         && typeof patch.searchQuery === "string") {
@@ -859,6 +1231,7 @@ async function changePlanView(review, patch, queued = false) {
   };
   review.pending = "view";
   review.message = "Updating view…";
+  beginForegroundWindowRead(review);
   renderTasks();
   try {
     const summary = await updatePlanView(
@@ -881,7 +1254,7 @@ async function changePlanView(review, patch, queued = false) {
       || window.highlight_revision !== summary.highlight_revision
     ) return;
     review.summary = summary;
-    review.window = window;
+    adoptExecutionWindow(review, window);
     review.message = summary.disposition === "conflict"
       ? "View changed. Current view restored."
       : null;
@@ -900,6 +1273,7 @@ async function changePlanView(review, patch, queued = false) {
         void changePlanView(review, { searchQuery: queuedSearchQuery }, true);
       }
     }
+    endForegroundWindowRead(review);
   }
 }
 
@@ -909,9 +1283,17 @@ async function loadPlanWindow(review, offset) {
   if (offset !== null && review.pending !== null) return;
   review.windowRequestRevision += 1;
   review.windowRequestOffset = offset;
-  if (offset === null || review.windowRequestRunning) return;
+  if (offset === null) {
+    review.foregroundWindowEpoch += 1;
+    return;
+  }
+  if (review.windowRequestRunning) {
+    review.foregroundWindowEpoch += 1;
+    return;
+  }
 
   review.windowRequestRunning = true;
+  beginForegroundWindowRead(review);
   try {
     while (review.windowRequestOffset !== null) {
       const requestedOffset = review.windowRequestOffset;
@@ -943,7 +1325,7 @@ async function loadPlanWindow(review, offset) {
           || window.view_revision !== viewRevision
           || window.highlight_revision !== review.summary.highlight_revision
         ) return;
-        review.window = window;
+        adoptExecutionWindow(review, window);
         review.message = "";
         renderTasks();
       } catch (_error) {
@@ -960,6 +1342,7 @@ async function loadPlanWindow(review, offset) {
     }
   } finally {
     review.windowRequestRunning = false;
+    endForegroundWindowRead(review);
   }
 }
 
@@ -971,32 +1354,42 @@ function queuePlanHighlight(review, gesture, nodeId) {
     if (task === null || review.pending !== null || task.executionAttempt !== null
         || review.summary.view_revision !== queuedViewRevision
         || review.actionRevision !== queuedActionRevision) return;
+    beginForegroundWindowRead(review);
     const action = review.actionRevision;
     const viewRevision = review.summary.view_revision;
-    const summary = await mutatePlanHighlight(
-      task.taskId, viewRevision, review.summary.highlight_revision, gesture, nodeId,
-    );
-    if (retainedReviewTask(review) !== task || review.actionRevision !== action) return;
-    const moving = gesture === "move_up" || gesture === "move_down"
-      || gesture === "move_up_extend" || gesture === "move_down_extend";
-    const focusIndex = summary.highlight_focus_visible_index;
-    const currentEnd = review.window.offset + review.window.rows.length;
-    const targetOutsideWindow = moving
-      && Number.isSafeInteger(focusIndex)
-      && (focusIndex < review.window.offset || focusIndex >= currentEnd);
-    const window = await getPlanWindow(
-      task.taskId,
-      summary.view_revision,
-      targetOutsideWindow ? focusIndex : review.window.offset,
-      256,
-    );
-    if (retainedReviewTask(review) !== task || review.actionRevision !== action
-        || window.disposition !== "current"
-        || window.view_revision !== summary.view_revision
-        || window.highlight_revision !== summary.highlight_revision) return;
-    review.summary = summary;
-    review.window = window;
-    renderTasks();
+    try {
+      const summary = await mutatePlanHighlight(
+        task.taskId, viewRevision, review.summary.highlight_revision, gesture, nodeId,
+      );
+      if (retainedReviewTask(review) !== task || review.actionRevision !== action) return;
+      const moving = gesture === "move_up" || gesture === "move_down"
+        || gesture === "move_up_extend" || gesture === "move_down_extend";
+      const focusIndex = summary.highlight_focus_visible_index;
+      const currentEnd = review.window.offset + review.window.rows.length;
+      const targetOutsideWindow = moving
+        && Number.isSafeInteger(focusIndex)
+        && (focusIndex < review.window.offset || focusIndex >= currentEnd);
+      const window = await getPlanWindow(
+        task.taskId,
+        summary.view_revision,
+        targetOutsideWindow ? focusIndex : review.window.offset,
+        256,
+      );
+      if (retainedReviewTask(review) !== task || review.actionRevision !== action
+          || window.disposition !== "current"
+          || window.view_revision !== summary.view_revision
+          || window.highlight_revision !== summary.highlight_revision) return;
+      review.summary = summary;
+      adoptExecutionWindow(review, window);
+      const focusedRow = window.rows.find((row) => row.node_id === summary.highlight_focus_node_id);
+      if (focusedRow?.operation_id === review.executionDetail?.operationId
+          && review.executionDetail?.state === "error") {
+        void readExecutionDetail(review, focusedRow);
+      }
+      renderTasks();
+    } finally {
+      endForegroundWindowRead(review);
+    }
   });
   return review.highlightQueue;
 }
@@ -1021,6 +1414,7 @@ async function changePlanSelection(review, row, selected, highlightedScope = fal
   const anchorNodeId = review.window.rows[0]?.node_id ?? null;
   review.pending = "selection";
   review.message = "Updating selection…";
+  beginForegroundWindowRead(review);
   renderTasks();
   try {
     const summary = highlightedScope
@@ -1050,7 +1444,7 @@ async function changePlanSelection(review, row, selected, highlightedScope = fal
       || window.disposition !== "current"
     ) return;
     review.summary = summary;
-    review.window = window;
+    adoptExecutionWindow(review, window);
     review.message = summary.disposition === "applied"
       ? null
       : summary.disposition === "conflict"
@@ -1073,6 +1467,7 @@ async function changePlanSelection(review, row, selected, highlightedScope = fal
       review.pending = null;
       renderTasks();
     }
+    endForegroundWindowRead(review);
   }
 }
 
@@ -1167,9 +1562,21 @@ async function submitReviewedExecution(task, attempt) {
       task.sessionState = "active";
       task.sessionReleased = false;
       task.executionStarted = true;
+      task.executionResult = null;
+      task.executionStartedAt = null;
+      task.executionEndedAt = null;
+      task.executionWindowDirty = true;
+      task.executionWindowDirtyRevision += 1;
       task.executionControlRevision += 1;
       task.executionControlState = "running";
       task.reviewSessionId = result.session_id;
+      if (attempt.review.follow !== null) {
+        attempt.review.follow.eligible = planFollowEligible(attempt.review);
+        attempt.review.follow.enabled = attempt.review.follow.eligible;
+        attempt.review.follow.generation += 1;
+        attempt.review.follow.anchorKey = null;
+        attempt.review.follow.anchorIndex = null;
+      }
       attachTaskDrain(task);
       if (task.review === attempt.review) {
         attempt.review.message = executionControlMessage(task.executionControlState);
@@ -1232,6 +1639,9 @@ async function controlReviewedExecution(review, actionName) {
   const sessionId = task.sessionId;
   const controlRevision = task.executionControlRevision;
   const controlState = task.executionControlState;
+  if (actionName === "pause" || actionName === "resume") {
+    task.progressPresentation = rebaseProgressSampling(task.progressPresentation);
+  }
   review.pending = actionName;
   review.message = `${actionName[0].toUpperCase()}${actionName.slice(1)} requested…`;
   renderTasks();

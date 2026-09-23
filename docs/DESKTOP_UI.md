@@ -4,9 +4,9 @@ The secured host, theme/accessibility foundation, generic tree renderer and
 file-row gallery are implemented. Process-live tasks expose frozen Setup and
 typed/picker/recent plan and standalone inventory starts. Production Plan
 review, execution admission and live pause/resume/cancel controls are active;
-inventory, integrity, detailed execution-result review, history and global
-settings pages remain deferred. Current v5 item progress is reduced by the
-bridge, while detailed production result-row binding remains future work.
+retained execution-result review is active in that Plan pane, while inventory,
+integrity, history and global settings pages remain deferred. Current v5 item
+progress and detailed result rows are reduced by the bridge for bounded display.
 
 This document owns visual/user interaction behavior. BRIDGE owns exact transport,
 PRESENTATION owns projection/window/search/sort behavior, INTERFACES owns the host,
@@ -19,7 +19,10 @@ NamiSync's Windows desktop is a local, headed adapter for reviewing and
 controlling safe one-way mirroring, location inventory and integrity work, and
 retained history. It makes the workflow's existing facts comprehensible; it
 does not decide sync policy, calculate plans, write SQLite, mutate files, or
-own a second session lifecycle.
+own a second session lifecycle. Live execution refresh does not interrupt a
+foreground view, highlight, selection, or scroll interaction; changed ownership
+replays the refresh at the accepted window, while navigation, Settings, reload,
+and stale or failed receipts remain inert toward visible result/detail facts.
 
 The Stage 6 target is a `pywebview` host forced to Edge Chromium/WebView2 with
 packaged web assets. The earlier PySide6 proof-of-concept is historical input,
@@ -1247,8 +1250,26 @@ folder's own available mtime, never a time inferred from descendants. Sorting
 preserves hierarchy, node ids, selection, collapse, and execution authority
 and order. It advances coherent view revisions, indexes, and anchors; the
 browser cannot sort only a page or reuse old numeric indexes. Ordinary
-sort/reset starts at offset zero; enabled plan follow resolves the active item
-through a fresh guarded server anchor.
+sort/reset starts at offset zero. **M1-8-R0 follow:** automatic following
+is available only in canonical path-key order with no search or filters. It
+starts enabled for a new eligible execution and follows execution/post-copy
+verification's active operation or nearest visible collapsed ancestor. User
+scrolling the target out of view, or changing sort/search/filter, disables it;
+only explicit action resumes it, even after returning to an eligible view.
+Programmatic scroll does not disable follow. Pause/phase changes preserve the
+choice; task navigation cannot silently re-enable it. Follow never changes
+selection or keyboard focus, and stale replies cannot undo manual navigation.
+Repeated progress for the same target in the loaded window does not reposition
+the viewport; explicit Go still jumps to it.
+
+Float **Go to current operation** and **Turn on autoscroll** over the rows at
+the viewport's lower-right, reusing existing floating-control conventions. Go
+performs a one-time jump in the current view, without enabling follow or changing
+sort/filters. If the target and ancestors are excluded, report that fact. Enable
+appears only when follow is eligible and off. With no active target, controls
+cannot jump to a fabricated row. Both actions support keyboard use; underlying
+rows/actions must be scrollable clear of the overlay. A distance readout is not
+required. PRESENTATION owns resolution; M1_PLAN owns finite R0 acceptance.
 
 The Plan review renders its current bounded window in the compact file-row grid
 with exact 24-CSS-pixel rows and matching leading/trailing spacer offsets; the
@@ -1533,6 +1554,73 @@ item retries. Canceled or otherwise abnormally terminated sessions retain their
 terminal truth for review and close, without resume, retry, or session cleanup.
 Paused live sessions retain their existing controls.
 
+M1 execution review is active in the existing Plan pane. The execution header
+and every row come from one coherent bounded Plan window; live update bursts
+coalesce into one selected-window read at a time, while a hidden task keeps only
+a dirty marker until it is selected. The browser never builds a complete result
+map. Every read is pinned to the task, session, reviewed request, view action and
+execution revision; Settings navigation, task navigation, reinjection, Close and
+replacement generations make older replies inert. Terminal release explicitly reopens the retained Plan
+truth. The task rail may use the exact terminal session result immediately so a
+known failure or degradation cannot remain labelled as green completion while
+retained capacity counts are still being captured.
+
+Rows present the operation result, automatic linked verification, recording
+state and current stored evidence as independent axes. Structural operation
+containers may carry projected rollups without pretending to be a detail
+subject. Missing means unknown, and a successful zero-byte operation is still
+reported as ran. One explicit row action may load full operation detail; the
+pane retains only that one response and retires it when its operation identity
+or execution revision changes. Hostile detail remains inert text. Producer and
+presentation omission counts, recording issues, terminal filesystem/integrity/
+audit axes, phases, errors and observed Gap history remain visible after
+settlement. Capacity guidance uses yellow in the aggregate run header and task
+rail only when the retained counts, terminal axes and active-result identity
+prove that classification. Independently, an operation row that itself failed
+for the exact disk-capacity reason uses the yellow capacity lifecycle. The row
+still says Failed, keeps the capacity reason, and preserves independent
+verification, recording and stored-evidence facts. It does not inherit or
+reinterpret the aggregate result. Unknown, stale, generic or mixed aggregate
+failure evidence remains red and never masks an independent operation,
+integrity, recording or audit failure; each row continues to show its own facts.
+The accepted M1-8 closure interaction uses one detailed status line on the
+Plan/execution page: selected a of b, required space and planning-issue count
+before execution; phase, item progress, percent, throughput and ETA during it;
+key terminal outcomes afterward. Execution and terminal information replace
+stale plan facts. Unknown totals/rates/ETA remain unavailable rather than being
+invented; presentation estimates do not become durable execution facts.
+
+The status title and primary action share one row at the native minimum width;
+active controls may occupy the next row. The detailed status line places its
+Details disclosure at the right. Expanded diagnostics follow that line, and
+progress follows the expanded area. The shared card is used by Plan, live and
+terminal execution; the same presentation remains available to a future Verify
+view without implementing that view here. Details starts collapsed. Its bounded
+two-column pane shows global plan/execution diagnostics, issues, omissions and
+trash location on one side and the highlighted item's facts on the other. The
+item pane always exists while expanded and prompts for a highlight when none is
+active. The server-owned highlight focus, including the last focus in a range,
+chooses the item; a row click does not force a deliberately collapsed pane open.
+Checkbox selection remains independent. Planned facts appear before execution;
+later the one retained operation response adds distinct operation, automatic
+verification and stored-evidence truth. Ordinary detail omits the operation ID
+and has no sticky shaded title or per-row Details/Close buttons. The whole area
+collapses while retaining the table view, selection, highlight and scroll, and
+focus returns to the disclosure when hidden content held it. No separate card
+or reserved blank diagnostic row sits below the table. Headline failures,
+independent degraded outcomes and issue/Gap indication remain visible when
+folded. Trash is location-only, with no existence/count/purge claim.
+Terminal detail includes a concise outcome, local completion time when known,
+and nonnegative elapsed wall time from the matching session's end and start;
+null or invalid timing is omitted, and overlapping error categories are never
+summed into an invented total.
+The default/minimum windows remain 1280×800/1024×640; expansion can lengthen the
+card with bounded scrolling. Fine visual tuning follows integration closure.
+
+[M1_PLAN](M1_PLAN.md#scope-and-decisions) owns R0 delivery status and its finite
+acceptance. The superseded `76f9281` allocation and its rejected layout evidence
+are historical in [the recovery archive](obsolete/M1_8_U_RECOVERY.md).
+
 On `review-publication-protocol-failed`, the pane keeps prior settled review
 truth, clears the faulting live row decoration, disables mutating actions, and
 shows: **NamiSync could not publish this review safely. Close the task and try
@@ -1588,13 +1676,10 @@ erase any known failure or independent recording/integrity issue. Other I/O
 failures use the existing typed generic reason and available diagnostic detail;
 a richer I/O taxonomy is deferred to M2.
 
-M1 execution review also supplies an informational trash-location string; its
-placement (for example, text or tooltip) remains open. An exact completed count
-may accompany it only when outcome evidence supports that count. Otherwise
-show location information without a total. Planned operation counts are not
-completed counts, and this message is not a scan of everything in `.synctrash`
-or a promise that externally removable files still exist. No purge action is
-implied.
+M1 execution review also supplies an informational trash-location string. It is
+shown as a location only, without a total, existence claim, scan of everything
+in `.synctrash`, or promise that externally removable files still exist. No
+purge action is implied.
 
 The Plan pane distinguishes immutable **Review snapshot** context from the
 current edited selection and the latest fresh-execution notices. Search,
@@ -1669,12 +1754,64 @@ item total, item and attempt identity stay active but the determinate byte pair
 becomes absent, while aggregate progress retains the producing module's
 monotonic semantics. The bridge drain consumes these fields through its pure
 protocol reducer and exposes a frozen derived state to update consumers; the
-dormant row renderers do not yet consume that state.
+Plan row adapter consumes nominal active-item progress without changing the
+settled operation lifecycle during automatic verification.
 At the accepted cutover, the UI preserves large quantities exactly and keeps
 opaque identity non-arithmetic. Scalar and event-containment mechanics remain
 bridge/defense authority.
 Executor pipeline diagnostics are opt-in developer data, not the rolling
 transfer rate or ETA promised to users.
+
+**M1-8 progress presentation.** Events carry dispatcher-stamped UTC `at`;
+ordinary executor/verifier progress is throttled (normally 100 ms), with forced
+boundaries and lossy coalescing, not a delivery metronome. The browser reducer
+retains that time with the accepted Progress body (BRIDGE owns the contract).
+The digest uses phase aggregate bytes, with item-count fallback only for known
+byte-free work. Nominal active-item bytes feed Plan row progress independently;
+automatic verification preserves the settled operation lifecycle.
+
+- The status line shows phase aggregate byte progress and settled item count
+  (`items_done` of `items_total`); an active ordinal, if shown, is labeled
+  separately and never increments the settled count. The overall percentage
+  uses phase `bytes_done / bytes_total`; known byte-free work may use known item
+  counts, while unknown totals stay indeterminate. Zero/zero alone is not success.
+- An active row uses only nominal `item_type`/`item_id` matching and its own
+  `item_bytes_done / item_bytes_total`. No aggregate percentage is copied into
+  a row; a path is never identity. Unknown item counters remain indeterminate.
+  Reliable outcomes retire active decoration and supply the terminal row result.
+  Verification progress remains separate from the already-settled operation
+  result; it must not turn a completed copy back into an executing copy.
+- Throughput uses aggregate byte deltas divided by accepted event-time deltas.
+  Share one five-second smoothing horizon with phase ETA: a time-weighted EMA
+  with `alpha = 1 - exp(-dt / 5s)`, seeded by the first valid two-sample rate.
+  Retain only a prior sample and smoothed rate. Subtract Scalar64 bytes exactly
+  before approximate rate/ratio conversion. No per-item rate or second filter.
+  Sample once per accepted Progress update, never on repaint or an outcome
+  update that merely retains the prior Progress body/time.
+- ETA is `(bytes_total - bytes_done) / smoothed_rate` for this phase only.
+  Unknown totals or a zero/unavailable rate give unavailable ETA; throughput can
+  remain available without a total. Estimates never predict subsequent verify
+  work from execute, or survive terminal settlement. Label them as estimates.
+- Equal/backward timestamps simply rebase sampling and make the estimate
+  unavailable until another positive interval; do not reject valid progress.
+  Pause/resume, hidden-task return and budget changes restart sampling; phase,
+  session, explicit Gap and terminal/reset retire the old estimate. Ordinary
+  sequence holes/coalescing use observed deltas with no recovery or compensation.
+- Preserve ARCHITECTURE's aggregate high-water rule. Within a phase, displayed
+  percentage is a high-water of the valid computed percentages, so an expanded
+  verifier budget does not move the bar backward. For the same active item,
+  retain its displayed high-water across new attempts; raw attempt bytes may
+  restart. Keep only that active item's display state. Pause/resume and hidden
+  return preserve visual high-water; new phase/item, explicit Gap or session
+  retirement starts a fresh display domain. Unknown counters do not become
+  fabricated known values. Neither a held bar nor 100% claims success.
+
+Executor retry catch-up may temporarily produce zero observed throughput, and
+verifier counters measure physical read work with a growing budget. These are
+approximate progress estimates, not certified device speed or durable bytes.
+Loss/retry noise is acceptable; no accuracy SLO, retained sample history,
+background sampling timer or adaptive estimator is required for M1-8.
+
 Filter/search state never changes the underlying plan or inventory selection;
 changing a location or plan option invalidates only the state that semantically
 depends on it.

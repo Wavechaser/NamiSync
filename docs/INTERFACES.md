@@ -566,6 +566,12 @@ location-only trash context. It does not scan trash, infer an item count, or
 clear transport-loss history. Explicit task Close retires both the task and
 adapter overlay through the existing owner path.
 
+The adapter also projects `started_at` and `ended_at` from its already delivered
+terminal `SessionRecordView` only when that record belongs to the current
+execution session and the retained result is present. This adds no workflow
+summary field or durable state. A terminal execution with no start retains a
+null start and its actual completion time.
+
 Summary decoration is centralized in `TaskRegistry`; open, view updates,
 selection/highlight mutations and their conflict/no-op results therefore expose
 one exact execution shape without changing `PlanReviewState`. Window and detail

@@ -21,6 +21,9 @@ verification facts separately, and exposes no ledger evidence. A terminal
 session release replaces only facts proved by the captured workflow review: its
 item-free result axes, typed failure counts, location-only trash context and
 bounded retained item/evidence reads. Missing retained items remain unknown.
+The adapter adds the matching delivered terminal record's UTC start and end
+times to that Plan summary after capture. Both remain null before retained
+terminal truth exists; an unrun refusal retains a null start and a real end.
 
 Every Plan row with an operation identity receives that operation's compact
 overlay, including an operation-bearing container. Structural rows remain null.
@@ -139,7 +142,12 @@ returning to covered rows invalidates an obsolete result. Window reads do not
 disable the whole review or remount unchanged rows. View/selection/execute actions
 retain their separate pending and revision guards, so a later window response
 cannot restore older interactive facts. The retained browser window stays bounded
-to 256 rows, including when the total population is larger.
+at 256 rows. Background execution refresh waits for complete foreground view,
+highlight, selection, and scroll reads. It adopts only while the same review and
+reload generation, foreground epoch, view, task/session, and displayed offset
+remain current. Invalidated or rejected reads preserve one dirty replay at the
+accepted offset and cannot publish result facts or retire exact detail, including
+when the total population is larger.
 
 **Future surface.** Inventory projections remain service-owned and coherent for live readers. Retention must be bounded, with truthful refusal when capacity is unavailable; publication must not expose partially rebuilt state. Acknowledgment, restore, and terminal changes refresh affected facts without invalidating a live reader silently. Cache topology, pinning, and patch/rebuild mechanisms are reopened implementation choices. History belongs to `HISTORY.md` and pages in the database.
 
@@ -168,7 +176,21 @@ selection overlays; prior benchmark receipts do not certify the new totals.
 
 Sort is process-live view state, never durable preference; it preserves tree identity, selection, recursive action scope, execution order, rollups, and domain truth. A rebuild derives the retained chosen sort from the new immutable projection and publishes its permutation, indexes, and revisions atomically; a failed rebuild preserves the previous complete view, and window reads perform no I/O to discover sort keys. Inventory sorting retains its accepted contract but remains unrealized.
 
-**Future surface.** Follow mode resolves an active item to the nearest visible ancestor-or-self under the same collapse, filter, search, and result revision. If nothing in its chain is visible it reports `not-visible`, without mutating filters or inventing a root target. The client requests the returned index's window. User scrolling away turns follow off; only explicit action resumes it. Progress carries an opaque item identity, never a display path.
+**M1-8-R0 surface.** Follow resolves the active operation to the nearest
+visible ancestor-or-self under the current collapse, filter, search, sort and
+revision. Nothing visible means no target; never mutate filters or invent a
+root. Automatic follow is restricted to unfiltered, search-free canonical order.
+User scroll-away or changing sort/search/filter disables it until explicit enable;
+returning to canonical alone does not resume it. One-shot Go to current operation
+remains available in other views without enabling follow. DESKTOP_UI owns the
+floating controls and override behavior.
+
+Reuse `PlanProjection.operation_node_id_by_id` and existing visible-anchor
+resolution for off-window operations; the browser must not derive node IDs or
+retain a full mapping. The read-only active-operation variant of `get_plan_anchor`
+is bound to the current task/session and view revision for execution and post-copy
+verification. Existing node-anchor callers retain their unchanged request shape. BRIDGE owns its exact wire extension;
+standalone integrity/inventory following remains outside this batch.
 
 ## Bounded work and focused measurement
 
@@ -323,8 +345,9 @@ These results apply to the P2 measured build; later UI edits reopen affected
 cases under their own declared evidence. Final committed-source validation is
 required in addition to receipt/result validation.
 
-For terminal reproduction from the repository root, load the three named
-artifacts and the unchanged compact contract, import
+For historical P2 terminal reproduction, check out its recorded accepted
+revision (`4bbf943`) with matching retained package bytes, then load the three
+named artifacts and the unchanged compact contract, import
 `tests/interfaces/web/_m1_8_execution_receipt_scale.py`, and invoke
 `validate_authority_workspace` with the retained wheel/installed paths, then
 `validate_receipts`, `validate_result` and `validate_committed_sources`.
@@ -334,6 +357,14 @@ is `build/m1-8-p2-terminal-validate.py --installed-root <site-packages>
 --installed-wheel <wheel>`, executed with the project Python. It calls both
 historical and supplemental checks unmocked and finishes with named-artifact
 and clean-HEAD binding. HANDOFF records the actual retained installation.
+The validator intentionally rejects later changed source bytes. Pending U
+acceptance includes both P2 receipt metrics in its thirteen-case collection;
+once accepted, that evidence supersedes P2's measurements for the final U build.
+Do not rewrite frozen P2 artifacts or require their clean-HEAD check on U's tree.
+This supersession is pending, not a claim that U performance has passed.
+Receipt/result checks use committed artifacts; workspace validation additionally
+requires the matching retained wheel and installation. Missing package evidence
+must not be described as a successful workspace reproduction.
 
 Component windows, changed views, construction and projection-memory acceptance
 retain their existing premises only while PlanReviewState, projection/order/
@@ -343,6 +374,37 @@ Control receipt paths likewise require an unchanged timed dependency path.
 Changing a premise reopens affected cases; later GUI changes rerun affected
 receipts. The new execution overlay has structural population/work/byte bounds,
 not a new numeric latency or memory claim.
+
+### Scoped M1-8 execution UI revalidation
+
+Gate U uses a separately versioned affected-path report rather than changing
+the protected P2 or historical M1-7 authorities. Its fixed order is eight cold
+interaction cases—update view, mutate selection, destructive start, confirm,
+nondestructive start, pause, resume and cancel click feedback—followed by five
+warm receipt cases: one-row window, start, pause, resume and cancel. Run all 13
+untimed readiness children first, then five fresh children per case in that
+order, for exactly 78 attempts. Each cold child contributes one sample and must
+finish within 50 ms. Each warm child contributes six samples; nearest-rank p95
+must be at most 100 ms and the maximum at most 250 ms.
+
+Keep the compact contract's fixtures, warmup, endpoints, fresh unused-Plan
+population and installed headed path. The scoped rootless adapter retains
+120,000 projection nodes, 119,999 public rows and independently checks the
+first Previous paths group. For selection-click only, it may adapt the one
+legacy `initialWindow.total !== 120000` check to 119999 after proving exactly
+one original site and byte-for-byte identity everywhere else; it never edits
+the protected script or rewrites an observation.
+
+Before launch, freeze and independently validate the exact source, CSS,
+instrument, adapter, checker, control, wheel, installed-runtime and profile
+bindings. Durably publish the complete attempt plan and current launch state;
+stop at the first failure and refuse overwrite, restart or favorable retry.
+Raw receipts and derived results have separate validators for exact identities,
+order, samples, hashes and budgets. Positive and corruption controls must reach
+the real supplemental byte and Git checks. Component construction, general
+window/sort/selection and process-memory observations remain excluded only when
+the final diff proves their measured code and retained graphs unchanged. Actual
+collection occurs only after final source/control review.
 
 ### Existing complete-collection procedure
 

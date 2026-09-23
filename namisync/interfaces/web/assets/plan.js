@@ -28,16 +28,37 @@ const INTENT_KEYS = Object.freeze(new Set([
 const ROW_LIFECYCLE_KEYS = Object.freeze(new Set([
   "executing",
   "completed",
+  "partial",
+  "degraded",
+  "incomplete",
+  "canceled",
+  "refused",
+  "capacity",
+  "failed",
 ]));
 
 function validProgressPercent(rowView) {
   const executing = rowView.lifecycleKey === "executing";
   return executing
-    ? typeof rowView.progressPercent === "number" &&
-      Number.isFinite(rowView.progressPercent) &&
-      rowView.progressPercent >= 0 &&
-      rowView.progressPercent <= 100
+    ? rowView.progressPercent === undefined ||
+      (typeof rowView.progressPercent === "number" &&
+       Number.isFinite(rowView.progressPercent) &&
+       rowView.progressPercent >= 0 &&
+       rowView.progressPercent <= 100)
     : rowView.progressPercent === undefined;
+}
+
+function validVerificationProgress(rowView) {
+  if (rowView.verification === undefined) {
+    return rowView.verificationProgressPercent === undefined;
+  }
+  return rowView.verification === true && (
+    rowView.verificationProgressPercent === undefined ||
+    (typeof rowView.verificationProgressPercent === "number" &&
+     Number.isFinite(rowView.verificationProgressPercent) &&
+     rowView.verificationProgressPercent >= 0 &&
+     rowView.verificationProgressPercent <= 100)
+  );
 }
 
 function validRowView(rowView) {
@@ -54,6 +75,7 @@ function validRowView(rowView) {
     typeof rowView.expanded === "boolean" &&
     STRING_FIELDS.every((name) => typeof rowView[name] === "string") &&
     validProgressPercent(rowView) &&
+    validVerificationProgress(rowView) &&
     (
       rowView.lifecycleKey === undefined
         ? rowView.intentKey === "" || INTENT_KEYS.has(rowView.intentKey)
@@ -86,7 +108,7 @@ export function renderPlanRow(element, rowView) {
   } else if (rowView.intentKey !== "") {
     intent.dataset.intent = rowView.intentKey;
   }
-  if (rowView.lifecycleKey === "executing") {
+  if (rowView.lifecycleKey === "executing" && rowView.progressPercent !== undefined) {
     renderFileProgress(
       intent,
       rowView.intentText,
@@ -98,6 +120,22 @@ export function renderPlanRow(element, rowView) {
     intentLabel.className = "nami-file-state-label";
     renderText(intentLabel, rowView.intentText);
     intent.append(intentLabel);
+  }
+  if (rowView.verification === true) {
+    const verification = ownerDocument.createElement("div");
+    verification.className = "nami-plan-row__verification";
+    if (rowView.verificationProgressPercent === undefined) {
+      verification.dataset.lifecycle = "verifying";
+      renderText(verification, "Verifying");
+    } else {
+      renderFileProgress(
+        verification,
+        "Verification",
+        rowView.verificationProgressPercent,
+        "verifying",
+      );
+    }
+    intent.append(verification);
   }
 
   const checksum = createCell(ownerDocument, "nami-plan-row__checksum", "secondary");

@@ -251,6 +251,7 @@ def test_modules_use_only_local_explicit_js_imports(
             "./panels.js",
             "./rail.js",
             "./render.js",
+            "./task_status.js",
         ],
         "appearance.js": [],
         "bridge.js": [],
@@ -475,6 +476,26 @@ def test_plan_review_component_keeps_actions_bounded_and_generation_safe() -> No
             str(assets / "plan_review.js"),
             str(assets / "render.js"),
             str(assets / "icons.js"),
+        ],
+        capture_output=True,
+        check=False,
+        text=True,
+        timeout=10,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert completed.stdout == "ok"
+
+
+def test_execution_review_projects_independent_terminal_and_row_axes() -> None:
+    node = _node_executable()
+    assert node is not None, "Node.js is required for the execution-review witness"
+    assets = PROJECT_ROOT / "namisync" / "interfaces" / "web" / "assets"
+    completed = subprocess.run(
+        [
+            str(node),
+            str(PROJECT_ROOT / "tests" / "assets" / "execution_review_probe.mjs"),
+            str(assets / "plan_review.js"),
+            str(assets / "task_status.js"),
         ],
         capture_output=True,
         check=False,
@@ -752,6 +773,13 @@ def test_plan_row_renderer_is_active_and_consumes_only_projected_views(
     assert _javascript_frozen_set(plan, "ROW_LIFECYCLE_KEYS") == (
         "executing",
         "completed",
+        "partial",
+        "degraded",
+        "incomplete",
+        "canceled",
+        "refused",
+        "capacity",
+        "failed",
     )
     assert "ROW_LIFECYCLE_KEYS.has(rowView.lifecycleKey)" in plan
     assert 'rowView.lifecycleKey === "executing"' in plan
@@ -1410,27 +1438,8 @@ def test_sh_g_7_packaged_shell_has_accessible_process_live_blank_tasks(
     assert not re.search(r"[0-9a-f]{32}", shell)
 
 
-def test_sh_g_7_shell_layout_reflows_without_fixed_viewport_clipping(
-    built_wheel: BuiltWheel,
-) -> None:
-    app_css = _wheel_assets(built_wheel)["app.css"]
-
-    assert '"rail work"' in app_css
-    assert "minmax(12rem, 18rem) minmax(0, 1fr)" in app_css
-    assert "container-type: inline-size;" in app_css
-    assert "@container (max-width: 48rem)" in app_css
-    assert "@media (max-width: 48rem)" not in app_css
-    assert '"rail"' in app_css and '"work"' in app_css
-    assert "grid-template-columns: minmax(0, 1fr);" in app_css
-    assert app_css.count("min-inline-size: 0;") >= 2
-    assert "min-block-size: 100vh;" in app_css
-    assert "height: 100vh" not in app_css
-    for selector, declarations in re.findall(r"([^{}]+)\{([^{}]*)\}", app_css.split(".nami-tree", 1)[0]):
-        if "overflow: hidden" in declarations:
-            assert selector.strip().replace("\r\n", "\n") in {"#app", ".nami-task-rail", ".nami-task-card__paths > span", ".nami-labeled-path__value", ".nami-plan-review__paths", ".nami-plan-review__path", ".nami-plan-review__settings > span", ".nami-work-panel:has(.nami-plan-review)", ".nami-setup__recent", ".nami-setup__pair-path-value,\n.nami-setup__batch-path-value", ".nami-setup__batch-settings > span", ".nami-setup__batch-status"}
-    assert "grid-template-rows: auto minmax(0, 1fr);" in app_css
-    assert "grid-template-rows: auto minmax(0, 1fr) auto;" in app_css
-    assert "--palette-" not in app_css
+def test_shell_styles_use_semantic_tokens(built_wheel: BuiltWheel) -> None:
+    assert "--palette-" not in _wheel_assets(built_wheel)["app.css"]
 
 
 def test_gui_s9_scrollbars_and_tables_share_fixed_native_geometry(

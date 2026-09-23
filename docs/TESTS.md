@@ -64,6 +64,15 @@ Run it for phase integration, global fixtures or pytest configuration, the
 department manifest, broad shared contracts, uncertain blast radius, and before
 considering a non-headed phase complete.
 
+The session-scoped wheel fixture enumerates Git tracked and nonignored `namisync`
+paths plus `pyproject.toml`, `README.md`, and `LICENSE`, copies their physical
+bytes into a clean staging tree, and builds from that tree. It rejects source
+or staging drift around the build, duplicate ZIP members, and any missing,
+extra, or changed package file in the wheel or installed environment before
+yielding an installed fixture. Canonical identity records beside the temporary
+wheel and installations bind later evidence to the source manifest and artifact
+hash without making generated build or cache files package inputs.
+
 Required ordinary JavaScript tests are unmarked and non-skippable. They execute
 the packaged public event consumers, start-plan deadline/replay and interactive
 bridge wrappers, and the production drain-manager live-event

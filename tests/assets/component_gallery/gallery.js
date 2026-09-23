@@ -10,6 +10,11 @@ const FAILURE_TYPES = Object.freeze(new Set([
   "TypeError",
 ]));
 let galleryStage = "module_import";
+let galleryMeasurementStep = "not_started";
+let galleryFailureReason = "stage_failure";
+let galleryLayoutFailure = null;
+let gallerySettled = false;
+let galleryWatchdog = null;
 const PSEUDO_STATE_SETTLE_MS = 350;
 const CONTROL_REPORT_CHUNK_ROWS = 10;
 
@@ -19,6 +24,36 @@ function validAccepted(value) {
     !Array.isArray(value) &&
     Object.keys(value).length === 1 &&
     value.accepted === true;
+}
+
+function validMinimumWindowStatus(value) {
+  if (value === null || typeof value !== "object" || Array.isArray(value)
+      || typeof value.complete !== "boolean") return false;
+  if (!value.complete) return Object.keys(value).length === 1;
+  return Object.keys(value).length === 8
+    && [
+      "owner_scale", "minimum_width", "minimum_height",
+      "outer_width", "outer_height", "client_width", "client_height",
+    ].every((name) => Number.isFinite(value[name]) && value[name] > 0);
+}
+
+function validNativeFailureSnapshot(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    && Object.keys(value).length === 8
+    && ["none", "pseudo_states", "wheel_content", "wheel_backdrop", "minimum_window"]
+      .includes(value.pending)
+    && [
+      "owner_scale", "minimum_width", "minimum_height", "outer_width",
+      "outer_height", "client_width", "client_height",
+    ].every((name) => Number.isFinite(value[name]) && value[name] > 0);
+}
+
+function minimumWindowSettled(value, innerWidth, innerHeight) {
+  return validMinimumWindowStatus(value) && value.complete
+    && Math.abs(value.outer_width - value.minimum_width) <= 1
+    && Math.abs(value.outer_height - value.minimum_height) <= 1
+    && Math.abs(value.client_width / value.owner_scale - innerWidth) <= 2
+    && Math.abs(value.client_height / value.owner_scale - innerHeight) <= 2;
 }
 
 async function waitForTheme(theme) {
@@ -46,25 +81,90 @@ async function waitForThemeSelector(root, theme, disabled) {
   throw new Error("the product theme selector did not reconcile");
 }
 
+function buildFailureEvidence(
+  stage, type, step, reason, native = null, layout = null,
+) {
+  const failure = { stage, type, step, reason };
+  if (native !== null) failure.native = Object.freeze({ ...native });
+  if (layout !== null) failure.layout = Object.freeze({ ...layout });
+  return Object.freeze(failure);
+}
+
+function rejectDiagnosticLayout(layoutResult) {
+  galleryFailureReason = "layout_invariant";
+  galleryLayoutFailure = Object.freeze(layoutResult);
+  throw new Error(`${layoutResult.case} diagnostic layout is not bounded and reachable`);
+}
+
 async function reportFailure(error) {
+  if (gallerySettled) return;
+  gallerySettled = true;
+  if (galleryWatchdog !== null) clearTimeout(galleryWatchdog);
   const candidate = error !== null && typeof error === "object" ? error.name : "";
   const type = FAILURE_TYPES.has(candidate) ? candidate : "Error";
-  const failure = Object.freeze({ stage: galleryStage, type });
+  let native = null;
+  const nativeFailure = [
+    "native_pseudo_pending",
+    "native_wheel_pending",
+    "native_minimum_pending",
+    "native_minimum_dimensions",
+  ].includes(galleryFailureReason);
+  let dispatchInteractive;
   try {
-    const { dispatchInteractive } = await import("/bridge.js");
-    await dispatchInteractive(
-      "test_report",
-      Object.freeze({ phase: "failure", failure }),
-      validAccepted,
-    );
+    ({ dispatchInteractive } = await import("/bridge.js"));
   } catch {
-    // The native scenario deadline remains authoritative when transport is gone.
+    dispatchInteractive = null;
+  }
+  if (nativeFailure && typeof dispatchInteractive === "function") {
+    try {
+      native = await dispatchInteractive(
+        "test_report",
+        Object.freeze({ phase: "diagnostic_status" }),
+        validNativeFailureSnapshot,
+      );
+    } catch {
+      galleryFailureReason = "stage_failure";
+    }
+  }
+  const failure = buildFailureEvidence(
+    galleryStage, type, galleryMeasurementStep, galleryFailureReason,
+    native, galleryLayoutFailure,
+  );
+  if (typeof dispatchInteractive === "function") {
+    try {
+      await dispatchInteractive(
+        "test_report",
+        Object.freeze({ phase: "failure", failure }),
+        validAccepted,
+      );
+    } catch {
+      // Preserve the closed location even if optional diagnostic detail drifted.
+      try {
+        await dispatchInteractive(
+          "test_report",
+          Object.freeze({
+            phase: "failure",
+            failure: buildFailureEvidence(
+              galleryStage, type, galleryMeasurementStep, "stage_failure",
+            ),
+          }),
+          validAccepted,
+        );
+      } catch {
+        // The native scenario deadline remains authoritative when transport is gone.
+      }
+    }
   }
   const target = document.querySelector("#host-status");
   if (target instanceof HTMLElement) {
     target.textContent = `Gallery failed: ${type}`;
   }
 }
+
+window.addEventListener("error", (event) => { void reportFailure(event.error); });
+window.addEventListener("unhandledrejection", (event) => {
+  void reportFailure(event.reason);
+});
 
 (async () => {
 
@@ -92,6 +192,7 @@ async function reportFailure(error) {
     { key: "canceled_after_publish", text: "Canceled after publish", hue: "yellow", form: "fill", icon: "warning", shape: "triangle", cue: "Published filesystem results need review" },
     { key: "canceled_after_mutation", text: "Canceled after mutation", hue: "yellow", form: "fill", icon: "warning", shape: "triangle", cue: "Filesystem mutations need review" },
     { key: "refused", text: "Refused", hue: "yellow", form: "fill", icon: "warning", shape: "barrier", cue: "A precondition needs attention" },
+    { key: "capacity", text: "Needs target space", hue: "yellow", form: "fill", icon: "warning", shape: "triangle", cue: "Execution stopped for target capacity" },
     { key: "failed", text: "Failed", hue: "red", form: "fill", icon: "dismiss-circle", shape: "circle-x", cue: "The run failed" },
     { key: "errored", text: "Errored", hue: "red", form: "fill", icon: "dismiss-circle", shape: "circle-x", cue: "The run encountered an error" },
   ]);
@@ -116,6 +217,7 @@ async function reportFailure(error) {
     { key: "update", parentKey: "mkdir", rowView: Object.freeze({ checked: false, mixed: false, selectionDisabled: false, selectionLabel: "Select photos DSC_1001.jpeg", depth: 1, folder: false, expanded: false, nameText: "DSC_1001.jpeg", sizeText: "6.7 MB", intentText: "Update", intentKey: "update", checksumText: "90ef12ab", notesText: "Changed child file." }) },
     { key: "copying", rowView: Object.freeze({ checked: true, mixed: false, selectionDisabled: false, selectionLabel: "Select active-copy.bin", depth: 0, folder: false, expanded: false, nameText: "active-copy.bin", sizeText: "24 MB", intentText: "Copying", intentKey: "", lifecycleKey: "executing", progressPercent: 42, checksumText: "—", notesText: "Projected execution is in progress." }) },
     { key: "completed", rowView: Object.freeze({ checked: true, mixed: false, selectionDisabled: false, selectionLabel: "Select completed-copy.bin", depth: 0, folder: false, expanded: false, nameText: "completed-copy.bin", sizeText: "12 MB", intentText: "Completed", intentKey: "", lifecycleKey: "completed", checksumText: "5a2f8c10", notesText: "Projected execution completed." }) },
+    { key: "capacity", rowView: Object.freeze({ checked: true, mixed: false, selectionDisabled: true, selectionLabel: "Selection unavailable for capacity.bin", depth: 0, folder: false, expanded: false, nameText: "capacity.bin", sizeText: "0 B", intentText: "Failed", intentKey: "", lifecycleKey: "capacity", checksumText: "—", notesText: "Operation: Failed (Disk capacity) · Automatic verification: Verified · Stored evidence: Unrecorded" }) },
     { key: "move", rowView: Object.freeze({ checked: true, mixed: false, selectionDisabled: false, selectionLabel: "Select report.pdf", depth: 0, folder: false, expanded: false, nameText: "report.pdf", sizeText: "842 KB", intentText: "Move", intentKey: "move", checksumText: "3456cdef", notesText: "Relocate without replacing bytes." }) },
     { key: "move_update", rowView: Object.freeze({ checked: true, mixed: false, selectionDisabled: false, selectionLabel: "Select notes.md", depth: 0, folder: false, expanded: false, nameText: "notes.md", sizeText: "4.6 KB", intentText: "Move + update", intentKey: "move_update", checksumText: "7890abcd", notesText: "Relocate and replace content." }) },
     { key: "recase", rowView: Object.freeze({ checked: true, mixed: false, selectionDisabled: false, selectionLabel: "Select Logo.PNG", depth: 0, folder: false, expanded: false, nameText: "Logo.PNG", sizeText: "32 KB", intentText: "Change name casing", intentKey: "recase", checksumText: "bcde1234", notesText: "Change only the path casing." }) },
@@ -209,6 +311,24 @@ async function reportFailure(error) {
   ) {
     throw new TypeError("installed icon registry has an invalid public shape");
   }
+  galleryWatchdog = setTimeout(async () => {
+    if (gallerySettled) return;
+    gallerySettled = true;
+    try {
+      await dispatchInteractive(
+        "test_report",
+        Object.freeze({
+          phase: "failure",
+          failure: buildFailureEvidence(
+            galleryStage, "Error", galleryMeasurementStep, "watchdog_timeout",
+          ),
+        }),
+        validAccepted,
+      );
+    } catch {
+      // The outer 75-second scenario deadline remains authoritative.
+    }
+  }, 60000);
   galleryStage = "page_setup";
 
   const forced = matchMedia("(forced-colors: active)").matches;
@@ -688,6 +808,7 @@ async function reportFailure(error) {
     LIFECYCLE_PROGRESS_CASES,
   );
   galleryStage = "plan_matrix";
+  galleryMeasurementStep = "plan_list_construction";
   const planSection = document.createElement("section");
   planSection.className = "nami-card";
   planSection.dataset.gallerySection = "plan_rows";
@@ -1028,10 +1149,28 @@ async function reportFailure(error) {
   app.append(planSection);
   planSpecimen.refreshResizerValues();
   integritySpecimen.refreshResizerValues();
-  const planReviewPanel = createPlanReviewPanel(Object.fromEntries([
+  galleryMeasurementStep = "plan_review_construction";
+  let renderedGalleryTask = null;
+  let galleryWindowRequests = [];
+  const planReviewCallbacks = Object.fromEntries([
     "onViewChange", "onWindow", "onSelect", "onScopeSelect", "onExecute", "onControl",
-    "onPlanAgain", "onHighlight", "onHighlightedSelect",
-  ].map((name) => [name, () => {}])));
+    "onPlanAgain", "onHighlight", "onHighlightedSelect", "onExecutionDetail",
+    "onFollowOverride", "onNavigateCurrent",
+  ].map((name) => [name, () => {}]));
+  planReviewCallbacks.onWindow = (review, offset) => {
+    galleryWindowRequests.push(offset);
+    if (offset === null || renderedGalleryTask === null) return;
+    review.window = {
+      ...review.window,
+      offset,
+      rows: Array.from(
+        { length: Math.min(64, Math.max(0, review.window.total - offset)) },
+        (_, index) => galleryRow(offset + index),
+      ),
+    };
+    planReviewPanel.render(renderedGalleryTask);
+  };
+  const planReviewPanel = createPlanReviewPanel(planReviewCallbacks);
   planReviewPanel.element.dataset.gallerySection = "plan_review_controls";
   planReviewPanel.element.style.blockSize = "480px";
   planReviewPanel.element.style.gridColumn = "1 / -1";
@@ -1058,7 +1197,16 @@ async function reportFailure(error) {
         selection_state: "reviewing", scope_selectable_operation_count: 21,
         scope_selected_operation_count: 12,
       },
-      window: { disposition: "current", view_revision: 0, offset: 0, total: 0, rows: [] },
+      window: {
+        disposition: "current", view_revision: 0, highlight_revision: 0,
+        offset: 0, total: 0, rows: [],
+        execution: {
+          execution_revision: 0, session_id: null, result: null,
+          started_at: null, ended_at: null,
+          failed_operation_count: null, disk_capacity_failure_count: null,
+          gap: null, trash_location: null,
+        },
+      },
       pending: null,
       message: "",
     },
@@ -1071,36 +1219,54 @@ async function reportFailure(error) {
     executionAttempt: null,
     form: { options: { verify_after_execute: true, deletion_policy: "trash" } },
   };
+  galleryMeasurementStep = "plan_review_initial_render";
   planReviewPanel.render(planReviewTask);
+  const planDetailsToggle = planReviewPanel.element.querySelector('[data-action="toggle-execution-details"]');
+  const planItemPane = planReviewPanel.element.querySelector(".nami-plan-review__detail");
+  planDetailsToggle.click();
+  if (planDetailsToggle.ariaExpanded !== "true"
+      || planItemPane.closest("[hidden]") !== null
+      || !planItemPane.textContent.includes("Highlight an item to see its details.")) {
+    throw new Error("Plan status card must show the empty item pane when expanded");
+  }
+  planDetailsToggle.click();
+  galleryMeasurementStep = "plan_review_static_contract";
   const semanticSettings = planReviewPanel.element.querySelector(".nami-plan-review__settings");
   const filterSpecimen = planReviewPanel.element.querySelector('[data-filter="noop"]');
+  galleryMeasurementStep = "plan_review_filter_spacing";
   if (filterSpecimen.children[0].textContent !== "No change"
       || filterSpecimen.children[1].textContent !== "2"
       || getComputedStyle(filterSpecimen).wordSpacing !== "0px") {
     throw new Error("filter label/count spacing must not stretch words");
   }
   const pathValues = [...planReviewPanel.element.querySelectorAll(".nami-labeled-path__value")];
+  galleryMeasurementStep = "plan_review_path_alignment";
   if (Math.abs(pathValues[0].getBoundingClientRect().left - pathValues[1].getBoundingClientRect().left) > 0.5) {
     throw new Error("Plan path starts must align");
   }
   const resetBounds = planReviewPanel.element.querySelector('[data-action="plan-again"]').getBoundingClientRect();
+  galleryMeasurementStep = "plan_review_reset_geometry";
   if (Math.abs(resetBounds.width - resetBounds.height) > 0.5) throw new Error("Plan again must be square");
   const semanticPaths = planReviewPanel.element.querySelector(".nami-plan-review__paths");
   const settingBounds = semanticSettings.getBoundingClientRect();
   const pathBounds = semanticPaths.getBoundingClientRect();
   const statusDetail = planReviewPanel.element.querySelector(".nami-plan-review__status-summary");
   const statusFeedback = planReviewPanel.element.querySelector(".nami-plan-review__status");
+  galleryMeasurementStep = "plan_review_status_typography";
   if (getComputedStyle(statusFeedback).fontSize !== getComputedStyle(statusDetail).fontSize
       || getComputedStyle(statusFeedback).color !== getComputedStyle(statusDetail).color) {
     throw new Error("status feedback must share secondary status typography and color");
   }
+  galleryMeasurementStep = "plan_review_caption_typography";
   if (getComputedStyle(semanticPaths).fontSize !== "12px"
       || getComputedStyle(semanticSettings).fontSize !== "12px") {
     throw new Error("Plan paths and semantic settings must use caption size");
   }
+  galleryMeasurementStep = "plan_review_setting_alignment";
   if (Math.abs(settingBounds.left - resetBounds.left) > 4) {
     throw new Error("semantic icons must align optically with the Plan-again button");
   }
+  galleryMeasurementStep = "plan_review_path_label_gap";
   for (const value of pathValues) {
     const label = value.previousElementSibling;
     if (value.getBoundingClientRect().left - label.getBoundingClientRect().right > 4.5) {
@@ -1109,6 +1275,7 @@ async function reportFailure(error) {
   }
   const semanticColorProbe = document.createElement("span");
   semanticSettings.append(semanticColorProbe);
+  galleryMeasurementStep = "plan_review_setting_states";
   for (const [verify, deletion, glyphs, tones] of [
     [true, "trash", ["arrow-sync-checkmark", "delete"], ["accent", "muted"]],
     [false, "additive", ["arrow-sync", "document-add"], ["muted", "accent"]],
@@ -1140,6 +1307,7 @@ async function reportFailure(error) {
     if (getComputedStyle(cell).color !== tertiaryColor) throw new Error("metadata must use tertiary text");
   }
   semanticColorProbe.remove();
+  galleryMeasurementStep = "plan_review_session_states";
   planReviewPanel.render({ ...planReviewTask, review: null, sessionState: "active" });
   if (!planReviewPanel.element.querySelector(".nami-plan-review__progress")
       .classList.contains("nami-progress--indeterminate")) {
@@ -1156,6 +1324,7 @@ async function reportFailure(error) {
       .classList.contains("nami-progress--indeterminate")) {
     throw new Error("ready Plan progress must return to idle");
   }
+  galleryMeasurementStep = "plan_review_filter_menu";
   planReviewPanel.element.querySelector('[data-filter="update"]')?.parentElement
     ?.querySelector(".nami-plan-filter-split__arrow")?.click();
   const menuCounts = [...planReviewPanel.element.querySelectorAll('.nami-plan-filter-split__menu:not([hidden]) .nami-filter-count')];
@@ -1163,6 +1332,459 @@ async function reportFailure(error) {
     Math.abs(count.getBoundingClientRect().right - menuCounts[0].getBoundingClientRect().right) > 0.5)) {
     throw new Error("filter menu counts must align right");
   }
+
+  const longDiagnostic = `literal terminal diagnostic ${"x".repeat(1600)}`;
+  const longTrashLocation = `D:\\${"segment\\".repeat(4095)}file`;
+  if (longTrashLocation.length !== 32767) throw new Error("trash-location fixture bound drifted");
+  const calmExecutionResult = {
+    headline: "success", filesystem: "succeeded", integrity: "not-run",
+    recording: "ok", audit: "ok", disposition: "ran", canceled: false,
+    phases: [], bytes_done: "0", bytes_total: "0", error: null,
+    recording_degraded_items: 0, recording_issues: [],
+    omitted_detail_count: 0, presentation_omitted_detail_count: 0,
+    review_refusal: null,
+  };
+  const longExecutionResult = {
+    ...calmExecutionResult,
+    headline: "partial", filesystem: "failed", recording: "degraded",
+    audit: "degraded",
+    phases: [
+      { phase: "prepare", status: "failed", error: longDiagnostic },
+      { phase: "execute", status: "failed", error: longDiagnostic },
+      { phase: "verify", status: "failed", error: longDiagnostic },
+    ],
+    error: longDiagnostic,
+    recording_degraded_items: 1,
+    recording_issues: [{ reason: "final-flush-failed", detail: longDiagnostic }],
+  };
+  const longExecutionDetail = {
+    state: "current",
+    operationId: "5".repeat(32),
+    executionRevision: 1,
+    focusNodeId: `node-${"7".repeat(32)}`,
+    message: null,
+    response: {
+      disposition: "current", execution_revision: 1,
+      operation_id: "5".repeat(32),
+      operation: {
+        kind: "copy", path: "C:\\source\\long-diagnostic.bin",
+        result: "failed", reason: "io-error",
+        detail: { diagnostic: longDiagnostic },
+        recording: "degraded", recording_detail: longDiagnostic,
+        detail_omitted_count: 0,
+      },
+      automatic_verification: null,
+      evidence: { state: "unrecorded", content: null },
+    },
+  };
+
+  const populatedRow = {
+    node_id: `node-${"7".repeat(32)}`, display: "long-diagnostic.bin", depth: 0,
+    is_container: false, visible_index: 0, parent_visible_index: null,
+    first_child_visible_index: null, position_in_set: 1, set_size: 1000,
+    expanded: false, row_kind: "operation", operation_id: "5".repeat(32),
+    operation_kind: "copy", reason: null, blocked_reason: null,
+    selection: "selected", selectable_operation_count: 1,
+    selected_operation_count: 1, operation_count: 1, size: "4096",
+    mtime_ns: "1000000000", dependency_count: 0, risk: "none",
+    move_peer_id: null, notice: null, selection_exclusion_reason: null,
+    execution: {
+      operation: {
+        result: "failed", reason: "io-error", recording: "degraded",
+        recording_reason: "final-flush-failed", detail_omitted_count: 0,
+      },
+      automatic_verification: null,
+      evidence: null,
+    },
+  };
+  let galleryFocusedOperationId = null;
+
+
+  function galleryRow(index) {
+    const longOperation = index === 400;
+    const identity = index.toString(16).padStart(32, "0");
+    const selected = index < 12;
+    return {
+      ...populatedRow,
+      node_id: longOperation ? populatedRow.node_id : "node-" + identity,
+      operation_id: longOperation ? populatedRow.operation_id : identity,
+      display: longOperation ? populatedRow.display : "operation-" + index + ".bin",
+      visible_index: index,
+      position_in_set: index + 1,
+      selection: selected ? "selected" : "unselected",
+      selected_operation_count: selected ? 1 : 0,
+      highlighted: (longOperation ? populatedRow.operation_id : identity) === galleryFocusedOperationId,
+      execution: longOperation ? populatedRow.execution : null,
+    };
+  }
+
+  planReviewCallbacks.onHighlight = (review, gesture, nodeId) => {
+    if (gesture !== "replace") throw new Error("gallery row activation changed");
+    const row = review.window.rows.find((item) => item.node_id === nodeId);
+    if (row?.operation_id !== populatedRow.operation_id) {
+      throw new Error("gallery focus did not target the retained operation");
+    }
+    galleryFocusedOperationId = row.operation_id;
+    review.summary.highlight_focus_node_id = row.node_id;
+    review.summary.highlight_focus_visible_index = row.visible_index;
+    review.summary.highlight_revision = (review.summary.highlight_revision ?? 0) + 1;
+    for (const item of review.window.rows) item.highlighted = item.node_id === row.node_id;
+    review.executionDetail = longExecutionDetail;
+    planReviewPanel.render(renderedGalleryTask);
+  };
+
+  async function diagnosticLayout(caseName, blockSize, expanded, populated) {
+    if (blockSize === null) planReviewPanel.element.style.removeProperty("block-size");
+    else planReviewPanel.element.style.blockSize = `${blockSize}px`;
+    const result = populated ? longExecutionResult : calmExecutionResult;
+    galleryFocusedOperationId = null;
+    galleryWindowRequests = [];
+    renderedGalleryTask = {
+      ...planReviewTask,
+      executionStarted: true,
+      sessionState: populated ? "failed" : "completed",
+      executionResult: result,
+      review: {
+        ...planReviewTask.review,
+        summary: {
+          ...planReviewTask.review.summary, selection_state: "committed",
+          highlight_focus_node_id: null, highlight_focus_visible_index: null,
+          highlight_revision: 0,
+        },
+        window: {
+          ...planReviewTask.review.window,
+          execution: {
+            execution_revision: 1, session_id: "6".repeat(32), result,
+            started_at: "2026-09-23T08:00:00+00:00",
+            ended_at: "2026-09-23T08:00:04+00:00",
+            failed_operation_count: populated ? 1 : 0,
+            disk_capacity_failure_count: 0, gap: null,
+            trash_location: populated ? longTrashLocation : null,
+          },
+          offset: 0,
+          total: populated ? 1000 : 0,
+          rows: populated ? [galleryRow(0)] : [],
+        },
+        executionDetail: null,
+      },
+    };
+    planReviewPanel.render(renderedGalleryTask);
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    const toggle = planReviewPanel.element.querySelector(".nami-plan-review__details-toggle");
+    if (!(toggle instanceof HTMLButtonElement)) throw new TypeError(`${caseName} Details toggle is unavailable`);
+    if ((toggle.getAttribute("aria-expanded") === "true") !== expanded && !toggle.hidden) toggle.click();
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    const pageScroll = { x: window.scrollX, y: window.scrollY };
+    planReviewPanel.element.scrollIntoView({ block: "end", inline: "nearest" });
+    const content = planReviewPanel.element.querySelector(".nami-plan-review__content");
+    const table = planReviewPanel.element.querySelector(".nami-plan-review__table-card");
+    const tableHeader = table?.querySelector(".nami-file-list__header");
+    const viewport = planReviewPanel.element.querySelector(".nami-plan-review__rows");
+    const diagnostics = planReviewPanel.element.querySelector(".nami-plan-review__diagnostics");
+    const globalDiagnostics = planReviewPanel.element.querySelector(".nami-plan-review__global-diagnostics");
+    const issueRegion = planReviewPanel.element.querySelector(".nami-plan-review__execution-issues");
+    const trashRegion = planReviewPanel.element.querySelector(".nami-plan-review__execution-trash");
+    const detailRegion = planReviewPanel.element.querySelector(".nami-plan-review__detail");
+    const detailBody = detailRegion.querySelector(".nami-plan-review__detail-body");
+    if (!(content instanceof HTMLElement) || !(table instanceof HTMLElement)
+        || !(tableHeader instanceof HTMLElement)
+        || !(viewport instanceof HTMLElement) || !(diagnostics instanceof HTMLElement)
+        || !(globalDiagnostics instanceof HTMLElement)
+        || !(issueRegion instanceof HTMLElement) || !(trashRegion instanceof HTMLElement)
+        || !(detailRegion instanceof HTMLElement) || !(detailBody instanceof HTMLElement)) {
+      throw new TypeError(`${caseName} diagnostic geometry is unavailable`);
+    }
+    const initialOffset = renderedGalleryTask.review.window.offset;
+    if (populated) {
+      viewport.scrollTop = 400 * 24;
+      viewport.dispatchEvent(new Event("scroll"));
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+    }
+    const adoptedOffset = renderedGalleryTask.review.window.offset;
+    let visibleRow = populated ? [...viewport.querySelectorAll("[data-node-id]")]
+      .find((row) => Number(row.ariaRowIndex) === 402) : null;
+    if (populated && visibleRow instanceof HTMLElement) {
+      const focusedNodeId = visibleRow.dataset.nodeId;
+      visibleRow.click();
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      visibleRow = [...viewport.querySelectorAll("[data-node-id]")]
+        .find((row) => row.dataset.nodeId === focusedNodeId && row.isConnected) ?? null;
+    }
+    const rootBounds = planReviewPanel.element.getBoundingClientRect();
+    const contentBounds = content.getBoundingClientRect();
+    const tableBounds = table.getBoundingClientRect();
+    const visibleColumns = diagnostics.hidden
+      ? [] : [globalDiagnostics, detailRegion].filter((region) => !region.hidden);
+    const visibleCount = expanded ? 2 : 0;
+    const rootFits = planReviewPanel.element.scrollHeight <= planReviewPanel.element.clientHeight + 1
+      && contentBounds.bottom <= rootBounds.bottom + 1;
+    const tableUsable = tableBounds.height > 0 && viewport.clientHeight >= 24;
+    function controlFits(control) {
+      if (control.closest("[hidden]") !== null) return true;
+      const bounds = control.getBoundingClientRect();
+      return bounds.width > 0 && bounds.height > 0
+        && bounds.left >= rootBounds.left - 1 && bounds.right <= rootBounds.right + 1;
+    }
+    const hiddenMenuControl = planReviewPanel.element.querySelector(
+      ".nami-plan-filter-split__menu[hidden] button",
+    );
+    const hiddenDescendantExempt = hiddenMenuControl instanceof HTMLButtonElement
+      && controlFits(hiddenMenuControl);
+    const collapsedControl = document.createElement("button");
+    collapsedControl.tabIndex = 0;
+    collapsedControl.style.cssText = [
+      "appearance: none", "position: absolute", "inline-size: 0", "block-size: 0",
+      "min-inline-size: 0", "min-block-size: 0", "padding: 0", "border: 0",
+      "margin: 0", "overflow: hidden",
+    ].join(";");
+    planReviewPanel.element.append(collapsedControl);
+    const visibleCollapsedRejected = !controlFits(collapsedControl);
+    collapsedControl.remove();
+    const list = table.querySelector(".nami-plan-review__list");
+    const viewportBounds = viewport.getBoundingClientRect();
+    const listBounds = list.getBoundingClientRect();
+    const rowBounds = visibleRow?.getBoundingClientRect();
+    const wholeRowReachable = !populated || (
+      rowBounds !== undefined
+      && rowBounds.height >= 23.5
+      && rowBounds.top >= Math.max(viewportBounds.top, listBounds.top, rootBounds.top) - 1
+      && rowBounds.bottom <= Math.min(
+        viewportBounds.bottom, listBounds.top + list.clientHeight, rootBounds.bottom,
+      ) + 1
+    );
+    const otherControlsFit = [...planReviewPanel.element.querySelectorAll("button")]
+      .filter((control) => !control.closest(".nami-plan-review__list"))
+      .every(controlFits);
+    function hitTableControl(control) {
+      const bounds = control.getBoundingClientRect();
+      const x = (bounds.left + bounds.right) / 2;
+      const y = (bounds.top + bounds.bottom) / 2;
+      const hit = document.elementFromPoint(x, y);
+      return bounds.width > 0 && bounds.height > 0
+        && bounds.left >= Math.max(listBounds.left, rootBounds.left) - 1
+        && bounds.right <= Math.min(listBounds.left + list.clientWidth, rootBounds.right) + 1
+        && y >= listBounds.top && y <= listBounds.top + list.clientHeight
+        && (hit === control || control.contains(hit));
+    }
+    let rowActivationReachable = !populated;
+    if (populated && visibleRow !== null) {
+      const previousFocus = document.activeElement;
+      const previousLeft = list.scrollLeft;
+      const previousTop = viewport.scrollTop;
+      list.scrollLeft = list.scrollWidth;
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      list.scrollLeft = 0;
+      const rowVisibleBounds = visibleRow.getBoundingClientRect();
+      const rowX = Math.max(listBounds.left, rowVisibleBounds.left) + 48;
+      const rowY = (rowVisibleBounds.top + rowVisibleBounds.bottom) / 2;
+      const rowHit = document.elementFromPoint(rowX, rowY);
+      visibleRow.focus({ preventScroll: true });
+      rowActivationReachable = wholeRowReachable
+        && rowHit !== null && visibleRow.contains(rowHit)
+        && document.activeElement === visibleRow
+        && visibleRow.dataset.highlighted === "true";
+      if (previousFocus instanceof HTMLElement) previousFocus.focus({ preventScroll: true });
+      list.scrollLeft = previousLeft;
+      viewport.scrollTop = previousTop;
+    }
+    const previousLeft = list.scrollLeft;
+    const headerControls = [...list.querySelectorAll(".nami-file-list__header button")];
+    const headersReachable = headerControls.every((control) => {
+      list.scrollLeft = 0;
+      if (hitTableControl(control)) return true;
+      list.scrollLeft = list.scrollWidth;
+      return hitTableControl(control);
+    });
+    list.scrollLeft = previousLeft;
+    const noHorizontalControlClipping = otherControlsFit && rowActivationReachable && headersReachable;
+    const cardinalityExact = diagnostics.hidden === (visibleCount === 0)
+      && visibleColumns.length === visibleCount
+      && visibleColumns.every((region) => (
+        Math.abs(region.getBoundingClientRect().width - visibleColumns[0].getBoundingClientRect().width) <= 1
+      ))
+      && (visibleCount === 0 || visibleColumns[1].getBoundingClientRect().left
+        >= visibleColumns[0].getBoundingClientRect().right - 1);
+    const issuesScrollable = !expanded || !populated || (
+      issueRegion.textContent.includes(longDiagnostic)
+      && issueRegion.scrollHeight > issueRegion.clientHeight
+      && issueRegion.tabIndex === 0
+    );
+    const trashScrollable = !expanded || !populated || (
+      trashRegion.textContent === `Trash location: ${longTrashLocation}`
+      && trashRegion.scrollHeight > trashRegion.clientHeight
+      && trashRegion.tabIndex === 0
+    );
+    const detailScrollable = !expanded || !populated || (
+      detailRegion.textContent.includes(longDiagnostic)
+      && detailRegion.scrollHeight > detailRegion.clientHeight
+      && detailRegion.tabIndex === 0
+    );
+    issueRegion.scrollTop = issueRegion.scrollHeight;
+    trashRegion.scrollTop = trashRegion.scrollHeight;
+    detailRegion.scrollTop = detailRegion.scrollHeight;
+    issueRegion.focus();
+    const issuesKeyboardReachable = !expanded || !populated || document.activeElement === issueRegion;
+    trashRegion.focus();
+    const trashKeyboardReachable = !expanded || !populated || document.activeElement === trashRegion;
+    detailRegion.focus();
+    const detailKeyboardReachable = !expanded || !populated || document.activeElement === detailRegion;
+    const lineHeight = parseFloat(getComputedStyle(detailBody).lineHeight);
+    const readableBody = !expanded || !populated || detailRegion.clientHeight >= Math.max(48, lineHeight * 3);
+    toggle.focus();
+    const disclosureBounds = toggle.getBoundingClientRect();
+    const summary = planReviewPanel.element.querySelector(".nami-plan-review__summary");
+    function disclosureFitsRegion(region) {
+      if (!(region instanceof HTMLElement)) return false;
+      const bounds = region.getBoundingClientRect();
+      const left = bounds.left + region.clientLeft;
+      const top = bounds.top + region.clientTop;
+      return disclosureBounds.left >= left - 1
+        && disclosureBounds.right <= left + region.clientWidth + 1
+        && disclosureBounds.top >= top - 1
+        && disclosureBounds.bottom <= top + region.clientHeight + 1;
+    }
+    const disclosureHit = document.elementFromPoint(
+      (disclosureBounds.left + disclosureBounds.right) / 2,
+      (disclosureBounds.top + disclosureBounds.bottom) / 2,
+    );
+    const disclosureReachable = document.activeElement === toggle
+      && disclosureBounds.width > 0 && disclosureBounds.height > 0
+      && [planReviewPanel.element, summary].every(disclosureFitsRegion)
+      && (disclosureHit === toggle || toggle.contains(disclosureHit));
+    const placeholderPresent = !expanded || populated || (
+      !detailRegion.hidden && detailRegion.textContent.trim().length > 0
+      && detailBody.querySelectorAll("dt").length === 0
+    );
+    const detailMatchesFocusedRow = !expanded || !populated || (
+      visibleRow?.dataset.highlighted === "true"
+      && detailRegion.textContent.includes("long-diagnostic.bin")
+      && detailRegion.textContent.includes(longDiagnostic)
+    );
+    const titleBounds = planReviewPanel.element.querySelector(".nami-plan-review__status-title")
+      .getBoundingClientRect();
+    const actionBounds = planReviewPanel.element.querySelector('[data-action="plan-again"]')
+      .getBoundingClientRect();
+    const titleActionAligned = titleBounds.height > 0 && actionBounds.height > 0
+      && Math.abs((titleBounds.top + titleBounds.bottom) / 2
+        - (actionBounds.top + actionBounds.bottom) / 2) <= Math.max(2, titleBounds.height / 2);
+    const statusSummary = planReviewPanel.element.querySelector(".nami-plan-review__status-summary");
+    const statusSummaryBounds = statusSummary?.getBoundingClientRect();
+    const statusDetailsSameRow = statusSummaryBounds !== undefined
+      && statusSummaryBounds.width > 0 && statusSummaryBounds.height > 0
+      && disclosureBounds.left >= statusSummaryBounds.right - 1
+      && Math.min(disclosureBounds.bottom, statusSummaryBounds.bottom)
+        - Math.max(disclosureBounds.top, statusSummaryBounds.top)
+        >= Math.min(disclosureBounds.height, statusSummaryBounds.height) / 2;
+    const tableState = {
+      offset: renderedGalleryTask.review.window.offset,
+      scrollTop: viewport.scrollTop,
+    };
+    let collapseFocusRestored = true;
+    let tableStatePreserved = true;
+    if (expanded && populated) {
+      detailRegion.focus();
+      toggle.click();
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      collapseFocusRestored = diagnostics.hidden && document.activeElement === toggle;
+      tableStatePreserved = renderedGalleryTask.review.window.offset === tableState.offset
+        && viewport.scrollTop === tableState.scrollTop;
+      toggle.click();
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+    }
+    const layoutResult = {
+      case: caseName,
+      block_size: Number(rootBounds.height.toFixed(3)),
+      expanded,
+      populated,
+      logical_rows: populated ? 1000 : 0,
+      loaded_rows: renderedGalleryTask.review.window.rows.length,
+      disclosure_matches: toggle.getAttribute("aria-expanded") === String(expanded),
+      diagnostics_visible: diagnostics.hidden === !expanded,
+      rows_overflow: !populated || viewport.scrollHeight > viewport.clientHeight,
+      scroll_advanced: !populated || viewport.scrollTop > 0,
+      window_requested: !populated || galleryWindowRequests.some((offset) => Number.isInteger(offset)),
+      window_adopted: !populated || adoptedOffset > initialOffset,
+      viewport_bounded: viewport.clientHeight < (populated ? 1000 * 24 : rootBounds.height),
+      row_height: populated ? (rowBounds?.height ?? 0) : 24,
+      header_aligned: Math.abs(tableHeader.getBoundingClientRect().width - viewport.getBoundingClientRect().width) <= 1,
+      whole_row_reachable: wholeRowReachable,
+      both_columns_reachable: !expanded || visibleColumns.length === 2,
+      row_activation_reachable: rowActivationReachable,
+      placeholder_present: placeholderPresent,
+      detail_matches_focused_row: detailMatchesFocusedRow,
+      title_action_aligned: titleActionAligned,
+      status_details_same_row: statusDetailsSameRow,
+      collapse_focus_restored: collapseFocusRestored,
+      table_state_preserved: tableStatePreserved,
+      visible_count: visibleCount,
+      root_fits: rootFits,
+      table_usable: tableUsable,
+      hidden_descendant_exempt: hiddenDescendantExempt,
+      visible_collapsed_rejected: visibleCollapsedRejected,
+      no_horizontal_control_clipping: noHorizontalControlClipping,
+      cardinality_exact: cardinalityExact,
+      issues_scrollable: issuesScrollable,
+      trash_scrollable: trashScrollable,
+      detail_scrollable: detailScrollable,
+      issues_keyboard_reachable: issuesKeyboardReachable,
+      trash_keyboard_reachable: trashKeyboardReachable,
+      detail_keyboard_reachable: detailKeyboardReachable,
+      readable_body: readableBody,
+      disclosure_reachable: disclosureReachable,
+      stale_facts_cleared: populated || (
+        issueRegion.hidden && trashRegion.hidden && placeholderPresent
+      ),
+    };
+    window.scrollTo(pageScroll.x, pageScroll.y);
+    if (!rootFits || !tableUsable || !wholeRowReachable
+        || !hiddenDescendantExempt || !visibleCollapsedRejected
+        || !noHorizontalControlClipping || !cardinalityExact
+        || !issuesScrollable || !trashScrollable || !detailScrollable
+        || !issuesKeyboardReachable || !trashKeyboardReachable
+        || !detailKeyboardReachable || !readableBody || !disclosureReachable
+        || !placeholderPresent || !detailMatchesFocusedRow || !rowActivationReachable
+        || !titleActionAligned || !statusDetailsSameRow) {
+      rejectDiagnosticLayout(layoutResult);
+    }
+    return layoutResult;
+  }
+
+  const diagnosticLayoutEvidence = [];
+  // These Plan-pane block sizes model the available area at default and supported-minimum
+  // windows; they do not set a product viewport or restore the retired file-list width.
+  const minimumDiagnosticBlockSize = 480;
+  const defaultDiagnosticBlockSize = minimumDiagnosticBlockSize + 160;
+  // The native minimum fixture height is separate from the retired file-list width guard.
+  const minimumNativeWindowHeight = minimumDiagnosticBlockSize + 160;
+  galleryMeasurementStep = "diagnostic_default_folded_empty";
+  diagnosticLayoutEvidence.push(
+    await diagnosticLayout("default-folded-empty", defaultDiagnosticBlockSize, false, false),
+  );
+  galleryMeasurementStep = "diagnostic_default_folded_populated";
+  diagnosticLayoutEvidence.push(
+    await diagnosticLayout("default-folded-populated", defaultDiagnosticBlockSize, false, true),
+  );
+  galleryMeasurementStep = "diagnostic_default_expanded_empty";
+  diagnosticLayoutEvidence.push(
+    await diagnosticLayout("default-expanded-empty", defaultDiagnosticBlockSize, true, false),
+  );
+  galleryMeasurementStep = "diagnostic_default_expanded_populated";
+  diagnosticLayoutEvidence.push(
+    await diagnosticLayout("default-expanded-populated", defaultDiagnosticBlockSize, true, true),
+  );
+  const defaultWindowSize = {
+    outer_width: window.outerWidth,
+    outer_height: window.outerHeight,
+  };
+  const nativeDefault = await dispatchInteractive(
+    "test_report",
+    Object.freeze({ phase: "diagnostic_status" }),
+    validNativeFailureSnapshot,
+  );
+  let minimumWindowEvidence = null;
+  planReviewPanel.element.style.blockSize = "480px";
+  planReviewPanel.render(planReviewTask);
   galleryStage = "control_matrix";
   const controlsSection = document.createElement("section");
   controlsSection.className = "nami-card";
@@ -1271,6 +1893,8 @@ async function reportFailure(error) {
     },
   );
   galleryStage = "pseudo_states";
+  galleryMeasurementStep = "pseudo_state_settlement";
+  galleryFailureReason = "native_pseudo_pending";
   await dispatchInteractive(
     "test_report",
     Object.freeze({ phase: "prepare", targets: pseudoTargets }),
@@ -1286,6 +1910,8 @@ async function reportFailure(error) {
   await new Promise((resolve) => setTimeout(resolve, PSEUDO_STATE_SETTLE_MS));
 
   galleryStage = "measurement";
+  galleryMeasurementStep = "control_styles";
+  galleryFailureReason = "control_invariant";
   const controlsSurfaceProbe = document.createElement("div");
   controlsSurfaceProbe.style.background = "var(--color-card-background-solid)";
   controlsSurfaceProbe.style.position = "fixed";
@@ -1434,6 +2060,8 @@ async function reportFailure(error) {
   }
 
   function collectFileListEvidence(specimen, definitions) {
+    galleryMeasurementStep = "file_list_specimen";
+    galleryFailureReason = "file_list_invariant";
     const {
       list,
       grid,
@@ -1447,6 +2075,8 @@ async function reportFailure(error) {
     const fillsWorkArea = Math.abs(
       list.getBoundingClientRect().width - planSectionContentWidth,
     ) < 0.5;
+    galleryMeasurementStep = "hierarchy_selection";
+    galleryFailureReason = "hierarchy_invariant";
     const folderDisclosure = body.querySelector(
       '[data-folder="true"] .nami-file-row__disclosure',
     );
@@ -1495,6 +2125,8 @@ async function reportFailure(error) {
       indeterminate: checkbox.indeterminate,
       ariaChecked: checkbox.getAttribute("aria-checked"),
     }));
+    galleryMeasurementStep = "master_selection";
+    galleryFailureReason = "selection_invariant";
     const masterInitiallyMixed = !masterCheckbox.checked
       && masterCheckbox.indeterminate
       && masterCheckbox.ariaChecked === "mixed";
@@ -1571,6 +2203,8 @@ async function reportFailure(error) {
       clientX: 200,
     }));
     const frozenGeometry = geometry();
+    galleryMeasurementStep = "column_resize";
+    galleryFailureReason = "column_resize_invariant";
     const requestedPointerDelta = -Math.min(
       8,
       Math.max(0, frozenGeometry.widths[1] - rootFontSize * 12),
@@ -1630,6 +2264,8 @@ async function reportFailure(error) {
     const constrainedGeometry = geometry();
     const constrainedColumnsAlign = columnsAlign();
     const renderedRows = [...body.children];
+    galleryMeasurementStep = "file_rows";
+    galleryFailureReason = "file_row_invariant";
     const rows = renderedRows.map((row, index) => {
       if (!(row instanceof HTMLElement)) {
         throw new TypeError("gallery file row is unavailable");
@@ -1767,6 +2403,8 @@ async function reportFailure(error) {
     const headerCells = [...header.children];
     const bodyBounds = body.getBoundingClientRect();
     const lastRow = renderedRows[renderedRows.length - 1];
+    galleryMeasurementStep = "file_list_structure";
+    galleryFailureReason = "file_list_invariant";
     if (
       !(lastRow instanceof HTMLElement)
       || headerCells.length !== header.children.length
@@ -1950,6 +2588,8 @@ async function reportFailure(error) {
     INTEGRITY_ROW_CASES,
   );
 
+  galleryMeasurementStep = "icon_registry";
+  galleryFailureReason = "icon_invariant";
   const systemColors = {};
   for (const name of [
     "Canvas",
@@ -2077,7 +2717,11 @@ async function reportFailure(error) {
   const mixedStyle = getComputedStyle(mixedCheckbox, "::after");
   const mixedCheckboxStyle = getComputedStyle(mixedCheckbox);
   const uncheckedCheckboxStyle = getComputedStyle(uncheckedCheckbox);
+  galleryMeasurementStep = "dialog_exit";
+  galleryFailureReason = "dialog_invariant";
   const dialogExit = await dialogExitEvidence();
+  galleryMeasurementStep = "confirmation_preview";
+  galleryFailureReason = "dialog_invariant";
   const confirmationPreviewEvidence = await measureConfirmationPreview();
   themeTrigger.blur();
   themeTrigger.click();
@@ -2087,6 +2731,8 @@ async function reportFailure(error) {
   const selectedThemeOption = themePopup?.querySelector(
     '.nami-combobox__option[aria-selected="true"]',
   );
+  galleryMeasurementStep = "combobox_layout";
+  galleryFailureReason = "combobox_invariant";
   const selectionPill = selectedThemeOption?.querySelector(
     ".nami-combobox__selection",
   );
@@ -2105,6 +2751,8 @@ async function reportFailure(error) {
   const selectedBounds = selectedThemeOption.getBoundingClientRect();
   const triggerStyle = getComputedStyle(themeTrigger);
   const popupStyle = getComputedStyle(themePopup);
+  galleryMeasurementStep = "task_rail_layout";
+  galleryFailureReason = "task_rail_invariant";
   const taskCards = [...galleryRail.element.querySelectorAll(".nami-task-card")];
   for (const card of galleryRail.element.querySelectorAll(".nami-task-rail__row .nami-task-card")) {
     if (getComputedStyle(card.querySelector(".nami-task-card__paths")).color !== tertiaryColor) {
@@ -2149,6 +2797,160 @@ async function reportFailure(error) {
     probe.remove();
     return [name, resolved];
   }));
+  galleryMeasurementStep = "native_minimum_request";
+  galleryFailureReason = "native_minimum_pending";
+  await dispatchInteractive(
+    "test_report",
+    Object.freeze({ phase: "minimum_window" }),
+    validAccepted,
+  );
+  let nativeMinimum = null;
+  for (let frame = 0; frame < 300; frame += 1) {
+    nativeMinimum = await dispatchInteractive(
+      "test_report",
+      Object.freeze({ phase: "minimum_window_status" }),
+      validMinimumWindowStatus,
+    );
+    if (minimumWindowSettled(
+      nativeMinimum, window.innerWidth, window.innerHeight,
+    )) break;
+    if (frame === 299) throw new Error("native minimum window did not settle");
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+  }
+  if (nativeMinimum === null || nativeMinimum.complete !== true
+      || Math.abs(nativeMinimum.minimum_width - 1024 * nativeMinimum.owner_scale) > 1
+      || Math.abs(nativeMinimum.minimum_height
+        - minimumNativeWindowHeight * nativeMinimum.owner_scale) > 1) {
+    galleryFailureReason = "native_minimum_dimensions";
+    throw new Error("native minimum window completion is invalid");
+  }
+  galleryMeasurementStep = "native_minimum_layout";
+  galleryFailureReason = "layout_invariant";
+  const catalogNodes = [...app.children];
+  const catalogRootStyle = {
+    blockSize: app.style.blockSize,
+    gridTemplateRows: app.style.gridTemplateRows,
+    overflow: app.style.overflow,
+  };
+  const catalogPanelStyle = {
+    blockSize: planReviewPanel.element.style.blockSize,
+    gridColumn: planReviewPanel.element.style.gridColumn,
+  };
+  const catalogStash = document.createDocumentFragment();
+  catalogStash.append(...catalogNodes);
+  app.style.removeProperty("block-size");
+  app.style.removeProperty("grid-template-rows");
+  app.style.removeProperty("overflow");
+  const minimumHeader = document.createElement("header");
+  minimumHeader.className = "nami-shell__header";
+  const minimumHeading = document.createElement("h1");
+  const minimumStatus = document.createElement("p");
+  minimumStatus.id = "host-status";
+  renderText(minimumHeading, "NamiSync");
+  renderText(minimumStatus, "Execution review");
+  minimumHeader.append(minimumHeading, minimumStatus);
+  const minimumRail = document.createElement("aside");
+  minimumRail.className = "nami-task-rail";
+  const minimumWork = document.createElement("main");
+  minimumWork.className = "nami-work-panel";
+  const minimumWorkBody = document.createElement("div");
+  minimumWorkBody.className = "nami-work-panel__body";
+  minimumWork.append(minimumWorkBody);
+  planReviewPanel.element.style.removeProperty("block-size");
+  planReviewPanel.element.style.removeProperty("grid-column");
+  minimumWorkBody.append(planReviewPanel.element);
+  app.append(minimumHeader, minimumRail, minimumWork);
+  await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  const minimumLayoutEvidence = [
+    await diagnosticLayout("minimum-folded-empty", null, false, false),
+    await diagnosticLayout("minimum-folded-populated", null, false, true),
+    await diagnosticLayout("minimum-expanded-empty", null, true, false),
+    await diagnosticLayout("minimum-expanded-populated", null, true, true),
+  ];
+  diagnosticLayoutEvidence.push(...minimumLayoutEvidence);
+  const minimumAllDiagnostics = minimumLayoutEvidence.at(-1);
+  if (minimumAllDiagnostics === undefined) throw new Error("native minimum A1 evidence is missing");
+  galleryMeasurementStep = "native_minimum_keyboard";
+  galleryFailureReason = "layout_invariant";
+  globalThis.__namiGalleryA1Keyboard = null;
+  await dispatchInteractive(
+    "test_report",
+    Object.freeze({ phase: "a1_keyboard" }),
+    validAccepted,
+  );
+  let nativeKeyboard = null;
+  for (let frame = 0; frame < 300; frame += 1) {
+    nativeKeyboard = globalThis.__namiGalleryA1Keyboard;
+    if (nativeKeyboard !== null) break;
+    if (frame === 299) throw new Error("native minimum keyboard evidence did not complete");
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+  }
+  if (!(Number.isFinite(nativeKeyboard?.before)
+      && Number.isFinite(nativeKeyboard?.after)
+      && nativeKeyboard.after > nativeKeyboard.before
+      && nativeKeyboard.capture === true
+      && Array.isArray(nativeKeyboard.dimensions)
+      && nativeKeyboard.dimensions.length === 2
+      && nativeKeyboard.dimensions.every((value) => Number.isInteger(value) && value > 0))) {
+    throw new Error("native minimum keyboard or capture evidence is invalid");
+  }
+  const minimumWorkBounds = minimumWork.getBoundingClientRect();
+  const minimumWorkContentBounds = minimumWorkBody.getBoundingClientRect();
+  const minimumRootBounds = planReviewPanel.element.getBoundingClientRect();
+  galleryMeasurementStep = "execution_axes";
+  galleryFailureReason = "execution_axes_invariant";
+  const executionAxes = planReviewPanel.element.querySelector(".nami-plan-review__execution-axes");
+  if (!(executionAxes instanceof HTMLElement)) {
+    throw new TypeError("native minimum execution axes are unavailable");
+  }
+  const axesLineHeight = parseFloat(getComputedStyle(executionAxes).lineHeight);
+  minimumWindowEvidence = {
+    default_outer_width: defaultWindowSize.outer_width,
+    default_outer_height: defaultWindowSize.outer_height,
+    native_default_owner_scale: nativeDefault.owner_scale,
+    native_default_outer_width: nativeDefault.outer_width,
+    native_default_outer_height: nativeDefault.outer_height,
+    outer_width: window.outerWidth,
+    outer_height: window.outerHeight,
+    inner_width: window.innerWidth,
+    inner_height: window.innerHeight,
+    native_owner_scale: nativeMinimum.owner_scale,
+    native_minimum_width: nativeMinimum.minimum_width,
+    native_minimum_height: nativeMinimum.minimum_height,
+    native_outer_width: nativeMinimum.outer_width,
+    native_outer_height: nativeMinimum.outer_height,
+    native_client_width: nativeMinimum.client_width,
+    native_client_height: nativeMinimum.client_height,
+    work_width: Number(minimumWorkBounds.width.toFixed(3)),
+    work_content_width: Number(minimumWorkContentBounds.width.toFixed(3)),
+    work_content_aligned: Math.abs(minimumRootBounds.left - minimumWorkContentBounds.left) <= 1
+      && Math.abs(minimumRootBounds.right - minimumWorkContentBounds.right) <= 1,
+    work_height: Number(minimumWorkBounds.height.toFixed(3)),
+    review_width: Number(minimumRootBounds.width.toFixed(3)),
+    review_height: Number(minimumRootBounds.height.toFixed(3)),
+    axes_wrapped: executionAxes.scrollHeight > axesLineHeight + 1,
+    long_trash_length: longTrashLocation.length,
+    all_three_bounded: minimumAllDiagnostics.root_fits
+      && minimumAllDiagnostics.table_usable
+      && minimumAllDiagnostics.no_horizontal_control_clipping
+      && minimumAllDiagnostics.cardinality_exact
+      && minimumAllDiagnostics.issues_scrollable
+      && minimumAllDiagnostics.trash_scrollable
+      && minimumAllDiagnostics.detail_scrollable
+      && minimumAllDiagnostics.readable_body
+      && minimumAllDiagnostics.disclosure_reachable
+      && minimumAllDiagnostics.row_activation_reachable,
+    keyboard_scroll_before: nativeKeyboard.before,
+    keyboard_scroll_after: nativeKeyboard.after,
+    keyboard_capture_width: nativeKeyboard.dimensions[0],
+    keyboard_capture_height: nativeKeyboard.dimensions[1],
+  };
+  app.replaceChildren(...catalogNodes);
+  app.style.blockSize = catalogRootStyle.blockSize;
+  app.style.gridTemplateRows = catalogRootStyle.gridTemplateRows;
+  app.style.overflow = catalogRootStyle.overflow;
+  planReviewPanel.element.style.blockSize = catalogPanelStyle.blockSize;
+  planReviewPanel.element.style.gridColumn = catalogPanelStyle.gridColumn;
   const controlContract = {
     accent: accentTokens,
     tri_state: {
@@ -2168,7 +2970,11 @@ async function reportFailure(error) {
     },
     dialog_exit: dialogExit,
     confirmation_preview: confirmationPreviewEvidence,
+    diagnostic_layout: diagnosticLayoutEvidence,
+    minimum_window: minimumWindowEvidence,
     segmented: (() => {
+      galleryMeasurementStep = "segmented_state";
+      galleryFailureReason = "segmented_state_invariant";
       const selected = document.querySelector(
         "#gallery-control-segmented_control-rest",
       );
@@ -2272,6 +3078,8 @@ async function reportFailure(error) {
   optionStatePopup.remove();
 
   galleryStage = "report";
+  galleryMeasurementStep = "report_assembly";
+  galleryFailureReason = "report_invariant";
   const sectionBounds = [...app.querySelectorAll(":scope > [data-gallery-section]")]
     .map((section) => section.getBoundingClientRect());
   for (const [index, bounds] of sectionBounds.entries()) {
@@ -2331,6 +3139,8 @@ async function reportFailure(error) {
     }),
     validAccepted,
   );
+  gallerySettled = true;
+  if (galleryWatchdog !== null) clearTimeout(galleryWatchdog);
   renderText(status, `Gallery ${mode} complete`);
 
   async function dialogExitEvidence() {
@@ -2379,6 +3189,7 @@ async function reportFailure(error) {
     const scrollableGallery = scrollRoot.scrollHeight > innerHeight + 100;
     const beforeWheel = scrollRoot.scrollTop;
     for (const target of ["content", "backdrop"]) {
+      galleryFailureReason = "native_wheel_pending";
       globalThis.__namiGalleryWheelTarget = null;
       await dispatchInteractive(
         "test_report", Object.freeze({ phase: "preview_wheel", target }), validAccepted,
@@ -2389,6 +3200,7 @@ async function reportFailure(error) {
       }
       await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     }
+    galleryFailureReason = "dialog_invariant";
     const wheelBlocked = scrollableGallery && scrollRoot.scrollTop === beforeWheel;
     dialog.querySelector("[data-cancel-execution]").click();
     await waitForClose();

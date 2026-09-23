@@ -173,59 +173,24 @@ const renderUrl = moduleUrl(renderSource);
 const iconsUrl = moduleUrl(await readFile(process.argv[4], "utf8"));
 const taskStatusUrl = moduleUrl((await readFile(join(dirname(process.argv[2]), "task_status.js"), "utf8"))
   .replace("./render.js", renderUrl));
-const planUrl = moduleUrl(`
-  export function renderPlanRow(element, row) {
-    element.className = "nami-file-row nami-plan-row";
-    element.dataset.folder = String(row.folder);
-    element.textContent = row.nameText;
-    const checkbox = document.createElement("input");
-    checkbox.className = "nami-checkbox";
-    checkbox.checked = row.checked;
-    checkbox.disabled = row.selectionDisabled;
-    const selection = document.createElement("div");
-    selection.dataset.fileColumn = "selection";
-    selection.append(checkbox);
-    const name = document.createElement("div");
-    name.className = "nami-file-row__name";
-    name.dataset.fileColumn = "name";
-    const disclosure = document.createElement(row.folder ? "button" : "span");
-    disclosure.className = row.folder
-      ? "nami-file-row__disclosure"
-      : "nami-file-row__disclosure-spacer";
-    name.append(disclosure);
-    const notes = document.createElement("span");
-    notes.textContent = row.notesText;
-    notes.dataset.fileColumn = "notes";
-    const cells = ["size", "primary", "secondary", "modified"].map((column) => {
-      const cell = document.createElement("div");
-      cell.dataset.fileColumn = column === "modified" ? "secondary" : column;
-      cell.className = column === "size" ? "nami-file-row__size" : "nami-plan-row__" + column;
-      if (column === "size") cell.textContent = row.sizeText;
-      if (column === "primary") cell.textContent = row.intentText;
-      return cell;
-    });
-    element.append(selection, name, ...cells, notes);
-  }
-`);
+const fileRowUrl = moduleUrl((await readFile(join(dirname(process.argv[2]), "file_row.js"), "utf8"))
+  .replace("./render.js", renderUrl));
+const planUrl = moduleUrl((await readFile(join(dirname(process.argv[2]), "plan.js"), "utf8"))
+  .replace("./file_row.js", fileRowUrl).replace("./render.js", renderUrl));
 const source = (await readFile(process.argv[2], "utf8"))
   .replace("./plan.js", planUrl)
   .replace("./icons.js", iconsUrl)
   .replace("./task_status.js", taskStatusUrl)
   .replace("./render.js", renderUrl);
 const { createPlanReviewPanel } = await import(moduleUrl(source));
+const { advanceProgressPresentation } = await import(taskStatusUrl);
 
 const calls = [];
 const callbacks = Object.fromEntries([
   "onViewChange", "onWindow", "onSelect", "onScopeSelect", "onExecute", "onControl", "onPlanAgain",
-  "onHighlight", "onHighlightedSelect",
+  "onHighlight", "onHighlightedSelect", "onExecutionDetail", "onFollowOverride", "onNavigateCurrent",
 ].map((name) => [name, (...args) => calls.push([name, ...args])]));
 const panel = createPlanReviewPanel(callbacks);
-const historicalFooter = document.createElement("div");
-const historicalAcknowledgment = document.createElement("input");
-historicalAcknowledgment.type = "checkbox";
-historicalAcknowledgment.dataset.action = "destructive-confirmation";
-historicalAcknowledgment.checked = true;
-historicalFooter.append(historicalAcknowledgment);
 const hostile = "<img src=x onerror=alert(1)>\u202e海";
 const row = {
   node_id: `node-${"1".repeat(32)}`,
@@ -254,6 +219,7 @@ const row = {
   move_peer_id: null,
   notice: null,
   selection_exclusion_reason: null,
+  execution: null,
 };
 const summary = {
   disposition: "opened",
@@ -290,7 +256,16 @@ const summary = {
 };
 const review = {
   summary,
-  window: { disposition: "current", view_revision: 0, offset: 10, total: 1000, rows: [row] },
+  window: {
+    disposition: "current", view_revision: 0, highlight_revision: 0,
+    offset: 10, total: 1000,
+    execution: {
+      execution_revision: 0, session_id: null, result: null,
+      failed_operation_count: null, disk_capacity_failure_count: null,
+      gap: null, trash_location: null,
+    },
+    rows: [row],
+  },
   pending: null,
   message: "Inspect the refusal.",
 };
@@ -341,7 +316,7 @@ review.summary = summary;
 panel.render(task);
 document.defaultView.flushAnimationFrame();
 assert.ok(findText(panel.element, hostile));
-assert.equal(findText(panel.element, "1 destructive"), false);
+assert.ok(findText(panel.element, "1 destructive"), "plan diagnostics retain destructive context");
 assert.ok(findText(panel.element, "4.00 KiB required"));
 assert.ok(findText(panel.element, "planning issues"));
 assert.ok(findText(panel.element, "Source:"));
@@ -378,8 +353,27 @@ const footerMessage = findByClass(panel.element, "nami-plan-review__status");
 assert.equal(footerMessage.hidden, false, "actionable warnings remain visible");
 const statusActions = findByClass(panel.element, "nami-plan-review__actions");
 const statusMeta = findByClass(panel.element, "nami-plan-review__status-meta");
-assert.equal(statusActions.parentElement, statusCard, "actions live in the status card");
-assert.equal(statusMeta.parentElement, statusCard, "facts and feedback live in the status card");
+assert.ok(statusActions.parentElement === statusCard, "actions live in the status card");
+assert.ok(statusMeta.parentElement === statusCard, "facts and feedback live in the status card");
+const planDisclosure = findAction(panel.element, "toggle-execution-details");
+const planDiagnostics = findByClass(panel.element, "nami-plan-review__diagnostics");
+const planItemPane = findByClass(panel.element, "nami-plan-review__detail");
+const cardProgress = findByClass(panel.element, "nami-plan-review__progress");
+assert.ok(planDisclosure.parentElement === statusMeta, "disclosure shares the detailed status line");
+assert.ok(statusCard.children.indexOf(planDiagnostics) < statusCard.children.indexOf(cardProgress),
+  "expanded facts precede progress in the same card");
+planDisclosure.dispatch("click");
+assert.equal(planDiagnostics.hidden, false, "Plan exposes the shared Details area");
+assert.ok(findText(planItemPane, "Highlight an item"), "unfocused Plan has an item placeholder");
+review.summary = { ...summary, highlight_focus_node_id: row.node_id, highlight_revision: 1 };
+panel.render(task);
+assert.ok(findText(planItemPane, "Planned action"), "focused Plan row reveals planned facts");
+assert.ok(findText(planItemPane, hostile.replace("\u202e", "⟦U+202E⟧")));
+planDisclosure.dispatch("click");
+assert.equal(planDiagnostics.hidden, true);
+review.summary = summary;
+panel.render(task);
+assert.equal(planDiagnostics.hidden, true, "highlight updates do not reopen a collapsed card");
 assert.equal(findAction(panel.element, "plan-again").ariaLabel, "Plan again");
 assert.equal(findAction(panel.element, "plan-again").title, "Plan again");
 review.message = null;
@@ -389,22 +383,25 @@ review.message = "Updating this view…";
 panel.render(task);
 assert.equal(footerMessage.hidden, false, "in-flight feedback remains visible");
 panel.render(task);
-assert.equal(findByDataset(panel.element, "nodeId", row.node_id), renderedRow,
+assert.ok(findByDataset(panel.element, "nodeId", row.node_id) === renderedRow,
   "unchanged review rendering preserves row controls and focus");
 review.pending = "view";
 panel.render(task);
-assert.equal(findByDataset(panel.element, "nodeId", row.node_id), renderedRow,
+assert.ok(findByDataset(panel.element, "nodeId", row.node_id) === renderedRow,
   "pending control disable does not rebuild the row window");
 assert.equal(findByClass(renderedRow, "nami-checkbox").disabled, true);
-assert.equal(findByClass(panel.element, "nami-plan-review__plan"), planCard);
-assert.equal(findByClass(panel.element, "nami-plan-review__summary"), statusCard);
+assert.ok(findByClass(panel.element, "nami-plan-review__plan") === planCard,
+  "pending rendering preserves the Plan card identity");
+assert.ok(findByClass(panel.element, "nami-plan-review__summary") === statusCard,
+  "pending rendering preserves the status card identity");
 review.pending = null;
 panel.render(task);
-assert.equal(findByDataset(panel.element, "nodeId", row.node_id), renderedRow);
+assert.ok(findByDataset(panel.element, "nodeId", row.node_id) === renderedRow,
+  "settled rendering preserves the row identity");
 assert.equal(findByClass(renderedRow, "nami-checkbox").disabled, false);
 document.defaultView.flushAnimationFrame();
 assert.equal(renderedRow.dataset.folder, "false", "operation groups remain non-folder rows");
-assert.equal(renderedRow.textContent, hostile);
+assert.ok(findText(renderedRow, hostile.replace("\u202e", "⟦U+202E⟧")));
 assert.equal(findText(renderedRow, "Risk: none"), false);
 assert.equal(findText(renderedRow, "deps"), false);
 const renderedNotice = findByDataset(panel.element, "nodeId", notice.node_id);
@@ -519,7 +516,7 @@ for (const [group, members] of Object.entries({
   assert.equal(document.activeElement.dataset.filterDetail, members.at(-1));
   menu.dispatch("keydown", { key: "Escape" });
   assert.equal(menu.hidden, true);
-  assert.equal(document.activeElement, arrow);
+  assert.ok(document.activeElement === arrow, "Escape returns focus to the filter arrow");
   review.summary = { ...summary, filters: ["notice", members.at(-1)] };
   panel.render(task);
   main.dispatch("click");
@@ -586,17 +583,18 @@ search.dispatch("input");
 assert.equal(clearSearch.hidden, false);
 clearSearch.dispatch("click");
 assert.equal(search.value, "");
-assert.equal(document.activeElement, search);
+assert.ok(document.activeElement === search, "clearing search returns focus to its input");
 assert.equal(clearSearch.hidden, true);
 assert.deepEqual(calls.at(-1), ["onViewChange", review, { searchQuery: "" }]);
 
-assert.equal(
-  findByDataset(panel.element, "action", "destructive-confirmation"),
-  null,
+assert.ok(
+  findByDataset(panel.element, "action", "destructive-confirmation") === null,
   "the stale persistent acknowledgment control is absent",
 );
-findAction(panel.element, "execute").dispatch("click");
-assert.deepEqual(calls.at(-1), ["onExecute", review, findAction(panel.element, "execute")]);
+const firstExecuteButton = findAction(panel.element, "execute");
+firstExecuteButton.dispatch("click");
+assert.ok(calls.at(-1)[0] === "onExecute" && calls.at(-1)[1] === review
+  && calls.at(-1)[2] === firstExecuteButton, "Execute preserves review and invoker identity");
 
 task.canPlanAgain = false;
 panel.render(task);
@@ -612,14 +610,12 @@ review.summary = {
   irreversible_operation_count: 2,
 };
 panel.render(task);
-assert.equal(
-  historicalAcknowledgment.checked,
-  true,
-  "the historical persistent checkbox reproduces an acknowledgment detached from revision state",
-);
-findAction(panel.element, "execute").dispatch("click");
-assert.deepEqual(calls.at(-1), ["onExecute", review, findAction(panel.element, "execute")]);
-assert.equal(findByDataset(panel.element, "action", "destructive-confirmation"), null);
+const secondExecuteButton = findAction(panel.element, "execute");
+secondExecuteButton.dispatch("click");
+assert.ok(calls.at(-1)[0] === "onExecute" && calls.at(-1)[1] === review
+  && calls.at(-1)[2] === secondExecuteButton,
+"later Execute preserves review and invoker identity");
+assert.ok(findByDataset(panel.element, "action", "destructive-confirmation") === null, "the destructive acknowledgment control remains absent");
 
 task.executionStarted = true;
 task.sessionState = "active";
@@ -658,6 +654,19 @@ assert.equal(
   calls.filter(([name]) => name === "onWindow").length,
   coveredWindowCallCount,
   "a covered viewport does not refetch",
+);
+
+review.follow = { anchorIndex: 10, hasTarget: true, eligible: true, enabled: true };
+panel.render(task);
+const overrideCount = calls.filter(([name]) => name === "onFollowOverride").length;
+viewport.dispatch("wheel");
+viewport.scrollTop = ROW_HEIGHT * 10 + 1;
+viewport.dispatch("scroll");
+document.defaultView.flushAnimationFrame();
+assert.equal(
+  calls.filter(([name]) => name === "onFollowOverride").length,
+  overrideCount,
+  "a small manual scroll retains follow while the current operation stays visible",
 );
 
 viewport.scrollTop = ROW_HEIGHT * 300;
@@ -748,7 +757,7 @@ function findText(root, text) {
 
 const terminologyPanel = createPlanReviewPanel(Object.fromEntries([
   "onViewChange", "onWindow", "onSelect", "onScopeSelect", "onExecute", "onControl",
-  "onPlanAgain", "onHighlight", "onHighlightedSelect",
+  "onPlanAgain", "onHighlight", "onHighlightedSelect", "onExecutionDetail", "onFollowOverride", "onNavigateCurrent",
 ].map((name) => [name, () => {}])));
 function terminologyRow(patch) {
   const specimen = { ...row, operation_kind: "noop", reason: null, ...patch };
@@ -779,4 +788,409 @@ for (const [operation_kind, label] of [["mkdir", "Create folder"], ["recase", "C
   assert.ok(findText(terminologyRow({ operation_kind }), label));
 }
 terminologyPanel.dispose();
+
+const detailCalls = [];
+const executionPanel = createPlanReviewPanel(Object.fromEntries([
+  "onViewChange", "onWindow", "onSelect", "onScopeSelect", "onExecute", "onControl",
+  "onPlanAgain", "onHighlight", "onHighlightedSelect", "onExecutionDetail", "onFollowOverride", "onNavigateCurrent",
+].map((name) => [name, (...args) => {
+  if (name === "onExecutionDetail") detailCalls.push(args);
+}])));
+const operationId = "5".repeat(32);
+const terminalResult = {
+  headline: "partial", filesystem: "failed", integrity: "mismatch",
+  recording: "degraded", audit: "degraded", disposition: "ran", canceled: false,
+  phases: [{ phase: "execute", status: "failed", error: hostile }],
+  bytes_done: "0", bytes_total: "0", error: "mixed I/O failure",
+  recording_degraded_items: 1,
+  recording_issues: [{ reason: "final-flush-failed", detail: hostile }],
+  omitted_detail_count: 2, presentation_omitted_detail_count: 3, review_refusal: null,
+};
+const executionSummary = {
+  execution_revision: 9, session_id: "6".repeat(32), result: terminalResult,
+  failed_operation_count: 2, disk_capacity_failure_count: 1,
+  gap: { minimum_first_missed_seq: 4, maximum_first_missed_seq: 8 },
+  trash_location: `D:\\${hostile}`,
+};
+const executionRow = {
+  ...row, node_id: `node-${"7".repeat(32)}`, display: "zero-byte.bin",
+  is_container: true, row_kind: "operation-group", operation_id: operationId,
+  operation_kind: "copy", selection: "selected", selectable_operation_count: 1,
+  selected_operation_count: 1, operation_count: 1, size: "0",
+  execution: {
+    operation: { result: "succeeded", reason: null, recording: "degraded",
+      recording_reason: "record-write-failed", detail_omitted_count: 2 },
+    automatic_verification: { result: "mismatched", reason: "hash-mismatch",
+      recording: "ok", record_disposition: "noop", detail_omitted_count: 3 },
+    evidence: { state: "superseded", content: null },
+  },
+};
+const executionReviewState = {
+  ...review, summary: { ...summary, selection_state: "committed",
+    highlight_focus_node_id: executionRow.node_id, highlight_revision: 1 },
+  window: { ...review.window, execution: executionSummary, rows: [executionRow], total: 1 },
+  executionDetail: null,
+};
+const executionTask = { ...task, review: executionReviewState, executionStarted: true,
+  executionResult: terminalResult, sessionState: "failed" };
+const liveTerminalReview = { ...executionReviewState, window: {
+  ...executionReviewState.window, execution: { ...executionSummary, result: null,
+    started_at: null, ended_at: null },
+} };
+executionPanel.render({ ...executionTask, review: liveTerminalReview,
+  executionStartedAt: "2026-09-23T01:00:00+00:00",
+  executionEndedAt: "2026-09-23T01:01:05+00:00" });
+assert.equal(findByClass(executionPanel.element, "nami-plan-review__status-summary").textContent,
+  `Execution needs review · Completed ${new Date("2026-09-23T01:01:05+00:00").toLocaleString()} · 1m 5s elapsed`,
+  "terminal record updates the card before retained-window capture");
+executionPanel.render({ ...executionTask, review: liveTerminalReview, executionResult: null,
+  executionStartedAt: "2026-09-23T01:00:00+00:00",
+  executionEndedAt: "2026-09-23T01:01:05+00:00" });
+assert.equal(findByClass(executionPanel.element, "nami-plan-review__status-summary").textContent,
+  `Execution failed · Completed ${new Date("2026-09-23T01:01:05+00:00").toLocaleString()} · 1m 5s elapsed`,
+  "abnormal terminal record replaces live facts even when no result was retained");
+assert.ok(findText(executionPanel.element, "No retained execution result is available."));
+executionPanel.render({ ...executionTask, review: null, error: null });
+const initialDiagnostics = findByClass(executionPanel.element, "nami-plan-review__diagnostics");
+assert.equal(initialDiagnostics.hidden, true, "an initial null review has no diagnostics row");
+assert.equal(findByClass(executionPanel.element, "nami-plan-review__execution-issues").hidden, true);
+assert.equal(findByClass(executionPanel.element, "nami-plan-review__execution-trash").hidden, true);
+executionPanel.render(executionTask);
+const executionContent = findByClass(executionPanel.element, "nami-plan-review__content");
+const executionDiagnostics = findByClass(executionPanel.element, "nami-plan-review__diagnostics");
+const executionIssues = findByClass(executionPanel.element, "nami-plan-review__execution-issues");
+const executionTrash = findByClass(executionPanel.element, "nami-plan-review__execution-trash");
+const globalDiagnostics = findByClass(executionPanel.element, "nami-plan-review__global-diagnostics");
+const executionDetailCard = findByClass(executionPanel.element, "nami-plan-review__detail");
+const executionStatusCard = findByClass(executionPanel.element, "nami-plan-review__summary");
+const detailsToggle = findAction(executionPanel.element, "toggle-execution-details");
+const executionAlert = findByClass(executionPanel.element, "nami-plan-review__execution-alert");
+assert.ok(executionContent, "table and diagnostics share one bounded content region");
+assert.ok(executionDiagnostics, "variable diagnostics share one explicit grid row");
+assert.ok(findByClass(executionPanel.element, "nami-plan-review__table-card").parentElement === executionContent,
+  "the table remains in the bounded content region");
+assert.ok(executionDiagnostics.parentElement === executionStatusCard,
+  "the inline Details pane expands the existing status card");
+assert.ok(globalDiagnostics.parentElement === executionDiagnostics,
+  "global execution facts occupy one Details column");
+assert.ok(executionIssues.parentElement === globalDiagnostics,
+  "global issues remain in the global Details column");
+assert.ok(executionTrash.parentElement === globalDiagnostics,
+  "trash location remains in the global Details column");
+assert.ok(executionDetailCard.parentElement === executionDiagnostics,
+  "operation detail remains in the Details pane");
+assert.equal(detailsToggle.ariaExpanded, "false");
+assert.equal(executionDiagnostics.hidden, true, "Details is folded by default");
+assert.equal(executionAlert.hidden, false, "a compact gap warning remains visible while Details is folded");
+assert.ok(executionAlert.parentElement === executionStatusCard,
+  "the compact gap warning belongs to the folded status card");
+detailsToggle.dispatch("click");
+assert.equal(detailsToggle.ariaExpanded, "true");
+assert.equal(executionDiagnostics.hidden, false);
+assert.equal(executionDetailCard.hidden, false, "expanded Details always includes an item pane");
+assert.equal(executionIssues.tabIndex, 0, "terminal diagnostics remain keyboard-scrollable");
+assert.equal(executionIssues.ariaLabel, "Execution issues");
+assert.equal(executionTrash.tabIndex, 0, "the literal trash location remains keyboard-scrollable");
+assert.equal(executionTrash.ariaLabel, "Trash location");
+assert.equal(executionDetailCard.tabIndex, 0, "operation detail remains keyboard-scrollable");
+assert.equal(executionDetailCard.ariaLabel, "Item details");
+assert.ok(findText(executionPanel.element, "Execution needs review"));
+assert.ok(findText(executionPanel.element, "Filesystem: Failed"));
+assert.ok(findText(executionPanel.element, "Automatic verification: Mismatch"));
+assert.ok(findText(executionPanel.element, "producer details omitted"));
+assert.ok(findText(executionPanel.element, "presentation details omitted"));
+assert.ok(findText(executionPanel.element, "Gaps observed from event 4 through 8"));
+assert.ok(findText(executionPanel.element, "Trash location:"));
+assert.ok(findText(executionPanel.element, "Operation: Completed"));
+assert.ok(findText(executionPanel.element, "Automatic verification: Mismatch"));
+assert.ok(findText(executionPanel.element, "Stored evidence: Superseded"));
+assert.equal(findByClass(executionPanel.element, "nami-plan-review__detail-button"), null,
+  "rows use authoritative highlight instead of a separate detail button");
+assert.ok(findText(executionDetailCard, "Planned action"));
+assert.ok(findText(executionDetailCard, "zero-byte.bin"));
+assert.equal(detailCalls.length, 0, "rendering a focused row does not bypass the highlight controller");
+executionReviewState.executionDetail = {
+  operationId, executionRevision: 9,
+  state: "current",
+  response: {
+    disposition: "current", execution_revision: 9, operation_id: operationId,
+    operation: {
+      item_type: "operation", phase: "execute", item_id: operationId, kind: "copy",
+      path: `C:\\${hostile}`, result: "succeeded", reason: null,
+      detail: { message: hostile, continued: false }, recording: "degraded",
+      recording_reason: "record-write-failed", recording_detail: hostile,
+      detail_omitted_count: 1,
+    },
+    automatic_verification: {
+      item_type: "integrity", phase: "verify", item_id: operationId,
+      row_id: null, location_id: null, kind: "integrity", path: `D:\\${hostile}`,
+      result: "mismatched", reason: "hash-mismatch", detail: hostile,
+      read_strategy: "windows-unbuffered", recording: "ok",
+      record_disposition: "noop", detail_omitted_count: 1,
+    },
+    evidence: { state: "unrecorded", content: null },
+  },
+};
+executionPanel.render(executionTask);
+const detailBody = findByClass(executionPanel.element, "nami-plan-review__detail-body");
+assert.ok(findText(detailBody, hostile), "hostile detail remains literal text");
+assert.equal(walk(detailBody).some((item) => item.tagName === "IMG"), false);
+detailsToggle.dispatch("click");
+assert.equal(executionDiagnostics.hidden, true, "user collapse folds retained detail");
+executionPanel.render(executionTask);
+assert.equal(executionDiagnostics.hidden, true, "routine render preserves collapse");
+executionReviewState.window = { ...executionReviewState.window };
+executionPanel.render(executionTask);
+assert.equal(executionDiagnostics.hidden, true, "window adoption preserves collapse");
+assert.ok(findText(detailBody, hostile), "collapsed detail still refreshes its content");
+detailsToggle.dispatch("click");
+assert.equal(executionDiagnostics.hidden, false);
+const retainedResponse = executionReviewState.executionDetail.response;
+executionReviewState.executionDetail = null;
+executionPanel.render(executionTask);
+assert.equal(executionDetailCard.hidden, false, "item pane remains with planned facts after detail retirement");
+assert.ok(findText(executionDetailCard, "Planned action"));
+
+executionReviewState.executionDetail = {
+  operationId, executionRevision: 9, state: "loading", response: null, message: null,
+};
+executionPanel.render(executionTask);
+assert.equal(executionDiagnostics.hidden, false, "new row Details request opens the pane");
+assert.ok(findText(executionDetailCard, "Loading operation detail"));
+executionReviewState.executionDetail.state = "current";
+executionReviewState.executionDetail.response = retainedResponse;
+executionPanel.render(executionTask);
+assert.ok(findText(detailBody, hostile), "loading-to-result refreshes the same detail");
+detailsToggle.focus();
+detailsToggle.dispatch("click");
+assert.equal(executionDiagnostics.hidden, true);
+executionReviewState.executionDetail = { ...executionReviewState.executionDetail,
+  response: { ...retainedResponse, operation: { ...retainedResponse.operation, result: "failed" } } };
+executionPanel.render(executionTask);
+assert.equal(executionDiagnostics.hidden, true, "a changed focused detail never reopens deliberate collapse");
+detailsToggle.dispatch("click");
+
+const quietResult = {
+  ...terminalResult,
+  headline: "success", filesystem: "completed", integrity: "verified",
+  recording: "ok", audit: "ok",
+  phases: [{ phase: "execute", status: "completed", error: null }],
+  error: null, recording_degraded_items: 0, recording_issues: [],
+  omitted_detail_count: 0, presentation_omitted_detail_count: 0,
+};
+for (const issuesVisible of [false, true]) {
+  for (const trashVisible of [false, true]) {
+      const visibilityReview = {
+        ...executionReviewState,
+        window: {
+          ...executionReviewState.window,
+          execution: {
+            ...executionSummary,
+            result: { ...quietResult, error: issuesVisible ? hostile : null },
+            failed_operation_count: 0,
+            disk_capacity_failure_count: 0,
+            gap: null,
+            trash_location: trashVisible ? `D:\\${hostile}` : null,
+          },
+        },
+        executionDetail: null,
+      };
+      executionPanel.render({
+        ...executionTask, review: visibilityReview, executionResult: quietResult,
+      });
+      assert.equal(executionIssues.hidden, !issuesVisible);
+      assert.equal(executionTrash.hidden, !trashVisible);
+      assert.equal(executionDetailCard.hidden, false, "item pane is present with or without execution facts");
+      assert.equal(globalDiagnostics.hidden, false, "secondary execution facts keep the global column available");
+      if (executionDiagnostics.hidden) detailsToggle.dispatch("click");
+      assert.equal(executionDiagnostics.hidden, false);
+      assert.ok(findText(executionDetailCard, "Planned action"));
+  }
+}
+
+function assertNullReviewDiagnostics(error) {
+  executionPanel.render({
+    ...executionTask,
+    review: null,
+    error,
+    sessionState: error === null ? "planning" : "failed",
+  });
+  assert.equal(executionDiagnostics.hidden, true);
+  assert.equal(executionDiagnostics.dataset.status, "none");
+  assert.equal(executionIssues.hidden, true);
+  assert.equal(executionIssues.textContent, "");
+  assert.equal(executionTrash.hidden, true);
+  assert.equal(executionTrash.textContent, "");
+  assert.equal(executionDetailCard.parentElement.hidden, true);
+}
+
+executionPanel.render(executionTask);
+if (executionDiagnostics.hidden) detailsToggle.dispatch("click");
+assert.equal(executionDiagnostics.hidden, false);
+assert.ok(executionIssues.textContent.includes(hostile));
+assert.ok(findText(executionTrash, "Trash location:"));
+assertNullReviewDiagnostics(null);
+executionPanel.render(executionTask);
+if (executionDiagnostics.hidden) detailsToggle.dispatch("click");
+assert.equal(executionDiagnostics.hidden, false);
+assert.ok(executionIssues.textContent.includes(hostile));
+assert.ok(findText(executionTrash, "Trash location:"));
+assertNullReviewDiagnostics("Different task plan unavailable.");
+executionPanel.render(executionTask);
+if (executionDiagnostics.hidden) detailsToggle.dispatch("click");
+assert.equal(executionDiagnostics.hidden, false);
+assert.ok(executionIssues.textContent.includes(hostile));
+assert.ok(findText(executionTrash, "Trash location:"));
+
+const capacityResult = {
+  ...terminalResult,
+  headline: "failed", filesystem: "failed", integrity: "verified",
+  recording: "ok", audit: "ok",
+  phases: [{ phase: "execute", status: "failed", error: "disk capacity" }],
+  error: null, recording_degraded_items: 0, recording_issues: [],
+  omitted_detail_count: 0, presentation_omitted_detail_count: 0,
+};
+const capacityRow = {
+  ...executionRow,
+  display: "capacity.bin",
+  execution: {
+    operation: {
+      result: "failed", reason: "disk-capacity", recording: "ok",
+      recording_reason: null, detail_omitted_count: 0,
+    },
+    automatic_verification: {
+      result: "verified", reason: null, recording: "ok",
+      record_disposition: "noop", detail_omitted_count: 0,
+    },
+    evidence: {
+      state: "recorded-copy",
+      content: { digest: "abcdef0123456789abcdef0123456789" },
+    },
+  },
+};
+const capacityReview = {
+  ...executionReviewState,
+  window: {
+    ...executionReviewState.window,
+    rows: [capacityRow],
+    execution: {
+      ...executionSummary,
+      result: capacityResult,
+      failed_operation_count: 1,
+      disk_capacity_failure_count: 1,
+    },
+  },
+  executionDetail: null,
+};
+executionPanel.render({
+  ...executionTask, review: capacityReview, executionResult: capacityResult,
+});
+assert.ok(findText(executionPanel.element, "Execution stopped: more target space is needed"));
+const capacityIntent = walk(executionPanel.element).find(
+  (item) => item.dataset?.lifecycle === "capacity",
+);
+assert.ok(capacityIntent, "the exact disk-capacity failure has its closed lifecycle key");
+assert.ok(findText(capacityIntent, "Failed"), "capacity row retains the literal failed result");
+assert.ok(findText(executionPanel.element, "Operation: Failed (Disk capacity)"));
+assert.ok(findText(executionPanel.element, "Automatic verification: Verified"));
+assert.ok(findText(executionPanel.element, "Stored evidence: Recorded copy"),
+  "capacity presentation preserves every independent row axis");
+assert.ok(findText(executionPanel.element, "abcdef01"), "only stored evidence supplies the checksum");
+
+const quietDetailReview = {
+  ...capacityReview,
+  window: {
+    ...capacityReview.window,
+    execution: { ...executionSummary, session_id: null, result: null, gap: null, trash_location: null },
+  },
+  executionDetail: { operationId, state: "loading", response: null, message: null },
+};
+const quietDetailTask = { ...executionTask, review: quietDetailReview, executionResult: null };
+executionPanel.render(quietDetailTask);
+if (executionDiagnostics.hidden) detailsToggle.dispatch("click");
+executionDetailCard.focus();
+detailsToggle.dispatch("click");
+assert.ok(document.activeElement === detailsToggle,
+  "whole-pane collapse returns hidden-content focus to its disclosure");
+detailsToggle.dispatch("click");
+executionDetailCard.focus();
+executionPanel.render({ ...quietDetailTask, review: null });
+assert.ok(document.activeElement === findByClass(executionPanel.element, "nami-plan-review__status-title"),
+  "null review returns hidden-detail focus to visible status");
+executionPanel.dispose();
+
+const livePanel = createPlanReviewPanel(callbacks);
+const liveRow = {
+  ...executionRow, execution: null, is_container: false, row_kind: "operation",
+};
+const liveReview = {
+  ...executionReviewState,
+  window: {
+    ...executionReviewState.window,
+    rows: [liveRow], total: 1,
+    execution: { ...executionSummary, result: null, gap: null, trash_location: null },
+  },
+  executionDetail: null,
+};
+const liveTask = {
+  ...executionTask, review: liveReview, executionResult: null, sessionState: "active",
+  executionControlState: "running",
+  progressPresentation: {
+    phase: "execute", activeItem: { item_id: operationId, item_type: "operation" },
+    itemPercent: 10,
+  },
+};
+livePanel.render(liveTask);
+const liveElement = findByDataset(livePanel.element, "nodeId", liveRow.node_id);
+let liveIntent = findByClass(liveElement, "nami-plan-row__intent");
+assert.equal(liveIntent.dataset.lifecycle, "executing",
+  "unsettled operation composes through the real row validator");
+assert.equal(findByClass(liveIntent, "nami-progress").ariaValueNow, "10");
+liveElement.focus();
+liveTask.progressPresentation = { ...liveTask.progressPresentation, itemPercent: 80 };
+livePanel.render(liveTask);
+liveIntent = findByClass(liveElement, "nami-plan-row__intent");
+assert.equal(findByClass(liveIntent, "nami-progress").ariaValueNow, "80",
+  "same-window progress updates the visible active row");
+assert.ok(findByDataset(livePanel.element, "nodeId", liveRow.node_id) === liveElement,
+  "progress keeps row identity");
+assert.ok(document.activeElement === liveElement, "progress keeps row focus");
+liveRow.execution = {
+  operation: executionRow.execution.operation,
+  automatic_verification: null, evidence: null,
+};
+liveTask.progressPresentation = {
+  phase: "verify", activeItem: { item_id: operationId, item_type: "operation" },
+  itemPercent: 40,
+};
+livePanel.render(liveTask);
+liveIntent = findByClass(liveElement, "nami-plan-row__intent");
+assert.equal(liveIntent.dataset.lifecycle, "completed", "copy outcome survives verification");
+assert.ok(findText(liveIntent, "Completed"));
+assert.equal(findByClass(liveIntent, "nami-plan-row__verification")
+  .querySelector(".nami-progress").ariaValueNow, "40");
+liveTask.progressPresentation = { phase: "verify", activeItem: null, itemPercent: null };
+livePanel.render(liveTask);
+liveIntent = findByClass(liveElement, "nami-plan-row__intent");
+assert.equal(liveIntent.dataset.lifecycle, "completed", "retirement keeps copy outcome");
+assert.equal(findByClass(liveIntent, "nami-plan-row__verification"), null);
+assert.ok(document.activeElement === liveElement, "retirement keeps row focus");
+const largeProgress = (bytes, at) => ({ phase: "execute", progressAt: at, activeItem: null,
+  progress: { bytes_done: bytes, bytes_total: "9223372036854775807",
+    items_done: 0, items_total: 1 } });
+const progressEvent = { update_type: "event", event: { body_type: "Progress" } };
+const rateStart = largeProgress("0", "2026-09-23T00:00:00+00:00");
+const rateEnd = largeProgress("90071992547409920", "2026-09-23T00:00:05+00:00");
+const firstRate = advanceProgressPresentation(null, rateStart, progressEvent);
+liveTask.progressPresentation = advanceProgressPresentation(firstRate, rateEnd, progressEvent);
+liveTask.progressState = rateEnd;
+assert.ok(liveTask.progressPresentation.throughputBytesPerSecond > Number.MAX_SAFE_INTEGER,
+  "a valid five-second Scalar64 delta exceeds the exact Number integer boundary");
+livePanel.render(liveTask);
+assert.ok(findText(findByClass(livePanel.element, "nami-plan-review__status-summary"),
+  "16.00 PiB/s estimate"), "the approximate large rate renders without violating the exact byte formatter");
+findAction(livePanel.element, "pause").dispatch("click");
+assert.deepEqual(calls.at(-1), ["onControl", liveReview, "pause"],
+  "real composed row leaves controls dispatchable");
+livePanel.dispose();
 process.stdout.write("ok");

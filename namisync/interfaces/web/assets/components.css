@@ -1556,7 +1556,8 @@ body {
 [data-lifecycle]:is(
   [data-lifecycle="canceled_after_publish"],
   [data-lifecycle="canceled_after_mutation"],
-  [data-lifecycle="refused"]
+  [data-lifecycle="refused"],
+  [data-lifecycle="capacity"]
 ) {
   --nami-state-background: var(--lifecycle-attention-background);
   --nami-state-foreground: var(--lifecycle-attention-fill-foreground);
@@ -1798,7 +1799,8 @@ body {
   [data-lifecycle="interrupted"],
   [data-lifecycle="canceled_after_publish"],
   [data-lifecycle="canceled_after_mutation"],
-  [data-lifecycle="refused"]
+  [data-lifecycle="refused"],
+  [data-lifecycle="capacity"]
 ) .nami-state-cue::before,
 [data-integrity]:is(
   [data-integrity="modified"],

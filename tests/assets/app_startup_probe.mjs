@@ -132,6 +132,7 @@ const bridgeStub = moduleUrl(`
   export const createTask = () => Promise.reject(new Error("unused"));
   export const closeTask = () => Promise.reject(new Error("unused"));
   export const listTasks = () => Promise.resolve({ tasks: [] });
+  export const getExecutionDetail = () => Promise.reject(new Error("unused"));
   export const readSetup = () => Promise.resolve({
     task_id: null,
     snapshot: {
@@ -180,15 +181,22 @@ const panelsStub = moduleUrl(`
 `);
 const renderStub = moduleUrl(`
   export const renderText = (element, value) => { element.textContent = value; };
+  export const formatByteCount = (value) => String(value);
 `);
 const executionConfirmationStub = moduleUrl(`
   export const createExecutionConfirmation = () => ({ element: {}, show() {} });
 `);
 
 let source = await readFile(process.argv[2], "utf8");
+let taskStatusSource = await readFile(
+  process.argv[2].replace(/app\.js$/, "task_status.js"),
+  "utf8",
+);
+taskStatusSource = taskStatusSource.replace("./render.js", renderStub);
+const taskStatusStub = moduleUrl(taskStatusSource);
 source = source.replace(
   /import \{[\s\S]*?\} from "\.\/bridge\.js";/,
-  `import { acknowledgeShellReady, admitLocation, BridgeTransportError, closeTask, createTask, echoReadiness, listTasks, markBridgeOperational, pickFolder, planAgain, prepareSetup, probeRecentPairs, readSetup, StartPlanUncertainError, startInventory, startPlan, startTaskDrain, TaskCreateUncertainError, whenBridgeApiReady } from "${bridgeStub}";`,
+  `import { acknowledgeShellReady, admitLocation, BridgeTransportError, closeTask, createTask, echoReadiness, getExecutionDetail, listTasks, markBridgeOperational, pickFolder, planAgain, prepareSetup, probeRecentPairs, readSetup, StartPlanUncertainError, startInventory, startPlan, startTaskDrain, TaskCreateUncertainError, whenBridgeApiReady } from "${bridgeStub}";`,
 );
 source = source
   .replace("./readiness.js", readinessStub)
@@ -197,7 +205,8 @@ source = source
   .replace("./execution_confirmation.js", executionConfirmationStub)
   .replace("./panels.js", panelsStub)
   .replace("./rail.js", railStub)
-  .replace("./render.js", renderStub);
+  .replace("./render.js", renderStub)
+  .replace("./task_status.js", taskStatusStub);
 
 window.addEventListener("pywebviewready", () => {
   globalThis.startupHarness.signalBridgeApiReady();

@@ -8,7 +8,9 @@ import inspect
 import json
 import math
 import re
+import subprocess
 import sys
+import threading
 import zipfile
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -20,7 +22,7 @@ from uuid import uuid4
 import pytest
 
 import _component_gallery_child as component_gallery_child
-from _frontend_test_support import ICON_GLYPHS, ICON_MASK_FILES
+from _frontend_test_support import ICON_GLYPHS, ICON_MASK_FILES, _node_executable
 from _headed_evidence import EvidencePaths, EvidenceReader, require_host_final
 from conftest import HeadedInstalledWheel
 from namisync.interfaces.web.commands import CommandPayloadError
@@ -77,6 +79,7 @@ _LIFECYCLE_CASES = {
     "canceled_after_publish": ("yellow", "fill"),
     "canceled_after_mutation": ("yellow", "fill"),
     "refused": ("yellow", "fill"),
+    "capacity": ("yellow", "fill"),
     "failed": ("red", "fill"),
     "errored": ("red", "fill"),
 }
@@ -152,6 +155,7 @@ _PLAN_ROW_CASE_KEYS = {
     "copy",
     "copying",
     "completed",
+    "capacity",
     "update",
     "move",
     "move_update",
@@ -467,12 +471,176 @@ def test_component_gallery_failure_evidence_is_sanitized(tmp_path: Path) -> None
         "failure": {
             "stage": "child",
             "type": "RuntimeError",
+            "step": "child",
+            "reason": "child_failure",
         }
     }
     assert _sanitized_failure_record(failure) == failure["failure"]
     encoded = json.dumps(failure).casefold()
     assert "private" not in encoded
     assert "sentinel" not in encoded
+
+
+def test_component_gallery_measurement_diagnostic_survives_full_failure_path(
+    tmp_path: Path,
+) -> None:
+    native_snapshot = {
+        "pending": "minimum_window",
+        "owner_scale": 1.25,
+        "minimum_width": 1280,
+        "minimum_height": 800,
+        "outer_width": 1280,
+        "outer_height": 800,
+        "client_width": 1252,
+        "client_height": 732,
+    }
+    layout_result = {
+        "case": "default-folded-populated",
+        "block_size": 640.0,
+        "visible_count": 0,
+        "expanded": False,
+        "populated": True,
+        "logical_rows": 1000,
+        "loaded_rows": 64,
+        "row_height": 24.0,
+        **dict.fromkeys(
+            component_gallery_child._LAYOUT_FAILURE_BOOLEAN_KEYS, True
+        ),
+        "no_horizontal_control_clipping": False,
+    }
+    node = _node_executable()
+    if node is None:
+        pytest.skip("Node.js is unavailable")
+    probe = """
+const fs = require("fs");
+const source = fs.readFileSync(process.argv[1], "utf8");
+const prefix = source.slice(0, source.indexOf("(async () => {"));
+const native = JSON.parse(process.argv[2]);
+const layout = JSON.parse(process.argv[3]);
+global.window = {addEventListener() {}};
+eval(prefix + `
+let producedLayoutFailure;
+try {
+  rejectDiagnosticLayout(layout);
+} catch (error) {
+  producedLayoutFailure = buildFailureEvidence(
+    "plan_matrix", error.name, "diagnostic_default_folded_populated",
+    galleryFailureReason, null, galleryLayoutFailure,
+  );
+}
+console.log(JSON.stringify([
+  buildFailureEvidence("measurement", "Error", "control_styles", "control_invariant"),
+  buildFailureEvidence("measurement", "Error", "native_minimum_request", "native_minimum_pending", native),
+  producedLayoutFailure,
+]));`);
+"""
+    completed = subprocess.run(
+        [
+            node, "-e", probe, str(_SCENARIO),
+            json.dumps(native_snapshot), json.dumps(layout_result),
+        ],
+        check=True,
+        timeout=10,
+        capture_output=True,
+        text=True,
+    )
+    non_native_failure, native_failure, layout_failure = json.loads(
+        completed.stdout
+    )
+    assert layout_failure["reason"] == "layout_invariant"
+    assert layout_failure["layout"]["no_horizontal_control_clipping"] is False
+    assert layout_failure["layout"]["status_details_same_row"] is True
+    assert layout_failure["step"] == "diagnostic_default_folded_populated"
+
+    paths = EvidencePaths((tmp_path / "native").resolve())
+    paths.root.mkdir()
+    recorder = component_gallery_child._Recorder(paths, "light")
+    spec = component_gallery_child._test_report_spec(
+        recorder,
+        lambda _targets: None,
+        "light",
+        read_native_diagnostic=lambda: dict(native_snapshot),
+    )
+    private_text = "C:\\private\\sentinel"
+    with pytest.raises(CommandPayloadError, match="report is invalid"):
+        spec.invoke(
+            {
+                "phase": "failure",
+                "failure": {**layout_failure, "detail": private_text},
+            },
+            context=_OPEN_CONTEXT,
+        )
+    with pytest.raises(CommandPayloadError, match="report is invalid"):
+        spec.invoke(
+            {
+                "phase": "failure",
+                "failure": {**non_native_failure, "native": native_snapshot},
+            },
+            context=_OPEN_CONTEXT,
+        )
+    with pytest.raises(CommandPayloadError, match="report is invalid"):
+        spec.invoke(
+            {
+                "phase": "failure",
+                "failure": {
+                    name: value
+                    for name, value in native_failure.items()
+                    if name != "native"
+                },
+            },
+            context=_OPEN_CONTEXT,
+        )
+
+    assert spec.invoke(
+        {"phase": "diagnostic_status"}, context=_OPEN_CONTEXT
+    ) == native_snapshot
+    payload = {"phase": "failure", "failure": native_failure}
+    assert spec.invoke(payload, context=_OPEN_CONTEXT) == {"accepted": True}
+    failure = EvidenceReader(paths).read_failure()
+    assert failure == {"failure": payload["failure"]}
+    assert _sanitized_failure_record(failure) == payload["failure"]
+    encoded = json.dumps(failure).casefold()
+    assert "private" not in encoded
+    assert "sentinel" not in encoded
+
+    non_native_paths = EvidencePaths((tmp_path / "non-native").resolve())
+    non_native_paths.root.mkdir()
+    non_native_spec = component_gallery_child._test_report_spec(
+        component_gallery_child._Recorder(non_native_paths, "light"),
+        lambda _targets: None,
+        "light",
+    )
+    assert non_native_spec.invoke(
+        {"phase": "failure", "failure": non_native_failure},
+        context=_OPEN_CONTEXT,
+    ) == {"accepted": True}
+    non_native_evidence = EvidenceReader(non_native_paths).read_failure()
+    assert non_native_evidence == {"failure": non_native_failure}
+    assert _sanitized_failure_record(non_native_evidence) == non_native_failure
+
+    layout_paths = EvidencePaths((tmp_path / "layout").resolve())
+    layout_paths.root.mkdir()
+    layout_spec = component_gallery_child._test_report_spec(
+        component_gallery_child._Recorder(layout_paths, "light"),
+        lambda _targets: None,
+        "light",
+    )
+    wrong_layout = {
+        **layout_failure["layout"], "status_details_same_row": "true",
+    }
+    assert component_gallery_child._valid_layout_failure(wrong_layout) is False
+    with pytest.raises(CommandPayloadError, match="report is invalid"):
+        layout_spec.invoke(
+            {"phase": "failure", "failure": {**layout_failure, "layout": wrong_layout}},
+            context=_OPEN_CONTEXT,
+        )
+    assert layout_spec.invoke(
+        {"phase": "failure", "failure": layout_failure},
+        context=_OPEN_CONTEXT,
+    ) == {"accepted": True}
+    layout_evidence = EvidenceReader(layout_paths).read_failure()
+    assert layout_evidence == {"failure": layout_failure}
+    assert _sanitized_failure_record(layout_evidence) == layout_failure
 
 
 def test_component_gallery_write_retains_a_post_ready_failure(
@@ -501,10 +669,89 @@ def test_component_gallery_write_retains_a_post_ready_failure(
         "post_ready_failure": {
             "stage": "page_setup",
             "type": "ScriptExecutionError",
+            "step": "not_started",
+            "reason": "stage_failure",
         },
     }
     assert "private" not in json.dumps(final).casefold()
     reader.assert_consistent(require_final=True)
+
+
+def test_component_gallery_a1_keyboard_starts_on_native_ui_thread(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    system = ModuleType("System")
+    setattr(system, "Action", lambda callback: callback)
+    monkeypatch.setitem(sys.modules, "System", system)
+
+    class Native:
+        def __init__(self) -> None:
+            self.on_ui = False
+            self.queued: list[Callable[[], None]] = []
+
+        def BeginInvoke(self, callback: Callable[[], None]) -> None:
+            self.queued.append(callback)
+
+    class Task:
+        def GetAwaiter(self) -> Task:
+            return self
+
+        def OnCompleted(self, _callback: Callable[[], None]) -> None:
+            pass
+
+    class Core:
+        def __init__(self, native: Native) -> None:
+            self.native = native
+            self.methods: list[str] = []
+
+        def CallDevToolsProtocolMethodAsync(
+            self, method: str, _parameters: str,
+        ) -> Task:
+            assert self.native.on_ui
+            self.methods.append(method)
+            return Task()
+
+    class Recorder:
+        def __init__(self) -> None:
+            self.failures: list[object] = []
+
+        def set(self, name: str, value: object) -> None:
+            if name == "native_script_failure":
+                self.failures.append(value)
+
+        def write(self) -> None:
+            pass
+
+    native = Native()
+    core = Core(native)
+    recorder = Recorder()
+    retained: list[object] = []
+    component_gallery_child._schedule_a1_keyboard_capture(
+        native, core, tmp_path / "a1.png", recorder, retained,
+    )
+    assert core.methods == []
+    assert len(native.queued) == 1
+    assert native.queued[0] in retained
+    native.on_ui = True
+    native.queued.pop()()
+    assert core.methods == ["Runtime.evaluate"]
+    assert recorder.failures == []
+
+
+def test_component_gallery_a1_native_failure_keeps_measurement_location(
+    tmp_path: Path,
+) -> None:
+    paths = EvidencePaths(tmp_path.resolve())
+    recorder = component_gallery_child._Recorder(paths, "light")
+    recorder.set("native_script_failure", {
+        "stage": "a1_keyboard", "type": "RuntimeError",
+        "step": "a1_keyboard_focus", "method": "Runtime.evaluate",
+    })
+    recorder.write()
+    assert EvidenceReader(paths).read_failure() == {"failure": {
+        "stage": "measurement", "type": "RuntimeError",
+        "step": "native_minimum_keyboard", "reason": "stage_failure",
+    }}
 
 
 def test_component_gallery_media_modes_are_exact_and_scenario_bounded() -> None:
@@ -645,6 +892,299 @@ def test_component_gallery_preview_wheel_is_bounded(tmp_path: Path) -> None:
     assert scheduled == ["content", "backdrop"]
 
 
+def test_component_gallery_minimum_window_requires_completed_native_observation(
+    tmp_path: Path,
+) -> None:
+    scheduled: list[bool] = []
+    status: dict[str, object] = {"complete": False}
+    spec = component_gallery_child._test_report_spec(
+        component_gallery_child._Recorder(
+            EvidencePaths(tmp_path.resolve()), "light"
+        ),
+        lambda _targets: None,
+        "light",
+        schedule_minimum_window=lambda: scheduled.append(True),
+        read_minimum_window=lambda: dict(status),
+    )
+
+    with pytest.raises(CommandPayloadError, match="status is invalid"):
+        spec.invoke({"phase": "minimum_window_status"}, context=_OPEN_CONTEXT)
+    assert spec.invoke(
+        {"phase": "minimum_window"}, context=_OPEN_CONTEXT
+    ) == {"accepted": True}
+    assert scheduled == [True]
+    assert spec.invoke(
+        {"phase": "minimum_window_status"}, context=_OPEN_CONTEXT
+    ) == {"complete": False}
+
+    status.update(
+        {
+            "complete": True,
+            "owner_scale": 1.75,
+            "minimum_width": 1792,
+            "minimum_height": 1120,
+            "outer_width": 1792,
+            "outer_height": 1120,
+            "client_width": 1769,
+            "client_height": 1057,
+        }
+    )
+    assert spec.invoke(
+        {"phase": "minimum_window_status"}, context=_OPEN_CONTEXT
+    ) == status
+    with pytest.raises(CommandPayloadError, match="request is invalid"):
+        spec.invoke({"phase": "minimum_window"}, context=_OPEN_CONTEXT)
+
+    assert component_gallery_child._native_minimum_matches_owner_scale(
+        1792, 1120, 1.75
+    )
+    assert not component_gallery_child._native_minimum_matches_owner_scale(
+        1024, 640, 1.75
+    )
+
+
+def test_component_gallery_minimum_status_never_exposes_partial_snapshot() -> None:
+    owner = component_gallery_child._MinimumWindowStatus()
+    pending = {"complete": False}
+    completed = {
+        "complete": True,
+        "owner_scale": 1.75,
+        "minimum_width": 1792,
+        "minimum_height": 1120,
+        "outer_width": 1792,
+        "outer_height": 1120,
+        "client_width": 1769,
+        "client_height": 1057,
+    }
+    wrong_minimum = {
+        **completed,
+        "minimum_width": 1024,
+        "minimum_height": 640,
+    }
+    assert owner.read() == pending
+
+    observed: list[dict[str, object]] = []
+    stop = threading.Event()
+
+    def read_until_stopped() -> None:
+        while not stop.is_set():
+            observed.append(owner.read())
+
+    reader = threading.Thread(target=read_until_stopped)
+    reader.start()
+    try:
+        for snapshot in (completed, wrong_minimum) * 100:
+            owner.publish(**{
+                name: value
+                for name, value in snapshot.items()
+                if name != "complete"
+            })
+            assert owner.read() == snapshot
+    finally:
+        stop.set()
+        reader.join()
+
+    assert observed
+    assert all(snapshot in (pending, completed, wrong_minimum) for snapshot in observed)
+
+
+@pytest.mark.parametrize("configured_minimum", ["owner", "logical"])
+def test_component_gallery_minimum_window_callback_uses_native_owner(
+    configured_minimum: str,
+) -> None:
+    class Dimensions:
+        def __init__(self, width: int, height: int) -> None:
+            self.Width = width
+            self.Height = height
+
+    class Native:
+        def __init__(self, minimum: Dimensions) -> None:
+            self._scale = 1.0
+            self.MinimumSize = minimum
+            self.Width = 1280
+            self.Height = 800
+            self.ClientSize = Dimensions(1260, 760)
+            self.queued: list[Callable[[], None]] = []
+            self.assignments: list[Dimensions] = []
+
+        @property
+        def Size(self) -> Dimensions:
+            return Dimensions(self.Width, self.Height)
+
+        @Size.setter
+        def Size(self, value: Dimensions) -> None:
+            self.assignments.append(value)
+            self.Width = value.Width
+            self.Height = value.Height
+            self.ClientSize = Dimensions(1348, 820)
+
+        def BeginInvoke(self, callback: Callable[[], None]) -> None:
+            self.queued.append(callback)
+
+    class Wrapper:
+        def __init__(self, native: Native) -> None:
+            self.native = native
+
+        @property
+        def _scale(self) -> float:
+            raise AssertionError("wrapper does not own native scale")
+
+    class Recorder:
+        def __init__(self) -> None:
+            self.values: dict[str, object] = {}
+
+        def set(self, name: str, value: object) -> None:
+            self.values[name] = value
+
+    scale = 1.3337
+    owner_minimum = Dimensions(int(1024 * scale), int(640 * scale))
+    minimum = (
+        owner_minimum
+        if configured_minimum == "owner"
+        else Dimensions(1024, 640)
+    )
+    native = Native(minimum)
+    wrapper = Wrapper(native)
+    retained: list[object] = []
+    scheduler: dict[str, object] = {}
+    status = component_gallery_child._MinimumWindowStatus()
+    recorder = Recorder()
+    component_gallery_child._install_minimum_window_scheduler(
+        window=wrapper,
+        native=native,
+        action=lambda callback: callback,
+        retained_delegates=retained,
+        scheduler=scheduler,
+        status=status,
+        recorder=recorder,
+    )
+    assert status.read_diagnostic() == {
+        "pending": "none",
+        "owner_scale": 1.0,
+        "minimum_width": minimum.Width,
+        "minimum_height": minimum.Height,
+        "outer_width": 1280,
+        "outer_height": 800,
+        "client_width": 1260,
+        "client_height": 760,
+    }
+    status.set_pending("pseudo_states")
+    assert status.read_diagnostic()["pending"] == "pseudo_states"
+    status.set_pending("wheel_content")
+    assert status.read_diagnostic()["pending"] == "wheel_content"
+    status.set_pending("wheel_backdrop")
+    assert status.read_diagnostic()["pending"] == "wheel_backdrop"
+
+    schedule = scheduler["value"]
+    assert callable(schedule)
+    schedule()
+    assert len(native.queued) == 1
+    assert status.read() == {"complete": False}
+    assert status.read_diagnostic()["pending"] == "minimum_window"
+    native._scale = scale
+    native.queued.pop(0)()
+
+    if configured_minimum == "logical":
+        assert native.assignments == []
+        assert native.queued == []
+        assert status.read() == {
+            "complete": True,
+            "owner_scale": scale,
+            "minimum_width": 1024,
+            "minimum_height": 640,
+            "outer_width": 1280,
+            "outer_height": 800,
+            "client_width": 1260,
+            "client_height": 760,
+        }
+        assert recorder.values == {}
+        assert status.read_diagnostic() == {
+            "pending": "none",
+            **{
+                name: value
+                for name, value in status.read().items()
+                if name != "complete"
+            },
+        }
+        return
+
+    assert native.assignments == [owner_minimum]
+    assert len(native.queued) == 1
+    assert status.read() == {"complete": False}
+    native.queued.pop(0)()
+    assert status.read() == {
+        "complete": True,
+        "owner_scale": scale,
+        "minimum_width": int(1024 * scale),
+        "minimum_height": int(640 * scale),
+        "outer_width": int(1024 * scale),
+        "outer_height": int(640 * scale),
+        "client_width": 1348,
+        "client_height": 820,
+    }
+    assert status.read_diagnostic() == {
+        "pending": "none",
+        **{
+            name: value
+            for name, value in status.read().items()
+            if name != "complete"
+        },
+    }
+    assert recorder.values["native_window_request"] == {
+        "minimum": True,
+        "logical_width": 1024,
+        "logical_height": 640,
+        "owner_scale": scale,
+        "minimum_width": int(1024 * scale),
+        "minimum_height": int(640 * scale),
+    }
+
+
+def test_component_gallery_minimum_window_js_rejects_wrong_coordinates() -> None:
+    node = _node_executable()
+    if node is None:
+        pytest.skip("Node.js is unavailable")
+    script = _SCENARIO.read_text(encoding="utf-8")
+    functions = []
+    for name in ("validMinimumWindowStatus", "minimumWindowSettled"):
+        match = re.search(
+            rf"function {name}\([^)]*\) \{{.*?\n\}}",
+            script,
+            re.DOTALL,
+        )
+        assert match is not None
+        functions.append(match.group(0))
+    complete = {
+        "complete": True,
+        "owner_scale": 1.75,
+        "minimum_width": 1792,
+        "minimum_height": 1120,
+        "outer_width": 1792,
+        "outer_height": 1120,
+        "client_width": 1769,
+        "client_height": 1057,
+    }
+    cases = [
+        [complete, 1011, 604, True],
+        [{**complete, "outer_width": 1800}, 1011, 604, False],
+        [{**complete, "client_width": 1790}, 1011, 604, False],
+        [{"complete": False}, 1011, 604, False],
+    ]
+    probe = "\n".join(functions) + (
+        "\nconst cases = " + json.dumps(cases) + ";"
+        "\nfor (const [value, width, height, expected] of cases) {"
+        " if (minimumWindowSettled(value, width, height) !== expected)"
+        " process.exit(1); }"
+    )
+    completed = subprocess.run(
+        (node, "--input-type=module", "--eval", probe),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+
+
 def test_component_gallery_report_parser_is_exact_and_nested(
     tmp_path: Path,
 ) -> None:
@@ -767,6 +1307,7 @@ def test_component_gallery_report_parser_is_exact_and_nested(
         "update",
         "copying",
         "completed",
+        "capacity",
         "move",
         "move_update",
         "recase",
@@ -781,6 +1322,7 @@ def test_component_gallery_report_parser_is_exact_and_nested(
         "plain": ("", "", ""),
         "copying": ("lifecycle", "executing", "progress"),
         "completed": ("lifecycle", "completed", "text"),
+        "capacity": ("lifecycle", "capacity", "fill"),
         **{
             key: ("intent", key, form)
             for key, (_hue, form) in _INTENT_CASES.items()
@@ -1176,6 +1718,84 @@ def test_component_gallery_report_parser_is_exact_and_nested(
                 "focus_restored": True,
                 "wheel_blocked": True,
             },
+            "diagnostic_layout": [
+                {
+                    "case": f"{size}-{disclosure}-{population}",
+                    "block_size": block_size,
+                    "expanded": disclosure == "expanded",
+                    "populated": population == "populated",
+                    "logical_rows": 1000 if population == "populated" else 0,
+                    "loaded_rows": 64 if population == "populated" else 0,
+                    "disclosure_matches": True,
+                    "diagnostics_visible": True,
+                    "rows_overflow": True,
+                    "scroll_advanced": True,
+                    "window_requested": True,
+                    "window_adopted": True,
+                    "viewport_bounded": True,
+                    "row_height": 24.0,
+                    "stale_facts_cleared": True,
+                    "header_aligned": True,
+                    "whole_row_reachable": True,
+                    "both_columns_reachable": True,
+                    "collapse_focus_restored": True,
+                    "table_state_preserved": True,
+                    "root_fits": True,
+                    "table_usable": True,
+                    "hidden_descendant_exempt": True,
+                    "visible_collapsed_rejected": True,
+                    "no_horizontal_control_clipping": True,
+                    "visible_count": 2 if disclosure == "expanded" else 0,
+                    "cardinality_exact": True,
+                    "issues_scrollable": True,
+                    "trash_scrollable": True,
+                    "detail_scrollable": True,
+                    "issues_keyboard_reachable": True,
+                    "trash_keyboard_reachable": True,
+                    "detail_keyboard_reachable": True,
+                    "readable_body": True,
+                    "disclosure_reachable": True,
+                    "row_activation_reachable": True,
+                    "placeholder_present": True,
+                    "detail_matches_focused_row": True,
+                    "title_action_aligned": True,
+                    "status_details_same_row": True,
+                }
+                for size, block_size in (("default", 640), ("minimum", 501))
+                for disclosure in ("folded", "expanded")
+                for population in ("empty", "populated")
+            ],
+            "minimum_window": {
+                "default_outer_width": 1280,
+                "default_outer_height": 800,
+                "native_default_owner_scale": 1.75,
+                "native_default_outer_width": 2240,
+                "native_default_outer_height": 1400,
+                "outer_width": 1024,
+                "outer_height": 640,
+                "inner_width": 1008,
+                "inner_height": 601,
+                "native_owner_scale": 1.75,
+                "native_minimum_width": 1792,
+                "native_minimum_height": 1120,
+                "native_outer_width": 1792,
+                "native_outer_height": 1120,
+                "native_client_width": 1764,
+                "native_client_height": 1052,
+                "work_width": 1008.0,
+                "work_content_width": 1008.0,
+                "work_content_aligned": True,
+                "work_height": 501.0,
+                "review_width": 1008.0,
+                "review_height": 501.0,
+                "axes_wrapped": True,
+                "long_trash_length": 32767,
+                "all_three_bounded": True,
+                "keyboard_scroll_before": 0.0,
+                "keyboard_scroll_after": 120.0,
+                "keyboard_capture_width": 1008,
+                "keyboard_capture_height": 601,
+            },
             "segmented": {
                 "group_role": "radiogroup",
                 "selected_role": "radio",
@@ -1268,6 +1888,17 @@ def test_component_gallery_report_parser_is_exact_and_nested(
     }
     assert component_gallery_child._valid_complete_report(report) is True
 
+    capacity_row = next(
+        row
+        for row in report["control_contract"]["file_list"]["rows"]
+        if row["case"] == "capacity"
+    )
+    capacity_row["primary_form"] = "text"
+    assert component_gallery_child._valid_plan_evidence(
+        report["control_contract"]["file_list"]
+    ) is False
+    capacity_row["primary_form"] = "fill"
+
     chunk_rows = component_gallery_child._CONTROL_REPORT_CHUNK_ROWS
     part_values = [
         ("lifecycles", report["lifecycles"]),
@@ -1289,10 +1920,13 @@ def test_component_gallery_report_parser_is_exact_and_nested(
     report_paths = EvidencePaths(report_root.resolve())
     recorder = component_gallery_child._Recorder(report_paths, "light")
     scheduled: list[list[dict[str, object]]] = []
+    minimum_window_requests: list[bool] = []
     spec = component_gallery_child._test_report_spec(
         recorder,
         scheduled.append,
         "light",
+        None,
+        lambda: minimum_window_requests.append(True),
     )
     pseudo_targets = component_gallery_child._expected_pseudo_targets("light")
     assert spec.invoke(
@@ -1300,6 +1934,13 @@ def test_component_gallery_report_parser_is_exact_and_nested(
         context=_OPEN_CONTEXT,
     ) == {"accepted": True}
     assert scheduled == [pseudo_targets]
+    assert spec.invoke(
+        {"phase": "minimum_window"},
+        context=_OPEN_CONTEXT,
+    ) == {"accepted": True}
+    assert minimum_window_requests == [True]
+    with pytest.raises(CommandPayloadError, match="minimum window request is invalid"):
+        spec.invoke({"phase": "minimum_window"}, context=_OPEN_CONTEXT)
     for sequence, (name, value) in enumerate(part_values):
         payload = {
             "phase": "part",
@@ -1395,6 +2036,25 @@ def test_component_gallery_report_parser_is_exact_and_nested(
     report["cosmetic"]["replacement"]["disposition"] = "applied"
     assert component_gallery_child._valid_complete_report(report) is False
     report["cosmetic"]["replacement"]["disposition"] = "noop"
+    minimum_window = report["control_contract"]["minimum_window"]
+    minimum_window["native_client_width"] += 20
+    assert component_gallery_child._valid_complete_report(report) is False
+    minimum_window["native_client_width"] -= 20
+    minimum_window["native_minimum_height"] -= 20
+    assert component_gallery_child._valid_complete_report(report) is False
+    minimum_window["native_minimum_height"] += 20
+    minimum_window["native_default_outer_width"] += 20
+    assert component_gallery_child._valid_complete_report(report) is False
+    minimum_window["native_default_outer_width"] -= 20
+    minimum_window["work_content_width"] -= 20
+    assert component_gallery_child._valid_complete_report(report) is False
+    minimum_window["work_content_width"] += 20
+    minimum_window["work_content_aligned"] = False
+    assert component_gallery_child._valid_complete_report(report) is False
+    minimum_window["work_content_aligned"] = True
+    report["control_contract"]["diagnostic_layout"][0]["status_details_same_row"] = False
+    assert component_gallery_child._valid_complete_report(report) is False
+    report["control_contract"]["diagnostic_layout"][0]["status_details_same_row"] = True
     report["controls"][0]["state"] = "invented"
     assert component_gallery_child._valid_complete_report(report) is False
 
@@ -1461,6 +2121,9 @@ def test_component_gallery_script_declares_exact_required_matrix() -> None:
     assert script.count("ensureFrozen();") == 2
     assert 'data-column="notes"' in script
     assert "640" not in script
+    assert 'control.closest("[hidden]") !== null' in script
+    assert "bounds.width > 0 && bounds.height > 0" in script
+    assert "const visibleCollapsedRejected = !controlFits(collapsedControl);" in script
     assert 'masterCheckbox.addEventListener("change"' in script
     assert 'surface.dataset.galleryHdrIsolate = isolate;' in script
     assert 'surface.style.boxShadow = "var(--elevation-8)";' in script
@@ -2293,17 +2956,43 @@ def test_sh_g_14_component_gallery_uses_closed_local_icon_registry(
         )
 
 
-def _sanitized_failure_record(value: object) -> dict[str, str]:
+def _sanitized_failure_record(value: object) -> dict[str, object]:
     if type(value) is not dict or set(value) != {"failure"}:
         raise AssertionError("component gallery failure evidence is invalid")
     failure = value["failure"]
     if (
         type(failure) is not dict
-        or set(failure) != {"stage", "type"}
+        or not {"stage", "type", "step", "reason"}.issubset(failure)
+        or not set(failure).issubset(
+            {"stage", "type", "step", "reason", "native", "layout"}
+        )
         or failure.get("stage")
         not in component_gallery_child._EVIDENCE_FAILURE_STAGES
         or failure.get("type")
         not in component_gallery_child._EVIDENCE_FAILURE_TYPES
+        or failure.get("step") not in component_gallery_child._FAILURE_STEPS
+        or failure.get("reason") not in component_gallery_child._FAILURE_REASONS
+        or (
+            failure.get("reason")
+            in component_gallery_child._NATIVE_FAILURE_REASONS
+            and "native" not in failure
+        )
+        or (
+            "native" in failure
+            and (
+                failure["reason"]
+                not in component_gallery_child._NATIVE_FAILURE_REASONS
+                or not component_gallery_child._valid_native_failure_snapshot(
+                    failure["native"]
+                )
+            )
+        )
+        or (
+            "layout" in failure and (
+                failure.get("reason") != "layout_invariant"
+                or not component_gallery_child._valid_layout_failure(failure["layout"])
+            )
+        )
     ):
         raise AssertionError("component gallery failure evidence is invalid")
     return failure
@@ -2383,6 +3072,18 @@ def _run_gallery_mode(
     assert result["exit_code"] == 0
     assert result["schema_version"] == 6
     assert result["startup_errors"] == []
+    assert result["native_window_request"] == {
+        "minimum": True,
+        "logical_width": 1024,
+        "logical_height": 640,
+        "owner_scale": result["native_window_request"]["owner_scale"],
+        "minimum_width": int(
+            1024 * result["native_window_request"]["owner_scale"]
+        ),
+        "minimum_height": int(
+            640 * result["native_window_request"]["owner_scale"]
+        ),
+    }
     assert result["runtime"]["versions"] == {
         "namisync": VERSION,
         "pywebview": "6.2.1",
@@ -2486,6 +3187,8 @@ def _run_gallery_mode(
         component_gallery_child._expected_pseudo_targets(mode)
     )
     return result
+
+
 
 
 def _assert_installed_assets(evidence: _GalleryEvidence) -> None:
@@ -2733,6 +3436,7 @@ def _assert_plan_list_evidence(
         "update",
         "copying",
         "completed",
+        "capacity",
         "move",
         "move_update",
         "recase",
@@ -2772,6 +3476,7 @@ def _assert_plan_list_evidence(
         "plain": ("", "", ""),
         "copying": ("lifecycle", "executing", "progress"),
         "completed": ("lifecycle", "completed", "text"),
+        "capacity": ("lifecycle", "capacity", "fill"),
         **{
             key: ("intent", key, form)
             for key, (_hue, form) in _INTENT_CASES.items()
@@ -3296,6 +4001,94 @@ def _assert_complete_gallery_matrix(report: dict[str, object]) -> None:
         "focus_restored": True,
         "wheel_blocked": True,
     }
+    diagnostic_layout = report["control_contract"]["diagnostic_layout"]
+    assert [case["case"] for case in diagnostic_layout] == [
+        "default-folded-empty", "default-folded-populated",
+        "default-expanded-empty", "default-expanded-populated",
+        "minimum-folded-empty", "minimum-folded-populated",
+        "minimum-expanded-empty", "minimum-expanded-populated",
+    ]
+    assert [case["block_size"] for case in diagnostic_layout[:4]] == [640] * 4
+    assert all(0 < case["block_size"] < 640 for case in diagnostic_layout[4:])
+    assert all(case["disclosure_matches"] for case in diagnostic_layout)
+    assert all(case["diagnostics_visible"] for case in diagnostic_layout)
+    assert all(case["rows_overflow"] for case in diagnostic_layout)
+    assert all(case["scroll_advanced"] for case in diagnostic_layout)
+    assert all(case["window_requested"] for case in diagnostic_layout)
+    assert all(case["window_adopted"] for case in diagnostic_layout)
+    assert all(case["viewport_bounded"] for case in diagnostic_layout)
+    assert all(case["row_height"] == pytest.approx(24, abs=0.5) for case in diagnostic_layout)
+    assert all(case["stale_facts_cleared"] for case in diagnostic_layout)
+    assert all(case["header_aligned"] for case in diagnostic_layout)
+    assert all(case["whole_row_reachable"] for case in diagnostic_layout)
+    assert all(case["both_columns_reachable"] for case in diagnostic_layout)
+    assert all(case["collapse_focus_restored"] for case in diagnostic_layout)
+    assert all(case["table_state_preserved"] for case in diagnostic_layout)
+    assert [case["logical_rows"] for case in diagnostic_layout] == [0, 1000] * 4
+    assert [case["loaded_rows"] for case in diagnostic_layout] == [0, 64] * 4
+    assert all(case["root_fits"] for case in diagnostic_layout)
+    assert all(case["table_usable"] for case in diagnostic_layout)
+    assert all(case["hidden_descendant_exempt"] for case in diagnostic_layout)
+    assert all(case["visible_collapsed_rejected"] for case in diagnostic_layout)
+    assert all(case["no_horizontal_control_clipping"] for case in diagnostic_layout)
+    assert all(case["cardinality_exact"] for case in diagnostic_layout)
+    assert all(case["issues_scrollable"] for case in diagnostic_layout)
+    assert all(case["trash_scrollable"] for case in diagnostic_layout)
+    assert all(case["detail_scrollable"] for case in diagnostic_layout)
+    assert all(case["issues_keyboard_reachable"] for case in diagnostic_layout)
+    assert all(case["trash_keyboard_reachable"] for case in diagnostic_layout)
+    assert all(case["detail_keyboard_reachable"] for case in diagnostic_layout)
+    assert all(case["readable_body"] for case in diagnostic_layout)
+    assert all(case["disclosure_reachable"] for case in diagnostic_layout)
+    assert all(case["row_activation_reachable"] for case in diagnostic_layout)
+    assert all(case["placeholder_present"] for case in diagnostic_layout)
+    assert all(case["detail_matches_focused_row"] for case in diagnostic_layout)
+    assert all(case["title_action_aligned"] for case in diagnostic_layout)
+    assert all(case["status_details_same_row"] for case in diagnostic_layout)
+    minimum_window = report["control_contract"]["minimum_window"]
+    assert minimum_window["long_trash_length"] == 32767
+    assert minimum_window["all_three_bounded"] is True
+    assert minimum_window["keyboard_scroll_after"] > minimum_window["keyboard_scroll_before"]
+    assert minimum_window["keyboard_capture_width"] > 0
+    assert minimum_window["keyboard_capture_height"] > 0
+    assert minimum_window["axes_wrapped"] is True
+    assert minimum_window["work_width"] <= minimum_window["inner_width"]
+    assert minimum_window["work_content_width"] <= minimum_window["work_width"]
+    assert minimum_window["work_content_aligned"] is True
+    assert minimum_window["review_width"] == pytest.approx(
+        minimum_window["work_content_width"], abs=1,
+    )
+    assert minimum_window["review_height"] == pytest.approx(
+        minimum_window["work_height"], abs=1,
+    )
+    assert minimum_window["native_minimum_width"] == pytest.approx(
+        int(1024 * minimum_window["native_owner_scale"]), abs=1,
+    )
+    assert minimum_window["native_minimum_height"] == pytest.approx(
+        int(640 * minimum_window["native_owner_scale"]), abs=1,
+    )
+    assert minimum_window["native_outer_width"] == pytest.approx(
+        minimum_window["native_minimum_width"], abs=1,
+    )
+    assert minimum_window["native_outer_height"] == pytest.approx(
+        minimum_window["native_minimum_height"], abs=1,
+    )
+    assert minimum_window["native_client_width"] / minimum_window[
+        "native_owner_scale"
+    ] == pytest.approx(minimum_window["inner_width"], abs=2)
+    assert minimum_window["native_client_height"] / minimum_window[
+        "native_owner_scale"
+    ] == pytest.approx(minimum_window["inner_height"], abs=2)
+    assert minimum_window["default_outer_width"] > 0
+    assert minimum_window["default_outer_height"] > 0
+    assert minimum_window["native_default_outer_width"] == pytest.approx(
+        1280 * minimum_window["native_default_owner_scale"], abs=2,
+    )
+    assert minimum_window["native_default_outer_height"] == pytest.approx(
+        800 * minimum_window["native_default_owner_scale"], abs=2,
+    )
+    assert minimum_window["outer_width"] >= minimum_window["inner_width"]
+    assert minimum_window["outer_height"] >= minimum_window["inner_height"]
     assert report["control_contract"]["segmented"] == {
         "group_role": "radiogroup",
         "selected_role": "radio",

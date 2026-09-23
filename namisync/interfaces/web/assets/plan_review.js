@@ -1,7 +1,12 @@
 import { renderPlanRow } from "./plan.js";
 import { createIcon } from "./icons.js";
 import { formatByteCount, renderFilesystemText, renderText } from "./render.js";
-import { taskStatusDigest } from "./task_status.js";
+import {
+  isCapacityOnlyExecution,
+  projectActiveOperationProgress,
+  taskStatusDigest,
+  terminalStatusLine,
+} from "./task_status.js";
 
 const FILTERS = Object.freeze([
   "all", "copy", "move", "update", "remove", "error", "noop", "notice",
@@ -42,6 +47,79 @@ const HIDDEN_REASONS = new Set([
 const displayLabel = (value) => Object.prototype.hasOwnProperty.call(DISPLAY_LABELS, value) ? DISPLAY_LABELS[value] : value;
 const reasonLabel = (value) => Object.prototype.hasOwnProperty.call(REASON_LABELS, value) ? REASON_LABELS[value] : value;
 
+const EXECUTION_LABELS = Object.freeze({
+  succeeded: "Completed", skipped: "Skipped", failed: "Failed", canceled: "Canceled",
+  deferred: "Deferred", blocked: "Blocked", verified: "Verified", baselined: "Baselined",
+  mismatched: "Mismatch", modified: "Modified", missing: "Missing", unsupported: "Unsupported",
+  error: "Error", "recorded-copy": "Recorded copy", "already-verified": "Already verified",
+  unrecorded: "Unrecorded", superseded: "Superseded", "not-applicable": "Not applicable",
+  "not-run": "Not run", incomplete: "Incomplete", degraded: "Degraded", ok: "OK",
+});
+const executionLabel = (value) => Object.prototype.hasOwnProperty.call(EXECUTION_LABELS, value)
+  ? EXECUTION_LABELS[value]
+  : typeof value === "string"
+    ? value.replaceAll("_", " ").replaceAll("-", " ").replace(/^./, (first) => first.toUpperCase())
+    : "Unknown";
+
+function operationLifecycle(operation) {
+  if (operation === null) return null;
+  if (operation.result === "succeeded" || operation.result === "skipped") return "completed";
+  if (operation.result === "canceled") return "canceled";
+  if (operation.result === "deferred") return "incomplete";
+  if (operation.result === "failed" && operation.reason === "disk-capacity") return "capacity";
+  if (operation.result === "failed" || operation.result === "blocked") return "failed";
+  return null;
+}
+
+export function projectExecutionRow(execution) {
+  if (execution === null) return { lifecycle: null, intent: null, checksum: "", notes: [] };
+  const operation = execution.operation;
+  const automatic = execution.automatic_verification;
+  const evidence = execution.evidence;
+  const notes = [];
+  if (operation !== null) {
+    notes.push(`Operation: ${executionLabel(operation.result)}${operation.reason === null ? "" : ` (${executionLabel(operation.reason)})`}`);
+    if (operation.recording !== "ok") {
+      notes.push(`Recording: ${executionLabel(operation.recording)}${operation.recording_reason === null ? "" : ` (${executionLabel(operation.recording_reason)})`}`);
+    }
+    if (operation.detail_omitted_count > 0) notes.push(`${operation.detail_omitted_count} operation details omitted`);
+  }
+  if (automatic !== null) {
+    notes.push(`Automatic verification: ${executionLabel(automatic.result)}${automatic.reason === null ? "" : ` (${executionLabel(automatic.reason)})`}`);
+    if (automatic.recording !== "ok") notes.push(`Verification recording: ${executionLabel(automatic.recording)}`);
+    if (automatic.detail_omitted_count > 0) notes.push(`${automatic.detail_omitted_count} verification details omitted`);
+  }
+  if (evidence !== null) notes.push(`Stored evidence: ${executionLabel(evidence.state)}`);
+  return {
+    lifecycle: operationLifecycle(operation),
+    intent: operation === null ? null : executionLabel(operation.result),
+    checksum: evidence?.content?.digest?.slice(0, 8) ?? "",
+    notes,
+  };
+}
+
+export function projectExecutionSummary(execution) {
+  const result = execution.result;
+  if (result === null) {
+    return execution.session_id === null
+      ? { title: null, status: null }
+      : { title: "Execution in progress", status: "executing" };
+  }
+  if (result.disposition === "unrun") return { title: "Execution did not start", status: "error" };
+  const capacityOnly = isCapacityOnlyExecution(execution, result);
+  if (capacityOnly) return { title: "Execution stopped: more target space is needed", status: "attention" };
+  const labels = {
+    failed: ["Execution failed", "error"], partial: ["Execution needs review", "error"],
+    refused: ["Execution did not start", "error"], mismatch: ["Verification mismatch", "error"],
+    canceled: ["Execution canceled", "canceled"],
+    "verification-incomplete": ["Verification incomplete", "attention"],
+    degraded: ["Execution completed with issues", "attention"],
+    "all-noop": ["Execution completed", "completed"], success: ["Execution completed", "completed"],
+  };
+  const [title, status] = labels[result.headline] ?? ["Execution needs review", "error"];
+  return { title, status };
+}
+
 function button(label, className = "nami-button") {
   const element = document.createElement("button");
   element.type = "button";
@@ -60,14 +138,15 @@ function countedButton(label, className) {
   return element;
 }
 
-function rowView(row, busy, committed) {
+function rowView(row, busy, committed, progressPresentation = null) {
   const hideReason = row.risk === "none" && row.blocked_reason === null
     && row.selection_exclusion_reason === null && HIDDEN_REASONS.has(row.reason);
   const reason = hideReason ? null : reasonLabel(row.reason);
+  const execution = projectExecutionRow(row.execution);
   const notes = [...new Set([
     row.notice, reasonLabel(row.blocked_reason), reasonLabel(row.selection_exclusion_reason),
     row.move_peer_id === null ? null : row.row_kind.startsWith("prior-") ? "Previous location" : "Paired move",
-    reason,
+    reason, ...execution.notes,
   ].filter((value) => typeof value === "string" && value !== ""))].join(" · ");
   const risk = row.risk === "none" ? "" : `Risk: ${row.risk}`;
   const intent = row.operation_kind ?? (row.row_kind === "notice" ? "notice" : "");
@@ -76,6 +155,8 @@ function rowView(row, busy, committed) {
     const pad = (value) => String(value).padStart(2, "0");
     return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
   })();
+  const activeProgress = projectActiveOperationProgress(progressPresentation, row.operation_id);
+  const lifecycle = activeProgress?.lifecycleKey ?? execution.lifecycle;
   return {
     checked: row.selection === "selected",
     mixed: row.selection === "mixed",
@@ -86,11 +167,13 @@ function rowView(row, busy, committed) {
     expanded: row.expanded ?? false,
     nameText: row.display,
     sizeText: row.size === null ? "" : formatByteCount(row.size),
-    intentText: displayLabel(intent),
-    intentKey: row.blocked_reason !== null
+    intentText: execution.intent ?? displayLabel(intent),
+    intentKey: lifecycle !== null ? "" : row.blocked_reason !== null
       ? "blocked"
       : row.row_kind === "notice" ? "" : intent,
-    checksumText: "",
+    ...(lifecycle === null ? {} : { lifecycleKey: lifecycle }),
+    ...(activeProgress ?? {}),
+    checksumText: execution.checksum,
     modifiedText: modified,
     notesText: notes === "" ? risk : risk === "" ? notes : `${risk} · ${notes}`,
   };
@@ -138,7 +221,7 @@ function addGroupDisclosure(element, row, onCollapse) {
 export function createPlanReviewPanel(callbacks) {
   const required = [
     "onViewChange", "onWindow", "onSelect", "onScopeSelect", "onExecute", "onControl", "onPlanAgain",
-    "onHighlight", "onHighlightedSelect",
+    "onHighlight", "onHighlightedSelect", "onExecutionDetail", "onFollowOverride", "onNavigateCurrent",
   ];
   if (callbacks === null || typeof callbacks !== "object"
       || !required.every((name) => typeof callbacks[name] === "function")) {
@@ -193,8 +276,12 @@ export function createPlanReviewPanel(callbacks) {
   const statusTitle = document.createElement("p");
   statusTitle.className = "nami-plan-review__status-title";
   statusTitle.setAttribute("role", "status");
+  statusTitle.tabIndex = -1;
   const facts = document.createElement("p");
   facts.className = "nami-shell__guidance nami-plan-review__status-summary";
+  const executionAlert = document.createElement("p");
+  executionAlert.className = "nami-shell__guidance nami-plan-review__execution-alert";
+  executionAlert.hidden = true;
   const statusActions = document.createElement("div");
   statusActions.className = "nami-plan-review__actions";
   const statusMeta = document.createElement("div");
@@ -205,10 +292,51 @@ export function createPlanReviewPanel(callbacks) {
   const progressBar = document.createElement("div");
   progressBar.className = "nami-progress__bar";
   progress.append(progressBar);
-  summary.append(statusActions, statusMeta, progress);
+  const executionReview = document.createElement("div");
+  executionReview.className = "nami-plan-review__execution";
+  const executionAxes = document.createElement("p");
+  executionAxes.className = "nami-plan-review__execution-axes";
+  const executionIssues = document.createElement("p");
+  executionIssues.className = "nami-card nami-plan-review__execution-issues";
+  executionIssues.hidden = true;
+  executionIssues.tabIndex = 0;
+  executionIssues.ariaLabel = "Execution issues";
+  const executionTrash = document.createElement("p");
+  executionTrash.className = "nami-card nami-plan-review__execution-trash";
+  executionTrash.hidden = true;
+  executionTrash.tabIndex = 0;
+  executionTrash.ariaLabel = "Trash location";
+  executionReview.append(executionAxes);
+  const detailsToggle = button("Details", "nami-button nami-button--clear nami-plan-review__details-toggle");
+  detailsToggle.ariaExpanded = "false";
+  detailsToggle.dataset.action = "toggle-execution-details";
+  summary.append(statusActions, statusMeta, executionAlert);
 
   const tableCard = document.createElement("div");
   tableCard.className = "nami-card nami-plan-review__table-card";
+  const floatingControls = document.createElement("div");
+  floatingControls.className = "nami-plan-review__floating-controls";
+  const goCurrent = button("Go to current operation", "nami-button nami-button--secondary");
+  goCurrent.dataset.action = "go-current-operation";
+  const enableFollow = button("Turn on autoscroll", "nami-button nami-button--primary");
+  enableFollow.dataset.action = "enable-operation-follow";
+  floatingControls.append(goCurrent, enableFollow);
+
+  const detailCard = document.createElement("section");
+  detailCard.className = "nami-card nami-plan-review__detail";
+  detailCard.tabIndex = 0;
+  detailCard.ariaLabel = "Item details";
+  const detailHeader = document.createElement("div");
+  detailHeader.className = "nami-plan-review__detail-header";
+  const detailTitle = document.createElement("h2");
+  renderText(detailTitle, "Item details");
+  detailHeader.append(detailTitle);
+  const detailStatus = document.createElement("p");
+  detailStatus.className = "nami-shell__guidance nami-plan-review__detail-status";
+  detailStatus.setAttribute("role", "status");
+  const detailBody = document.createElement("dl");
+  detailBody.className = "nami-plan-review__detail-body";
+  detailCard.append(detailHeader, detailStatus, detailBody);
 
   const toolbar = document.createElement("div");
   toolbar.className = "nami-plan-review__toolbar";
@@ -360,11 +488,29 @@ export function createPlanReviewPanel(callbacks) {
   primary.className = "nami-plan-review__control-group";
   primary.append(planAgain, execute);
   statusActions.append(statusTitle, controls, primary);
-  statusMeta.append(facts, status);
-  tableCard.append(toolbar, list);
-  element.append(header, summary, tableCard);
+  statusMeta.append(facts, status, detailsToggle);
+  tableCard.append(toolbar, list, floatingControls);
+  const content = document.createElement("div");
+  content.className = "nami-plan-review__content";
+  const diagnostics = document.createElement("div");
+  diagnostics.className = "nami-plan-review__diagnostics";
+  diagnostics.hidden = true;
+  const globalDiagnostics = document.createElement("div");
+  globalDiagnostics.className = "nami-plan-review__global-diagnostics";
+  const planDiagnostics = document.createElement("p");
+  planDiagnostics.className = "nami-plan-review__plan-diagnostics";
+  globalDiagnostics.append(planDiagnostics, executionReview, executionIssues, executionTrash);
+  diagnostics.append(globalDiagnostics, detailCard);
+  summary.append(diagnostics, progress);
+  content.append(tableCard);
+  element.append(header, summary, content);
 
   let current = null;
+  let detailsExpanded = false;
+  let focusedPlanRow = null;
+  let focusedPlanRequestId = null;
+  let programmaticScroll = false;
+  let manualScrollIntent = false;
   let searchTimer = null;
   let lastSearchSubmit = -Infinity;
   let scrollFramePending = false;
@@ -563,7 +709,24 @@ export function createPlanReviewPanel(callbacks) {
         : { sortColumn: column, sortDirection: same ? "descending" : "ascending" });
     });
   }
+  body.addEventListener("wheel", () => { manualScrollIntent = true; }, { passive: true });
+  body.addEventListener("touchstart", () => { manualScrollIntent = true; }, { passive: true });
+  body.addEventListener("pointerdown", () => { manualScrollIntent = true; });
+  body.addEventListener("keydown", (event) => {
+    if (["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " "].includes(event.key)) {
+      manualScrollIntent = true;
+    }
+  });
   body.addEventListener("scroll", () => {
+    if (current !== null && !programmaticScroll && manualScrollIntent) {
+      const target = current.follow?.anchorIndex;
+      const first = Math.floor(Math.max(0, body.scrollTop) / ROW_HEIGHT);
+      const last = Math.max(first, Math.ceil((body.scrollTop + body.clientHeight) / ROW_HEIGHT) - 1);
+      if (!Number.isSafeInteger(target) || target < first || target > last) {
+        callbacks.onFollowOverride(current);
+      }
+    }
+    manualScrollIntent = false;
     scheduleViewportCheck();
   });
   const resizeObserver = new window.ResizeObserver(scheduleViewportCheck);
@@ -617,6 +780,143 @@ export function createPlanReviewPanel(callbacks) {
   pause.addEventListener("click", () => current !== null && callbacks.onControl(current, "pause"));
   resume.addEventListener("click", () => current !== null && callbacks.onControl(current, "resume"));
   cancel.addEventListener("click", () => current !== null && callbacks.onControl(current, "cancel"));
+  detailsToggle.addEventListener("click", () => {
+    detailsExpanded = !detailsExpanded;
+    detailsToggle.ariaExpanded = String(detailsExpanded);
+    if (!detailsExpanded && diagnostics.contains(document.activeElement)) detailsToggle.focus?.();
+    updateDiagnostics();
+  });
+  goCurrent.addEventListener("click", () => current !== null && callbacks.onNavigateCurrent(current, false));
+  enableFollow.addEventListener("click", () => current !== null && callbacks.onNavigateCurrent(current, true));
+
+  function updateDiagnostics() {
+    detailsToggle.hidden = current === null;
+    detailsToggle.ariaExpanded = String(detailsExpanded);
+    diagnostics.hidden = current === null || !detailsExpanded;
+  }
+
+  function renderExecution(execution, terminalState) {
+    const presentation = projectExecutionSummary(execution);
+    executionReview.hidden = !terminalState && execution.session_id === null && execution.gap === null;
+    executionReview.dataset.status = presentation.status ?? "none";
+    diagnostics.dataset.status = presentation.status ?? "none";
+    const result = execution.result;
+    const axes = [];
+    const issues = [];
+    if (result === null) {
+      if (terminalState) axes.push("No retained execution result is available.");
+      else if (execution.session_id !== null) axes.push("Live execution facts will appear in this bounded window.");
+    } else {
+      axes.push(`Filesystem: ${executionLabel(result.filesystem)}`);
+      axes.push(`Automatic verification: ${executionLabel(result.integrity)}`);
+      axes.push(`Item recording: ${executionLabel(result.recording)}`);
+      axes.push(`Audit: ${executionLabel(result.audit)}`);
+      axes.push(`Disposition: ${executionLabel(result.disposition)}`);
+      for (const phase of result.phases) {
+        axes.push(`${executionLabel(phase.phase)} phase: ${executionLabel(phase.status)}`);
+        if (phase.error !== null) issues.push(`${executionLabel(phase.phase)}: ${phase.error}`);
+      }
+      if (result.error !== null) issues.push(result.error);
+      for (const issue of result.recording_issues) {
+        issues.push(`Recording ${executionLabel(issue.reason)}: ${issue.detail}`);
+      }
+      if (result.recording_degraded_items > 0) issues.push(`${result.recording_degraded_items} items have degraded recording`);
+      if (result.omitted_detail_count > 0) issues.push(`${result.omitted_detail_count} producer details omitted`);
+      if (result.presentation_omitted_detail_count > 0) issues.push(`${result.presentation_omitted_detail_count} presentation details omitted`);
+      if (execution.failed_operation_count > 0) issues.push(`${execution.failed_operation_count} operations failed`);
+      if (execution.disk_capacity_failure_count > 0) issues.push(`${execution.disk_capacity_failure_count} failures need more target space`);
+    }
+    if (execution.gap !== null) {
+      issues.push(execution.gap.minimum_first_missed_seq === execution.gap.maximum_first_missed_seq
+        ? `Gap observed at event ${execution.gap.minimum_first_missed_seq}`
+        : `Gaps observed from event ${execution.gap.minimum_first_missed_seq} through ${execution.gap.maximum_first_missed_seq}`);
+    }
+    updateText(executionAlert, "Execution event history has gaps.", execution.gap !== null);
+    executionAlert.hidden = execution.gap === null;
+    updateText(executionAxes, axes.join(" · "));
+    updateText(executionIssues, issues.join(" · "));
+    executionIssues.hidden = issues.length === 0;
+    const trashText = execution.trash_location === null ? "" : `Trash location: ${execution.trash_location}`;
+    updateText(executionTrash, trashText, execution.trash_location !== null);
+    executionTrash.hidden = execution.trash_location === null;
+    updateDiagnostics();
+    return presentation;
+  }
+
+  function appendDetailFact(label, value, filesystem = false) {
+    const term = document.createElement("dt");
+    renderText(term, label);
+    const definition = document.createElement("dd");
+    if (filesystem) renderFilesystemText(definition, value);
+    else renderText(definition, value);
+    detailBody.append(term, definition);
+  }
+
+  function renderDetail(detail, row) {
+    detailBody.replaceChildren();
+    updateText(detailTitle, row?.display ?? "Item details", row !== null);
+    if (row === null) {
+      updateText(detailStatus, "Highlight an item to see its details.");
+      detailStatus.hidden = false;
+      updateDiagnostics();
+      return;
+    }
+    appendDetailFact("Planned action", displayLabel(row.operation_kind ?? row.row_kind));
+    if (row.size !== null) appendDetailFact("Size", formatByteCount(row.size));
+    if (row.risk !== "none") appendDetailFact("Risk", executionLabel(row.risk));
+    if (row.reason !== null) appendDetailFact("Reason", reasonLabel(row.reason));
+    if (row.blocked_reason !== null) appendDetailFact("Blocked", reasonLabel(row.blocked_reason));
+    if (row.selection_exclusion_reason !== null) appendDetailFact("Excluded", reasonLabel(row.selection_exclusion_reason));
+    if (row.notice !== null) appendDetailFact("Notice", row.notice);
+    if (row.operation_id === null || current.window.execution.session_id === null) {
+      updateText(detailStatus, "Execution detail is available after this item runs.");
+      detailStatus.hidden = false;
+      updateDiagnostics();
+      return;
+    }
+    if (detail === null || detail.operationId !== row.operation_id) {
+      updateText(detailStatus, "Operation detail is unavailable.");
+      detailStatus.hidden = false;
+      updateDiagnostics();
+      return;
+    }
+    updateText(detailStatus, detail.state === "loading" ? "Loading operation detail…"
+      : detail.state === "not-retained" ? "Detail will be available after terminal release."
+        : detail.state === "error" ? detail.message : "");
+    detailStatus.hidden = detail.state === "current";
+    if (detail.state !== "current") {
+      updateDiagnostics();
+      return;
+    }
+    const response = detail.response;
+    const operation = response.operation;
+    if (operation !== null) {
+      appendDetailFact("Operation", `${executionLabel(operation.result)} · ${executionLabel(operation.kind)}${operation.reason === null ? "" : ` · ${executionLabel(operation.reason)}`}`);
+      appendDetailFact("Path", operation.path, true);
+      appendDetailFact("Operation recording", `${executionLabel(operation.recording)}${operation.recording_reason === null ? "" : ` · ${executionLabel(operation.recording_reason)}`}${operation.recording_detail === null ? "" : ` · ${operation.recording_detail}`}`);
+      for (const [key, value] of Object.entries(operation.detail)) {
+        const text = Array.isArray(value) ? value.join(", ") : String(value);
+        appendDetailFact(executionLabel(key), text, key.endsWith("_path") || key === "mutation_destination");
+      }
+      if (operation.detail_omitted_count > 0) appendDetailFact("Operation details omitted", String(operation.detail_omitted_count));
+    } else appendDetailFact("Operation", "Unknown");
+    const automatic = response.automatic_verification;
+    if (automatic !== null) {
+      appendDetailFact("Automatic verification", `${executionLabel(automatic.result)}${automatic.reason === null ? "" : ` · ${executionLabel(automatic.reason)}`}`);
+      appendDetailFact("Verification path", automatic.path, true);
+      if (automatic.detail !== null) appendDetailFact("Verification detail", automatic.detail);
+      appendDetailFact("Verification recording", executionLabel(automatic.recording));
+      if (automatic.detail_omitted_count > 0) appendDetailFact("Verification details omitted", String(automatic.detail_omitted_count));
+    } else appendDetailFact("Automatic verification", "Unknown");
+    const evidence = response.evidence;
+    appendDetailFact("Stored evidence", evidence === null ? "Unknown" : executionLabel(evidence.state));
+    if (evidence?.content !== null && evidence?.content !== undefined) {
+      appendDetailFact("Evidence digest", evidence.content.digest);
+      appendDetailFact("Evidence size", formatByteCount(evidence.content.size));
+      appendDetailFact("Evidence provenance", executionLabel(evidence.content.provenance));
+    }
+    updateDiagnostics();
+  }
 
   function renderRows(review, task) {
     const disabled = review.pending !== null || task.executionAttempt !== null;
@@ -631,6 +931,24 @@ export function createPlanReviewPanel(callbacks) {
     const focusNodeId = review.summary.highlight_focus_node_id;
     if (renderedRows?.review === review && renderedRows.window === review.window
     ) {
+      if (renderedRows.progressPresentation !== task.progressPresentation) {
+        const activeOperationId = task.progressPresentation?.activeItem?.item_id ?? null;
+        for (const operationId of new Set([renderedRows.activeOperationId, activeOperationId])) {
+          if (operationId === null) continue;
+          const index = review.window.rows.findIndex((row) => row.operation_id === operationId);
+          if (index < 0) continue;
+          const rowElement = renderedRows.rows[index];
+          const intent = rowElement.querySelector(".nami-plan-row__intent");
+          if (intent === null) continue;
+          const replacement = document.createElement("div");
+          renderPlanRow(replacement, rowView(
+            review.window.rows[index], disabled, committed, task.progressPresentation,
+          ));
+          intent.replaceWith(replacement.querySelector(".nami-plan-row__intent"));
+        }
+        renderedRows.progressPresentation = task.progressPresentation;
+        renderedRows.activeOperationId = activeOperationId;
+      }
       if (renderedRows.disabled !== disabled || renderedRows.committed !== committed) {
         for (const [index, checkbox] of renderedRows.checkboxes.entries()) {
           if (checkbox !== null) checkbox.disabled = disabled || committed
@@ -678,6 +996,7 @@ export function createPlanReviewPanel(callbacks) {
         row,
         disabled,
         committed,
+        task.progressPresentation,
       ));
       element.insertBefore(element.querySelector(".nami-file-row__size"),
         element.querySelector(".nami-plan-row__modified"));
@@ -752,10 +1071,13 @@ export function createPlanReviewPanel(callbacks) {
       review, window: review.window, disabled, committed, checkboxes,
       rows: rowElements,
       highlightRevision,
+      progressPresentation: task.progressPresentation,
+      activeOperationId: task.progressPresentation?.activeItem?.item_id ?? null,
     };
   }
 
   function render(task) {
+    const focusInDetails = diagnostics.contains(document.activeElement);
     if (current !== task.review) {
       if (searchTimer !== null) clearTimeout(searchTimer);
       searchTimer = null;
@@ -763,9 +1085,15 @@ export function createPlanReviewPanel(callbacks) {
       scrollFramePending = false;
       pendingWindowOffset = null;
       body.scrollTop = (task.review?.window.offset ?? 0) * ROW_HEIGHT;
+      detailsExpanded = false;
+      focusedPlanRow = null;
+      focusedPlanRequestId = null;
     }
     const previousWindow = renderedRows?.window ?? null;
     current = task.review;
+    if (focusInDetails && (current === null || !detailsExpanded)) {
+      (current === null ? statusTitle : detailsToggle).focus?.();
+    }
     if (current === null) {
       delete element.dataset.pending;
       updateText(sourceValue, "Loading reviewed plan…");
@@ -781,9 +1109,32 @@ export function createPlanReviewPanel(callbacks) {
       body.replaceChildren();
       renderedRows = null;
       tableCard.hidden = true;
+      executionReview.hidden = true;
+      executionReview.dataset.status = "none";
+      diagnostics.dataset.status = "none";
+      updateText(executionAlert, "");
+      executionAlert.hidden = true;
+      updateText(executionIssues, "");
+      executionIssues.hidden = true;
+      updateText(executionTrash, "");
+      executionTrash.hidden = true;
+      planDiagnostics.hidden = true;
+      renderDetail(null, null);
+      floatingControls.hidden = true;
       return;
     }
     const review = current;
+    if (Number.isSafeInteger(review.follow?.scrollOffset)) {
+      programmaticScroll = true;
+      body.scrollTop = review.follow.scrollOffset * ROW_HEIGHT;
+      review.follow.scrollOffset = null;
+      window.requestAnimationFrame(() => { programmaticScroll = false; });
+    }
+    const follow = review.follow ?? null;
+    goCurrent.hidden = follow?.hasTarget !== true;
+    enableFollow.hidden = follow?.hasTarget !== true
+      || follow?.eligible !== true || follow?.enabled === true;
+    floatingControls.hidden = goCurrent.hidden && enableFollow.hidden;
     if (review.window !== previousWindow) pendingWindowOffset = null;
     element.dataset.pending = review.pending ?? "";
     list.ariaRowCount = String(review.window.total + 1);
@@ -808,17 +1159,41 @@ export function createPlanReviewPanel(callbacks) {
       additive ? "accent" : "muted",
     );
     const planningIssues = review.summary.preflight_refusal_count + review.summary.warning_count;
-    updateText(
-      facts,
-      `${review.summary.selected_operation_count} of ${review.summary.selectable_operation_count} selected · ${formatByteCount(review.summary.required_bytes)} required · ${planningIssues} planning issues`,
-    );
+    const planFacts = `${review.summary.selected_operation_count} of ${review.summary.selectable_operation_count} selected · ${formatByteCount(review.summary.required_bytes)} required · ${planningIssues} planning issues`;
+    updateText(planDiagnostics, `Plan: ${review.summary.preflight_refusal_count} refusals · ${review.summary.warning_count} warnings · ${review.summary.destructive_operation_count} destructive operations`);
+    planDiagnostics.hidden = task.executionStarted;
     const executionState = task.executionStarted ? task.sessionState : null;
     const canExecuteSelection = review.summary.preflight_ready
       && review.summary.selected_operation_count > 0
       && review.summary.selection_state === "reviewing";
     const digest = taskStatusDigest(task);
-    updateText(statusTitle, digest.title);
-    summary.dataset.status = digest.state;
+    const retainedExecution = review.window.execution;
+    const displayExecution = retainedExecution.result === null
+      && (task.executionResult != null || task.executionEndedAt != null)
+      ? { ...retainedExecution, result: task.executionResult,
+        started_at: task.executionStartedAt, ended_at: task.executionEndedAt }
+      : retainedExecution;
+    const terminalState = task.executionStarted
+      && ["completed", "failed", "refused", "canceled"].includes(task.sessionState);
+    const executionPresentation = renderExecution(displayExecution, terminalState);
+    updateText(statusTitle, terminalState && displayExecution.result === null
+      ? digest.title : executionPresentation.title ?? digest.title);
+    const progressFacts = task.executionStarted && digest.progress.phase !== null
+      ? [
+        digest.progress.phase === "verify" ? "Verifying" : "Executing",
+        digest.progress.total == null ? null : `${digest.progress.done} of ${digest.progress.total} items`,
+        digest.progress.determinate ? `${Math.round(digest.progress.value)}%` : null,
+        digest.progress.throughputBytesPerSecond == null ? null
+          : `${formatByteCount(BigInt(Math.round(digest.progress.throughputBytesPerSecond)))}/s estimate`,
+        digest.progress.etaSeconds == null ? null
+          : `${Math.ceil(digest.progress.etaSeconds)}s ETA estimate`,
+      ].filter(Boolean).join(" · ")
+      : null;
+    updateText(facts, terminalState ? terminalStatusLine(displayExecution, task.sessionState)
+      : executionPresentation.title === null ? planFacts
+        : progressFacts ?? digest.detail);
+    summary.dataset.status = terminalState && displayExecution.result === null
+      ? digest.state : executionPresentation.status ?? digest.state;
     const progressValue = digest.progress.value;
     progress.dataset.lifecycle = executionState ?? "completed";
     if (digest.progress.indeterminate) {
@@ -902,6 +1277,16 @@ export function createPlanReviewPanel(callbacks) {
     status.title = review.message ?? "";
     status.hidden = !review.message;
     renderRows(review, task);
+    if (focusedPlanRequestId !== review.summary.request_id) focusedPlanRow = null;
+    focusedPlanRequestId = review.summary.request_id;
+    const focusNodeId = review.summary.highlight_focus_node_id;
+    if (focusNodeId === null) focusedPlanRow = null;
+    else {
+      const visibleFocus = review.window.rows.find((row) => row.node_id === focusNodeId);
+      if (visibleFocus !== undefined) focusedPlanRow = visibleFocus;
+      else if (focusedPlanRow?.node_id !== focusNodeId) focusedPlanRow = null;
+    }
+    renderDetail(review.executionDetail ?? null, focusedPlanRow);
     refreshResizers();
     scheduleViewportCheck();
   }

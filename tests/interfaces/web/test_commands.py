@@ -300,6 +300,11 @@ class _Service:
         self.calls.append(("get-plan-anchor", task_id, kwargs))
         return {"disposition": "current", "node_id": kwargs["node_id"], "index": 0}
 
+    def get_plan_operation_anchor(self, task_id, **kwargs):
+        self.calls.append(("get-plan-operation-anchor", task_id, kwargs))
+        return {"disposition": "current", "view_revision": kwargs["expected_revision"],
+                "node_id": "node-" + "9" * 32, "index": 17}
+
     def mutate_plan_selection(self, task_id, **kwargs):
         self.calls.append(("mutate-plan-selection", task_id, kwargs))
         return {"disposition": "applied", "task_id": task_id}
@@ -720,6 +725,35 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
         commands["future_command"] = commands["pick_folder"]  # type: ignore[index]
     with pytest.raises(FrozenInstanceError):
         commands["pick_folder"].retry = CommandRetry.SAME_COMMAND_ONCE  # type: ignore[misc]
+
+
+def test_operation_anchor_request_is_exact_read_only_and_session_bound() -> None:
+    commands, _slots, service = _commands()
+    spec = commands["get_plan_anchor"]
+    payload = {
+        "task_id": TASK_ID, "session_id": SESSION_ID,
+        "expected_revision": 3, "operation_id": "8" * 32,
+    }
+    assert _invoke(spec, payload) == {
+        "disposition": "current", "view_revision": 3,
+        "node_id": "node-" + "9" * 32, "index": 17,
+    }
+    assert service.calls == [("get-plan-operation-anchor", TASK_ID, {
+        "session_id": SESSION_ID, "expected_revision": 3, "operation_id": "8" * 32,
+    })]
+    assert spec.access is CommandAccess.READ_ONLY
+    invalid = [
+        {**payload, "node_id": "node-" + "9" * 32},
+        {key: value for key, value in payload.items() if key != "session_id"},
+        {**payload, "session_id": "invalid"},
+        {**payload, "operation_id": "node-" + "8" * 32},
+        {**payload, "expected_revision": True},
+        {**payload, "expected_revision": -1},
+    ]
+    for value in invalid:
+        with pytest.raises(CommandPayloadError):
+            _invoke(spec, value)
+    assert len(service.calls) == 1
 
 
 def test_m1_7_plan_commands_validate_and_reach_task_authority() -> None:

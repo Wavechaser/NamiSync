@@ -29,7 +29,7 @@ from namisync.core.integrity import (
 )
 from namisync.core.planning import OperationKind
 from namisync.core.preflight import Refusal, RefusalCode, Verdict
-from namisync.core.session import OperationResult, SessionId, SessionState
+from namisync.core.session import Disposition, OperationResult, SessionId, SessionState
 from namisync.dispatcher import (
     Dispatcher,
     PreparedSession,
@@ -1388,10 +1388,22 @@ def _drain_until_record(
     raise AssertionError("terminal task record was not drained")
 
 
-def _mark_terminal_drained(registry: TaskRegistry, start) -> None:
+def _mark_terminal_drained(
+    registry: TaskRegistry,
+    start,
+    terminal_record: SessionRecordView | None = None,
+) -> None:
     task = registry._tasks[start.task_id]
     with task.condition:
-        task.terminal_record = replace(_record(), session_id=start.session_id)
+        execution = task.execution_session_id == start.session_id
+        task.terminal_record = terminal_record or replace(
+            _record(
+                kind=EXECUTION_KIND if execution else PLAN_KIND,
+                supports_pause=execution,
+            ),
+            session_id=start.session_id,
+            started_at="2026-01-01T00:00:00+00:00" if execution else None,
+        )
         task.terminal_pending = True
         task.condition.notify_all()
     drained = registry.drain(
@@ -3141,6 +3153,72 @@ def test_m1_8_pre_execution_window_does_not_read_retained_execution() -> None:
     assert structural["rows"][0]["execution"] is None
 
 
+def test_m1_8_execution_times_follow_the_matching_terminal_record() -> None:
+    registry, _service, planned, execution = _start_execution_overlay()
+    before = registry.open_plan_view(planned.task_id)["execution"]
+    assert before["started_at"] is None
+    assert before["ended_at"] is None
+
+    _mark_terminal_drained(registry, execution)
+    delivered = registry._tasks[planned.task_id].delivered_terminal_record
+    assert delivered is not None
+    assert delivered.started_at is not None
+    assert delivered.ended_at is not None
+    assert registry.open_plan_view(planned.task_id)["execution"]["ended_at"] is None
+
+    registry.release_terminal_session(execution.task_id, execution.session_id)
+    summary = registry.open_plan_view(planned.task_id)
+    retained = summary["execution"]
+    assert retained["started_at"] == delivered.started_at
+    assert retained["ended_at"] == delivered.ended_at
+    window = registry.get_plan_window(
+        planned.task_id,
+        expected_revision=summary["view_revision"],
+        offset=0,
+        limit=1,
+    )
+    assert window["execution"] == retained
+
+    task = registry._tasks[planned.task_id]
+    with task.condition:
+        task.delivered_terminal_record = replace(delivered, session_id="f" * 32)
+    stale = registry.open_plan_view(planned.task_id)["execution"]
+    assert stale["started_at"] is None
+    assert stale["ended_at"] is None
+
+
+def test_m1_8_unrun_execution_retains_completion_without_a_start() -> None:
+    refused_result = operation_result_view(OperationResult(
+        SessionState.REFUSED,
+        disposition=Disposition.UNRUN,
+    ))
+
+    class Service(_ExecutionOverlayService):
+        def read_task_execution_summary(self, task_id):
+            return replace(
+                super().read_task_execution_summary(task_id),
+                result=refused_result,
+            )
+
+    registry, _service, planned, execution = _start_execution_overlay(Service())
+    refused_record = SessionRecordView(
+        execution.session_id,
+        EXECUTION_KIND,
+        "refused",
+        True,
+        "2026-01-01T00:00:00+00:00",
+        None,
+        "2026-01-01T00:00:03+00:00",
+        refused_result,
+    )
+    _mark_terminal_drained(registry, execution, refused_record)
+    registry.release_terminal_session(execution.task_id, execution.session_id)
+    retained = registry.open_plan_view(planned.task_id)["execution"]
+    assert retained["result"] == refused_result
+    assert retained["started_at"] is None
+    assert retained["ended_at"] == refused_record.ended_at
+
+
 def test_m1_8_delivery_factory_arms_execution_before_fast_item() -> None:
     class Service(_ExecutionOverlayService):
         def start_task_execution(self, task_id, request_id, **kwargs):
@@ -3712,6 +3790,32 @@ def test_m1_7_execution_response_failure_recovers_admitted_receipt() -> None:
         )
 
 
+def test_operation_anchor_fences_session_and_view_without_reading_execution() -> None:
+    registry, service, planned, execution = _start_execution_overlay()
+    summary = registry.open_plan_view(planned.task_id)
+    revision = summary["view_revision"]
+    before_tasks = registry.list_tasks()
+    before_reads = list(service.execution_reads)
+    payload = {"expected_revision": revision, "operation_id": service.operation_id}
+    assert registry.get_plan_operation_anchor(
+        planned.task_id, session_id=execution.session_id, **payload,
+    ) == {
+        "disposition": "current", "view_revision": revision,
+        "node_id": "node-" + "2" * 32, "index": 0,
+    }
+    conflict = {"disposition": "conflict", "view_revision": revision,
+                "node_id": None, "index": None}
+    assert registry.get_plan_operation_anchor(
+        planned.task_id, session_id=planned.session_id, **payload,
+    ) == conflict
+    assert registry.get_plan_operation_anchor(
+        planned.task_id, session_id=execution.session_id,
+        expected_revision=revision + 1, operation_id=service.operation_id,
+    ) == conflict
+    assert registry.list_tasks() == before_tasks
+    assert service.execution_reads == before_reads
+
+
 def test_m1_7_close_first_fences_plan_consumers_and_execution() -> None:
     class Service(_Service):
         def __init__(self) -> None:
@@ -3768,6 +3872,12 @@ def test_m1_7_close_first_fences_plan_consumers_and_execution() -> None:
             plan_start.task_id,
             expected_revision=opened["view_revision"],
             node_id="node-" + "1" * 32,
+        ),
+        lambda: registry.get_plan_operation_anchor(
+            plan_start.task_id,
+            session_id=plan_start.session_id,
+            expected_revision=opened["view_revision"],
+            operation_id="9" * 32,
         ),
         lambda: registry.mutate_plan_selection(
             plan_start.task_id,

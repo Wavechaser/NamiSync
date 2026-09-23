@@ -71,6 +71,45 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Workspace and measurement integrity
 
+- MINOR - FIXED (2026-09-23). Duplicated badge expectation drift. The gallery
+  correctly emitted a yellow fill capacity badge, but its child validator and
+  a separate parent assertion expected text, rejecting valid installed evidence.
+  Both direct consumers now follow the documented fill form. The saved original
+  report passes both and a text-form mutation fails both; the existing parser
+  test retains its negative control. Product badge behavior is unchanged.
+
+- MODERATE - FIXED (2026-09-23). Window-fixture acceptance without a visible
+  row. The gallery returned one row at the renderer's overscan start, then
+  inferred a reachable whole row from viewport height even though that row
+  lay above the viewport. The existing fixture now returns a bounded contiguous
+  window covering the viewport, with stable row identities and the long-content
+  operation at its actual index. Acceptance observes a whole rendered row and
+  row activation and the card disclosure's hit target and focus. Logical row
+  count, eight-state corpus and product request limits are unchanged.
+- MINOR - FIXED (2026-09-23). Failure-packet reason mismatch. The gallery
+  attached layout predicates under a generic failure reason, so its receiver
+  rejected the rich packet and retained only a later fallback. The actual
+  rejection producer now sets the matching layout reason; its existing
+  receiver test exercises that producer. The affected native journeys retain
+  bounded first browser-error context. The legacy refusal witness also waits
+  for the panel's asynchronous terminal refresh before recording its facts;
+  a missing refresh still fails within the original bound. The native keyboard
+  fixture starts its browser call on the UI thread and observes actual scroll
+  movement before recording; failures retain their keyboard-stage location.
+- SEVERE - FIXED (2026-09-22). Unbounded assertion diagnostics. A failed
+  `plan_review_probe.mjs` DOM identity assertion exhausted Windows commit;
+  Event 2004 recorded one Node process at 67,223,269,376 bytes, with coincident
+  application/runtime failures reported by the user. Cause: a stale D1 parent
+  expectation made Node format the entire interconnected fake DOM graph.
+  Boolean identity assertions preserve the comparisons while bounding failure
+  diagnostics; the directly exposed task-shell identity check uses the same
+  correction. A capped original run exhausts allocation, while changing only
+  formatting retains the failed comparison at about 69 MiB; the corrected four
+  frontend checks pass at about 111 MiB. Task-local Windows Job containment and
+  raw evidence are retained in `build/r0-focused-01/MEMORY_INCIDENT.md`.
+  No product data-loss or filesystem-damage consequence was established.
+
+
 - MINOR - FIXED (2026-09-07). Fixed-wait headed synchronization. The native-host
   evidence child could exhaust its 10-second reinjection waits before WebView
   reported the next ready document, losing the off-thread URL measurement.
@@ -746,6 +785,64 @@ defect, and move implementation-level test choreography out of the log.
 ## INTERFACES
 
 ### Plan review windowing
+
+- MODERATE - FIXED (2026-09-23). Approximate/exact numeric representation
+  mismatch. A valid Scalar64 progress delta could produce a finite observed
+  rate above Number's safe-integer range; passing that approximate Number to
+  the exact byte formatter threw and interrupted card rendering. The call now
+  converts the rounded estimate to the formatter's supported integer type,
+  leaving raw bytes and the formatter's exact API unchanged. The rendered
+  progress probe covers a 90,071,992,547,409,920-byte delta over five seconds.
+- MODERATE - FIXED (2026-09-23). Repeated navigation side effects. Cached
+  follow-target updates reset scroll on every progress tick, undoing a user's
+  position even while the active row remained visible. Automatic same-target
+  updates now reuse the anchor without a new scroll request; explicit Go still
+  jumps. The task-shell witness preserves offset across progress/window refresh
+  and proves the explicit action, without adding lookups or changing selection.
+- MODERATE - FIXED (2026-09-23). Terminal/result conflation. A terminal
+  execution without a retained result could retain the in-progress card label.
+  The shared card now uses terminal session state independently and shows known
+  matching live-record timing while identifying the absent retained result.
+  Focused status/card probes cover that fallback and the pre-capture terminal
+  record; unavailable elapsed time is never fabricated.
+
+- MODERATE - FIXED (2026-09-23). Unshrinkable row-note content. Long Plan
+  notes displaced the appended Details button outside its clipped cell without
+  creating a usable horizontal scroll range. The notes were an anonymous flex
+  item with an intrinsic minimum. The initial repair made that text shrinkable;
+  the approved shared-card redesign subsequently removed the per-row button.
+  Row highlighting now chooses detail, and the populated long-text gallery
+  checks row activation and whole-card disclosure reachability.
+- MODERATE - FIXED (2026-09-23). Live-row contract composition. Unsettled
+  execution combined a copy intent with an executing lifecycle, which the real
+  row renderer rejected. Rendering before Pause dispatch could then leave the
+  control pending without reaching its handler. Row composition now clears the
+  intent when a lifecycle is present and recognizes operation-typed post-copy
+  verification by phase, preserving settled copy truth. The panel probe uses
+  the production row renderer across execution, verification and settlement.
+- MINOR - FIXED (2026-09-23). Incomplete presentation invalidation. Retained
+  detail rendering reopened a user-collapsed disclosure, while an unchanged
+  Plan window prevented newer active-row progress from appearing. Detail
+  rendering now preserves explicit collapse; hiding the detail area transfers
+  focus out of its hidden controls. Progress changes update
+  only the previous/current visible operation cells. Composed witnesses retain
+  collapse, focus and row identity while progress and phase advance.
+- MINOR - FIXED (2026-09-23). Unknown-total estimate suppression. The
+  indeterminate status branch discarded a known observed throughput along with
+  unavailable percentage and ETA. It now retains the rate independently;
+  digest and rendered-status witnesses keep unknown totals and ETA unavailable.
+
+- MODERATE - FIXED (2026-09-21). Competing window adoption. A background live-
+  execution refresh could replace a newer foreground scroll window and regress
+  its execution overlay when the late response carried older facts. Renderer
+  reconciliation can request a repairing read; this path does not mutate durable
+  state. Cause: refresh
+  coalescing captured an offset without evidence that a foreground view,
+  highlight, selection, or scroll read had remained absent. Review-local reader
+  and epoch evidence now defer refresh and reject invalidated completion before
+  publishing window, result, or detail retirement. Packaged controls cover both
+  completion orders, cancellation, reload/error cleanup, dirty replay, equal or
+  older revisions, and genuine changed-result adoption.
 
 - MODERATE - FIXED (2026-09-18). Gesture contract mismatch. Plan row arrows
   sent a row endpoint even though relative keyboard gestures require a null
