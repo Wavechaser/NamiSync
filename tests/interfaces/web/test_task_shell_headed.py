@@ -69,32 +69,14 @@ def test_task_shell_child_preserves_the_production_stack_and_bounded_seams() -> 
     assert "headed_command_extension(host, extension)" in source
     assert "host.run_desktop(" in source
     assert "registry.create_task_shell" in source
-    assert 'const freedTaskTitle = "Task 1";' in source
-    assert 'freedTaskStatus !== "New task"' in source
-    assert 'rows().length === 48 && rowByTitle("Task 49") !== undefined' in source
-    assert 'if key == "Enter":' in source
-    assert '"type": "keyDown", "text": "\\r", "unmodifiedText": "\\r"' in source
-    assert "self._registry().start_plan(" in source
-    assert "original_release(*args, **kwargs)" in source
-    assert "original_observer_release(session_id)" in source
-    assert 'location.reload();' in source
-    assert '"Canceling and closing…"' in source
     assert "EvidencePublisher(" in source
     assert "CallDevToolsProtocolMethodAsync" in source
     assert '"Page.captureScreenshot"' in source
     assert '"Input.dispatchKeyEvent"' in source
     assert '"Input.dispatchMouseEvent"' in source
-    assert '"rawKeyDown"' in source
-    assert '"execution-confirmation-driver.json"' in source
-    assert source.count("window.__namiConfirmationExitBarrier = dialog.animate") == 2
-    assert source.count("window.__namiConfirmationExitBarrier.pause()") == 2
-    assert source.count("window.__namiConfirmationExitBarrier?.finish()") == 2
-    assert "window.__namiConfirmationInputEvidence?.liveEnterConfirmed === true" in source
-    assert "driver_failure(error, task)" in source
-    assert source.count("document.elementFromPoint(point.x, point.y) !== execute") == 3
     assert "evaluate_js" not in source
     assert "ExecuteScriptAsync" not in source
-    assert "scenario_deadline(120.0)" in launch
+    assert "scenario_deadline(" in launch
     assert "EvidenceReader(" in launch
     assert "wait_for_initial_evidence(" in launch
     assert "cwd=installed.root" in launch

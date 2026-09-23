@@ -114,9 +114,6 @@ def built_wheel(tmp_path_factory: pytest.TempPathFactory) -> BuiltWheel:
     assert len(wheels) == 1
     assert_wheel_package(wheels[0], package_inputs(inputs))
     write_identity_record(wheel_dir / "wheel-identity.json", inputs, wheels[0])
-    assert_source_inputs(PROJECT_ROOT, inputs)
-    assert_staged_inputs(staging_root, inputs, allow_generated=True)
-    assert_wheel_package(wheels[0], package_inputs(inputs))
     return BuiltWheel(wheels[0])
 
 
@@ -160,9 +157,6 @@ def installed_wheel(
         built_wheel.path,
         site_packages=site_packages,
     )
-    assert_recorded_artifact(identity_record, PROJECT_ROOT, built_wheel.path)
-    assert_wheel_package(built_wheel.path, package_inputs(inputs))
-    assert_installed_package(site_packages, package_inputs(inputs))
     return InstalledWheel(built_wheel.path, root, python)
 
 
@@ -214,9 +208,6 @@ def headed_installed_wheel(
         built_wheel.path,
         site_packages=site_packages,
     )
-    assert_recorded_artifact(identity_record, PROJECT_ROOT, built_wheel.path)
-    assert_wheel_package(built_wheel.path, package_inputs(inputs))
-    assert_installed_package(site_packages, package_inputs(inputs))
     return HeadedInstalledWheel(
         built_wheel.path,
         root,

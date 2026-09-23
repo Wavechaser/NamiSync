@@ -1,66 +1,52 @@
-# Latest session — R1 ablation scope and workflow priorities
+# Latest session — M1-8-R1 complete; stop before R2
 
-The investigation and this documentation update are one reviewed commit on
-`codex/m1-8-r0-ready`, based on R0 `8f7555b`, in
-`F:/GitHubRepositories/NamiSync/build/m1-8-r0`. No product/test implementation,
-acceptance rerun, milestone integration, push or cleanup is part of this task.
+R1 is one reviewed commit on `codex/m1-8-r0-ready`, based on `2e6bb81`, in
+`F:/GitHubRepositories/NamiSync/build/m1-8-r0`. Its commit/evidence binding is
+`build/r1-20260923/delivery.json`. The user authorized R1 only. R2/R3 and
+integration remain pending; no next-checkpoint work started.
 
-## Decisions
+## Changes and verification
 
-- R1 now includes current T1–T5 as R1-A–E: gallery verdict consolidation,
-  short-native choreography removal, identified source-spelling assertions,
-  local request counts and redundant identity scans. M1_PLAN owns the finite
-  population, surviving detectors and gates; product optimization stays separate.
-- AGENTS and personal execute-task have five concise priorities: work by
-  mechanism, check real seams early, settle inputs before acceptance, reuse
-  evidence by dependency and keep one current decision record. Stop rules and
-  acceptance gates remain binding; no new preflight protocol is introduced.
-- Retain M1_7_ABLATION_STUDY but defer revisiting it until after M1-8 closes and
-  the user resumes it. It cannot expand R2's frozen historical dependencies.
-- The preceding investigation found recurring consumer/oracle drift, late native
-  layout checks and weak diagnostics, alongside genuine product defects. Its
-  report is `build/delivery-investigation-20260923/report.md`; recommendations
-  there describe the pre-update snapshot. The decisions above supersede its
-  proposed R1 limit and timing of M1-7 reconsideration.
+- R1-A–E consolidate gallery verdicts, short-copy receipts and capture identity,
+  identified CSS/source recipes, local request receipts and repeated package
+  scans. Product/package inputs are unchanged. M1_PLAN owns dispositions and
+  preserved guarantees; TESTS owns harness policy.
+- Ordinary-01: 5,321 passed / five skips / 33 deselected. Full-headed-01: all
+  33 passed. All 12 import contracts passed. Fresh independent review, document
+  consistency/link checks and diff checks passed.
+- `build/r1-20260923/` retains detailed disposition reports and every failed and
+  successful run. Final input patch SHA-256:
+  `1703adc4e80adf8917443f9837dcd6ed7e6a875ade1710e7d0fef2547edaa1d4`.
+  `installed-identity.json` verifies 265 source inputs / 262 package files across
+  source, staging, wheel and installation. `native-final/manifest.json` binds
+  102 retained artifacts. Both short/legacy captures and all four gallery
+  minimum captures were inspected; `visual-review.md` records the limitations.
 
-## Review and verification
+## Still open
 
-Fresh independent review of the complete delta from `8f7555b`, investigation
-reports and external skill diff passed. All 110 local documentation links resolve;
-`git diff --check` and the skill-creator validator pass. R2 is unchanged. Product
-tests were not run: no executable contract or test authority changed.
-The skill is updated in place at
-`C:/Users/Spectrum/.codex/skills/execute-task/SKILL.md`, outside the Git commit.
-Its before-copy and diff are retained in the investigation evidence; updated
-SHA-256: `ed4193ac57179fb5491ff04d9f5388ded63289563e8d0aefec54a4dae5cae179`.
+The earlier R0 short larger-window pre-Execute focus-or-hit failure recurred
+once, before execution admission. Its original operands remain unavailable.
+R1 adds five bounded Boolean operands to that existing failure path without
+relaxing its guard. One meaningful diagnostic and the full final headed gate
+passed; this does not establish a cause or a fix. The first diagnostic attempt
+instead exposed an introduced duplicate JavaScript variable, corrected and
+syntax-checked before the meaningful rerun. Preserve all failed receipts.
 
-## R0 acceptance and open observations
+Known theme/contrast defects remain visible in retained PNGs; filter/Search
+overflow also remains deferred. R1 makes no performance or memory improvement
+claim. M1-7 reduction-study work remains deferred until after M1-8 and explicit
+user resumption. R2 was neither changed nor started.
 
-`build/r0-layout-20260923-01/delivery.json` binds the R0 commit and evidence.
-Ordinary-04: 5,321 passed/five skips/33 deselected; full-headed-03: all 33 pass
-under an 8 GiB Windows Job cap; all 12 import contracts pass. Final v4 source/tests,
-source/staging/wheel/install identity, native captures and independent review
-remain R0 acceptance. The previous handoff is preserved in the investigation
-evidence as `handoff-before-investigation.md`; original detailed chronology is
-`build/r0-layout-20260923-01/plan-before-final-closeout.md`.
-
-Theme/contrast and filter/Search overflow remain deferred. One earlier short
-larger-window pre-click focus-or-hit failure remains unclassified: its operand
-was not retained, while one bounded diagnostic and final gate passed unchanged
-guards. Preserve those receipts if it recurs. R1–R3, quantitative acceptance and
-milestone integration remain pending; this documentation update does not start implementation.
-
-Memory incident: `build/r0-focused-01/MEMORY_INCIDENT.md` identifies cyclic mock-DOM
-assertion formatting as the Node allocation cause. Keep Boolean diagnostics and
-capped launchers; never rerun the old unrestricted probe. These task-local limits
-are not a product memory guarantee.
+Keep the existing bounded Windows Job launcher for Node-capable checks and
+inspect the child exit receipt. R0's cyclic mock-DOM assertion formatting caused
+the earlier allocation incident; `build/r0-focused-01/MEMORY_INCIDENT.md` owns
+that evidence. Task caps are not product memory guarantees.
 
 ## Preservation
 
-Original checkout remains on `codex/m1-8-r0` at P2 `4bbf943`; milestone1 remains
+No integration, push, recovery-ancestry reuse or cleanup occurred. Original
+checkout remains clean on `codex/m1-8-r0` at P2 `4bbf943`; milestone1 remains
 `055325b`. Protected stash `93414b7...`, unrelated `af02913`, recovery `8b2a0fb`
-and `6ada8ca`, old U/UV2/P2 evidence and `build/m1-8-uv1-parent` remain untouched.
-No recovery ancestry was integrated. Investigation evidence is retained under `build/delivery-investigation-20260923/`.
-Review the R0 GUI before resuming implementation; this task only commits the
-combined investigation and documentation/rule update. No branch integration or
-cleanup is included.
+and `6ada8ca`, old U/UV2/P2/R0 evidence and `build/m1-8-uv1-parent` remain
+untouched. Keep this candidate checkout and its evidence for later R2/R3.
+The prior handoff is retained as `build/r1-20260923/handoff-before-r1.md`.

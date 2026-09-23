@@ -987,6 +987,7 @@ assert.deepEqual(
   ["execute-plan", TASK_G, frozenRequestId, frozenSelectionRevision, true],
   "uncertain retry retains the exact confirmed intent after review replacement",
 );
+const admissionOpenBase = planOpens.length;
 planExecutions[2].resolve({ task_id: TASK_G, session_id: executionSession });
 await until(() => calls.some(
   (call) => call[0] === "drain" && call[1] === TASK_G && call[2] === executionSession,
@@ -994,7 +995,8 @@ await until(() => calls.some(
 const executionDrain = drains.get(TASK_G);
 assert.notEqual(executionDrain, planDrain, "execution replaces the released plan drain");
 assert.equal(planExecutions.length, 3, "navigation cannot duplicate execution admission");
-await until(() => planOpens.length === 4);
+await until(() => planOpens.length === admissionOpenBase + 1);
+const admissionReload = planOpens.at(-1);
 
 const stateUpdate = (state) => ({
   update_type: "event",
@@ -1029,7 +1031,7 @@ assert.equal(reviewRenders.at(-1).executionControlState, "paused");
 // (_require_released_plan_task), even when that stale UI still offers it.
 // Plan again is deliberately not used: it creates a different task identity.
 const selectionWindowBase = planWindows.length;
-planOpens[3].reject(new Error("post-admission reload failed"));
+admissionReload.reject(new Error("post-admission reload failed"));
 await until(() => planWindows.length === selectionWindowBase + 1);
 const retainedAdmissionReview = reviewRenders.at(-1).review;
 const unchangedSelection = retainedAdmissionReview.summary;
@@ -1046,7 +1048,8 @@ await until(() => !reviewRenders.at(-1).executionWindowRefreshRunning);
 assert.equal(retainedAdmissionReview.window, unchangedAdmissionWindow, "selection supersedes background publication");
 assert.equal(reviewRenders.at(-1).executionWindowDirty, true);
 planSelections[1].reject(new Error("task is unavailable: execution custody is unreleased"));
-await until(() => planOpens.length === 5);
+await until(() => planOpens.length === admissionOpenBase + 2);
+const selectionRecoveryReload = planOpens.at(-1);
 assert.equal(retainedAdmissionReview.foregroundWindowReaders, 0);
 assert.equal(retainedAdmissionReview.summary, unchangedSelection, "rejected selection has no mutation effect");
 
@@ -1057,25 +1060,25 @@ globalThis.planReviewHarness.callbacks.onSelect(
 );
 await until(() => retainedAdmissionReview.foregroundWindowReaders === 1);
 executionDrain.acceptUpdate(stateUpdate("paused"));
-planOpens[4].reject(new Error("selection recovery reload failed"));
+selectionRecoveryReload.reject(new Error("selection recovery reload failed"));
 await until(() => !reviewRenders.at(-1).reviewLoading);
 await turns();
 assert.equal(planWindows.length, selectionWindowBase + 1, "dirty replay waits for selection cleanup");
 planSelections[2].reject(new Error("task is unavailable: execution custody is unreleased"));
-await until(() => planOpens.length === 6);
+await until(() => planOpens.length === admissionOpenBase + 3);
+const committedReload = planOpens.at(-1);
 assert.equal(retainedAdmissionReview.foregroundWindowReaders, 0);
 assert.equal(retainedAdmissionReview.summary, unchangedSelection);
 assert.equal(reviewRenders.at(-1).executionWindowDirty, true);
-planOpens.splice(3, 3, planOpens[5]); // Keep subsequent independent receipt ordinals.
-planWindows.splice(selectionWindowBase);
 
 const committedReview = planSummary({
   selection_state: "committed", view_revision: 3, selection_revision: 1,
   preflight_ready: true, preflight_refusal_count: 0, warning_count: 0,
 });
-planOpens[3].resolve(committedReview);
-await until(() => planWindows.length === 7);
-planWindows[6].resolve(planWindow(committedReview));
+committedReload.resolve(committedReview);
+const committedWindowBase = planWindows.length;
+await until(() => planWindows.length === committedWindowBase + 1);
+planWindows.at(-1).resolve(planWindow(committedReview));
 await turns();
 taskButton("Task 7").click();
 const liveTask = reviewRenders.at(-1);
@@ -1091,33 +1094,37 @@ const conflictWindow = (reviewSummary) => ({
   ...planWindow(reviewSummary), disposition: "conflict",
 });
 const executionDirtyUpdate = { update_type: "event", event: { body_type: "Progress", body: {} } };
+const conflictOpenBase = planOpens.length;
+const conflictWindowBase = planWindows.length;
 executionDrain.acceptUpdate(executionDirtyUpdate);
-await until(() => planWindows.length === 8);
-planWindows[7].resolve(conflictWindow(committedReview));
-await until(() => planOpens.length === 5);
-planOpens[4].resolve(committedReview);
-await until(() => planWindows.length === 9);
-planWindows[8].resolve(conflictWindow(committedReview));
+await until(() => planWindows.length === conflictWindowBase + 1);
+planWindows.at(-1).resolve(conflictWindow(committedReview));
+await until(() => planOpens.length === conflictOpenBase + 1);
+const firstConflictReload = planOpens.at(-1);
+firstConflictReload.resolve(committedReview);
+await until(() => planWindows.length === conflictWindowBase + 2);
+planWindows.at(-1).resolve(conflictWindow(committedReview));
 await until(() => reviewRenders.at(-1).executionWindowRefreshRunning === false
   && reviewRenders.at(-1).reviewLoading === false);
 await turns();
-assert.equal(planWindows.length, 9, "a persistent conflict cannot self-poll");
-assert.equal(planOpens.length, 5, "a conflict gets one forced review reopen");
+assert.equal(planWindows.length, conflictWindowBase + 2, "a persistent conflict cannot self-poll");
+assert.equal(planOpens.length, conflictOpenBase + 1, "a conflict gets one forced review reopen");
 assert.match(liveTask.review.message, /refresh delayed/);
 
 const conflictedReview = liveTask.review;
 executionDrain.acceptUpdate(executionDirtyUpdate);
-await until(() => planWindows.length === 10);
+await until(() => planWindows.length === conflictWindowBase + 3);
 executionDrain.acceptUpdate(executionDirtyUpdate);
-assert.equal(planWindows.length, 10, "a newer live event cannot open a parallel window read");
-planWindows[9].resolve(conflictWindow(committedReview));
-await until(() => planOpens.length === 6);
-planOpens[5].resolve(committedReview);
-await until(() => planWindows.length === 11);
-planWindows[10].resolve(planWindow(committedReview));
+assert.equal(planWindows.length, conflictWindowBase + 3, "a newer live event cannot open a parallel window read");
+planWindows.at(-1).resolve(conflictWindow(committedReview));
+await until(() => planOpens.length === conflictOpenBase + 2);
+const secondConflictReload = planOpens.at(-1);
+secondConflictReload.resolve(committedReview);
+await until(() => planWindows.length === conflictWindowBase + 4);
+planWindows.at(-1).resolve(planWindow(committedReview));
 await until(() => liveTask.review !== conflictedReview);
 await turns();
-assert.equal(planWindows.length, 11, "the one forced reopen captures the newer live event");
+assert.equal(planWindows.length, conflictWindowBase + 4, "the one forced reopen captures the newer live event");
 const liveReview = liveTask.review;
 const executionWindow = (reviewSummary, offset, revision, result = null) => ({
   ...planWindow(reviewSummary, offset),
@@ -1417,8 +1424,11 @@ liveReview.summary = followSummaryBefore;
 globalThis.planReviewHarness.callbacks.onControl(liveReview, "resume");
 assert.equal(liveReview.pending, "resume", "resume feedback precedes its receipt");
 assert.deepEqual(calls.at(-1), ["control-execution", TASK_G, executionSession, "resume"]);
+const controlWindowBase = planWindows.length;
 executionDrain.acceptUpdate(stateUpdate("pending"));
 executionDrain.acceptUpdate(stateUpdate("running"));
+await until(() => planWindows.length === controlWindowBase + 1);
+const pendingControlWindow = planWindows[controlWindowBase];
 executionControls[1].resolve({
   code: "accepted", session_id: executionSession, before: "paused",
   after: "pending", detail: "Resume requested; resource admission is pending.", accepted: true,
@@ -1459,6 +1469,7 @@ assert.equal(liveReview.pending, "cancel", "cancel feedback precedes its receipt
 assert.deepEqual(calls.at(-1), ["control-execution", TASK_G, executionSession, "cancel"]);
 const refusedResult = executionResult({ headline: "refused", filesystem: "refused",
   integrity: "not-run", disposition: "unrun" });
+assert.equal(planWindows.length, controlWindowBase + 1, "control updates share one in-flight window read");
 executionDrain.acceptUpdate({ update_type: "record", record: {
   kind: "sync-execution", state: "refused", result: refusedResult,
   started_at: null, ended_at: "2026-09-23T02:00:00+00:00",
@@ -1488,10 +1499,13 @@ const retiredViewUpdate = planViewUpdates.length;
 globalThis.planReviewHarness.callbacks.onViewChange(liveReview, { sortColumn: "path" });
 assert.equal(liveReview.foregroundWindowReaders, 1);
 liveTask.reviewSessionId = null;
+const releaseOpenBase = planOpens.length;
 executionDrain.acceptRelease(TASK_G, executionSession);
-await until(() => planOpens.length === 7);
-assert.equal(planWindows.length, 12, "live execution updates coalesce behind one bounded window read");
-planWindows[11].resolve(executionWindow(retainedSummary, 1280, 7, failedResult));
+await until(() => planOpens.length === releaseOpenBase + 1);
+const retainedReload = planOpens.at(-1);
+assert.equal(planWindows.length, controlWindowBase + 1, "live execution updates coalesce behind one bounded window read");
+assert.equal(planWindows.at(-1), pendingControlWindow, "release retains the in-flight control window");
+pendingControlWindow.resolve(executionWindow(retainedSummary, 1280, 7, failedResult));
 await until(() => !liveTask.executionWindowRefreshRunning);
 assert.equal(liveReview.window, releaseWindowBefore, "reload admission invalidates old refresh before review replacement");
 assert.equal(liveTask.executionResult, releaseResultBefore);
@@ -1507,15 +1521,15 @@ executionDetails[releaseDetailIndex].resolve({
   operation: null, automatic_verification: null, evidence: null,
 });
 await until(() => liveReview.executionDetail === null);
-assert.equal(planWindows.length, 12, "dirty detail reconciliation cannot compete with reload");
-planOpens[6].resolve(retainedSummary);
-await until(() => planWindows.length === 13);
-planWindows[12].resolve(executionWindow(retainedSummary, 0, 7));
+assert.equal(planWindows.length, controlWindowBase + 1, "dirty detail reconciliation cannot compete with reload");
+retainedReload.resolve(retainedSummary);
+await until(() => planWindows.length === controlWindowBase + 2);
+planWindows.at(-1).resolve(executionWindow(retainedSummary, 0, 7));
 await until(() => reviewRenders.at(-1).review !== liveReview);
 const postTerminalReview = reviewRenders.at(-1).review;
-await until(() => planWindows.length === 14);
+await until(() => planWindows.length === controlWindowBase + 3);
 assert.deepEqual(calls.at(-1), ["plan-window", TASK_G, retainedSummary.view_revision, 0, 256]);
-planWindows[13].resolve(executionWindow(retainedSummary, 0, 7));
+planWindows.at(-1).resolve(executionWindow(retainedSummary, 0, 7));
 await until(() => !liveTask.executionWindowRefreshRunning);
 assert.equal(liveTask.executionWindowDirty, false);
 assert.equal(postTerminalReview.foregroundWindowReaders, 0);
@@ -1526,8 +1540,7 @@ planViewUpdates[retiredViewUpdate].reject(new Error("old view request failed aft
 await until(() => liveReview.foregroundWindowReaders === 0);
 assert.equal(postTerminalReview.window, replacementWindow);
 assert.equal(postTerminalReview.message, terminalMessage, "stale foreground rejection cannot overwrite replacement feedback");
-assert.equal(planWindows.length, 14, "retired foreground cleanup cannot launch another refresh");
-planWindows.splice(13);
+assert.equal(planWindows.length, controlWindowBase + 3, "retired foreground cleanup cannot launch another refresh");
 assert.equal(
   postTerminalReview.message,
   terminalMessage,
@@ -1540,6 +1553,7 @@ planAgainStarts[0].reject(new Error("simulated Plan-again refusal"));
 await until(() => postTerminalReview.pending === null);
 
 const searchUpdateBase = planViewUpdates.length;
+const searchWindowBase = planWindows.length;
 globalThis.planReviewHarness.callbacks.onViewChange(postTerminalReview, { searchQuery: "a" });
 assert.equal(postTerminalReview.pending, "view");
 globalThis.planReviewHarness.callbacks.onViewChange(postTerminalReview, { searchQuery: "ab" });
@@ -1549,8 +1563,8 @@ const firstSearch = planSummary({
   ...retainedSummary, disposition: "applied", view_revision: 5, search_query: "a",
 });
 planViewUpdates[searchUpdateBase].resolve(firstSearch);
-await until(() => planWindows.length === 14);
-planWindows[13].resolve(planWindow(firstSearch));
+await until(() => planWindows.length === searchWindowBase + 1);
+planWindows.at(-1).resolve(planWindow(firstSearch));
 await until(() => planViewUpdates.length === searchUpdateBase + 2);
 assert.deepEqual(calls.at(-1), ["update-plan", TASK_G, 5, {
   searchQuery: "abc", filters: [], sortColumn: "size", sortDirection: "ascending",
@@ -1560,8 +1574,8 @@ const finalSearch = planSummary({
   ...retainedSummary, disposition: "applied", view_revision: 6, search_query: "abc",
 });
 planViewUpdates[searchUpdateBase + 1].resolve(finalSearch);
-await until(() => planWindows.length === 15);
-planWindows[14].resolve(planWindow(finalSearch));
+await until(() => planWindows.length === searchWindowBase + 2);
+planWindows.at(-1).resolve(planWindow(finalSearch));
 await until(() => postTerminalReview.pending === null);
 assert.equal(postTerminalReview.summary.search_query, "abc");
 

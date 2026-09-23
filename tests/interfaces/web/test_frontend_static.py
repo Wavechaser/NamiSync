@@ -857,7 +857,6 @@ def test_plan_row_renderer_is_active_and_consumes_only_projected_views(
     assert hidden_plan_review.group("body").strip() == "display: none;"
     assert ".nami-file-list__body > .nami-file-row[hidden]" in layout
     assert "display: none;" in layout
-    assert layout.count("--nami-file-column-") == 29
     assert "--nami-file-column-primary: var(--plan-action-column-width);" in layout
     assert "--plan-action-column-width: minmax(6rem, 0.55fr);" in assets["tokens.css"]
     assert ".nami-file-list__column-resizer" in layout
@@ -868,7 +867,6 @@ def test_plan_row_renderer_is_active_and_consumes_only_projected_views(
     assert not re.search(r"\.nami-file-list__header-cell[^\{]*:nth-child", layout)
     assert "background: initial;" in layout
     assert "--file-row-h: 24px;" in assets["tokens.css"]
-    assert layout.count("block-size: var(--file-row-h);") == 2
     file_grid = re.search(
         r"(?ms)^\.nami-file-list__grid\s*\{(?P<body>.*?)^\}",
         layout,
@@ -1501,8 +1499,6 @@ def test_gui_s9_scrollbars_and_tables_share_fixed_native_geometry(
     assert ".nami-table-scroll {" in components_css
     assert "overflow-x: auto;" in components_css
     assert "overflow-y: hidden;" in components_css
-    assert ".nami-table-layout {" in components_css
-    assert "grid-template-rows: auto minmax(0, 1fr);" in components_css
     assert ".nami-table__header,\n.nami-table__body {\n  scrollbar-gutter: stable;" in components_css
     assert ".nami-table__body {\n  overflow-x: hidden;\n  overflow-y: auto;" in components_css
     assert all(
@@ -1514,11 +1510,4 @@ def test_gui_s9_scrollbars_and_tables_share_fixed_native_geometry(
     app_css = assets["app.css"]
     assert "--nami-table-columns: var(--setup-recent-columns);" in app_css
     assert "--nami-table-columns: var(--setup-batch-columns);" in app_css
-    setup_table = re.search(
-        r"(?ms)^\.nami-setup__pair-table\s*\{(?P<body>.*?)^\}",
-        app_css,
-    )
-    assert setup_table is not None
-    assert "min-inline-size: 32rem;" in setup_table.group("body")
-    assert app_css.count("min-inline-size: 32rem;") == 1
     assert "grid-template-columns: var(--nami-table-columns);" in app_css

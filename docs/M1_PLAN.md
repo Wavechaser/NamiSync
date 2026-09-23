@@ -11,7 +11,8 @@
 
 This is the **refactoring/closure plan, revised 2026-09-23**. R0 is complete
 on the isolated `codex/m1-8-r0-ready` branch, reconstructed as one reviewed
-commit on verified P2. Stop for the user's GUI review. R1–R3, milestone
+commit on verified P2. The user authorized R1 on 2026-09-23; stop after R1.
+R2–R3, milestone
 integration, filter/Search overflow, theme remediation, push and PR stay pending
 and outside the delivered R0 scope.
 
@@ -311,8 +312,8 @@ push, PR, release or next milestone follows automatically.
 
 | ID | Accepted outcome | Depends on | Primary verification | Status |
 | --- | --- | --- | --- | --- |
-| M1-8-R0 | Usable execution navigation, phase status/progress and folded details; B1–B6 resolved | Separate execution authorization; accepted D1–D3, verified P2 and protected snapshot | A1–A4; focused and ordinary/import/full installed gates | complete; isolated reviewed commit, GUI review next |
-| M1-8-R1 | Consolidated functional witnesses preserving R0's accepted behavior | Accepted R0 | Assertion-disposition map; affected tests and A1–A4 evidence identity | pending |
+| M1-8-R0 | Usable execution navigation, phase status/progress and folded details; B1–B6 resolved | Separate execution authorization; accepted D1–D3, verified P2 and protected snapshot | A1–A4; focused and ordinary/import/full installed gates | complete; isolated reviewed commit |
+| M1-8-R1 | Consolidated functional witnesses preserving R0's accepted behavior | Accepted R0 | Assertion-disposition map; affected tests and A1–A4 evidence identity | complete; reviewed isolated commit, stop before R2 |
 | M1-8-R2 | One maintainable active U measurement path and accepted fixed-profile evidence | R1; same final product/installed bytes | A5; finite checker controls, 78 attempts and independent terminal validation | pending |
 | M1-8-R3 | Reviewed, fully accounted M1-8 integration and closure | R1/R2 | A6 and overall final sweep | pending |
 
@@ -442,6 +443,12 @@ containment, not a product memory guarantee. No recovery ref or evidence cleanup
 
 ### M1-8-R1 — functional witness consolidation and ablation
 
+**Delivered scope.** User-authorized R1 only, based on `2e6bb81` in
+`build/m1-8-r0`, branch `codex/m1-8-r0-ready`; integration remains R3.
+`build/r1-20260923/` retains the owner/consumer regression study, assertion maps,
+all run receipts and captures. Historical `TEST_ABLATION` losses prohibit
+wholesale cohort removal; archived U recipes and M1-7 retirement were not revived.
+
 **Objective.** Remove current T1–T5 duplicate responsibilities and incidental
 test constraints while preserving R0's accepted behavior. Test/evidence work
 only; no product optimization, second UI implementation or new feature.
@@ -484,6 +491,37 @@ changed harness policy, plus CHANGELOG/HANDOFF. One coherent
 `test(web): consolidate execution review witnesses` commit with passing gates,
 or a documented no-change disposition. Correct introduced regressions; a product
 defect reopens its owner under the existing scope and stop rules.
+
+**Implemented assertion dispositions.** R1-A's parent
+`_assert_diagnostic_layout` owns the eight-state verdict; page observations and
+native keyboard/capture remain, child validation owns bounded shape. Retired
+equal column widths, exact tabindex, three independent scrollbars, repeated
+truth checks and their orphaned layout-failure payload. R1-B accepts matching
+repeat reads and newer settled receipts; capture pins receipt plus DOM identity.
+Real composed copy/source, release ordering, stale refusal and native completion
+remain. R1-C's identified CSS/source spellings defer to gallery geometry,
+Setup's native table checks and legacy navigation/modal/control/recovery;
+structural stack/security guards remain. R1-D's affected window/open request
+spans use local admission bases and explicit receipts, retaining race,
+in-flight, quiescence and mutation assertions. R1-E removes nine immediately
+repeated scan calls; helper contracts and existing corruption controls are
+unchanged. Exact removal-to-owner maps are retained in
+`build/r1-20260923/{gallery,short,local}-report.md`.
+
+The known short larger-window pre-click failure recurred before execution;
+its cause remains unclassified. The failure path now retains bounded Boolean
+operands without relaxing the guard. The meaningful diagnostic and final gate
+passed; this is not a product fix or proof of an environmental cause.
+
+**R1 acceptance (2026-09-24).** Ordinary-01: 5,321 passed/five skips/33 deselected;
+full-headed-01: 33 passed; all 12 import contracts pass. Fresh independent review,
+document/link/diff checks and final source/staging/wheel/install binding pass.
+The final input patch hash is
+`1703adc4e80adf8917443f9837dcd6ed7e6a875ade1710e7d0fef2547edaa1d4`;
+`build/r1-20260923/delivery.json` binds this checkpoint commit and receipts.
+Required captures were inspected, retaining existing theme/contrast exclusions.
+Product/package inputs and R2's section are unchanged. No quantitative claim,
+M1-7 retirement, branch integration or cleanup. Stop here as requested.
 
 ### M1-8-R2 — quantitative path and fixed acceptance
 

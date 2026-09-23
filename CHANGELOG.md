@@ -27,6 +27,22 @@ and remembered locations, bounded Plan review/selection/sorting and same-task
 execution with live controls and bounded live/retained result review. Inventory review and beta
 packaging remain open.
 
+#### Consolidate M1-8-R1 functional witnesses (2026-09-23 – 2026-09-24)
+
+- Give the gallery parent the execution-layout verdict; remove duplicate page/
+  child verdicts and the orphaned layout-failure payload. Preserve native
+  geometry, content reachability, focus, scrolling and capture evidence.
+- Replace short-journey fixed read/revision choreography with coherent settled
+  receipts and capture identity. Retain the distinct real-copy and legacy
+  journeys; report pre-Execute guard failures with bounded Boolean operands.
+- Retire identified CSS/source spellings, use scenario-local request receipts,
+  and remove package scans duplicated only across identity-record serialization.
+  Preserve operational, asynchronous and package-integrity checks. No product
+  behavior, benchmark acceptance or M1-7 capability changes.
+- Verify 5,321 ordinary passes/five skips, all 33 installed headed cases and 12
+  import contracts; preserve package identity, captures and independent review.
+  The earlier pre-click failure remains unclassified despite final passing gates.
+
 #### Investigate delivery friction and adopt workflow corrections (2026-09-23)
 
 - Review current product/tests/workflow against R0 `8f7555b`, with independent

@@ -72,6 +72,8 @@ extra, or changed package file in the wheel or installed environment before
 yielding an installed fixture. Canonical identity records beside the temporary
 wheel and installations bind later evidence to the source manifest and artifact
 hash without making generated build or cache files package inputs.
+Verify populations at build/install boundaries and revalidate recorded artifacts
+on reuse; identity-record serialization does not require a second population scan.
 
 Required ordinary JavaScript tests are unmarked and non-skippable. They execute
 the packaged public event consumers, start-plan deadline/replay and interactive
@@ -152,6 +154,14 @@ per-invocation measurement artifacts; retained baseline sidecars are distinct
 input evidence. Neither is a live child-to-parent snapshot or part of the
 milestone state machine. The tree-window fixture likewise remains a one-shot
 parent-created input.
+
+For the gallery's execution layout matrix, the page observes, the child checks
+bounded transport and drives native input/capture, and the parent owns the
+independent layout verdict. Harmless layout recipes are not acceptance criteria.
+The short execution journey uses coherent settled receipts and stable visible
+identity across capture, rather than a fixed detail-read count or permanent
+revision. Its real-copy endpoint remains distinct from the legacy journey's
+navigation, modal, control and recovery coverage.
 
 `tools/gui.ps1 gallery` reuses the child and milestone format for an editable
 manual preview, but its GUID-named output is diagnostic only. It is not produced

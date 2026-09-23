@@ -494,20 +494,6 @@ def test_component_gallery_measurement_diagnostic_survives_full_failure_path(
         "client_width": 1252,
         "client_height": 732,
     }
-    layout_result = {
-        "case": "default-folded-populated",
-        "block_size": 640.0,
-        "visible_count": 0,
-        "expanded": False,
-        "populated": True,
-        "logical_rows": 1000,
-        "loaded_rows": 64,
-        "row_height": 24.0,
-        **dict.fromkeys(
-            component_gallery_child._LAYOUT_FAILURE_BOOLEAN_KEYS, True
-        ),
-        "no_horizontal_control_clipping": False,
-    }
     node = _node_executable()
     if node is None:
         pytest.skip("Node.js is unavailable")
@@ -516,41 +502,26 @@ const fs = require("fs");
 const source = fs.readFileSync(process.argv[1], "utf8");
 const prefix = source.slice(0, source.indexOf("(async () => {"));
 const native = JSON.parse(process.argv[2]);
-const layout = JSON.parse(process.argv[3]);
 global.window = {addEventListener() {}};
 eval(prefix + `
-let producedLayoutFailure;
-try {
-  rejectDiagnosticLayout(layout);
-} catch (error) {
-  producedLayoutFailure = buildFailureEvidence(
-    "plan_matrix", error.name, "diagnostic_default_folded_populated",
-    galleryFailureReason, null, galleryLayoutFailure,
-  );
-}
 console.log(JSON.stringify([
   buildFailureEvidence("measurement", "Error", "control_styles", "control_invariant"),
   buildFailureEvidence("measurement", "Error", "native_minimum_request", "native_minimum_pending", native),
-  producedLayoutFailure,
 ]));`);
 """
     completed = subprocess.run(
         [
             node, "-e", probe, str(_SCENARIO),
-            json.dumps(native_snapshot), json.dumps(layout_result),
+            json.dumps(native_snapshot),
         ],
         check=True,
         timeout=10,
         capture_output=True,
         text=True,
     )
-    non_native_failure, native_failure, layout_failure = json.loads(
+    non_native_failure, native_failure = json.loads(
         completed.stdout
     )
-    assert layout_failure["reason"] == "layout_invariant"
-    assert layout_failure["layout"]["no_horizontal_control_clipping"] is False
-    assert layout_failure["layout"]["status_details_same_row"] is True
-    assert layout_failure["step"] == "diagnostic_default_folded_populated"
 
     paths = EvidencePaths((tmp_path / "native").resolve())
     paths.root.mkdir()
@@ -566,7 +537,7 @@ console.log(JSON.stringify([
         spec.invoke(
             {
                 "phase": "failure",
-                "failure": {**layout_failure, "detail": private_text},
+                "failure": {**non_native_failure, "detail": private_text},
             },
             context=_OPEN_CONTEXT,
         )
@@ -618,29 +589,6 @@ console.log(JSON.stringify([
     assert non_native_evidence == {"failure": non_native_failure}
     assert _sanitized_failure_record(non_native_evidence) == non_native_failure
 
-    layout_paths = EvidencePaths((tmp_path / "layout").resolve())
-    layout_paths.root.mkdir()
-    layout_spec = component_gallery_child._test_report_spec(
-        component_gallery_child._Recorder(layout_paths, "light"),
-        lambda _targets: None,
-        "light",
-    )
-    wrong_layout = {
-        **layout_failure["layout"], "status_details_same_row": "true",
-    }
-    assert component_gallery_child._valid_layout_failure(wrong_layout) is False
-    with pytest.raises(CommandPayloadError, match="report is invalid"):
-        layout_spec.invoke(
-            {"phase": "failure", "failure": {**layout_failure, "layout": wrong_layout}},
-            context=_OPEN_CONTEXT,
-        )
-    assert layout_spec.invoke(
-        {"phase": "failure", "failure": layout_failure},
-        context=_OPEN_CONTEXT,
-    ) == {"accepted": True}
-    layout_evidence = EvidenceReader(layout_paths).read_failure()
-    assert layout_evidence == {"failure": layout_failure}
-    assert _sanitized_failure_record(layout_evidence) == layout_failure
 
 
 def test_component_gallery_write_retains_a_post_ready_failure(
@@ -1747,9 +1695,9 @@ def test_component_gallery_report_parser_is_exact_and_nested(
                     "no_horizontal_control_clipping": True,
                     "visible_count": 2 if disclosure == "expanded" else 0,
                     "cardinality_exact": True,
-                    "issues_scrollable": True,
-                    "trash_scrollable": True,
-                    "detail_scrollable": True,
+                    "issues_content_reachable": True,
+                    "trash_content_reachable": True,
+                    "detail_content_reachable": True,
                     "issues_keyboard_reachable": True,
                     "trash_keyboard_reachable": True,
                     "detail_keyboard_reachable": True,
@@ -1790,7 +1738,6 @@ def test_component_gallery_report_parser_is_exact_and_nested(
                 "review_height": 501.0,
                 "axes_wrapped": True,
                 "long_trash_length": 32767,
-                "all_three_bounded": True,
                 "keyboard_scroll_before": 0.0,
                 "keyboard_scroll_after": 120.0,
                 "keyboard_capture_width": 1008,
@@ -2052,8 +1999,11 @@ def test_component_gallery_report_parser_is_exact_and_nested(
     minimum_window["work_content_aligned"] = False
     assert component_gallery_child._valid_complete_report(report) is False
     minimum_window["work_content_aligned"] = True
+    _assert_diagnostic_layout(report["control_contract"]["diagnostic_layout"])
     report["control_contract"]["diagnostic_layout"][0]["status_details_same_row"] = False
-    assert component_gallery_child._valid_complete_report(report) is False
+    assert component_gallery_child._valid_complete_report(report) is True
+    with pytest.raises(AssertionError, match="status_details_same_row"):
+        _assert_diagnostic_layout(report["control_contract"]["diagnostic_layout"])
     report["control_contract"]["diagnostic_layout"][0]["status_details_same_row"] = True
     report["controls"][0]["state"] = "invented"
     assert component_gallery_child._valid_complete_report(report) is False
@@ -2964,7 +2914,7 @@ def _sanitized_failure_record(value: object) -> dict[str, object]:
         type(failure) is not dict
         or not {"stage", "type", "step", "reason"}.issubset(failure)
         or not set(failure).issubset(
-            {"stage", "type", "step", "reason", "native", "layout"}
+            {"stage", "type", "step", "reason", "native"}
         )
         or failure.get("stage")
         not in component_gallery_child._EVIDENCE_FAILURE_STAGES
@@ -2985,12 +2935,6 @@ def _sanitized_failure_record(value: object) -> dict[str, object]:
                 or not component_gallery_child._valid_native_failure_snapshot(
                     failure["native"]
                 )
-            )
-        )
-        or (
-            "layout" in failure and (
-                failure.get("reason") != "layout_invariant"
-                or not component_gallery_child._valid_layout_failure(failure["layout"])
             )
         )
     ):
@@ -3911,6 +3855,41 @@ def _assert_file_list_evidence(
     return rows
 
 
+def _assert_diagnostic_layout(diagnostic_layout: list[dict[str, object]]) -> None:
+    assert [case["case"] for case in diagnostic_layout] == [
+        "default-folded-empty", "default-folded-populated",
+        "default-expanded-empty", "default-expanded-populated",
+        "minimum-folded-empty", "minimum-folded-populated",
+        "minimum-expanded-empty", "minimum-expanded-populated",
+    ]
+    assert [case["block_size"] for case in diagnostic_layout[:4]] == [640] * 4
+    assert all(0 < case["block_size"] < 640 for case in diagnostic_layout[4:])
+    assert [case["logical_rows"] for case in diagnostic_layout] == [0, 1000] * 4
+    assert [case["loaded_rows"] for case in diagnostic_layout] == [0, 64] * 4
+    for case in diagnostic_layout:
+        assert case["expanded"] is ("-expanded-" in case["case"])
+        assert case["populated"] is case["case"].endswith("-populated")
+        assert case["visible_count"] == (2 if case["expanded"] else 0)
+        assert case["row_height"] == pytest.approx(24, abs=0.5)
+        for field in (
+            "disclosure_matches", "diagnostics_visible", "rows_overflow",
+            "scroll_advanced", "window_requested", "window_adopted",
+            "viewport_bounded", "stale_facts_cleared", "header_aligned",
+            "whole_row_reachable", "both_columns_reachable",
+            "collapse_focus_restored", "table_state_preserved", "root_fits",
+            "table_usable", "hidden_descendant_exempt",
+            "visible_collapsed_rejected", "no_horizontal_control_clipping",
+            "cardinality_exact", "issues_content_reachable",
+            "trash_content_reachable", "detail_content_reachable",
+            "issues_keyboard_reachable", "trash_keyboard_reachable",
+            "detail_keyboard_reachable", "readable_body",
+            "disclosure_reachable", "row_activation_reachable",
+            "placeholder_present", "detail_matches_focused_row",
+            "title_action_aligned", "status_details_same_row",
+        ):
+            assert case[field] is True, f'{case["case"]}.{field}'
+
+
 def _assert_complete_gallery_matrix(report: dict[str, object]) -> None:
     assert set(report) == {
         "phase",
@@ -4001,53 +3980,9 @@ def _assert_complete_gallery_matrix(report: dict[str, object]) -> None:
         "focus_restored": True,
         "wheel_blocked": True,
     }
-    diagnostic_layout = report["control_contract"]["diagnostic_layout"]
-    assert [case["case"] for case in diagnostic_layout] == [
-        "default-folded-empty", "default-folded-populated",
-        "default-expanded-empty", "default-expanded-populated",
-        "minimum-folded-empty", "minimum-folded-populated",
-        "minimum-expanded-empty", "minimum-expanded-populated",
-    ]
-    assert [case["block_size"] for case in diagnostic_layout[:4]] == [640] * 4
-    assert all(0 < case["block_size"] < 640 for case in diagnostic_layout[4:])
-    assert all(case["disclosure_matches"] for case in diagnostic_layout)
-    assert all(case["diagnostics_visible"] for case in diagnostic_layout)
-    assert all(case["rows_overflow"] for case in diagnostic_layout)
-    assert all(case["scroll_advanced"] for case in diagnostic_layout)
-    assert all(case["window_requested"] for case in diagnostic_layout)
-    assert all(case["window_adopted"] for case in diagnostic_layout)
-    assert all(case["viewport_bounded"] for case in diagnostic_layout)
-    assert all(case["row_height"] == pytest.approx(24, abs=0.5) for case in diagnostic_layout)
-    assert all(case["stale_facts_cleared"] for case in diagnostic_layout)
-    assert all(case["header_aligned"] for case in diagnostic_layout)
-    assert all(case["whole_row_reachable"] for case in diagnostic_layout)
-    assert all(case["both_columns_reachable"] for case in diagnostic_layout)
-    assert all(case["collapse_focus_restored"] for case in diagnostic_layout)
-    assert all(case["table_state_preserved"] for case in diagnostic_layout)
-    assert [case["logical_rows"] for case in diagnostic_layout] == [0, 1000] * 4
-    assert [case["loaded_rows"] for case in diagnostic_layout] == [0, 64] * 4
-    assert all(case["root_fits"] for case in diagnostic_layout)
-    assert all(case["table_usable"] for case in diagnostic_layout)
-    assert all(case["hidden_descendant_exempt"] for case in diagnostic_layout)
-    assert all(case["visible_collapsed_rejected"] for case in diagnostic_layout)
-    assert all(case["no_horizontal_control_clipping"] for case in diagnostic_layout)
-    assert all(case["cardinality_exact"] for case in diagnostic_layout)
-    assert all(case["issues_scrollable"] for case in diagnostic_layout)
-    assert all(case["trash_scrollable"] for case in diagnostic_layout)
-    assert all(case["detail_scrollable"] for case in diagnostic_layout)
-    assert all(case["issues_keyboard_reachable"] for case in diagnostic_layout)
-    assert all(case["trash_keyboard_reachable"] for case in diagnostic_layout)
-    assert all(case["detail_keyboard_reachable"] for case in diagnostic_layout)
-    assert all(case["readable_body"] for case in diagnostic_layout)
-    assert all(case["disclosure_reachable"] for case in diagnostic_layout)
-    assert all(case["row_activation_reachable"] for case in diagnostic_layout)
-    assert all(case["placeholder_present"] for case in diagnostic_layout)
-    assert all(case["detail_matches_focused_row"] for case in diagnostic_layout)
-    assert all(case["title_action_aligned"] for case in diagnostic_layout)
-    assert all(case["status_details_same_row"] for case in diagnostic_layout)
+    _assert_diagnostic_layout(report["control_contract"]["diagnostic_layout"])
     minimum_window = report["control_contract"]["minimum_window"]
     assert minimum_window["long_trash_length"] == 32767
-    assert minimum_window["all_three_bounded"] is True
     assert minimum_window["keyboard_scroll_after"] > minimum_window["keyboard_scroll_before"]
     assert minimum_window["keyboard_capture_width"] > 0
     assert minimum_window["keyboard_capture_height"] > 0

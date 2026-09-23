@@ -298,12 +298,13 @@ def test_execution_review_phase_rejects_execution_for_another_plan(tmp_path: Pat
         )
 
 
-def test_execution_review_phase_requires_release_window_detail_order(tmp_path: Path) -> None:
+def test_execution_review_phase_accepts_latest_settled_receipt_and_stable_capture(tmp_path: Path) -> None:
     from namisync.dispatcher import SessionNotFound
 
     phase = child._ExecutionReviewPhase(tmp_path / "source", tmp_path / "target")
     task_id, plan_id, session_id = "1" * 32, "2" * 32, "5" * 32
-    phase.plan = {"task_id": task_id, "request_id": plan_id, "session_id": "3" * 32}
+    phase.plan = {"task_id": task_id, "request_id": plan_id, "session_id": "3" * 32,
+                  "task_label": "Task 1"}
     service = SimpleNamespace(get_session=lambda _session_id: (_ for _ in ()).throw(SessionNotFound()))
     task = SimpleNamespace(task_id=task_id, session_id=session_id, session_released=True)
     phase.registry = SimpleNamespace(
@@ -329,33 +330,52 @@ def test_execution_review_phase_requires_release_window_detail_order(tmp_path: P
         "get_plan_window", 5, 6,
         SimpleNamespace(task_id=task_id, expected_revision=7), window,
     )
-    retained = dict(phase.window)
-    with pytest.raises(ValueError, match="conflicting"):
-        phase.record(
-            "get_plan_window", 7, 8,
-            SimpleNamespace(task_id=task_id, expected_revision=9),
-            {**window, "view_revision": 9},
-        )
-    assert phase.window == retained
     phase.record(
-        "get_execution_detail", 9, 10,
-        SimpleNamespace(
-            task_id=task_id, operation_id="6" * 32,
-            expected_execution_revision=8,
-        ),
-        {"disposition": "current", "operation_id": "6" * 32, "execution_revision": 8,
-         "operation": SimpleNamespace(path="one.txt")},
+        "get_plan_window", 7, 8,
+        SimpleNamespace(task_id=task_id, expected_revision=9),
+        {**window, "view_revision": 9},
     )
-    assert phase.detail_calls == 1
+    phase.record(
+        "get_plan_window", 9, 10,
+        SimpleNamespace(task_id=task_id, expected_revision=7), window,
+    )
+    assert phase.window["view_revision"] == 9
+    phase.record(
+        "get_execution_detail", 11, 12,
+        SimpleNamespace(task_id=task_id, operation_id="6" * 32, expected_execution_revision=7),
+        {"disposition": "conflict"},
+    )
+    assert phase.detail is None
+    detail_payload = SimpleNamespace(
+        task_id=task_id, operation_id="6" * 32, expected_execution_revision=8,
+    )
+    detail_result = {
+        "disposition": "current", "operation_id": "6" * 32,
+        "execution_revision": 8, "operation": SimpleNamespace(path="one.txt"),
+    }
+    phase.record(
+        "get_execution_detail", 13, 14, detail_payload, detail_result,
+    )
+    phase.record("get_execution_detail", 15, 16, detail_payload, detail_result)
     assert phase.execution["completed"] < phase.release["admitted"]
     assert phase.release["completed"] < phase.window["admitted"]
-    assert phase.window["completed"] < phase.detail["admitted"]
     assert phase.capture_ready() is True
+    identity = phase._expected_identity_locked()
+    phase.set_identity("pre", identity)
+    with pytest.raises(RuntimeError, match="identity"):
+        phase.set_identity("post", {**identity, "operationPath": "other.txt"})
+    phase.record(
+        "get_plan_window", 17, 18,
+        SimpleNamespace(task_id=task_id, expected_revision=11),
+        {**window, "view_revision": 11},
+    )
+    with pytest.raises(RuntimeError, match="identity"):
+        phase.set_identity("post", identity)
     task.session_released = False
     assert phase.capture_ready() is False
 
 
-def test_phase_rejects_early_duplicate_and_mismatched_detail(tmp_path: Path) -> None:
+def test_phase_rejects_early_and_mismatched_current_detail(tmp_path: Path) -> None:
     task_id, plan_id, session_id, operation_id = (
         "1" * 32, "2" * 32, "5" * 32, "6" * 32,
     )
@@ -380,26 +400,6 @@ def test_phase_rejects_early_duplicate_and_mismatched_detail(tmp_path: Path) -> 
     phase.record("get_plan_window", 8, 9, SimpleNamespace(task_id=task_id, expected_revision=7), window)
     with pytest.raises(ValueError, match="does not match"):
         phase.record("get_execution_detail", 10, 11, SimpleNamespace(task_id=task_id, operation_id="7" * 32, expected_execution_revision=8), {"disposition": "current", "operation_id": "7" * 32, "execution_revision": 8})
-
-    duplicate = child._ExecutionReviewPhase(tmp_path / "dup-source", tmp_path / "dup-target")
-    duplicate.plan, duplicate.execution, duplicate.release, duplicate.window = (
-        dict(phase.plan), dict(phase.execution), dict(phase.release), dict(phase.window),
-    )
-    payload = SimpleNamespace(task_id=task_id, operation_id=operation_id, expected_execution_revision=8)
-    result = {"disposition": "current", "operation_id": operation_id, "execution_revision": 8,
-              "operation": SimpleNamespace(path="one.txt")}
-    duplicate.record("get_execution_detail", 10, 11, payload, result)
-    with pytest.raises(ValueError, match="more than once"):
-        duplicate.record("get_execution_detail", 12, 13, payload, result)
-
-    identity = duplicate._expected_identity_locked()
-    duplicate.set_identity("pre", identity)
-    with pytest.raises(RuntimeError, match="capture phase"):
-        duplicate.set_capture("rechecked", "acknowledged")
-    duplicate.set_capture("waiting", "persisting")
-    duplicate.set_capture("persisting", "decoded")
-    with pytest.raises(RuntimeError, match="identity"):
-        duplicate.set_identity("post", {**identity, "operationPath": "other.txt"})
 
 
 def test_task_execution_review_scenarios_own_disjoint_evidence_paths(tmp_path: Path) -> None:
@@ -456,6 +456,21 @@ def test_execution_review_evidence_ready_failure_final_and_privacy(tmp_path: Pat
         "diagnostic": diagnostic,
     }
 
+    preclick_root = (tmp_path / "preclick").resolve()
+    preclick_root.mkdir()
+    preclick_paths = EvidencePaths(preclick_root)
+    preclick = child._Recorder(preclick_paths, preclick_root / "driver.json")
+    operands = {name: False for name in child._PRECLICK_DIAGNOSTIC}
+    for invalid in ({**operands, "hitPresent": "secret"}, {**operands, "private": "secret"}):
+        with pytest.raises(RuntimeError, match="diagnostic"):
+            preclick.fail("page-preclick", "PointerTargetError", invalid)
+    preclick.fail("page-preclick", "PointerTargetError", operands)
+    assert EvidenceReader(preclick_paths).read_failure() == {
+        "stage": "page-preclick", "reason": "PointerTargetError",
+        "identity": {}, "diagnostic": operands,
+    }
+    assert "private" not in (preclick_root / "driver.json").read_text(encoding="utf-8")
+
 
 @pytest.mark.headed
 @pytest.mark.parametrize("large_window", [False, True], ids=["default", "larger"])
@@ -478,8 +493,10 @@ def test_installed_task_execution_review_real_copy_and_capture(
     }
     assert report["dimensions"][0] > 0 and report["dimensions"][1] > 0
     phase = report["phase"]
-    assert phase["capture"] == "acknowledged"
-    assert phase["detail_calls"] == 1
+    assert phase["capture_complete"] is True
+    assert phase["pre_identity"] == phase["post_identity"]
+    assert phase["detail"]["operation_id"] == phase["window"]["operation_id"]
+    assert phase["detail"]["execution_revision"] == phase["window"]["execution_revision"]
     assert phase["plan"]["request_id"] != phase["execution"]["request_id"]
 
 

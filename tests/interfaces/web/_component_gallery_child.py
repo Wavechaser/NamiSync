@@ -299,54 +299,6 @@ _NATIVE_FAILURE_REASONS = frozenset(
 _NATIVE_PENDING = frozenset(
     {"none", "pseudo_states", "wheel_content", "wheel_backdrop", "minimum_window"}
 )
-_LAYOUT_FAILURE_BOOLEAN_KEYS = frozenset(
-    {
-        "root_fits",
-        "table_usable",
-        "hidden_descendant_exempt",
-        "visible_collapsed_rejected",
-        "no_horizontal_control_clipping",
-        "cardinality_exact",
-        "issues_scrollable",
-        "trash_scrollable",
-        "detail_scrollable",
-        "issues_keyboard_reachable",
-        "trash_keyboard_reachable",
-        "detail_keyboard_reachable",
-        "readable_body",
-        "disclosure_reachable",
-        "row_activation_reachable",
-        "placeholder_present",
-        "detail_matches_focused_row",
-        "title_action_aligned",
-        "status_details_same_row",
-        "disclosure_matches",
-        "diagnostics_visible",
-        "rows_overflow",
-        "scroll_advanced",
-        "window_requested",
-        "window_adopted",
-        "viewport_bounded",
-        "stale_facts_cleared",
-        "header_aligned",
-        "whole_row_reachable",
-        "both_columns_reachable",
-        "collapse_focus_restored",
-        "table_state_preserved",
-    }
-)
-_LAYOUT_FAILURE_KEYS = _LAYOUT_FAILURE_BOOLEAN_KEYS | {
-    "case", "block_size", "visible_count", "expanded", "populated",
-    "logical_rows", "loaded_rows", "row_height",
-}
-_LAYOUT_FAILURE_CASES = frozenset(
-    {
-        f"{size}-{disclosure}-{population}"
-        for size in ("default", "minimum")
-        for disclosure in ("folded", "expanded")
-        for population in ("empty", "populated")
-    }
-)
 _SYSTEM_COLOR_NAMES = frozenset(
     {
         "Canvas",
@@ -503,12 +455,6 @@ class _Recorder:
                     and _valid_native_failure_snapshot(native)
                 ):
                     result["native"] = dict(native)
-                layout = failure.get("layout")
-                if (
-                    result["reason"] == "layout_invariant"
-                    and _valid_layout_failure(layout)
-                ):
-                    result["layout"] = dict(layout)
                 return result
         if "pseudo_state_failed" in self._data:
             return {
@@ -577,34 +523,6 @@ def _valid_native_failure_snapshot(value: object) -> bool:
                 "outer_width", "outer_height", "client_width", "client_height",
             )
         )
-    )
-
-
-def _valid_layout_failure(value: object) -> bool:
-    return (
-        type(value) is dict
-        and set(value) == _LAYOUT_FAILURE_KEYS
-        and type(value["case"]) is str
-        and value["case"] in _LAYOUT_FAILURE_CASES
-        and type(value["block_size"]) in {int, float}
-        and math.isfinite(value["block_size"])
-        and value["block_size"] > 0
-        and type(value["visible_count"]) is int
-        and 0 <= value["visible_count"] <= 2
-        and type(value["expanded"]) is bool
-        and type(value["populated"]) is bool
-        and type(value["logical_rows"]) is int
-        and value["logical_rows"] in {0, 1000}
-        and type(value["loaded_rows"]) is int
-        and (
-            value["loaded_rows"] == 0
-            if not value["populated"]
-            else 1 <= value["loaded_rows"] <= 64
-        )
-        and type(value["row_height"]) in {int, float}
-        and math.isfinite(value["row_height"])
-        and value["row_height"] >= 0
-        and all(type(value[name]) is bool for name in _LAYOUT_FAILURE_BOOLEAN_KEYS)
     )
 
 
@@ -751,7 +669,7 @@ def _test_report_spec(
                 type(failure) is not dict
                 or not {"stage", "type", "step", "reason"}.issubset(failure)
                 or not set(failure).issubset(
-                    {"stage", "type", "step", "reason", "native", "layout"}
+                    {"stage", "type", "step", "reason", "native"}
                 )
                 or type(failure["stage"]) is not str
                 or type(failure["type"]) is not str
@@ -771,13 +689,6 @@ def _test_report_spec(
                 or (
                     failure["reason"] in _NATIVE_FAILURE_REASONS
                     and "native" not in failure
-                )
-                or (
-                    "layout" in failure
-                    and (
-                        failure["reason"] != "layout_invariant"
-                        or not _valid_layout_failure(failure["layout"])
-                    )
                 )
             ):
                 raise CommandPayloadError("component gallery report is invalid")
@@ -1442,7 +1353,7 @@ def _valid_control_contract(value: object) -> bool:
             "work_width", "work_content_width", "work_height",
             "review_width", "review_height",
             "work_content_aligned",
-            "axes_wrapped", "long_trash_length", "all_three_bounded",
+            "axes_wrapped", "long_trash_length",
             "keyboard_scroll_before", "keyboard_scroll_after",
             "keyboard_capture_width", "keyboard_capture_height",
         }
@@ -1469,7 +1380,6 @@ def _valid_control_contract(value: object) -> bool:
         and minimum_window["keyboard_scroll_after"] > minimum_window["keyboard_scroll_before"]
         and minimum_window["axes_wrapped"] is True
         and minimum_window["long_trash_length"] == 32767
-        and minimum_window["all_three_bounded"] is True
         and minimum_window["work_content_aligned"] is True
         and math.isclose(
             minimum_window["native_default_outer_width"],
@@ -1810,8 +1720,8 @@ def _valid_diagnostic_layout(value: object) -> bool:
         "collapse_focus_restored", "table_state_preserved",
         "hidden_descendant_exempt", "visible_collapsed_rejected",
         "no_horizontal_control_clipping", "visible_count",
-        "cardinality_exact", "issues_scrollable", "trash_scrollable",
-        "detail_scrollable", "issues_keyboard_reachable",
+        "cardinality_exact", "issues_content_reachable", "trash_content_reachable",
+        "detail_content_reachable", "issues_keyboard_reachable",
         "trash_keyboard_reachable", "detail_keyboard_reachable",
         "readable_body", "disclosure_reachable",
         "row_activation_reachable", "placeholder_present",
@@ -1821,25 +1731,27 @@ def _valid_diagnostic_layout(value: object) -> bool:
     return (
         type(value) is list
         and len(value) == len(cases)
-        and {item.get("case") for item in value if type(item) is dict} == cases
+        and all(type(item) is dict and type(item.get("case")) is str for item in value)
+        and {item["case"] for item in value} == cases
         and all(
             type(item) is dict
             and set(item) == keys
             and type(item["block_size"]) in {int, float}
             and math.isfinite(item["block_size"])
             and item["block_size"] > 0
-            and item["visible_count"] in {0, 1, 2}
-            and item["expanded"] is ("-expanded-" in item["case"])
-            and item["populated"] is item["case"].endswith("-populated")
-            and item["logical_rows"] == (1000 if item["populated"] else 0)
-            and item["loaded_rows"] == (64 if item["populated"] else 0)
-            and item["visible_count"] == (
-                2 if item["expanded"] else 0
-            )
+            and type(item["visible_count"]) is int
+            and 0 <= item["visible_count"] <= 2
+            and type(item["expanded"]) is bool
+            and type(item["populated"]) is bool
+            and type(item["logical_rows"]) is int
+            and 0 <= item["logical_rows"] <= 1000
+            and type(item["loaded_rows"]) is int
+            and 0 <= item["loaded_rows"] <= 64
             and type(item["row_height"]) in {int, float}
-            and math.isclose(item["row_height"], 24, abs_tol=0.5)
+            and math.isfinite(item["row_height"])
+            and 0 <= item["row_height"] <= 128
             and all(
-                item[name] is True
+                type(item[name]) is bool
                 for name in keys - {
                     "case", "block_size", "visible_count", "expanded", "populated",
                     "logical_rows", "loaded_rows", "row_height",

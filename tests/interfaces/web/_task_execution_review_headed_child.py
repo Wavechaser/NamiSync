@@ -37,6 +37,10 @@ _WAIT_REVIEW_DIAGNOSTIC = frozenset({
     "reviewPending", "executionObserved", "releaseObserved",
     "windowObserved", "reviewReady", "phaseFailureObserved",
 })
+_PRECLICK_DIAGNOSTIC = frozenset({
+    "executeFocused", "pointInsideViewport", "hitPresent",
+    "hitExecute", "hitDescendant",
+})
 
 
 class _ExecutionReviewPhase:
@@ -52,12 +56,12 @@ class _ExecutionReviewPhase:
         self.release: dict[str, object] | None = None
         self.window: dict[str, object] | None = None
         self.detail: dict[str, object] | None = None
-        self.detail_calls = 0
         self.ordinal = 0
         self.failure: str | None = None
-        self.capture = "waiting"
         self.pre_identity: dict[str, object] | None = None
         self.post_identity: dict[str, object] | None = None
+        self.capture_receipt: tuple[object, ...] | None = None
+        self.capture_complete = False
 
     def bind(self, registry: object) -> None:
         self.registry = registry
@@ -160,13 +164,11 @@ class _ExecutionReviewPhase:
             }
             return
         if name == "get_execution_detail":
-            self.detail_calls += 1
-            if self.detail_calls != 1:
-                raise ValueError("execution detail was requested more than once")
+            if result.get("disposition") != "current":
+                return
             if self.window is None or (
                 payload.operation_id != self.window["operation_id"]
                 or payload.expected_execution_revision != self.window["execution_revision"]
-                or result.get("disposition") != "current"
                 or result.get("operation_id") != payload.operation_id
                 or result.get("execution_revision") != payload.expected_execution_revision
             ):
@@ -218,12 +220,11 @@ class _ExecutionReviewPhase:
                 and operation is not None
                 and type(candidate["row_display"]) is str
             ):
-                identity = ("view_revision", "execution_revision", "operation_id")
-                if self.window is not None and any(
-                    candidate[key] != self.window[key] for key in identity
+                if self.window is None or (
+                    candidate["view_revision"], candidate["execution_revision"]
+                ) >= (
+                    self.window["view_revision"], self.window["execution_revision"]
                 ):
-                    raise ValueError("conflicting retained execution window")
-                if self.window is None:
                     self.window = candidate
             return
 
@@ -262,33 +263,51 @@ class _ExecutionReviewPhase:
 
     def capture_ready(self) -> bool:
         with self.lock:
-            return bool(
-                self._review_ready_locked() and self.detail is not None
-                and self.detail_calls == 1
-                and self.window["completed"] < self.detail["admitted"]
-            )
+            return self._capture_ready_locked()
 
-    def set_capture(self, expected: str, next_phase: str) -> None:
-        with self.lock:
-            if self.capture != expected:
-                raise RuntimeError("execution review capture phase is invalid")
-            self.capture = next_phase
+    def _capture_ready_locked(self) -> bool:
+        return bool(
+            self._review_ready_locked() and self.detail is not None
+            and self.detail["operation_id"] == self.window["operation_id"]
+            and self.detail["execution_revision"] == self.window["execution_revision"]
+        )
 
     def set_identity(self, phase: str, value: object) -> None:
         if phase not in {"pre", "post"} or type(value) is not dict:
             raise RuntimeError("execution review identity is invalid")
         with self.lock:
+            if not self._capture_ready_locked():
+                raise RuntimeError("execution review capture identity changed")
             expected = self._expected_identity_locked()
             if value != expected:
                 raise RuntimeError("execution review identity does not match receipts")
             if phase == "pre":
-                if self.capture != "waiting" or self.pre_identity is not None:
-                    raise RuntimeError("execution review PRE identity is out of order")
+                if self.pre_identity is not None:
+                    raise RuntimeError("execution review capture already started")
                 self.pre_identity = dict(value)
+                self.capture_receipt = self._receipt_identity_locked()
             else:
-                if self.capture != "decoded" or self.pre_identity != value:
+                if (self.pre_identity != value or self.capture_receipt is None
+                        or self.capture_receipt != self._receipt_identity_locked()):
                     raise RuntimeError("execution review POST identity changed")
                 self.post_identity = dict(value)
+
+    def acknowledge_capture(self) -> None:
+        with self.lock:
+            if self.post_identity is None:
+                raise RuntimeError("execution review capture identity is incomplete")
+            self.capture_complete = True
+
+    def _receipt_identity_locked(self) -> tuple[object, ...]:
+        if self.plan is None or self.execution is None or self.window is None or self.detail is None:
+            raise RuntimeError("execution review receipts are incomplete")
+        return (
+            self.plan["task_id"], self.execution["request_id"],
+            self.execution["session_id"], self.window["view_revision"],
+            self.window["execution_revision"], self.window["operation_id"],
+            self.window["row_display"], self.detail["operation_id"],
+            self.detail["execution_revision"], self.detail["operation_path"],
+        )
 
     def _expected_identity_locked(self) -> dict[str, object]:
         if self.plan is None or self.execution is None or self.window is None or self.detail is None:
@@ -321,8 +340,8 @@ class _ExecutionReviewPhase:
             return deepcopy({
                 "plan": self.plan, "execution": self.execution, "release": self.release,
                 "window": self.window, "detail": self.detail,
-                "detail_calls": self.detail_calls, "failure": self.failure,
-                "capture": self.capture, "pre_identity": self.pre_identity,
+                "failure": self.failure, "capture_complete": self.capture_complete,
+                "pre_identity": self.pre_identity,
                 "post_identity": self.post_identity,
                 "review_ready": self._review_ready_locked(),
             })
@@ -371,7 +390,7 @@ class _Recorder:
             payload = {"stage": stage, "reason": reason,
                        "identity": self.phase.failure_identity() if self.phase else {}}
             if diagnostic is not None:
-                if set(diagnostic) != _WAIT_REVIEW_DIAGNOSTIC or any(
+                if set(diagnostic) not in {_WAIT_REVIEW_DIAGNOSTIC, _PRECLICK_DIAGNOSTIC} or any(
                     type(value) is not bool for value in diagnostic.values()
                 ):
                     raise RuntimeError("execution review diagnostic is invalid")
@@ -426,8 +445,16 @@ _PAGE = r"""
   await new Promise((resolve) => requestAnimationFrame(resolve));
   const rect = execute.getBoundingClientRect();
   const point = {x:(rect.left+rect.right)/2,y:(rect.top+rect.bottom)/2};
-  if (document.activeElement !== execute || document.elementFromPoint(point.x, point.y) !== execute) {
-    throw new Error('Execute is not the native pointer target');
+  const executeHit = document.elementFromPoint(point.x, point.y);
+  if (document.activeElement !== execute || executeHit !== execute) {
+    return {preclick: {
+      executeFocused: document.activeElement === execute,
+      pointInsideViewport: point.x >= 0 && point.y >= 0
+        && point.x < innerWidth && point.y < innerHeight,
+      hitPresent: executeHit !== null,
+      hitExecute: executeHit === execute,
+      hitDescendant: executeHit !== null && executeHit !== execute && execute.contains(executeHit),
+    }};
   }
   const nativeInput = {mouseDownSeen:false, mouseUpSeen:false, clickSeen:false};
   execute.addEventListener('mousedown', (event) => { nativeInput.mouseDownSeen ||= event.isTrusted; });
@@ -500,6 +527,7 @@ def _drive(window: object, phase: _ExecutionReviewPhase, recorder: _Recorder, re
 
     cdp = NativeCdp(native, core, retained, fail)
     decoded_dimensions: tuple[int, int] | None = None
+    page_result: object = None
 
     wait_execute = r"""(async()=>{for(let i=0;i<1200;i++){if(window.__executionReviewStage==='execute-ready')return window.__executionReviewExecutePoint;await new Promise(r=>setTimeout(r,25));}throw new Error('execute');})()"""
     wait_capture = r"""
@@ -594,33 +622,44 @@ def _drive(window: object, phase: _ExecutionReviewPhase, recorder: _Recorder, re
 
     def before_capture(value: object) -> None:
         phase.set_identity("pre", value)
-        phase.set_capture("waiting", "persisting")
         cdp.capture(screenshot, decoded, "capture")
 
     def decoded() -> None:
         nonlocal decoded_dimensions
         dimensions = decode_png(screenshot)
         decoded_dimensions = dimensions
-        phase.set_capture("persisting", "decoded")
-        cdp.evaluate(identity_expression(), lambda value: rechecked(value, dimensions), "post-identity")
+        cdp.evaluate(identity_expression(), rechecked, "post-identity")
 
-    def rechecked(value: object, dimensions: tuple[int, int]) -> None:
+    def rechecked(value: object) -> None:
         phase.set_identity("post", value)
-        phase.set_capture("decoded", "rechecked")
-        cdp.evaluate("window.__executionReviewCaptureAck=true;true", lambda ack: acknowledged(ack, dimensions), "ack")
+        cdp.evaluate("window.__executionReviewCaptureAck=true;true", acknowledged, "ack")
 
-    def acknowledged(value: object, dimensions: tuple[int, int]) -> None:
+    def acknowledged(value: object) -> None:
         if value is not True:
             raise RuntimeError("capture acknowledgement failed")
-        phase.set_capture("rechecked", "acknowledged")
+        phase.acknowledge_capture()
+        complete_if_ready()
 
-    def finished(value: object) -> None:
+    def complete_if_ready() -> None:
         dimensions = decoded_dimensions
+        value = page_result
+        if value is None or not phase.capture_complete:
+            return
         if dimensions is None:
             raise RuntimeError("page completed before native capture decode")
         if type(value) is not dict or set(value.get("geometry", {})) != _GEOMETRY:
             raise RuntimeError("execution geometry evidence is invalid")
         recorder.complete({"geometry": value["geometry"], "dimensions": list(dimensions), "phase": phase.snapshot()})
+
+    def finished(value: object) -> None:
+        nonlocal page_result
+        if type(value) is dict and "preclick" in value:
+            recorder.fail("page-preclick", "PointerTargetError", value["preclick"])
+            return
+        if type(value) is not dict or set(value.get("geometry", {})) != _GEOMETRY:
+            raise RuntimeError("execution geometry evidence is invalid")
+        page_result = value
+        complete_if_ready()
 
     def confirmed(_value: object) -> None:
         cdp.evaluate("window.__executionReviewNativeConfirmed=true;true", lambda _v: cdp.evaluate(wait_capture, capture_ready, "wait-review"), "confirm-observed")
