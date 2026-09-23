@@ -227,9 +227,8 @@ never hides the other result axes in rendered output.
   and diagnostic commands.
 - [Test ablation study](docs/TEST_ABLATION.md) — measured detection losses,
   rebased recommendations and subsequent refinement dispositions.
-- [M1-7 ablation plan](docs/M1_7_ABLATION_STUDY.md) — retained candidate register,
-  bounded simplification checkpoints, detector-quality gates and explicit
-  deferrals; implementation awaits authorization.
+- [M1-7 ablation study](docs/M1_7_ABLATION_STUDY.md) — retained reduction proposals;
+  revisiting is deferred until after M1-8 closes and requires user resumption.
 - [Test refinement register](docs/TEST_REFINEMENT.md) — bounded implementation
   outcomes and verification of retained test guarantees.
 - [Production reduction register](docs/PRODUCTION_REDUCTION.md) — bounded

@@ -27,6 +27,22 @@ and remembered locations, bounded Plan review/selection/sorting and same-task
 execution with live controls and bounded live/retained result review. Inventory review and beta
 packaging remain open.
 
+#### Investigate delivery friction and adopt workflow corrections (2026-09-23)
+
+- Review current product/tests/workflow against R0 `8f7555b`, with independent
+  source and retained-history lanes. Separate repeated consumer/oracle drift
+  from genuine product defects and unknown native observations.
+- Identify bounded witness-consolidation and pure-progress window invalidation
+  candidates; retain safety, native composition, provenance and independent
+  numerical authority. Reuse the existing separate benchmark-retirement study.
+- Adopt five concise workflow priorities in AGENTS and the personal execute-task
+  skill: mechanism-wide migrations, early real-seam checks, settled acceptance
+  inputs, dependency-based evidence reuse and one current decision record.
+- Merge current T1–T5 ablation items into R1 with explicit surviving detectors;
+  defer revisiting M1-7 capability retirement until after M1-8. R2 is unchanged.
+  Review both documentation rounds together; no product/test implementation or
+  acceptance relaxation. The personal skill lives outside this repository.
+
 #### Deliver execution review and capacity stopping (2026-09-20 – 2026-09-23)
 
 - Complete R0 as one reviewed commit reconstructed on P2, preserving recovery

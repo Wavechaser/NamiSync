@@ -1,6 +1,14 @@
 # M1-7 ablation implementation plan
 
-## Active reassessment — test and evidence machinery (2026-09-17)
+## Current disposition — deferred (2026-09-23)
+
+Retain this completed study for possible work after M1-8 closes. Do not revisit
+or implement its benchmark capability retirements during M1-8; R2 preserves
+historical dependencies and its fixed acceptance. Resumption requires the user.
+Current functional-test items adopted into R1 are owned by
+[M1_PLAN](M1_PLAN.md#m1-8-r1--functional-witness-consolidation-and-ablation).
+
+## Completed reassessment — test and evidence machinery (2026-09-17)
 
 The user has redirected the task after R7-4: investigate materially larger
 reductions in M1-7 test/evidence machinery, including retirement and reopening

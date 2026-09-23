@@ -1,68 +1,66 @@
-# Latest session — M1-8-R0 complete; stop for GUI review
+# Latest session — R1 ablation scope and workflow priorities
 
-R0 is complete on `codex/m1-8-r0-ready` in
-`F:/GitHubRepositories/NamiSync/build/m1-8-r0`. Its coherent commit is parented
-on verified P2 `4bbf943`; `build/r0-layout-20260923-01/delivery.json` records
-commit and evidence identity. No recovery ancestry is integrated. Stop here for
-the user's GUI review. R1–R3, performance acceptance, milestone integration,
-filter/Search overflow, theme remediation, push and PR remain pending.
+The investigation and this documentation update are one reviewed commit on
+`codex/m1-8-r0-ready`, based on R0 `8f7555b`, in
+`F:/GitHubRepositories/NamiSync/build/m1-8-r0`. No product/test implementation,
+acceptance rerun, milestone integration, push or cleanup is part of this task.
 
-## Delivered
+## Decisions
 
-- A shared Plan/live/terminal status card with title/action together, Details
-  beside the status line, diagnostics and an always-present item pane above
-  progress. Highlight/range focus drives planned or retained facts; explicit
-  collapse and safe keyboard focus persist. No per-row Details/Close buttons.
-- Truthful phase/progress and terminal status, local completion and valid elapsed
-  time from matching retained session records; independent verification and
-  recording outcomes remain separate. Large rates preserve exact byte handling.
-- Bounded follow/manual navigation, stale reply fencing and one focused detail;
-  automatic same-target progress does not reset scrolling. The existing 208px
-  table reserve preserves usable 24px rows at native minimum 1024×640.
-- Capacity badge validators agree on yellow/fill. Coupled native witnesses now
-  measure visible facts, actual text, usable content and native host dimensions;
-  exact report schemas and positive/negative controls remain enforced.
+- R1 now includes current T1–T5 as R1-A–E: gallery verdict consolidation,
+  short-native choreography removal, identified source-spelling assertions,
+  local request counts and redundant identity scans. M1_PLAN owns the finite
+  population, surviving detectors and gates; product optimization stays separate.
+- AGENTS and personal execute-task have five concise priorities: work by
+  mechanism, check real seams early, settle inputs before acceptance, reuse
+  evidence by dependency and keep one current decision record. Stop rules and
+  acceptance gates remain binding; no new preflight protocol is introduced.
+- Retain M1_7_ABLATION_STUDY but defer revisiting it until after M1-8 closes and
+  the user resumes it. It cannot expand R2's frozen historical dependencies.
+- The preceding investigation found recurring consumer/oracle drift, late native
+  layout checks and weak diagnostics, alongside genuine product defects. Its
+  report is `build/delivery-investigation-20260923/report.md`; recommendations
+  there describe the pre-update snapshot. The decisions above supersede its
+  proposed R1 limit and timing of M1-7 reconsideration.
 
-## Final verification
+## Review and verification
 
-Evidence root: `build/r0-layout-20260923-01/` in the candidate checkout.
+Fresh independent review of the complete delta from `8f7555b`, investigation
+reports and external skill diff passed. All 110 local documentation links resolve;
+`git diff --check` and the skill-creator validator pass. R2 is unchanged. Product
+tests were not run: no executable contract or test authority changed.
+The skill is updated in place at
+`C:/Users/Spectrum/.codex/skills/execute-task/SKILL.md`, outside the Git commit.
+Its before-copy and diff are retained in the investigation evidence; updated
+SHA-256: `ed4193ac57179fb5491ff04d9f5388ded63289563e8d0aefec54a4dae5cae179`.
 
-- `ordinary-04`: 5,321 passed, five skipped, 33 headed deselected (301.70s).
-- `imports.txt`: all 12 import contracts pass; production Python imports unchanged.
-- `full-headed-03`: all 33 installed interface-headed tests pass under an 8 GiB
-  Windows Job cap. `native-03/manifest.json` preserves reports, wheels and PNGs.
-- Frozen v4 binds final source/tests; source, staging, wheel and installed package
-  identity are verified. Both short default/larger, both legacy confirmation and
-  native-minimum all-facts PNGs were inspected. Final independent P2-delta source
-  and evidence review passed; documentation links and diff checks pass.
+## R0 acceptance and open observations
 
-## Open observations for GUI review
+`build/r0-layout-20260923-01/delivery.json` binds the R0 commit and evidence.
+Ordinary-04: 5,321 passed/five skips/33 deselected; full-headed-03: all 33 pass
+under an 8 GiB Windows Job cap; all 12 import contracts pass. Final v4 source/tests,
+source/staging/wheel/install identity, native captures and independent review
+remain R0 acceptance. The previous handoff is preserved in the investigation
+evidence as `handoff-before-investigation.md`; original detailed chronology is
+`build/r0-layout-20260923-01/plan-before-final-closeout.md`.
 
-Known theme/contrast concerns remain visible in native captures and were excluded
-from this checkpoint. Filter/Search overflow work remains deferred. One earlier
-short larger-window run failed its pre-click focus-or-hit guard before execution;
-the single bounded diagnostic and final full gate passed unchanged input checks.
-The failed guard's exact operand was not retained, so its cause remains unknown.
-Keep the failed receipt and diagnostic for any recurrence; no speculative fix or
-weakened input assertion was introduced.
+Theme/contrast and filter/Search overflow remain deferred. One earlier short
+larger-window pre-click focus-or-hit failure remains unclassified: its operand
+was not retained, while one bounded diagnostic and final gate passed unchanged
+guards. Preserve those receipts if it recurs. R1–R3, quantitative acceptance and
+milestone integration remain pending; this documentation update does not start implementation.
 
-## Preservation and resumption
+Memory incident: `build/r0-focused-01/MEMORY_INCIDENT.md` identifies cyclic mock-DOM
+assertion formatting as the Node allocation cause. Keep Boolean diagnostics and
+capped launchers; never rerun the old unrestricted probe. These task-local limits
+are not a product memory guarantee.
 
-- Original checkout remains clean on `codex/m1-8-r0` at `4bbf943`; milestone1
-  remains `055325b`. Protected stash `93414b7...`, unrelated `af02913`, recovery
-  `8b2a0fb` and `6ada8ca`, old U/UV2/P2 evidence and `build/m1-8-uv1-parent`
-  remain untouched. No branch/worktree/evidence cleanup occurred.
-- Incoming user HANDOFF is preserved as `user-handoff.md`; detailed task decisions
-  and finite populations as `plan-before-final-closeout.md`. The user explicitly
-  approved RC1–RC4 corrections; subsequent changes completed the already declared
-  layout/fixture migration, with independent review.
-- `ordinary-01` aborted, `ordinary-02` and `full-headed-01/02` failed; these are
-  historical evidence, not acceptance. `short-diagnostic/` preserves the single
-  actual diagnostic; its first helper attempt failed before launching the child.
-- Memory incident cause/control: `build/r0-focused-01/MEMORY_INCIDENT.md`.
-  Cyclic mock-DOM assertion formatting caused the allocation blow-up. Keep the
-  boolean diagnostics and capped launcher; never rerun the old probe unrestricted.
-  Task-local process caps are not a product memory guarantee.
+## Preservation
 
-Resume only the user-approved GUI adjustments or next checkpoint. R1/R2/R3 are
-not implicitly authorized by R0 closure, and the ready commit is not merged.
+Original checkout remains on `codex/m1-8-r0` at P2 `4bbf943`; milestone1 remains
+`055325b`. Protected stash `93414b7...`, unrelated `af02913`, recovery `8b2a0fb`
+and `6ada8ca`, old U/UV2/P2 evidence and `build/m1-8-uv1-parent` remain untouched.
+No recovery ancestry was integrated. Investigation evidence is retained under `build/delivery-investigation-20260923/`.
+Review the R0 GUI before resuming implementation; this task only commits the
+combined investigation and documentation/rule update. No branch integration or
+cleanup is included.

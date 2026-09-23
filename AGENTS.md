@@ -91,10 +91,24 @@ Use the relevant routes below, not a mandatory full-document reading sequence:
 - Import component public APIs through their facades; patch internal collaborators
   in the owning submodule. For fixes, identify a reproducer first when practical;
   add focused tests for new core behavior.
-- Run focused checks and required broader gates. Repeat passed checks only when
-  edits, failures or changed seams invalidate evidence. Documentation-only work
-  needs consistency, link and diff checks; product tests are needed when it
-  changes an executable contract or test authority.
+- Documentation-only work needs consistency, link and diff checks; product
+  tests are needed when it changes an executable contract or test authority.
+
+### Execution Priorities
+
+1. **Work by mechanism.** Trace owners and direct consumers, including fixtures
+   and external helpers. Classify the failure before fixing its family; scope
+   follows the accepted outcome, not a file list. Stop rules still apply.
+2. **Check the real seam early.** Run existing affected composition/native cases
+   before broad gates. Add no separate preflight suite or protocol.
+3. **Settle inputs before acceptance.** Finish writers and reconcile review
+   corrections before freezing. Serialize shared source, tests and validators.
+4. **Reuse evidence by dependency.** Changed product, producer, checker or driver
+   dependencies invalidate their evidence. Retain unaffected passes and failed
+   receipts; unchanged product bytes alone are insufficient.
+5. **Keep one current decision record.** M1_PLAN owns scope/decisions, HANDOFF
+   owns resumption context, and evidence owns chronology. Update those owners;
+   do not add parallel checklists or stop/resume transcripts.
 
 ## Task Containment And Recovery
 

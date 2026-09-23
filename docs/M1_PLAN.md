@@ -24,6 +24,43 @@ and [REDUCTION_FOLLOWUP](REDUCTION_FOLLOWUP.md); no retired owner-graph,
 reservation or command-count recipe is revived. Superseded working
 chronology is [archived](obsolete/M1_8_U_RECOVERY.md), never active authority.
 
+## Delivery friction investigation — 2026-09-23
+
+Initial discovery inspected baseline `8f7555b`; product/tests, budgets and
+integration were unchanged. The follow-up authorizes documentation/rule updates
+and one combined commit, not R1 implementation. Findings identify consequence,
+owner, evidence and a simpler alternative with preserved guarantees; size alone
+does not establish dead weight.
+
+| ID | Finite corpus/method | Completion observation | Status |
+| --- | --- | --- | --- |
+| INV-P | Current production layer/file census; web presentation/session owners behind R0 failures; representative earlier reduction dispositions. Trace candidates to callers and guarantees. | Supported complexity/removal candidates distinguished from necessary boundaries and unproven suspicions. | complete |
+| INV-T | Current test/tool census, R0 direct witnesses and native harness, existing consolidation studies and recorded run receipts. Trace duplication and failure sensitivity. | Keep/replace/remove candidates with preserved detectors, observed cost and limits. | complete |
+| INV-W | AGENTS, execute-task guidelines, active delivery/verification policy, R0 records plus named earlier delivery samples. Separate policy requirements from execution mistakes. | Causal failure map and one prioritized workflow/product/test proposal with counterarguments. | complete |
+
+Evidence goes in ignored `build/delivery-investigation-20260923/`: bounded
+read-only analysis, no acceptance reruns or native launches. Files there are
+named by subject; retain them for review, with no automatic cleanup. Stop this
+investigation after the three corpora and a cross-review are reconciled; do not
+expand into repairs or claim whole-project exhaustion.
+
+**Closure.** The three lanes and cross-review support recurring consumer/oracle
+drift, late native geometry observation and weak first-failure diagnostics;
+the same gates also caught real product defects. Six completed final R0 broad
+invocations took 25.82 minutes in total, not a measure of avoidable time or a
+project-wide delivery percentage. Detailed findings and proposed ordering are
+in `build/delivery-investigation-20260923/report.md`, with product/test/history
+reports and reproducible read-only censuses beside it.
+
+**Disposition (2026-09-23).** Merge current T1–T5 ablation candidates into R1
+as R1-A–E below, including their named gallery/static/native/identity consumers.
+AGENTS and execute-task adopt the five workflow priorities. Product optimization
+candidates remain separate; no product/test implementation starts in this update.
+Retain the M1-7 study but defer revisiting it until after M1-8 closes and the user
+resumes it. R2's historical dependencies, cases and acceptance remain unchanged.
+Combined independent review, documentation checks and skill validation pass;
+deliver this update and the investigation in one documentation commit.
+
 ## Scope and decisions
 
 **Baseline and ownership.** R0's ready branch is in `build/m1-8-r0`, parented
@@ -119,7 +156,8 @@ in flight and the latest pending target, rather than querying on every byte tick
 terminal retry/reopening, purge, durable tasks, M1-9 onward, release packaging,
 DOC-2 branch surgery, native material/DWM remediation, new performance budgets,
 whole-runtime memory certification, universal fake DOM/test framework, or
-blanket M1-7 benchmark/tracer retirement. Deferred M1-7 ablation remains deferred.
+blanket M1-7 benchmark/tracer retirement. Revisit that study only after M1-8
+closes and the user resumes it.
 No line-count/test-count reduction quota. DEFENSE and AGENTS remain controlling.
 
 **Baseline to preserve.** Existing ordinary/import contracts and installed
@@ -402,50 +440,50 @@ and are not acceptance. The memory incident and bounded diagnostic controls are
 recorded in `build/r0-focused-01/MEMORY_INCIDENT.md`; this is test-process
 containment, not a product memory guarantee. No recovery ref or evidence cleanup.
 
-### M1-8-R1 — functional witness consolidation
+### M1-8-R1 — functional witness consolidation and ablation
 
-**Objective.** Reduce the remaining U functional-test maintenance burden while
-preserving R0's accepted behavior. No second UI implementation or new feature.
+**Objective.** Remove current T1–T5 duplicate responsibilities and incidental
+test constraints while preserving R0's accepted behavior. Test/evidence work
+only; no product optimization, second UI implementation or new feature.
 
-**Scope and approach.** Start from accepted R0. Review its surviving coupled test
-population once and record keep/replace/retire dispositions. Consolidate duplicate
-layout-field declarations while retaining synthetic/native dimension rules;
-remove tautological flags and U recipe/count assertions with named surviving
-behavior checks. Reduce short-scenario phase choreography to copy/identity/detail/
-capture facts, replace incidental cumulative read counts with local assertions,
-and remove repeated package scans separated only by identity-record writes.
-Skip anything already resolved in R0. Keep CDP/PNG handling, real command
-boundaries, semantic projection/refresh tests and source/wheel/install proof.
-Do not rewrite the whole gallery literal merely to shorten it, create a general
-test framework, change frozen measurement dependencies or target a deletion quota.
+**Finite population.** `tests/assets/component_gallery/gallery.js`,
+`tests/assets/task_shell_probe.mjs`; under `tests/interfaces/web/`, the gallery,
+short execution-review and legacy task-shell headed children/parents plus
+`test_frontend_static.py`; `tests/conftest.py`, `tests/_wheel_identity.py` and
+`tests/test_wheel_metadata.py`. Inspect direct helper/probe consumers together
+before editing, record any in-bound additions, and skip changes already made in R0.
+Matching owner docs may change; frozen benchmark sources/artifacts may not.
 
-**Acceptance criteria.** Each removed assertion has a surviving outcome owner or
-explicit fixture-only disposition; A1–A4 remain satisfied. No loss of Setup,
-confirmation, controls, independent result axes, Gap/omission or safe-text checks.
+| ID | Accepted reduction | Surviving detector / boundary |
+| --- | --- | --- |
+| R1-A | Consolidate gallery layout fields and repeated semantic verdicts across page, child and parent. Retire non-contract layout recipes. | Page observes; child retains bounded transport, native interaction/capture and checks needed for its operation; parent owns independent acceptance. Preserve populated native geometry, content reachability, focus, scrolling, row/detail identity and synthetic/native dimension rules. |
+| R1-B | Replace short-native phase choreography, exact-one detail-read count and permanently frozen revision with coherent settled evidence. | Preserve real copy/source, task/run/operation identity, release ordering, stale refusal, loaded detail, native input, stable identity during capture and cleanup. Keep mutation counts and production in-flight/quiescence bounds. |
+| R1-C | Retire identified CSS/source-spelling and occurrence assertions in frontend-static and legacy headed tests. | Map each to behavioral layout/public scenario evidence or retain it when it protects structural security/stack fidelity. Keep Setup, modal, controls, refusal/recovery and safe-text guarantees. |
+| R1-D | Replace incidental cumulative task-shell request ordinals with scenario-local deltas and settled outcomes. | Keep deferred reply orders, no parallel/hidden reads, conflict quiescence, retired-response refusal and no duplicate mutation. Keep fake DOM tests for races, native tests for geometry. |
+| R1-E | Remove repeated package scans separated only by identity-record serialization. | Verify source/staging/wheel/install bytes at build/install/reuse boundaries; retain drift, missing/extra/changed and duplicate-member controls. No cross-run installation cache. |
 
-**Regression watchlist.** Shared schemas becoming circular oracles; positive-only
-fixtures accepting fabricated reports; removed package identity checks; changed
-native completion ordering; reintroducing absolute fixture choreography.
+**Acceptance and review.** Give each removal a surviving outcome owner or an
+explicit fixture-only disposition; A1–A4 and D1–D3 remain unchanged. Keep CDP/PNG,
+real commands, independent result axes, Gap/omission, semantic/refresh tests and
+package provenance. Preserve short and legacy journeys' distinct endpoints.
+Reject circular producer/checker oracles, positive-only controls and relocated
+choreography. No whole-gallery rewrite, universal fake DOM/framework, deletion
+quota, product P1–P4 work or M1-7 capability retirement. Zero justified removals
+in a row is acceptable; record why rather than manufacture cleanup.
 
-**Tests and evidence.** Run changed test modules/probes and direct helper consumers,
-ordinary suite/imports, and affected installed cases. Reuse R0 evidence only for
-unchanged producer/checker dependencies and product/package identity; changed
-evidence machinery requires its cases to run again. If impact is uncertain, use
-the full installed gate. Do not rerun unrelated passed measurements.
+**Verification.** Run existing affected composition/native cases early, then
+changed modules/probes and helper consumers, ordinary suite/imports and affected
+installed cases. Use the full installed gate if impact is uncertain. Reuse R0
+evidence only where product, producer, checker, driver and package dependencies
+are unchanged. A changed failure schema needs its focused positive/negative
+control. Add no separate preflight protocol or broad malformed-field matrix.
 
-**Documentation and handoff.** Record the assertion-disposition table and final
-evidence bindings in the delivery record; update TESTS only for changed harness
-policy, plus CHANGELOG and HANDOFF. D1–D3 remain unchanged.
-
-**Adversarial review.** Compare the test delta with R0's acceptance map, verify
-negative controls reach the actual owner, and reject consolidation that hides
-meaningfully different validation semantics. Zero justified deletions is an
-acceptable review result; invented cleanup is not required for closure.
-
-**Commit gate.** One `test(web): consolidate execution review witnesses` commit
-with relevant docs and passing gates, or a documented no-change disposition if
-R0 already exhausted the useful consolidation. R0 product defects reopen R0;
-introduced test regressions must be corrected here.
+**Delivery.** Review the complete delta against the R0 acceptance map. Record
+assertion dispositions and evidence in this register; update TESTS only for
+changed harness policy, plus CHANGELOG/HANDOFF. One coherent
+`test(web): consolidate execution review witnesses` commit with passing gates,
+or a documented no-change disposition. Correct introduced regressions; a product
+defect reopens its owner under the existing scope and stop rules.
 
 ### M1-8-R2 — quantitative path and fixed acceptance
 
@@ -820,7 +858,8 @@ Plan profile, not whole-app memory or current-source acceptance for later edits.
 Post-delivery ablation R7-1–R7-4 landed through `95f31e1`; R7-5–R7-8/R7-G remain
 suspended, not completed. RI-1–RI-4 discovery is complete; larger test/evidence
 retirement remains a proposal in [M1_7_ABLATION_STUDY](M1_7_ABLATION_STUDY.md).
-It is not a dependency of M1-8 closure. Later delivered Plan GUI refinements
+Revisiting it is deferred until after M1-8 closes and requires user resumption;
+it is not a closure dependency and cannot expand R2. Later delivered Plan GUI refinements
 through `2cc0083` are recorded in the compact GUI results table above.
 
 ## M1-8 foundation delivered; U remains open
