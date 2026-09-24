@@ -24,10 +24,143 @@ Stage 6 delivered the secured desktop host, command/event transport, design
 foundation with a fixed local Fluent icon vocabulary, bounded presentation core, process-live task navigation and closure,
 bounded asynchronous task commands, frozen Setup using shared location admission
 and remembered locations, bounded Plan review/selection/sorting and same-task
-execution with live controls. Execution-result/inventory review and beta
+execution with live controls and bounded live/retained result review. Inventory review and beta
 packaging remain open.
 
-#### Deliver execution review and capacity stopping (2026-09-20)
+#### Close M1-8 execution review and integration (2026-09-24)
+
+- Condense the verified R0–R2 series and recovery correction into the six-outcome
+  acceptance ledger; archive the detailed register without dropping future M1
+  or release obligations. Filter/Search and the reduction study remain deferred.
+- Bind the non-squash milestone1 merge to the accepted tree and exact physical
+  source/package/artifact identity. The integration receipt is the terminal
+  closure record, with independent review of the complete P2-to-final series.
+- Preserve recovery refs, dirty detached-worktree files and the complete task
+  evidence archive before removing only accounted spare branches/worktrees.
+  Unrelated GUI recovery refs and all stashes remain untouched.
+
+#### Recover task updates and pending Close (2026-09-24)
+
+- Retain a suspended observation drain and offer Retry updates on the existing
+  task card. Recover the same task/session through native replay without
+  restarting execution; restore controls only after validated current delivery.
+- Let pending Close request cancellation and recover observation until terminal
+  settlement. An uncertain Close keeps its fence and exact Retry close action.
+- Preserve independent action/error feedback and reject obsolete recovery
+  callbacks. Terminal presentation and release retain their existing retries.
+- Verification: 60 focused checks, 5,405 ordinary tests (five skips), all 33
+  installed GUI obligations and 12 import contracts passed. Fresh U acceptance
+  completed all 78 attempts: cold maximum 20.3 ms, warm p95 72.0 ms and maximum
+  73.3 ms within unchanged budgets; full source/wheel/install identity passed.
+
+#### Preserve execution controls across review and drain changes (2026-09-24)
+
+- Keep control attempts and their feedback with the task/session across review
+  replacement, preventing duplicate requests and rejecting obsolete replies.
+- Disable controls after active updates stop, including during review loading.
+  Preserve last-known execution truth and existing terminal cleanup guidance;
+  closing NamiSync requests cancellation without promising completion.
+- Verification: three focused checks, 33 installed GUI tests, 5,405 ordinary
+  tests (five skips), 12 import contracts and independent review passed. Fresh
+  U acceptance completed all 78 attempts: worst cold 10.2 ms, warm p95 68.8 ms
+  and warm maximum 70.4 ms, within unchanged budgets.
+
+#### Contain frontend probe failures automatically (2026-09-24)
+
+- Route ordinary frontend Node probes through the existing prelaunch Windows Job
+  with a probe-specific memory limit, timeout cleanup and bounded diagnostic reads.
+- Keep fake-DOM assertion truth while making failure inspection concise. Prefer
+  these durable safeguards to routine memory watching; native launcher defaults
+  and historical quantitative instruments stay unchanged.
+- Verification: populated-graph failure, allocation/output/timeout and original
+  probe controls passed; 5,405 ordinary tests passed (five skips), 12 import
+  contracts and independent review passed.
+
+#### Correct U observers and continue M1-8-R2 consolidation (2026-09-24)
+
+- Restore the scoped U measurement owners, consolidate redundant controls and
+  add precommit staged-source/artifact validation; keep historical dependencies,
+  metrics, sample counts and budgets unchanged.
+- U-v2 observes pending or correlated truthful first-frame success, proves warmup
+  acceptance, binds start commands to their plan/transport/current session, and
+  independently validates typed warm-control outcomes. Historical sources and
+  product behavior remain unchanged.
+- Correction verification: 101 focused U/P2 and 5,401 ordinary tests passed
+  (five skips), all 13 native paths and 12 import contracts passed. Independent
+  review and physical installed-package identity support the retained 33 GUI passes.
+- Preserve failed quantitative runs 01/02 and early correction diagnostics.
+  Correction `b1f5a07` precedes fresh run-03: all 78 attempts completed, with
+  independent derivation passing unchanged limits (20.9 ms worst cold maximum,
+  64.4 ms worst warm p95, 64.9 ms warm maximum). Retain U-v2 authority, receipts
+  and result artifacts with staged/clean-HEAD binding. R3 remains unstarted.
+  Lost-drain feedback and review-replacement refusal handling remain
+  deferred product findings; filter/Search and the reduction study stay shelved.
+
+#### Correct retained Plan lifecycle and capture interpretation (2026-09-24)
+
+- Clear unavailable actions while a review loads; make the short native witness
+  wait for the connected loaded review before its unchanged focus/hit guard.
+- Restore viewport resize observation after retained-panel disposal/reuse,
+  preserving coalesced paging and avoiding duplicate observation on rerender.
+- Preserve raw browser screenshots with bounded theme/material/alpha provenance;
+  distinguish transparent surface captures from native Mica appearance. Earlier
+  white-card captures alone do not establish product contrast defects.
+- Keep filter/Search and M1-7 reduction shelved; proceed to R2 only after the
+  reviewed correction commit. No backend admission or effect-policy change.
+- Verification: 5,325 ordinary tests passed (five skips), all 33 installed GUI
+  cases and 12 import contracts passed; source/wheel/install identity verified.
+
+#### Consolidate M1-8-R1 functional witnesses (2026-09-23 – 2026-09-24)
+
+- Give the gallery parent the execution-layout verdict; remove duplicate page/
+  child verdicts and the orphaned layout-failure payload. Preserve native
+  geometry, content reachability, focus, scrolling and capture evidence.
+- Replace short-journey fixed read/revision choreography with coherent settled
+  receipts and capture identity. Retain the distinct real-copy and legacy
+  journeys; report pre-Execute guard failures with bounded Boolean operands.
+- Retire identified CSS/source spellings, use scenario-local request receipts,
+  and remove package scans duplicated only across identity-record serialization.
+  Preserve operational, asynchronous and package-integrity checks. No product
+  behavior, benchmark acceptance or M1-7 capability changes.
+- Verify 5,321 ordinary passes/five skips, all 33 installed headed cases and 12
+  import contracts; preserve package identity, captures and independent review.
+  The earlier pre-click failure remains unclassified despite final passing gates.
+
+#### Investigate delivery friction and adopt workflow corrections (2026-09-23)
+
+- Review current product/tests/workflow against R0 `8f7555b`, with independent
+  source and retained-history lanes. Separate repeated consumer/oracle drift
+  from genuine product defects and unknown native observations.
+- Identify bounded witness-consolidation and pure-progress window invalidation
+  candidates; retain safety, native composition, provenance and independent
+  numerical authority. Reuse the existing separate benchmark-retirement study.
+- Adopt five concise workflow priorities in AGENTS and the personal execute-task
+  skill: mechanism-wide migrations, early real-seam checks, settled acceptance
+  inputs, dependency-based evidence reuse and one current decision record.
+- Merge current T1–T5 ablation items into R1 with explicit surviving detectors;
+  defer revisiting M1-7 capability retirement until after M1-8. R2 is unchanged.
+  Review both documentation rounds together; no product/test implementation or
+  acceptance relaxation. The personal skill lives outside this repository.
+
+#### Deliver execution review and capacity stopping (2026-09-20 – 2026-09-23)
+
+- Complete R0 as one reviewed commit reconstructed on P2, preserving recovery
+  ancestry separately. Stop for GUI review; R1–R3 and integration remain pending.
+- Share the Plan/live/terminal status card, with Details beside the status line,
+  row-driven planned/retained item facts, persistent collapse, safe focus and
+  local terminal completion/elapsed time from the matching session record.
+- Restore bounded follow/manual navigation, phase-aware progress and large-rate
+  display; retain exact byte values, separate result axes and stale-reply fences.
+  Keep the table usable at the unchanged native minimum with a 208px reserve.
+- Align capacity validators to the documented fill badge and migrate coupled
+  GUI witnesses to real visible content, native geometry and row interactions.
+  Preserve exact source/staging/wheel/install identity and failure diagnostics.
+  Ordinary suite, all 12 import contracts, all 33 installed headed tests,
+  required PNG inspection and independent review pass; evidence is in HANDOFF.
+- Diagnose the Node memory incident as unbounded cyclic mock-DOM assertion
+  formatting. Boolean identity diagnostics and task-local Windows Job limits
+  contain reruns; preserve the incident evidence without claiming a product
+  memory guarantee. Theme/contrast and filter/Search work remain deferred.
 
 - Condense completed Plan GUI registers into delivery/owner/commit pointers,
   retaining unresolved limits and evidence provenance.
@@ -47,7 +180,26 @@ packaging remain open.
   Validate committed Plan/selection/session identity, preserve partial-cleanup
   retries, and dispose review at Close/shutdown. Derive complete-selection
   evidence ownership, typed failure counts and location-only trash context.
-  Browser protocol and GUI consumption follow in separate commits.
+- Add bounded live/retained execution summaries and row overlays without changing
+  the Plan hierarchy or selection. Keep automatic verification and recording
+  independent, preserve Gap history, and fetch full detail one operation at a
+  time with exact revision/request validation.
+- Validate the affected installed receipt paths with a separate frozen report:
+  window p95/max 6.8/7.3 ms and execution-start 58.8/65.1 ms, within unchanged
+  100/250 ms budgets. Preserve all 12 attempts and source/runtime provenance.
+  The temporary environment pause is resolved.
+- Present live and retained execution facts in the existing Plan window, with
+  separate automatic verification and current stored evidence, persistent Gap
+  diagnostics, terminal result axes and one explicitly requested operation detail.
+  Keep missing facts unknown and successful zero-byte work distinct from unrun.
+- Coalesce selected-window refreshes, refresh retained facts on release, and
+  retire stale detail across task, revision and Settings navigation. Bound long
+  diagnostics in independently scrollable regions while keeping table and
+  keyboard controls usable.
+- Show recognized capacity failures in yellow on the affected row and run
+  status, preserving literal failure and independent verification/recording
+  facts. Successful verification of earlier files does not hide the capacity
+  cause, and stale window counts cannot override a newer terminal result.
 
 #### Refine Plan density, readiness and row highlighting (2026-09-17 – 2026-09-20)
 

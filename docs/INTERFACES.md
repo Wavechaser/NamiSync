@@ -4,7 +4,7 @@ This document owns the implemented CLI and desktop adapters, service/task lifecy
 
 `BRIDGE.md` owns external desktop protocol, transport, retry/recovery, and its exact evidence. `PRESENTATION.md` owns tree/view/search/sort/selection behavior and visual scale evidence. The frozen v1 event-and-transport custody result is scoped to its bridge evidence and does not establish whole-runtime containment. The former BR-G-45 aggregate terminal-artifact model is retired. SH-G-15 remains an open, scoped release criterion defined below.
 
-The active service and CLI support sync, inventory, baseline, verify and rebaseline. The desktop exposes the bounded host/transport foundation and process-live tasks with frozen Setup, typed/picker/recent locations, plan and standalone inventory starts, Plan again, navigation, reconstruction, and explicit close. Plan review supplies bounded hierarchy, sibling sorting, server-owned selection, destructive confirmation and same-task execution with live controls. Execution-result review, inventory projections, manual post-copy verification, history and full settings remain accepted but unrealized outcomes. Their delivery register is [M1_PLAN.md](M1_PLAN.md).
+The active service and CLI support sync, inventory, baseline, verify and rebaseline. The desktop exposes the bounded host/transport foundation and process-live tasks with frozen Setup, typed/picker/recent locations, plan and standalone inventory starts, Plan again, navigation, reconstruction, and explicit close. Plan review supplies bounded hierarchy, sibling sorting, server-owned selection, destructive confirmation and same-task execution with live controls and retained result review. Inventory projections, manual post-copy verification, history and full settings remain accepted but unrealized outcomes. Their delivery register is [M1_PLAN.md](M1_PLAN.md).
 
 
 ## Purpose
@@ -546,6 +546,42 @@ compensation. The strong import contract `Web task drain cannot reach domain
 lifecycle owners` forbids both direct and indirect drain paths to those owners,
 including `SessionObserver`.
 
+For a Plan execution, the same task owner also keeps one adapter execution epoch.
+The epoch is armed inside the application delivery factory before its sink is
+returned, so a synchronous first event cannot precede overlay state. Admission
+failure restores the existing released-plan delivery and its prior execution
+state; successful publication binds the epoch to the exact execution session.
+Re-observation changes delivery generation but retains compact execution facts
+and visible Gap history. Equal compact replays are idempotent; a conflicting
+fact for the same operation and axis is an observation conflict. Operation and
+automatic linked-verification maps are separate and each admits identities only
+from the projection's immutable operation mapping.
+
+Terminal-session release captures the workflow review through the lifecycle
+owner, then the adapter reads and installs its item-free retained summary before
+publishing release locally. This step retains the terminal filesystem,
+integrity, recording, audit, disposition, cancellation, phase, byte, error,
+recording-issue and omission axes, the failed and disk-capacity counts, and the
+location-only trash context. It does not scan trash, infer an item count, or
+clear transport-loss history. Explicit task Close retires both the task and
+adapter overlay through the existing owner path.
+
+The adapter also projects `started_at` and `ended_at` from its already delivered
+terminal `SessionRecordView` only when that record belongs to the current
+execution session and the retained result is present. This adds no workflow
+summary field or durable state. A terminal execution with no start retains a
+null start and its actual completion time.
+
+Summary decoration is centralized in `TaskRegistry`; open, view updates,
+selection/highlight mutations and their conflict/no-op results therefore expose
+one exact execution shape without changing `PlanReviewState`. Window and detail
+reads snapshot task, session, delivery generation, Plan view revision and
+execution revision while holding the task owner, perform workflow and ledger
+reads after releasing it, then require the exact snapshot before returning.
+The live and pre-execution fast paths do not call the ledger. A stale snapshot
+returns a typed conflict and never combines old Plan structure with newer
+execution facts.
+
 `interfaces/web/_exception_graph.py` intentionally keeps the small
 exception-retirement operation adapter-local because the interface import law
 bars core and the drain-specific contract bars lifecycle owners. Do not relax
@@ -588,6 +624,11 @@ it does not revoke a previously earned delivery receipt. Release consumes that
 receipt even if replay has cleared the transient terminal cache. Browser batch
 refusal precedes callbacks, cursor/reducer advancement, and release; successful
 terminal presentation remains required before the browser requests release.
+Suspended browser observation can explicitly retry this existing exact-session
+replay path. It restores update delivery, not domain execution or a new session.
+The last successfully presented cursor and reducer survive suspension; a failed
+presentation restores their prior values. Pending task Close still depends on
+real terminal delivery, with browser retirement fences governed by BRIDGE.
 Failed single-flight starts retain only a closed four-value failure code for
 observation conflict, task unavailability, interruption, or generic start
 failure. Every participant and retained failure replay receives a fresh fixed

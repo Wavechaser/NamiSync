@@ -22,9 +22,14 @@ from namisync.core.events import (
     CORE_EVENT_SCHEMA_VERSION, Envelope, Gap, ItemOutcome, Progress, StateChanged,
     Terminal, TerminalSummary,
 )
-from namisync.core.evidence import Outcome
+from namisync.core.evidence import ContentEvidence, Outcome, Provenance, RecordingStatus
+from namisync.core.execution import ItemRecordingReason
+from namisync.core.integrity import (
+    IntegrityOutcome, IntegrityReason, IntegrityResult, RecordDisposition,
+)
+from namisync.core.planning import OperationKind
 from namisync.core.preflight import Refusal, RefusalCode, Verdict
-from namisync.core.session import OperationResult, SessionId, SessionState
+from namisync.core.session import Disposition, OperationResult, SessionId, SessionState
 from namisync.dispatcher import (
     Dispatcher,
     PreparedSession,
@@ -64,12 +69,16 @@ from namisync.interfaces.task_port import (
     TaskUnavailableError,
 )
 from namisync.workflows import (
-    EXECUTION_KIND,
+    EXECUTION_KIND, ExecutionEvidenceResult, ExecutionEvidenceState,
+    ExecutionEvidenceWindow,
     INVENTORY_KIND,
     PLAN_KIND,
     PlanProjection,
     PlanProjectionNode,
     PlanSortColumn,
+    RetainedExecutionItemWindow,
+    RetainedExecutionSummary,
+    RetainedIntegrityItemWindow,
     SortDirection,
 )
 from namisync.workflows.views import (
@@ -213,6 +222,20 @@ def _event(sequence: int, body_type: str = "StateChanged") -> SessionEventView:
         datetime(2026, 1, 1, tzinfo=timezone.utc),
         CORE_EVENT_SCHEMA_VERSION,
         bodies[body_type],
+    ))
+
+
+def _execution_event(
+    session_id: str,
+    sequence: int,
+    body: object,
+) -> SessionEventView:
+    return session_event_view(Envelope(
+        SessionId(session_id),
+        sequence,
+        datetime(2026, 1, 1, tzinfo=timezone.utc),
+        CORE_EVENT_SCHEMA_VERSION,
+        body,
     ))
 
 
@@ -423,9 +446,144 @@ class _Service:
         )
         return TaskSessionReleaseView(task_id, session_id)
 
+    def read_task_execution_summary(self, task_id):
+        return RetainedExecutionSummary(
+            task_id,
+            "d" * 32,
+            operation_result_view(OperationResult(SessionState.COMPLETED)),
+            0,
+            0,
+            "target/.synctrash/" + "d" * 32,
+        )
+
+    def read_task_execution_items(self, task_id, operation_ids):
+        return RetainedExecutionItemWindow(task_id, "d" * 32, ())
+
+    def read_task_integrity_items(self, task_id, operation_ids):
+        return RetainedIntegrityItemWindow(task_id, "d" * 32, ())
+
+    def read_task_execution_evidence(self, task_id, operation_ids):
+        return ExecutionEvidenceWindow("d" * 32, ())
+
     def close_task(self, task_id, session_id, delivery):
         self.lifecycle_calls.append(("close_task", task_id, session_id, delivery))
         return TaskCloseView(task_id, session_id)
+
+
+class _ExecutionOverlayService(_Service):
+    operation_id = "9" * 32
+    run_id = "d" * 32
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.execution_sink = None
+        self.execution_reads: list[tuple[str, tuple[str, ...]]] = []
+        self.operation_item = ItemOutcome(
+            self.operation_id,
+            OperationKind.COPY,
+            "copy.txt",
+            Outcome.SUCCEEDED,
+            detail={"message": "copied"},
+        )
+        self.integrity_item = IntegrityOutcome(
+            self.operation_id,
+            None,
+            None,
+            "copy.txt",
+            IntegrityResult.VERIFIED,
+            read_strategy=None,
+            recording=RecordingStatus.OK,
+            record_disposition=RecordDisposition.NOOP,
+            phase="verify",
+        )
+
+    def get_plan_projection(self, request_id):
+        self.projection_calls += 1
+        root = PlanProjectionNode(
+            "node-" + "1" * 32, "Plan", "", 0, 0, None, 2, True,
+            "folder", None, None, None, None, "selected", 1, 1, 1,
+            None, None, 0, "none",
+        )
+        operation = PlanProjectionNode(
+            "node-" + "2" * 32, "copy.txt", "copy.txt", 1, 1, 0, 2,
+            True, "operation", self.operation_id, "copy", None, None,
+            "selected", 1, 1, 1, 4, None, 0, "none",
+        )
+        projection = PlanProjection(
+            request_id,
+            (root, operation),
+            {root.node_id: 0, operation.node_id: 1},
+            {self.operation_id: operation.node_id},
+            frozenset({self.operation_id}),
+        )
+        preview = SimpleNamespace(
+            revision=0,
+            state="reviewing",
+            selected_operation_ids=(self.operation_id,),
+            requires_destructive_confirmation=False,
+            irreversible_update_count=0,
+            destructive_operation_count=0,
+            irreversible_operation_count=0,
+            destructive_operation_counts={
+                "update": 0, "move_update": 0, "trash": 0, "delete": 0,
+            },
+            required_bytes="4",
+            operations=(SimpleNamespace(
+                operation_id=self.operation_id, reason=None,
+            ),),
+        )
+        return projection, preview, "source", "target"
+
+    def get_plan_selection_membership(self, request_id, expected_revision):
+        return frozenset({self.operation_id})
+
+    def start_task_execution(self, task_id, request_id, **kwargs):
+        self.execution_sink = kwargs["delivery_factory"](task_id)
+        session_id = "b" * 32
+        self.execution_sink(replace(_event(1), session_id=session_id))
+        return TaskStartView(task_id, "c" * 32, session_id)
+
+    def read_task_execution_summary(self, task_id):
+        return RetainedExecutionSummary(
+            task_id,
+            self.run_id,
+            operation_result_view(OperationResult(
+                SessionState.COMPLETED,
+                items=(self.operation_item, self.integrity_item),
+                bytes_done=4,
+                bytes_total=4,
+            )),
+            0,
+            0,
+            "target/.synctrash/" + self.run_id,
+        )
+
+    def read_task_execution_items(self, task_id, operation_ids):
+        self.execution_reads.append(("operation", operation_ids))
+        items = (self.operation_item,) if self.operation_id in operation_ids else ()
+        return RetainedExecutionItemWindow(task_id, self.run_id, items)
+
+    def read_task_integrity_items(self, task_id, operation_ids):
+        self.execution_reads.append(("integrity", operation_ids))
+        items = (self.integrity_item,) if self.operation_id in operation_ids else ()
+        return RetainedIntegrityItemWindow(task_id, self.run_id, items)
+
+    def read_task_execution_evidence(self, task_id, operation_ids):
+        self.execution_reads.append(("evidence", operation_ids))
+        results = ()
+        if self.operation_id in operation_ids:
+            results = (ExecutionEvidenceResult(
+                self.operation_id,
+                ExecutionEvidenceState.RECORDED_COPY,
+                ContentEvidence(
+                    "xxh3_128",
+                    b"\x01" * 16,
+                    4,
+                    Provenance.COPY_ATTESTED,
+                    datetime(2026, 1, 1, tzinfo=timezone.utc),
+                ),
+            ),)
+        return ExecutionEvidenceWindow(self.run_id, results)
 
 
 def _make_registry(lifecycle, **kwargs) -> TaskRegistry:
@@ -1230,10 +1388,22 @@ def _drain_until_record(
     raise AssertionError("terminal task record was not drained")
 
 
-def _mark_terminal_drained(registry: TaskRegistry, start) -> None:
+def _mark_terminal_drained(
+    registry: TaskRegistry,
+    start,
+    terminal_record: SessionRecordView | None = None,
+) -> None:
     task = registry._tasks[start.task_id]
     with task.condition:
-        task.terminal_record = replace(_record(), session_id=start.session_id)
+        execution = task.execution_session_id == start.session_id
+        task.terminal_record = terminal_record or replace(
+            _record(
+                kind=EXECUTION_KIND if execution else PLAN_KIND,
+                supports_pause=execution,
+            ),
+            session_id=start.session_id,
+            started_at="2026-01-01T00:00:00+00:00" if execution else None,
+        )
         task.terminal_pending = True
         task.condition.notify_all()
     drained = registry.drain(
@@ -1243,6 +1413,26 @@ def _mark_terminal_drained(registry: TaskRegistry, start) -> None:
         replay_from=None,
     )
     assert any(update.update_type == "record" for update in drained.updates)
+
+
+def _start_execution_overlay(
+    service: _ExecutionOverlayService | None = None,
+) -> tuple[TaskRegistry, _ExecutionOverlayService, TaskStartView, TaskStartView]:
+    service = service or _ExecutionOverlayService()
+    registry, _ = _registry(service)
+    planned = _start(registry)
+    _mark_terminal_drained(registry, planned)
+    registry.release_terminal_session(planned.task_id, planned.session_id)
+    registry.open_plan_view(planned.task_id)
+    execution = registry.start_execution(
+        planned.task_id,
+        request_id=planned.request_id,
+        expected_revision=0,
+        destructive_acknowledged=False,
+        command_id="5" * 32,
+        wire_intent=(planned.task_id, planned.request_id, 0, False),
+    )
+    return registry, service, planned, execution
 
 
 def test_failed_application_admission_discards_provisional_delivery_state() -> None:
@@ -2817,6 +3007,521 @@ def test_m1_7_execution_controls_require_exact_current_task_session() -> None:
     ]
 
 
+def test_m1_8_live_execution_overlay_is_bounded_replay_exact_and_copy_safe() -> None:
+    registry, service, planned, execution = _start_execution_overlay()
+    assert service.execution_sink is not None
+    operation = service.operation_item
+    service.execution_sink(_execution_event(execution.session_id, 2, operation))
+    revision_after_item = registry._tasks[planned.task_id].execution_revision
+    service.execution_sink(_execution_event(execution.session_id, 3, operation))
+    assert registry._tasks[planned.task_id].execution_revision == revision_after_item
+
+    service.execution_sink(_execution_event(execution.session_id, 4, Gap(10)))
+    service.execution_sink(_execution_event(execution.session_id, 5, Gap(5)))
+    revision_after_extrema = registry._tasks[planned.task_id].execution_revision
+    service.execution_sink(_execution_event(execution.session_id, 6, Gap(10)))
+    assert registry._tasks[planned.task_id].execution_revision == revision_after_extrema
+
+    current = registry.open_plan_view(planned.task_id)
+    window = registry.get_plan_window(
+        planned.task_id,
+        expected_revision=current["view_revision"],
+        offset=0,
+        limit=2,
+    )
+    assert service.execution_reads == []
+    assert window["execution"]["gap"] == {
+        "minimum_first_missed_seq": 5,
+        "maximum_first_missed_seq": 10,
+    }
+    assert window["rows"][0]["is_container"] is True
+    compact = window["rows"][0]["execution"]["operation"]
+    assert compact == {
+        "result": "succeeded",
+        "reason": None,
+        "recording": "ok",
+        "recording_reason": None,
+        "detail_omitted_count": 0,
+    }
+    assert window["rows"][0]["execution"]["automatic_verification"] is None
+    assert window["rows"][0]["execution"]["evidence"] is None
+    assert registry.get_execution_detail(
+        planned.task_id,
+        service.operation_id,
+        expected_execution_revision=window["execution"]["execution_revision"],
+    )["disposition"] == "not-retained"
+    assert registry.get_execution_detail(
+        planned.task_id,
+        service.operation_id,
+        expected_execution_revision=0,
+    )["disposition"] == "conflict"
+    compact["result"] = "failed"
+    repeated = registry.get_plan_window(
+        planned.task_id,
+        expected_revision=current["view_revision"],
+        offset=0,
+        limit=1,
+    )
+    assert repeated["rows"][0]["execution"]["operation"]["result"] == "succeeded"
+
+    verification = replace(service.integrity_item, detail_omitted_count=2)
+    service.execution_sink(
+        _execution_event(execution.session_id, 7, verification)
+    )
+    with_verification = registry.get_plan_window(
+        planned.task_id,
+        expected_revision=current["view_revision"],
+        offset=0,
+        limit=1,
+    )
+    assert with_verification["rows"][0]["execution"] == {
+        "operation": {
+            "result": "succeeded", "reason": None, "recording": "ok",
+            "recording_reason": None, "detail_omitted_count": 0,
+        },
+        "automatic_verification": {
+            "result": "verified", "reason": None, "recording": "ok",
+            "record_disposition": "noop", "detail_omitted_count": 2,
+        },
+        "evidence": None,
+    }
+    with_verification["rows"][0]["execution"]["automatic_verification"][
+        "result"
+    ] = "failed"
+    repeated = registry.get_plan_window(
+        planned.task_id,
+        expected_revision=current["view_revision"],
+        offset=0,
+        limit=1,
+    )
+    assert repeated["rows"][0]["execution"]["automatic_verification"][
+        "result"
+    ] == "verified"
+
+    before_conflict = registry._tasks[planned.task_id].execution_revision
+    changed = replace(
+        operation,
+        outcome=Outcome.FAILED,
+        reason="io-error",
+        recording=RecordingStatus.DEGRADED,
+        recording_reason=ItemRecordingReason.UNRECORDED_MUTATION,
+    )
+    with pytest.raises(ObservationConflictError, match="compact fact"):
+        service.execution_sink(_execution_event(execution.session_id, 8, changed))
+    forged_phase = replace(service.integrity_item, phase="baseline")
+    with pytest.raises(ObservationConflictError, match="verification changed its phase"):
+        service.execution_sink(
+            _execution_event(execution.session_id, 9, forged_phase)
+        )
+    assert registry._tasks[planned.task_id].execution_revision == before_conflict
+    foreign = replace(operation, item_id="8" * 32)
+    with pytest.raises(ObservationConflictError, match="outside the retained Plan"):
+        service.execution_sink(_execution_event(execution.session_id, 10, foreign))
+    assert registry._tasks[planned.task_id].execution_revision == before_conflict
+
+
+def test_m1_8_pre_execution_window_does_not_read_retained_execution() -> None:
+    service = _ExecutionOverlayService()
+    registry, _ = _registry(service)
+    planned = _start(registry)
+    _mark_terminal_drained(registry, planned)
+    registry.release_terminal_session(planned.task_id, planned.session_id)
+    summary = registry.open_plan_view(planned.task_id)
+
+    window = registry.get_plan_window(
+        planned.task_id,
+        expected_revision=summary["view_revision"],
+        offset=0,
+        limit=2,
+    )
+
+    assert service.execution_reads == []
+    assert window["execution"] == summary["execution"]
+    rows_by_operation = {row["operation_id"]: row for row in window["rows"]}
+    assert rows_by_operation[service.operation_id]["execution"] == {
+        "operation": None,
+        "automatic_verification": None,
+        "evidence": None,
+    }
+    structural = drain_module._decorate_execution_window(
+        {"rows": [{"operation_id": None}]},
+        summary["execution"],
+        {},
+        {},
+        {},
+    )
+    assert structural["rows"][0]["execution"] is None
+
+
+def test_m1_8_execution_times_follow_the_matching_terminal_record() -> None:
+    registry, _service, planned, execution = _start_execution_overlay()
+    before = registry.open_plan_view(planned.task_id)["execution"]
+    assert before["started_at"] is None
+    assert before["ended_at"] is None
+
+    _mark_terminal_drained(registry, execution)
+    delivered = registry._tasks[planned.task_id].delivered_terminal_record
+    assert delivered is not None
+    assert delivered.started_at is not None
+    assert delivered.ended_at is not None
+    assert registry.open_plan_view(planned.task_id)["execution"]["ended_at"] is None
+
+    registry.release_terminal_session(execution.task_id, execution.session_id)
+    summary = registry.open_plan_view(planned.task_id)
+    retained = summary["execution"]
+    assert retained["started_at"] == delivered.started_at
+    assert retained["ended_at"] == delivered.ended_at
+    window = registry.get_plan_window(
+        planned.task_id,
+        expected_revision=summary["view_revision"],
+        offset=0,
+        limit=1,
+    )
+    assert window["execution"] == retained
+
+    task = registry._tasks[planned.task_id]
+    with task.condition:
+        task.delivered_terminal_record = replace(delivered, session_id="f" * 32)
+    stale = registry.open_plan_view(planned.task_id)["execution"]
+    assert stale["started_at"] is None
+    assert stale["ended_at"] is None
+
+
+def test_m1_8_unrun_execution_retains_completion_without_a_start() -> None:
+    refused_result = operation_result_view(OperationResult(
+        SessionState.REFUSED,
+        disposition=Disposition.UNRUN,
+    ))
+
+    class Service(_ExecutionOverlayService):
+        def read_task_execution_summary(self, task_id):
+            return replace(
+                super().read_task_execution_summary(task_id),
+                result=refused_result,
+            )
+
+    registry, _service, planned, execution = _start_execution_overlay(Service())
+    refused_record = SessionRecordView(
+        execution.session_id,
+        EXECUTION_KIND,
+        "refused",
+        True,
+        "2026-01-01T00:00:00+00:00",
+        None,
+        "2026-01-01T00:00:03+00:00",
+        refused_result,
+    )
+    _mark_terminal_drained(registry, execution, refused_record)
+    registry.release_terminal_session(execution.task_id, execution.session_id)
+    retained = registry.open_plan_view(planned.task_id)["execution"]
+    assert retained["result"] == refused_result
+    assert retained["started_at"] is None
+    assert retained["ended_at"] == refused_record.ended_at
+
+
+def test_m1_8_delivery_factory_arms_execution_before_fast_item() -> None:
+    class Service(_ExecutionOverlayService):
+        def start_task_execution(self, task_id, request_id, **kwargs):
+            self.execution_sink = kwargs["delivery_factory"](task_id)
+            session_id = "b" * 32
+            self.execution_sink(
+                _execution_event(session_id, 1, self.operation_item)
+            )
+            return TaskStartView(task_id, "c" * 32, session_id)
+
+    registry, service, planned, _execution = _start_execution_overlay(Service())
+    summary = registry.open_plan_view(planned.task_id)
+    window = registry.get_plan_window(
+        planned.task_id,
+        expected_revision=summary["view_revision"],
+        offset=0,
+        limit=1,
+    )
+    assert window["rows"][0]["execution"]["operation"]["result"] == "succeeded"
+    assert service.execution_reads == []
+
+
+def test_m1_8_execution_revision_overflow_cannot_partially_publish_fact() -> None:
+    registry, service, planned, execution = _start_execution_overlay()
+    task = registry._tasks[planned.task_id]
+    task.execution_revision = drain_module.MAX_JAVASCRIPT_SAFE_INTEGER
+    assert service.execution_sink is not None
+    with pytest.raises(OverflowError, match="revision is exhausted"):
+        service.execution_sink(
+            _execution_event(execution.session_id, 2, service.operation_item)
+        )
+    assert task.execution_operation_results == {}
+    with pytest.raises(OverflowError, match="revision is exhausted"):
+        service.execution_sink(_execution_event(execution.session_id, 3, Gap(4)))
+    assert task.execution_gap_minimum is None
+    assert task.execution_gap_maximum is None
+
+
+def test_m1_8_retained_window_skips_full_detail_conversion_and_detail_reads_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    registry, service, planned, execution = _start_execution_overlay()
+    assert service.execution_sink is not None
+    service.execution_sink(_execution_event(execution.session_id, 2, Gap(6)))
+    _mark_terminal_drained(registry, execution)
+    registry.release_terminal_session(execution.task_id, execution.session_id)
+    summary = registry.open_plan_view(planned.task_id)
+    original = drain_module.result_item_view
+    converted: list[object] = []
+
+    def observe(value):
+        converted.append(value)
+        return original(value)
+
+    monkeypatch.setattr(drain_module, "result_item_view", observe)
+    window = registry.get_plan_window(
+        planned.task_id,
+        expected_revision=summary["view_revision"],
+        offset=0,
+        limit=1,
+    )
+    assert converted == []
+    row = window["rows"][0]["execution"]
+    assert row["operation"]["result"] == "succeeded"
+    assert row["automatic_verification"]["result"] == "verified"
+    assert row["evidence"]["state"] == "recorded-copy"
+    assert window["execution"]["gap"] == {
+        "minimum_first_missed_seq": 6,
+        "maximum_first_missed_seq": 6,
+    }
+    assert service.execution_reads == [
+        ("operation", (service.operation_id,)),
+        ("integrity", (service.operation_id,)),
+        ("evidence", (service.operation_id,)),
+    ]
+    row["operation"]["result"] = "failed"
+    row["automatic_verification"]["result"] = "failed"
+    row["evidence"]["state"] = "unavailable"
+    row["evidence"]["content"]["digest"] = "ff" * 16
+    repeated = registry.get_plan_window(
+        planned.task_id,
+        expected_revision=summary["view_revision"],
+        offset=0,
+        limit=1,
+    )["rows"][0]["execution"]
+    assert repeated["operation"]["result"] == "succeeded"
+    assert repeated["automatic_verification"]["result"] == "verified"
+    assert repeated["evidence"]["state"] == "recorded-copy"
+    assert repeated["evidence"]["content"]["digest"] == "01" * 16
+    detail = registry.get_execution_detail(
+        planned.task_id,
+        service.operation_id,
+        expected_execution_revision=window["execution"]["execution_revision"],
+    )
+    assert converted == [service.operation_item, service.integrity_item]
+    assert detail["disposition"] == "current"
+    assert detail["operation"].detail == {"message": "copied"}
+    assert detail["automatic_verification"].phase == "verify"
+    assert detail["evidence"]["content"]["digest"] == "01" * 16
+
+
+def test_m1_8_execution_release_retries_summary_capture_after_custody_release() -> None:
+    class Service(_ExecutionOverlayService):
+        summary_reads = 0
+
+        def read_task_execution_summary(self, task_id):
+            self.summary_reads += 1
+            if self.summary_reads == 1:
+                raise RuntimeError("retained summary is temporarily unavailable")
+            return super().read_task_execution_summary(task_id)
+
+    registry, service, planned, execution = _start_execution_overlay(Service())
+    _mark_terminal_drained(registry, execution)
+    with pytest.raises(RuntimeError, match="temporarily unavailable"):
+        registry.release_terminal_session(execution.task_id, execution.session_id)
+    assert registry._tasks[planned.task_id].session_released is False
+
+    released = registry.release_terminal_session(execution.task_id, execution.session_id)
+    assert released == TaskSessionReleaseView(execution.task_id, execution.session_id)
+    assert service.summary_reads == 2
+    assert len([
+        call for call in service.lifecycle_calls
+        if call[0] == "release_task_session" and call[2] == execution.session_id
+    ]) == 2
+    assert registry.open_plan_view(planned.task_id)["execution"]["result"] is not None
+
+
+def test_m1_8_retained_window_rejects_a_changed_captured_run() -> None:
+    class Service(_ExecutionOverlayService):
+        def read_task_execution_items(self, task_id, operation_ids):
+            return replace(
+                super().read_task_execution_items(task_id, operation_ids),
+                run_id="e" * 32,
+            )
+
+    registry, _service, planned, execution = _start_execution_overlay(Service())
+    _mark_terminal_drained(registry, execution)
+    registry.release_terminal_session(execution.task_id, execution.session_id)
+    summary = registry.open_plan_view(planned.task_id)
+    with pytest.raises(RuntimeError, match="task binding"):
+        registry.get_plan_window(
+            planned.task_id,
+            expected_revision=summary["view_revision"],
+            offset=0,
+            limit=1,
+        )
+
+
+def test_m1_8_live_overlay_survives_reobserve_generation_change() -> None:
+    registry, service, planned, execution = _start_execution_overlay()
+    assert service.execution_sink is not None
+    service.execution_sink(
+        _execution_event(execution.session_id, 2, service.operation_item)
+    )
+    service.reobserve_result = SessionRecordView(
+        execution.session_id,
+        EXECUTION_KIND,
+        "pending",
+        True,
+        "2026-01-01T00:00:00+00:00",
+        None,
+        None,
+        None,
+    )
+    registry.drain(
+        planned.task_id,
+        execution.session_id,
+        DRAIN,
+        replay_from=None,
+    )
+    recovered = registry.drain(
+        planned.task_id,
+        execution.session_id,
+        "6" * 32,
+        replay_from=1,
+    )
+    assert recovered.updates == ()
+    summary = registry.open_plan_view(planned.task_id)
+    window = registry.get_plan_window(
+        planned.task_id,
+        expected_revision=summary["view_revision"],
+        offset=0,
+        limit=1,
+    )
+    assert window["rows"][0]["execution"]["operation"]["result"] == "succeeded"
+    assert service.execution_reads == []
+
+
+def test_m1_8_retained_window_revalidates_after_outside_read() -> None:
+    class Service(_ExecutionOverlayService):
+        def __init__(self) -> None:
+            super().__init__()
+            self.read_entered = Event()
+            self.allow_read = Event()
+
+        def read_task_execution_items(self, task_id, operation_ids):
+            self.read_entered.set()
+            assert self.allow_read.wait(2)
+            return super().read_task_execution_items(task_id, operation_ids)
+
+    service = Service()
+    registry, _service, planned, execution = _start_execution_overlay(service)
+    _mark_terminal_drained(registry, execution)
+    registry.release_terminal_session(execution.task_id, execution.session_id)
+    summary = registry.open_plan_view(planned.task_id)
+    results: list[dict[str, object]] = []
+    errors: list[BaseException] = []
+
+    def read_window() -> None:
+        try:
+            results.append(registry.get_plan_window(
+                planned.task_id,
+                expected_revision=summary["view_revision"],
+                offset=0,
+                limit=1,
+            ))
+        except BaseException as error:
+            errors.append(error)
+
+    worker = Thread(target=read_window)
+    worker.start()
+    assert service.read_entered.wait(1)
+    changed = registry.update_plan_view(
+        planned.task_id,
+        expected_revision=summary["view_revision"],
+        search_query="copy",
+        filters=frozenset(),
+        sort_column=PlanSortColumn.PATH,
+        sort_direction=SortDirection.ASCENDING,
+        collapse_node_id=None,
+        collapsed=None,
+    )
+    service.allow_read.set()
+    worker.join(2)
+    assert not worker.is_alive()
+    assert errors == []
+    assert results[0]["disposition"] == "conflict"
+    assert results[0]["view_revision"] == changed["view_revision"]
+    assert results[0]["execution"] == changed["execution"]
+    assert results[0]["rows"] == []
+
+
+def test_m1_8_exact_detail_close_race_cannot_publish_stale_data() -> None:
+    class Service(_ExecutionOverlayService):
+        def __init__(self) -> None:
+            super().__init__()
+            self.read_entered = Event()
+            self.allow_read = Event()
+
+        def read_task_execution_items(self, task_id, operation_ids):
+            self.read_entered.set()
+            assert self.allow_read.wait(2)
+            return super().read_task_execution_items(task_id, operation_ids)
+
+    service = Service()
+    registry, _service, planned, execution = _start_execution_overlay(service)
+    _mark_terminal_drained(registry, execution)
+    registry.release_terminal_session(execution.task_id, execution.session_id)
+    summary = registry.open_plan_view(planned.task_id)
+    errors: list[BaseException] = []
+
+    def read_detail() -> None:
+        try:
+            registry.get_execution_detail(
+                planned.task_id,
+                service.operation_id,
+                expected_execution_revision=summary["execution"]["execution_revision"],
+            )
+        except BaseException as error:
+            errors.append(error)
+
+    worker = Thread(target=read_detail)
+    worker.start()
+    assert service.read_entered.wait(1)
+    assert registry.close_task(planned.task_id, execution.session_id) == TaskCloseView(
+        planned.task_id, execution.session_id,
+    )
+    service.allow_read.set()
+    worker.join(2)
+    assert not worker.is_alive()
+    assert len(errors) == 1
+    assert type(errors[0]) is TaskUnavailableError
+
+
+def test_m1_8_retained_window_rejects_foreign_returned_operation() -> None:
+    class Service(_ExecutionOverlayService):
+        def read_task_execution_items(self, task_id, operation_ids):
+            foreign = replace(self.operation_item, item_id="8" * 32)
+            return RetainedExecutionItemWindow(task_id, self.run_id, (foreign,))
+
+    registry, _service, planned, execution = _start_execution_overlay(Service())
+    _mark_terminal_drained(registry, execution)
+    registry.release_terminal_session(execution.task_id, execution.session_id)
+    summary = registry.open_plan_view(planned.task_id)
+    with pytest.raises(RuntimeError, match="operation item has invalid data"):
+        registry.get_plan_window(
+            planned.task_id,
+            expected_revision=summary["view_revision"],
+            offset=0,
+            limit=1,
+        )
+
+
 def test_m1_7_reopen_retains_view_identity_and_execution_commit_revision() -> None:
     registry, service = _registry()
     plan_start = _start(registry)
@@ -3085,6 +3790,32 @@ def test_m1_7_execution_response_failure_recovers_admitted_receipt() -> None:
         )
 
 
+def test_operation_anchor_fences_session_and_view_without_reading_execution() -> None:
+    registry, service, planned, execution = _start_execution_overlay()
+    summary = registry.open_plan_view(planned.task_id)
+    revision = summary["view_revision"]
+    before_tasks = registry.list_tasks()
+    before_reads = list(service.execution_reads)
+    payload = {"expected_revision": revision, "operation_id": service.operation_id}
+    assert registry.get_plan_operation_anchor(
+        planned.task_id, session_id=execution.session_id, **payload,
+    ) == {
+        "disposition": "current", "view_revision": revision,
+        "node_id": "node-" + "2" * 32, "index": 0,
+    }
+    conflict = {"disposition": "conflict", "view_revision": revision,
+                "node_id": None, "index": None}
+    assert registry.get_plan_operation_anchor(
+        planned.task_id, session_id=planned.session_id, **payload,
+    ) == conflict
+    assert registry.get_plan_operation_anchor(
+        planned.task_id, session_id=execution.session_id,
+        expected_revision=revision + 1, operation_id=service.operation_id,
+    ) == conflict
+    assert registry.list_tasks() == before_tasks
+    assert service.execution_reads == before_reads
+
+
 def test_m1_7_close_first_fences_plan_consumers_and_execution() -> None:
     class Service(_Service):
         def __init__(self) -> None:
@@ -3141,6 +3872,12 @@ def test_m1_7_close_first_fences_plan_consumers_and_execution() -> None:
             plan_start.task_id,
             expected_revision=opened["view_revision"],
             node_id="node-" + "1" * 32,
+        ),
+        lambda: registry.get_plan_operation_anchor(
+            plan_start.task_id,
+            session_id=plan_start.session_id,
+            expected_revision=opened["view_revision"],
+            operation_id="9" * 32,
         ),
         lambda: registry.mutate_plan_selection(
             plan_start.task_id,

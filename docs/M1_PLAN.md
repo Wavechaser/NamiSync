@@ -1,47 +1,60 @@
 # M1 Delivery Register
 
-This is the sole active M1 delivery register. It records remaining accepted outcomes, their order, and the verification that closes each one. Implemented contracts are owned by their active subject documents; completed delivery history and superseded mechanisms are in [obsolete](obsolete/). The archived plan files retain historical staging and review but are not instructions for new work.
+This is the sole active M1 delivery register. Subject contracts remain in
+[ARCHITECTURE](ARCHITECTURE.md), [DEFENSE](DEFENSE.md), [BRIDGE](BRIDGE.md),
+[PRESENTATION](PRESENTATION.md), [INTERFACES](INTERFACES.md),
+[DESKTOP_UI](DESKTOP_UI.md), [FEATURES](FEATURES.md) and [TESTS](TESTS.md).
+The [archived delivery register](obsolete/M1_8_DELIVERY.md) preserves the finite
+R0–R3 criteria, original B1–B6 dispositions and recovery chronology.
 
-[BRIDGE.md](BRIDGE.md) owns external command, transport, retry/recovery, and bridge-gate contracts. [PRESENTATION.md](PRESENTATION.md) owns trees, views, search, selection, sorting, and scale evidence. [INTERFACES.md](INTERFACES.md) owns implemented task lifecycle and desktop host/package rules. [FEATURES.md](FEATURES.md), [ARCHITECTURE.md](ARCHITECTURE.md), and [DEFENSE.md](DEFENSE.md) remain the owners of product behavior, cross-layer meaning, and safety/evidence policy.
+## M1-8 execution review closure
 
-[PRODUCTION_REDUCTION.md](PRODUCTION_REDUCTION.md) is the closed maintenance
-subregister for the completed production-ablation pass under M1-12. Its PR-0
-through PR-9 rows remove redundant implementation and test prescriptions; they
-do not add, defer, or reinterpret an M1 product outcome.
+Delivered: shared Plan/live/terminal status, bounded virtual rows and reachable
+Details at native minimum, exact execution/current-evidence distinctions,
+follow/Go navigation, truthful progress and capacity feedback, retained action
+feedback, and task/session-owned Retry updates including pending Close.
+Operational admission, terminal truth, close fences and effect authority are
+unchanged. Retry restores observation; it never restarts execution.
 
-## Main objectives and current boundary
+| Outcome | Reviewed commit / disposition |
+| --- | --- |
+| P2 foundation | `4bbf943`; bounded live/retained overlays and one-detail custody. |
+| R0 usable execution review | `8f7555b`; A1–A4 and B1–B6 closed. |
+| R1 functional consolidation | `0fc2f5d`, corrections `9e5b080`; retained semantic/native detectors. |
+| R2 quantitative consolidation | `b1f5a07`, `c974447`; U-v2 observers and fixed 78-attempt acceptance. |
+| Post-R2 containment/control fixes | `96a0212`, `9be2930`; automatic probe bounds and task-owned control feedback. |
+| RC-1 observation recovery | `3ea4e6b`; separate reviewed correction, fresh affected gates and U evidence. |
+| R3 integration | A6 below defines the terminal observation; no WIP or unrelated GUI recovery enters the merge. |
 
-The current authorized batch is **M1-8-capacity and M1-8**, starting at
-`2cc0083` on `milestone1`. Implement and review smaller coherent commits,
-then stop for a recap and GUI tweaks. M1-9 onward, DOC-2, push, PR and release
-remain outside this batch. The user delegated stopping/scope adjudication to
-the arbiter task `01a0ba9c-b187-70f1-bf21-4f91e742eeaf`; consult it on reached
-boundaries and record its decision before dependent work resumes.
+### Final acceptance ledger
 
-[REDUCTION_FOLLOWUP.md](REDUCTION_FOLLOWUP.md) owns the accepted narrow
-immutable-value, scan-validation, history encoding/projection, and executor
-simplification follow-up under M1-12. Its NR-0–NR-9 register and migrated RF-E/RF-X
-dispositions preserve existing product outcomes; implementation and integrated
-verification are complete. Further product simplification is outside the
-remaining frontend delivery scope.
+Evidence root **E** is `build/recovery-close-20260924/` inside the candidate.
+After cleanup the entire directory is preserved at
+`build/m1-8-archive-20260924/evidence/recovery-close-20260924/` in the main
+checkout. E's `delivery-01.json` binds RC-1 `3ea4e6b1b59d700428440c45cc845f68d852eeae`, its Git tree,
+artifact hashes, raw logs and independent review. All package inputs, wheel
+members and installed files are compared physically; the U authority records
+the fixed runtime/native profile and measured source population.
 
-The secured desktop host and transport, presentation foundation, current service/CLI surface, and implemented ledger/history boundary are active. The frozen v1 event-and-transport custody claim remains closed at its bridge evidence owner. That closure does not establish whole-runtime containment.
+| ID / accepted outcome | Owning detector and evidence | Result / review disposition |
+| --- | --- | --- |
+| A1 usable layout; B1/B2 | Existing gallery's eight disclosure/size/row states, native keyboard/scroll and bounded-window adoption; E `builder/consumer-headed-pytest.txt`, `captures/`, `review/visual-review.md`. | Pass on final installed product; native minimum 1024×640 retained. Raw browser alpha captures are not native-material contrast evidence. |
+| A2 identity/interaction; B6 | Task-shell/drain/row probes, deferred-response controls, follow/Go sequences and native task-shell recovery/Close witness; E `ordinary-01.log`, `builder/rc1-builder-report.md`, `headed-01.log`. | Pass; exact task/session/revision, bounded 256-row window/one detail, stale rejection, control feedback and retirement remain distinct. |
+| A3 truthful facts; B6 | Producer, reducer and execution-review tests plus rendered row/status witnesses in the ordinary and installed suites. | Pass for success/zero/unrun/canceled/degraded, capacity plus independent failure, Gap/terminal and exact large-byte progress. No changed ingress, mutation or safety authority. |
+| A4 installed composition; B3/B4/B5 | E `headed-01.log`: 24 unaffected passes; nine gallery/transport passes after two direct test-consumer migrations, E `builder/consumer-headed-pytest.txt`. Both short copies/details/PNGs and both legacy native journeys pass. Full source/wheel/install identity in `run-01/head-validation.log`. | All 33 obligations pass; failed original headed attempt preserved. E `review/RC-review.md` and visual review name actual evidence and limitations. |
+| A5 fixed performance | Three `tests/interfaces/web/m1_8_execution_ui_*.json` artifacts; E `run-01/` raw/freeze/derive/staged/HEAD validations and `artifact-controls-01.log`. | All 78 attempts: 13 readiness + 65 measurement children, 40 cold/150 warm samples. Unchanged cold max ≤50ms, warm nearest-rank p95 ≤100ms/max ≤250ms; independent raw derivation passes. Historical failed R2 runs remain failed. |
+| A6 coherent integration | E `review/R3-review.md`, `accounting/`; main `build/m1-8-archive-20260924/integration.json` records non-squash merge, exact candidate/merge tree and passing postmerge source/package/artifact identity. `evidence-move.json` and `cleanup.json` record preservation and cleanup. | Functional gates: 5,405 ordinary passes/five skips, 33 installed GUI obligations and 12 imports. Complete only when the integration receipt records the matching merge/tree and PASS; receipt absent means integration remains open. |
 
-The process-live desktop task shell, shared location admission and frozen Setup
-are active, including plan/inventory starts and Plan again. M1-7 delivers bounded
-Plan review, selection, sorting and reviewed execution admission. Finish execution/
-inventory projections, integrity controls and first manual post-copy verification,
-then release closure; those remain unrealized frontend outcomes. The history page, global-settings mutation
-page, drag-and-drop, file-scoped planning, durable task survival across a process
-restart, durable sort preferences, status/progress or global-flat sorting, and
-compare-and-accept rebaseline semantics remain deferred. User-facing terminal
-execution/verification retries (including Verify remaining), user-invoked session
-cleanup/trash purge, and richer I/O error categories are deferred to M2; see the
-feature-only [M2 proposal](M2_PROPOSAL.md). Existing automatic retries, owned-temp
-recovery, transport replay, close/shutdown recovery, and live pause/resume are
-not removed by those deferrals.
+The integration receipt is the terminal observation; this register does not
+claim completion before it exists. Independent reviews cover the complete
+P2-to-final delta, not only RC-1. Seven recovery refs are preserved in a verified
+bundle; four dirty detached-worktree files and every unique build-evidence tree
+are accounted before removal. Unrelated GUI refs and all stashes stay untouched.
 
-The prior aggregate complete-owner-graph model and BR-G-45 are retired. No future work inherits its reservation, DTO, lease, byte-budget, command-count, or representation recipe. Completed M1-4 replaced the former task lifecycle/retention preservation checkpoint. Existing externally enforced ingress and population bounds remain active independently.
+Stop after M1-8. Filter/Search, speculative theme changes, M1-7 reduction-study
+resumption, general test-framework changes, M1-9, push and PR are excluded.
+The [retained reduction study](M1_7_ABLATION_STUDY.md) requires explicit user
+resumption. Future product and release obligations below remain binding.
 
 ## Remaining checkpoints
 
@@ -105,610 +118,12 @@ Each checkpoint is a closed register row. A new finding does not enlarge a row; 
 | M1-6 | Deliver frozen, backend-canonical Setup, typed/picker/recent inputs, standalone inventory creation, serial best-effort pair creation, and explicit Plan-again after fresh reviewed-identity resolution. | Verify bounded inputs, canonical snapshots, immediate invalidation, no global-default mutation or browser filter normalization, partial-pair refusal, mixed batches, replay/recovery, slot/plan-generation races, and headed hostile-text/picker/recent flows. Map needed command behavior in BRIDGE when this activates; do not prescribe the retired 18-command expansion. | Complete |
 | M1-7 | Deliver bounded plan review, selection, execution admission, and the full plan consumer for sibling sorting. A review remains truthful when execution never ran; an admitted attempt keeps its selection committed. | Exercise plan publication, selection and commitment freshness, stale/replayed mutation, admission-failure rollback versus post-admission preflight refusal, fresh Plan-again review after source/target changes, destructive confirmation, controls, windows/anchors/search/filter, and headed production flows. No terminal selection reopening or subset retry. BRIDGE and PRESENTATION define protocol and projection criteria. | Complete |
 | M1-8-capacity | Distinguish recognized disk-capacity I/O failure and stop admission of later executor operations after settling the current operation. | Gate C passed with A8-02's explicit recorder-only/finalization boundary; existing failure-policy/Stop and settlement paths, unchanged oracle. | Complete |
-| M1-8 | Deliver live and retained execution review with bounded item windows, exact execution overlays, task/item recording issues, terminal axes, current ledger evidence, capacity/generic-I/O messages, and informational trash location. | Test filesystem/recording combinations, overlay and omission invariants, Gap plus terminal reconciliation, navigation/re-observation, generic unrun presentation, yellow capacity without hiding known failures, bounded evidence queries, and post-copy overlay independence. Trash counts require complete outcome evidence; location-only fallback must not assert a planned count, scan all trash, or imply purge. | Pending |
+| M1-8 | Deliver live and retained execution review with bounded item windows, exact execution overlays, task/item recording issues, terminal axes, current ledger evidence, capacity/generic-I/O messages, and informational trash location. | Test filesystem/recording combinations, overlay and omission invariants, Gap plus terminal reconciliation, navigation/re-observation, generic unrun presentation, yellow capacity without hiding known failures, bounded evidence queries, and post-copy overlay independence. Trash counts require complete outcome evidence; location-only fallback must not assert a planned count, scan all trash, or imply purge. | A1–A5 verified; A6 receipt governs integrated closure. |
 | M1-9 | Deliver bounded inventory projections, current evidence, and the full inventory consumer for sibling sorting. | Test complete or prior-complete publication, warnings outside action scope, raw evidence provenance, search/filter/collapse/window/detail behavior, replacement/races, supported sort/reset production paths, and headed witnesses. | Pending |
 | M1-10 | Deliver baseline, verify, and rebaseline controls plus the first same-task manual post-copy verification without persistent operation-time hashes. Rebaseline includes eligible null-evidence files and always hashes/replaces evidence; matching content is not a verified match. | Test acknowledgement admission before claim/native work; all-null and mixed rebaseline through workflow, service/CLI, and desktop; conditional-recording and supersession races; handoff classification; live pause/resume/cancel and unchanged automatic failed-read retries; and overlay/result identity boundaries. Terminal Verify-remaining/subset retry is deferred. Independently review the operation matrix and conditional-recording races. | Pending |
 | M1-12 | First close integrated lifecycle/retention across activated task surfaces (absorbing former M1-11), then complete adversarial, documentation, ordinary, and headed verification. | Exercise plan-only, execution-only, linked/manual verification, inventory, refused, canceled, degraded, and failed tasks across navigation, reinjection, explicit close, and shutdown. Verify existing admission bounds, stale-response suppression, exact resource release and retained result truth; no aggregate-artifact or whole-owner-graph criterion. Run applicable settlement-oracle stability, ordinary/headed suites, installed-wheel/product witnesses, import checks, `git diff --check`, active-link checks, and independent cross-component review. | Pending |
 | M1-Release | Produce beta packaging and release closure after delivery rows above are complete. | Build/test an installed artifact from a clean checkout; supply frozen specification/dependency/CI, notices and corresponding-source release material, standard-integrity host proof, and every applicable BR-G and SH-G gate. INTERFACES owns host/package and SH-G release criteria; BRIDGE owns BR-G evidence. | Pending |
 
-
-## M1-8 implementation register
-
-Study baseline: `2cc0083`. Each row is a separate reviewed commit; dependencies
-are serial. Root owns this register, CHANGELOG and HANDOFF. Builders own their
-declared code, tests and subject docs. No product work starts on a later row
-until its predecessor closes. Initial read-only studies found no mandatory stop.
-
-| ID | Atomic outcome and finite population | Acceptance / state |
-| --- | --- | --- |
-| M1-8-D | Condense completed GUI records and register this batch; only M1_PLAN, CHANGELOG, HANDOFF. | Diff, links, outcome/limitation accounting and independent review passed; complete. |
-| M1-8-capacity | Core execution reason and executor runtime classifier/default policy; executor runtime/settlement tests and direct core event/workflow-view/service consumers; EXECUTOR, FEATURES, DESKTOP_UI. | Gate C passed; complete. |
-| M1-8-E | Bounded atomic current-ledger evidence query with read-only workflow/service facade and explicit evidence classes; existing db repository, workflow view contracts, runtime/service, matching repository/workflow/service tests; DATABASE, PRESENTATION, ARCHITECTURE, INTERFACES, FEATURES. No schema/recorder writes. | Gate E passed against integrated capacity `04947ba`; complete. |
-| M1-8-P1 | Backend retained execution review: exact task/Plan/session/run binding, capture before release, separate operation and automatic linked-verification indexes, bounded workflow/service reads and close/shutdown retirement; workflow models/runtime and focused review owner, service/task lifecycle/port and direct tests; PRESENTATION, INTERFACES, ARCHITECTURE. | Gate P1 passed after E `7905a1b`; complete. |
-| M1-8-P2 | Bounded summary/window/detail protocol over the existing Plan hierarchy; web Plan review/drain, commands/bridge and Python/browser validators with direct tests; PRESENTATION, BRIDGE, INTERFACES. | Live/terminal/Gap reconciliation, omission truth, re-observation/reinjection, stale reads and 256-row/byte bounds; pending detailed expansion after P1. |
-| M1-8-U | Live and retained execution UI, independent recording/terminal axes, capacity/generic-I/O guidance and location-only trash information; packaged app/Plan renderer/status/styles and browser/component/installed witnesses; DESKTOP_UI, FEATURES. | Production headed flow, navigation/reinjection, hostile text, no hidden complete browser list, no masked issues; pending detailed expansion. |
-
-### Capacity boundary and gate C
-
-The only production files are `namisync/core/execution.py` and
-`namisync/modules/executor/runtime.py`. Add `disk-capacity` to the existing
-ExecutionReason vocabulary; event-v5 derives its closed reason set from that
-enum. Preserve event shapes/version, item-free terminal transport, independent
-recording axes and all existing effect/settlement paths. Direct consumers are
-`tests/test_executor_runtime.py`, `tests/test_executor_settlement.py`,
-`tests/core/test_session_events.py`, `tests/core/test_event_v5_consumers.py`,
-`tests/test_workflow_views.py` and `tests/test_service.py`; the direct native
-preallocation consumer `tests/test_executor_native.py` must expect disk-capacity
-for code 112 while preserving its cleanup assertions. Add witnesses only
-where they exercise a distinct seam.
-
-Recognize Win32 disk-full codes 39/112 and disk-quota code 1295, plus ENOSPC
-when a native winerror is absent. Do not classify quota 1816, permission,
-memory, socket quota or unknown errors as disk capacity. Native error codes
-take precedence over errno. Trace actual explicit/semantic causal wrappers
-with cycle protection; do not broaden sharing-violation retry classification
-as a side effect. Preserve stronger existing typed reasons; only otherwise
-generic I/O acquires the capacity label. Capacity policy uses existing Stop;
-current-effect, cleanup, recorder-prerequisite and task-recording truth remain.
-
-Regression study covers direct/wrapped capacity and native/errno precedence,
-ordinary-I/O continuation, unchanged sharing retries, current pre/post-effect
-settlement and recording combinations, and later independent/dependent work
-left unrun by the policy-stop sweep. Gate C is these focused witnesses,
-executor/core/workflows/interfaces neighborhood, ordinary suite, imports,
-unchanged settlement oracle `check --repeat 3`, docs/diff checks and fresh
-adversarial review. Baseline oracle passed 30 scenarios x 3 runs at `2cc0083`.
-The oracle, baseline and semantic pin are immutable in this row. No settlement
-redesign, native/pipeline changes, new taxonomy or frontend work belongs here.
-
-**A8-02 — completed recurrence audit and authorized remedy.** Capacity can be
-missed where failures bypass policy or cleanup introduces a new failure after
-policy selection. Dependent edits paused; the arbiter approved this finite
-correction before resumption. Production population remains the two files above.
-
-| Reached path / owner | Consequence and disposition |
-| --- | --- |
-| MKDIR start / executor main loop | Direct settlement bypasses policy. Consult existing policy only for recognized capacity; accept Stop only, no new retries. Existing durable settlement and collaborator-escape path remain. |
-| Pre-retry cleanup / executor main loop | Cleanup can introduce capacity after Retry was selected. Consult on the actual cleanup exception, preserve cleanup-failed wrapper/original cause, settle once, then stop only on Stop. |
-| Ordinary failure cleanup / `_settle_ordinary_failure` | Continue/exhausted Retry can hide cleanup capacity. Return the transient cleanup exception after existing cleanup/settlement; only the admission-returning caller consults capacity policy. Escaping callers ignore it. |
-| Other cleanup callers / BaseException, cancel, pause, backstop | These exit admission; no new Stop or settlement mechanism. |
-| Deferred-directory finalization / executor | Already-admitted directories still settle/finalize; no new operation admission remains. |
-| Recorder-only `_record` writes | Preserve filesystem success and independent recording degradation/continuation. No new stop field or exception retention. Pre-destructive recorder-prerequisite failure remains an operation failure eligible for Stop. |
-| Final flush/restoration, workflow finish/close/open and preflight | Post-admission settlement or refusal before admission; preserve current axes and behavior. |
-
-Original Stop dominates without another policy callback. Secondary Continue or
-Retry never restarts settled work, sleeps, repeats cleanup or creates effects.
-Non-capacity callback counts and MKDIR sharing/no-retry behavior remain unchanged.
-Set stop only after successful settlement; preserve pause/cancel and callback
-escape truth through existing paths. No settlement shape/trace/schema changes.
-Add the distinct directory, ordinary/pre-retry cleanup, exhausted Retry, original
-Stop, callback escape, recorder-only/prerequisite and non-capacity control
-witnesses to Gate C. Native preallocation code-112 expectation migration is
-also covered by A8-02. New findings beyond this table require containment anew.
-
-Gate C closure: 3,968 consumer-neighborhood tests passed (two skips); 5,216
-ordinary tests passed (five skips; 31 headed deselections). The five skips are
-four unavailable symlink privileges and the unconfigured optional M1-7 readiness
-artifact, not capacity gates. Latest test-only controls also passed independent
-17-case focused review. The unchanged oracle passed 30 scenarios x 3 runs;
-12 import contracts, 86 local documentation links, diff checks and fresh
-adversarial review passed. No test or protected oracle artifact was retired.
-Raw final logs are `build/m1-8-capacity-{neighborhood,ordinary}-final01.log`
-and `build/m1-8-capacity-oracle-final.log`. Earlier temp-permission/source-tree
-fixture runs are retained as failed attempts, not acceptance. Delivery is the
-single `feat(executor): stop on recognized capacity failure` commit after
-`42ff8f2`; the frontend remains pending.
-
-### M1-8-E finite evidence boundary
-
-Read-only study inspected `2cc0083` and the capacity candidate. Revalidate the
-reason vocabulary against the integrated capacity commit before coding. E is
-one stateless read model; task retention belongs to P1, web protocol to P2.
-
-Production population: `namisync/db/repositories.py`, core evidence/execution
-contracts only where genuinely shared, `namisync/workflows/models.py`, a focused
-`namisync/workflows/execution_review.py`, runtime and workflow public exports,
-and the forwarding method in `namisync/interfaces/service.py`. Existing db
-public exports may change only as needed. No schema/index/recorder/history or
-Plan projection changes. Reuse existing inventory/stat/attestation decoders.
-Owning docs: DATABASE, PRESENTATION, FEATURES, INTERFACES and ARCHITECTURE's
-source locator, plus this register/CHANGELOG/HANDOFF. Database supplies raw
-snapshot facts; workflows classify them; interfaces do not decide attribution.
-
-Admit an exact bounded tuple of at most 256 retained-operation subjects before
-normalizing/deduplicating or opening SQL work. Resolve textual run token to its
-internal row only inside one read transaction; batch requested operation tokens
-and canonical target keys, using the run's target location. Repeated windows
-must not scan/decode the whole run or inventory. Complete-run eligibility and
-ambiguous target ownership are computed once by P1; E receives those trusted
-facts, never a browser claim of evidence ownership. P1 separately proves their
-derivation across off-window operations. No new latency/memory budget is added.
-
-Only successful COPY/UPDATE/MOVE_UPDATE outcomes are eligible; an empty file
-is eligible regardless of its zero byte count. Other outcomes/kinds are
-not-applicable. No matching committed successful operation receipt means
-unrecorded. A matching receipt without uniquely attributable coherent current
-same-run target evidence is superseded, including ambiguity, missing/currently
-absent row, changed scope, invalidation or contradictory observed/attested stat.
-Coherent copy provenance with no verification timestamp is recorded-copy;
-coherent readback/verify provenance with a verification timestamp is already-
-verified. Only those two classes expose the stored xxh3_128 digest and its
-provenance. Unsupported/incoherent combinations never borrow a digest. Preserve
-item and task recording issues independently; a later task/audit failure does
-not revoke a committed item. Do not promote failed post-publication outcomes
-to successful evidence eligibility or infer authority from byte counts.
-
-Finite verification: `tests/test_db_repositories.py`,
-`tests/test_runtime_readers.py`, `tests/test_workflow_views.py`,
-`tests/test_service.py` and a focused `tests/test_execution_review.py` assigned
-in `tests/_departments.py` if needed. Witness all five classes, zero-byte copy,
-linked readback/verify scope preservation, task recording degradation, absent
-and mismatched receipt/run/target, duplicates/invalidated/superseded evidence,
-native identity/stat coherence and no digest leakage. A trace/count witness
-checks at most one run read, one bounded operation read and one bounded inventory
-read per nonempty 256-subject window in one SQLite snapshot; first excess refuses
-before SQL/materialization. Empty request behavior must be explicit and inert.
-Reader reuse/error-retirement, affected database/workflow/interface/core checks,
-ordinary suite, imports, docs/diff and fresh adversarial review close E. No
-protected evidence artifact is changed. New schema, whole-run per-window work,
-new ownership or attribution beyond these classes requires adjudication.
-
-Gate E closure: final ordinary 5,226 passed, five unchanged capability/optional
-artifact skips and 31 headed deselections; consumer neighborhood 2,960 passed,
-one optional M1-7 artifact skip. Final focused and independent nine-case review
-passed after correcting result-content validation and the closed-runtime empty
-read. Twelve import contracts, 59 local documentation links and diff checks
-passed. No protected artifact or test was retired. Raw logs:
-`build/m1-8-e-neighborhood-02.log` and `build/m1-8-e-ordinary-final01.log`.
-The initial neighborhood invocation used an invalid department name and ran no
-tests. E's internal ownership bit remains trusted input until P1 derives it;
-there is no browser evidence endpoint in this commit.
-
-### M1-8-P1 finite retention boundary
-
-Read-only study inspected `04947ba` and E's integration seams. Implementation
-starts after E `7905a1b`, revalidating its models/runtime entry point.
-This is A8-01's backend lifetime outcome, one atomic commit; P2 and U follow.
-
-Production population: `workflows/{models,execution_review,runtime,__init__}.py`
-and `interfaces/{service,task_lifecycle,task_port}.py` where the typed facade
-needs forwarding. No dispatcher, core event, database, recorder, Plan construction
-or hierarchy change. Subject owners are ARCHITECTURE, INTERFACES and PRESENTATION.
-Tests are `test_execution_review`, `test_service`, `test_task_lifecycle`,
-`test_runtime_readers` and `test_workflow_views`; the direct port fixtures in
-`test_bridge_service` and `interfaces/web/test_drain` may migrate signatures
-without changing behavior if the port changes. Root maintains this register,
-CHANGELOG and HANDOFF.
-
-Terminal dispatcher records have **no checkpoint**. Capture the exact immutable
-core `OperationResult` from reconciled dispatcher truth before observer release,
-dispatcher close, execution-detail drop or Plan retirement. Validate the exact
-task association/Plan token against the service's existing committed artifact,
-derived selection and execution session/run. The workflow retains the result
-by reference, scalar binding and bounded operation/linked-integrity indexes;
-no second hierarchy, checkpoint, observer or queue survives through this owner.
-Expose item-free summary and exact at-most-256-operation reads. These internal
-reads may share immutable item references; P2 must keep window summaries compact
-and obtain full detail separately within the existing response byte bound.
-An individual reliable event can reach 1 MiB, so blindly serializing 256 full
-item details is not an acceptable public window. Missing items
-remain unknown; emitted exclusion items retain their actual outcomes. Linked
-verification is an independent index, bounded separately by Plan membership.
-Reject foreign/duplicate result identities before publication.
-
-Derive evidence ownership once from the complete committed selection: each
-selected operation touches its canonical target; MOVE/MOVE_UPDATE also touch
-their prior target. An eligible item's target is unique only when its touch
-group contains that operation alone. Deduplicate one operation's same-key
-touches. Unselected exclusions cannot compete; selected failed or missing items
-still compete. This conservative implementation of A8-01 never infers content
-ownership from a visible window or execution byte count. It adds no state or
-effect policy to E. Record location-only trash context without filesystem reads.
-
-Capture failure leaves settlement retryable before release effects. Repeated
-capture is exact/idempotent; after partial cleanup removes dispatcher custody,
-the existing terminal digest and retained binding/result permit retry. Release
-retains review; successful task Close and completed shutdown dispose of it.
-Failures before completed cleanup preserve the review for retry. Direct non-task
-retirement stays unchanged. Do not infer a result from its item-free delivery
-view, history or a later ledger read.
-
-Gate P1: capture-order fault witnesses; stale task/session/run/token/selection
-rejection; terminal-checkpoint absence; release/replay/Close and partial cleanup
-retries; close/shutdown retirement and unchanged direct-session behavior; exact
-axes/issues/omissions; separate automatic verification; off-window competing
-targets, same-key move and excluded-versus-missing selected items; 256/first-excess
-reads and Plan-bounded indexes. Run workflow/interface consumer departments,
-ordinary suite, imports, docs/diff checks and fresh adversarial review. Existing
-Plan representation/BR-G-42 evidence is untouched. Archived reopening, manual
-verification, full browser lists, durable live results and history fallback
-remain excluded. New ownership or effect changes return to the arbiter.
-
-P1 delivered capture/retirement and the reads above without dispatcher or Plan
-representation changes. Review corrected committed-decision reuse, linked
-verification identity checks, exclusion ownership, an interface import route
-and no-fail post-settlement retirement during shutdown. Gate: 2,532 workflow/
-interface tests passed with one optional artifact skip; final ordinary 5,232
-passed, five unchanged skips and 31 headed deselections (287.24 s). Final focused
-review passed 244 tests; a subsequent test-only mixed-failure/axes/omissions
-witness passed the 14-test review module and independent review. Twelve import
-contracts, local links and diff checks passed. No existing test was retired.
-Logs: `build/m1-8-p1-neighborhood-01.log` and
-`build/m1-8-p1-ordinary-final02.log`. The earlier ordinary run collected an
-intermediate new test expecting KeyError after runtime closing; its corrected
-closed-runtime assertion passed focused review and the final ordinary run.
-
-### M1-8-P2 protocol study and affected measurement boundary
-
-Read-only study inspected E `7905a1b` and the P1 candidate; dependent product
-edits wait for integrated P1 and a refresh of its public reads and retirement.
-P2 enriches the adapter's existing Plan summary/window, not PlanReviewState,
-its projection, selection, ordering or visible sequence. Operation-bearing
-containers receive the same overlay as operation leaves. Exact result detail
-is a separate one-operation read; a 256-row window never expands full details.
-
-Production population is `interfaces/web/{drain,commands}.py` and packaged
-`assets/bridge.js`. Reuse the existing projection operation-ID mapping by
-reference for live admission; do not copy another complete membership set.
-Arm the execution epoch before returning the attach-before-start sink, preserve
-the existing rollback/recovery binding, and bound operation and automatic
-verification maps separately by Plan membership. Compact facts are replay
-idempotent; do not use a generic sequence high-water to suppress replay.
-Gap retains minimum/latest observed `first_missed_seq` values, not a count or a
-claim that every intervening sequence was lost. Terminal reconciliation uses
-P1 facts and preserves that visible transport-loss history. Missing results
-remain unknown. E alone supplies coherent stored digest/provenance.
-
-Reads snapshot task/session/generation, Plan and execution revisions and the
-requested operation IDs under the owner lock; workflow/ledger reads occur
-outside it, followed by exact revalidation. No full-run scan per window,
-history fallback, browser-owned complete result list, or altered action scope.
-The existing 256-row and 8-MiB response walls remain; full detail keeps operation
-and automatic verification distinct. P1's location-only trash context passes
-through without filesystem reads. BRIDGE/PRESENTATION/INTERFACES own the
-protocol and lifetime description; U owns rendering and interactions.
-
-Direct tests are web `test_drain`, `test_commands`, `test_transport`,
-`test_frontend_static`, `test_cosmetic_channel`, and the packaged bridge/drain
-JavaScript probes. Exact command-catalog consumers also include `test_host`,
-`test_native_host_gates`, `test_transport_headed`, `test_component_gallery_headed`,
-`test_bridge_event_benchmark` and its root helper. Plan scale tests and benchmark
-are compatibility consumers: migrate only actual adapter stubs/catalog facts,
-never protected measurement semantics. Renderer-only legacy fixtures stay with
-U unless an actual shared validator makes them a direct P2 consumer. Record
-the final finite measurement helper/test/artifact names before their creation.
-
-Arbiter **A8-03** authorizes a separately identified scoped Tier-2 gate, not
-renewed full M1-7/P9 acceptance. The selected metrics are
-`ui_get_plan_window_one_row_receipt` and `ui_start_execution_receipt`: adapter
-enrichment and pre-receipt live-epoch setup affect these timed paths even when
-the extra work is constant. Each retains its existing installed full-base
-fixture, untimed readiness/warmup, five fresh children with six samples each,
-nearest-rank p95 <=100 ms and maximum <=250 ms. Record every failure/timeout,
-exact child/sample membership, identities and dispersion. Do not substitute
-successful retries for failed observations.
-
-Component window/changed-view, construction and projection-memory metrics
-directly own PlanReviewState paths/graphs and remain excluded only while those
-are unchanged. Control receipt paths remain excluded only while their timed
-dependencies are unchanged. Changes to those premises reopen their affected
-cases without another scope pause; a changed measurement contract returns to
-the arbiter. U must rerun any cases affected by its later measured-path edits.
-
-Freeze independently checked source/instrument/validator/fixture/runtime/profile
-and source-wheel-installed byte bindings, including newly reached dependencies,
-before measurement. A separate scoped checker may reuse unchanged independent
-validator checks; never filter the protected contract to pass its full terminal
-validator with a partial collection. Require rejection controls for missing or
-reused samples, wrong identities and max-only failure. Commit compact versioned
-raw receipts/provenance and a separate validation result; ignored logs alone
-cannot close Tier 2. Final committed product bytes must match measured bytes.
-Existing contracts, budgets and historical evidence retain their meaning.
-New overlay bounds close structurally without a new timing or memory claim.
-
-The additive evidence population is
-`tests/interfaces/web/_m1_8_execution_receipt_scale.py` (independent scoped checker)
-and its matching `test_m1_8_execution_receipt_scale.py`.
-Use `m1_8_execution_receipt_{authority,receipts,result}.json` beside that checker
-for frozen provenance, verdict-free raw observations and derived result. Exact
-selected specs come from the unchanged compact M1-7 contract, not copied or
-filtered authority. Reuse existing headed readiness/child modes and the authority
-freezer without a new workload runner. Existing per-receipt/profile/byte validators
-may be reused;
-do not duplicate the headed workload or weaken its full-collection validator.
-`tests/_departments.py` assigns the new test to interfaces. Temporary installs,
-child outputs and logs stay in ignored `build/`; promote only the named compact
-artifacts after independent verification. No new directory is needed.
-
-Gate P2 combines live/terminal/Gap, fast-event admission/rollback/replay,
-operation-bearing containers, independent verification, missing/omitted facts,
-navigation/re-observation/reinjection, stale/Close/read races, 256/first-excess
-and raw-byte bounds, no-DB preexecution fast path, literal hostile text and exact
-Python/browser validators. Run interface/consumer checks, ordinary/import/doc
-gates, installed headed command compatibility, the A8-03 scoped evidence and
-fresh adversarial review before its atomic protocol commit. The evidence helper
-may be built in an independently owned lane after P1 closes; its acceptance
-remains coupled to the measured final P2 product, not a separate product claim.
-
-### Preserved boundaries for execution review
-
-Keep committed selection after admitted preflight refusal; Plan again is the
-recovery. Archived terminal-unrun reopening recipes do not apply. Indexed
-follow, inventory UI, manual post-copy controls, terminal retry and purge stay
-outside this batch. No history fallback, transient copy hash display, new
-schema or complete trash scan. Use location-only trash information. Existing
-automatic linked verification must remain a separate overlay.
-
-New query/window/overlay bounds need source-derived enforcement and structural
-witnesses over the admitted population, not M1-7's historical timings. Record
-the exact domain and counts in PRESENTATION/DATABASE before implementation.
-No new execution latency or memory budget is claimed. Changes to existing Plan
-construction, representation, indexing, publication or windowing reopen their
-affected BR-G-42 evidence; classify that seam before edits under DEFENSE §7.
-Arbiter decision **A8-01** approves the necessary review lifetime extension:
-retain the immutable core result by reference plus operation-keyed indexes in
-workflow-owned review until task close. Capture and exact identity validation
-precede custody release; capture failure cannot report release success. Repeated
-capture/release/Close and partial-cleanup retries are idempotent, including when
-dispatcher custody is already gone. Keep direct non-task retirement unchanged;
-close and shutdown free review ownership without retaining queues/observers.
-Live Gap may leave explicit uncertainty; terminal reconciliation restores only
-facts in the exact result and never erases visible transport-loss history.
-Missing/omitted facts are not invented success or unrun. P1/P2/U are separate
-only where each preserves cleanup/public behavior; capture/retirement changes
-remain atomic. DATABASE classification belongs to workflows, serialized by the
-bridge. This is scope approval, not acceptance evidence; expand finite files
-and update owning lifetime docs before P1 implementation.
-
-All AGENTS mandatory and recurrence stops apply; route reached boundaries to
-the designated arbiter with a finite proposal before dependent work resumes.
-
-## Checkpoint expansion and scope decisions
-
-Use this lightweight expansion before each pending checkpoint, drawing on
-`plan-work` without duplicating its full template. AGENTS owns the boundaries;
-`execute-task` supplies the decision, waiting and recovery procedure. These
-requirements remain usable without either personal skill installed.
-
-1. Start from the accepted outcome and current repository revision. Trace the
-   owners, state/effect transitions, direct consumers and harness dependencies;
-   include helpers outside the initially selected directory. Record the finite
-   corpus, relevant observations and remaining uncertainty.
-2. Name the finite production, test and documentation population, current
-   owners/seams, one acceptance gate and atomic commit boundary. State preserved
-   guarantees, excluded/archived clauses and dependencies. Add only the detail
-   needed to implement and review that outcome; findings do not silently become
-   scope.
-3. Probe likely regressions during design: lost guarantees, false states,
-   unauthorized/duplicate effects and newly unbounded work. Tie each concrete
-   risk to a reached seam and named verification. Record baseline evidence;
-   red tests indicate a question, green tests do not prove absence of defects.
-   Implementation validates this map rather than starting a broad discovery pass.
-4. Require final adversarial review of source, tests, documentation and evidence
-   at the checkpoint gate. Completion requires the gate and preserved baseline,
-   not a favorable test count. After delivery, replace detailed working/recovery
-   notes with what happened, what did not, and commit/contract/evidence pointers.
-
-One next-checkpoint design lane may begin during the current checkpoint's final
-product implementation and continue through testing, verification and review.
-It is read-only toward product and test sources; serialize shared plan edits.
-Record the inspected revision, then compare affected seams against the final
-integrated predecessor before implementation. Refresh only changed assumptions,
-consumers and probes. A current finding that changes those seams reopens that
-part of the next design. Design readiness cannot waive predecessor completion,
-implementation authorization or the user's pause.
-
-Elaborating an accepted pending outcome within these boundaries is planning;
-enlarging an active implementation population or its mechanism is a scope
-decision. For the latter, suspend dependent edits and first complete the finite
-dependency probe and one consolidated proposal. A narrow, understood extension
-may obtain explicit adjudication in-turn using the available permitted input
-mechanism; unanswered requests within the bounded procedure become a full stop.
-Architectural or unresolved changes require a full stop with the design study.
-Hard-wall stops take precedence immediately. Record approved scope before edits;
-silence never expands it, and unchanged approvals are not requested again.
-
-## M1-7 implementation and closure
-
-### Post-delivery ablation study (2026-09-16)
-
-This discovery-only pass studies `ae3daf6^..5986c57`, starting from a clean
-`5986c57` checkout. It authorizes no production/test changes, new acceptance
-criteria, M1-8 work, push or PR. Work proceeds from diff/structure inventories
-to selected behavioral seams and direct consumers, not exhaustive line review.
-The original report, committed in `dbeb7a5`, distinguishes observed redundancy,
-bounded experimental support and design proposals. Its successor
-[implementation plan](M1_7_ABLATION_STUDY.md) retains that evidence and candidate
-register; neither discovery nor plan preparation authorizes implementation.
-
-| ID | Accepted study outcome | Named verification | Status |
-| --- | --- | --- | --- |
-| AB7-1 | Attribute checkpoint growth and map product/test/evidence owners. | Inclusive Git/AST census: 77 files, 22,273 additions; 72.3% of added lines in tests/helpers/evidence. | Complete |
-| AB7-2 | Identify bounded architecture, logic and test ablations while preserving behavioral guarantees. | Twelve source/consumer-backed candidates with retained obligations and falsifying gates; E1 33/33 focused control/ablation passes, E2 5/5, and both deliberately seeded faults detected. | Complete |
-| AB7-3 | Independently review with one Claude Opus 5 xhigh session and synthesize useful findings. | Two invocations of the same session, zero Claude subagents; targeted challenge accepted, corrected claims and useful recommendations synthesized. | Complete |
-| AB7-4 | Deliver a ranked report and preserve exact review provenance. | Adversarial synthesis, documentation/link/diff checks, preserved review-start state, unchanged product/test tree; disposable copies removed. | Complete |
-
-Finite corpus: the 77 changed files, their immediate symbol consumers and
-owning active documents; earlier reduction dispositions are contextual evidence.
-Stop discovery and report if supported hard-wall/data-loss/false-success
-evidence is established; do not fix findings during this study. Other findings
-are recommendations only. No benchmark rerun or performance claim is authorized
-by static inspection. Evidence lives in ignored `build/m1-7-ablation/`: named
-UTF-8 prompts/scripts, structural inventories, original-state receipt and raw
-review responses. Preserve these for report provenance; disposable fixtures,
-if needed, must be separately identified and removed after verification.
-
-Both E1/E2 experiments used disposable copies and retained their exact plans,
-patches and control/ablation/fault logs. E2's cohort-only patch is not suitable
-for direct integration: any implementation must separate synthetic controls
-from live-generator coverage. No full benchmark rerun, product/test edit or
-commit was performed during discovery. The subsequent user-requested snapshot
-commit is `dbeb7a5`; it preserves the original review reconciliation and usage.
-
-### Post-delivery ablation implementation (2026-09-16 – 2026-09-17)
-
-**Current direction (2026-09-17):** R7-1–R7-4 are delivered through `95f31e1`.
-The user has suspended continuation to reassess substantial reductions of the
-added test/evidence machinery; the production shell is not the target. The
-ablation document's RI-1–RI-4 register now owns a read-only investigation,
-including deferred retirement options. R7-5–R7-8 and R7-G remain unexecuted;
-the earlier scope below is historical authorization, not an instruction to
-resume. Proposed readiness/partial-index/tracer retirement, historical
-archival and a simpler current acceptance path require a new decision before
-implementation or evidence-policy changes. Existing SLOs and P9 meaning stay.
-
-The user first requested a reviewed subtractive plan, then authorized execution
-on 2026-09-17 after baseline and working-set preparation.
-[M1_7_ABLATION_STUDY.md](M1_7_ABLATION_STUDY.md#checkpoint-register) is this
-register's detailed maintenance subregister: R7-1–R7-8 and R7-G are the finite
-accepted completion denominator before this reassessment.
-Its candidate register preserves A1–A12 and explicitly separates selected
-portions from deferred work. This does not reopen M1-7 product acceptance or
-authorize M1-8, deferred redesigns, push or PR.
-
-The selected scope is synthetic/live fixture separation, canonical-comparator
-and unused replacement-route removal, independent-validator receipt checks,
-producer publication bookkeeping, browser admission replay, lazy ID resolver
-work and the tracer's mirrored test oracle. A5/A6/A7/A8/A10 remain deferred;
-A4 read retries, broader A12 safety reuse and A11 tracer retirement are excluded.
-A7 may be ratified later in ARCHITECTURE/PRESENTATION and this register.
-
-Every row names its bounded behavioral population, protected guarantees,
-product seams, detector-quality controls and atomic commit gate. Existing
-product behavior is the baseline; green rewritten tests alone cannot prove
-detector quality. Log/report latent product defects without fixing them in this
-refactor. Introduced regressions remain checkpoint obligations; AGENTS stops
-and DEFENSE consequence/evidence policy apply. The user-approved measurement
-policy uses affected local Tier 1 checks before checkpoint commits and one full
-current-source measurement suite at R7-G. Local checks do not renew full scale
-acceptance; frozen budgets and historical artifacts remain unchanged.
-PRESENTATION owns this scoped rerun policy; the subregister records exact gates.
-
-### Delivered product scope and P9 closure
-
-The user authorized M1-7, the closing-race correction, snapshot-bound destructive
-confirmation, aggregate/breakdown facts, an inert gallery preview, and confirmed
-Plan-again/control consumer corrections. Stop after this checkpoint for recap and
-GUI tweaks. No M1-8, DOC-2, push or PR is included. Original study revision:
-`7e94598`; documentation cleanup is integrated in `a1d78ca` and `40ca76f`.
-
-### Implemented behavior and ownership
-
-- Workflows derive immutable Plan projections, raw sibling-sort facts and selected
-  operation/risk/space totals. Selection preserves dependency closure, operation
-  ordering and immutable artifact identity. Filters and windows do not redefine
-  scope. The browser retains only its bounded 1–256-row window.
-- TaskRegistry owns task delivery and the current session; the existing service
-  and lifecycle own reviewed identity, selection commitment and admission.
-  Same-task Execute requires the released planning session. Failed admission
-  restores editable review; admitted execution remains committed even when fresh
-  preflight refuses before effects. Original Plan replay cannot become current.
-- Execute captures task/request/selection revision. Every selected destructive
-  scope opens the production Fluent smoke modal. Cancel submits nothing; Confirm
-  submits the same snapshot for backend validation, commitment and admission in
-  one command. Exact uncertain retries retain their intent and fence selection
-  and Close. Modal/background focus, pointer, wheel, Escape, animation exit and
-  reduced-motion behavior are verified. The gallery starts closed and previews
-  the same dialog without execution effects.
-- Terminal-session release retains a task; explicit Close retires it. Close and
-  follow-up admission have atomic ordering and claim revalidation after waits,
-  without holding owner locks over domain I/O. Exact replay survives source-task
-  retirement. Terminal records retain the exact plan/inventory/execution kind and
-  capability contract.
-- Current-session StateChanged events drive execution controls. A later event or
-  terminal record prevents an older command reply from regressing presentation;
-  Plan refresh preserves live state. Hidden Plan controls stay hidden. Plan again
-  creates a fresh task under the existing 48-task limit; release does not free a
-  task slot. Selecting a task after a Plan-load error performs the advertised
-  guarded retry, preserving cached and in-flight views.
-
-Behavior owners: [BRIDGE](BRIDGE.md), [PRESENTATION](PRESENTATION.md),
-[INTERFACES](INTERFACES.md), [DESKTOP_UI](DESKTOP_UI.md), [FEATURES](FEATURES.md).
-[BUGS](BUGS.md) records substantive corrected mechanisms. Core source remains the
-authority for exact contract shapes; no dispatcher/module/db effect-policy change
-was needed.
-
-### Finite implementation and regression boundary
-
-Production owners are core execution contracts; workflow tree/projection/selection helpers; existing
-interface service/lifecycle/task-port owners; web commands, task delivery and
-Plan review; and packaged app/bridge/Plan/modal assets. Tests cover those owners
-and their current setup/task-shell/gallery, event, wheel, replay/uncertainty,
-close-ordering and quantitative consumers. The user-approved investigation
-compared Setup, Task 47→48 and post-release Task 48→49 across button, eligibility,
-attempt, bridge, host validation, registry, response and refresh boundaries.
-Its bounded opt-in test trace preserves installed asset bytes and is diagnostic
-only; clean installed runs establish acceptance. Raw findings are retained in
-`build/m1-7/evidence/plan-again-findings.md` and its referenced records.
-
-Regression guarantees include exact review/session identity, current-request
-binding, monotonic selection revision, stale callback rejection, single admission,
-Close/replay ordering, truthful committed-but-unrun status, inert hostile display
-text, bounded ingress/windows and authoritative state ordering. There is no
-selection reopening, terminal subset retry, execution-result overlay, inventory
-projection, capacity-policy change or global-settings expansion. Archived bridge
-recipes remain provenance, not renewed representation or reservation requirements.
-
-### Acceptance evidence and integration
-
-The authorized P9 full run on the unchanged `3c3bbbc` candidate passed all
-**35 fixed metrics**, after **15 readiness children / 35 untimed cases**, with
-**175 fresh measurement children / 775 samples**. No retries, budget changes or
-product changes were made during the run. Independent terminal, collection,
-identity and physical-byte verification passed. This closes the quantitative
-part of **M1-7-G**, alongside functional/consumer, ordinary, import, installed
-headed, documentation and final integration checks.
-
-| Evidence | Result |
-| --- | --- |
-| Six changed sorts | P95 0.756–1.109 s; largest maximum 1.192 s, within 1.5/3 s. |
-| Review construction/staging memory | 280,768,512 bytes (267.762 MiB), within 320 MiB. This is not whole-app or paused-execution memory. |
-| Confirmed execution admission receipt | P95 54.6 ms / maximum 55.4 ms, within 100/250 ms; receipt remains after admission. |
-| Prior unchanged candidate verification | 5,157 ordinary tests, 259 checkpoint/resume/post-execution tests, 12 import contracts and installed Plan GUI passed at P8. |
-| Final closure verification | 55 artifact/scale checks and 5,158 ordinary tests pass (four platform skips; 30 headed tests deselected). Documentation and reconstructed endpoint reviews pass. Clean committed-source, supplemental core and exact product/test accounting pass. |
-
-Raw children, incremental indexes, readiness, authority, terminal measurements,
-independent audit and before/after identities are retained under
-`build/m1-7/evidence/p9-full-20260916/`. The current compact authority and
-measurement artifacts are published at their contract-owned paths under
-`tests/interfaces/web/`; previous bytes remain in Git and the evidence directory.
-Authority SHA-256: `dcea9df79599739e07c8652b9a16eca6b7e88e81de31594c30bd74ec309797b7`.
-Terminal artifact SHA-256: `e5718367c4f386e5845b93b7de484176228504b8382d0f6d5c0a1317d862665d`.
-The fixed compact contract, historical legacy evidence and all budgets remain
-unchanged. Legacy compatibility remains confined to the historical evidence reader.
-
-The historical contract names 42 source, 38 installed and 14 runtime files.
-P8's additional `namisync/core/execution.py` is bound separately by equal source,
-installed and wheel-member SHA-256
-`76350ca8aebb23959c47a502cb0767cfb569adf7cb45fdc1f80399b7df8ffbb9`,
-checked before and after the full run and again at integration. The independent
-audit verifies both this supplemental binding and the contract-owned population.
-Collection receipt hashes are verified; per-child invocation/log hashes are not
-fields of the full-run collection contract and are not claimed.
-
-The reviewed closure series reconstructs six dependency-ordered outcomes from the
-recovery history: reviewed Plan delivery and measurement readiness; covered
-windows and compact Plan scale; reduced review/selection retention; prepared
-selection digests; shared validated execution structure; and accepted evidence
-with closure documentation. Intermediate trees preserve the historical failed
-measurements honestly; only the complete verified series is merge-ready.
-The original commits, including `cf5a00b` and `30d35f3`, are not amended or
-integrated as WIP objects. Final product/test accounting against `3c3bbbc`
-permits only the two newly accepted artifact files. Recovery history is preserved
-by the `codex/m1-7-recovery-20260916` archive tag and the verified
-`build/m1-7/evidence/p9-full-20260916/m1-7-recovery.bundle`. The integration receipt
-in that directory records exact reconstructed and recovery commit identities,
-tree equality, merge and branch cleanup. No original commit was amended.
-
-The earlier confirmed hidden-control, state-ordering and Plan-retry defects are
-closed at their existing owners; BUGS retains their mechanisms and witnesses.
-Historical working records, failed runs and the bounded admission breakdown
-remain in Git/evidence rather than this active register. Shared execution
-structure extends one immutable index's paused lifetime; ARCHITECTURE owns its
-complete retention account. No dispatcher policy or receipt guarantee changed.
-
-Stop on `milestone1` after verified integration for the requested recap and GUI
-review. M1-8, DOC-2, push, PR and release gates remain outside this task.
 
 ## M1-4 delivered
 
@@ -829,43 +244,43 @@ results, review dispositions and screenshots are in ignored `build/m1-6/`;
 successful gate directories are `focused-final05`, `neighborhood-final04`, `ordinary-final04`, `headed-final03`, `imports-final02`.
 No test was retired and no recovery branch or worktree was created.
 
-## Investigation and regression map
+## M1-7 delivered
 
-The current service rolls `committing` back only when admission fails;
-post-admission preflight refusal remains committed. `run_plan` saves a plan
-with its review-preflight verdict even when that verdict is negative; a typed
-plan-admission limit instead saves no artifact. Existing preflight tests pin
-the exact capacity boundary, fresh-world drift, and refusal without plan or
-selection mutation. Existing core/planner tests pin operation identities,
-selection digests, and dependency closure. Preserve these behavioral witnesses
-when implementing fresh Plan again; a digest is not a filesystem snapshot.
+Delivered and integrated through `5986c57`: bounded Plan review and sibling
+sorting, selection/commitment freshness, snapshot-bound destructive confirmation,
+same-task execution, pause/resume/cancel, truthful committed-but-unrun review,
+fresh Plan again and task-close/replay ordering. The browser keeps only its
+bounded window; workflows/service remain authority for operations and effects.
+BRIDGE, PRESENTATION, INTERFACES and DESKTOP_UI own current contracts. No
+inventory/result-overlay or terminal retry/reopening was delivered by M1-7.
 
-M1-8-capacity uses the existing failure-policy Stop and settlement paths for
-recognized operation, cleanup and destructive-prerequisite capacity failures.
-Recorder-only write errors retain independent degradation and continuation;
-already-admitted directory finalization remains settlement. The finite A8-02
-mechanism table and Gate C above own the implementation/verification boundary.
-The unchanged retained oracle guards settlement; no capacity label may hide
-an unrelated typed failure or recording issue. Frontend consumption follows
-in M1-8, independently of this policy change.
+P9 accepted the unchanged `3c3bbbc` measured candidate: 35 metrics, 175 fresh
+measurement children/775 samples after declared readiness, with independent
+source/runtime/installed and terminal validation. Final ordinary verification
+was 5,158 passed/four platform skips; imports, installed Plan checks, docs and
+reconstructed integration accounting passed. Raw evidence and integration
+receipt: `build/m1-7/evidence/p9-full-20260916/`; protected compact artifacts
+remain at their existing paths in `tests/interfaces/web/`. This is the declared
+Plan profile, not whole-app memory or current-source acceptance for later edits.
 
-For test cleanup, retire only unimplemented UI retry/reopening/cleanup promises
-from future acceptance lists. Keep direct-service artifact replacement,
-admission rollback, protocol replay, close recovery, automatic operation/read
-retry, and pause/resume tests. They protect different behavior. Add terminal
-action-availability witnesses when each surface activates, including degraded
-completion, abnormal termination, and first manual verification. Add trash
-location-only and evidence-backed count cases without requiring a full trash
-inventory. Green existing tests cannot prove these new frontend outcomes; red
-tests justify removal only when their exact retired product promise is named.
+Post-delivery ablation R7-1–R7-4 landed through `95f31e1`; R7-5–R7-8/R7-G remain
+suspended, not completed. RI-1–RI-4 discovery is complete; larger test/evidence
+retirement remains a proposal in [M1_7_ABLATION_STUDY](M1_7_ABLATION_STUDY.md).
+Revisiting it is deferred until after M1-8 closes and requires user resumption;
+it is not a closure dependency and cannot expand R2. Later delivered Plan GUI refinements
+through `2cc0083` are recorded in the compact GUI results table above.
 
-All remaining rows are pending product work. The baseline is the implemented
-public/CLI, schema/event, authority, and settlement behavior recorded by the
-closed reduction registers; those guarantees remain protected. The future
-capacity checkpoint changes only the explicitly accepted failure classification
-and later-operation admission policy. No implementation recipe from the discarded
-compact-plan branch is an additional prerequisite. Product changes follow the
-finite rows above, owning subject docs, and AGENTS/DEFENSE stop rules.
+## M1-8 foundation delivered
+
+| Closed row | Result and owner | Commit / accepted evidence |
+| --- | --- | --- |
+| M1-8-D | Condensed prior GUI records and established the original delivery register. | `42ff8f2`; documentation/link/diff review. |
+| M1-8-capacity | Recognized disk-capacity operation/cleanup/prerequisite failures stop later admission after current settlement. Recorder-only failure remains independent degradation; finalization remains settlement. EXECUTOR owns classification. | `04947ba`; Gate C, unchanged 30-scenario/three-run settlement oracle, 5,216 ordinary passes/five skips, twelve import contracts. `build/m1-8-capacity-*-final01.log`, `build/m1-8-capacity-oracle-final.log`. |
+| M1-8-E | Bounded atomic current-ledger classification, coherent content only, no schema/write path or full-run scan. DATABASE/PRESENTATION own evidence semantics. | `7905a1b`; Gate E, 5,226 ordinary passes/five unchanged skips and consumer/independent checks. `build/m1-8-e-ordinary-final01.log`, `build/m1-8-e-neighborhood-02.log`. |
+| M1-8-P1 | Exact task/Plan/session/run-bound retained execution summary and separate operation/linked-verification indexes; capture before release; idempotent close/shutdown retirement. INTERFACES/PRESENTATION own lifetime. | `055325b`; Gate P1, 5,232 ordinary passes/five unchanged skips, neighborhood/independent/import checks. `build/m1-8-p1-ordinary-final02.log`, `build/m1-8-p1-neighborhood-01.log`. |
+| M1-8-P2 | Bounded live/retained Plan summary/window overlays and one-operation detail, revision binding, visible Gap history and bounded current evidence. BRIDGE/PRESENTATION own protocol and measurement. | `4bbf943`; independent functional/installed/source review and full unmocked terminal/clean-HEAD validation. A8-03/A8-05 scoped Tier-2 window/start receipts accepted: p95/max 6.8/7.3ms and 58.8/65.1ms against unchanged 100/250ms. |
+
+The immutable P2 artifacts remain reproducible at their recorded revision. The final U artifact supersedes corresponding performance results for the delivered UI bytes; historical failures and reconstruction dispositions remain in the evidence archive and [historical register](obsolete/M1_8_DELIVERY.md).
 
 ## Accepted behavior carried by the delivery rows
 
@@ -891,11 +306,11 @@ not by assuming that a prior selection digest binds the changed filesystem.
 Recognized operation, cleanup and destructive-prerequisite disk-capacity failure
 stops later admission after current settlement under M1-8-capacity. Recorder-only
 write failure remains recording degradation with continuation. Generic I/O keeps
-its typed reason and needs ordinary frontend presentation.
+its typed reason and has ordinary frontend presentation.
 Yellow capacity mapping uses existing DESKTOP_UI semantics and never hides
 independent known failures. Trash-location text is accepted for M1; exact
-counting is conditional on complete outcome evidence and display placement is
-open. No filesystem inventory or purge is added to populate that information.
+counting is conditional on complete outcome evidence. Location-only text is
+displayed in execution Details. No filesystem inventory or purge is added to populate that information.
 
 Location admission is workflow-owned and reused by typed, picker, and recent Setup/inventory inputs. A remembered location is not authorization; every consumer retains its point-of-use re-probe. Setup freezes its semantic plan options in a backend-derived snapshot and never writes global defaults or makes browser text/filter normalization authority.
 
@@ -916,12 +331,3 @@ and pass without skip/xfail on Windows; narrow selections do not substitute for
 release evidence. TESTS owns collection commands and routing. These requirements
 remain open release obligations, not an assertion that this checkpoint delivery
 performed a product release run.
-
-## Resumption
-
-M1-4, M1-async (`675181a`), M1-5 (`e19ed9d`), GUI-1 (`b98dce4`), M1-6,
-M1-7 and the subsequent Plan GUI work through `2cc0083` are delivered on
-`milestone1`. The active batch is M1-8-capacity followed by M1-8; stop after
-M1-8 for recap and GUI tweaks. HANDOFF owns immediate operational context;
-AGENTS owns containment. Later checkpoints, halo workarounds, DOC-2, push and
-PR remain unauthorized.

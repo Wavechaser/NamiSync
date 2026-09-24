@@ -2,8 +2,8 @@ import { createIcon } from "./icons.js";
 import { renderFilesystemText, renderText } from "./render.js";
 import { taskStatusDigest } from "./task_status.js";
 
-export function createTaskRail({ onCreate, onSelect, onClose, onSettings }) {
-  if (![onCreate, onSelect, onClose, onSettings].every((callback) => typeof callback === "function")) {
+export function createTaskRail({ onCreate, onSelect, onClose, onRetryUpdates, onSettings }) {
+  if (![onCreate, onSelect, onClose, onRetryUpdates, onSettings].every((callback) => typeof callback === "function")) {
     throw new TypeError("task rail callbacks must be callable");
   }
   const rail = document.createElement("nav");
@@ -103,8 +103,13 @@ export function createTaskRail({ onCreate, onSelect, onClose, onSettings }) {
         close.type = "button";
         close.append(createIcon(document, "dismiss", "sm"));
         close.addEventListener("click", () => onClose(task.taskId));
-        row.append(select, close);
-        entry = { row, select, title, status, source, target, progress, close };
+        const retry = document.createElement("button");
+        retry.classList.add("nami-button", "nami-task-rail__retry");
+        retry.type = "button";
+        renderText(retry, "Retry updates");
+        retry.addEventListener("click", () => onRetryUpdates(task.taskId));
+        row.append(select, retry, close);
+        entry = { row, select, title, status, source, target, progress, retry, close };
         entries.set(task.taskId, entry);
       }
       entry.select.ariaCurrent = !settingsVisible && task.taskId === selectedTaskId ? "page" : "false";
@@ -129,8 +134,12 @@ export function createTaskRail({ onCreate, onSelect, onClose, onSettings }) {
       else entry.progress.ariaValueNow = String(digest.progress.value);
       entry.progress.style?.setProperty("--nami-progress-value", `${digest.progress.value}%`);
       const batchCloseReason = typeof task.batchCloseReason === "string" ? task.batchCloseReason : null;
+      entry.retry.hidden = typeof task.recoveryRetry !== "function" || task.closeRetry !== null;
+      entry.retry.disabled = task.recoveryRunning;
+      renderText(entry.retry, task.recoveryRunning ? "Retrying updates…" : "Retry updates");
+      entry.retry.ariaLabel = `${task.recoveryRunning ? "Retrying updates for" : "Retry updates for"} ${task.label}`;
       entry.close.disabled = task.closePending || batchCloseReason !== null;
-      entry.close.ariaLabel = batchCloseReason ?? `${task.error === null ? "Close" : "Retry close for"} ${task.label}`;
+      entry.close.ariaLabel = batchCloseReason ?? `${task.closeFailed ? "Retry close for" : "Close"} ${task.label}`;
       entry.close.title = entry.close.ariaLabel;
       list.append(entry.row);
     }

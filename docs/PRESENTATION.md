@@ -11,9 +11,29 @@ axes without carrying item details. Operation and automatic linked-verification
 items have separate Plan-bounded indexes. Exact internal reads admit at most 256
 operation identities before lookup and may return the immutable item references;
 missing selected items remain unknown and emitted exclusion outcomes retain
-their actual result. A later public result window must remain compact and obtain
-full detail separately because one reliable item can approach the event-envelope
-limit.
+their actual result.
+
+The web adapter projects that truth onto the existing Plan summary and rows.
+One execution revision guards the summary, window overlays and exact detail.
+Before execution the summary has no session or terminal facts. During execution
+it identifies the current session, retains compact operation and automatic-
+verification facts separately, and exposes no ledger evidence. A terminal
+session release replaces only facts proved by the captured workflow review: its
+item-free result axes, typed failure counts, location-only trash context and
+bounded retained item/evidence reads. Missing retained items remain unknown.
+The adapter adds the matching delivered terminal record's UTC start and end
+times to that Plan summary after capture. Both remain null before retained
+terminal truth exists; an unrun refusal retains a null start and a real end.
+
+Every Plan row with an operation identity receives that operation's compact
+overlay, including an operation-bearing container. Structural rows remain null.
+Compact operation facts are result, reason, recording state/reason and omission
+count; compact automatic verification has its own result, reason, recording,
+record disposition and omission count. Details and paths remain absent from a
+256-row window because one reliable item can approach the event-envelope limit.
+The separate exact one-operation detail read is available only after retained
+review exists and keeps the operation item, automatic verification and current
+ledger evidence distinct.
 
 Complete committed selection owns target uniqueness. Every selected operation
 touches its canonical target; MOVE and MOVE_UPDATE also touch their prior target,
@@ -42,6 +62,23 @@ as a trusted internal boolean derived by retained task review. E has
 no browser surface, and later adapters never supply or reinterpret the bit.
 The classifier never derives uniqueness from one window. Item and task recording degradation remain separate
 axes, so the committed ledger snapshot decides whether an item has evidence.
+
+Adapter result maps are independently bounded by the immutable Plan operation
+membership already retained by the projection; they do not copy another complete
+membership set. Live replay equality compares compact facts, not an unbounded
+event body, and changes no revision for an equal replay. A `Gap` records only the
+minimum and maximum observed `first_missed_seq`;
+it is visible uncertainty, not a
+lost-item count or a claim about the entire intervening sequence range. Terminal
+reconciliation never erases that history.
+
+A result window admits at most the existing 256 Plan rows before any workflow or
+ledger read. Retained operation and automatic-verification lookups use only the
+distinct requested operation identities; current evidence uses one bounded
+workflow query over those identities. Adapter task/session/generation, Plan view
+and execution revisions are snapshotted before those external reads and exactly
+revalidated afterward. Pre-execution and live windows perform no ledger query,
+and no window or detail scans the complete run.
 
 ## Tree identity and meaning
 
@@ -105,7 +142,12 @@ returning to covered rows invalidates an obsolete result. Window reads do not
 disable the whole review or remount unchanged rows. View/selection/execute actions
 retain their separate pending and revision guards, so a later window response
 cannot restore older interactive facts. The retained browser window stays bounded
-to 256 rows, including when the total population is larger.
+at 256 rows. Background execution refresh waits for complete foreground view,
+highlight, selection, and scroll reads. It adopts only while the same review and
+reload generation, foreground epoch, view, task/session, and displayed offset
+remain current. Invalidated or rejected reads preserve one dirty replay at the
+accepted offset and cannot publish result facts or retire exact detail, including
+when the total population is larger.
 
 **Future surface.** Inventory projections remain service-owned and coherent for live readers. Retention must be bounded, with truthful refusal when capacity is unavailable; publication must not expose partially rebuilt state. Acknowledgment, restore, and terminal changes refresh affected facts without invalidating a live reader silently. Cache topology, pinning, and patch/rebuild mechanisms are reopened implementation choices. History belongs to `HISTORY.md` and pages in the database.
 
@@ -134,7 +176,21 @@ selection overlays; prior benchmark receipts do not certify the new totals.
 
 Sort is process-live view state, never durable preference; it preserves tree identity, selection, recursive action scope, execution order, rollups, and domain truth. A rebuild derives the retained chosen sort from the new immutable projection and publishes its permutation, indexes, and revisions atomically; a failed rebuild preserves the previous complete view, and window reads perform no I/O to discover sort keys. Inventory sorting retains its accepted contract but remains unrealized.
 
-**Future surface.** Follow mode resolves an active item to the nearest visible ancestor-or-self under the same collapse, filter, search, and result revision. If nothing in its chain is visible it reports `not-visible`, without mutating filters or inventing a root target. The client requests the returned index's window. User scrolling away turns follow off; only explicit action resumes it. Progress carries an opaque item identity, never a display path.
+**M1-8-R0 surface.** Follow resolves the active operation to the nearest
+visible ancestor-or-self under the current collapse, filter, search, sort and
+revision. Nothing visible means no target; never mutate filters or invent a
+root. Automatic follow is restricted to unfiltered, search-free canonical order.
+User scroll-away or changing sort/search/filter disables it until explicit enable;
+returning to canonical alone does not resume it. One-shot Go to current operation
+remains available in other views without enabling follow. DESKTOP_UI owns the
+floating controls and override behavior.
+
+Reuse `PlanProjection.operation_node_id_by_id` and existing visible-anchor
+resolution for off-window operations; the browser must not derive node IDs or
+retain a full mapping. The read-only active-operation variant of `get_plan_anchor`
+is bound to the current task/session and view revision for execution and post-copy
+verification. Existing node-anchor callers retain their unchanged request shape. BRIDGE owns its exact wire extension;
+standalone integrity/inventory following remains outside this batch.
 
 ## Bounded work and focused measurement
 
@@ -146,7 +202,7 @@ Focused checks must catch the failures that small fixtures conceal: scope-qualif
 
 ## Implemented Plan and accepted future outcomes
 
-The implemented Plan review surface lets users inspect a complete stable view of immutable review facts, inert notices, current server-owned selection and destructive intent without letting stale UI actions acquire authority. It preserves prior-path ancestry and paired move annotations, while operation groups remain non-folder membership containers. Its renderer retains only the current `1..256` row window and uses exact 24 px rows and matching virtual spacers. The generic `tree.js` inventory foundation retains its separate exact 28 px row contract. Inventory review, follow mode and later result-detail projection remain accepted future outcomes; their DTO layout, caching topology and intermediate delivery sequence remain open until implementation.
+The implemented Plan review surface lets users inspect a complete stable view of immutable review facts, inert notices, current server-owned selection and destructive intent without letting stale UI actions acquire authority. It preserves prior-path ancestry and paired move annotations, while operation groups remain non-folder membership containers. Its renderer retains only the current `1..256` row window and uses exact 24 px rows and matching virtual spacers. The generic `tree.js` inventory foundation retains its separate exact 28 px row contract. Inventory review and follow mode remain accepted future outcomes; their DTO layout, caching topology and intermediate delivery sequence remain open until implementation.
 
 The Plan summary displays workflow-derived selected/eligible counts, selected
 required bytes, and planning issues (preflight refusals plus scan notices).
@@ -243,8 +299,9 @@ maximum <=250 ms; retain child identities and within/across-child dispersion.
 All failed attempts and timeouts remain recorded. This scoped acceptance does
 not renew the full 35-case collection or change its protected validator.
 
-Use existing headed child/readiness modes and authority freezing, with a separate
-scoped checker reusing independent receipt/fixture/profile/byte checks. Freeze
+Use existing headed workload/child/readiness and authority-freezing primitives
+through the A8-05 two-metric adapter/collector, with a separate scoped checker
+reusing unchanged independent receipt/profile/byte checks. Freeze
 the exact instrument/checker and additional product dependencies outside the
 historical source manifest, including `workflows/execution_review.py`. Verify
 physical source, wheel-member and installed bytes and Git-clean identities;
@@ -252,6 +309,61 @@ commit versioned raw provenance/receipts and a separate validation result.
 Require controls for missing/reused samples, wrong identities and a maximum-only
 failure. M1_PLAN names the finite files and selected-case readiness. Never filter
 the full contract to make its terminal validator accept partial evidence.
+
+A8-05 versions this scoped report for the accepted rootless surface: the unchanged
+base has 100,000 operations and 120,000 projection nodes, while its public window
+has 119,999 rows. Initial settlement requires 256 current rows at revision/offset
+zero and the independently derived `NamiSyncPriorV1` Previous paths first group.
+Retain per-plan identities and the existing fresh-unused Plan population for the
+start metric. Adapt only scoped fixture settlement/validation; preserve historical
+producer, checker, contract and artifacts without fabricating a public root.
+
+Before each launch durably publish the fixed ordered plan of two readiness
+children (window, start), five window children and five start children, plus the
+current launching state. Record accepted receipt/path/hash/process or the first
+failure/timeout and bounded error/log evidence. Refuse restart/overwrite; stop on
+first failure and obtain disposition before another collection. Independently
+validate the final index embedded in raw evidence against exact receipt membership,
+order, identities and hashes. Failed, launching or incomplete states cannot pass.
+This preserves evidence custody in the trusted local collection model, not
+protection against malicious rewriting. Both actual installed headed readiness
+cases precede timed acceptance; headless fixture probes are only compatibility
+evidence. Derive embedded authority OID from declared canonical bytes and bind
+the named authority through filtered repository bytes to final HEAD and raw
+receipts. Corruption controls cover these identities, rootless fixture premises,
+attempt custody and budgets. Freeze the new adapter/checker/test dependencies
+and verify postcommit source/evidence bindings; changed measured bytes invalidate
+affected observations.
+
+The P2 collection on 2026-09-20 completed its fixed 12 attempts with no failure.
+The named `m1_8_execution_receipt_{authority,receipts,result}.json` artifacts
+retain frozen provenance, exact attempt/sample membership and separate results.
+Window receipt p95/max is 6.8/7.3 ms; execution-start receipt is 58.8/65.1 ms.
+The full unmocked workspace validator passed before and after collection.
+Ignored `build/m1-8-p2/run-01/` retains child receipts, launch index and logs.
+These results apply to the P2 measured build; later UI edits reopen affected
+cases under their own declared evidence. Final committed-source validation is
+required in addition to receipt/result validation.
+
+For historical P2 terminal reproduction, check out its recorded accepted
+revision (`4bbf943`) with matching retained package bytes, then load the three
+named artifacts and the unchanged compact contract, import
+`tests/interfaces/web/_m1_8_execution_receipt_scale.py`, and invoke
+`validate_authority_workspace` with the retained wheel/installed paths, then
+`validate_receipts`, `validate_result` and `validate_committed_sources`.
+`compact_authority` uses `plan_scale.canonical_json_bytes`; use its recorded
+receipt OID and the raw artifact's authority OID. The exact retained invocation
+is `build/m1-8-p2-terminal-validate.py --installed-root <site-packages>
+--installed-wheel <wheel>`, executed with the project Python. It calls both
+historical and supplemental checks unmocked and finishes with named-artifact
+and clean-HEAD binding. HANDOFF records the actual retained installation.
+The validator intentionally rejects later changed source bytes. Accepted U
+evidence includes both P2 receipt metrics in its thirteen-case collection
+and supersedes P2's measurements for the corresponding U build.
+Do not rewrite frozen P2 artifacts or require their clean-HEAD check on U's tree.
+Receipt/result checks use committed artifacts; workspace validation additionally
+requires the matching retained wheel and installation. Missing package evidence
+must not be described as a successful workspace reproduction.
 
 Component windows, changed views, construction and projection-memory acceptance
 retain their existing premises only while PlanReviewState, projection/order/
@@ -261,6 +373,87 @@ Control receipt paths likewise require an unchanged timed dependency path.
 Changing a premise reopens affected cases; later GUI changes rerun affected
 receipts. The new execution overlay has structural population/work/byte bounds,
 not a new numeric latency or memory claim.
+
+### Scoped M1-8 execution UI revalidation
+
+Gate U uses a separately versioned affected-path report rather than changing
+the protected P2 or historical M1-7 authorities. Its fixed order is eight cold
+interaction cases—update view, mutate selection, destructive start, confirm,
+nondestructive start, pause, resume and cancel click feedback—followed by five
+warm receipt cases: one-row window, start, pause, resume and cancel. Run all 13
+untimed readiness children first, then five fresh children per case in that
+order, for exactly 78 attempts. Each cold child contributes one sample and must
+finish within 50 ms. Each warm child contributes six samples; nearest-rank p95
+must be at most 100 ms and the maximum at most 250 ms.
+
+Keep the compact contract's fixtures, equivalent untimed warmup, fresh unused-Plan
+population and installed headed path. The scoped rootless adapter retains
+120,000 projection nodes, 119,999 public rows and independently checks the
+first Previous paths group. The approved U-v2 observation contract supersedes
+pending-only feedback for the seven transient cold cases; historical M1-7/P2
+contracts and observations remain unchanged.
+
+At the first frame after an eligible connected control is clicked, require either
+action-specific pending feedback or an exact successful typed outcome already
+reflected in truthful action-correlated UI. Retain eventual exact settlement in
+both cases. Empty pending, refusal, uncertainty, no dispatch or an unrelated state
+never counts as success. Valid authoritative progress may advance beyond the
+reply's immediate state: Pause initially returns pausing, Resume pending and
+Cancel canceling. Do not force those intermediate states to linger. Destructive
+Execute keeps its exact modal/snapshot endpoint; Confirm preserves its modal
+safety requirements and proves the actual admission outcome separately.
+
+Selection and control warmups prove an equivalent successful action, untimed.
+Start observations bind the outgoing command to the expected plan request and
+its transport-correlated reply to the current task/session. The reply carries
+an execution run ID; the task summary retains its plan ID.
+Warm control correctness retains accepted/code/before/after and identity facts
+for independent validation, rather than treating session equality as acceptance.
+The U adapter uses guarded replacements and one scoped JavaScript probe, with
+exact source binding and byte identity outside the declared sites. The historical
+producer remains untouched. Keep click-to-first-frame timing and all budgets;
+no extra frame wait, post-frame repair or delayed product reply is permitted.
+Failure details contain bounded scalar operands, never DOM graphs or unbounded
+event histories. Failed observations remain failures, not acceptance samples.
+
+Before launch, freeze and independently validate the exact source, CSS,
+instrument, adapter, checker, control, wheel, installed-runtime and profile
+bindings. Durably publish the complete attempt plan and current launch state;
+stop at the first failure and refuse overwrite, restart or favorable retry.
+Publish the existing immutable failure packet before updating the mutable index,
+so a refused index replacement cannot suppress that packet. External monitoring
+must not hold the index open while its writer replaces it on Windows.
+Raw receipts and derived results have separate validators for exact identities,
+order, samples, hashes and budgets. Positive and corruption controls must reach
+the real supplemental byte and Git checks. Component construction, general
+window/sort/selection and process-memory observations remain excluded only when
+the final diff proves their measured code and retained graphs unchanged. Actual
+collection occurs only after final source/control review.
+
+The active U adapter is `tests/m1_8_execution_ui_benchmark.py`; its independent
+checker and focused controls are `_m1_8_execution_ui_scale.py` and
+`test_m1_8_execution_ui_scale.py` under `tests/interfaces/web/`;
+`tests/assets/m1_8_execution_ui_probe.mjs` owns its shared observation mechanics
+and is frozen as instrument source. Reuse unchanged
+P2 rootless settlement and historical profile helpers; keep U metric membership,
+cold/warm policy and attempt custody here. The three versioned artifacts are
+`m1_8_execution_ui_{authority,receipts,result}.json` in that same test directory.
+Acceptance requires the fixed collection and both source-binding
+stages: full workspace/raw validation against the staged candidate before
+commit, then clean-HEAD validation including the raw authority binding afterward.
+Changes to measured product, instrument, checker, controls, package or native
+profile reopen the affected evidence; unchanged product alone is insufficient.
+
+The 2026-09-24 post-R2 recovery correction reran all 78 attempts with the fixed
+profile and populations. Independent derivation gives a 20.3 ms worst cold
+maximum, 72.0 ms worst warm p95 and 73.3 ms warm maximum, within the unchanged
+limits. The three artifacts above retain this current-source evidence;
+`build/recovery-close-20260924/delivery-01.json` records staged and clean-HEAD
+closure. Accepted predecessor run-03 remains under `build/r2-20260924/`;
+historical failed runs remain separate and contribute no accepted samples.
+R3 preserves that candidate's entire `build/` tree under the main checkout's
+`build/m1-8-archive-20260924/evidence/`; the delivery register records integration
+and the original-to-archive path mapping.
 
 ### Existing complete-collection procedure
 
@@ -446,8 +639,9 @@ view and its connected checkbox. Warmup must publish pending and settle to an
 advanced authoritative selection revision with that same row unchecked; the
 measured action requeries that row. Public summary/window reads are untimed
 witnesses, not asynchronous completion events for the synchronous mutation path.
-The pending-frame criterion is unchanged; failure after verified eligibility is
-a stop for review, not permission to delay product receipts or weaken the test.
+The historical M1-7 pending-frame criterion is unchanged; failure after verified
+eligibility is a stop for review, not permission to delay product receipts or
+weaken that test. Scoped U uses the separately approved observation contract above.
 
 Retain each checked child receipt atomically under a unique ignored run evidence
 directory. A separate atomic index binds its frozen authority, case, planned

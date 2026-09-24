@@ -336,6 +336,7 @@ async function proveBrowserGate(sourceId, targetId) {
     "malformed response escaped its fixed refusal",
   );
   const malformedRefusal = { name: malformedRefusals[0].name };
+  stopMalformed();
   const stopMalformedReplacement = startTaskDrain(
     malformedPlan.task_id,
     malformedPlan.session_id,
@@ -346,7 +347,6 @@ async function proveBrowserGate(sourceId, targetId) {
 
   stopMain();
   stopBusy();
-  stopMalformed();
   browserStage = "task-listener-timer-cleanup";
   await waitFor(
     () => readyListeners.size === 1 && activeTimers.size === 0,

@@ -53,16 +53,23 @@ with editable queued search, counted toggle-button filters, server-owned
 search/filter-scoped bulk selection, sibling sorting and a
 blocking Fluent confirmation
 for each destructive execution admission,
-live pause/resume/cancel controls, and a minimal Settings/About page with theme
-control and independent task-rail scrolling. Execution-result and inventory review,
-final packaging, and beta
+live pause/resume/cancel controls, bounded live and retained execution review,
+and a minimal Settings/About page with theme control and independent task-rail
+scrolling. Execution review keeps filesystem, verification, recording and audit
+results distinct, with current stored evidence and on-demand operation detail.
+Canonical execution following has an explicit manual override and navigation
+controls; phase progress, observed throughput and ETA share the inline status
+card with folded global and operation Details.
+Inventory review, final packaging, and beta
 closure remain open, so the window is not yet the complete desktop product.
+The [M1 delivery register](docs/M1_PLAN.md) records execution-review acceptance,
+affected performance verification, and any remaining recovery work.
 Desktop release also requires scoped cold-start resource budgets and repeated/
 long-workload leak checks under the [resource acceptance policy](docs/DEFENSE.md#7-quantitative-evidence-and-measurement-authority).
 These remain open and do not promise universal whole-runtime memory containment.
 
-Remaining desktop work covers execution-result review and
-inventory/integrity content within the active task shell. Accepted sorting and rebaseline
+Remaining desktop work covers inventory/integrity content within the active task
+shell. Accepted sorting and rebaseline
 behavior lives in the [feature catalog](docs/FEATURES.md); the
 [M1 plan](docs/M1_PLAN.md) owns remaining delivery and verification.
 External requests and applicable populations are bounded at their owners;
@@ -220,9 +227,8 @@ never hides the other result axes in rendered output.
   and diagnostic commands.
 - [Test ablation study](docs/TEST_ABLATION.md) — measured detection losses,
   rebased recommendations and subsequent refinement dispositions.
-- [M1-7 ablation plan](docs/M1_7_ABLATION_STUDY.md) — retained candidate register,
-  bounded simplification checkpoints, detector-quality gates and explicit
-  deferrals; implementation awaits authorization.
+- [M1-7 ablation study](docs/M1_7_ABLATION_STUDY.md) — retained reduction proposals;
+  revisiting remains separate work requiring explicit user resumption.
 - [Test refinement register](docs/TEST_REFINEMENT.md) — bounded implementation
   outcomes and verification of retained test guarantees.
 - [Production reduction register](docs/PRODUCTION_REDUCTION.md) — bounded
@@ -243,6 +249,7 @@ never hides the other result axes in rendered output.
 - [Handoff](docs/HANDOFF.md) — immediate operational context.
 
 Historical plans and delivery records are under `docs/obsolete/`:
+[M1-7/M1-8 working and recovery register](docs/obsolete/M1_8_U_RECOVERY.md),
 [M1 plan](docs/obsolete/M1_PLAN.md), [bridge](docs/obsolete/M1_BRIDGE.md),
 [shell](docs/obsolete/M1_SHELL.md), [second-half checklist](docs/obsolete/M1_SHELL_H2.md),
 [initial simplification](docs/obsolete/M1_SIMPLIFICATION.md),
@@ -279,9 +286,12 @@ from recent pairs with fresh availability checks. Settings/About occupies the
 work area while preserving tasks; the rail scrolls independently. The exact
 event-v5/data-epoch-7 protocol cut is active. Plan review adds bounded hierarchy,
 search/filter/sort, authoritative selection, snapshot-bound destructive confirmation and
-same-task execution with live controls. Close fences new admission while keeping
-terminal release and retained review distinct. M1-7's fixed Plan-scale and
-interaction criteria pass on the reference profile. Execution-result/inventory review and beta
+same-task execution with live controls and bounded live/retained result review.
+Recognized capacity failures stop later executor work after current settlement;
+capacity guidance preserves independent failure and verification facts.
+Close fences new admission while keeping terminal release and retained review
+distinct. M1-7's fixed Plan-scale and interaction criteria pass on the reference
+profile. Inventory review and beta
 packaging remain open.
 
 ### M1 Consolidation

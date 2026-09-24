@@ -96,6 +96,7 @@ _LIFECYCLE_CASES = {
     "canceled_after_publish": ("yellow", "fill"),
     "canceled_after_mutation": ("yellow", "fill"),
     "refused": ("yellow", "fill"),
+    "capacity": ("yellow", "fill"),
     "failed": ("red", "fill"),
     "errored": ("red", "fill"),
 }
@@ -131,6 +132,7 @@ _PLAN_ROW_CASE_KEYS = frozenset(
         "copy",
         "copying",
         "completed",
+        "capacity",
         "update",
         "move",
         "move_update",
@@ -151,6 +153,7 @@ _PLAN_ROW_PRIMARY = {
     "plain": ("", "", ""),
     "copying": ("lifecycle", "executing", "progress"),
     "completed": ("lifecycle", "completed", "text"),
+    "capacity": ("lifecycle", "capacity", "fill"),
     **{
         key: ("intent", key, form)
         for key, (_hue, form) in _INTENT_CASES.items()
@@ -217,6 +220,85 @@ _EVIDENCE_FAILURE_TYPES = _FAILURE_TYPES | {
     "ScriptExecutionError",
     "ValueError",
 }
+_FAILURE_STEPS = frozenset(
+    {
+        "not_started",
+        "plan_list_construction",
+        "plan_review_construction",
+        "plan_review_initial_render",
+        "plan_review_static_contract",
+        "plan_review_filter_spacing",
+        "plan_review_path_alignment",
+        "plan_review_reset_geometry",
+        "plan_review_status_typography",
+        "plan_review_caption_typography",
+        "plan_review_setting_alignment",
+        "plan_review_path_label_gap",
+        "plan_review_setting_states",
+        "plan_review_session_states",
+        "plan_review_filter_menu",
+        "diagnostic_default_folded_empty",
+        "diagnostic_default_folded_populated",
+        "diagnostic_default_expanded_empty",
+        "diagnostic_default_expanded_populated",
+        "pseudo_state_settlement",
+        "control_styles",
+        "file_list_specimen",
+        "hierarchy_selection",
+        "master_selection",
+        "column_resize",
+        "file_rows",
+        "file_list_structure",
+        "icon_registry",
+        "dialog_exit",
+        "confirmation_preview",
+        "combobox_layout",
+        "task_rail_layout",
+        "native_minimum_request",
+        "native_minimum_layout",
+        "native_minimum_keyboard",
+        "execution_axes",
+        "segmented_state",
+        "report_assembly",
+        "child",
+    }
+)
+_FAILURE_REASONS = frozenset(
+    {
+        "stage_failure",
+        "watchdog_timeout",
+        "native_pseudo_pending",
+        "control_invariant",
+        "hierarchy_invariant",
+        "selection_invariant",
+        "column_resize_invariant",
+        "file_row_invariant",
+        "file_list_invariant",
+        "icon_invariant",
+        "dialog_invariant",
+        "combobox_invariant",
+        "task_rail_invariant",
+        "native_wheel_pending",
+        "native_minimum_pending",
+        "native_minimum_dimensions",
+        "layout_invariant",
+        "execution_axes_invariant",
+        "segmented_state_invariant",
+        "report_invariant",
+        "child_failure",
+    }
+)
+_NATIVE_FAILURE_REASONS = frozenset(
+    {
+        "native_pseudo_pending",
+        "native_wheel_pending",
+        "native_minimum_pending",
+        "native_minimum_dimensions",
+    }
+)
+_NATIVE_PENDING = frozenset(
+    {"none", "pseudo_states", "wheel_content", "wheel_backdrop", "minimum_window"}
+)
 _SYSTEM_COLOR_NAMES = frozenset(
     {
         "Canvas",
@@ -274,7 +356,7 @@ class _Recorder:
         self._publisher = EvidencePublisher(evidence_paths)
         self._lock = threading.Lock()
         self._initial: str | None = None
-        self._post_ready_failure: dict[str, str] | None = None
+        self._post_ready_failure: dict[str, object] | None = None
         self._data: dict[str, Any] = {
             "schema_version": 6,
             "mode": mode,
@@ -316,6 +398,8 @@ class _Recorder:
             failure = {
                 "stage": stage if stage in _EVIDENCE_FAILURE_STAGES else "child",
                 "type": _sanitized_error_type(error),
+                "step": "child",
+                "reason": "child_failure",
             }
             if self._initial == "failure":
                 return
@@ -344,13 +428,13 @@ class _Recorder:
                 )
             self._publisher.publish_final(payload)
 
-    def _failure_locked(self) -> dict[str, str] | None:
+    def _failure_locked(self) -> dict[str, object] | None:
         report = self._data.get("report")
         if type(report) is dict and report.get("phase") == "failure":
             failure = report.get("failure")
             if type(failure) is dict:
                 stage = failure.get("stage")
-                return {
+                result: dict[str, object] = {
                     "stage": (
                         stage
                         if type(stage) is str
@@ -358,22 +442,89 @@ class _Recorder:
                         else "report"
                     ),
                     "type": _sanitized_type_name(failure.get("type")),
+                    "step": _sanitized_failure_token(
+                        failure.get("step"), _FAILURE_STEPS, "not_started"
+                    ),
+                    "reason": _sanitized_failure_token(
+                        failure.get("reason"), _FAILURE_REASONS, "stage_failure"
+                    ),
                 }
+                native = failure.get("native")
+                if (
+                    result["reason"] in _NATIVE_FAILURE_REASONS
+                    and _valid_native_failure_snapshot(native)
+                ):
+                    result["native"] = dict(native)
+                return result
         if "pseudo_state_failed" in self._data:
-            return {"stage": "pseudo_states", "type": "Error"}
+            return {
+                "stage": "pseudo_states", "type": "Error",
+                "step": "pseudo_state_settlement", "reason": "stage_failure",
+            }
         if "media_emulation_failed" in self._data:
-            return {"stage": "page_setup", "type": "Error"}
+            return {
+                "stage": "page_setup", "type": "Error",
+                "step": "not_started", "reason": "stage_failure",
+            }
         native_failure = self._data.get("native_script_failure")
         if type(native_failure) is dict:
+            a1_methods = {
+                "a1_keyboard_focus": "Runtime.evaluate",
+                "a1_keyboard_down": "Input.dispatchKeyEvent",
+                "a1_keyboard_up": "Input.dispatchKeyEvent",
+                "a1_keyboard_after": "Runtime.evaluate",
+                "a1_keyboard_capture-context": "Runtime.evaluate",
+                "a1_keyboard_capture": "Page.captureScreenshot",
+            }
+            if (
+                native_failure.get("stage") == "a1_keyboard"
+                and a1_methods.get(native_failure.get("step"))
+                == native_failure.get("method")
+            ):
+                return {
+                    "stage": "measurement",
+                    "type": _sanitized_type_name(native_failure.get("type")),
+                    "step": "native_minimum_keyboard",
+                    "reason": "stage_failure",
+                }
             return {
                 "stage": "page_setup",
                 "type": _sanitized_type_name(native_failure.get("type")),
+                "step": "not_started",
+                "reason": "stage_failure",
             }
         return None
 
 
 def _sanitized_error_type(error: BaseException) -> str:
     return _sanitized_type_name(type(error).__name__)
+
+
+def _sanitized_failure_token(
+    value: object, allowed: frozenset[str], fallback: str
+) -> str:
+    return value if type(value) is str and value in allowed else fallback
+
+
+def _valid_native_failure_snapshot(value: object) -> bool:
+    if type(value) is not dict or set(value) != {
+        "pending", "owner_scale", "minimum_width", "minimum_height",
+        "outer_width", "outer_height", "client_width", "client_height",
+    }:
+        return False
+    return (
+        type(value["pending"]) is str
+        and value["pending"] in _NATIVE_PENDING
+        and all(
+            type(value[name]) in {int, float}
+            and math.isfinite(value[name])
+            and value[name] > 0
+            for name in (
+                "owner_scale", "minimum_width", "minimum_height",
+                "outer_width", "outer_height", "client_width", "client_height",
+            )
+        )
+    )
 
 
 def _sanitized_type_name(value: object) -> str:
@@ -467,6 +618,10 @@ def _test_report_spec(
     schedule_pseudos: object,
     expected_mode: str,
     schedule_wheel: object = None,
+    schedule_minimum_window: object = None,
+    read_minimum_window: object = None,
+    read_native_diagnostic: object = None,
+    schedule_a1_keyboard: object = None,
 ):
     from namisync.interfaces.web.commands import (
         CommandAccess,
@@ -480,6 +635,8 @@ def _test_report_spec(
     parts: list[tuple[str, object]] = []
     completed = False
     wheel_targets: set[str] = set()
+    minimum_window_requested = False
+    a1_keyboard_requested = False
 
     def validate(payload: object) -> dict[str, object]:
         if type(payload) is not dict or type(payload.get("phase")) is not str:
@@ -487,6 +644,14 @@ def _test_report_spec(
         if payload["phase"] == "preview_wheel" and set(payload) == {"phase", "target"}:
             if type(payload["target"]) is not str or payload["target"] not in {"content", "backdrop"}:
                 raise CommandPayloadError("component gallery wheel target is invalid")
+            return dict(payload)
+        if payload["phase"] == "minimum_window" and set(payload) == {"phase"}:
+            return dict(payload)
+        if payload["phase"] == "minimum_window_status" and set(payload) == {"phase"}:
+            return dict(payload)
+        if payload["phase"] == "diagnostic_status" and set(payload) == {"phase"}:
+            return dict(payload)
+        if payload["phase"] == "a1_keyboard" and set(payload) == {"phase"}:
             return dict(payload)
         if payload["phase"] == "prepare" and set(payload) == {
             "phase",
@@ -503,11 +668,29 @@ def _test_report_spec(
             failure = payload["failure"]
             if (
                 type(failure) is not dict
-                or set(failure) != {"stage", "type"}
+                or not {"stage", "type", "step", "reason"}.issubset(failure)
+                or not set(failure).issubset(
+                    {"stage", "type", "step", "reason", "native"}
+                )
                 or type(failure["stage"]) is not str
                 or type(failure["type"]) is not str
+                or type(failure["step"]) is not str
+                or type(failure["reason"]) is not str
                 or failure["stage"] not in _FAILURE_STAGES
                 or failure["type"] not in _FAILURE_TYPES
+                or failure["step"] not in _FAILURE_STEPS
+                or failure["reason"] not in _FAILURE_REASONS
+                or (
+                    "native" in failure
+                    and (
+                        failure["reason"] not in _NATIVE_FAILURE_REASONS
+                        or not _valid_native_failure_snapshot(failure["native"])
+                    )
+                )
+                or (
+                    failure["reason"] in _NATIVE_FAILURE_REASONS
+                    and "native" not in failure
+                )
             ):
                 raise CommandPayloadError("component gallery report is invalid")
             return dict(payload)
@@ -572,11 +755,42 @@ def _test_report_spec(
         return dict(payload)
 
     def report(payload: object) -> object:
-        nonlocal completed
+        nonlocal completed, minimum_window_requested, a1_keyboard_requested
         if type(payload) is not dict:
             raise TypeError("component gallery received unvalidated data")
         if payload["phase"] == "prepare":
             schedule_pseudos(payload["targets"])
+            return {"accepted": True}
+        if payload["phase"] == "minimum_window":
+            if minimum_window_requested or not callable(schedule_minimum_window):
+                raise CommandPayloadError(
+                    "component gallery minimum window request is invalid"
+                )
+            minimum_window_requested = True
+            schedule_minimum_window()
+            return {"accepted": True}
+        if payload["phase"] == "minimum_window_status":
+            if not minimum_window_requested or not callable(read_minimum_window):
+                raise CommandPayloadError(
+                    "component gallery minimum window status is invalid"
+                )
+            return read_minimum_window()
+        if payload["phase"] == "diagnostic_status":
+            if not callable(read_native_diagnostic):
+                raise CommandPayloadError(
+                    "component gallery diagnostic status is invalid"
+                )
+            value = read_native_diagnostic()
+            if not _valid_native_failure_snapshot(value):
+                raise CommandPayloadError(
+                    "component gallery diagnostic status is invalid"
+                )
+            return value
+        if payload["phase"] == "a1_keyboard":
+            if a1_keyboard_requested or not callable(schedule_a1_keyboard):
+                raise CommandPayloadError("component gallery A1 keyboard request is invalid")
+            a1_keyboard_requested = True
+            schedule_a1_keyboard()
             return {"accepted": True}
         if completed:
             raise CommandPayloadError("component gallery report is invalid")
@@ -1049,6 +1263,8 @@ def _valid_control_contract(value: object) -> bool:
         "tri_state",
         "dialog_exit",
         "confirmation_preview",
+        "diagnostic_layout",
+        "minimum_window",
         "segmented",
         "combobox",
         "task_rail",
@@ -1060,6 +1276,8 @@ def _valid_control_contract(value: object) -> bool:
     tri_state = value["tri_state"]
     dialog_exit = value["dialog_exit"]
     confirmation_preview = value["confirmation_preview"]
+    diagnostic_layout = value["diagnostic_layout"]
+    minimum_window = value["minimum_window"]
     segmented = value["segmented"]
     combobox = value["combobox"]
     task_rail = value["task_rail"]
@@ -1123,6 +1341,95 @@ def _valid_control_contract(value: object) -> bool:
             "cancel_closed", "confirm_closed", "focus_restored", "wheel_blocked",
         }
         and all(item is True for item in confirmation_preview.values())
+        and _valid_diagnostic_layout(diagnostic_layout)
+        and type(minimum_window) is dict
+        and set(minimum_window) == {
+            "default_outer_width", "default_outer_height",
+            "native_default_owner_scale", "native_default_outer_width",
+            "native_default_outer_height",
+            "outer_width", "outer_height", "inner_width", "inner_height",
+            "native_owner_scale", "native_minimum_width", "native_minimum_height",
+            "native_outer_width", "native_outer_height",
+            "native_client_width", "native_client_height",
+            "work_width", "work_content_width", "work_height",
+            "review_width", "review_height",
+            "work_content_aligned",
+            "axes_wrapped", "long_trash_length",
+            "keyboard_scroll_before", "keyboard_scroll_after",
+            "keyboard_capture_width", "keyboard_capture_height",
+        }
+        and all(
+            type(minimum_window[name]) in {int, float}
+            and math.isfinite(minimum_window[name])
+            and minimum_window[name] > 0
+            for name in (
+                "default_outer_width", "default_outer_height",
+                "native_default_owner_scale", "native_default_outer_width",
+                "native_default_outer_height",
+                "outer_width", "outer_height", "inner_width", "inner_height",
+                "native_owner_scale", "native_minimum_width", "native_minimum_height",
+                "native_outer_width", "native_outer_height",
+                "native_client_width", "native_client_height",
+                "work_width", "work_content_width", "work_height",
+                "review_width", "review_height",
+                "keyboard_capture_width", "keyboard_capture_height",
+            )
+        )
+        and type(minimum_window["keyboard_scroll_before"]) in {int, float}
+        and type(minimum_window["keyboard_scroll_after"]) in {int, float}
+        and minimum_window["keyboard_scroll_before"] >= 0
+        and minimum_window["keyboard_scroll_after"] > minimum_window["keyboard_scroll_before"]
+        and minimum_window["axes_wrapped"] is True
+        and minimum_window["long_trash_length"] == 32767
+        and minimum_window["work_content_aligned"] is True
+        and math.isclose(
+            minimum_window["native_default_outer_width"],
+            1280 * minimum_window["native_default_owner_scale"],
+            abs_tol=2,
+        )
+        and math.isclose(
+            minimum_window["native_default_outer_height"],
+            800 * minimum_window["native_default_owner_scale"],
+            abs_tol=2,
+        )
+        and minimum_window["work_content_width"] <= minimum_window["work_width"]
+        and math.isclose(
+            minimum_window["review_width"],
+            minimum_window["work_content_width"],
+            abs_tol=1,
+        )
+        and math.isclose(
+            minimum_window["native_minimum_width"],
+            int(1024 * minimum_window["native_owner_scale"]),
+            abs_tol=1,
+        )
+        and math.isclose(
+            minimum_window["native_minimum_height"],
+            int(640 * minimum_window["native_owner_scale"]),
+            abs_tol=1,
+        )
+        and math.isclose(
+            minimum_window["native_outer_width"],
+            minimum_window["native_minimum_width"],
+            abs_tol=1,
+        )
+        and math.isclose(
+            minimum_window["native_outer_height"],
+            minimum_window["native_minimum_height"],
+            abs_tol=1,
+        )
+        and math.isclose(
+            minimum_window["native_client_width"]
+            / minimum_window["native_owner_scale"],
+            minimum_window["inner_width"],
+            abs_tol=2,
+        )
+        and math.isclose(
+            minimum_window["native_client_height"]
+            / minimum_window["native_owner_scale"],
+            minimum_window["inner_height"],
+            abs_tol=2,
+        )
         and segmented
         == {
             "group_role": "radiogroup",
@@ -1226,6 +1533,233 @@ def _valid_control_contract(value: object) -> bool:
         and bool(task_rail["selected_marker_background"])
         and _valid_plan_evidence(file_list)
         and _valid_integrity_evidence(integrity_list)
+    )
+
+
+def _native_minimum_matches_owner_scale(
+    width: int,
+    height: int,
+    owner_scale: float,
+) -> bool:
+    return (
+        math.isclose(width, int(1024 * owner_scale), abs_tol=1)
+        and math.isclose(height, int(640 * owner_scale), abs_tol=1)
+    )
+
+
+class _MinimumWindowStatus:
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._value: dict[str, object] = {"complete": False}
+        self._diagnostic: dict[str, object] | None = None
+
+    def read(self) -> dict[str, object]:
+        with self._lock:
+            return dict(self._value)
+
+    def read_diagnostic(self) -> dict[str, object] | None:
+        with self._lock:
+            return (
+                None if self._diagnostic is None else dict(self._diagnostic)
+            )
+
+    def set_pending(self, pending: str) -> None:
+        if pending not in _NATIVE_PENDING:
+            raise ValueError("component gallery native pending state is invalid")
+        with self._lock:
+            if self._diagnostic is not None:
+                self._diagnostic["pending"] = pending
+
+    def publish_diagnostic(
+        self,
+        *,
+        pending: str,
+        owner_scale: float,
+        minimum_width: int,
+        minimum_height: int,
+        outer_width: int,
+        outer_height: int,
+        client_width: int,
+        client_height: int,
+    ) -> None:
+        snapshot = {
+            "pending": pending,
+            "owner_scale": owner_scale,
+            "minimum_width": minimum_width,
+            "minimum_height": minimum_height,
+            "outer_width": outer_width,
+            "outer_height": outer_height,
+            "client_width": client_width,
+            "client_height": client_height,
+        }
+        if not _valid_native_failure_snapshot(snapshot):
+            raise ValueError("component gallery native diagnostic is invalid")
+        with self._lock:
+            self._diagnostic = snapshot
+
+    def publish(
+        self,
+        *,
+        owner_scale: float,
+        minimum_width: int,
+        minimum_height: int,
+        outer_width: int,
+        outer_height: int,
+        client_width: int,
+        client_height: int,
+    ) -> None:
+        snapshot = {
+            "complete": True,
+            "owner_scale": owner_scale,
+            "minimum_width": minimum_width,
+            "minimum_height": minimum_height,
+            "outer_width": outer_width,
+            "outer_height": outer_height,
+            "client_width": client_width,
+            "client_height": client_height,
+        }
+        with self._lock:
+            self._value = snapshot
+            self._diagnostic = {
+                "pending": "none",
+                **{name: value for name, value in snapshot.items() if name != "complete"},
+            }
+
+
+def _install_minimum_window_scheduler(
+    *,
+    window: object,
+    native: object,
+    action: object,
+    retained_delegates: list[object],
+    scheduler: dict[str, object],
+    status: _MinimumWindowStatus,
+    recorder: object,
+) -> None:
+    status.publish_diagnostic(
+        pending="none",
+        owner_scale=float(native._scale),
+        minimum_width=native.MinimumSize.Width,
+        minimum_height=native.MinimumSize.Height,
+        outer_width=native.Width,
+        outer_height=native.Height,
+        client_width=native.ClientSize.Width,
+        client_height=native.ClientSize.Height,
+    )
+
+    def resize_minimum_window() -> None:
+        owner_scale = float(native._scale)
+        minimum = native.MinimumSize
+        if not _native_minimum_matches_owner_scale(
+            minimum.Width,
+            minimum.Height,
+            owner_scale,
+        ):
+            status.publish(
+                owner_scale=owner_scale,
+                minimum_width=minimum.Width,
+                minimum_height=minimum.Height,
+                outer_width=native.Width,
+                outer_height=native.Height,
+                client_width=native.ClientSize.Width,
+                client_height=native.ClientSize.Height,
+            )
+            return
+        native.Size = minimum
+        recorder.set(
+            "native_window_request",
+            {
+                "minimum": True,
+                "logical_width": 1024,
+                "logical_height": 640,
+                "owner_scale": owner_scale,
+                "minimum_width": minimum.Width,
+                "minimum_height": minimum.Height,
+            },
+        )
+
+        def observe_completed_resize() -> None:
+            status.publish(
+                owner_scale=owner_scale,
+                minimum_width=native.MinimumSize.Width,
+                minimum_height=native.MinimumSize.Height,
+                outer_width=native.Width,
+                outer_height=native.Height,
+                client_width=native.ClientSize.Width,
+                client_height=native.ClientSize.Height,
+            )
+
+        completion = action(observe_completed_resize)
+        retained_delegates.append(completion)
+        native.BeginInvoke(completion)
+
+    def schedule_minimum_window() -> None:
+        status.set_pending("minimum_window")
+        resize = action(resize_minimum_window)
+        retained_delegates.append(resize)
+        native.BeginInvoke(resize)
+
+    if window.native is not native:
+        raise RuntimeError("component gallery native window ownership changed")
+    scheduler["value"] = schedule_minimum_window
+
+
+def _valid_diagnostic_layout(value: object) -> bool:
+    cases = {
+        f"{size}-{disclosure}-{population}"
+        for size in ("default", "minimum")
+        for disclosure in ("folded", "expanded")
+        for population in ("empty", "populated")
+    }
+    keys = {
+        "case", "block_size", "root_fits", "table_usable",
+        "expanded", "populated", "logical_rows", "loaded_rows",
+        "disclosure_matches", "diagnostics_visible", "rows_overflow",
+        "scroll_advanced", "window_requested", "window_adopted",
+        "viewport_bounded", "row_height", "stale_facts_cleared",
+        "header_aligned", "whole_row_reachable", "both_columns_reachable",
+        "collapse_focus_restored", "table_state_preserved",
+        "hidden_descendant_exempt", "visible_collapsed_rejected",
+        "no_horizontal_control_clipping", "visible_count",
+        "cardinality_exact", "issues_content_reachable", "trash_content_reachable",
+        "detail_content_reachable", "issues_keyboard_reachable",
+        "trash_keyboard_reachable", "detail_keyboard_reachable",
+        "readable_body", "disclosure_reachable",
+        "row_activation_reachable", "placeholder_present",
+        "detail_matches_focused_row",
+        "title_action_aligned", "status_details_same_row",
+    }
+    return (
+        type(value) is list
+        and len(value) == len(cases)
+        and all(type(item) is dict and type(item.get("case")) is str for item in value)
+        and {item["case"] for item in value} == cases
+        and all(
+            type(item) is dict
+            and set(item) == keys
+            and type(item["block_size"]) in {int, float}
+            and math.isfinite(item["block_size"])
+            and item["block_size"] > 0
+            and type(item["visible_count"]) is int
+            and 0 <= item["visible_count"] <= 2
+            and type(item["expanded"]) is bool
+            and type(item["populated"]) is bool
+            and type(item["logical_rows"]) is int
+            and 0 <= item["logical_rows"] <= 1000
+            and type(item["loaded_rows"]) is int
+            and 0 <= item["loaded_rows"] <= 64
+            and type(item["row_height"]) in {int, float}
+            and math.isfinite(item["row_height"])
+            and 0 <= item["row_height"] <= 128
+            and all(
+                type(item[name]) is bool
+                for name in keys - {
+                    "case", "block_size", "visible_count", "expanded", "populated",
+                    "logical_rows", "loaded_rows", "row_height",
+                }
+            )
+            for item in value
+        )
     )
 
 
@@ -2038,6 +2572,80 @@ def _schedule_preview_wheel(
     on_ui(locate)
 
 
+def _schedule_a1_keyboard_capture(
+    native: object,
+    core: object,
+    target: Path,
+    recorder: _Recorder,
+    retained_delegates: list[object],
+) -> None:
+    from System import Action
+    from _headed_cdp import NativeCdp, decode_png
+
+    def fail(error: BaseException, _task: object, step: str, method: str) -> None:
+        recorder.set(
+            "native_script_failure",
+            {"stage": "a1_keyboard", "type": type(error).__name__, "step": step, "method": method},
+        )
+        recorder.write()
+
+    cdp = NativeCdp(native, core, retained_delegates, fail)
+    expression = """(() => {
+      const region = document.querySelector('.nami-plan-review__detail:not([hidden])');
+      if (!(region instanceof HTMLElement)) throw new Error('expanded detail is unavailable');
+      region.scrollTop = 0;
+      region.focus();
+      return region.scrollTop;
+    })()"""
+
+    def complete(value: object, after: object) -> None:
+        dimensions = decode_png(target)
+        _execute_script_checked(
+            core,
+            "globalThis.__namiGalleryA1Keyboard = "
+            + json.dumps({"before": value, "after": after, "capture": True, "dimensions": dimensions})
+            + ";",
+            stage="a1_keyboard", recorder=recorder,
+            retained_delegates=retained_delegates,
+        )
+
+    def before(value: object) -> None:
+        if type(value) not in {int, float}:
+            raise TypeError("native keyboard start position is invalid")
+        cdp.dispatch(
+            {"type": "keyDown", "key": "PageDown", "code": "PageDown", "windowsVirtualKeyCode": 34},
+            lambda: cdp.dispatch(
+                {"type": "keyUp", "key": "PageDown", "code": "PageDown", "windowsVirtualKeyCode": 34},
+                lambda: cdp.evaluate(
+                    """(async () => {
+                      const region = document.querySelector('.nami-plan-review__detail:not([hidden])');
+                      if (!(region instanceof HTMLElement)) throw new Error('expanded detail is unavailable');
+                      for (let frame = 0; frame < 120 && region.scrollTop <= """
+                    + json.dumps(value)
+                    + """; frame += 1) {
+                        await new Promise((resolve) => requestAnimationFrame(resolve));
+                      }
+                      return region.scrollTop;
+                    })()""",
+                    lambda after: cdp.capture(
+                        target,
+                        lambda: complete(value, after),
+                        "a1_keyboard_capture",
+                    ),
+                    "a1_keyboard_after",
+                ),
+                "a1_keyboard_up",
+            ),
+            "a1_keyboard_down",
+        )
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.unlink(missing_ok=True)
+    start = Action(lambda: cdp.evaluate(expression, before, "a1_keyboard_focus"))
+    retained_delegates.append(start)
+    native.BeginInvoke(start)
+
+
 def _execute_script_checked(
     core: object,
     source: str,
@@ -2077,6 +2685,9 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
     retained_delegates: list[object] = []
     pseudo_scheduler: dict[str, object] = {}
     wheel_scheduler: dict[str, object] = {}
+    a1_keyboard_scheduler: dict[str, object] = {}
+    minimum_window_scheduler: dict[str, object] = {}
+    minimum_window_status = _MinimumWindowStatus()
 
     def create_seeded_ui_state(path: Path):
         return _seeded_ui_state_owner(path, arguments.mode, recorder)
@@ -2104,13 +2715,33 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
             callback = pseudo_scheduler.get("value")
             if not callable(callback):
                 raise RuntimeError("component gallery pseudo-state owner is pending")
+            minimum_window_status.set_pending("pseudo_states")
             callback(targets)
 
         def wheel(target: str) -> None:
             callback = wheel_scheduler.get("value")
             if not callable(callback):
                 raise RuntimeError("component gallery wheel owner is pending")
+            minimum_window_status.set_pending(f"wheel_{target}")
             callback(target)
+
+        def minimum_window() -> None:
+            callback = minimum_window_scheduler.get("value")
+            if not callable(callback):
+                raise RuntimeError("component gallery minimum window owner is pending")
+            callback()
+
+        def a1_keyboard() -> None:
+            callback = a1_keyboard_scheduler.get("value")
+            if not callable(callback):
+                raise RuntimeError("component gallery A1 keyboard owner is pending")
+            callback()
+
+        def read_minimum_window() -> dict[str, object]:
+            return minimum_window_status.read()
+
+        def read_native_diagnostic() -> dict[str, object] | None:
+            return minimum_window_status.read_diagnostic()
 
         return {
             "test_report": _test_report_spec(
@@ -2118,6 +2749,10 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
                 schedule,
                 arguments.mode,
                 wheel,
+                minimum_window,
+                read_minimum_window,
+                read_native_diagnostic,
+                a1_keyboard,
             )
         }
 
@@ -2167,9 +2802,25 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
                         raise RuntimeError(
                             "component gallery UI dispatch did not reach the UI thread"
                         )
+                    _install_minimum_window_scheduler(
+                        window=window,
+                        native=native,
+                        action=Action,
+                        retained_delegates=retained_delegates,
+                        scheduler=minimum_window_scheduler,
+                        status=minimum_window_status,
+                        recorder=recorder,
+                    )
                     core = native.browser.webview.CoreWebView2
                     wheel_scheduler["value"] = lambda target: _schedule_preview_wheel(
                         native, core, target, recorder, retained_delegates,
+                    )
+                    a1_keyboard_scheduler["value"] = lambda: _schedule_a1_keyboard_capture(
+                        native,
+                        core,
+                        arguments.evidence_dir / "a1-native-minimum.png",
+                        recorder,
+                        retained_delegates,
                     )
                     pseudo_scheduler["value"] = lambda targets: (
                         _schedule_pseudo_states(

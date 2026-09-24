@@ -51,6 +51,22 @@ const baseRow = {
   move_peer_id: null,
   notice: "Partial size: overflow",
   selection_exclusion_reason: null,
+  execution: {
+    operation: null,
+    automatic_verification: null,
+    evidence: null,
+  },
+};
+const execution = {
+  execution_revision: 0,
+  session_id: null,
+  result: null,
+  failed_operation_count: null,
+  disk_capacity_failure_count: null,
+  gap: null,
+  trash_location: null,
+  started_at: null,
+  ended_at: null,
 };
 const baseWindow = (size) => ({
   disposition: "current",
@@ -58,6 +74,7 @@ const baseWindow = (size) => ({
   highlight_revision: 0,
   offset: 0,
   total: 1,
+  execution,
   rows: [{ ...baseRow, size }],
 });
 
@@ -100,7 +117,39 @@ const overflow = await read("9223372036854775808").then(
   (error) => error,
 );
 if (overflow === null) throw new Error("signed 64-bit overflow was accepted");
-if (requests.length !== 4 || requests.some((request) => request.command !== "get_plan_window")) {
-  throw new Error("unexpected bridge command receipt");
+const terminalResult = {
+  headline: "success", filesystem: "completed", integrity: "not-run",
+  recording: "ok", audit: "ok", disposition: "ran", canceled: false,
+  phases: [], bytes_done: "0", bytes_total: "0", error: null,
+  recording_degraded_items: 0, recording_issues: [], omitted_detail_count: 0,
+  presentation_omitted_detail_count: 0, review_refusal: null,
+};
+const terminalExecution = {
+  ...execution, session_id: "1".repeat(32), result: terminalResult,
+  failed_operation_count: 0, disk_capacity_failure_count: 0,
+  trash_location: "D:\\.synctrash",
+  started_at: "2026-08-12T10:00:00+00:00",
+  ended_at: "2026-08-12T10:00:03+00:00",
+};
+responseResult = { ...baseWindow(null), execution: terminalExecution };
+const acceptedTerminal = await bridge.getPlanWindow(taskId, 0, 0, 1);
+if (acceptedTerminal.execution.ended_at !== terminalExecution.ended_at) {
+  throw new Error("terminal record time was not preserved");
+}
+for (const invalid of [
+  { ...terminalExecution, ended_at: null },
+  { ...terminalExecution, started_at: "2026-08-12T10:00:00+05:30" },
+  { ...terminalExecution, started_at: undefined },
+  { ...execution, ended_at: terminalExecution.ended_at },
+]) {
+  responseResult = { ...baseWindow(null), execution: invalid };
+  const rejected = await bridge.getPlanWindow(taskId, 0, 0, 1).then(
+    () => null,
+    (error) => error,
+  );
+  if (rejected === null) throw new Error("invalid execution timestamp was accepted");
+}
+if (requests.length !== 13 || requests.some((request) => request.command !== "get_plan_window")) {
+  throw new Error(`unexpected bridge command receipt: ${requests.length}`);
 }
 console.log("ok");

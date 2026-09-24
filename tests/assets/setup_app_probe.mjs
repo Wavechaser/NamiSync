@@ -169,7 +169,10 @@ async function loadScenario({
   };
   globalThis.setupAppHarness = harness;
 
-  const renderUrl = moduleUrl("export const renderText = (element, value) => { element.textContent = value; };");
+  const renderUrl = moduleUrl(`
+    export const renderText = (element, value) => { element.textContent = value; };
+    export const formatByteCount = (value) => String(value);
+  `);
   const bridgeUrl = moduleUrl(`
     const harness = globalThis.setupAppHarness;
     export class BridgeTransportError extends Error {}
@@ -177,6 +180,9 @@ async function loadScenario({
       constructor(retry) { super(); this.retry = retry; }
     }
     export class TaskCreateUncertainError extends BridgeTransportError {
+      constructor(retry) { super(); this.retry = retry; }
+    }
+    export class TaskCloseUncertainError extends BridgeTransportError {
       constructor(retry) { super(); this.retry = retry; }
     }
     harness.BridgeTransportError = BridgeTransportError;
@@ -188,6 +194,7 @@ async function loadScenario({
     export const createTask = () => harness.createTask();
     export const echoReadiness = () => Promise.resolve({ acknowledged: true });
     export const listTasks = () => harness.listTasks();
+    export const getExecutionDetail = () => Promise.reject(new Error("unused"));
     export const markBridgeOperational = () => {};
     export const pickFolder = (...args) => harness.pickFolder(...args);
     export const planAgain = (...args) => harness.planAgain(...args);
@@ -245,10 +252,16 @@ async function loadScenario({
   const executionConfirmationUrl = moduleUrl(`
     export const createExecutionConfirmation = () => ({ element: {}, show() {} });
   `);
+  let taskStatusSource = await readFile(
+    process.argv[2].replace(/app\.js$/, "task_status.js"),
+    "utf8",
+  );
+  taskStatusSource = taskStatusSource.replace("./render.js", renderUrl);
+  const taskStatusUrl = moduleUrl(taskStatusSource);
   let source = await readFile(process.argv[2], "utf8");
   source = source.replace(
     /import \{[\s\S]*?\} from "\.\/bridge\.js";/,
-    `import { acknowledgeShellReady, admitLocation, BridgeTransportError, closeTask, createTask, echoReadiness, listTasks, markBridgeOperational, pickFolder, planAgain, prepareSetup, probeRecentPairs, readSetup, StartPlanUncertainError, startInventory, startPlan, startTaskDrain, TaskCreateUncertainError, whenBridgeApiReady } from "${bridgeUrl}";`,
+    `import { acknowledgeShellReady, admitLocation, BridgeTransportError, closeTask, createTask, echoReadiness, getExecutionDetail, listTasks, markBridgeOperational, pickFolder, planAgain, prepareSetup, probeRecentPairs, readSetup, StartPlanUncertainError, startInventory, startPlan, startTaskDrain, TaskCloseUncertainError, TaskCreateUncertainError, whenBridgeApiReady } from "${bridgeUrl}";`,
   );
   source = source
     .replace("./readiness.js", readinessUrl)
@@ -257,7 +270,8 @@ async function loadScenario({
     .replace("./execution_confirmation.js", executionConfirmationUrl)
     .replace("./panels.js", panelUrl)
     .replace("./rail.js", railUrl)
-    .replace("./render.js", renderUrl);
+    .replace("./render.js", renderUrl)
+    .replace("./task_status.js", taskStatusUrl);
   await import(moduleUrl(`${source}\n// scenario ${scenarioId}`));
   await until(() => harness.model !== null, "initial Setup read");
   return harness;
@@ -292,6 +306,22 @@ async function loadScenario({
   assert.equal(retained.source.text, "");
   assert.equal(retained.source.candidate, null);
   assert.equal(retained.source.location, null, "late admission cannot restore a cleared field");
+}
+
+{
+  const harness = await loadScenario();
+  harness.railCallbacks.onClose(TASK_A);
+  await until(() => harness.railTasks.length === 0, "close sole selected task");
+  const creation = deferred();
+  harness.createTask = () => creation.promise;
+  harness.railCallbacks.onCreate();
+  harness.railCallbacks.onSettings();
+  creation.resolve({ task_id: TASK_B });
+  await until(() => harness.railTasks.some((task) => task.taskId === TASK_B), "retain unselected created task");
+  assert.equal(harness.settingsVisible, true);
+  harness.railCallbacks.onSelect(TASK_B);
+  await until(() => harness.settingsVisible === false && harness.task?.taskId === TASK_B,
+    "first task selection from a null prior selection");
 }
 
 {

@@ -64,13 +64,37 @@ Run it for phase integration, global fixtures or pytest configuration, the
 department manifest, broad shared contracts, uncertain blast radius, and before
 considering a non-headed phase complete.
 
+The session-scoped wheel fixture enumerates Git tracked and nonignored `namisync`
+paths plus `pyproject.toml`, `README.md`, and `LICENSE`, copies their physical
+bytes into a clean staging tree, and builds from that tree. It rejects source
+or staging drift around the build, duplicate ZIP members, and any missing,
+extra, or changed package file in the wheel or installed environment before
+yielding an installed fixture. Canonical identity records beside the temporary
+wheel and installations bind later evidence to the source manifest and artifact
+hash without making generated build or cache files package inputs.
+Verify populations at build/install boundaries and revalidate recorded artifacts
+on reuse; identity-record serialization does not require a second population scan.
+
 Required ordinary JavaScript tests are unmarked and non-skippable. They execute
 the packaged public event consumers, start-plan deadline/replay and interactive
 bridge wrappers, and the production drain-manager live-event
 transport/replay and Progress reducer. Node.js must be available through
 `NAMISYNC_TEST_NODE` or `PATH`; the explicit environment setting takes
 precedence. A missing or unusable executable fails these gates rather than
-silently reducing the ordinary suite to source-text inspection. The drain probe
+silently reducing the ordinary suite to source-text inspection.
+
+Frontend static Node probes use `run_node_probe`: a prelaunch Windows Job caps
+their process tree at 512 MiB, keeps the caller's timeout and bounds file-backed
+diagnostic reads. Native headed launches retain their own defaults. Fake-DOM
+identity assertions use a shared exact-reference helper with scalar diagnostics;
+custom inspection also keeps ordinary object inspection concise. Keep graph fields
+enumerable so structural comparisons retain their meaning. Node's assertion
+formatter can bypass custom inspection, so it is not a substitute for the helper.
+Use these automatic safeguards, not routine memory polling or a watching agent.
+Inspect resource evidence when diagnosing a failure or running a named resource
+gate. This probe limit is neither whole-suite nor product memory acceptance.
+
+The drain probe
 executes the packaged transport check and proves whole-batch rejection: an
 invalid event envelope, wrapper, lifecycle transition, or reducer transition
 cannot partially deliver co-batched reliable updates or advance the accepted
@@ -143,6 +167,22 @@ per-invocation measurement artifacts; retained baseline sidecars are distinct
 input evidence. Neither is a live child-to-parent snapshot or part of the
 milestone state machine. The tree-window fixture likewise remains a one-shot
 parent-created input.
+
+For the gallery's execution layout matrix, the page observes, the child checks
+bounded transport and drives native input/capture, and the parent owns the
+independent layout verdict. Harmless layout recipes are not acceptance criteria.
+The short execution journey uses coherent settled receipts and stable visible
+identity across capture, rather than a fixed detail-read count or permanent
+revision. Its real-copy endpoint remains distinct from the legacy journey's
+navigation, modal, control and recovery coverage.
+
+Shared CDP captures retain the raw browser-surface PNG and neighboring capture
+provenance. The observed page theme/material and sampled alpha describe that
+surface; they do not certify the native DWM/Mica composition. Transparent white
+pixels are not opaque white cards. Use existing opaque/forced-color scenarios
+for their named appearance outcomes, and a native composited observation before
+attributing a Mica contrast defect to product tokens. Preserve earlier raw
+captures; correct their interpretation rather than rewriting historical evidence.
 
 `tools/gui.ps1 gallery` reuses the child and milestone format for an editable
 manual preview, but its GUID-named output is diagnostic only. It is not produced

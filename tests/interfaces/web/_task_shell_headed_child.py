@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import base64
 import importlib.metadata
 import json
 import sys
@@ -16,6 +15,7 @@ from typing import Any, Callable
 from unittest.mock import patch
 
 from _headed_evidence import EvidencePaths, EvidencePublisher
+from _headed_cdp import NativeCdp, runtime_value, failure_site
 from _plan_again_trace import (
     PlanAgainHostTrace,
     trace_registry_plan_again,
@@ -73,9 +73,10 @@ _DRIVER_DIAGNOSTIC_KEYS = frozenset(
         "task_delivery_terminal_delivered", "task_delivery_terminal_record_present", "dialog_open",
         "document_has_focus", "execute_disabled", "execute_focused", "execute_hidden",
         "last_driver_step", "last_method", "page_confirmation_stage",
-        "preflight_hook_count",
+        "live_service_state", "review_pending", "preflight_hook_count", "pause_disabled", "pause_hidden", "resume_hidden", "controls_hidden",
         "runtime_has_exception_details", "runtime_result_type", "trusted_click_count",
         "trusted_keydown_count", "trusted_keyup_count",
+        "browser_async_error",
     }
 )
 
@@ -84,6 +85,7 @@ _COMMON_JS = r"""
 const sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 async function until(predicate, label) {
   for (let attempt = 0; attempt < 300; attempt += 1) {
+    if (window.__namiFirstAsyncError) throw new Error("browser asynchronous error");
     const value = predicate();
     if (value) return value;
     await sleep(25);
@@ -92,6 +94,7 @@ async function until(predicate, label) {
 }
 async function untilAsync(predicate, label) {
   for (let attempt = 0; attempt < 300; attempt += 1) {
+    if (window.__namiFirstAsyncError) throw new Error("browser asynchronous error");
     const value = await predicate();
     if (value) return value;
     await sleep(25);
@@ -310,7 +313,8 @@ _INITIAL_SCRIPT = _COMMON_JS + r"""
   await control("arm_close_failure");
   clickClose("Task 47");
   await until(() => rowByTitle("Task 47")?.querySelector(".nami-task-rail__close")?.getAttribute("aria-label") === "Retry close for Task 47", "failed close recovery");
-  const retainedAfterFailure = rows().length === 47 && detailFor("Task 47") === "Close did not finish. Retry.";
+  const failureDetail = detailFor("Task 47");
+  const retainedAfterFailure = rows().length === 47 && failureDetail === "Close could not be confirmed. Select Retry close for this task.";
   clickClose("Task 47");
   await until(() => rows().length === 46 && rowByTitle("Task 47") === undefined, "close retry");
   await control("checkpoint", "retry");
@@ -327,7 +331,7 @@ _INITIAL_SCRIPT = _COMMON_JS + r"""
   await until(() => rows().length === 46, "delayed create cleanup");
   await control("checkpoint", "navigation_cleanup");
 
-  await control("record", { initial: { newest, setupVisible, refusedCount, retainedAfterFailure, navigationStayed, olderAppearance, newerAppearance, olderSelectionCleared, idleGeometry, pointerFocusHidden, keyboardFocusVisible, independentRail, settingsSurface, settingsDraftRetained } });
+  await control("record", { initial: { newest, setupVisible, refusedCount, retainedAfterFailure, failureDetail, navigationStayed, olderAppearance, newerAppearance, olderSelectionCleared, idleGeometry, pointerFocusHidden, keyboardFocusVisible, independentRail, settingsSurface, settingsDraftRetained } });
   await control("checkpoint", "navigation_recorded");
   await control("arm_create_delay");
   await control("checkpoint", "reinjection_armed");
@@ -364,14 +368,23 @@ _BUSY_SCRIPT = _COMMON_JS + r"""
 (async () => {
   await ready();
   await until(() => rows().length === 47 && statusFor("Task 47") === "Planning", "busy task");
+  await control("arm_busy_drain_failure");
   clickClose("Task 47");
   await until(() => detailFor("Task 47") === "Canceling and closing…", "pending cancellation");
   const pending = await control("status");
   const retainedPending = rows().length === 47 && rowByTitle("Task 47") !== undefined;
+  const retry = await until(() => {
+    const button = rowByTitle("Task 47")?.querySelector(".nami-task-rail__retry");
+    return button && !button.hidden && !button.disabled ? button : null;
+  }, "stopped busy-task updates");
+  retry.click();
+  await until(() => rowByTitle("Task 47")?.querySelector(".nami-task-rail__retry")?.hidden === true,
+    "exact busy-task observation recovery");
+  const recovered = await control("status");
   await control("settle_busy");
   await until(() => rows().length === 46, "settled busy close");
   const settled = await control("status");
-  await control("record", { busy: { pending, retainedPending, settled } });
+  await control("record", { busy: { pending, retainedPending, recovered, settled } });
   await control("arm_release_delay");
   await control("start_terminal");
   await control("set_stage", "terminal_first");
@@ -423,6 +436,22 @@ _TERMINAL_SECOND_SCRIPT = _COMMON_JS + r"""
 
 
 _PLAN_REVIEW_SCRIPT = _COMMON_JS + r"""
+function recordAsyncError(error, line) {
+  if (window.__namiFirstAsyncError) return;
+  const name = error?.name;
+  const type = ["Error", "TypeError", "ReferenceError", "SyntaxError", "RangeError"]
+    .includes(name) ? name : "Error";
+  const match = String(error?.stack ?? "").match(/:(\d{1,6}):\d{1,6}(?:\)|$)/m);
+  const location = Number.isSafeInteger(line) && line > 0 && line <= 1000000
+    ? line : match ? Number(match[1]) : null;
+  window.__namiFirstAsyncError = {type, line: location};
+}
+window.addEventListener("unhandledrejection", (event) => {
+  recordAsyncError(event.reason, null);
+});
+window.addEventListener("error", (event) => {
+  recordAsyncError(event.error, event.lineno);
+});
 (async () => {
   window.__namiConfirmationStage = "starting";
   window.__namiConfirmationInputEvidence = null;
@@ -438,7 +467,7 @@ _PLAN_REVIEW_SCRIPT = _COMMON_JS + r"""
   await until(() => document.querySelector(".nami-plan-review__rows [data-node-id]"), "Plan review rows");
   await control("checkpoint", "plan_surface");
   const review = document.querySelector(".nami-plan-review");
-  const facts = review.querySelector(".nami-plan-review__summary").textContent;
+  const facts = review.querySelector(".nami-plan-review__status-summary").textContent;
   const viewport = review.querySelector(".nami-plan-review__rows");
   const planGeometry = planGeometryFor(review);
   viewport.scrollTop = 280 * 24;
@@ -558,8 +587,12 @@ _PLAN_REVIEW_SCRIPT = _COMMON_JS + r"""
   feedback.hidden = false;
   statusDetail.textContent = "120000 of 120000 selected · 12.00 GiB required · 120000 planning issues";
   feedback.textContent = "Review preflight failed. Resolve notices and plan again.";
-  const singleLine = (node) => node.getBoundingClientRect().height
-    <= parseFloat(getComputedStyle(node).lineHeight) + 1;
+  const singleLine = (node) => {
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    return getComputedStyle(node).whiteSpace === "nowrap"
+      && range.getBoundingClientRect().height <= parseFloat(getComputedStyle(node).lineHeight) + 1;
+  };
   if (!singleLine(statusDetail) || !singleLine(feedback)
     || Math.abs(statusDetail.getBoundingClientRect().top - feedback.getBoundingClientRect().top) > 1) {
     throw new Error("Default status feedback must share one unwrapped row");
@@ -695,15 +728,24 @@ _PLAN_REVIEW_SCRIPT = _COMMON_JS + r"""
   window.__namiConfirmationStage = "confirm-closing";
   await until(() => !document.querySelector("#execution-confirmation")?.open, "confirmation exit");
   await control("checkpoint", "plan_execute");
-  await until(() => statusFor("Task 48") === "Error", "post-admission preflight refusal");
+  await until(
+    () => statusFor("Task 48") === "Execution did not start",
+    "post-admission preflight refusal",
+  );
   await control("checkpoint", "plan_refused");
   await untilAsync(async () => (await control("status")).review_session_released === true, "refused execution release");
   await control("checkpoint", "plan_release");
   await until(() => fresh.querySelector('[data-action="execute"]').hidden, "committed selection review");
+  await until(() => fresh.querySelector(".nami-plan-review__status-title")?.textContent
+    === "Execution did not start"
+    && fresh.querySelector(".nami-plan-review__execution")?.textContent
+      .includes("Disposition: Unrun"), "refused execution review refresh");
   const refused = {
     committed: fresh.querySelector('[data-action="execute"]').hidden,
-    unrun: statusFor("Task 48") === "Error",
+    unrun: statusFor("Task 48") === "Execution did not start",
     message: fresh.querySelector(".nami-plan-review__status").textContent,
+    executionHeader: fresh.querySelector(".nami-plan-review__status-title").textContent,
+    executionAxes: fresh.querySelector(".nami-plan-review__execution").textContent,
   };
 
   const freedTaskTitle = "Task 1";
@@ -763,6 +805,10 @@ _PLAN_REVIEW_SCRIPT = _COMMON_JS + r"""
   const live = document.querySelector(".nami-plan-review");
   const liveExecute = live.querySelector('[data-action="execute"]');
   await until(() => liveExecute.disabled === false, "live Execute readiness");
+  const liveViewport = live.querySelector('.nami-plan-review__rows');
+  liveViewport.scrollTop = 280 * 24;
+  liveViewport.dispatchEvent(new Event('scroll'));
+  await until(() => liveViewport.scrollTop > 0, 'off-window execution start');
   window.__namiConfirmationStage = "live-execute-ready";
   await until(() => document.querySelector("#execution-confirmation")?.open, "live destructive confirmation");
   window.__namiConfirmationStage = "live-confirm-open";
@@ -773,6 +819,41 @@ _PLAN_REVIEW_SCRIPT = _COMMON_JS + r"""
   await untilAsync(async () => (await control("status")).execution_entered === true, "live execution");
   await until(() => !live.querySelector('[data-action="pause"]').closest(".nami-plan-review__control-group").hidden, "live controls");
   await control("checkpoint", "plan_live");
+  liveViewport.scrollTop = 280 * 24;
+  liveViewport.dispatchEvent(new Event('scroll'));
+  await until(() => liveViewport.scrollTop > 24, 'held-progress off-window position');
+  const offWindowOffset = liveViewport.scrollTop;
+  const focusBeforeFollow = live.querySelector('[data-action="pause"]');
+  focusBeforeFollow.focus();
+  const selectionBeforeFollow = await control('follow_snapshot');
+  const titleBeforeFollow = selectedTitle();
+  await control('release_follow_progress');
+  await until(() => liveViewport.scrollTop < 24, 'automatic current-operation movement');
+  const goCurrent = live.querySelector('[data-action="go-current-operation"]');
+  const enableFollow = live.querySelector('[data-action="enable-operation-follow"]');
+  await until(() => !goCurrent.hidden, 'current-operation navigation');
+  const automaticPreservesFocus = document.activeElement === focusBeforeFollow;
+  const automaticOffset = liveViewport.scrollTop;
+  let trustedFollowWheels = 0;
+  liveViewport.addEventListener('wheel', event => { if (event.isTrusted) trustedFollowWheels += 1; });
+  const followBounds = liveViewport.getBoundingClientRect();
+  window.__namiFollowWheelPoint = {x: followBounds.left + followBounds.width / 2, y: followBounds.top + 30};
+  await until(() => window.__namiFollowWheelDone === true && liveViewport.scrollTop > 24
+    && !enableFollow.hidden, 'native scroll override');
+  const manualOffset = liveViewport.scrollTop;
+  goCurrent.click();
+  await until(() => liveViewport.scrollTop < 24, 'one-shot current-operation jump');
+  const goStayedManual = !enableFollow.hidden;
+  enableFollow.click();
+  await until(() => enableFollow.hidden, 'explicit follow enable');
+  const followNavigation = {
+    automaticMoved: automaticOffset < 24 && offWindowOffset > 24,
+    nativeOverride: manualOffset > 24 && trustedFollowWheels > 0,
+    goStayedManual, explicitEnable: enableFollow.hidden,
+    focusPreserved: automaticPreservesFocus && document.activeElement === focusBeforeFollow,
+    selectionPreserved: JSON.stringify(await control('follow_snapshot')) === JSON.stringify(selectionBeforeFollow)
+      && selectedTitle() === titleBeforeFollow,
+  };
   live.querySelector('[data-action="pause"]').click();
   await until(() => !live.querySelector('[data-action="resume"]').hidden, "paused execution");
   await control("checkpoint", "plan_paused");
@@ -782,6 +863,11 @@ _PLAN_REVIEW_SCRIPT = _COMMON_JS + r"""
   await control("checkpoint", "plan_resumed");
   live.querySelector('[data-action="cancel"]').click();
   await until(() => statusFor("Task 49") === "Canceled", "canceled execution");
+  await until(
+    () => live.querySelector(".nami-plan-review__execution")?.textContent.includes("Filesystem: Canceled"),
+    "canceled execution review",
+  );
+  const canceledExecutionHeader = live.querySelector(".nami-plan-review__execution").textContent;
   await control("checkpoint", "plan_empty_prepare");
   await until(() => !live.querySelector('[data-action="plan-again"]').disabled, "settled Plan-again eligibility");
   const countBeforeEmptyPlanAgain = rows().length;
@@ -818,6 +904,8 @@ _PLAN_REVIEW_SCRIPT = _COMMON_JS + r"""
       paused: paused.length > 0,
       resumed: live.querySelector('[data-action="resume"]').hidden,
       canceled: statusFor("Task 49") === "Canceled",
+      canceledExecutionHeader,
+      followNavigation,
       emptyPlanGeometry,
       emptyPlanMessage,
     },
@@ -918,6 +1006,9 @@ class _Control:
         self.busy_entered = threading.Event()
         self.busy_task_id: str | None = None
         self.busy_session_id: str | None = None
+        self.fail_busy_drain = False
+        self.busy_drain_failures = 0
+        self.busy_reobservations = 0
         self.terminal_task_id: str | None = None
         self.terminal_session_id: str | None = None
         self.release_gate = threading.Event()
@@ -931,6 +1022,7 @@ class _Control:
         self.block_execution = False
         self.execution_entered = threading.Event()
         self.execution_release = threading.Event()
+        self.follow_release = threading.Event()
         self.review_task_id: str | None = None
         self.review_plan_session_id: str | None = None
         self.preflight_hook_count = 0
@@ -949,6 +1041,28 @@ class _Control:
         original_close_shell = service.close_task_shell
         original_release = service.release_task_session
         original_observer_release = service._observer.release
+        original_drain_for_bridge = registry.drain_for_bridge
+        original_reobserve_task = service.reobserve_task
+
+        def drain_for_bridge(_registry: object, task_id: str, session_id: str,
+                             drain_id: str, *, replay_from: int | None) -> object:
+            if self.fail_busy_drain and task_id == self.busy_task_id and (
+                self._service().get_session(session_id).state == "canceling"
+            ):
+                from namisync.interfaces.task_port import TaskUnavailableError
+
+                self.fail_busy_drain = False
+                self.busy_drain_failures += 1
+                raise TaskUnavailableError("injected temporary observation loss")
+            return original_drain_for_bridge(
+                task_id, session_id, drain_id, replay_from=replay_from,
+            )
+
+        def reobserve_task(_service: object, task_id: str, session_id: str,
+                           sink: object, from_sequence: int) -> object:
+            if task_id == self.busy_task_id:
+                self.busy_reobservations += 1
+            return original_reobserve_task(task_id, session_id, sink, from_sequence)
 
         def create_task_shell(_service: object, command_id: str, delivery_factory: object) -> object:
             result = original_create(command_id, delivery_factory)
@@ -984,6 +1098,8 @@ class _Control:
         service.close_task_shell = MethodType(close_task_shell, service)
         service.release_task_session = MethodType(release_task_session, service)
         service._observer.release = observer_release
+        service.reobserve_task = MethodType(reobserve_task, service)
+        registry.drain_for_bridge = MethodType(drain_for_bridge, registry)
 
         for index in range(46):
             registry.create_task_shell(f"{1000 + index:032x}")
@@ -1019,6 +1135,8 @@ class _Control:
             "busy_entered": self.busy_entered.is_set(),
             "busy_state": busy_state,
             "busy_present": any(task.task_id == self.busy_task_id for task in tasks),
+            "busy_drain_failures": self.busy_drain_failures,
+            "busy_reobservations": self.busy_reobservations,
             "terminal": terminal,
             "terminal_present": any(task.task_id == self.terminal_task_id for task in tasks),
             "release_waiting": self.release_waiting.is_set(),
@@ -1041,6 +1159,7 @@ class _Control:
             "task_delivery_terminal_delivered": None,
             "task_delivery_terminal_record_present": None,
             "preflight_hook_count": None,
+            "live_service_state": None,
         }
         with self.diagnostic_lock:
             result["preflight_hook_count"] = self.preflight_hook_count
@@ -1140,6 +1259,9 @@ class _Control:
         if action == "start_busy":
             self._start_busy()
             return {"accepted": True}
+        if action == "arm_busy_drain_failure":
+            self.fail_busy_drain = True
+            return {"accepted": True}
         if action == "settle_busy":
             self.busy_gate.set()
             self._service()._runtime._deps = self.original_deps
@@ -1186,7 +1308,17 @@ class _Control:
             self.review_task_id = review_task.task_id
             self.review_plan_session_id = review_task.session_id
             return {"accepted": True}
+        if action == "release_follow_progress":
+            self.follow_release.set()
+            return {"accepted": True}
+        if action == "follow_snapshot":
+            task = self._registry().list_tasks().tasks[-1]
+            summary = self._registry().open_plan_view(task.task_id)
+            return {key: summary[key] for key in (
+                "task_id", "selection_revision", "selected_operation_count", "highlight_revision",
+            )}
         if action == "prepare_live_execution":
+            self.follow_release.clear()
             self.force_preflight_refusal = False
             self.block_execution = True
             self.execution_entered.clear()
@@ -1268,12 +1400,31 @@ class _Control:
             return original_preflight(review, world, **kwargs)
 
         def executor(*args: object, **kwargs: object) -> object:
-            if self.block_execution:
-                context = args[1]
-                self.execution_entered.set()
-                while not self.execution_release.wait(0.01):
-                    context.checkpoint()
-            return original_executor(*args, **kwargs)
+            if not self.block_execution:
+                return original_executor(*args, **kwargs)
+            from namisync.core.events import Progress
+            from namisync.core.session import RunContext
+
+            context = args[1]
+            held = False
+
+            def emit(body: object) -> None:
+                nonlocal held
+                if not held and type(body) is Progress and body.item_id is not None:
+                    held = True
+                    self.execution_entered.set()
+                    while not self.follow_release.wait(0.01):
+                        context.checkpoint()
+                    context.emit(body)
+                    while not self.execution_release.wait(0.01):
+                        context.checkpoint()
+                else:
+                    context.emit(body)
+
+            policies = replace(args[3], progress_interval_seconds=0)
+            return original_executor(
+                args[0], RunContext(emit, context.checkpoint), args[2], policies, *args[4:], **kwargs,
+            )
 
         self._service()._runtime._deps = replace(
             self.review_deps,
@@ -1359,12 +1510,20 @@ def _test_spec(handler: Callable[[object], object]) -> object:
 
 
 def _runtime_value(task: object) -> object:
-    if task.IsFaulted or task.IsCanceled:
-        raise RuntimeError("native CDP evaluation failed")
-    envelope = json.loads(str(task.Result))
-    if type(envelope) is not dict or "exceptionDetails" in envelope:
-        raise RuntimeError("page task-shell probe failed")
-    return envelope.get("result", {}).get("value")
+    return runtime_value(task)
+
+
+def _sanitized_browser_error(value: object) -> dict[str, object] | None:
+    if type(value) is not dict or set(value) != {"type", "line"}:
+        return None
+    if type(value["type"]) is not str or value["type"] not in {
+        "Error", "TypeError", "ReferenceError", "SyntaxError", "RangeError",
+    }:
+        return None
+    line = value["line"]
+    if line is not None and (type(line) is not int or not 0 < line <= 1000000):
+        return None
+    return {"type": value["type"], "line": line}
 
 
 def _write_driver_diagnostic(path: Path, record: dict[str, object]) -> None:
@@ -1426,6 +1585,8 @@ def _drive_plan_confirmation(
             "execute_disabled": None,
             "execute_focused": None,
             "execute_hidden": None,
+            "live_service_state": None, "review_pending": None,
+            "pause_disabled": None, "pause_hidden": None, "resume_hidden": None, "controls_hidden": None,
             "last_driver_step": last_driver_step,
             "last_method": last_method,
             "page_confirmation_stage": None,
@@ -1435,10 +1596,13 @@ def _drive_plan_confirmation(
             "trusted_click_count": None,
             "trusted_keydown_count": None,
             "trusted_keyup_count": None,
+            "browser_async_error": None,
         }
         diagnostic_expression = r"""
 (() => {
   const execute = document.querySelector('.nami-plan-review [data-action="execute"]');
+  const pause = document.querySelector('.nami-plan-review [data-action="pause"]');
+  const resume = document.querySelector('.nami-plan-review [data-action="resume"]');
   const dialog = document.querySelector("#execution-confirmation");
   const active = document.activeElement;
   const counters = window.__namiConfirmationTrustedInput ?? {};
@@ -1448,6 +1612,12 @@ def _drive_plan_confirmation(
         : active?.matches?.("[data-confirm-execution]") ? "confirm"
           : active === null ? "none" : "other";
   return {
+    browser_async_error: window.__namiFirstAsyncError ?? null,
+    review_pending: ['','pause','resume','execute','view','selection','confirmation','plan-again'].includes(document.querySelector('.nami-plan-review')?.dataset.pending) ? document.querySelector('.nami-plan-review').dataset.pending : null,
+    pause_disabled: pause instanceof HTMLButtonElement ? pause.disabled : null,
+    pause_hidden: pause instanceof HTMLButtonElement ? pause.hidden : null,
+    resume_hidden: resume instanceof HTMLButtonElement ? resume.hidden : null,
+    controls_hidden: pause?.closest('.nami-plan-review__control-group')?.hidden ?? null,
     active_element: activeElement,
     dialog_open: dialog?.open === true,
     document_has_focus: document.hasFocus(),
@@ -1474,11 +1644,15 @@ def _drive_plan_confirmation(
                     "active_element", "dialog_open", "document_has_focus", "execute_disabled",
                     "execute_focused", "execute_hidden", "page_confirmation_stage", "trusted_click_count",
                     "trusted_keydown_count", "trusted_keyup_count",
+                    "pause_disabled", "pause_hidden", "resume_hidden", "controls_hidden", "review_pending",
                 ):
                     if key in page:
                         base[key] = page[key]
+                base["browser_async_error"] = _sanitized_browser_error(
+                    page.get("browser_async_error")
+                )
             _write_driver_diagnostic(diagnostic_path, base)
-            recorder.failure("page_plan_review_plan_ack", error)
+            recorder.failure(f"page_plan_review_{control.checkpoint}", error)
 
         try:
             diagnostic_task = core.CallDevToolsProtocolMethodAsync(
@@ -1506,6 +1680,11 @@ def _drive_plan_confirmation(
         except BaseException:
             publish()
 
+    transport = NativeCdp(
+        native, core, retained,
+        lambda error, task, _step, _method: fail(error, task),
+    )
+
     def call(
         method: str,
         parameters: dict[str, object],
@@ -1517,71 +1696,21 @@ def _drive_plan_confirmation(
             return
         last_driver_step = step
         last_method = method
-        try:
-            task = core.CallDevToolsProtocolMethodAsync(method, json.dumps(parameters))
-        except BaseException as error:
-            fail(error)
-            return
-
-        def completed() -> None:
-            def finish() -> None:
-                try:
-                    then(_runtime_value(task))
-                except BaseException as error:
-                    fail(error, task)
-
-            finish_action = Action(finish)
-            retained.append(finish_action)
-            native.BeginInvoke(finish_action)
-
-        completion = Action(completed)
-        retained.append(completion)
-        task.GetAwaiter().OnCompleted(completion)
+        transport.call(method, parameters, then, step)
 
     def evaluate(expression: str, then: Callable[[object], None], step: str) -> None:
-        call(
-            "Runtime.evaluate",
-            {"expression": expression, "awaitPromise": True, "returnByValue": True},
-            then,
-            step,
-        )
+        nonlocal last_driver_step, last_method
+        if failed:
+            return
+        last_driver_step = step
+        last_method = "Runtime.evaluate"
+        transport.evaluate(expression, then, step)
 
     def capture(then: Callable[[], None], step: str) -> None:
         nonlocal last_driver_step, last_method
         last_driver_step = step
         last_method = "Page.captureScreenshot"
-        try:
-            task = core.CallDevToolsProtocolMethodAsync(
-                "Page.captureScreenshot", json.dumps({"format": "png"}),
-            )
-        except BaseException as error:
-            fail(error)
-            return
-
-        def completed() -> None:
-            def finish() -> None:
-                try:
-                    if task.IsFaulted or task.IsCanceled:
-                        raise RuntimeError("native confirmation screenshot failed")
-                    envelope = json.loads(str(task.Result))
-                    data = envelope.get("data") if type(envelope) is dict else None
-                    if type(data) is not str:
-                        raise RuntimeError("native confirmation screenshot payload is invalid")
-                    content = base64.b64decode(data, validate=True)
-                    if not content.startswith(b"\x89PNG\r\n\x1a\n"):
-                        raise ValueError("native confirmation screenshot is not PNG")
-                    screenshot.write_bytes(content)
-                    then()
-                except BaseException as error:
-                    fail(error, task)
-
-            finish_action = Action(finish)
-            retained.append(finish_action)
-            native.BeginInvoke(finish_action)
-
-        completion = Action(completed)
-        retained.append(completion)
-        task.GetAwaiter().OnCompleted(completion)
+        transport.capture(screenshot, then, step)
 
     def dispatch(
         events: list[tuple[str, dict[str, object]]],
@@ -1634,6 +1763,7 @@ def _drive_plan_confirmation(
     wait_execute = r"""
 (async () => {
   for (let attempt = 0; attempt < 1200; attempt += 1) {
+    if (window.__namiFirstAsyncError) throw new Error('browser asynchronous error');
     if (window.__namiConfirmationStage === "execute-ready") {
       const execute = document.querySelector('.nami-plan-review [data-action="execute"]');
       if (!(execute instanceof HTMLButtonElement)) throw new Error("Execute control missing");
@@ -1660,6 +1790,7 @@ def _drive_plan_confirmation(
     wait_cancel = r"""
 (async () => {
   for (let attempt = 0; attempt < 1200; attempt += 1) {
+    if (window.__namiFirstAsyncError) throw new Error('browser asynchronous error');
     if (window.__namiConfirmationStage === "cancel-open") {
       const dialog = document.querySelector("#execution-confirmation");
       const cancel = dialog?.querySelector("[data-cancel-execution]");
@@ -1682,6 +1813,7 @@ def _drive_plan_confirmation(
     wait_confirm = r"""
 (async () => {
   for (let attempt = 0; attempt < 1200; attempt += 1) {
+    if (window.__namiFirstAsyncError) throw new Error('browser asynchronous error');
     if (window.__namiConfirmationStage === "confirm-open") {
       const dialog = document.querySelector("#execution-confirmation");
       const confirm = dialog?.querySelector("[data-confirm-execution]");
@@ -1738,6 +1870,7 @@ def _drive_plan_confirmation(
     wait_reopen = r"""
 (async () => {
   for (let attempt = 0; attempt < 1200; attempt += 1) {
+    if (window.__namiFirstAsyncError) throw new Error('browser asynchronous error');
     if (window.__namiConfirmationStage === "reopen-ready") {
       const execute = document.querySelector('.nami-plan-review [data-action="execute"]');
       if (!(execute instanceof HTMLButtonElement)) throw new Error("reopened Execute missing");
@@ -1857,6 +1990,7 @@ def _drive_plan_confirmation(
     wait_live_execute = r"""
 (async () => {
   for (let attempt = 0; attempt < 1200; attempt += 1) {
+    if (window.__namiFirstAsyncError) throw new Error('browser asynchronous error');
     if (window.__namiConfirmationStage === "live-execute-ready") {
       const execute = document.querySelector('.nami-plan-review [data-action="execute"]');
       if (!(execute instanceof HTMLButtonElement)) throw new Error("live Execute missing");
@@ -1884,6 +2018,7 @@ def _drive_plan_confirmation(
     wait_live_confirm = r"""
 (async () => {
   for (let attempt = 0; attempt < 1200; attempt += 1) {
+    if (window.__namiFirstAsyncError) throw new Error('browser asynchronous error');
     if (window.__namiConfirmationStage === "live-confirm-open") {
       const dialog = document.querySelector("#execution-confirmation");
       const confirm = dialog?.querySelector("[data-confirm-execution]");
@@ -1912,6 +2047,28 @@ def _drive_plan_confirmation(
             "live_execute_pointer",
         )
 
+    wait_follow = r"""
+(async () => {
+  for (let attempt = 0; attempt < 1200; attempt += 1) {
+    if (window.__namiFirstAsyncError) throw new Error('browser asynchronous error');
+    if (window.__namiFollowWheelPoint) return window.__namiFollowWheelPoint;
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  throw new Error("current-operation follow target did not become visible");
+})()
+"""
+
+    def scroll_follow(point: object) -> None:
+        if type(point) is not dict:
+            raise RuntimeError("follow viewport point is unavailable")
+        dispatch(
+            [("Input.dispatchMouseEvent", {
+                "type": "mouseWheel", "deltaX": 0, "deltaY": 6000, **point,
+            })],
+            lambda: evaluate("window.__namiFollowWheelDone=true;true", lambda _value: None, "follow_wheel_done"),
+            "follow_wheel",
+        )
+
     def after_live(value: object) -> None:
         if type(value) is not dict:
             raise RuntimeError("live confirmation geometry was not returned")
@@ -1934,7 +2091,7 @@ def _drive_plan_confirmation(
   throw new Error("timed out waiting for Enter confirmation");
 })()
 """,
-                lambda _confirmed: None,
+                lambda _confirmed: evaluate(wait_follow, scroll_follow, "wait_follow"),
                 "verify_live_enter",
             ), "live_confirm_enter"),
             "verify_live_confirm_focus",
@@ -1942,6 +2099,27 @@ def _drive_plan_confirmation(
 
     evaluate(wait_execute, after_execute, "wait_execute")
     return fail
+
+
+def _thread_sites() -> list[list[dict[str, object]]]:
+    """Bounded child-process stack locations without locals or full paths."""
+    allowed = {"dispatcher.py", "service.py", "drain.py", "session.py", "runtime.py",
+               "threading.py", "_task_shell_headed_child.py", "runner.py", "workflow.py",
+               "execution.py", "events.py", "context.py", "store.py", "pipeline.py",
+               "bridge.py", "commands.py", "lifecycle.py", "thread.py", "_base.py",
+               "util.py", "winforms.py", "edgechromium.py", "__init__.py"}
+    result = []
+    for frame in list(sys._current_frames().values())[:32]:
+        stack = []
+        for _ in range(24):
+            if frame is None:
+                break
+            filename = Path(frame.f_code.co_filename).name
+            if filename in allowed:
+                stack.append({"file": filename, "line": frame.f_lineno})
+            frame = frame.f_back
+        result.append(stack)
+    return result
 
 
 def _begin_probe(
@@ -1982,6 +2160,12 @@ def _begin_probe(
                 if starting_stage == "plan_review" and value != {"complete": True}:
                     raise RuntimeError("final page probe returned invalid evidence")
             except BaseException as error:
+                screenshot.with_name("runtime-thread-sites.json").write_text(
+                    json.dumps(_thread_sites(), sort_keys=True), encoding="utf-8",
+                )
+                screenshot.with_name("runtime-failure-site.json").write_text(
+                    json.dumps(failure_site(task), sort_keys=True), encoding="utf-8",
+                )
                 if driver_failure is not None:
                     driver_failure(error, task)
                     return
