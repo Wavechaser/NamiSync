@@ -7,6 +7,65 @@ This is the sole active M1 delivery register. Subject contracts remain in
 The [archived delivery register](obsolete/M1_8_DELIVERY.md) preserves the finite
 R0–R3 criteria, original B1–B6 dispositions and recovery chronology.
 
+## MOVE-1 retained-history move detection (2026-09-25)
+
+User-authorized backend investigation and correction, independent of pending
+GUI work. Base: `3514bb8`; current checkout `milestone1`. One atomic fix commit
+after independent review; no push, PR or live development-ledger mutation.
+
+| ID | Accepted outcome | Named verification | Status |
+| --- | --- | --- | --- |
+| MOVE-1 | Repeated source renames/moves remain eligible for correspondence-backed target moves despite retained historical inventory aliases; real simultaneous hardlinks and ambiguous correspondence remain ineligible. | Native failure reproduced before correction; 148 focused checks; 5,417 ordinary passes/five environment skips; 12 imports; diff/link checks; fresh adversarial review. | Complete in the commit recording this row |
+
+Finite population: planning correspondence in `db/repositories.py`, its direct
+consumer `workflows/runtime.py`, planner move eligibility in `modules/planner.py`,
+and existing `test_db_repositories.py`, `test_planner.py`, `test_workflows.py`.
+Recorder retention/reconciliation, scanner links, workflow completeness and
+service Plan projection were inspected without changes. Documentation owners:
+DATABASE, PLANNER, BUGS, this register, CHANGELOG and HANDOFF; README only if its
+phase synopsis changes (none needed). Preserved the prior investigation in
+`build/move-history-20260925/handoff-before.md` before replacing it at delivery.
+That ignored evidence directory holds flat, descriptively named logs and review
+notes, plus named pytest temporary-root subdirectories when the system temp
+directory is unavailable; retain evidence at closeout, with no artifacts in Git.
+
+Preserved guarantees: reviewed effects, current source/target identity and link
+checks, unique correspondence, incomplete-scan refusal, query admission/batching,
+one SQLite read snapshot, ordering, retained inventory/history and ledger schema.
+Verified repeated native move/no-op cycles with retained aliases; current
+source/target links, including outside-root/excluded links; stale multi-link
+observations; duplicate scan identities/pair ambiguity; and consistent batched
+reads. Archived M0 hardlink refusal remains binding. No performance claim added.
+Non-goals: ledger cleanup/migration, identity-reuse redesign, GUI behavior,
+inventory reconciliation changes, broader planner refactoring or unrelated bugs.
+AGENTS mandatory safety/recurrence stops apply; changed effect or ownership
+boundaries require adjudication before implementation.
+
+Shipped: remove historical disqualification only from `find_current_mapping`;
+current `FileRecord.nlink` and planner identity counts own current alias
+eligibility. General inspection remains conservative. No path/presence filter
+can make a retained observation fresh. Production edits are confined to
+`db/repositories.py`; the three test files above cover the affected seams.
+Obsolete identity-query assertions became pair-query batching/index and
+concurrent correspondence snapshot controls without retiring their guarantees.
+Archived DESIGN_REVIEW DR-04's correspondence and hardlink evidence obligation
+remains satisfied by retained pairs plus current scans. No recorder, schema,
+workflow, scanner, preflight, executor or interface production change is needed.
+The completed TEST_REFINEMENT ST-2 register described historical alias-query
+assertions at its frozen source revision. MOVE-1 supersedes only that obsolete
+alias-query mechanism; its current pair index, batching, ordering, identity
+filtering and snapshot guarantees remain binding. FEATURES already describes
+hardlink refusal in terms of scanned paths and needs no contract change.
+
+Evidence: `build/move-history-20260925/` contains the native pre-fix failure,
+`focused-final2.log`, `ordinary-final.log`, imports, links, and independent
+`reviewer-readonly.md`. The first ordinary attempt used repository-local temp
+roots and hit protective test refusals; its failed receipt is retained. The
+final run uses normal external temp roots and the final frozen source/tests.
+Five skips: unavailable symlink privileges (four) and unconfigured M1-7 readiness
+artifact (one); 33 headed tests are outside this backend-only change. No extra
+branch/worktree, live user-data mutation or unrelated change was introduced.
+
 ## M1-8 execution review closure
 
 Delivered: shared Plan/live/terminal status, bounded virtual rows and reachable

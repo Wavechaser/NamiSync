@@ -523,15 +523,17 @@ state as a side effect.
 The planning mapping reader derives its complete query scope from the two
 current file scans. It reads correspondence only for current target path keys,
 then retains only current source identities and a current target identity or the
-existing nullable target-identity evidence. Source and target disqualification
-queries cover only identities present in those scans while still counting every
-matching inventory alias and retained multi-link observation. Mapping lookup,
-all `QUERY_SUBJECT_BATCH_SIZE` key/identity batches, and disqualification share
-one SQLite snapshot; the bounded result is restored to canonical
+existing nullable target-identity evidence. This scan-scoped reader does not
+derive identity disqualifiers from inventory: retained paths and link counts
+describe earlier observations, not simultaneous current aliases. The planner
+checks current source/target link counts and identity multiplicity from the
+scans, and still requires unique eligible correspondence. Mapping lookup and
+all `QUERY_SUBJECT_BATCH_SIZE` target-key batches share one SQLite snapshot;
+the bounded result is restored to canonical
 source-key/target-key order before
 planning. Irrelevant historical location rows are therefore never materialized
 by planning. The general mapping snapshot reader remains available for explicit
-mapping inspection.
+mapping inspection and retains its conservative historical disqualifiers.
 
 Inventory reads distinguish current observation from retained attested baseline
 and derive unverified/verified/modified/mismatched state from the baseline,

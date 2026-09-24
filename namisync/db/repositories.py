@@ -1131,7 +1131,7 @@ class LedgerRepository:
         source_identities: Iterable[FileIdentity],
         target_identities: Iterable[FileIdentity],
     ) -> MappingLookup | None:
-        """Return correspondence relevant to one pair of current file scans."""
+        """Return correspondence for current scans; their link facts govern moves."""
 
         source_key = normalize_relative_path(source_relative_root, allow_root=True)
         target_key = normalize_relative_path(target_relative_root, allow_root=True)
@@ -1248,54 +1248,13 @@ class LedgerRepository:
                     target_volume_id=target_volume,
                     pairs=tuple(pairs),
                     ambiguous_source_keys=frozenset(),
-                    disqualified_source_identities=(
-                        self._current_disqualified_identities(
-                            source_location_id,
-                            current_source_identities,
-                        )
-                    ),
-                    disqualified_target_identities=(
-                        self._current_disqualified_identities(
-                            target_location_id,
-                            current_target_identities,
-                        )
-                    ),
+                    # Retained inventory aliases are history, not concurrent links.
+                    disqualified_source_identities=frozenset(),
+                    disqualified_target_identities=frozenset(),
                 ),
             )
         finally:
             self._connection.rollback()
-
-    def _current_disqualified_identities(
-        self,
-        location_id: int,
-        identities: tuple[tuple[str, str], ...],
-    ) -> frozenset[FileIdentity]:
-        disqualified: set[FileIdentity] = set()
-        for start in range(0, len(identities), QUERY_SUBJECT_BATCH_SIZE):
-            chunk = identities[start : start + QUERY_SUBJECT_BATCH_SIZE]
-            values = ",".join("(?, ?)" for _ in chunk)
-            parameters = tuple(value for identity in chunk for value in identity)
-            cursor = self._connection.execute(
-                f"""WITH requested(volume_serial, file_index) AS (VALUES {values})
-                     SELECT inventory.file_identity_volume_serial,
-                            inventory.file_identity_file_index
-                       FROM inventory
-                       JOIN requested
-                         ON requested.volume_serial =
-                                inventory.file_identity_volume_serial
-                        AND requested.file_index =
-                                inventory.file_identity_file_index
-                      WHERE inventory.location_id = ?
-                      GROUP BY inventory.file_identity_volume_serial,
-                               inventory.file_identity_file_index
-                     HAVING count(*) > 1 OR max(inventory.observed_nlink) > 1""",
-                (*parameters, location_id),
-            )
-            for identity_row in cursor:
-                identity = _identity(identity_row[0], identity_row[1])
-                assert identity is not None
-                disqualified.add(identity)
-        return frozenset(disqualified)
 
     def _disqualified_identities(self, location_id: int) -> frozenset[FileIdentity]:
         rows = self._connection.execute(

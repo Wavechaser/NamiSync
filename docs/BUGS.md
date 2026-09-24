@@ -1643,6 +1643,18 @@ defect, and move implementation-level test choreography out of the log.
 
 ## DATABASE AND INVENTORY
 
+### Planning evidence freshness
+
+- MODERATE - FIXED (2026-09-25). Historical observation conflation. Repeated
+  renames accumulated path-keyed inventory rows for one file identity, causing
+  later plans to replace eligible moves with copy plus target trash. Cause:
+  the scan-scoped reader counted retained aliases and old multi-link observations
+  as current ambiguity. It now supplies prior correspondence without historical
+  identity disqualifiers; the planner still rejects current source/target links,
+  duplicate identities and ambiguous pairs. Native repeated-move/no-op cycles
+  and current-link controls cover the correction. Inventory, correspondence
+  history and the conservative general inspection reader remain intact.
+
 ### Database artifact ownership and rollback
 
 - SEVERE - FIXED (2026-08-13). TOCTOU rollback-unlink race. Failed
@@ -1671,10 +1683,11 @@ defect, and move implementation-level test choreography out of the log.
   historical graph before planning and exhaust the desktop process. Cause: the
   runtime used the general mapping snapshot reader without passing current scan
   scope. Fixed with current target-key and source/target-identity selection,
-  400-subject streamed queries under one read snapshot, identity-indexed
-  disqualification limited to identities relevant now, and restored canonical
-  pair order. Nullable target identity, current alias, and multi-link safety
-  semantics remain unchanged; unrelated history is not planning input.
+  400-subject streamed target-key queries under one read snapshot and restored
+  canonical pair order. The later historical-observation correction above
+  removes retained-alias disqualification from this scoped reader; current
+  scans own alias and multi-link refusal. Nullable target-identity evidence
+  remains supported; unrelated history is not planning input.
 - MODERATE - FIXED (2026-08-27). Unbounded integrity candidate population.
   Fresh full and selected-path integrity, stale-plus-completed scope, and saved
   resume could materialize an arbitrary eligible ledger population before any

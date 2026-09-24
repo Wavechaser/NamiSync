@@ -67,8 +67,12 @@ filter snapshot, the selected `DestinationPolicy`, and the fingerprinted
 `propagate_source_casing` policy plus any already-extracted enrichment metadata.
 The casing policy defaults to false and is exposed through the primitive
 semantic-settings facade; there is no current settings CLI or GUI control.
-`MappingSnapshot` contains prior accepted pairs/no-ops, retained missing rows,
-and ambiguity/hardlink disqualifiers keyed by canonical path. Observed target
+`MappingSnapshot` contains prior accepted pairs/no-ops and optional ambiguity
+and identity disqualifiers. The workflow's scan-scoped correspondence reader
+does not turn retained inventory paths or old link counts into current hardlink
+evidence. Move eligibility checks current source and target link counts and
+identity multiplicity, plus unique prior correspondence; repeated names of one
+file in ledger history alone do not disqualify it. Observed target
 free space is deliberately absent: review and execution call `observe()` and
 judge the same pure required-byte formula against current space.
 

@@ -1027,6 +1027,17 @@ repeated machinery while preserving operational safety and boundary contracts.
 Safety, settlement, authority, and measurement work made high-risk release
 claims explicit, independently reviewable, and regression-backed.
 
+#### Preserve move detection across repeated renames (2026-09-25)
+
+- Stop treating retained inventory paths and link counts as current aliases in
+  the planning correspondence reader. Fresh source/target scans continue to
+  reject hardlinks and duplicate identities; ambiguous correspondence remains
+  ineligible. No ledger reset, history deletion or schema change is required.
+- Add native repeated-rename and no-op convergence coverage, with repository
+  history/current-link controls and preserved batched snapshot checks.
+- Verify 148 focused checks, 5,417 ordinary passes/five environment skips,
+  12 import contracts and independent adversarial review.
+
 #### Study and plan M1-7 ablation after delivery (2026-09-16)
 
 - Study `ae3daf6` through `5986c57` from diff/structure to selected behaviors

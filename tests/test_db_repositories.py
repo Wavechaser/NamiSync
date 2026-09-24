@@ -91,10 +91,6 @@ def _first_excess(*values: object) -> Iterator[object]:
 _MAPPING_PAIR_QUERY = re.compile(
     r"\bFROM\s+mapping_correspondence\b", re.IGNORECASE
 )
-_IDENTITY_QUERY = re.compile(
-    r"\bWITH\s+requested\s*\(\s*volume_serial\s*,\s*file_index\s*\)",
-    re.IGNORECASE,
-)
 _INVENTORY_SELECTION_QUERY = re.compile(
     r"^\s*SELECT\s+\*\s+FROM\s+inventory\b", re.IGNORECASE
 )
@@ -1009,7 +1005,7 @@ def test_current_mapping_read_ignores_large_irrelevant_history_and_keeps_pair_or
         setup.recorder.close()
 
 
-def test_current_mapping_read_preserves_relevant_identity_alias_disqualification(
+def test_current_mapping_read_keeps_pairs_without_historical_alias_disqualification(
     tmp_path: Path,
 ) -> None:
     shared_source = FileIdentity("source-serial", 41)
@@ -1045,14 +1041,8 @@ def test_current_mapping_read_preserves_relevant_identity_alias_disqualification
             "LINKED.BIN",
             "Z-SOURCE.BIN",
         ]
-        assert found.snapshot.disqualified_source_identities == frozenset(
-            {shared_source, linked_source}
-        )
-        assert found.snapshot.disqualified_target_identities == frozenset(
-            {shared_target, linked_target}
-        )
-        assert irrelevant_source not in found.snapshot.disqualified_source_identities
-        assert irrelevant_target not in found.snapshot.disqualified_target_identities
+        assert found.snapshot.disqualified_source_identities == frozenset()
+        assert found.snapshot.disqualified_target_identities == frozenset()
     finally:
         setup.recorder.close()
 
@@ -1119,7 +1109,7 @@ def test_current_mapping_read_skips_pair_query_for_an_empty_target_scope(
         setup.recorder.close()
 
 
-def test_current_mapping_queries_use_target_and_identity_indexes(
+def test_current_mapping_query_uses_target_index(
     tmp_path: Path,
 ) -> None:
     source_identity = FileIdentity("source-serial", 41)
@@ -1147,9 +1137,7 @@ def test_current_mapping_queries_use_target_and_identity_indexes(
         assert found is not None
 
         pair_statement = _matching_statements(statements, _MAPPING_PAIR_QUERY)[0]
-        identity_statement = _matching_statements(statements, _IDENTITY_QUERY)[0]
         pair_plan = _query_plan(setup.recorder.path, pair_statement)
-        identity_plan = _query_plan(setup.recorder.path, identity_statement)
 
         assert any(
             "USING INDEX" in detail
@@ -1161,7 +1149,6 @@ def test_current_mapping_queries_use_target_and_identity_indexes(
             and "location_id=? AND rel_path_key=?" in detail
             for detail in pair_plan
         )
-        assert any("inventory_identity_idx" in detail for detail in identity_plan)
     finally:
         setup.recorder.close()
 
@@ -1170,7 +1157,7 @@ def test_current_mapping_queries_use_target_and_identity_indexes(
     ("count", "batch_size"),
     _SUBJECT_BATCH_CASES,
 )
-def test_current_mapping_read_chunks_keys_and_identities_at_four_hundred(
+def test_current_mapping_read_chunks_target_keys_at_four_hundred(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     count: int,
@@ -1207,19 +1194,8 @@ def test_current_mapping_read_chunks_keys_and_identities_at_four_hundred(
             for statement, parameters in parameter_calls
             if _MAPPING_PAIR_QUERY.search(statement)
         ]
-        identity_parameters = [
-            parameters
-            for statement, parameters in parameter_calls
-            if _IDENTITY_QUERY.search(statement)
-        ]
         assert bool(pair_parameters) is bool(count)
-        assert bool(identity_parameters) is bool(count)
         assert all(len(parameters) <= batch_size + 2 for parameters in pair_parameters)
-        assert all(
-            len(parameters) <= 2 * batch_size + 1
-            and (len(parameters) - 1) % 2 == 0
-            for parameters in identity_parameters
-        )
     finally:
         setup.recorder.close()
 
@@ -1239,7 +1215,7 @@ def test_current_mapping_read_uses_one_snapshot_across_query_batches(
         pair_select_count += 1
         if pair_select_count == 2:
             writer.execute(
-                "UPDATE inventory SET observed_nlink = 2 WHERE id = 1"
+                "DELETE FROM mapping_correspondence WHERE source_inventory_id = 401"
             )
             writer.commit()
 
@@ -1262,7 +1238,10 @@ def test_current_mapping_read_uses_one_snapshot_across_query_batches(
             )
         assert found is not None
         assert pair_select_count >= 2
-        assert found.snapshot.disqualified_source_identities == frozenset()
+        assert len(found.snapshot.pairs) == 401
+        assert FileIdentity("source-serial", 401) in {
+            pair.source_identity for pair in found.snapshot.pairs
+        }
 
         with LedgerRepository(setup.recorder.path) as repository:
             current = repository.find_current_mapping(
@@ -1275,9 +1254,10 @@ def test_current_mapping_read_uses_one_snapshot_across_query_batches(
                 target_identities=target_identities,
             )
         assert current is not None
-        assert current.snapshot.disqualified_source_identities == frozenset(
-            {FileIdentity("source-serial", 1)}
-        )
+        assert len(current.snapshot.pairs) == 400
+        assert FileIdentity("source-serial", 401) not in {
+            pair.source_identity for pair in current.snapshot.pairs
+        }
     finally:
         writer.close()
         setup.recorder.close()

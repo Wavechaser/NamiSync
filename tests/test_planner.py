@@ -254,6 +254,7 @@ def test_persisted_paired_noop_evidence_enables_move_and_empty_correspondence_do
     [
         (_file("new.bin", identity=None), _profile(stable=False), _file("old.bin", identity=FileIdentity("DST", 2)), None),
         (_file("new.bin", identity=FileIdentity("SRC", 1), nlink=2), _profile(), _file("old.bin", identity=FileIdentity("DST", 2)), None),
+        (_file("new.bin", identity=FileIdentity("SRC", 1)), _profile(), _file("old.bin", identity=FileIdentity("DST", 2), nlink=2), None),
         (_file("new.bin", identity=FileIdentity("OTHER", 1)), _profile(), _file("old.bin", identity=FileIdentity("DST", 2)), None),
         (_file("new.bin", identity=FileIdentity("SRC", 1)), _profile(), _file("old.bin", identity=FileIdentity("DST", 2)), "cross"),
     ],
@@ -795,6 +796,46 @@ def test_duplicate_identity_and_ambiguous_prior_correspondence_disable_move() ->
     assert not any(operation.kind in {OperationKind.MOVE, OperationKind.MOVE_UPDATE} for operation in duplicate.operations)
 
     unique_source = _scan("source", SOURCE_VOLUME, files=(_file("new.bin", identity=identity),))
+    duplicate_target = _scan(
+        "target",
+        TARGET_VOLUME,
+        files=(
+            _file("old.bin", identity=target_identity),
+            _file("other.bin", identity=target_identity),
+        ),
+    )
+    duplicate_target_plan = _plan(
+        unique_source,
+        duplicate_target,
+        correspondence=MappingSnapshot(SOURCE_VOLUME, TARGET_VOLUME, (pair,)),
+    )
+    assert not any(
+        operation.kind in {OperationKind.MOVE, OperationKind.MOVE_UPDATE}
+        for operation in duplicate_target_plan.operations
+    )
+
+    other_pair = MappingPair(
+        "OLD.BIN", "other.bin", "OTHER.BIN", identity, FileIdentity("DST", 23)
+    )
+    ambiguous_pairs = _plan(
+        unique_source,
+        _scan(
+            "target",
+            TARGET_VOLUME,
+            files=(
+                _file("old.bin", identity=target_identity),
+                _file("other.bin", identity=FileIdentity("DST", 23)),
+            ),
+        ),
+        correspondence=MappingSnapshot(
+            SOURCE_VOLUME, TARGET_VOLUME, (pair, other_pair)
+        ),
+    )
+    assert not any(
+        operation.kind in {OperationKind.MOVE, OperationKind.MOVE_UPDATE}
+        for operation in ambiguous_pairs.operations
+    )
+
     ambiguous = _plan(
         unique_source,
         target,

@@ -1783,6 +1783,183 @@ def _real_cycle(
     return review, runtime.open_execution(checkpoint).run(context)
 
 
+def test_repeated_source_renames_use_current_scan_identity_for_moves(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+    source.mkdir()
+    target.mkdir()
+    (source / "original.bin").write_bytes(b"same content")
+    (target / "original.bin").write_bytes(b"same content")
+    source_stat = os.stat(source / "original.bin")
+    os.utime(
+        target / "original.bin",
+        ns=(source_stat.st_mtime_ns, source_stat.st_mtime_ns),
+    )
+    target_identity = os.stat(target / "original.bin").st_ino
+
+    runtime = LocalWorkflowRuntime(tmp_path / "ledger.db", tmp_path / "history.db")
+    try:
+        review, result = _real_cycle(
+            runtime, source, target, request_id=f"{1:032x}", run_id=f"{2:032x}"
+        )
+        assert [operation.kind for operation in review.operations] == ["noop"]
+        assert result.status is SessionState.COMPLETED
+
+        previous = "original.bin"
+        for index, current in enumerate(("first.bin", "second.bin", "third.bin")):
+            (source / previous).rename(source / current)
+            review, result = _real_cycle(
+                runtime,
+                source,
+                target,
+                request_id=f"{4 * index + 3:032x}",
+                run_id=f"{4 * index + 4:032x}",
+            )
+            assert [operation.kind for operation in review.operations] == ["move"], index
+            assert review.operations[0].prior_target_path == previous
+            assert review.operations[0].target_path == current
+            assert review.operations[0].content_bytes == "0"
+            assert result.status is SessionState.COMPLETED
+            assert result.bytes_total == 0
+            assert [entry.name for entry in target.iterdir()] == [current]
+            assert os.stat(target / current).st_ino == target_identity
+            assert not (target / ".synctrash").exists()
+
+            rerun_review, rerun_result = _real_cycle(
+                runtime,
+                source,
+                target,
+                request_id=f"{4 * index + 5:032x}",
+                run_id=f"{4 * index + 6:032x}",
+            )
+            assert [operation.kind for operation in rerun_review.operations] == ["noop"]
+            assert rerun_result.status is SessionState.COMPLETED
+            previous = current
+
+        connection = connect_ledger_reader(runtime.ledger_path)
+        try:
+            source_location_id = connection.execute(
+                "SELECT source_location_id FROM mappings"
+            ).fetchone()[0]
+            source_rows = connection.execute(
+                """SELECT rel_path, file_identity_file_index, observed_nlink
+                     FROM inventory WHERE location_id = ? ORDER BY rel_path""",
+                (source_location_id,),
+            ).fetchall()
+            assert [row["rel_path"] for row in source_rows] == [
+                "first.bin", "original.bin", "second.bin", "third.bin"
+            ]
+            assert len({row["file_identity_file_index"] for row in source_rows}) == 1
+            assert {row["observed_nlink"] for row in source_rows} == {1}
+        finally:
+            connection.close()
+    finally:
+        runtime.close()
+
+
+def test_past_multilink_observation_does_not_block_fresh_single_link_move(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+    source.mkdir()
+    target.mkdir()
+    (source / "original.bin").write_bytes(b"same content")
+    (target / "original.bin").write_bytes(b"same content")
+    source_stat = os.stat(source / "original.bin")
+    os.utime(
+        target / "original.bin",
+        ns=(source_stat.st_mtime_ns, source_stat.st_mtime_ns),
+    )
+
+    runtime = LocalWorkflowRuntime(tmp_path / "ledger.db", tmp_path / "history.db")
+    try:
+        first, result = _real_cycle(
+            runtime, source, target, request_id=f"{1:032x}", run_id=f"{2:032x}"
+        )
+        assert [operation.kind for operation in first.operations] == ["noop"]
+        assert result.status is SessionState.COMPLETED
+
+        outside = tmp_path / "outside.bin"
+        os.link(source / "original.bin", outside)
+        linked, result = _real_cycle(
+            runtime, source, target, request_id=f"{3:032x}", run_id=f"{4:032x}"
+        )
+        assert [operation.kind for operation in linked.operations] == ["noop"]
+        assert result.status is SessionState.COMPLETED
+        outside.unlink()
+        assert os.stat(source / "original.bin").st_nlink == 1
+        (source / "original.bin").rename(source / "renamed.bin")
+
+        moved, result = _real_cycle(
+            runtime, source, target, request_id=f"{5:032x}", run_id=f"{6:032x}"
+        )
+        assert [operation.kind for operation in moved.operations] == ["move"]
+        assert result.status is SessionState.COMPLETED
+        assert result.bytes_total == 0
+    finally:
+        runtime.close()
+
+
+@pytest.mark.parametrize("side", ("source", "target"))
+@pytest.mark.parametrize("link_location", ("outside", "excluded"))
+def test_current_multilink_blocks_move_with_outside_or_excluded_alias(
+    tmp_path: Path, side: str, link_location: str
+) -> None:
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+    source.mkdir()
+    target.mkdir()
+    (source / "original.bin").write_bytes(b"same content")
+    (target / "original.bin").write_bytes(b"same content")
+    source_stat = os.stat(source / "original.bin")
+    os.utime(
+        target / "original.bin",
+        ns=(source_stat.st_mtime_ns, source_stat.st_mtime_ns),
+    )
+
+    runtime = LocalWorkflowRuntime(tmp_path / "ledger.db", tmp_path / "history.db")
+    try:
+        review, result = _real_cycle(
+            runtime, source, target, request_id=f"{1:032x}", run_id=f"{2:032x}"
+        )
+        assert [operation.kind for operation in review.operations] == ["noop"]
+        assert result.status is SessionState.COMPLETED
+
+        linked_root = source if side == "source" else target
+        if link_location == "outside":
+            link = tmp_path / "outside.bin"
+            filters = FilterSet()
+        else:
+            excluded = linked_root / "excluded"
+            excluded.mkdir()
+            link = excluded / "link.bin"
+            filters = FilterSet(("excluded",))
+        os.link(linked_root / "original.bin", link)
+        (source / "original.bin").rename(source / "renamed.bin")
+        observed = source / "renamed.bin" if side == "source" else target / "original.bin"
+        assert os.stat(observed).st_nlink == 2
+
+        request = PlanRequest(
+            request_id=f"{3:032x}",
+            source_path=str(source),
+            target_path=str(target),
+            options=SyncOptions(filters=filters),
+        )
+        context = RunContext(lambda _: None, lambda: None)
+        planned = runtime.open_plan(runtime.prepare_plan(request).checkpoint).run(context)
+        assert planned.status is SessionState.COMPLETED
+        review = runtime.get_plan_review(request.request_id)
+        assert not any(
+            operation.kind in {"move", "move_update"}
+            for operation in review.operations
+        )
+    finally:
+        runtime.close()
+
+
 def test_opt_in_recase_runs_end_to_end_without_copying_or_trashing(
     tmp_path: Path,
 ) -> None:
