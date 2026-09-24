@@ -28,6 +28,7 @@ import {
   startPlan,
   startTaskDrain,
   TaskCreateUncertainError,
+  TaskCloseUncertainError,
   TerminalPresentationError,
   TerminalSessionReleaseError,
   whenBridgeApiReady,
@@ -116,7 +117,24 @@ const ACTIVE_EXECUTION_CONTROL_STATES = new Set([
   "canceling",
 ]);
 const STOPPED_TASK_UPDATES_MESSAGE =
-  "Task updates stopped. Execution controls are unavailable. Close NamiSync to request cancellation.";
+  "Task updates stopped. Select Retry updates on this task to restore execution controls.";
+const TASK_RECOVERY_MESSAGES = new Set([
+  STOPPED_TASK_UPDATES_MESSAGE,
+  "Task updates stopped. Close can be retried.",
+  "Task recovery paused. Select Retry updates on this task.",
+  "Reconnecting task updates…",
+  "Task updates are still unavailable. Select Retry updates to try again.",
+]);
+
+function clearTaskRecoveryError(task) {
+  if (TASK_RECOVERY_MESSAGES.has(task.error)) task.error = null;
+}
+
+function setTaskRecoveryError(task, message) {
+  if (task.error === null || TASK_RECOVERY_MESSAGES.has(task.error)) {
+    task.error = message;
+  }
+}
 
 function executionControlMessage(state) {
   switch (state) {
@@ -179,6 +197,7 @@ const rail = createTaskRail({
   onCreate: () => { void createBlankTask(); },
   onSelect: selectTask,
   onClose: (taskId) => { void closeRetainedTask(taskId); },
+  onRetryUpdates: retryTaskUpdates,
   onSettings: showSettings,
 });
 app.append(rail.element, panel.element);
@@ -385,6 +404,11 @@ function adoptTask(summary) {
       taskKind: summary.task_kind,
       requestId: summary.request_id,
       closePending: false,
+      closeRetry: null,
+      closeFailed: false,
+      recoveryRetry: null,
+      recoverySessionId: null,
+      recoveryRunning: false,
       error: null,
       label: `Task ${nextTaskNumber}`,
       stopDrain: null,
@@ -412,6 +436,13 @@ function adoptTask(summary) {
     nextTaskNumber += 1;
     tasks.set(task.taskId, task);
   } else {
+    if (task.sessionId !== summary.session_id) {
+      task.recoveryRetry = null;
+      task.recoverySessionId = null;
+      task.recoveryRunning = false;
+      task.closeRetry = null;
+      task.closeFailed = false;
+    }
     if (task.sessionId !== summary.session_id || summary.session_state !== "active") {
       const controlAttempt = task.executionControlAttempt;
       task.executionControlAttempt = null;
@@ -459,12 +490,13 @@ function attachTaskDrain(task) {
     task.taskId,
     sessionId,
     (update, progressState) => acceptTaskUpdate(task, sessionId, update, progressState),
-    (error) => acceptTaskRefusal(task, sessionId, error),
+    (error, retry) => acceptTaskRefusal(task, sessionId, error, retry),
     {
       terminal: task.sessionState !== "active",
       sessionReleased: task.sessionReleased,
     },
     (_taskId, sessionId) => acceptTaskRelease(task, sessionId),
+    (_taskId, sessionId) => acceptTaskRecovery(task, sessionId),
   );
   task.drainUnavailable = false;
 }
@@ -505,6 +537,11 @@ function acceptTaskUpdate(task, sessionId, update, progressState = null) {
     return;
   }
   if (update.update_type === "record") {
+    task.recoveryRetry = null;
+    task.recoverySessionId = null;
+    task.recoveryRunning = false;
+    task.drainUnavailable = false;
+    clearTaskRecoveryError(task);
     taskMutationRevision += 1;
     task.executionControlRevision += 1;
     const controlAttempt = task.executionControlAttempt;
@@ -538,7 +575,7 @@ function acceptTaskUpdate(task, sessionId, update, progressState = null) {
   }
 }
 
-function acceptTaskRefusal(task, sessionId, error) {
+function acceptTaskRefusal(task, sessionId, error, retry = null) {
   if (tasks.get(task.taskId) !== task || task.sessionId !== sessionId) {
     return;
   }
@@ -546,17 +583,55 @@ function acceptTaskRefusal(task, sessionId, error) {
     && !(error instanceof TerminalPresentationError)
     && !(error instanceof TerminalSessionReleaseError);
   if (drainStopped) task.drainUnavailable = true;
+  task.recoveryRetry = retry ?? (typeof error?.retry === "function" ? error.retry : null);
+  task.recoverySessionId = sessionId;
+  task.recoveryRunning = false;
   if (drainStopped && task.executionStarted) {
-    task.error = STOPPED_TASK_UPDATES_MESSAGE;
-    if (task.executionControlAttempt?.sessionId === sessionId) {
-      task.executionControlAttempt.message = STOPPED_TASK_UPDATES_MESSAGE;
-    }
+    setTaskRecoveryError(task, STOPPED_TASK_UPDATES_MESSAGE);
     if (task.review !== null) task.review.message = STOPPED_TASK_UPDATES_MESSAGE;
   } else {
-    task.error = "Task updates stopped. Close can be retried.";
+    setTaskRecoveryError(task, task.recoveryRetry === null
+      ? "Task updates stopped. Close can be retried."
+      : "Task recovery paused. Select Retry updates on this task.");
   }
-  task.closePending = false;
   renderTasks();
+}
+
+function acceptTaskRecovery(task, sessionId) {
+  if (tasks.get(task.taskId) !== task || task.sessionId !== sessionId) return;
+  task.recoveryRetry = null;
+  task.recoverySessionId = null;
+  task.recoveryRunning = false;
+  task.drainUnavailable = false;
+  clearTaskRecoveryError(task);
+  if (task.review?.message === STOPPED_TASK_UPDATES_MESSAGE) {
+    task.review.message = task.executionControlAttempt?.sessionId === sessionId
+      ? task.executionControlAttempt.message : executionControlMessage(task.executionControlState);
+  }
+  renderTasks();
+}
+
+function retryTaskUpdates(taskId) {
+  const task = tasks.get(taskId);
+  if (
+    task === undefined || task.recoveryRunning || task.closeRetry !== null ||
+    task.recoverySessionId !== task.sessionId ||
+    typeof task.recoveryRetry !== "function"
+  ) return;
+  task.recoveryRunning = true;
+  setTaskRecoveryError(task, "Reconnecting task updates…");
+  renderTasks();
+  try {
+    if (task.recoveryRetry() === false) {
+      task.recoveryRunning = false;
+      setTaskRecoveryError(task, "Task updates are still unavailable. Select Retry updates to try again.");
+      renderTasks();
+    }
+  } catch (_error) {
+    task.recoveryRunning = false;
+    setTaskRecoveryError(task, "Task updates are still unavailable. Select Retry updates to try again.");
+    renderTasks();
+  }
 }
 
 async function refreshTasks(epoch) {
@@ -661,11 +736,15 @@ async function closeRetainedTask(taskId) {
   if (batchTaskBlockReason(taskId) !== null) return;
   const epoch = startupEpoch;
   task.closePending = true;
+  task.closeFailed = false;
   task.error = null;
   renderTasks();
   let remainsPending = false;
   try {
-    const result = await closeTask(task.taskId, task.sessionId);
+    const result = await (task.closeRetry === null
+      ? closeTask(task.taskId, task.sessionId) : task.closeRetry());
+    task.closeRetry = null;
+    task.closeFailed = false;
     if (result.disposition === "closed") {
       taskMutationRevision += 1;
     }
@@ -689,9 +768,13 @@ async function closeRetainedTask(taskId) {
     } else {
       remainsPending = true;
     }
-  } catch (_error) {
+  } catch (error) {
     if (epoch === startupEpoch && tasks.get(taskId) === task) {
-      task.error = "Close did not finish. Retry.";
+      task.closeRetry = error instanceof TaskCloseUncertainError ? error.retry : null;
+      task.closeFailed = true;
+      task.error = task.closeRetry === null
+        ? "Close did not finish. Retry."
+        : "Close could not be confirmed. Select Retry close for this task.";
     }
   } finally {
     if (
@@ -942,6 +1025,10 @@ function editMode(mode) {
 
 function acceptTaskRelease(task, sessionId) {
   if (tasks.get(task.taskId) !== task || task.sessionId !== sessionId) return;
+  task.recoveryRetry = null;
+  task.recoverySessionId = null;
+  task.recoveryRunning = false;
+  clearTaskRecoveryError(task);
   task.sessionReleased = true;
   task.executionWindowDirty = true;
   task.executionWindowDirtyRevision += 1;

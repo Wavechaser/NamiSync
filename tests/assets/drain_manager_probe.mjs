@@ -1444,14 +1444,22 @@ assert.deepEqual(
   [],
 );
 
-// A second busy result in one uninterrupted generation is definitive and the
-// stopped entry is removed so an explicit later observation can be created.
+// A second busy result in one uninterrupted generation suspends the exact
+// browser entry until explicit replay or stop.
 const definitiveBusyRefusals = [];
+const definitiveBusyRetries = [];
+const definitiveBusyRecovered = [];
 const stopDefinitiveBusy = bridge.startTaskDrain(
   task("8"),
   session("8"),
   assert.fail,
-  (error) => definitiveBusyRefusals.push(error),
+  (error, retry) => {
+    definitiveBusyRefusals.push(error);
+    definitiveBusyRetries.push(retry);
+  },
+  null,
+  null,
+  () => definitiveBusyRecovered.push(true),
 );
 const busy0 = await nextRequest(requests.length);
 refusal(
@@ -1468,6 +1476,14 @@ refusal(
 await turns();
 assert.equal(definitiveBusyRefusals.length, 1);
 assert.equal(definitiveBusyRefusals[0].code, "drain_busy");
+assert.equal(typeof definitiveBusyRetries[0], "function");
+definitiveBusyRetries[0]();
+const busyRecovery = await nextRequest(requests.length);
+assert.equal(busyRecovery.request.payload.replay_from, 1);
+success(busyRecovery, []);
+await turns();
+assert.deepEqual(definitiveBusyRecovered, [true]);
+stopDefinitiveBusy();
 const stopFourReplacement = bridge.startTaskDrain(
   task("8"),
   session("8"),
@@ -1564,16 +1580,22 @@ success(cursor1, [terminalRecord(session("0"))]);
 await turns();
 assert.equal(acceptedCursor.length, 2);
 
-// Consumer failure stops before it can rearm and reports one bounded local
-// transport refusal. Duplicate task registration is refused synchronously.
+// Consumer failure suspends before rearm and preserves the failed event for
+// exact manual replay. Duplicate task registration is refused synchronously.
 const callbackRefusals = [];
+const callbackRetries = [];
+let callbackAttempts = 0;
 const stopSix = bridge.startTaskDrain(
   task("f"),
   session("6"),
   () => {
-    throw new Error("private consumer detail");
+    callbackAttempts += 1;
+    if (callbackAttempts === 1) throw new Error("private consumer detail");
   },
-  (error) => callbackRefusals.push(error),
+  (error, retry) => {
+    callbackRefusals.push(error);
+    callbackRetries.push(retry);
+  },
 );
 assert.throws(
   () => bridge.startTaskDrain(task("f"), session("6"), () => {}, () => {}),
@@ -1585,9 +1607,44 @@ await turns();
 assert.equal(callbackRefusals.length, 1);
 assert.equal(callbackRefusals[0].name, "BridgeTransportError");
 assert.ok(!callbackRefusals[0].message.includes("private"));
+assert.equal(typeof callbackRetries[0], "function");
+callbackRetries[0]();
+const sixReplay = await nextRequest(requests.length);
+assert.equal(sixReplay.request.payload.replay_from, 1);
+success(sixReplay, [event(session("6"), 1)]);
+await turns();
+assert.equal(callbackAttempts, 2, "failed presentation is replayed once");
+stopSix();
+
+// A terminal record consumed by native response admission but lost in the
+// browser is recovered through a manual non-null replay of the exact session.
+const manualTerminalUpdates = [];
+const manualTerminalRetries = [];
+const manualTerminalReleaseBase = releaseRequests.length;
+const stopManualTerminal = bridge.startTaskDrain(
+  task("5"), session("5"),
+  (update) => manualTerminalUpdates.push(update),
+  (_error, retry) => manualTerminalRetries.push(retry),
+);
+const manual0 = await nextRequest(requests.length);
+success(manual0, [event(session("5"), 1)]);
+const manual1 = await nextRequest(requests.length);
+refusal(manual1, "drain_busy", "That desktop task already has an event request in progress.");
+const manual2 = await nextRequest(requests.length);
+refusal(manual2, "drain_busy", "That desktop task already has an event request in progress.");
+await turns();
+assert.equal(manualTerminalRetries.length, 1);
+manualTerminalRetries[0]();
+const manualRecovery = await nextRequest(requests.length);
+assert.equal(manualRecovery.request.payload.replay_from, 2);
+success(manualRecovery, [terminalRecord(session("5"))]);
+await turns();
+assert.deepEqual(manualTerminalUpdates.map((update) => update.update_type), ["event", "record"]);
+assert.equal(releaseRequests.length, manualTerminalReleaseBase + 1);
+stopManualTerminal();
 
 // Failure while minting an attempt id is surfaced once from the queued arm,
-// does not become an unhandled rejection, and releases the task-map entry.
+// does not become an unhandled rejection, and retains exact retry authority.
 const originalGetRandomValues = globalThis.crypto.getRandomValues;
 const mintRefusals = [];
 globalThis.crypto.getRandomValues = () => {
@@ -1607,6 +1664,7 @@ assert.equal(
   "The desktop request id could not be created.",
 );
 globalThis.crypto.getRandomValues = originalGetRandomValues;
+stopSeven();
 const stopSevenReplacement = bridge.startTaskDrain(
   task("7"),
   session("7"),
@@ -1844,7 +1902,7 @@ stopClosedReplacement();
 
 // Persistent malformed transport responses consume a finite exponential
 // recovery budget. Every retry keeps the exact recovery cursor, then one fixed
-// refusal releases the browser entry instead of spinning in microtasks.
+// refusal suspends the browser entry instead of spinning in microtasks.
 const persistentRefusals = [];
 const persistentDelayIndex = scheduledDelays.length;
 const persistentRequestIndex = requests.length;
@@ -1872,6 +1930,7 @@ assert.deepEqual(scheduledDelays.slice(persistentDelayIndex), [
 ]);
 assert.equal(persistentRefusals.length, 1);
 assert.equal(persistentRefusals[0].name, "BridgeTransportError");
+stopPersistent();
 const stopPersistentReplacement = bridge.startTaskDrain(
   task("2"),
   session("b"),

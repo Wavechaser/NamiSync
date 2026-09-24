@@ -4,7 +4,7 @@ This document owns the implemented CLI and desktop adapters, service/task lifecy
 
 `BRIDGE.md` owns external desktop protocol, transport, retry/recovery, and its exact evidence. `PRESENTATION.md` owns tree/view/search/sort/selection behavior and visual scale evidence. The frozen v1 event-and-transport custody result is scoped to its bridge evidence and does not establish whole-runtime containment. The former BR-G-45 aggregate terminal-artifact model is retired. SH-G-15 remains an open, scoped release criterion defined below.
 
-The active service and CLI support sync, inventory, baseline, verify and rebaseline. The desktop exposes the bounded host/transport foundation and process-live tasks with frozen Setup, typed/picker/recent locations, plan and standalone inventory starts, Plan again, navigation, reconstruction, and explicit close. Plan review supplies bounded hierarchy, sibling sorting, server-owned selection, destructive confirmation and same-task execution with live controls. Execution-result review, inventory projections, manual post-copy verification, history and full settings remain accepted but unrealized outcomes. Their delivery register is [M1_PLAN.md](M1_PLAN.md).
+The active service and CLI support sync, inventory, baseline, verify and rebaseline. The desktop exposes the bounded host/transport foundation and process-live tasks with frozen Setup, typed/picker/recent locations, plan and standalone inventory starts, Plan again, navigation, reconstruction, and explicit close. Plan review supplies bounded hierarchy, sibling sorting, server-owned selection, destructive confirmation and same-task execution with live controls and retained result review. Inventory projections, manual post-copy verification, history and full settings remain accepted but unrealized outcomes. Their delivery register is [M1_PLAN.md](M1_PLAN.md).
 
 
 ## Purpose
@@ -624,6 +624,11 @@ it does not revoke a previously earned delivery receipt. Release consumes that
 receipt even if replay has cleared the transient terminal cache. Browser batch
 refusal precedes callbacks, cursor/reducer advancement, and release; successful
 terminal presentation remains required before the browser requests release.
+Suspended browser observation can explicitly retry this existing exact-session
+replay path. It restores update delivery, not domain execution or a new session.
+The last successfully presented cursor and reducer survive suspension; a failed
+presentation restores their prior values. Pending task Close still depends on
+real terminal delivery, with browser retirement fences governed by BRIDGE.
 Failed single-flight starts retain only a closed four-value failure code for
 observation conflict, task unavailability, interruption, or generic start
 failure. Every participant and retained failure replay receives a fresh fixed

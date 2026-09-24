@@ -153,6 +153,7 @@ def test_m1_4_installed_task_shell_navigation_closure_and_recovery(
         "setupVisible": True,
         "refusedCount": 48,
         "retainedAfterFailure": True,
+        "failureDetail": "Close could not be confirmed. Select Retry close for this task.",
         "navigationStayed": True,
         "olderSelectionCleared": True,
         "idleGeometry": {
@@ -197,6 +198,9 @@ def test_m1_4_installed_task_shell_navigation_closure_and_recovery(
     assert busy["retainedPending"] is True
     assert busy["pending"]["busy_state"] == "canceling"
     assert busy["pending"]["busy_present"] is True
+    assert busy["recovered"]["busy_drain_failures"] == 1
+    assert busy["recovered"]["busy_reobservations"] >= 1
+    assert busy["recovered"]["busy_present"] is True
     assert busy["settled"]["busy_present"] is False
     assert busy["settled"]["busy_state"] == "retired"
     assert busy["settled"]["observer_release_calls"] >= 1

@@ -471,6 +471,7 @@ window.addEventListener("unhandledrejection", (event) => {
     onCreate() {},
     onSelect() {},
     onClose() {},
+    onRetryUpdates() {},
     onSettings() {},
   });
   galleryRail.render([

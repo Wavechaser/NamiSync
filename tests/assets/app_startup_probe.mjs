@@ -124,6 +124,9 @@ const bridgeStub = moduleUrl(`
   export class TaskCreateUncertainError extends BridgeTransportError {
     constructor(retry) { super(); this.retry = retry; }
   }
+  export class TaskCloseUncertainError extends BridgeTransportError {
+    constructor(retry) { super(); this.retry = retry; }
+  }
   globalThis.startupHarness.BridgeTransportError = BridgeTransportError;
   export const whenBridgeApiReady = () => globalThis.startupHarness.whenBridgeApiReady();
   export const acknowledgeShellReady = () => globalThis.startupHarness.acknowledgeShell();
@@ -196,7 +199,7 @@ taskStatusSource = taskStatusSource.replace("./render.js", renderStub);
 const taskStatusStub = moduleUrl(taskStatusSource);
 source = source.replace(
   /import \{[\s\S]*?\} from "\.\/bridge\.js";/,
-  `import { acknowledgeShellReady, admitLocation, BridgeTransportError, closeTask, createTask, echoReadiness, getExecutionDetail, listTasks, markBridgeOperational, pickFolder, planAgain, prepareSetup, probeRecentPairs, readSetup, StartPlanUncertainError, startInventory, startPlan, startTaskDrain, TaskCreateUncertainError, whenBridgeApiReady } from "${bridgeStub}";`,
+  `import { acknowledgeShellReady, admitLocation, BridgeTransportError, closeTask, createTask, echoReadiness, getExecutionDetail, listTasks, markBridgeOperational, pickFolder, planAgain, prepareSetup, probeRecentPairs, readSetup, StartPlanUncertainError, startInventory, startPlan, startTaskDrain, TaskCloseUncertainError, TaskCreateUncertainError, whenBridgeApiReady } from "${bridgeStub}";`,
 );
 source = source
   .replace("./readiness.js", readinessStub)

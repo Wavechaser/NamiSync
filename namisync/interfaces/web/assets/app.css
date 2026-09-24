@@ -314,6 +314,15 @@ body {
   min-inline-size: 0;
 }
 
+.nami-task-rail__retry {
+  inline-size: 100%;
+  margin-block-start: var(--space-1);
+}
+
+.nami-task-rail__retry[hidden] {
+  display: none;
+}
+
 .nami-plan-review__diagnostics {
   display: grid;
   gap: var(--space-4);

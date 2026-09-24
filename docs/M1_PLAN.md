@@ -793,6 +793,59 @@ records the correction commit only after staged and clean-HEAD binding pass.
 The lost-drain task-Close limitation remains documented; no reattach is added.
 R3 remains unstarted.
 
+### Post-R2 recovery correction — verified
+
+User-authorized after `9be2930`: resolve lost update delivery and blocked task
+Close as one recovery outcome in a separate commit, then execute R3, merge into
+`milestone1` and clean up accounted task branches/worktrees. This supersedes the
+prior stop-before-R3 instruction; filter/Search and the reduction study remain
+excluded. No push or PR.
+
+| Id | Accepted outcome | Status / investigation boundary |
+| --- | --- | --- |
+| RC-1 | Recover observation of the exact retained task/session after updates stop, restore truthful controls and permit pending Close to settle without restarting execution or inventing terminal success. | Verified: suspended browser drain and one task-card Retry updates action; exact native replay from the last successfully presented non-Gap sequence + 1. 60 focused, 5405 ordinary/five skips, 33 installed GUI obligations, 12 imports and fresh 78-attempt U acceptance pass. Commit and review identity: `build/recovery-close-20260924/delivery-01.json`. |
+| RC-2 | Close M1-8 through R3 and verified integration, then remove only superseded/accounted task refs and worktrees. | Read-only provenance/evidence inventory may overlap RC-1; integration and cleanup wait for its reviewed commit. Preserve unrelated work and unique evidence. |
+
+Existing mandatory stops apply. Recovery cannot relax exact-session admission,
+terminal delivery, close fences, bounded automatic retries or mutation replay
+guarantees. Broader architectural/effect changes require adjudication. Final
+product/package changes require fresh affected functional and U acceptance;
+settle R3 package-input documentation before the last freeze.
+
+**RC-1 implementation boundary.** Browser `assets/{bridge.js,app.js,rail.js}`
+own suspended-drain/retry custody, task feedback and one reusable recovery action;
+`app.css` may place that action in the existing card. No native command, payload,
+mutation policy or backend change. Clear unavailability only after validated
+current delivery (including empty recovery); retain cursor/reducer on suspension
+and restore them if presentation throws. Terminal presentation/release keep
+their distinct existing retries. Close can request cancellation against the
+suspended exact drain; pending Close permits observation retry, while uncertain
+Close retains its fence and identical Close retry. Stale session/epoch callbacks,
+repeat clicks, reinjection and retirement cannot revive an obsolete drain.
+
+Direct tests: existing `drain_manager_probe.mjs`, `task_shell_probe.mjs` and
+their `setup_app_probe.mjs`/`app_startup_probe.mjs` mocks; owning frontend and
+transport pytest entries, native `test_drain.py` recovery/close seams, and
+existing task-shell headed child/driver/test helpers. Record any further direct
+consumer before editing. Full headed run-01 identified two additional direct
+helpers: `tests/assets/component_gallery/gallery.js` must supply the new rail
+callback, and `tests/assets/transport_gate/transport.js` must dispose its retained
+suspended owner before testing replacement registration. These are fixture
+contract migrations; the nine failed cases share those two paths. Preserve that
+failed run and rerun the affected gallery/transport cases; product/package and
+the other 24 passing headed cases remain unchanged. The all-caller scan closed
+this finite migration; independent review confirms no new product defect or
+recurrence stop. Use production-module reproductions and native replay/
+Close cases first, then full interface headed, ordinary/imports, fixed 78-attempt
+U acceptance with unchanged instruments/budgets, artifact controls and staged/
+clean-HEAD binding. Independent review precedes freeze and the separate RC-1
+commit. BRIDGE/INTERFACES/DESKTOP_UI and BUGS own behavior; FEATURES,
+PRESENTATION, README, CHANGELOG/HANDOFF and this register reconcile delivered
+status. README's retained-study disposition is settled before package freeze.
+Archived recovery/protocol recipes add no authority; current bounded replay and
+exact terminal/close contracts remain binding. R3 documentation/inventory may
+overlap read-only toward product; its merge and cleanup wait for RC-1 closure.
+
 ### M1-8-R3 — final sweep and integration
 
 **Objective.** Close M1-8 as an integrated outcome, not a pile of individually

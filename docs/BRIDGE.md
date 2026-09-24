@@ -450,6 +450,15 @@ Terminal-session release and task close remain distinct operations. The browser
 rejects stale document, navigation, and list generations before adopting task
 state.
 
+After active update delivery exhausts its automatic recovery budget, the browser
+retains the exact drain in a suspended state. The task's explicit Retry updates
+action restarts observation with a fresh drain id and non-null replay sequence
+after the last successfully presented event; it does not restart domain work.
+Controls remain unavailable until current recovery delivery is validated. Close
+can still request cancellation for that exact retained session, and a pending
+Close permits observation recovery so terminal delivery can finish retirement.
+Terminal presentation and session-release retries retain their own owners.
+
 Once exact terminal Close begins, the browser fences that task/session pair from
 new drains and replacement work until the close receipt is known. An uncertain
 result retains the same fence and only the identical Close may recover it;

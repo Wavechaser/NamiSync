@@ -313,7 +313,8 @@ _INITIAL_SCRIPT = _COMMON_JS + r"""
   await control("arm_close_failure");
   clickClose("Task 47");
   await until(() => rowByTitle("Task 47")?.querySelector(".nami-task-rail__close")?.getAttribute("aria-label") === "Retry close for Task 47", "failed close recovery");
-  const retainedAfterFailure = rows().length === 47 && detailFor("Task 47") === "Close did not finish. Retry.";
+  const failureDetail = detailFor("Task 47");
+  const retainedAfterFailure = rows().length === 47 && failureDetail === "Close could not be confirmed. Select Retry close for this task.";
   clickClose("Task 47");
   await until(() => rows().length === 46 && rowByTitle("Task 47") === undefined, "close retry");
   await control("checkpoint", "retry");
@@ -330,7 +331,7 @@ _INITIAL_SCRIPT = _COMMON_JS + r"""
   await until(() => rows().length === 46, "delayed create cleanup");
   await control("checkpoint", "navigation_cleanup");
 
-  await control("record", { initial: { newest, setupVisible, refusedCount, retainedAfterFailure, navigationStayed, olderAppearance, newerAppearance, olderSelectionCleared, idleGeometry, pointerFocusHidden, keyboardFocusVisible, independentRail, settingsSurface, settingsDraftRetained } });
+  await control("record", { initial: { newest, setupVisible, refusedCount, retainedAfterFailure, failureDetail, navigationStayed, olderAppearance, newerAppearance, olderSelectionCleared, idleGeometry, pointerFocusHidden, keyboardFocusVisible, independentRail, settingsSurface, settingsDraftRetained } });
   await control("checkpoint", "navigation_recorded");
   await control("arm_create_delay");
   await control("checkpoint", "reinjection_armed");
@@ -367,14 +368,23 @@ _BUSY_SCRIPT = _COMMON_JS + r"""
 (async () => {
   await ready();
   await until(() => rows().length === 47 && statusFor("Task 47") === "Planning", "busy task");
+  await control("arm_busy_drain_failure");
   clickClose("Task 47");
   await until(() => detailFor("Task 47") === "Canceling and closing…", "pending cancellation");
   const pending = await control("status");
   const retainedPending = rows().length === 47 && rowByTitle("Task 47") !== undefined;
+  const retry = await until(() => {
+    const button = rowByTitle("Task 47")?.querySelector(".nami-task-rail__retry");
+    return button && !button.hidden && !button.disabled ? button : null;
+  }, "stopped busy-task updates");
+  retry.click();
+  await until(() => rowByTitle("Task 47")?.querySelector(".nami-task-rail__retry")?.hidden === true,
+    "exact busy-task observation recovery");
+  const recovered = await control("status");
   await control("settle_busy");
   await until(() => rows().length === 46, "settled busy close");
   const settled = await control("status");
-  await control("record", { busy: { pending, retainedPending, settled } });
+  await control("record", { busy: { pending, retainedPending, recovered, settled } });
   await control("arm_release_delay");
   await control("start_terminal");
   await control("set_stage", "terminal_first");
@@ -996,6 +1006,9 @@ class _Control:
         self.busy_entered = threading.Event()
         self.busy_task_id: str | None = None
         self.busy_session_id: str | None = None
+        self.fail_busy_drain = False
+        self.busy_drain_failures = 0
+        self.busy_reobservations = 0
         self.terminal_task_id: str | None = None
         self.terminal_session_id: str | None = None
         self.release_gate = threading.Event()
@@ -1028,6 +1041,28 @@ class _Control:
         original_close_shell = service.close_task_shell
         original_release = service.release_task_session
         original_observer_release = service._observer.release
+        original_drain_for_bridge = registry.drain_for_bridge
+        original_reobserve_task = service.reobserve_task
+
+        def drain_for_bridge(_registry: object, task_id: str, session_id: str,
+                             drain_id: str, *, replay_from: int | None) -> object:
+            if self.fail_busy_drain and task_id == self.busy_task_id and (
+                self._service().get_session(session_id).state == "canceling"
+            ):
+                from namisync.interfaces.task_port import TaskUnavailableError
+
+                self.fail_busy_drain = False
+                self.busy_drain_failures += 1
+                raise TaskUnavailableError("injected temporary observation loss")
+            return original_drain_for_bridge(
+                task_id, session_id, drain_id, replay_from=replay_from,
+            )
+
+        def reobserve_task(_service: object, task_id: str, session_id: str,
+                           sink: object, from_sequence: int) -> object:
+            if task_id == self.busy_task_id:
+                self.busy_reobservations += 1
+            return original_reobserve_task(task_id, session_id, sink, from_sequence)
 
         def create_task_shell(_service: object, command_id: str, delivery_factory: object) -> object:
             result = original_create(command_id, delivery_factory)
@@ -1063,6 +1098,8 @@ class _Control:
         service.close_task_shell = MethodType(close_task_shell, service)
         service.release_task_session = MethodType(release_task_session, service)
         service._observer.release = observer_release
+        service.reobserve_task = MethodType(reobserve_task, service)
+        registry.drain_for_bridge = MethodType(drain_for_bridge, registry)
 
         for index in range(46):
             registry.create_task_shell(f"{1000 + index:032x}")
@@ -1098,6 +1135,8 @@ class _Control:
             "busy_entered": self.busy_entered.is_set(),
             "busy_state": busy_state,
             "busy_present": any(task.task_id == self.busy_task_id for task in tasks),
+            "busy_drain_failures": self.busy_drain_failures,
+            "busy_reobservations": self.busy_reobservations,
             "terminal": terminal,
             "terminal_present": any(task.task_id == self.terminal_task_id for task in tasks),
             "release_waiting": self.release_waiting.is_set(),
@@ -1219,6 +1258,9 @@ class _Control:
             return {"accepted": True}
         if action == "start_busy":
             self._start_busy()
+            return {"accepted": True}
+        if action == "arm_busy_drain_failure":
+            self.fail_busy_drain = True
             return {"accepted": True}
         if action == "settle_busy":
             self.busy_gate.set()

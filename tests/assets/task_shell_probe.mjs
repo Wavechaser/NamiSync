@@ -139,9 +139,9 @@ globalThis.taskHarness = {
     return deferred(closes);
   },
   listTasks() { calls.push(["list"]); return deferred(lists); },
-  startTaskDrain(taskId, sessionId, acceptUpdate, acceptRefusal, initialState, acceptRelease) {
+  startTaskDrain(taskId, sessionId, acceptUpdate, acceptRefusal, initialState, acceptRelease, acceptRecovered) {
     calls.push(["drain", taskId, sessionId, initialState]);
-    drains.set(taskId, { acceptUpdate, acceptRefusal, acceptRelease });
+    drains.set(taskId, { acceptUpdate, acceptRefusal, acceptRelease, acceptRecovered });
     return () => calls.push(["stop", taskId]);
   },
   openPlanView(...args) { calls.push(["open-plan", ...args]); return deferred(planOpens); },
@@ -328,6 +328,9 @@ const bridgeUrl = moduleUrl(`
   export class TaskCreateUncertainError extends BridgeTransportError {
     constructor(retry) { super(); this.retry = retry; }
   }
+  export class TaskCloseUncertainError extends BridgeTransportError {
+    constructor(retry) { super(); this.retry = retry; }
+  }
   export class TerminalPresentationError extends BridgeTransportError {}
   export class TerminalSessionReleaseError extends BridgeTransportError {}
   export const acknowledgeShellReady = () => Promise.resolve({ acknowledged: true });
@@ -373,7 +376,7 @@ const themeUrl = moduleUrl(`
 let appSource = await readFile(process.argv[2], "utf8");
 appSource = appSource.replace(
   /import \{[\s\S]*?\} from "\.\/bridge\.js";/,
-  `import { acknowledgeShellReady, admitLocation, BridgeTransportError, closeTask, controlExecution, createTask, echoReadiness, getExecutionDetail, getPlanAnchor, getPlanOperationAnchor, getPlanWindow, listTasks, markBridgeOperational, mutatePlanHighlight, mutatePlanSelection, openPlanView, pickFolder, planAgain, prepareSetup, readSetup, StartPlanUncertainError, startExecution, startInventory, startPlan, startTaskDrain, TaskCreateUncertainError, TerminalPresentationError, TerminalSessionReleaseError, updatePlanView, whenBridgeApiReady } from "${bridgeUrl}";`,
+  `import { acknowledgeShellReady, admitLocation, BridgeTransportError, closeTask, controlExecution, createTask, echoReadiness, getExecutionDetail, getPlanAnchor, getPlanOperationAnchor, getPlanWindow, listTasks, markBridgeOperational, mutatePlanHighlight, mutatePlanSelection, openPlanView, pickFolder, planAgain, prepareSetup, readSetup, StartPlanUncertainError, startExecution, startInventory, startPlan, startTaskDrain, TaskCloseUncertainError, TaskCreateUncertainError, TerminalPresentationError, TerminalSessionReleaseError, updatePlanView, whenBridgeApiReady } from "${bridgeUrl}";`,
 );
 appSource = appSource
   .replace("./readiness.js", readinessUrl)
@@ -1704,11 +1707,14 @@ assert.ok(stoppedDrain);
 stoppedDrain.acceptRefusal(new (await import(bridgeUrl)).TerminalPresentationError());
 assert.equal(stoppedTask.drainUnavailable, false,
   "terminal presentation retry does not stop the live drain");
-drains.delete(stoppedTaskId); // stopTask removes the bridge drain before refusal.
 const controlCallsBeforeStop = calls.filter(([name]) => name === "control-execution").length;
-stoppedDrain.acceptRefusal();
+let stoppedRecoveryCalls = 0;
+stoppedDrain.acceptRefusal(new Error("lost updates"), () => {
+  stoppedRecoveryCalls += 1;
+  return true;
+});
 assert.equal(stoppedTask.drainUnavailable, true);
-assert.match(stoppedReview.message, /Close NamiSync to request cancellation/);
+assert.match(stoppedReview.message, /Retry updates/);
 globalThis.planReviewHarness.callbacks.onControl(stoppedReview, "pause");
 assert.equal(calls.filter(([name]) => name === "control-execution").length,
   controlCallsBeforeStop, "stopped drain never dispatches a control");
@@ -1727,6 +1733,48 @@ assert.equal(stoppedTask.review.message, stoppedReview.message);
 globalThis.planReviewHarness.callbacks.onControl(stoppedTask.review, "cancel");
 assert.equal(calls.filter(([name]) => name === "control-execution").length,
   controlCallsBeforeStop, "refreshed stopped review cannot dispatch a control");
+const stoppedRetryButton = walk(app).find((element) =>
+  element.ariaLabel === `Retry updates for ${stoppedTask.label}`);
+assert.ok(stoppedRetryButton);
+assert.equal(typeof stoppedTask.recoveryRetry, "function");
+assert.equal(stoppedTask.recoverySessionId, stoppedTask.sessionId);
+assert.equal(stoppedTask.closeRetry, null);
+assert.equal(stoppedRetryButton.disabled, false);
+stoppedRetryButton.click();
+assert.equal(stoppedRecoveryCalls, 1);
+assert.equal(stoppedTask.drainUnavailable, true,
+  "retry intent alone cannot restore control authority");
+stoppedDrain.acceptRecovered(stoppedTaskId, stoppedSessionId);
+assert.equal(stoppedTask.drainUnavailable, false);
+assert.equal(stoppedTask.recoveryRetry, null);
+assert.equal(stoppedTask.review.message, "Pausing execution…",
+  "recovery restores accepted control feedback beneath the stopped-update guidance");
+const recoveredOpenBase = planOpens.length;
+const recoveredWindowBase = planWindows.length;
+void globalThis.taskHarness.forceReview(stoppedTask, true);
+await until(() => planOpens.length === recoveredOpenBase + 1);
+planOpens.at(-1).resolve(stoppedTask.review.summary);
+await until(() => planWindows.length === recoveredWindowBase + 1);
+planWindows.at(-1).resolve(planWindow(stoppedTask.review.summary));
+await until(() => stoppedTask.review.message === "Pausing execution…" && !stoppedTask.reviewLoading);
+const uncertainCloseIndex = closes.length;
+walk(app).find((element) => element.ariaLabel === `Close ${stoppedTask.label}`).click();
+await until(() => closes.length === uncertainCloseIndex + 1);
+const retryExactClose = () => {
+  calls.push(["close-retry", stoppedTaskId, stoppedSessionId]);
+  return deferred(closes);
+};
+closes.at(-1).reject(new (await import(bridgeUrl)).TaskCloseUncertainError(retryExactClose));
+await until(() => typeof stoppedTask.closeRetry === "function");
+assert.equal(walk(app).find((element) =>
+  element.ariaLabel === `Retry updates for ${stoppedTask.label}`).hidden, true,
+  "uncertain Close fences observation retry");
+walk(app).find((element) => element.ariaLabel === `Retry close for ${stoppedTask.label}`).click();
+await until(() => closes.length === uncertainCloseIndex + 2);
+assert.deepEqual(calls.at(-1), ["close-retry", stoppedTaskId, stoppedSessionId]);
+closes.at(-1).resolve({ task_id: stoppedTaskId, session_id: stoppedSessionId, disposition: "closed" });
+await turns();
+assert.ok(taskButton(stoppedTask.label) === undefined);
 
 const earlyStoppedTaskId = `task-${"9".repeat(32)}`;
 const earlyStoppedSessionId = "9".repeat(32);
@@ -1741,11 +1789,10 @@ await until(() => planOpens.length === earlyStoppedOpenBase + 1);
 assert.equal(earlyStoppedTask.executionStarted, false,
   "rehydration has not loaded the committed review yet");
 const earlyStoppedDrain = drains.get(earlyStoppedTaskId);
-drains.delete(earlyStoppedTaskId);
-earlyStoppedDrain.acceptRefusal();
+earlyStoppedDrain.acceptRefusal(new Error("lost updates"), () => true);
 assert.equal(earlyStoppedTask.drainUnavailable, true,
   "an active drain refusal is retained before execution review loads");
-assert.equal(earlyStoppedTask.error, "Task updates stopped. Close can be retried.");
+assert.match(earlyStoppedTask.error, /Retry updates/);
 const earlyStoppedSummary = planSummary({
   task_id: earlyStoppedTaskId, selection_state: "committed",
   execution: { ...committedReview.execution, session_id: earlyStoppedSessionId },
@@ -1756,13 +1803,52 @@ planWindows.at(-1).resolve(planWindow(earlyStoppedSummary));
 await until(() => earlyStoppedTask.review !== null);
 taskButton(earlyStoppedTask.label).click();
 assert.equal(earlyStoppedTask.executionStarted, true);
-assert.match(earlyStoppedTask.error, /Close NamiSync to request cancellation/);
+assert.match(earlyStoppedTask.error, /Retry updates/);
 assert.equal(earlyStoppedTask.review.message, earlyStoppedTask.error);
 const controlCallsBeforeEarlyStop = calls.filter(([name]) => name === "control-execution").length;
 globalThis.planReviewHarness.callbacks.onControl(earlyStoppedTask.review, "pause");
 assert.equal(calls.filter(([name]) => name === "control-execution").length,
   controlCallsBeforeEarlyStop,
   "early drain refusal prevents control dispatch after committed review loads");
+const failedCloseIndex = closes.length;
+walk(app).find((element) => element.ariaLabel === `Close ${earlyStoppedTask.label}`).click();
+await until(() => closes.length === failedCloseIndex + 1);
+closes.at(-1).reject(new Error("temporary close failure"));
+await until(() => earlyStoppedTask.closeFailed);
+const independentCloseError = earlyStoppedTask.error;
+assert.equal(independentCloseError, "Close did not finish. Retry.");
+walk(app).find((element) =>
+  element.ariaLabel === `Retry updates for ${earlyStoppedTask.label}`).click();
+earlyStoppedDrain.acceptRecovered(earlyStoppedTaskId, earlyStoppedSessionId);
+assert.equal(earlyStoppedTask.error, independentCloseError,
+  "observation recovery cannot erase a later Close failure");
+earlyStoppedDrain.acceptRefusal(new Error("updates stopped again"), () => true);
+assert.equal(earlyStoppedTask.error, independentCloseError,
+  "another drain refusal cannot replace Close feedback");
+const pendingCloseIndex = closes.length;
+walk(app).find((element) =>
+  element.ariaLabel === `Retry close for ${earlyStoppedTask.label}`).click();
+await until(() => closes.length === pendingCloseIndex + 1);
+closes.at(-1).resolve({
+  task_id: earlyStoppedTaskId, session_id: earlyStoppedSessionId, disposition: "pending",
+});
+await turns();
+assert.equal(earlyStoppedTask.closePending, true);
+const pendingRetry = walk(app).find((element) =>
+  element.ariaLabel === `Retry updates for ${earlyStoppedTask.label}`);
+assert.ok(pendingRetry && !pendingRetry.disabled && !pendingRetry.hidden,
+  "pending Close leaves the task-level recovery action available");
+pendingRetry.click();
+earlyStoppedDrain.acceptRecovered(earlyStoppedTaskId, earlyStoppedSessionId);
+assert.equal(earlyStoppedTask.closePending, true,
+  "empty recovery alone cannot claim terminal Close");
+earlyStoppedDrain.acceptUpdate({ update_type: "record", record: { state: "canceled" } });
+await until(() => closes.length === pendingCloseIndex + 2);
+closes.at(-1).resolve({
+  task_id: earlyStoppedTaskId, session_id: earlyStoppedSessionId, disposition: "closed",
+});
+await turns();
+assert.ok(taskButton(earlyStoppedTask.label) === undefined);
 
 const replacedSessionTaskId = `task-${"6".repeat(32)}`;
 const replacedSessionId = "6".repeat(32);

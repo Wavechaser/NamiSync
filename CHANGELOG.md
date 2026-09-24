@@ -27,6 +27,20 @@ and remembered locations, bounded Plan review/selection/sorting and same-task
 execution with live controls and bounded live/retained result review. Inventory review and beta
 packaging remain open.
 
+#### Recover task updates and pending Close (2026-09-24)
+
+- Retain a suspended observation drain and offer Retry updates on the existing
+  task card. Recover the same task/session through native replay without
+  restarting execution; restore controls only after validated current delivery.
+- Let pending Close request cancellation and recover observation until terminal
+  settlement. An uncertain Close keeps its fence and exact Retry close action.
+- Preserve independent action/error feedback and reject obsolete recovery
+  callbacks. Terminal presentation and release retain their existing retries.
+- Verification: 60 focused checks, 5,405 ordinary tests (five skips), all 33
+  installed GUI obligations and 12 import contracts passed. Fresh U acceptance
+  completed all 78 attempts: cold maximum 20.3 ms, warm p95 72.0 ms and maximum
+  73.3 ms within unchanged budgets; full source/wheel/install identity passed.
+
 #### Preserve execution controls across review and drain changes (2026-09-24)
 
 - Keep control attempts and their feedback with the task/session across review

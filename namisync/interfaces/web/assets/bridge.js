@@ -503,6 +503,7 @@ export function startTaskDrain(
   acceptRefusal,
   initialState = null,
   acceptRelease = null,
+  acceptRecovered = null,
 ) {
   if (
     typeof taskId !== "string" ||
@@ -520,6 +521,9 @@ export function startTaskDrain(
   }
   if (acceptRelease !== null && typeof acceptRelease !== "function") {
     throw new TypeError("startTaskDrain release callback must be a function");
+  }
+  if (acceptRecovered !== null && typeof acceptRecovered !== "function") {
+    throw new TypeError("startTaskDrain recovery callback must be a function");
   }
   if (
     initialState !== null &&
@@ -544,6 +548,7 @@ export function startTaskDrain(
     acceptUpdate,
     acceptRefusal,
     acceptRelease,
+    acceptRecovered,
     epoch: 0,
     active: null,
     armScheduled: false,
@@ -562,6 +567,8 @@ export function startTaskDrain(
     releaseTimer: null,
     releaseEpoch: 0,
     releaseFailures: 0,
+    suspended: false,
+    recoveryPending: false,
     stopped: false,
   };
   taskDrains.set(taskId, task);
@@ -1876,7 +1883,7 @@ function validateTaskCloseResult(value, taskId, sessionId) {
 }
 
 function rearmTask(task, replayFrom, delayMs = 0) {
-  if (task.stopped || task.terminal || task.pendingTerminalUpdate !== null) {
+  if (task.stopped || task.suspended || task.terminal || task.pendingTerminalUpdate !== null) {
     return;
   }
   task.epoch += 1;
@@ -1902,6 +1909,7 @@ function rearmTask(task, replayFrom, delayMs = 0) {
     task.scheduledEpoch = null;
     if (
       task.stopped ||
+      task.suspended ||
       task.terminal ||
       task.pendingTerminalUpdate !== null ||
       taskDrains.get(task.taskId) !== task
@@ -1957,6 +1965,7 @@ function runTaskDrain(task, epoch, replayFrom) {
 function isCurrentTaskDrain(task, active) {
   return (
     !task.stopped &&
+    !task.suspended &&
     !task.terminal &&
     taskDrains.get(task.taskId) === task &&
     task.epoch === active.epoch &&
@@ -1979,12 +1988,16 @@ function settleTaskDrain(task, active, result) {
     if (update.update_type === "record") {
       task.progressState = reduceProgressState(task.progressState, update);
       presentTerminalUpdate(task, update);
+      if (task.terminal && isCurrentTaskEpoch(task, active)) {
+        task.recoveryPending = false;
+      }
       return;
     }
     const event = update.event;
     if (event.body_type === "Gap") {
+      const previousState = task.progressState;
       task.progressState = reduceProgressState(task.progressState, update);
-      if (!deliverTaskUpdate(task, update)) {
+      if (!deliverTaskUpdate(task, update, task.lastAcceptedSequence, previousState)) {
         return;
       }
       const missed = event.body.first_missed_seq;
@@ -2001,13 +2014,35 @@ function settleTaskDrain(task, active, result) {
     if (event.sequence <= task.lastAcceptedSequence) {
       continue;
     }
+    const previousSequence = task.lastAcceptedSequence;
+    const previousState = task.progressState;
     task.lastAcceptedSequence = event.sequence;
     task.progressState = reduceProgressState(task.progressState, update);
-    if (!deliverTaskUpdate(task, update)) {
+    if (!deliverTaskUpdate(task, update, previousSequence, previousState)) {
       return;
     }
   }
+  if (!notifyTaskRecovered(task, active)) return;
   rearmTask(task, null);
+}
+
+function isCurrentTaskEpoch(task, active) {
+  return !task.stopped && !task.suspended &&
+    taskDrains.get(task.taskId) === task && task.epoch === active.epoch;
+}
+
+function notifyTaskRecovered(task, active) {
+  if (!isCurrentTaskEpoch(task, active)) return false;
+  if (!task.recoveryPending) return true;
+  try {
+    task.acceptRecovered?.(task.taskId, task.sessionId);
+  } catch (_error) {
+    stopTaskWithRefusal(task, new BridgeTransportError("The desktop update could not be applied."));
+    return false;
+  }
+  if (!isCurrentTaskEpoch(task, active)) return false;
+  task.recoveryPending = false;
+  return true;
 }
 
 function validateCosmeticSectionResult(value) {
@@ -2107,11 +2142,13 @@ function retryTerminalPresentation(task) {
   presentTerminalUpdate(task, task.pendingTerminalUpdate);
 }
 
-function deliverTaskUpdate(task, update) {
+function deliverTaskUpdate(task, update, previousSequence, previousState) {
   try {
     task.acceptUpdate(update, progressStateView(task.progressState));
     return true;
   } catch (_error) {
+    task.lastAcceptedSequence = previousSequence;
+    task.progressState = previousState;
     stopTaskWithRefusal(
       task,
       new BridgeTransportError("The desktop update could not be applied."),
@@ -2151,13 +2188,30 @@ function refuseTaskDrain(task, active, error) {
 }
 
 function stopTaskWithRefusal(task, error) {
-  stopTask(task);
-  reportTaskRefusal(task, error);
+  task.suspended = true;
+  task.epoch += 1;
+  task.active?.control.cancel();
+  task.active = null;
+  cancelTaskArm(task);
+  reportTaskRefusal(task, error, () => retryTaskDrain(task));
 }
 
-function reportTaskRefusal(task, error) {
+function retryTaskDrain(task) {
+  if (
+    task.stopped || !task.suspended || task.terminal ||
+    taskDrains.get(task.taskId) !== task || taskCloseFences.has(task.taskId)
+  ) return false;
+  task.suspended = false;
+  task.recoveryPending = true;
+  task.busyRearmUsed = false;
+  task.transportFailures = 0;
+  rearmTask(task, task.lastAcceptedSequence + 1);
+  return true;
+}
+
+function reportTaskRefusal(task, error, retry = null) {
   try {
-    task.acceptRefusal(error);
+    task.acceptRefusal(error, retry);
   } catch (_callbackError) {
     // Presentation failure cannot mutate retained native authority.
   }

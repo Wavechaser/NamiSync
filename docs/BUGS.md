@@ -938,14 +938,24 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Application task lifecycle
 
+- MODERATE - FIXED (2026-09-24). Observation-recovery ownership loss. Exhausted
+  browser drain recovery removed the exact task/session observation owner while
+  the task remained visible. Controls and Close then rejected it locally, or an
+  already pending Close waited indefinitely for missing terminal delivery.
+  Cause: stopping delivery discarded its replay capability. Suspend and retain
+  that owner instead; explicit Retry updates uses existing native re-observation
+  from the last presented sequence and restores terminal delivery without
+  restarting execution. Pending Close can settle; uncertain Close keeps its
+  fence and exact retry. Terminal display/release retain distinct retry owners.
+
 - MODERATE - FIXED (2026-09-24). Observation-loss state conflation. After task
   updates stopped, execution controls remained enabled and a locally rejected
   click reported an uncertain request despite dispatching nothing. Cause: drain
   loss only set temporary error text, leaving control availability unchanged.
   A persistent task flag now disables controls and guards stale callbacks while
   retaining last-known execution truth. Production callback/renderer probes
-  cover zero dispatch and review refresh. App-close guidance requests cancellation;
-  it does not promise completion, and task Close can still await missing delivery.
+  cover zero dispatch and review refresh. The subsequent observation-recovery
+  fix above replaces the initial app-close fallback with exact-session retry.
 
 - MODERATE - FIXED (2026-09-24). Presentation-bound action ownership. Replacing
   an execution review during Pause/Resume/Cancel lost its pending state and later

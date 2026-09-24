@@ -357,11 +357,10 @@ is `build/m1-8-p2-terminal-validate.py --installed-root <site-packages>
 --installed-wheel <wheel>`, executed with the project Python. It calls both
 historical and supplemental checks unmocked and finishes with named-artifact
 and clean-HEAD binding. HANDOFF records the actual retained installation.
-The validator intentionally rejects later changed source bytes. Pending U
-acceptance includes both P2 receipt metrics in its thirteen-case collection;
-once accepted, that evidence supersedes P2's measurements for the final U build.
+The validator intentionally rejects later changed source bytes. Accepted U
+evidence includes both P2 receipt metrics in its thirteen-case collection
+and supersedes P2's measurements for the corresponding U build.
 Do not rewrite frozen P2 artifacts or require their clean-HEAD check on U's tree.
-This supersession is pending, not a claim that U performance has passed.
 Receipt/result checks use committed artifacts; workspace validation additionally
 requires the matching retained wheel and installation. Missing package evidence
 must not be described as a successful workspace reproduction.
@@ -445,13 +444,16 @@ commit, then clean-HEAD validation including the raw authority binding afterward
 Changes to measured product, instrument, checker, controls, package or native
 profile reopen the affected evidence; unchanged product alone is insufficient.
 
-The 2026-09-24 post-R2 control correction reran all 78 attempts with the fixed
-profile and populations. Independent derivation gives a 10.2 ms worst cold
-maximum, 68.8 ms worst warm p95 and 70.4 ms warm maximum, within the unchanged
+The 2026-09-24 post-R2 recovery correction reran all 78 attempts with the fixed
+profile and populations. Independent derivation gives a 20.3 ms worst cold
+maximum, 72.0 ms worst warm p95 and 73.3 ms warm maximum, within the unchanged
 limits. The three artifacts above retain this current-source evidence;
-`build/control-edges-20260924/delivery-01.json` records staged and clean-HEAD
+`build/recovery-close-20260924/delivery-01.json` records staged and clean-HEAD
 closure. Accepted predecessor run-03 remains under `build/r2-20260924/`;
 historical failed runs remain separate and contribute no accepted samples.
+R3 preserves that candidate's entire `build/` tree under the main checkout's
+`build/m1-8-archive-20260924/evidence/`; the delivery register records integration
+and the original-to-archive path mapping.
 
 ### Existing complete-collection procedure
 

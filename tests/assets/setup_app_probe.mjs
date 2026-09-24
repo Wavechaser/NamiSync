@@ -182,6 +182,9 @@ async function loadScenario({
     export class TaskCreateUncertainError extends BridgeTransportError {
       constructor(retry) { super(); this.retry = retry; }
     }
+    export class TaskCloseUncertainError extends BridgeTransportError {
+      constructor(retry) { super(); this.retry = retry; }
+    }
     harness.BridgeTransportError = BridgeTransportError;
     harness.StartPlanUncertainError = StartPlanUncertainError;
     harness.TaskCreateUncertainError = TaskCreateUncertainError;
@@ -258,7 +261,7 @@ async function loadScenario({
   let source = await readFile(process.argv[2], "utf8");
   source = source.replace(
     /import \{[\s\S]*?\} from "\.\/bridge\.js";/,
-    `import { acknowledgeShellReady, admitLocation, BridgeTransportError, closeTask, createTask, echoReadiness, getExecutionDetail, listTasks, markBridgeOperational, pickFolder, planAgain, prepareSetup, probeRecentPairs, readSetup, StartPlanUncertainError, startInventory, startPlan, startTaskDrain, TaskCreateUncertainError, whenBridgeApiReady } from "${bridgeUrl}";`,
+    `import { acknowledgeShellReady, admitLocation, BridgeTransportError, closeTask, createTask, echoReadiness, getExecutionDetail, listTasks, markBridgeOperational, pickFolder, planAgain, prepareSetup, probeRecentPairs, readSetup, StartPlanUncertainError, startInventory, startPlan, startTaskDrain, TaskCloseUncertainError, TaskCreateUncertainError, whenBridgeApiReady } from "${bridgeUrl}";`,
   );
   source = source
     .replace("./readiness.js", readinessUrl)

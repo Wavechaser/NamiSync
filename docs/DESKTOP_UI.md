@@ -1541,10 +1541,13 @@ A replacement review retains pending and relevant accepted/refused/uncertain
 feedback, without allowing a duplicate request. New authoritative control state,
 terminal or replacement session wins over obsolete replies; ordinary byte-progress
 ticks do not erase a refusal. If task updates stop, disable Pause/Resume/Cancel
-and report known control unavailability without dispatching. Keep last-known
-execution truth: lost updates are not proof that work stopped. Direct the user
-to close NamiSync to request cancellation, without promising completed shutdown,
-reconnection or resumability. Task Close may remain pending without terminal delivery.
+and expose one task-card **Retry updates** action, including before review loads
+or while task Close is pending. Keep last-known execution truth: lost updates
+are not proof that work stopped. Retry restores observation of the same session;
+it does not restart work. Controls remain unavailable until recovery delivery
+is validated. Terminal display/release failures reuse their distinct retries.
+An uncertain Close keeps its exact retry and fence ahead of observation recovery;
+a pending Close can finish after recovered terminal delivery.
 
 Closing a live task renders
 **Closing…**, immediately requests best-effort cooperative cancellation, and
@@ -1686,8 +1689,7 @@ partial review. After resolving the cause, explicit Plan again performs fresh
 scans and review. Recognized operation/copy, cleanup and destructive-prerequisite
 disk-capacity failure during execution now settles the current operation and
 admits no later operation. Recorder-only item-write failure remains recording
-degradation. The pending execution
-review will show the yellow capacity message. This color does not
+degradation. Execution review shows the yellow capacity message. This color does not
 erase any known failure or independent recording/integrity issue. Other I/O
 failures use the existing typed generic reason and available diagnostic detail;
 a richer I/O taxonomy is deferred to M2.
