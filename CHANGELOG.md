@@ -40,8 +40,11 @@ packaging remain open.
   (five skips), all 13 native paths and 12 import contracts passed. Independent
   review and physical installed-package identity support the retained 33 GUI passes.
 - Preserve failed quantitative runs 01/02 and early correction diagnostics.
-  The observer correction precedes fresh full R2 acceptance; no performance
-  verdict yet. Lost-drain feedback and review-replacement refusal handling remain
+  Correction `b1f5a07` precedes fresh run-03: all 78 attempts completed, with
+  independent derivation passing unchanged limits (20.9 ms worst cold maximum,
+  64.4 ms worst warm p95, 64.9 ms warm maximum). Retain U-v2 authority, receipts
+  and result artifacts with staged/clean-HEAD binding. R3 remains unstarted.
+  Lost-drain feedback and review-replacement refusal handling remain
   deferred product findings; filter/Search and the reduction study stay shelved.
 
 #### Correct retained Plan lifecycle and capture interpretation (2026-09-24)

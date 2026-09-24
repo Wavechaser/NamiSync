@@ -347,7 +347,7 @@ push, PR, release or next milestone follows automatically.
 | --- | --- | --- | --- | --- |
 | M1-8-R0 | Usable execution navigation, phase status/progress and folded details; B1–B6 resolved | Separate execution authorization; accepted D1–D3, verified P2 and protected snapshot | A1–A4; focused and ordinary/import/full installed gates | complete; isolated reviewed commit |
 | M1-8-R1 | Consolidated functional witnesses preserving R0's accepted behavior | Accepted R0 | Assertion-disposition map; affected tests and A1–A4 evidence identity | complete at `0fc2f5d`; approved corrections precede R2 |
-| M1-8-R2 | One maintainable active U measurement path and accepted fixed-profile evidence | R1; same final product/installed bytes | A5; finite checker controls, 78 attempts and independent terminal validation | active: approved U observer correction commit, then fresh complete collection |
+| M1-8-R2 | One maintainable active U measurement path and accepted fixed-profile evidence | R1; same final product/installed bytes | A5; finite checker controls, 78 attempts and independent terminal validation | complete: run-03; final commit/binding receipt `build/r2-20260924/delivery-03.json` |
 | M1-8-R3 | Reviewed, fully accounted M1-8 integration and closure | R1/R2 | A6 and overall final sweep | pending |
 
 ## Detailed checkpoints
@@ -718,6 +718,20 @@ register, CHANGELOG and HANDOFF with command, candidate hashes and verdict.
 frozen contract; inspect checker independence and failed-attempt accounting;
 verify actual physical bytes and final committed-source binding, not a mocked
 workspace. Confirm excluded component paths/retained graphs are unchanged.
+
+**Run-03 result (2026-09-24).** Observer correction `b1f5a07` was committed before
+freeze. All 78 planned attempts completed once: 13 readiness and 65 measurement
+children, retaining 40 cold and 150 warm samples. Independent full workspace/raw
+derivation passed. Worst cold maximum: 20.9 ms / 50 ms. Worst warm p95: 64.4 ms /
+100 ms; warm maximum: 64.9 ms / 250 ms. Collection took 1,532.2 s and peaked at
+1,636,810,752 bytes under the 8 GiB diagnostic Job limit; this is not a product
+memory acceptance claim. Three U-v2 JSONs retain authority, raw receipts and
+derived results. Evidence, commands and independent review are under
+`build/r2-20260924/`; `run-03/` is the complete collection. Staged source/evidence
+validation passed; clean-HEAD validation is mandatory after the acceptance commit,
+and only its success creates `delivery-03.json` recording R2 closure.
+Failed runs 01/02 remain failed and were not sampled into run-03. Product and
+historical P2/M1-7 inputs are unchanged. R3 remains unstarted.
 
 **Commit gate.** The user-approved UO correction commit contains source, tests
 and matching docs. Follow it with `test(web): validate execution review metrics`

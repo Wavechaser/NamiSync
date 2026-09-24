@@ -1,4 +1,4 @@
-# Latest session — approved U observer correction, then R2 acceptance
+# Latest session — U observer correction and R2 acceptance
 
 Reviewed correction commit: `9e5b080` on `codex/m1-8-r0-ready`.
 It fixes unavailable Plan actions, retained resize observation and raw capture
@@ -7,13 +7,14 @@ provenance. All 5,325 ordinary tests (five skips), 33 installed GUI cases and
 delivery. Transparent browser PNGs alone do not establish native Mica defects.
 
 Active checkout: `F:/GitHubRepositories/NamiSync/build/m1-8-r0`, branch
-`codex/m1-8-r2`, based on reviewed `9e5b080`. The useful R2 files were rebuilt
+`codex/m1-8-r2`, with observer correction `b1f5a07` based on reviewed `9e5b080`.
+The useful R2 files were rebuilt
 from `b4ea0eb` without its WIP ancestry. Recovery branch
 `codex/wip-20260924-1233-r2` and all evidence remain preserved.
 The user approved the U observer fixes as one commit, then the rest of R2.
-M1_PLAN's UO-1–3 register is the finite correction scope; no R3 integration.
+M1_PLAN's UO-1–3 register is complete. No R3 integration.
 
-## R2 state and evidence
+## Preserved earlier R2 evidence
 
 Three U Python owners were restored from `4642491` (unchanged through
 `9391a62`), redundant controls consolidated, the test module registered and
@@ -64,10 +65,17 @@ Correction evidence is in `build/u-observer-20260924/`: 101 focused U/P2 tests,
 all 13 native paths (`native-03`), 5,401 ordinary tests with five skips
 (`ordinary-01`), 12 import contracts (`imports-01`), physical installed identity
 and independent review passed. `settled-inputs-03.json` binds the code.
-Revalidate installed identity, freeze fresh run-03,
-collect all 78 attempts, independently derive and validate staged artifacts,
-commit acceptance and validate clean HEAD. No accepted U artifact is claimed yet.
-Never reuse failed run-01/02 paths or samples.
+Correction commit `b1f5a07` is reviewed and clean. Revalidated installed identity
+and fresh run-03 freeze passed. All 78 attempts then completed once: 13 readiness
+and 65 measurement children, 40 cold and 150 warm samples. Independent raw and
+workspace validation passed, including exact physical child/index custody.
+Worst cold maximum is 20.9 ms (limit 50); worst warm p95 64.4 ms (limit 100),
+warm maximum 64.9 ms (limit 250). Runtime was 1,532.2 s; Job peak 1,636,810,752
+bytes under 8 GiB, with no timeout. This does not establish a product memory limit.
+Three U-v2 JSONs were promoted to `tests/interfaces/web/`. Final closure requires
+staged validation, the acceptance commit and clean-HEAD validation; retained
+`build/r2-20260924/delivery-03.json` records the final commit and binding result.
+Never reuse failed run-01/02 paths or samples. Stop before R3.
 
 Early native diagnostics are separate from quantitative collection: native-01
 exposed the inherited child runner's historical correctness comparison;
@@ -88,14 +96,14 @@ Its `Lib/site-packages` and gate sibling
 files. Wheel SHA-256:
 `36772d7d4588452426ec409b8db6a43a5cb3d7b68b13eee10bd622af271ed397`.
 
-From the candidate root, attempted commands were
-`& ./build/r2-20260924/launch.ps1 -Stage freeze`, then `-Stage collect`;
-run-02 used `launch-02.ps1` with the same stages. Each wrapper records exact
+From the candidate root, run-03 used
+`& ./build/r2-20260924/launch-03.ps1 -Stage freeze`, then `-Stage collect`.
+The installed Python runs `build/r2-20260924/validate-03.py` with `derive`,
+`staged` and `head`. Earlier recipes and failures remain intact. Each wrapper records exact
 CLI/source/install/fixture paths and uses a bounded Windows Job. Authority
 contains the native profile; workload observations are retained. Future approved
 runs need fresh paths and authority. Do not open the mutable index while its
-writer runs. After a successful full collection, independent derive, artifact
-promotion, staged validation, commit and clean-HEAD validation are still required.
+writer runs. Independent acceptance review is in `build/r2-20260924/review-03/`.
 
 ## Preserved exclusions
 

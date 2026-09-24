@@ -439,11 +439,18 @@ and is frozen as instrument source. Reuse unchanged
 P2 rootless settlement and historical profile helpers; keep U metric membership,
 cold/warm policy and attempt custody here. The three versioned artifacts are
 `m1_8_execution_ui_{authority,receipts,result}.json` in that same test directory.
-Acceptance remains pending until the fixed collection and both source-binding
-stages pass: full workspace/raw validation against the staged candidate before
+Acceptance requires the fixed collection and both source-binding
+stages: full workspace/raw validation against the staged candidate before
 commit, then clean-HEAD validation including the raw authority binding afterward.
 Changes to measured product, instrument, checker, controls, package or native
 profile reopen the affected evidence; unchanged product alone is insufficient.
+
+The 2026-09-24 U-v2 run-03 completed all 78 attempts with the fixed profile and
+populations. Independent derivation gives a 20.9 ms worst cold maximum,
+64.4 ms worst warm p95 and 64.9 ms warm maximum, within the unchanged limits.
+The three artifacts above retain the evidence; M1_PLAN and the delivery receipt
+under `build/r2-20260924/` record staged and clean-HEAD closure. Historical failed
+runs are retained separately and contribute no accepted samples.
 
 ### Existing complete-collection procedure
 
