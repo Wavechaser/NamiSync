@@ -665,10 +665,13 @@ taskButton("Task 7").click();
 drains.get(TASK_G).acceptRelease(TASK_G, SESSION_G);
 await until(() => planOpens.length === 1);
 assert.deepEqual(calls.at(-1), ["open-plan", TASK_G]);
+const firstLoadingSurface = byText("Plan review test surface");
+assert.ok(firstLoadingSurface, "selected task shows the retained review while loading");
 planOpens[0].reject(new Error("simulated initial plan open failure"));
 await until(() => byText("Plan unavailable. Select the task to retry.") !== undefined);
 assert.ok(byText("Loading task setup…"), "a failed Plan load leaves the Plan surface");
 assert.ok(byText("Plan review test surface") === undefined, "failed Plan surface is absent");
+assert.equal(firstLoadingSurface.parentNode, null, "refused load detaches the loading review");
 
 taskButton("Task 7").click();
 await until(() => planOpens.length === 2);
@@ -686,12 +689,16 @@ await until(() => planOpens.length === 3);
 await turns();
 assert.equal(planOpens.length, 3, "rapid reselection keeps one Plan retry in flight");
 assert.ok(byText("Plan review test surface"), "Plan retry exposes its loading surface");
+assert.equal(byText("Plan review test surface"), firstLoadingSurface,
+  "retry reuses the same review element after refusal");
 assert.equal(reviewRenders.at(-1).reviewLoading, true);
 const refusedReview = planSummary();
 planOpens[2].resolve(refusedReview);
 await until(() => planWindows.length === 2);
 planWindows[1].resolve(planWindow(refusedReview));
 await until(() => reviewRenders.at(-1)?.review?.summary === refusedReview);
+assert.equal(byText("Plan review test surface"), firstLoadingSurface,
+  "loaded review remains attached after the delayed window arrives");
 const firstReview = reviewRenders.at(-1).review;
 assert.match(firstReview.message, /Plan failed review/, "actionable warnings remain");
 assert.equal(reviewRenders.at(-1).error, null, "a successful selection retry clears the rail error");

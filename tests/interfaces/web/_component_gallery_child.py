@@ -473,6 +473,7 @@ class _Recorder:
                 "a1_keyboard_down": "Input.dispatchKeyEvent",
                 "a1_keyboard_up": "Input.dispatchKeyEvent",
                 "a1_keyboard_after": "Runtime.evaluate",
+                "a1_keyboard_capture-context": "Runtime.evaluate",
                 "a1_keyboard_capture": "Page.captureScreenshot",
             }
             if (

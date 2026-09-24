@@ -1299,6 +1299,11 @@ window.addEventListener("unhandledrejection", (event) => {
   semanticColorProbe.remove();
   galleryMeasurementStep = "plan_review_session_states";
   planReviewPanel.render({ ...planReviewTask, review: null, sessionState: "active" });
+  for (const action of ["execute", "plan-again", "pause", "resume", "cancel"]) {
+    if (!planReviewPanel.element.querySelector(`[data-action="${action}"]`)?.disabled) {
+      throw new Error(`loading Plan advertises unavailable ${action}`);
+    }
+  }
   if (!planReviewPanel.element.querySelector(".nami-plan-review__progress")
       .classList.contains("nami-progress--indeterminate")) {
     throw new Error("loading Plan status must show indeterminate planning");
@@ -1308,8 +1313,12 @@ window.addEventListener("unhandledrejection", (event) => {
       .classList.contains("nami-progress--indeterminate")) {
     throw new Error("failed planning must stop indeterminate progress");
   }
+  planReviewPanel.dispose();
   planReviewTask.form.options = { verify_after_execute: true, deletion_policy: "trash" };
   planReviewPanel.render(planReviewTask);
+  if (planReviewPanel.element.querySelector('[data-action="execute"]').disabled) {
+    throw new Error("loaded review must restore Execute after reuse");
+  }
   if (planReviewPanel.element.querySelector(".nami-plan-review__progress")
       .classList.contains("nami-progress--indeterminate")) {
     throw new Error("ready Plan progress must return to idle");

@@ -126,6 +126,7 @@ class DocumentFake {
     this.documentElement = new ElementFake("html", this);
     this.defaultView = {
       frames: [],
+      observers: [],
       listeners: new Map(),
       addEventListener(name, callback) {
         const listeners = this.listeners.get(name) ?? [];
@@ -139,9 +140,14 @@ class DocumentFake {
         for (const callback of this.listeners.get(name) ?? []) callback(properties);
       },
       ResizeObserver: class {
-        constructor(callback) { this.callback = callback; }
-        observe() {}
-        disconnect() { this.disconnected = true; }
+        constructor(callback) {
+          this.callback = callback;
+          this.observeCount = 0;
+          document.defaultView.observers.push(this);
+        }
+        observe(element) { this.observed = element; this.observeCount += 1; }
+        disconnect() { this.observed = null; }
+        trigger() { if (this.observed !== null) this.callback(); }
       },
       requestAnimationFrame: (callback) => {
         this.defaultView.frames.push(callback);
@@ -191,6 +197,10 @@ const callbacks = Object.fromEntries([
   "onHighlight", "onHighlightedSelect", "onExecutionDetail", "onFollowOverride", "onNavigateCurrent",
 ].map((name) => [name, (...args) => calls.push([name, ...args])]));
 const panel = createPlanReviewPanel(callbacks);
+for (const action of ["execute", "plan-again", "pause", "resume", "cancel"]) {
+  assert.equal(findAction(panel.element, action).disabled, true,
+    `fresh panel must not advertise ${action} before a review loads`);
+}
 const hostile = "<img src=x onerror=alert(1)>\u202e海";
 const row = {
   node_id: `node-${"1".repeat(32)}`,
@@ -312,6 +322,19 @@ review.summary = { ...summary, preflight_ready: true, preflight_refusal_count: 0
 panel.render(task);
 assert.equal(tierStatus.textContent, "Plan ready");
 assert.equal(executeButton.disabled, false);
+panel.render({ ...task, review: null, reviewLoading: true });
+for (const action of ["execute", "plan-again", "pause", "resume", "cancel"]) {
+  const control = findAction(panel.element, action);
+  assert.equal(control.disabled, true, `loading review must disable ${action}`);
+  const beforeClick = calls.length;
+  control.dispatch("click");
+  assert.equal(calls.length, beforeClick, `null review must not dispatch ${action}`);
+}
+assert.equal(findByClass(panel.element, "nami-plan-review__control-group").hidden, true);
+panel.render({ ...task, review: null, reviewLoading: false, error: "Plan unavailable" });
+assert.equal(executeButton.disabled, true, "failed review cannot leave Execute available");
+panel.render(task);
+assert.equal(executeButton.disabled, false, "loaded review restores its allowed action");
 review.summary = summary;
 panel.render(task);
 document.defaultView.flushAnimationFrame();
@@ -1193,4 +1216,38 @@ findAction(livePanel.element, "pause").dispatch("click");
 assert.deepEqual(calls.at(-1), ["onControl", liveReview, "pause"],
   "real composed row leaves controls dispatchable");
 livePanel.dispose();
+
+const resizeCalls = [];
+const resizePanel = createPlanReviewPanel({
+  ...callbacks, onWindow: (_review, offset) => resizeCalls.push(offset),
+});
+const resizeBody = findByClass(resizePanel.element, "nami-plan-review__rows");
+const resizeObserver = document.defaultView.observers.at(-1);
+const resizeTask = { ...task, review };
+resizePanel.render(resizeTask);
+document.defaultView.flushAnimationFrame();
+resizePanel.dispose();
+resizePanel.render(resizeTask);
+document.defaultView.flushAnimationFrame();
+resizeBody.clientHeight = 700;
+resizeObserver.trigger();
+document.defaultView.flushAnimationFrame();
+assert.deepEqual(resizeCalls, [0], "reused review observes newly visible rows after resize");
+assert.equal(resizeObserver.observed, resizeBody);
+const observedAfterReuse = resizeObserver.observeCount;
+resizePanel.render(resizeTask);
+assert.equal(resizeObserver.observeCount, observedAfterReuse,
+  "re-rendering one active review does not add another observation");
+resizeBody.clientHeight = 0;
+resizePanel.dispose();
+resizePanel.render(resizeTask);
+document.defaultView.flushAnimationFrame();
+resizeBody.clientHeight = 700;
+resizeObserver.trigger();
+document.defaultView.flushAnimationFrame();
+assert.deepEqual(resizeCalls, [0, 0], "another reuse responds to the next viewport resize");
+resizeObserver.trigger();
+document.defaultView.flushAnimationFrame();
+assert.deepEqual(resizeCalls, [0, 0], "one settled resize does not duplicate the window read");
+resizePanel.dispose();
 process.stdout.write("ok");

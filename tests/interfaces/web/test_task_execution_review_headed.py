@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import sys
 import time
@@ -76,8 +77,14 @@ def test_native_cdp_consumes_real_method_envelopes_and_persists_capture(
     core = _Core([
         {"result": {"type": "boolean", "value": True}},
         {},
+        {"result": {"type": "object", "value": {
+            "theme": "dark", "material": "mica", "forcedColors": False,
+        }}},
         {"data": "aGVsbG8="},
     ])
+    monkeypatch.setattr(cdp, "_capture_alpha_samples", lambda _path: {
+        "top_left": 0, "center": 13, "bottom_right": 255,
+    })
     failures: list[object] = []
     retained: list[object] = []
     native = _Native()
@@ -96,11 +103,56 @@ def test_native_cdp_consumes_real_method_envelopes_and_persists_capture(
     assert failures == []
     assert observed == [True, {}, "persisted"]
     assert target.read_bytes() == b"hello"
+    assert json.loads(target.with_suffix(".capture.json").read_text(encoding="utf-8")) == {
+        "source": "Page.captureScreenshot",
+        "surface": "browser surface",
+        "native_window_composition": "not captured",
+        "context_observed": "before capture",
+        "page_theme": "dark", "page_material": "mica", "page_forced_colors": False,
+        "raw_sha256": hashlib.sha256(b"hello").hexdigest(),
+        "alpha_samples": {"top_left": 0, "center": 13, "bottom_right": 255},
+    }
     assert [method for method, _payload in core.calls] == [
-        "Runtime.evaluate", "Input.dispatchMouseEvent", "Page.captureScreenshot",
+        "Runtime.evaluate", "Input.dispatchMouseEvent", "Runtime.evaluate",
+        "Page.captureScreenshot",
     ]
-    assert len(retained) == 6
-    assert native.invocations == 3
+    assert len(retained) == 8
+    assert native.invocations == 4
+
+
+@pytest.mark.parametrize("material", ["opaque", "degraded", None])
+def test_native_cdp_capture_records_bounded_fallback_context(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, material: str | None,
+) -> None:
+    monkeypatch.setitem(sys.modules, "System", SimpleNamespace(Action=lambda fn: fn))
+    monkeypatch.setattr(cdp, "_capture_alpha_samples", lambda _path: {
+        "top_left": 255, "center": 255, "bottom_right": 255,
+    })
+    core = _Core([
+        {"result": {"type": "object", "value": {
+            "theme": "light", "material": material, "forcedColors": material == "opaque",
+        }}},
+        {"data": "aGVsbG8="},
+    ])
+    failures: list[object] = []
+    observed: list[str] = []
+    transport = cdp.NativeCdp(
+        native := _Native(), core, [],
+        lambda error, task, step, method: failures.append((error, task, step, method)),
+    )
+    target = tmp_path / "fallback.png"
+    transport.capture(target, lambda: observed.append("persisted"), "capture")
+    native.drain()
+    assert failures == []
+    assert observed == ["persisted"]
+    assert target.read_bytes() == b"hello"
+    provenance = json.loads(target.with_suffix(".capture.json").read_text(encoding="utf-8"))
+    assert provenance["page_theme"] == "light"
+    assert provenance["page_material"] == material
+    assert provenance["page_forced_colors"] is (material == "opaque")
+    assert provenance["alpha_samples"] == {
+        "top_left": 255, "center": 255, "bottom_right": 255,
+    }
 
 
 @pytest.mark.parametrize("state", ["faulted", "canceled"])
@@ -132,6 +184,8 @@ def test_standard_decoder_disposes_bitmap_and_rejects_invalid_image(
         def __init__(self, path: str) -> None:
             if Path(path).read_bytes() == b"invalid":
                 raise ValueError("invalid image")
+        def GetPixel(self, x: int, y: int) -> object:
+            return SimpleNamespace(A={(0, 0): 0, (6, 3): 13, (11, 6): 255}[(x, y)])
         def Dispose(self) -> None:
             disposed.append(True)
     monkeypatch.setitem(sys.modules, "clr", SimpleNamespace(AddReference=lambda _name: None))
@@ -140,6 +194,10 @@ def test_standard_decoder_disposes_bitmap_and_rejects_invalid_image(
     valid.write_bytes(b"decoded by native seam")
     assert cdp.decode_png(valid) == (12, 7)
     assert disposed == [True]
+    assert cdp._capture_alpha_samples(valid) == {
+        "top_left": 0, "center": 13, "bottom_right": 255,
+    }
+    assert disposed == [True, True]
     invalid = tmp_path / "invalid.png"
     invalid.write_bytes(b"invalid")
     with pytest.raises(ValueError, match="invalid image"):

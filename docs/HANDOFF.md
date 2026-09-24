@@ -1,52 +1,60 @@
-# Latest session — M1-8-R1 complete; stop before R2
+# Latest session — post-R1 corrections; R2 authorized next
 
-R1 is one reviewed commit on `codex/m1-8-r0-ready`, based on `2e6bb81`, in
-`F:/GitHubRepositories/NamiSync/build/m1-8-r0`. Its commit/evidence binding is
-`build/r1-20260923/delivery.json`. The user authorized R1 only. R2/R3 and
-integration remain pending; no next-checkpoint work started.
+The user authorized C1–C3, one correction commit, then R2. Work remains in
+`F:/GitHubRepositories/NamiSync/build/m1-8-r0`, branch
+`codex/m1-8-r0-ready`, based on R1 `0fc2f5d`. M1_PLAN owns the finite scope.
+Filter/Search remains shelved. R3 integration and push/PR are not authorized.
 
-## Changes and verification
+## Changes and evidence
 
-- R1-A–E consolidate gallery verdicts, short-copy receipts and capture identity,
-  identified CSS/source recipes, local request receipts and repeated package
-  scans. Product/package inputs are unchanged. M1_PLAN owns dispositions and
-  preserved guarantees; TESTS owns harness policy.
-- Ordinary-01: 5,321 passed / five skips / 33 deselected. Full-headed-01: all
-  33 passed. All 12 import contracts passed. Fresh independent review, document
-  consistency/link checks and diff checks passed.
-- `build/r1-20260923/` retains detailed disposition reports and every failed and
-  successful run. Final input patch SHA-256:
-  `1703adc4e80adf8917443f9837dcd6ed7e6a875ade1710e7d0fef2547edaa1d4`.
-  `installed-identity.json` verifies 265 source inputs / 262 package files across
-  source, staging, wheel and installation. `native-final/manifest.json` binds
-  102 retained artifacts. Both short/legacy captures and all four gallery
-  minimum captures were inspected; `visual-review.md` records the limitations.
+- Null/loading Plan reviews no longer expose unavailable actions. The short
+  native witness waits for a connected, loaded review before its existing
+  focus/hit guard. Historical failures did not retain the exact failed operand;
+  detached-review evidence supports a cause without proving every old failure.
+- Retained Plan panels reconnect resize observation after disposal/reuse.
+  The corrected existing probe fails against the old source and passes against
+  the fix, including repeated reuse without duplicate observations.
+- Shared native capture preserves raw browser PNGs with bounded theme/material,
+  hash and three-point alpha provenance. These surfaces omit native Mica
+  composition: the earlier white-card PNGs alone did not prove a product theme
+  defect. No speculative recoloring was made.
+- `build/post-r1-20260924/` retains investigation, reconciled Opus review,
+  failed attempts, builder reports and final gate receipts. Invalid early resize
+  fixtures are distinguished from `c2-valid-before`, the genuine pre-fix failure.
+- Ordinary suite: 5,325 passed / five skipped / 33 deselected. Early installed
+  short/gallery/legacy journeys: eight passed. All 12 import contracts passed.
+  Full installed headed gate: all 33 passed. Package identity matches across
+  265 source inputs / 262 package files, staging, wheel and installation.
+  `native-final/manifest.json` retains 110 artifacts; `capture-provenance.json`
+  verifies eight raw PNG hashes. Visual review distinguishes browser geometry
+  from opaque/forced appearance; native Mica contrast is not inferred.
 
-## Still open
+Frozen product/test/package patch SHA-256 relative to `0fc2f5d`:
+`7daeb82b9a8325fbe45fb878b4348a062d26b88ef27d90ad105295330c38ea4d`.
+`final-inputs.json` owns its paths. Keep bounded Windows Jobs for Node-capable
+checks and inspect child exit receipts. R0's cyclic mock-DOM assertion formatting
+caused the earlier allocation incident; `build/r0-focused-01/MEMORY_INCIDENT.md`
+retains the diagnosis. Task caps are not product memory guarantees.
 
-The earlier R0 short larger-window pre-Execute focus-or-hit failure recurred
-once, before execution admission. Its original operands remain unavailable.
-R1 adds five bounded Boolean operands to that existing failure path without
-relaxing its guard. One meaningful diagnostic and the full final headed gate
-passed; this does not establish a cause or a fix. The first diagnostic attempt
-instead exposed an introduced duplicate JavaScript variable, corrected and
-syntax-checked before the meaningful rerun. Preserve all failed receipts.
+## Immediate continuation
 
-Known theme/contrast defects remain visible in retained PNGs; filter/Search
-overflow also remains deferred. R1 makes no performance or memory improvement
-claim. M1-7 reduction-study work remains deferred until after M1-8 and explicit
-user resumption. R2 was neither changed nor started.
+After the reviewed correction commit, elaborate and implement R2 from its active
+register. `build/post-r1-20260924/r2-design.md` is read-only design against R1;
+refresh its dependencies against the correction commit. Its reference to a
+current PRESENTATION U section is imprecise: the candidate currently retains
+P2 documentation, while M1_PLAN A5/R2 owns the active U obligation.
 
-Keep the existing bounded Windows Job launcher for Node-capable checks and
-inspect the child exit receipt. R0's cyclic mock-DOM assertion formatting caused
-the earlier allocation incident; `build/r0-focused-01/MEMORY_INCIDENT.md` owns
-that evidence. Task caps are not product memory guarantees.
+The three U Python owners survive in recovery `4642491` and are unchanged through
+`9391a62`; extract only those paths, never cherry-pick a recovery commit. Add the
+restored test module to `tests/_departments.py`. The three U JSON artifacts do not
+yet exist. Preserve the 13 metrics, 78 planned attempts, stop-on-first-failure
+policy and fixed budgets. Old headed04 wrappers contain stale absolute paths;
+do not use them or relabel old evidence. Historical P2/M1-7 inputs remain frozen;
+the M1-7 reduction study stays deferred until after M1-8 and explicit resumption.
 
 ## Preservation
 
-No integration, push, recovery-ancestry reuse or cleanup occurred. Original
-checkout remains clean on `codex/m1-8-r0` at P2 `4bbf943`; milestone1 remains
-`055325b`. Protected stash `93414b7...`, unrelated `af02913`, recovery `8b2a0fb`
-and `6ada8ca`, old U/UV2/P2/R0 evidence and `build/m1-8-uv1-parent` remain
-untouched. Keep this candidate checkout and its evidence for later R2/R3.
-The prior handoff is retained as `build/r1-20260923/handoff-before-r1.md`.
+Original checkout remains clean on `codex/m1-8-r0` at P2 `4bbf943`; milestone1
+remains `055325b`. Protected stash `93414b7...`, unrelated `af02913`, recoveries
+`8b2a0fb`/`6ada8ca`, old U/UV2/P2/R0 evidence and existing worktrees remain intact.
+No integration or cleanup occurred. Keep this candidate and its evidence for R2/R3.

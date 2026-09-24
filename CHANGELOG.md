@@ -27,6 +27,20 @@ and remembered locations, bounded Plan review/selection/sorting and same-task
 execution with live controls and bounded live/retained result review. Inventory review and beta
 packaging remain open.
 
+#### Correct retained Plan lifecycle and capture interpretation (2026-09-24)
+
+- Clear unavailable actions while a review loads; make the short native witness
+  wait for the connected loaded review before its unchanged focus/hit guard.
+- Restore viewport resize observation after retained-panel disposal/reuse,
+  preserving coalesced paging and avoiding duplicate observation on rerender.
+- Preserve raw browser screenshots with bounded theme/material/alpha provenance;
+  distinguish transparent surface captures from native Mica appearance. Earlier
+  white-card captures alone do not establish product contrast defects.
+- Keep filter/Search and M1-7 reduction shelved; proceed to R2 only after the
+  reviewed correction commit. No backend admission or effect-policy change.
+- Verification: 5,325 ordinary tests passed (five skips), all 33 installed GUI
+  cases and 12 import contracts passed; source/wheel/install identity verified.
+
 #### Consolidate M1-8-R1 functional witnesses (2026-09-23 – 2026-09-24)
 
 - Give the gallery parent the execution-layout verdict; remove duplicate page/

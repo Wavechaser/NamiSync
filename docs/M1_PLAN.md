@@ -11,10 +11,9 @@
 
 This is the **refactoring/closure plan, revised 2026-09-23**. R0 is complete
 on the isolated `codex/m1-8-r0-ready` branch, reconstructed as one reviewed
-commit on verified P2. The user authorized R1 on 2026-09-23; stop after R1.
-R2–R3, milestone
-integration, filter/Search overflow, theme remediation, push and PR stay pending
-and outside the delivered R0 scope.
+commit on verified P2. R1 is complete at `0fc2f5d`. On 2026-09-24 the user
+authorized the correction checkpoint below, one commit, then R2. R3 integration,
+filter/Search overflow, speculative theme recoloring, push and PR remain excluded.
 
 This is the sole active M1 delivery register. Subject contracts remain in
 [ARCHITECTURE](ARCHITECTURE.md), [DEFENSE](DEFENSE.md), [BRIDGE](BRIDGE.md),
@@ -63,6 +62,39 @@ Combined independent review, documentation checks and skill validation pass;
 deliver this update and the investigation in one documentation commit.
 
 ## Scope and decisions
+
+### Post-R1 corrections — complete, 2026-09-24
+
+Base `0fc2f5d`; one reviewed `fix(web)` commit before R2 implementation.
+The independent investigation and reconciled Opus 5.5 review are retained in
+`build/post-r1-20260924/investigation/`. The user approved the readiness mechanism
+correction after recurrence review; the historical failed operand remains unknown.
+
+| ID | Accepted outcome and finite owner/consumer population | Verification |
+| --- | --- | --- |
+| C1 | No unavailable actions while a reused Plan panel has no review; short native witness waits for a connected loaded review. `plan_review.js`, short child/parent, Plan/task-shell probes and existing gallery loading case. Preserve current-null callback and backend admission guards. | Fresh/retained-to-null controls; delayed/refused-load composition; both installed short sizes and gallery/legacy consumers. |
+| C2 | Viewport resizing remains observed when the retained panel is shown again. `plan_review.js`, `panels.js` lifecycle, existing Plan probe and gallery resize composition. Prove the missed resize callback before choosing the smallest reconnect/lifetime fix. | Construct/dispose/reuse/resize and repeated reuse without duplicate observations; existing native geometry/scroll witness. |
+| C3 | Raw browser surfaces cannot be mistaken for native Mica composition. Shared `_headed_cdp.py` capture owner, its direct short/gallery/legacy consumers and existing capture tests; use bounded capture metadata and explicitly labeled opaque-base review evidence where useful. | Retain raw PNG and alpha/material provenance; inspect labeled appearance evidence, including existing opaque/forced scenarios. No product color change without a real native defect. |
+
+Documentation population: DESKTOP_UI/TESTS for changed behavior/evidence,
+BUGS for verified substantive consequences, this register, CHANGELOG and HANDOFF.
+No new suite, protocol, generic framework or whole-window minimum change. Filter/
+Search and M1-7 study stay shelved. Source/producer/checker changes invalidate
+their evidence; settle writers/review before ordinary, full headed and import
+gates, then commit. Preserve failed receipts and use bounded Windows Jobs for
+Node-capable checks. AGENTS hard-wall/recurrence stops apply; these three declared
+mechanisms are the finite correction set, not permission for adjacent fixes.
+
+R2 keeps its existing metrics, budgets, 78-attempt policy and historical inputs;
+refresh its candidate binding after this correction commit before collection.
+
+**Closure.** C1–C3 pass their focused and installed seams, 5,325 ordinary tests
+(five skips), all 33 headed cases and all 12 import contracts. Source/staging/
+wheel/install bytes agree; eight raw capture sidecars and 110 retained artifacts
+are hash-bound. Independent review and visual evidence distinguish transparent
+browser geometry from opaque/forced appearance. Evidence and commit identity:
+`build/post-r1-20260924/`, including `delivery.json` after commit. Filter/Search
+remains excluded; the old short-driver failed operand remains unknown.
 
 **Baseline and ownership.** R0's ready branch is in `build/m1-8-r0`, parented
 on verified P2 `4bbf943`. The delivery receipt in
@@ -313,7 +345,7 @@ push, PR, release or next milestone follows automatically.
 | ID | Accepted outcome | Depends on | Primary verification | Status |
 | --- | --- | --- | --- | --- |
 | M1-8-R0 | Usable execution navigation, phase status/progress and folded details; B1–B6 resolved | Separate execution authorization; accepted D1–D3, verified P2 and protected snapshot | A1–A4; focused and ordinary/import/full installed gates | complete; isolated reviewed commit |
-| M1-8-R1 | Consolidated functional witnesses preserving R0's accepted behavior | Accepted R0 | Assertion-disposition map; affected tests and A1–A4 evidence identity | complete; reviewed isolated commit, stop before R2 |
+| M1-8-R1 | Consolidated functional witnesses preserving R0's accepted behavior | Accepted R0 | Assertion-disposition map; affected tests and A1–A4 evidence identity | complete at `0fc2f5d`; approved corrections precede R2 |
 | M1-8-R2 | One maintainable active U measurement path and accepted fixed-profile evidence | R1; same final product/installed bytes | A5; finite checker controls, 78 attempts and independent terminal validation | pending |
 | M1-8-R3 | Reviewed, fully accounted M1-8 integration and closure | R1/R2 | A6 and overall final sweep | pending |
 
@@ -421,7 +453,8 @@ Verification and provenance:
   task-local Job limit. `native-03/manifest.json` preserves raw reports, wheels,
   identity records and captures. Both short default/larger execution captures,
   both legacy confirmation captures and native-minimum all-facts capture were
-  visually inspected. Known theme/contrast concerns remain for GUI review.
+  visually inspected. Later alpha inspection identifies transparent browser
+  captures, which cannot establish native Mica contrast defects.
 - Frozen v4 binds both final gates. Source/staging/wheel/installed identity is
   verified separately; the delivery receipt binds the coherent commit. The
   earlier native02 short-larger pre-click focus/hit failure did not reproduce
@@ -519,9 +552,11 @@ document/link/diff checks and final source/staging/wheel/install binding pass.
 The final input patch hash is
 `1703adc4e80adf8917443f9837dcd6ed7e6a875ade1710e7d0fef2547edaa1d4`;
 `build/r1-20260923/delivery.json` binds this checkpoint commit and receipts.
-Required captures were inspected, retaining existing theme/contrast exclusions.
+Required captures were inspected. Their later-confirmed transparency limits
+native-theme conclusions; accepted palette exceptions remain unchanged.
 Product/package inputs and R2's section are unchanged. No quantitative claim,
-M1-7 retirement, branch integration or cleanup. Stop here as requested.
+M1-7 retirement, branch integration or cleanup. The requested R1 stop was honored;
+the 2026-09-24 authorization now resumes corrections and R2.
 
 ### M1-8-R2 — quantitative path and fixed acceptance
 

@@ -163,6 +163,14 @@ identity across capture, rather than a fixed detail-read count or permanent
 revision. Its real-copy endpoint remains distinct from the legacy journey's
 navigation, modal, control and recovery coverage.
 
+Shared CDP captures retain the raw browser-surface PNG and neighboring capture
+provenance. The observed page theme/material and sampled alpha describe that
+surface; they do not certify the native DWM/Mica composition. Transparent white
+pixels are not opaque white cards. Use existing opaque/forced-color scenarios
+for their named appearance outcomes, and a native composited observation before
+attributing a Mica contrast defect to product tokens. Preserve earlier raw
+captures; correct their interpretation rather than rewriting historical evidence.
+
 `tools/gui.ps1 gallery` reuses the child and milestone format for an editable
 manual preview, but its GUID-named output is diagnostic only. It is not produced
 from the clean installed wheel, is not parent-validated as an acceptance run,

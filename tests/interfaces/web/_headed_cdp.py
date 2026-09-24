@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import re
 from pathlib import Path
@@ -93,18 +94,53 @@ class NativeCdp:
         self.call("Input.dispatchMouseEvent" if "x" in event else "Input.dispatchKeyEvent", event, lambda _value: then(), step)
 
     def capture(self, target: Path, then: Callable[[], None], step: str) -> None:
-        def persist(value: object) -> None:
-            data = value.get("data") if type(value) is dict else None
-            if type(data) is not str:
-                raise TypeError("native screenshot result is invalid")
-            target.write_bytes(base64.b64decode(data, validate=True))
-            then()
+        def capture_with_context(context: object) -> None:
+            observed = context if type(context) is dict else {}
+            theme = observed.get("theme")
+            material = observed.get("material")
+            forced_colors = observed.get("forcedColors")
+            if type(theme) is not str or theme not in {"light", "dark"}:
+                theme = None
+            if type(material) is not str or material not in {"mica", "opaque", "degraded"}:
+                material = None
+            if type(forced_colors) is not bool:
+                forced_colors = None
 
-        self.call(
-            "Page.captureScreenshot",
-            {"format": "png", "fromSurface": True, "captureBeyondViewport": False},
-            persist,
-            step,
+            def persist(value: object) -> None:
+                data = value.get("data") if type(value) is dict else None
+                if type(data) is not str:
+                    raise TypeError("native screenshot result is invalid")
+                content = base64.b64decode(data, validate=True)
+                target.write_bytes(content)
+                provenance = {
+                    "source": "Page.captureScreenshot",
+                    "surface": "browser surface",
+                    "native_window_composition": "not captured",
+                    "context_observed": "before capture",
+                    "page_theme": theme,
+                    "page_material": material,
+                    "page_forced_colors": forced_colors,
+                    "raw_sha256": hashlib.sha256(content).hexdigest(),
+                    "alpha_samples": _capture_alpha_samples(target),
+                }
+                target.with_suffix(".capture.json").write_text(
+                    json.dumps(provenance, sort_keys=True) + "\n", encoding="utf-8",
+                )
+                then()
+
+            self.call(
+                "Page.captureScreenshot",
+                {"format": "png", "fromSurface": True, "captureBeyondViewport": False},
+                persist,
+                step,
+            )
+
+        self.evaluate(
+            "(()=>({theme:document.documentElement.dataset.theme??null,"
+            "material:document.documentElement.dataset.windowMaterial??null,"
+            "forcedColors:matchMedia('(forced-colors: active)').matches}))()",
+            capture_with_context,
+            step + "-context",
         )
 
 
@@ -130,6 +166,27 @@ def decode_png(path: Path) -> tuple[int, int]:
         if width <= 0 or height <= 0:
             raise ValueError("decoded PNG has invalid dimensions")
         return width, height
+    finally:
+        bitmap.Dispose()
+
+
+def _capture_alpha_samples(path: Path) -> dict[str, int]:
+    """Sample the raw browser PNG; three pixels do not establish whole-image opacity."""
+    import clr
+
+    clr.AddReference("System.Drawing")
+    from System.Drawing import Bitmap
+
+    bitmap = Bitmap(str(path))
+    try:
+        width, height = int(bitmap.Width), int(bitmap.Height)
+        if width <= 0 or height <= 0:
+            raise ValueError("decoded PNG has invalid dimensions")
+        return {
+            "top_left": int(bitmap.GetPixel(0, 0).A),
+            "center": int(bitmap.GetPixel(width // 2, height // 2).A),
+            "bottom_right": int(bitmap.GetPixel(width - 1, height - 1).A),
+        }
     finally:
         bitmap.Dispose()
 

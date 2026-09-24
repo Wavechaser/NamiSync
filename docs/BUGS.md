@@ -786,6 +786,22 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Plan review windowing
 
+- MINOR - FIXED (2026-09-24). Null-state control retention. A newly loading
+  or reused Plan panel could show Execute and other actions enabled without a
+  review; their guarded handlers did nothing. The short headed driver mistook
+  that affordance for readiness and retained a panel that a refused load could
+  detach. Null-review rendering now clears action availability, and the driver
+  requires the currently connected, loaded review before its unchanged native
+  focus/hit check. Fresh/retained-null and loading/detached readiness controls
+  cover the mechanism; historical failed operands remain unavailable.
+- MODERATE - FIXED (2026-09-24). Observer lifetime mismatch. Initial empty-panel
+  rendering disposed the retained Plan renderer and disconnected its viewport
+  ResizeObserver; later reuse never restored observation. Newly exposed rows
+  could therefore miss their resize-driven window request until another render
+  or scroll. Rendering now restores observation after disposal without adding
+  duplicate observations on ordinary rerenders. A disposed/reused viewport
+  growth witness checks the missing range request and preserves frame coalescing.
+
 - MODERATE - FIXED (2026-09-23). Approximate/exact numeric representation
   mismatch. A valid Scalar64 progress delta could produce a finite observed
   rate above Number's safe-integer range; passing that approximate Number to

@@ -39,7 +39,7 @@ _WAIT_REVIEW_DIAGNOSTIC = frozenset({
 })
 _PRECLICK_DIAGNOSTIC = frozenset({
     "executeFocused", "pointInsideViewport", "hitPresent",
-    "hitExecute", "hitDescendant",
+    "hitExecute", "hitDescendant", "executeConnected", "reviewLoaded",
 })
 
 
@@ -434,11 +434,17 @@ _PAGE = r"""
   };
   const card = await until(() => document.querySelector('.nami-task-rail__row .nami-task-card'), 'task');
   card.click();
-  const review = await until(() => document.querySelector('.nami-plan-review'), 'review');
-  const execute = await until(() => {
+  const ready = await until(() => {
+    const review = document.querySelector('.nami-plan-review');
+    if (!(review instanceof HTMLElement) || !review.isConnected) return null;
     const button = review.querySelector('[data-action="execute"]');
-    return button instanceof HTMLButtonElement && !button.disabled ? button : null;
+    const table = review.querySelector('.nami-plan-review__table-card');
+    return button instanceof HTMLButtonElement && button.isConnected
+      && !button.hidden && !button.disabled && table instanceof HTMLElement
+      && !table.hidden && review.querySelector('.nami-plan-review__rows [data-node-id]')
+      ? {review, execute:button} : null;
   }, 'execute');
+  const {review, execute} = ready;
   await until(() => document.hasFocus(), 'document-focus');
   execute.focus();
   await new Promise((resolve) => requestAnimationFrame(resolve));
@@ -446,8 +452,13 @@ _PAGE = r"""
   const rect = execute.getBoundingClientRect();
   const point = {x:(rect.left+rect.right)/2,y:(rect.top+rect.bottom)/2};
   const executeHit = document.elementFromPoint(point.x, point.y);
-  if (document.activeElement !== execute || executeHit !== execute) {
+  const reviewLoaded = review.isConnected
+    && !review.querySelector('.nami-plan-review__table-card').hidden;
+  if (!execute.isConnected || !reviewLoaded
+      || document.activeElement !== execute || executeHit !== execute) {
     return {preclick: {
+      executeConnected: execute.isConnected,
+      reviewLoaded,
       executeFocused: document.activeElement === execute,
       pointInsideViewport: point.x >= 0 && point.y >= 0
         && point.x < innerWidth && point.y < innerHeight,

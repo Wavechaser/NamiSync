@@ -1284,6 +1284,10 @@ Plan paths and semantic labels use 12px caption text. The semantic field is
 7rem wide, shifting its icon edge right to align optically with Plan again.
 A Status card shows selected/byte/planning-issue facts and execution controls;
 one table card owns search, toggle-button filters and the grid, without a footer.
+While no reviewed plan is available, execution and replan actions are not
+actionable; a loading or unavailable panel cannot retain a previous task's
+enabled controls. Reusing the Plan panel also restores viewport resize
+observation so newly exposed rows reconcile without requiring a scroll gesture.
 Status and table cards use a 16 px top inset. The status
 progress bar is 8 px thick; the rail's progress remains 4 px. The Plan view switcher has
 a 6 px outer radius. At default (1280×800) and larger window sizes the natural-height

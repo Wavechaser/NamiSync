@@ -686,14 +686,18 @@ def test_component_gallery_a1_keyboard_starts_on_native_ui_thread(
     assert recorder.failures == []
 
 
+@pytest.mark.parametrize("step,method", [
+    ("a1_keyboard_focus", "Runtime.evaluate"),
+    ("a1_keyboard_capture-context", "Runtime.evaluate"),
+])
 def test_component_gallery_a1_native_failure_keeps_measurement_location(
-    tmp_path: Path,
+    tmp_path: Path, step: str, method: str,
 ) -> None:
     paths = EvidencePaths(tmp_path.resolve())
     recorder = component_gallery_child._Recorder(paths, "light")
     recorder.set("native_script_failure", {
         "stage": "a1_keyboard", "type": "RuntimeError",
-        "step": "a1_keyboard_focus", "method": "Runtime.evaluate",
+        "step": step, "method": method,
     })
     recorder.write()
     assert EvidenceReader(paths).read_failure() == {"failure": {

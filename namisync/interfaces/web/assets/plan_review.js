@@ -517,6 +517,15 @@ export function createPlanReviewPanel(callbacks) {
   let scrollGeneration = 0;
   let pendingWindowOffset = null;
   let renderedRows = null;
+  function disableActions() {
+    execute.disabled = true;
+    planAgain.disabled = true;
+    pause.disabled = true;
+    resume.disabled = true;
+    cancel.disabled = true;
+    controls.hidden = true;
+  }
+  disableActions();
   const renderedText = new WeakMap();
   function updateText(node, value, filesystem = false) {
     if (renderedText.get(node) === value) return;
@@ -731,6 +740,7 @@ export function createPlanReviewPanel(callbacks) {
   });
   const resizeObserver = new window.ResizeObserver(scheduleViewportCheck);
   resizeObserver.observe(body);
+  let resizeObserved = true;
 
   function scheduleViewportCheck() {
     if (current === null || scrollFramePending) return;
@@ -1077,6 +1087,10 @@ export function createPlanReviewPanel(callbacks) {
   }
 
   function render(task) {
+    if (!resizeObserved) {
+      resizeObserver.observe(body);
+      resizeObserved = true;
+    }
     const focusInDetails = diagnostics.contains(document.activeElement);
     if (current !== task.review) {
       if (searchTimer !== null) clearTimeout(searchTimer);
@@ -1095,6 +1109,7 @@ export function createPlanReviewPanel(callbacks) {
       (current === null ? statusTitle : detailsToggle).focus?.();
     }
     if (current === null) {
+      disableActions();
       delete element.dataset.pending;
       updateText(sourceValue, "Loading reviewed plan…");
       updateText(targetValue, "");
@@ -1295,6 +1310,7 @@ export function createPlanReviewPanel(callbacks) {
     closeFilterMenus();
     finishResize?.();
     resizeObserver.disconnect();
+    resizeObserved = false;
     if (searchTimer !== null) clearTimeout(searchTimer);
     searchTimer = null;
     scrollGeneration += 1;
