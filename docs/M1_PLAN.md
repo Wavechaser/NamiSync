@@ -752,8 +752,8 @@ User-authorized on 2026-09-24 from accepted R2 `c974447`, on isolated
 | Id | Accepted outcome and owner | Gate / status |
 | --- | --- | --- |
 | PS-1 | Automatically contain ordinary frontend Node probes and bound fake-DOM failure formatting; preserve assertion truth without ad hoc Boolean rewrites or routine resource watching. | Complete: populated-graph identity failures, allocation/output/timeout controls, original probes and launcher tests; 5,405 ordinary passes (five skips), 12 imports and independent review. |
-| CE-1 | After task updates stop, execution controls report known unavailability without dispatch or a false uncertain-request message. Preserve last-known native session truth; offer only existing app-close cancellation guidance. | Production callback/renderer controls for lost/live drains and zero dispatch; native exact-session seam. Pending. |
-| CE-2 | A control attempt belongs to task/session/action across review replacement; preserve its pending/result feedback, prevent duplicate controls, and reject obsolete replies after newer progress, terminal, session replacement or task retirement. | Existing production task-shell probe interleavings for accepted/refused/error outcomes and same/new session; installed GUI control paths. Pending. |
+| CE-1 | After task updates stop, execution controls report known unavailability without dispatch or a false uncertain-request message. Preserve last-known native session truth; offer only existing app-close cancellation guidance. | Complete: production callback/renderer lost/live drain controls, zero dispatch before/after review loading and refresh, terminal retry distinction and native exact-session seam. |
+| CE-2 | A control attempt belongs to task/session/action across review replacement; preserve its pending/result feedback, prevent duplicate controls, and reject obsolete replies after newer authoritative control state, terminal, session replacement or task retirement. Ordinary byte-progress ticks do not obsolete a control refusal. | Complete: production task-shell accepted/refused/error and same/new-session interleavings, installed GUI controls and independent review. |
 
 **Finite population and commits.** PS-1 is a separate test-safety commit before
 the product correction: `tests/interfaces/web/{_headed_native.py,
@@ -781,6 +781,17 @@ Keep package/source identity exact. Use automatic Job containment and bounded
 failure diagnostics; inspect memory only for a failure or a named measurement
 gate, not by assigning a person/agent to watch normal tests. Existing mandatory
 stops apply; these three declared outcomes do not authorize adjacent repairs.
+
+**Correction result (2026-09-24).** PS-1 is `96a0212`. CE-1/2 passed three
+focused checks, 33 fresh installed GUI tests, 5,405 ordinary tests (five skips)
+and 12 import contracts. Fresh U `build/control-edges-20260924/run-01/`
+completed all 78 attempts once, with independent full raw/workspace validation:
+worst cold maximum 10.2 ms, warm p95 68.8 ms and warm maximum 70.4 ms. The three
+active U artifacts now bind the corrected product; predecessor run-03 remains
+preserved. `review/CE-review.md` holds independent review; `delivery-01.json`
+records the correction commit only after staged and clean-HEAD binding pass.
+The lost-drain task-Close limitation remains documented; no reattach is added.
+R3 remains unstarted.
 
 ### M1-8-R3 — final sweep and integration
 

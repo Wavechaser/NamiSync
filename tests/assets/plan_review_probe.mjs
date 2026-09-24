@@ -667,6 +667,13 @@ task.executionControlState = "running";
 panel.render(task);
 findAction(panel.element, "cancel").dispatch("click");
 assert.deepEqual(calls.at(-1), ["onControl", review, "cancel"]);
+task.drainUnavailable = true;
+panel.render(task);
+for (const action of ["pause", "resume", "cancel"]) {
+  assert.equal(findAction(panel.element, action).disabled, true,
+    "a stopped task drain offers no execution controls");
+}
+task.drainUnavailable = false;
 
 const viewport = findByClass(panel.element, "nami-plan-review__rows");
 viewport.clientHeight = ROW_HEIGHT - 1;

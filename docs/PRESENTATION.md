@@ -445,12 +445,13 @@ commit, then clean-HEAD validation including the raw authority binding afterward
 Changes to measured product, instrument, checker, controls, package or native
 profile reopen the affected evidence; unchanged product alone is insufficient.
 
-The 2026-09-24 U-v2 run-03 completed all 78 attempts with the fixed profile and
-populations. Independent derivation gives a 20.9 ms worst cold maximum,
-64.4 ms worst warm p95 and 64.9 ms warm maximum, within the unchanged limits.
-The three artifacts above retain the evidence; M1_PLAN and the delivery receipt
-under `build/r2-20260924/` record staged and clean-HEAD closure. Historical failed
-runs are retained separately and contribute no accepted samples.
+The 2026-09-24 post-R2 control correction reran all 78 attempts with the fixed
+profile and populations. Independent derivation gives a 10.2 ms worst cold
+maximum, 68.8 ms worst warm p95 and 70.4 ms warm maximum, within the unchanged
+limits. The three artifacts above retain this current-source evidence;
+`build/control-edges-20260924/delivery-01.json` records staged and clean-HEAD
+closure. Accepted predecessor run-03 remains under `build/r2-20260924/`;
+historical failed runs remain separate and contribute no accepted samples.
 
 ### Existing complete-collection procedure
 

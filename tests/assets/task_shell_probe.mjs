@@ -328,6 +328,8 @@ const bridgeUrl = moduleUrl(`
   export class TaskCreateUncertainError extends BridgeTransportError {
     constructor(retry) { super(); this.retry = retry; }
   }
+  export class TerminalPresentationError extends BridgeTransportError {}
+  export class TerminalSessionReleaseError extends BridgeTransportError {}
   export const acknowledgeShellReady = () => Promise.resolve({ acknowledged: true });
   export const echoReadiness = () => Promise.resolve({ acknowledged: true });
   export const whenBridgeApiReady = () => Promise.resolve();
@@ -371,7 +373,7 @@ const themeUrl = moduleUrl(`
 let appSource = await readFile(process.argv[2], "utf8");
 appSource = appSource.replace(
   /import \{[\s\S]*?\} from "\.\/bridge\.js";/,
-  `import { acknowledgeShellReady, admitLocation, BridgeTransportError, closeTask, controlExecution, createTask, echoReadiness, getExecutionDetail, getPlanAnchor, getPlanOperationAnchor, getPlanWindow, listTasks, markBridgeOperational, mutatePlanHighlight, mutatePlanSelection, openPlanView, pickFolder, planAgain, prepareSetup, readSetup, StartPlanUncertainError, startExecution, startInventory, startPlan, startTaskDrain, TaskCreateUncertainError, updatePlanView, whenBridgeApiReady } from "${bridgeUrl}";`,
+  `import { acknowledgeShellReady, admitLocation, BridgeTransportError, closeTask, controlExecution, createTask, echoReadiness, getExecutionDetail, getPlanAnchor, getPlanOperationAnchor, getPlanWindow, listTasks, markBridgeOperational, mutatePlanHighlight, mutatePlanSelection, openPlanView, pickFolder, planAgain, prepareSetup, readSetup, StartPlanUncertainError, startExecution, startInventory, startPlan, startTaskDrain, TaskCreateUncertainError, TerminalPresentationError, TerminalSessionReleaseError, updatePlanView, whenBridgeApiReady } from "${bridgeUrl}";`,
 );
 appSource = appSource
   .replace("./readiness.js", readinessUrl)
@@ -382,6 +384,8 @@ appSource = appSource
   .replace("./rail.js", moduleUrl(railSource))
   .replace("./panels.js", moduleUrl(preparedPanelSource))
   .replace("./render.js", renderUrl);
+appSource += "\nglobalThis.taskHarness.forceReview = loadPlanReview;\n"
+  + "globalThis.taskHarness.adoptTask = adoptTask;\n";
 
 function walk(root) {
   return [root, ...root.children.flatMap(walk)];
@@ -1136,7 +1140,7 @@ planWindows.at(-1).resolve(planWindow(committedReview));
 await until(() => liveTask.review !== conflictedReview);
 await turns();
 assert.equal(planWindows.length, conflictWindowBase + 4, "the one forced reopen captures the newer live event");
-const liveReview = liveTask.review;
+let liveReview = liveTask.review;
 const executionWindow = (reviewSummary, offset, revision, result = null) => ({
   ...planWindow(reviewSummary, offset),
   total: 2048,
@@ -1432,6 +1436,49 @@ assert.equal(planAnchors.length, noActiveAnchorCount, "no active operation launc
 assert.equal(liveReview.follow.message, "No operation is active.");
 liveReview.summary = followSummaryBefore;
 
+const replacedControlBase = executionControls.length;
+globalThis.planReviewHarness.callbacks.onControl(liveReview, "resume");
+const replacedControlOpenBase = planOpens.length;
+const replacedControlWindowBase = planWindows.length;
+void globalThis.taskHarness.forceReview(liveTask, true);
+await until(() => planOpens.length === replacedControlOpenBase + 1);
+planOpens.at(-1).resolve(liveReview.summary);
+await until(() => planWindows.length === replacedControlWindowBase + 1);
+planWindows.at(-1).resolve(executionWindow(liveReview.summary, 0, 6));
+await until(() => liveTask.review !== liveReview);
+const replacedReview = liveTask.review;
+assert.equal(replacedReview.pending, "resume", "review replacement retains an in-flight control");
+const duplicateControlCount = executionControls.length;
+globalThis.planReviewHarness.callbacks.onControl(replacedReview, "resume");
+assert.equal(executionControls.length, duplicateControlCount, "replacement cannot dispatch a duplicate control");
+executionControls[replacedControlBase].resolve({
+  code: "not-found", session_id: executionSession, before: "paused",
+  after: "paused", detail: "Resume was refused after review replacement.", accepted: false,
+});
+await until(() => replacedReview.pending === null);
+assert.equal(replacedReview.message, "Resume was refused after review replacement.");
+executionControls.splice(replacedControlBase, 1);
+liveReview = replacedReview;
+
+const erroredControlIndex = executionControls.length;
+globalThis.planReviewHarness.callbacks.onControl(liveReview, "resume");
+const erroredOpenBase = planOpens.length;
+const erroredWindowBase = planWindows.length;
+void globalThis.taskHarness.forceReview(liveTask, true);
+await until(() => planOpens.length === erroredOpenBase + 1);
+planOpens.at(-1).resolve(liveReview.summary);
+await until(() => planWindows.length === erroredWindowBase + 1);
+planWindows.at(-1).resolve(executionWindow(liveReview.summary, 0, 6));
+const priorErrorReview = liveReview;
+await until(() => liveTask.review !== priorErrorReview);
+liveReview = liveTask.review;
+assert.equal(liveReview.pending, "resume");
+executionControls[erroredControlIndex].reject(new Error("simulated lost control reply"));
+await until(() => liveReview.pending === null);
+assert.equal(liveReview.message, "Resume uncertain. Follow live status.",
+  "uncertain control feedback survives review replacement");
+executionControls.splice(erroredControlIndex, 1);
+
 globalThis.planReviewHarness.callbacks.onControl(liveReview, "resume");
 assert.equal(liveReview.pending, "resume", "resume feedback precedes its receipt");
 assert.deepEqual(calls.at(-1), ["control-execution", TASK_G, executionSession, "resume"]);
@@ -1604,4 +1651,169 @@ assertSameNodes(
   retainedBeforeCapacityRefusal,
   "task creation refusal must retain every existing task card",
 );
+
+const stoppedTaskId = `task-${"8".repeat(32)}`;
+const stoppedSessionId = "8".repeat(32);
+const stoppedOpenBase = planOpens.length;
+const stoppedWindowBase = planWindows.length;
+const stoppedTask = globalThis.taskHarness.adoptTask({
+  task_id: stoppedTaskId, session_id: stoppedSessionId,
+  session_state: "active", session_released: false,
+  task_kind: "sync-plan", request_id: "a".repeat(32),
+});
+await until(() => planOpens.length === stoppedOpenBase + 1);
+const stoppedSummary = planSummary({
+  task_id: stoppedTaskId, selection_state: "committed",
+  execution: { ...committedReview.execution, session_id: stoppedSessionId },
+});
+planOpens.at(-1).resolve(stoppedSummary);
+await until(() => planWindows.length === stoppedWindowBase + 1);
+planWindows.at(-1).resolve(planWindow(stoppedSummary));
+await until(() => stoppedTask.review !== null);
+taskButton(stoppedTask.label).click();
+const oldStoppedReview = stoppedTask.review;
+const priorSessionId = stoppedTask.sessionId;
+const beforeStaleReviewControl = executionControls.length;
+stoppedTask.sessionId = "9".repeat(32);
+globalThis.planReviewHarness.callbacks.onControl(oldStoppedReview, "pause");
+assert.equal(executionControls.length, beforeStaleReviewControl,
+  "an old review cannot control a replacement session while it loads");
+stoppedTask.sessionId = priorSessionId;
+const acceptedControlIndex = executionControls.length;
+globalThis.planReviewHarness.callbacks.onControl(oldStoppedReview, "pause");
+const acceptedOpenBase = planOpens.length;
+const acceptedWindowBase = planWindows.length;
+void globalThis.taskHarness.forceReview(stoppedTask, true);
+await until(() => planOpens.length === acceptedOpenBase + 1);
+planOpens.at(-1).resolve(oldStoppedReview.summary);
+await until(() => planWindows.length === acceptedWindowBase + 1);
+planWindows.at(-1).resolve(planWindow(oldStoppedReview.summary));
+await until(() => stoppedTask.review !== oldStoppedReview);
+const stoppedReview = stoppedTask.review;
+assert.equal(stoppedReview.pending, "pause");
+executionControls[acceptedControlIndex].resolve({
+  code: "accepted", session_id: stoppedSessionId, before: "running",
+  after: "pausing", detail: "Pause requested.", accepted: true,
+});
+await until(() => stoppedReview.pending === null);
+assert.equal(stoppedReview.message, "Pausing execution…",
+  "accepted control feedback survives review replacement");
+assert.equal(stoppedTask.executionControlState, "pausing");
+const stoppedDrain = drains.get(stoppedTaskId);
+assert.ok(stoppedDrain);
+stoppedDrain.acceptRefusal(new (await import(bridgeUrl)).TerminalPresentationError());
+assert.equal(stoppedTask.drainUnavailable, false,
+  "terminal presentation retry does not stop the live drain");
+drains.delete(stoppedTaskId); // stopTask removes the bridge drain before refusal.
+const controlCallsBeforeStop = calls.filter(([name]) => name === "control-execution").length;
+stoppedDrain.acceptRefusal();
+assert.equal(stoppedTask.drainUnavailable, true);
+assert.match(stoppedReview.message, /Close NamiSync to request cancellation/);
+globalThis.planReviewHarness.callbacks.onControl(stoppedReview, "pause");
+assert.equal(calls.filter(([name]) => name === "control-execution").length,
+  controlCallsBeforeStop, "stopped drain never dispatches a control");
+assert.doesNotMatch(stoppedReview.message, /uncertain/);
+const stoppedRefreshOpenBase = planOpens.length;
+const stoppedRefreshWindowBase = planWindows.length;
+void globalThis.taskHarness.forceReview(stoppedTask, true);
+await until(() => planOpens.length === stoppedRefreshOpenBase + 1);
+planOpens.at(-1).resolve(stoppedReview.summary);
+await until(() => planWindows.length === stoppedRefreshWindowBase + 1);
+planWindows.at(-1).resolve(planWindow(stoppedReview.summary));
+await until(() => stoppedTask.review !== stoppedReview);
+assert.equal(stoppedTask.error, stoppedReview.message,
+  "review refresh retains stopped-update guidance on the task card");
+assert.equal(stoppedTask.review.message, stoppedReview.message);
+globalThis.planReviewHarness.callbacks.onControl(stoppedTask.review, "cancel");
+assert.equal(calls.filter(([name]) => name === "control-execution").length,
+  controlCallsBeforeStop, "refreshed stopped review cannot dispatch a control");
+
+const earlyStoppedTaskId = `task-${"9".repeat(32)}`;
+const earlyStoppedSessionId = "9".repeat(32);
+const earlyStoppedOpenBase = planOpens.length;
+const earlyStoppedWindowBase = planWindows.length;
+const earlyStoppedTask = globalThis.taskHarness.adoptTask({
+  task_id: earlyStoppedTaskId, session_id: earlyStoppedSessionId,
+  session_state: "active", session_released: false,
+  task_kind: "sync-plan", request_id: "a".repeat(32),
+});
+await until(() => planOpens.length === earlyStoppedOpenBase + 1);
+assert.equal(earlyStoppedTask.executionStarted, false,
+  "rehydration has not loaded the committed review yet");
+const earlyStoppedDrain = drains.get(earlyStoppedTaskId);
+drains.delete(earlyStoppedTaskId);
+earlyStoppedDrain.acceptRefusal();
+assert.equal(earlyStoppedTask.drainUnavailable, true,
+  "an active drain refusal is retained before execution review loads");
+assert.equal(earlyStoppedTask.error, "Task updates stopped. Close can be retried.");
+const earlyStoppedSummary = planSummary({
+  task_id: earlyStoppedTaskId, selection_state: "committed",
+  execution: { ...committedReview.execution, session_id: earlyStoppedSessionId },
+});
+planOpens.at(-1).resolve(earlyStoppedSummary);
+await until(() => planWindows.length === earlyStoppedWindowBase + 1);
+planWindows.at(-1).resolve(planWindow(earlyStoppedSummary));
+await until(() => earlyStoppedTask.review !== null);
+taskButton(earlyStoppedTask.label).click();
+assert.equal(earlyStoppedTask.executionStarted, true);
+assert.match(earlyStoppedTask.error, /Close NamiSync to request cancellation/);
+assert.equal(earlyStoppedTask.review.message, earlyStoppedTask.error);
+const controlCallsBeforeEarlyStop = calls.filter(([name]) => name === "control-execution").length;
+globalThis.planReviewHarness.callbacks.onControl(earlyStoppedTask.review, "pause");
+assert.equal(calls.filter(([name]) => name === "control-execution").length,
+  controlCallsBeforeEarlyStop,
+  "early drain refusal prevents control dispatch after committed review loads");
+
+const replacedSessionTaskId = `task-${"6".repeat(32)}`;
+const replacedSessionId = "6".repeat(32);
+const replacementSessionId = "4".repeat(32);
+const replacedSessionOpenBase = planOpens.length;
+const replacedSessionWindowBase = planWindows.length;
+const replacedSessionTask = globalThis.taskHarness.adoptTask({
+  task_id: replacedSessionTaskId, session_id: replacedSessionId,
+  session_state: "active", session_released: false,
+  task_kind: "sync-plan", request_id: "a".repeat(32),
+});
+await until(() => planOpens.length === replacedSessionOpenBase + 1);
+const replacedSessionSummary = planSummary({
+  task_id: replacedSessionTaskId, selection_state: "committed",
+  execution: { ...committedReview.execution, session_id: replacedSessionId },
+});
+planOpens.at(-1).resolve(replacedSessionSummary);
+await until(() => planWindows.length === replacedSessionWindowBase + 1);
+planWindows.at(-1).resolve(planWindow(replacedSessionSummary));
+await until(() => replacedSessionTask.review !== null);
+taskButton(replacedSessionTask.label).click();
+const oldSessionReview = replacedSessionTask.review;
+const staleControlIndex = executionControls.length;
+globalThis.planReviewHarness.callbacks.onControl(oldSessionReview, "cancel");
+assert.equal(oldSessionReview.pending, "cancel");
+const replacementOpenBase = planOpens.length;
+const replacementWindowBase = planWindows.length;
+globalThis.taskHarness.adoptTask({
+  task_id: replacedSessionTaskId, session_id: replacementSessionId,
+  session_state: "active", session_released: false,
+  task_kind: "sync-plan", request_id: "a".repeat(32),
+});
+await until(() => planOpens.length === replacementOpenBase + 1);
+const replacementSummary = planSummary({
+  task_id: replacedSessionTaskId, selection_state: "committed",
+  execution: { ...committedReview.execution, session_id: replacementSessionId },
+});
+planOpens.at(-1).resolve(replacementSummary);
+await until(() => planWindows.length === replacementWindowBase + 1);
+planWindows.at(-1).resolve(planWindow(replacementSummary));
+await until(() => replacedSessionTask.review !== oldSessionReview);
+const newSessionReview = replacedSessionTask.review;
+assert.equal(newSessionReview.pending, null);
+const newSessionMessage = newSessionReview.message;
+executionControls[staleControlIndex].resolve({
+  code: "not-found", session_id: replacedSessionId,
+  before: "running", after: "running", detail: "Stale control refusal.", accepted: false,
+});
+await turns();
+assert.equal(newSessionReview.message, newSessionMessage,
+  "a prior session's control reply cannot overwrite replacement review feedback");
+assert.equal(replacedSessionTask.executionControlState, "running");
+
 process.stdout.write("ok");

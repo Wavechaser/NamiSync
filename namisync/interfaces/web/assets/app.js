@@ -28,6 +28,8 @@ import {
   startPlan,
   startTaskDrain,
   TaskCreateUncertainError,
+  TerminalPresentationError,
+  TerminalSessionReleaseError,
   whenBridgeApiReady,
   updatePlanView,
 } from "./bridge.js";
@@ -113,6 +115,8 @@ const ACTIVE_EXECUTION_CONTROL_STATES = new Set([
   "paused",
   "canceling",
 ]);
+const STOPPED_TASK_UPDATES_MESSAGE =
+  "Task updates stopped. Execution controls are unavailable. Close NamiSync to request cancellation.";
 
 function executionControlMessage(state) {
   switch (state) {
@@ -384,6 +388,7 @@ function adoptTask(summary) {
       error: null,
       label: `Task ${nextTaskNumber}`,
       stopDrain: null,
+      drainUnavailable: false,
       form: null,
       setupRevision: 0,
       review: null,
@@ -394,6 +399,7 @@ function adoptTask(summary) {
       executionAttempt: null,
       executionControlState: "running",
       executionControlRevision: 0,
+      executionControlAttempt: null,
       executionResult: null,
       executionStartedAt: null,
       executionEndedAt: null,
@@ -406,6 +412,12 @@ function adoptTask(summary) {
     nextTaskNumber += 1;
     tasks.set(task.taskId, task);
   } else {
+    if (task.sessionId !== summary.session_id || summary.session_state !== "active") {
+      const controlAttempt = task.executionControlAttempt;
+      task.executionControlAttempt = null;
+      if (task.review !== null && controlAttempt !== null
+          && task.review.pending === controlAttempt.actionName) task.review.pending = null;
+    }
     if (
       task.sessionId !== null
       && summary.session_id !== null
@@ -447,13 +459,14 @@ function attachTaskDrain(task) {
     task.taskId,
     sessionId,
     (update, progressState) => acceptTaskUpdate(task, sessionId, update, progressState),
-    () => acceptTaskRefusal(task, sessionId),
+    (error) => acceptTaskRefusal(task, sessionId, error),
     {
       terminal: task.sessionState !== "active",
       sessionReleased: task.sessionReleased,
     },
     (_taskId, sessionId) => acceptTaskRelease(task, sessionId),
   );
+  task.drainUnavailable = false;
 }
 
 function acceptTaskUpdate(task, sessionId, update, progressState = null) {
@@ -478,6 +491,13 @@ function acceptTaskUpdate(task, sessionId, update, progressState = null) {
   ) {
     task.executionControlRevision += 1;
     task.executionControlState = update.event.body.state;
+    if (task.executionControlAttempt?.sessionId === sessionId) {
+      if (task.executionControlAttempt.pending) {
+        task.executionControlAttempt.message = executionControlMessage(task.executionControlState);
+      } else {
+        task.executionControlAttempt = null;
+      }
+    }
     if (task.executionStarted && task.review !== null) {
       task.review.message = executionControlMessage(task.executionControlState);
     }
@@ -487,6 +507,10 @@ function acceptTaskUpdate(task, sessionId, update, progressState = null) {
   if (update.update_type === "record") {
     taskMutationRevision += 1;
     task.executionControlRevision += 1;
+    const controlAttempt = task.executionControlAttempt;
+    task.executionControlAttempt = null;
+    if (task.review !== null && controlAttempt !== null
+        && task.review.pending === controlAttempt.actionName) task.review.pending = null;
     task.sessionState = update.record.state;
     if (update.record.kind === "sync-execution") {
       task.executionResult = update.record.result;
@@ -514,11 +538,23 @@ function acceptTaskUpdate(task, sessionId, update, progressState = null) {
   }
 }
 
-function acceptTaskRefusal(task, sessionId) {
+function acceptTaskRefusal(task, sessionId, error) {
   if (tasks.get(task.taskId) !== task || task.sessionId !== sessionId) {
     return;
   }
-  task.error = "Task updates stopped. Close can be retried.";
+  const drainStopped = task.sessionState === "active"
+    && !(error instanceof TerminalPresentationError)
+    && !(error instanceof TerminalSessionReleaseError);
+  if (drainStopped) task.drainUnavailable = true;
+  if (drainStopped && task.executionStarted) {
+    task.error = STOPPED_TASK_UPDATES_MESSAGE;
+    if (task.executionControlAttempt?.sessionId === sessionId) {
+      task.executionControlAttempt.message = STOPPED_TASK_UPDATES_MESSAGE;
+    }
+    if (task.review !== null) task.review.message = STOPPED_TASK_UPDATES_MESSAGE;
+  } else {
+    task.error = "Task updates stopped. Close can be retried.";
+  }
   task.closePending = false;
   renderTasks();
 }
@@ -1133,16 +1169,20 @@ async function loadPlanReview(task, force = false) {
       : summary.preflight_ready
         ? null
         : "Plan failed review. Inspect notices and create a fresh plan.";
+    const controlAttempt = task.executionControlAttempt?.sessionId === sessionId
+      ? task.executionControlAttempt : null;
     const retainedFollow = task.reviewSessionId === sessionId ? task.review?.follow ?? null : null;
     const eligibleFollow = summary.search_query === "" && summary.filters.length === 0
       && summary.sort_column === "path" && summary.sort_direction === "ascending";
     task.review = {
       summary,
       window,
-      pending: null,
+      pending: controlAttempt?.pending ? controlAttempt.actionName : null,
       queuedSearchQuery: null,
       highlightQueue: Promise.resolve(),
-      message,
+      message: task.drainUnavailable && task.sessionState === "active" && task.executionStarted
+        ? STOPPED_TASK_UPDATES_MESSAGE
+        : controlAttempt?.message ?? message,
       actionRevision: 0,
       windowRequestRevision: 0,
       windowRequestOffset: null,
@@ -1164,7 +1204,10 @@ async function loadPlanReview(task, force = false) {
     };
     task.reviewSessionId = sessionId;
     task.executionWindowDirty = task.executionWindowDirtyRevision !== dirtyRevision;
-    task.error = null;
+    task.error = task.drainUnavailable
+      ? task.sessionState === "active" && task.executionStarted
+        ? STOPPED_TASK_UPDATES_MESSAGE : "Task updates stopped. Close can be retried."
+      : null;
   } catch (_error) {
     if (
       tasks.get(task.taskId) === task && task.reviewRevision === request
@@ -1634,23 +1677,31 @@ async function controlReviewedExecution(review, actionName) {
   if (
     task === null || review.pending !== null || !task.executionStarted
     || task.sessionState !== "active" || task.sessionId === null
+    || task.reviewSessionId !== task.sessionId
+    || task.drainUnavailable || task.executionControlAttempt?.pending
   ) return;
-  const action = ++review.actionRevision;
+  review.actionRevision += 1;
   const sessionId = task.sessionId;
   const controlRevision = task.executionControlRevision;
   const controlState = task.executionControlState;
+  const attempt = {
+    sessionId,
+    actionName,
+    pending: true,
+    message: `${actionName[0].toUpperCase()}${actionName.slice(1)} requested…`,
+  };
+  task.executionControlAttempt = attempt;
   if (actionName === "pause" || actionName === "resume") {
     task.progressPresentation = rebaseProgressSampling(task.progressPresentation);
   }
   review.pending = actionName;
-  review.message = `${actionName[0].toUpperCase()}${actionName.slice(1)} requested…`;
+  review.message = attempt.message;
   renderTasks();
+  const stillOwned = () => tasks.get(task.taskId) === task
+    && task.sessionId === sessionId && task.executionControlAttempt === attempt;
   try {
     const result = await controlExecution(task.taskId, sessionId, actionName);
-    if (
-      retainedReviewTask(review) !== task || review.actionRevision !== action
-      || task.sessionId !== sessionId || task.sessionState !== "active"
-    ) return;
+    if (!stillOwned() || task.sessionState !== "active" || task.drainUnavailable) return;
     if (
       task.executionControlRevision === controlRevision
       || task.executionControlState === controlState
@@ -1658,28 +1709,27 @@ async function controlReviewedExecution(review, actionName) {
       if (result.accepted && ACTIVE_EXECUTION_CONTROL_STATES.has(result.after)) {
         task.executionControlRevision += 1;
         task.executionControlState = result.after;
-        review.message = executionControlMessage(result.after);
+        attempt.message = executionControlMessage(result.after);
       } else {
-        review.message = result.detail || `The ${actionName} request was not accepted.`;
+        attempt.message = result.detail || `The ${actionName} request was not accepted.`;
       }
+      if (task.review !== null) task.review.message = attempt.message;
     }
   } catch (_error) {
     if (
-      retainedReviewTask(review) === task && review.actionRevision === action
-      && task.sessionId === sessionId && task.sessionState === "active"
+      stillOwned() && task.sessionState === "active" && !task.drainUnavailable
       && (
         task.executionControlRevision === controlRevision
         || task.executionControlState === controlState
       )
     ) {
-      review.message = `${actionName[0].toUpperCase()}${actionName.slice(1)} uncertain. Follow live status.`;
+      attempt.message = `${actionName[0].toUpperCase()}${actionName.slice(1)} uncertain. Follow live status.`;
+      if (task.review !== null) task.review.message = attempt.message;
     }
   } finally {
-    if (
-      retainedReviewTask(review) === task && review.actionRevision === action
-      && task.sessionId === sessionId
-    ) {
-      review.pending = null;
+    if (stillOwned()) {
+      attempt.pending = false;
+      if (task.review?.pending === actionName) task.review.pending = null;
       renderTasks();
     }
   }

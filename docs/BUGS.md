@@ -938,6 +938,24 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Application task lifecycle
 
+- MODERATE - FIXED (2026-09-24). Observation-loss state conflation. After task
+  updates stopped, execution controls remained enabled and a locally rejected
+  click reported an uncertain request despite dispatching nothing. Cause: drain
+  loss only set temporary error text, leaving control availability unchanged.
+  A persistent task flag now disables controls and guards stale callbacks while
+  retaining last-known execution truth. Production callback/renderer probes
+  cover zero dispatch and review refresh. App-close guidance requests cancellation;
+  it does not promise completion, and task Close can still await missing delivery.
+
+- MODERATE - FIXED (2026-09-24). Presentation-bound action ownership. Replacing
+  an execution review during Pause/Resume/Cancel lost its pending state and later
+  receipt, permitting duplicate requests and hiding refusals. Cause: control
+  ownership lived on the replaced review object. Task/session-owned attempts now
+  preserve pending and relevant result feedback across refresh, reject obsolete
+  replies and guard duplicate dispatch. Production-module interleavings cover
+  accepted, refused and uncertain replies plus authoritative state, terminal
+  and session changes; ordinary byte progress does not erase a refusal.
+
 - MODERATE - FIXED (2026-09-14). Incomplete terminal-record discriminant.
   An execution could finish Refused while its task still appeared active and could
   not release. Cause: native and browser task-record validators retained older

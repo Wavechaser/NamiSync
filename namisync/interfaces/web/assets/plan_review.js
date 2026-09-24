@@ -1275,6 +1275,8 @@ export function createPlanReviewPanel(callbacks) {
         && scopeSelected > 0 && scopeSelected < scopeSelectable;
     }
     const activeExecution = task.executionStarted && task.sessionState === "active";
+    const controlUnavailable = task.drainUnavailable
+      || task.reviewSessionId !== task.sessionId;
     const retryExecution = task.executionAttempt?.state === "uncertain";
     execute.hidden = review.summary.selection_state !== "reviewing";
     updateText(execute, retryExecution ? "Retry execute" : "Execute");
@@ -1285,9 +1287,12 @@ export function createPlanReviewPanel(callbacks) {
     controls.hidden = !activeExecution;
     pause.hidden = task.executionControlState === "paused";
     resume.hidden = task.executionControlState !== "paused";
-    pause.disabled = review.pending !== null || task.executionControlState !== "running";
-    resume.disabled = review.pending !== null || task.executionControlState !== "paused";
-    cancel.disabled = review.pending !== null || task.executionControlState === "canceling";
+    pause.disabled = review.pending !== null || controlUnavailable
+      || task.executionControlState !== "running";
+    resume.disabled = review.pending !== null || controlUnavailable
+      || task.executionControlState !== "paused";
+    cancel.disabled = review.pending !== null || controlUnavailable
+      || task.executionControlState === "canceling";
     updateText(status, review.message ?? "");
     status.title = review.message ?? "";
     status.hidden = !review.message;

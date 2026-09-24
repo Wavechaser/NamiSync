@@ -27,6 +27,18 @@ and remembered locations, bounded Plan review/selection/sorting and same-task
 execution with live controls and bounded live/retained result review. Inventory review and beta
 packaging remain open.
 
+#### Preserve execution controls across review and drain changes (2026-09-24)
+
+- Keep control attempts and their feedback with the task/session across review
+  replacement, preventing duplicate requests and rejecting obsolete replies.
+- Disable controls after active updates stop, including during review loading.
+  Preserve last-known execution truth and existing terminal cleanup guidance;
+  closing NamiSync requests cancellation without promising completion.
+- Verification: three focused checks, 33 installed GUI tests, 5,405 ordinary
+  tests (five skips), 12 import contracts and independent review passed. Fresh
+  U acceptance completed all 78 attempts: worst cold 10.2 ms, warm p95 68.8 ms
+  and warm maximum 70.4 ms, within unchanged budgets.
+
 #### Contain frontend probe failures automatically (2026-09-24)
 
 - Route ordinary frontend Node probes through the existing prelaunch Windows Job

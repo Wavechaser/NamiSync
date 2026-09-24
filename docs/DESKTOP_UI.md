@@ -1534,7 +1534,19 @@ responses cannot replace current-generation state or steal a later selection.
 An accepted pause renders **Pausing…** until custody actually reaches
 **Paused**; repeat pause/resume is disabled during the drain and cancellation
 remains available. Terminal presentation releases only that exact session while
-review artifacts remain. Closing a live task renders
+review artifacts remain.
+
+Execution-control attempts belong to the task and session across review refreshes.
+A replacement review retains pending and relevant accepted/refused/uncertain
+feedback, without allowing a duplicate request. New authoritative control state,
+terminal or replacement session wins over obsolete replies; ordinary byte-progress
+ticks do not erase a refusal. If task updates stop, disable Pause/Resume/Cancel
+and report known control unavailability without dispatching. Keep last-known
+execution truth: lost updates are not proof that work stopped. Direct the user
+to close NamiSync to request cancellation, without promising completed shutdown,
+reconnection or resumability. Task Close may remain pending without terminal delivery.
+
+Closing a live task renders
 **Closing…**, immediately requests best-effort cooperative cancellation, and
 stays visible until cancellation settlement and resource release permit close.
 An incomplete close remains actionable through close/shutdown recovery; this
