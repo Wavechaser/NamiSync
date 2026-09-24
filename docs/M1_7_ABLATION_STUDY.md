@@ -6,7 +6,7 @@ Retain this completed study for possible work after M1-8 closes. Do not revisit
 or implement its benchmark capability retirements during M1-8; R2 preserves
 historical dependencies and its fixed acceptance. Resumption requires the user.
 Current functional-test items adopted into R1 are owned by
-[M1_PLAN](M1_PLAN.md#m1-8-r1--functional-witness-consolidation-and-ablation).
+[M1_PLAN](obsolete/M1_8_DELIVERY.md#m1-8-r1--functional-witness-consolidation-and-ablation).
 
 ## Completed reassessment — test and evidence machinery (2026-09-17)
 

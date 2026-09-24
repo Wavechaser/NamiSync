@@ -1636,7 +1636,7 @@ summed into an invented total.
 The default/minimum windows remain 1280×800/1024×640; expansion can lengthen the
 card with bounded scrolling. Fine visual tuning follows integration closure.
 
-[M1_PLAN](M1_PLAN.md#scope-and-decisions) owns R0 delivery status and its finite
+[M1_PLAN](M1_PLAN.md#m1-8-execution-review-closure) owns M1-8 delivery status and its finite
 acceptance. The superseded `76f9281` allocation and its rejected layout evidence
 are historical in [the recovery archive](obsolete/M1_8_U_RECOVERY.md).
 

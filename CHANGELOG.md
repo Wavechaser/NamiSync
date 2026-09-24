@@ -27,6 +27,18 @@ and remembered locations, bounded Plan review/selection/sorting and same-task
 execution with live controls and bounded live/retained result review. Inventory review and beta
 packaging remain open.
 
+#### Close M1-8 execution review and integration (2026-09-24)
+
+- Condense the verified R0–R2 series and recovery correction into the six-outcome
+  acceptance ledger; archive the detailed register without dropping future M1
+  or release obligations. Filter/Search and the reduction study remain deferred.
+- Bind the non-squash milestone1 merge to the accepted tree and exact physical
+  source/package/artifact identity. The integration receipt is the terminal
+  closure record, with independent review of the complete P2-to-final series.
+- Preserve recovery refs, dirty detached-worktree files and the complete task
+  evidence archive before removing only accounted spare branches/worktrees.
+  Unrelated GUI recovery refs and all stashes remain untouched.
+
 #### Recover task updates and pending Close (2026-09-24)
 
 - Retain a suspended observation drain and offer Retry updates on the existing
