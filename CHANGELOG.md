@@ -29,6 +29,13 @@ packaging remain open.
 
 #### Isolate and mitigate the WCG shadow halo (2026-09-24)
 
+- Reviewed `c637025` native DisplayConfig handling against Microsoft API
+  definitions, appearance-v3 consumers, shadow selectors and lifecycle tests;
+  no production/test correction identified (GUI-WR1). All 165 focused checks
+  passed. Three installed gallery checks passed initially; the fourth passed
+  unchanged in isolation after a dark minimum-window clipping failure. Both
+  attempts are retained in `build/wcg-review-20260924/`; the current display
+  reports both HDR and Advanced Color, not a WCG-only witness.
 - Attributed the deferred dark flyout halo to Windows DWM Advanced Color
   composition of translucent window pixels. FP16 Desktop Duplication captures,
   model fits and a raw Win32 probe reproduce it without WebView2 or Mica; 8-bit

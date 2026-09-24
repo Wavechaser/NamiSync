@@ -116,6 +116,33 @@ or other renderer flags, light-theme or card-level changes, pre-distorted
 tokens, removing the HDR media rule. Stops: any change to Mica/opaque material
 selection, surface-safety settlement or command/readiness authority.
 
+### GUI-WR1 mitigation review (2026-09-24)
+
+User-authorized review of `c637025` against `6c00ec7`, limited to its native
+Advanced Color observation, appearance-v3 producer/receiver, shadow selectors,
+direct test/helper consumers and GUI-W1 documentation. Preserve material and
+surface-safety decisions, readiness authority, light-theme shadows and keyboard
+focus. No new GUI features, compositor fixes or unrelated harness cleanup.
+
+| ID | Accepted outcome | Named verification | Status |
+| --- | --- | --- | --- |
+| GUI-WR1 | Review the GUI-W1 mechanism and consumer migration; correct concrete in-bound defects if found, with a reproducer and finite correction population recorded before implementation. | Independent native/API review; source/consumer inspection; 165 focused checks; three installed gallery passes and the fourth passing unchanged in isolation; final diff review. | Complete; no production/test correction identified |
+
+One atomic reviewed commit per necessary correction; a review-only result changes
+only this register, CHANGELOG and HANDOFF. GUI-W1's stops remain binding; a
+changed ownership, safety or verification boundary requires adjudication. The
+regression study compares the old HDR selectors with the new WCG selectors,
+traces envelope readers and native subscription cleanup, and checks retained
+failure behavior. Historical GUI-D8–D10 diagnostics remain evidence, not a new
+acceptance gate or authority to rerun compositor experiments.
+
+Evidence: `build/wcg-review-20260924/` retains both installed attempts and
+source/wheel/install identity records. The first gallery matrix attempt failed
+the unchanged dark minimum-window clipping detector; the isolated rerun passed
+without changed assertions. Both Advanced Color and HDR were active, so this
+run does not isolate the WCG-only selector. GUI-W1's prior WCG-only and live
+monitor-move evidence remains separate. No new compositor-health claim is made.
+
 DOC-2 remains **pending, outside this M1-8 batch**: the historical branch
 reconciliation proposal was to remove exactly four superseded compact-plan
 commits from `milestone1`, preserve the old tip and open a draft PR from

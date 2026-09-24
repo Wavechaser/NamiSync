@@ -1,33 +1,36 @@
-# Latest session — WCG shadow halo isolation and GUI-W1 mitigation
+# Latest session — GUI-WR1 WCG mitigation review
 
-The deferred dark flyout halo (BUGS, desktop material composition) is a
-Windows DWM Advanced Color defect in composing per-pixel-alpha window content.
-GUI-D8–D10 evidence and reproducers are in `build/gui-tuning/halo-10bit/`
-(its AGENTS.md maps scripts, runs and the D5/D6→D8/D9 renumbering). Key
-method: 8-bit GDI screenshots show DWM's exact legacy composition and cannot
-see the halo; `transfer_capture.py --fp16 0` grabs scRGB FP16 through ffmpeg
-`ddagrab` and does. `native_probe.py --backdrop none --grid` reproduces it
-without WebView2 or Mica. scRGB-linear Chromium output was tried and rejected.
+Reviewed `c637025` against `6c00ec7`: native Advanced Color detection and
+subscriptions, appearance-v3 publication/receiver, shadow selectors and direct
+test/helper consumers. Independent native/API review found no concrete defect;
+no production or test changes were needed. Microsoft DisplayConfig definitions
+match the ctypes layouts and flags. The documented topology-read failure path
+keeps the prior value until another observation; no new retry policy was added.
+The remaining appearance-v2 string in `test_host.py` intentionally exercises
+non-readiness rejection and does not require migration.
 
-GUI-W1 (M1_PLAN) mitigates, not fixes: `appearance.py` reads the window
-display's Advanced Color state through DisplayConfig, refreshes it on display
-settings, monitor changes and activation without reapplying material, and
-publishes `advancedColor` in `namisync.appearance.v3`; `components.css` drops
-dark flyout shadows under `data-advanced-color="true"`, mirroring the HDR rule.
-The bug entry stays DEFERRED.
+Verification: 165 focused materials/frontend/token tests passed. The initial
+sandboxed run had 149 passes and 16 temporary-directory permission errors;
+the rerun with filesystem access passed all 165. Installed gallery: three
+checks passed initially; the matrix failed
+`minimum-folded-empty.no_horizontal_control_clipping` in dark mode. Its isolated
+unchanged rerun passed. Raw reports also mark clipping false in the other three
+dark minimum cases on the first attempt. The detector and Plan geometry are
+unchanged by `c637025`; no WCG causal link or deterministic defect was established.
+Do not erase that failed attempt or infer a full clean first run.
 
-Verification: 165 focused appearance/frontend/token checks; all 4 installed
-gallery headed tests on this LG WCG display, whose evidence records
-`advanced_color: true`, dark popup shadow `none` and light shadow retained;
-a live monitor move flipped the page flag LG true → Dell false → LG true
-(`transfer-w1-dataset/`); 1878 interfaces-department passes; 12 import
-contracts. Two `test_plan_review_scale.py` probes call bare `node` from PATH
-rather than `NAMISYNC_TEST_NODE`, so the department needs the codex Node
-runtime on PATH as well
-(`C:\Users\Spectrum\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin`).
-That harness inconsistency is pre-existing and not fixed here.
+`build/wcg-review-20260924/` retains both gallery attempts and wheel/install
+identity records; `review.md` records commands and review dispositions. Reports
+show `advanced_color: true`, `hdr: true`, dark popup shadow `none`, and light
+shadow retained. This session therefore does not isolate the WCG-only selector
+or verify live ACM toggling. Prior WCG-only and LG → Dell → LG move evidence
+remains in `build/gui-tuning/halo-10bit/transfer-w1-dataset/`; GUI-D8–D10 raw
+composition evidence and reproducer remain in that parent directory.
 
-Not verified: an actual HDR session and live ACM toggling with the app open
-(activation refresh is the fallback if Windows sends no display-change event).
-Filter/Search, theme changes, M1-7 reduction-study resumption, M1-9, push and
-PR remain excluded; DOC-2 remains pending.
+The Windows composition bug remains DEFERRED and mitigated, not fixed.
+Only review records changed; no public contract or consumer migration was
+needed. No interface-department rerun was required for these documentation-only
+edits. Preserve Mica/material, readiness and safety authority. Filter/Search,
+new GUI changes, M1-7 study resumption, M1-9, push and PR remain excluded;
+DOC-2 remains pending. If the minimum-layout failure recurs, use the preserved
+reports to investigate that mechanism separately without weakening its gate.
