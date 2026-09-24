@@ -1027,6 +1027,20 @@ repeated machinery while preserving operational safety and boundary contracts.
 Safety, settlement, authority, and measurement work made high-risk release
 claims explicit, independently reviewable, and regression-backed.
 
+#### Study post-M1-8 mechanism, test and workflow reduction (2026-09-25)
+
+- Record a read-only, repository-wide ablation study at `549f3b4` in
+  POST_M1_8_ABLATION: behavior-to-mechanism map, structural proposals S1–S5,
+  local reductions L1–L9, test, evidence and workflow recommendations, a retain
+  list and pending user decisions. No implementation is authorized.
+- Measure the cost census from Git, BUGS and active documents; interface and
+  dispatcher/history entries are 47% of recorded bugs, and product commits edit
+  5.2 documents on average.
+- In a disposable clone, comment-only edits to 12 product files and three
+  behavior-preserving refactors broke no behavioral test; the only new failures
+  were a literal CSS pin and a lexical scanner false positive. Evidence is
+  retained in `build/post-m1-8-ablation-20260925/`.
+
 #### Preserve move detection across repeated renames (2026-09-25)
 
 - Stop treating retained inventory paths and link counts as current aliases in

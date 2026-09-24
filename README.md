@@ -229,6 +229,8 @@ never hides the other result axes in rendered output.
   rebased recommendations and subsequent refinement dispositions.
 - [M1-7 ablation study](docs/M1_7_ABLATION_STUDY.md) — retained reduction proposals;
   revisiting remains separate work requiring explicit user resumption.
+- [Post-M1-8 ablation study](docs/POST_M1_8_ABLATION.md) — repository-wide
+  mechanism, test and workflow reduction proposals; decisions pending.
 - [Test refinement register](docs/TEST_REFINEMENT.md) — bounded implementation
   outcomes and verification of retained test guarantees.
 - [Production reduction register](docs/PRODUCTION_REDUCTION.md) — bounded
