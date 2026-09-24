@@ -387,24 +387,63 @@ order, for exactly 78 attempts. Each cold child contributes one sample and must
 finish within 50 ms. Each warm child contributes six samples; nearest-rank p95
 must be at most 100 ms and the maximum at most 250 ms.
 
-Keep the compact contract's fixtures, warmup, endpoints, fresh unused-Plan
+Keep the compact contract's fixtures, equivalent untimed warmup, fresh unused-Plan
 population and installed headed path. The scoped rootless adapter retains
 120,000 projection nodes, 119,999 public rows and independently checks the
-first Previous paths group. For selection-click only, it may adapt the one
-legacy `initialWindow.total !== 120000` check to 119999 after proving exactly
-one original site and byte-for-byte identity everywhere else; it never edits
-the protected script or rewrites an observation.
+first Previous paths group. The approved U-v2 observation contract supersedes
+pending-only feedback for the seven transient cold cases; historical M1-7/P2
+contracts and observations remain unchanged.
+
+At the first frame after an eligible connected control is clicked, require either
+action-specific pending feedback or an exact successful typed outcome already
+reflected in truthful action-correlated UI. Retain eventual exact settlement in
+both cases. Empty pending, refusal, uncertainty, no dispatch or an unrelated state
+never counts as success. Valid authoritative progress may advance beyond the
+reply's immediate state: Pause initially returns pausing, Resume pending and
+Cancel canceling. Do not force those intermediate states to linger. Destructive
+Execute keeps its exact modal/snapshot endpoint; Confirm preserves its modal
+safety requirements and proves the actual admission outcome separately.
+
+Selection and control warmups prove an equivalent successful action, untimed.
+Start observations bind the outgoing command to the expected plan request and
+its transport-correlated reply to the current task/session. The reply carries
+an execution run ID; the task summary retains its plan ID.
+Warm control correctness retains accepted/code/before/after and identity facts
+for independent validation, rather than treating session equality as acceptance.
+The U adapter uses guarded replacements and one scoped JavaScript probe, with
+exact source binding and byte identity outside the declared sites. The historical
+producer remains untouched. Keep click-to-first-frame timing and all budgets;
+no extra frame wait, post-frame repair or delayed product reply is permitted.
+Failure details contain bounded scalar operands, never DOM graphs or unbounded
+event histories. Failed observations remain failures, not acceptance samples.
 
 Before launch, freeze and independently validate the exact source, CSS,
 instrument, adapter, checker, control, wheel, installed-runtime and profile
 bindings. Durably publish the complete attempt plan and current launch state;
 stop at the first failure and refuse overwrite, restart or favorable retry.
+Publish the existing immutable failure packet before updating the mutable index,
+so a refused index replacement cannot suppress that packet. External monitoring
+must not hold the index open while its writer replaces it on Windows.
 Raw receipts and derived results have separate validators for exact identities,
 order, samples, hashes and budgets. Positive and corruption controls must reach
 the real supplemental byte and Git checks. Component construction, general
 window/sort/selection and process-memory observations remain excluded only when
 the final diff proves their measured code and retained graphs unchanged. Actual
 collection occurs only after final source/control review.
+
+The active U adapter is `tests/m1_8_execution_ui_benchmark.py`; its independent
+checker and focused controls are `_m1_8_execution_ui_scale.py` and
+`test_m1_8_execution_ui_scale.py` under `tests/interfaces/web/`;
+`tests/assets/m1_8_execution_ui_probe.mjs` owns its shared observation mechanics
+and is frozen as instrument source. Reuse unchanged
+P2 rootless settlement and historical profile helpers; keep U metric membership,
+cold/warm policy and attempt custody here. The three versioned artifacts are
+`m1_8_execution_ui_{authority,receipts,result}.json` in that same test directory.
+Acceptance remains pending until the fixed collection and both source-binding
+stages pass: full workspace/raw validation against the staged candidate before
+commit, then clean-HEAD validation including the raw authority binding afterward.
+Changes to measured product, instrument, checker, controls, package or native
+profile reopen the affected evidence; unchanged product alone is insufficient.
 
 ### Existing complete-collection procedure
 
@@ -590,8 +629,9 @@ view and its connected checkbox. Warmup must publish pending and settle to an
 advanced authoritative selection revision with that same row unchecked; the
 measured action requeries that row. Public summary/window reads are untimed
 witnesses, not asynchronous completion events for the synchronous mutation path.
-The pending-frame criterion is unchanged; failure after verified eligibility is
-a stop for review, not permission to delay product receipts or weaken the test.
+The historical M1-7 pending-frame criterion is unchanged; failure after verified
+eligibility is a stop for review, not permission to delay product receipts or
+weaken that test. Scoped U uses the separately approved observation contract above.
 
 Retain each checked child receipt atomically under a unique ignored run evidence
 directory. A separate atomic index binds its frozen authority, case, planned

@@ -321,7 +321,8 @@ metrics: eight cold interaction and five warm receipt cases, 13 readiness plus
 65 fresh measurement children = 78 predeclared attempts. Cold maximum <=50ms;
 warm nearest-rank p95 <=100ms and maximum <=250ms, six samples per child.
 Keep current fixture populations, rootless 119,999 public rows/120,000 nodes,
-endpoints, native profile and source/wheel/install/runtime provenance. This is
+native profile and source/wheel/install/runtime provenance. UO-1–3 below own the
+approved scoped feedback/receipt evidence changes; all other endpoints stay fixed. This is
 Tier-2 performance acceptance, not a new containment or whole-memory claim.
 Independently validate raw receipts, verdict and committed-source bindings.
 U has no accepted performance artifact to grandfather. Its 13 metrics include
@@ -346,7 +347,7 @@ push, PR, release or next milestone follows automatically.
 | --- | --- | --- | --- | --- |
 | M1-8-R0 | Usable execution navigation, phase status/progress and folded details; B1–B6 resolved | Separate execution authorization; accepted D1–D3, verified P2 and protected snapshot | A1–A4; focused and ordinary/import/full installed gates | complete; isolated reviewed commit |
 | M1-8-R1 | Consolidated functional witnesses preserving R0's accepted behavior | Accepted R0 | Assertion-disposition map; affected tests and A1–A4 evidence identity | complete at `0fc2f5d`; approved corrections precede R2 |
-| M1-8-R2 | One maintainable active U measurement path and accepted fixed-profile evidence | R1; same final product/installed bytes | A5; finite checker controls, 78 attempts and independent terminal validation | pending |
+| M1-8-R2 | One maintainable active U measurement path and accepted fixed-profile evidence | R1; same final product/installed bytes | A5; finite checker controls, 78 attempts and independent terminal validation | active: approved U observer correction commit, then fresh complete collection |
 | M1-8-R3 | Reviewed, fully accounted M1-8 integration and closure | R1/R2 | A6 and overall final sweep | pending |
 
 ## Detailed checkpoints
@@ -560,6 +561,109 @@ the 2026-09-24 authorization now resumes corrections and R2.
 
 ### M1-8-R2 — quantitative path and fixed acceptance
 
+**Start binding (2026-09-24).** Base `9e5b080`, with C1–C3 and final installed
+functional evidence in `build/post-r1-20260924/`. Restore only the three U Python
+owners from `4642491` (unchanged through `9391a62`), never recovery ancestry.
+Their test module's direct consumer `tests/_departments.py` is included in this
+finite population. Create the three U JSONs from new observations, not recovery
+artifacts. Design input `build/post-r1-20260924/r2-design.md` is refreshed against
+this base; update PRESENTATION's existing scoped U section without changing
+historical P2/M1-7 authorities. Product changes since R1 concern action
+readiness and observer lifetime; no construction/order/visible-sequence
+representation was changed. Rebind final U authority to those product bytes.
+Temporary scripts, failed and accepted raw evidence belong in
+`build/r2-20260924/`, named by stage/run and retained without automatic cleanup.
+Settle collector/checker/control review before collection; root serializes
+shared gates. The accepted gate, commit boundary and stop rules below govern.
+
+**Run-01 disposition / corrections approved.** Focused U+P2 75, ordinary 5,375
+(five skips) and 12 import contracts passed; the unchanged installed product
+and functional drivers reuse the correction's 33 headed passes after physical
+identity validation. Native freeze/full workspace validation passed. Collection
+stopped at readiness attempt 2 after one accepted child; no measurements exist.
+`build/r2-20260924/failure-assessment.json` binds the exact failed evidence.
+
+| Mechanism | Consequence and owner | Bounded proposal; preserved guarantees |
+| --- | --- | --- |
+| Legacy synchronous warmup expectation | Selection awaits the highlight queue before publishing pending; the legacy warmup asserts immediately after click. All 13 branches were inspected; this is the only immediate pending assertion. | Approved extension: U-only guarded untimed next-frame wait at selection warmup. Keep the existing rootless literal substitution, every measured endpoint/timer, fixture, sample and budget; historical P2/M1-7/product bytes stay frozen. Update exact-byte controls and owning docs. |
+| Failure packet ordered after mutable index publication | Windows refused replacing the index, leaving published state launching and the complete failed state in its temporary file; child log and parent traceback survive. A normal Python reader reproduces WinError 5, but the original conflicting handle is unknown. | Write the existing immutable failed packet before replacing the index; prove that index refusal cannot suppress it. No retry, alternate verdict or new protocol. Do not open the mutable index while a writer runs; inspect completed artifacts afterward. |
+
+The user approved both corrections and a fresh full run on 2026-09-24, before
+any recovery branch/commit was created. The finite U shim now permits the exact
+rootless literal substitution plus this guarded untimed warmup frame wait.
+Settle/review both corrections, refreeze affected inputs and perform a fresh
+whole 78-attempt collection. Run-01 remains failed, never resumed/replaced.
+
+**Run-02 stop.** The approved corrections passed 78 focused U+P2 controls,
+5,378 ordinary tests (five skips), independent review and fresh full workspace
+freeze. Unchanged imports and installed-functional evidence remain valid.
+Collection accepted all 13 readiness children and 27 measurement children, then
+attempt 41 (`ui_control_pause_click_feedback`) failed the pending-frame guard.
+Its failed packet, index, log and 52 frozen source snapshots agree; see
+`build/r2-20260924/failure-assessment-02.json`. Peak Job memory was 1,403,457,536
+bytes under 8 GiB; no timeout or allocation failure occurred. No U verdict,
+promoted artifacts or terminal staged/HEAD acceptance exists.
+
+The recurrence review groups both pending-observation failures under the shared
+temporal-feedback assumption, with failure-packet/index ordering a separate
+mechanism. Seven cold cases inspect transient pending/busy state at a frame;
+destructive-start checks its modal, and five warm cases measure typed receipts.
+The shared owner is the protected feedback contract/observer plus app callback
+ordering. Control clears pending after its awaited reply; a reply before RAF
+is plausible, but missing dispatch or a task-state race is not excluded by the
+failed log. Do not claim a proven fast-reply cause or environmental transient.
+
+AGENTS recurrence and PRESENTATION's pending-frame stop require review before
+another fix or run. Preserve the eight task paths on disposable
+`codex/wip-20260924-1233-r2`, based on `9e5b080`; exact recovery identity is in
+`build/r2-20260924/recovery.json`. Never merge/cherry-pick this WIP as-is.
+**U observer correction approved (2026-09-24).** The user authorized the relevant
+U fixes in one commit, then continuation of R2. The recurrence review is complete:
+`build/cold-feedback-20260924/REPORT.md` records native fast-reply reproductions,
+Opus 5.5 review and bounded controls. Run-01 sampled before pending publication;
+run-02 exposed a possible sample after settlement. The exact attempt-41 cause
+remains unknown. This finite migration replaces the former two-substitution limit
+only within U; historical inputs and both failed collections remain immutable.
+
+| Id | Accepted outcome | Verification / status |
+| --- | --- | --- |
+| UO-1 | All seven cold transient observers accept first-frame action-specific pending or an exact successful reply already reflected truthfully in the UI; retain click-to-first-frame timing and eventual exact settlement. Selection/control warmups prove an equivalent successful action. | Complete: before/after-frame and negative controls, current-task/header identity, 13 native paths. Pending-free alone never passes. |
+| UO-2 | Bind outgoing start to the expected plan, transport-correlate its typed reply and verify the current task/session; retain typed warm-control acceptance/transition facts for independent U validation. | Complete: wrong plan, transport/session mismatch, independent second start, refusal and wrong transition controls; correlated replay and authoritative later progress pass. |
+| UO-3 | Version the scoped U evidence and retain bounded failure operands without DOM graphs; preserve attempt custody and source binding. | Complete: 101 focused U/P2, 5,401 ordinary (five skips), 12 imports, physical package identity and independent review. Quantitative R2 acceptance remains separate. |
+
+Correction evidence is `build/u-observer-20260924/`: frozen source record
+`settled-inputs-03.json`, `native-03` (13 passes, 1,331,040,256-byte peak),
+`ordinary-01`, `imports-01`, installed identity and independent review.
+Earlier native diagnostics are retained; native-01 found the historical child
+validator seam and native-02 found the plan/run ID distinction. No failed sample
+was promoted. The unchanged 33 general GUI passes are reused by verified product,
+wheel/install and driver identity; the U native paths were rerun separately.
+
+**Population and commit boundary.** Rebuild useful `b4ea0eb` content on
+`codex/m1-8-r2` from reviewed `9e5b080`, without WIP ancestry. The correction
+commit includes the three restored U Python owners, their existing department
+registration, new `tests/assets/m1_8_execution_ui_probe.mjs` (frozen as instrument
+source), and matching PRESENTATION/M1_PLAN/HANDOFF/CHANGELOG edits. No other code
+owner changes. A subsequent R2 commit contains the three new acceptance JSONs
+and final evidence/docs, after the fresh complete run and staged/HEAD checks.
+
+**Preserved guarantees and regression study.** Keep 13 metric IDs, 13 readiness
+plus 65 measurement children, full fixtures, native path and 50/100/250 ms budgets.
+Destructive Execute remains its separate exact-modal case. Observe real action
+identity and accepted transitions, including Pause→pausing and Resume→pending;
+allow correlated authoritative later progress rather than forcing an intermediate
+state to linger. The checker must reject false positive receipts independently of
+producer Booleans. Use deterministic ordering controls for both reply/frame orders;
+native observations cannot promise to produce both orders on demand. Check the
+real affected paths before broad gates, then review/freeze before run-03.
+
+**Non-goals and stops.** No product delay/change, historical P2/M1-7 edits,
+filter/Search, reduction study or R3. Lost-drain feedback and review-replacement
+refusal handling are separately deferred product findings. Their false/no-op
+outcomes must not become successful U samples. Existing hard stops and recurrence
+rules remain; this declared finite observer migration is the approved review
+decision, not authority for unrelated fixes. Retain every failure; no favorable retry.
+
 **Objective.** Reduce the active U collector/checker maintenance burden and close
 the existing quantitative obligation without reopening historical machinery.
 
@@ -574,9 +678,9 @@ keep independent expected results and metric-specific cold/warm policy.
 P2/M1-7 files/artifacts remain frozen historical dependencies, not concurrent
 implementations to modernize in this batch. Identical historical source can
 remain for reproduction; removing every duplicated line is not a closure goal.
-Retain the bounded rootless string shim for this run rather than starting a
-benchmark-interface migration. Do not change readiness/sample counts, failure
-custody, metric membership, endpoints or budgets. Fix stale headed04 wrapper
+Retain guarded U-only adaptation rather than changing the historical benchmark
+interface. UO-1–3 above own the approved endpoint/evidence migration; do not change
+readiness/sample counts, failure custody, metric membership or budgets. Fix stale headed04 wrapper
 references and bind only R1's final installed candidate.
 
 **Acceptance criteria.** A5 passes on the final product/instrument/checker
@@ -588,7 +692,8 @@ controls. These are existing mechanisms, not a new malformed-field cross-product
 
 **Regression watchlist.** Shared helpers with different metric constants;
 producer/checker circularity; source or installed-byte drift; favorable retry;
-renamed artifacts losing history; selection shim altering more than its literal.
+renamed artifacts losing history; an adaptation changing bytes outside its
+declared U observer and evidence sites.
 Existing fixture/profile limits remain independent of sampled latency.
 
 **Tests and evidence.** Run the U scale test module and unchanged receipt-scale
@@ -614,8 +719,9 @@ frozen contract; inspect checker independence and failed-attempt accounting;
 verify actual physical bytes and final committed-source binding, not a mocked
 workspace. Confirm excluded component paths/retained graphs are unchanged.
 
-**Commit gate.** One `test(web): consolidate and validate execution review metrics`
-commit with source, tests, versioned U evidence and docs. Reconcile staged and
+**Commit gate.** The user-approved UO correction commit contains source, tests
+and matching docs. Follow it with `test(web): validate execution review metrics`
+for versioned U acceptance evidence and final docs. Reconcile staged and
 postcommit filtered/physical identities; do not edit measured source afterward.
 A failed collection remains failed and retains all attempts. Diagnose launch,
 transport and timing failures; absence of a timing sample alone does not prove

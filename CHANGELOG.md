@@ -27,6 +27,23 @@ and remembered locations, bounded Plan review/selection/sorting and same-task
 execution with live controls and bounded live/retained result review. Inventory review and beta
 packaging remain open.
 
+#### Correct U observers and continue M1-8-R2 consolidation (2026-09-24)
+
+- Restore the scoped U measurement owners, consolidate redundant controls and
+  add precommit staged-source/artifact validation; keep historical dependencies,
+  metrics, sample counts and budgets unchanged.
+- U-v2 observes pending or correlated truthful first-frame success, proves warmup
+  acceptance, binds start commands to their plan/transport/current session, and
+  independently validates typed warm-control outcomes. Historical sources and
+  product behavior remain unchanged.
+- Correction verification: 101 focused U/P2 and 5,401 ordinary tests passed
+  (five skips), all 13 native paths and 12 import contracts passed. Independent
+  review and physical installed-package identity support the retained 33 GUI passes.
+- Preserve failed quantitative runs 01/02 and early correction diagnostics.
+  The observer correction precedes fresh full R2 acceptance; no performance
+  verdict yet. Lost-drain feedback and review-replacement refusal handling remain
+  deferred product findings; filter/Search and the reduction study stay shelved.
+
 #### Correct retained Plan lifecycle and capture interpretation (2026-09-24)
 
 - Clear unavailable actions while a review loads; make the short native witness
