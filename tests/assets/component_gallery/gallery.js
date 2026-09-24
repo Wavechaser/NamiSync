@@ -3124,6 +3124,7 @@ window.addEventListener("unhandledrejection", (event) => {
         forced,
         reduced,
         hdr: matchMedia("(dynamic-range: high)").matches,
+        advanced_color: document.documentElement.dataset.advancedColor === "true",
       }),
       cosmetic: cosmeticEvidence,
       part_count: reportParts.length,

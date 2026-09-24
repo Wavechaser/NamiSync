@@ -373,6 +373,7 @@ def test_supplemental_node_appearance_receiver_accepts_latest_envelope() -> None
             "theme": "light",
             "highContrast": "false",
             "windowMaterial": "degraded",
+            "advancedColor": "true",
         },
         "properties": {
             "--color-accent-fill": "#123456",

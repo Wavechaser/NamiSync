@@ -93,11 +93,28 @@ not merge units; useful changes were rebuilt in `7cf4448`. The reported Optics
 refresh delay remains unprofiled; no cloud/path diagnosis was established.
 
 No rendering fix was established for the WCG shadow halo or intermittent
-disabled-label blur. Mica remains required; no workaround or compositor-health
-release gate was added. BUGS and DESKTOP_UI retain investigation boundaries and
-reopen evidence. Recent availability remains observation, never admission.
+disabled-label blur. Mica remains required and no compositor-health release gate
+was added. GUI-D8–D10 attributed the halo to Windows Advanced Color composition;
+GUI-W1 below adds a mitigation, not a fix. BUGS and DESKTOP_UI retain
+investigation boundaries and reopen evidence. Recent availability remains observation, never admission.
 The existing 48-pair bound, serial best effort, per-row options and exact
 uncertain retry remain active; clearing receipts does not close tasks.
+
+### GUI-W1 Advanced Color shadow mitigation (2026-09-24)
+
+User-activated after M1-8; it does not resume other excluded work. Evidence
+and diagnostics: [BUGS](BUGS.md#desktop-material-composition).
+
+| ID | Accepted outcome | Named verification | Status |
+| --- | --- | --- | --- |
+| GUI-W1 | While the window's current display has Windows Advanced Color active (SDR WCG or HDR), dark flyouts (dialogs other than keyboard-focused, menus, combobox popups) suppress CSS elevation shadows exactly as the existing dark HDR rule does. Native appearance reads the state for the window's monitor, refreshes it on display-setting changes, monitor changes and activation without reapplying material, and publishes it in the exact appearance envelope (v2 → v3). Read or observation failure keeps the prior value and degrades like other appearance observation. | Controller/fake-native publication, refresh, failure and close tests; page receiver probe for the v3 schema; token rule assertions; installed gallery report on this WCG display recording `advanced_color` and suppressed popup shadow; ordinary interface departments; import contracts; `git diff --check`. | Complete in the commit recording this row |
+
+Population: `appearance.py`, `appearance.js`, `components.css`; their tests,
+the appearance probe and the gallery evidence path; BUGS, DESKTOP_UI,
+FEATURES, CHANGELOG and HANDOFF. Non-goals: fixing the Windows defect, scRGB
+or other renderer flags, light-theme or card-level changes, pre-distorted
+tokens, removing the HDR media rule. Stops: any change to Mica/opaque material
+selection, surface-safety settlement or command/readiness authority.
 
 DOC-2 remains **pending, outside this M1-8 batch**: the historical branch
 reconciliation proposal was to remove exactly four superseded compact-plan

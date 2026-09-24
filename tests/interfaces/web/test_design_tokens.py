@@ -1440,6 +1440,16 @@ def test_sh_g_11_components_cover_controls_states_and_non_color_cues() -> None:
     assert ':root[data-theme="dark"] .nami-menu' in hdr_fallback
     assert ':root[data-theme="dark"] .nami-combobox__popup' in hdr_fallback
     assert "box-shadow: none;" in hdr_fallback
+    advanced_color = ':root[data-theme="dark"][data-advanced-color="true"]'
+    advanced_color_fallback = (
+        f"{advanced_color} .nami-dialog:not(:focus-visible),\n"
+        f"{advanced_color} .nami-menu,\n"
+        f"{advanced_color} .nami-combobox__popup {{\n"
+        "  box-shadow: none;\n"
+        "}"
+    )
+    assert source.count(advanced_color) == 3
+    assert advanced_color_fallback in source.replace("\r\n", "\n")
     assert ".nami-combobox__trigger:focus-visible" in source
     assert ".nami-combobox__trigger:focus:not(:focus-visible)" not in source
     assert not re.search(r"\.nami-combobox__trigger:focus\s*[,\{]", source)

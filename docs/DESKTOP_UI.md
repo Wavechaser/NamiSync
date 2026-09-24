@@ -517,16 +517,26 @@ matrix and the same modifier styles the two path Clear buttons.
 Elevated surfaces use a dedicated flyout boundary rather than the accessible
 control-stroke role: black 6% in Light and black 20% in Dark, with opaque
 Light/Dark stroke fallbacks. Dialogs and menus keep their ordinary black
-elevation shadows in SDR. On a high-dynamic-range display, a dark transparent
-WebView2/Mica composition suppresses those CSS shadows as a workaround for an
-observed bright perimeter halo; the subtle flyout boundary remains. A related
-SDR Advanced Color reproduction is tracked in
-[BUGS.md](BUGS.md#desktop-material-composition); its precise renderer cause is
-unconfirmed, and the current workaround remains HDR-only. The gallery's
-historical normal/opaque flyout labels do not currently isolate popup alpha:
-both fills are opaque. Its shadowless control remains useful. Dedicated
-GUI-D4 diagnostics instead vary receiver alpha and the individual shadow
-layers while retaining Mica; M1_PLAN records their findings and limits.
+elevation shadows on ordinary SDR displays. In Dark, dialogs other than a
+keyboard-focused one, menus and combobox popups drop those CSS shadows while
+the window's display composes in Windows Advanced Color: through
+`(dynamic-range: high)` for HDR, and through the native `data-advanced-color`
+flag for SDR WCG, which CSS media queries report as plain sRGB. The subtle
+flyout boundary remains. This mitigates, and does not fix, the Windows
+composition defect in [BUGS.md](BUGS.md#desktop-material-composition).
+
+That defect's evidence method: GDI/BitBlt screenshots show DWM's legacy 8-bit
+composition, which is exact and cannot see the halo. The GUI-D8–D10 diagnostics
+capture the scRGB desktop through Desktop Duplication FP16 (ffmpeg `ddagrab`),
+fit flat straight-alpha patches against sRGB-space, linear and linearized-
+premultiplied blends, and repeat the layout from a raw Win32 window writing exact
+premultiplied pixels. That raw window and a black-backdrop gray/alpha grid
+reproduce the error without WebView2 or Mica. `--force-color-profile=scrgb-linear`
+makes DWM's blend physically linear and removes the ring, but lightens every
+translucent token and renders HDR grayish, so it is not adopted. Light theme,
+cards and fills are unchanged; their small WCG deviation is accepted. The
+gallery's historical normal/opaque flyout labels do not isolate popup alpha
+(both fills are opaque); its shadowless control remains useful.
 
 Three file-list surface modules are deliberately inactive.
 `file_row.js` owns the shared row skeleton; `plan.js` exports only
@@ -734,10 +744,16 @@ the corresponding interaction is designed, rather than inventing 47 actions.
 
 Native appearance observes Windows light/dark/high-contrast state and live
 `UISettings` `Accent`, `AccentLight1`, `AccentLight2`, and `AccentDark1` values.
-The raw ramp stays native-side. The revisioned `namisync.appearance.v2`
-envelope publishes only `accentFill`, its 90% hover and 80% pressed values, and
-one contrast-selected foreground to packaged `appearance.js` through UI-thread
-`document_channel.py`; only its exact schema and fixed CSSOM sinks are valid.
+The raw ramp stays native-side. The revisioned `namisync.appearance.v3`
+envelope publishes only `accentFill`, its 90% hover and 80% pressed values, one
+contrast-selected foreground and the Boolean `advancedColor` of the window's
+current display to packaged `appearance.js` through UI-thread
+`document_channel.py`; only its exact schema and fixed CSSOM/dataset sinks are
+valid. `advancedColor` is read through DisplayConfig (24H2 active Advanced
+Color, else the original enabled bit) and refreshed on display-setting changes,
+monitor changes while moving and window activation. That refresh republishes
+only a changed value and never reapplies material; a read failure keeps the
+prior value.
 This internal document-envelope revision changes neither the persisted cosmetic
 value version nor the bridge request protocol.
 Observation subscribes before its mandatory initial read. Later native events

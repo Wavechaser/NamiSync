@@ -874,7 +874,7 @@ def _valid_complete_report(
         type(payload["mode"]) is str
         and payload["mode"] in _EXPECTED_MEDIA
         and (expected_mode is None or payload["mode"] == expected_mode)
-        and set(media) == {"dark", "forced", "reduced", "hdr"}
+        and set(media) == {"dark", "forced", "reduced", "hdr", "advanced_color"}
         and all(type(media[name]) is bool for name in media)
         and all(
             media[name] == expected

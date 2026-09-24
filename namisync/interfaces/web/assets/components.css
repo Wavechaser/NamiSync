@@ -476,6 +476,13 @@ body {
   }
 }
 
+/* SDR WCG is invisible to CSS media queries; native appearance reports it. */
+:root[data-theme="dark"][data-advanced-color="true"] .nami-dialog:not(:focus-visible),
+:root[data-theme="dark"][data-advanced-color="true"] .nami-menu,
+:root[data-theme="dark"][data-advanced-color="true"] .nami-combobox__popup {
+  box-shadow: none;
+}
+
 .nami-combobox__option {
   align-items: center;
   background: var(--color-neutral-subtle-background);

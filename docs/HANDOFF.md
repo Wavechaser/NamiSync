@@ -1,35 +1,33 @@
-# Latest session — M1-8 closure
+# Latest session — WCG shadow halo isolation and GUI-W1 mitigation
 
-RC-1 is `3ea4e6b`: Retry updates restores observation of the same retained
-task/session and lets pending Close settle. Uncertain Close keeps its fence
-and exact retry. The correction is separate from R3 documentation/integration.
+The deferred dark flyout halo (BUGS, desktop material composition) is a
+Windows DWM Advanced Color defect in composing per-pixel-alpha window content.
+GUI-D8–D10 evidence and reproducers are in `build/gui-tuning/halo-10bit/`
+(its AGENTS.md maps scripts, runs and the D5/D6→D8/D9 renumbering). Key
+method: 8-bit GDI screenshots show DWM's exact legacy composition and cannot
+see the halo; `transfer_capture.py --fp16 0` grabs scRGB FP16 through ffmpeg
+`ddagrab` and does. `native_probe.py --backdrop none --grid` reproduces it
+without WebView2 or Mica. scRGB-linear Chromium output was tried and rejected.
 
-The authoritative final integration receipt is
-`build/m1-8-archive-20260924/integration.json` in the main checkout. It binds the
-reviewed candidate, non-squash `milestone1` merge, exact tree and postmerge
-source/wheel/install/U-artifact validation. M1_PLAN A6 defines closure: matching
-merge/tree plus PASS means M1-8 is complete; an absent receipt means integration
-is still open. This avoids claiming completion before the merge succeeds.
+GUI-W1 (M1_PLAN) mitigates, not fixes: `appearance.py` reads the window
+display's Advanced Color state through DisplayConfig, refreshes it on display
+settings, monitor changes and activation without reapplying material, and
+publishes `advancedColor` in `namisync.appearance.v3`; `components.css` drops
+dark flyout shadows under `data-advanced-color="true"`, mirroring the HDR rule.
+The bug entry stays DEFERRED.
 
-Verification: 5405 ordinary passes/five skips, all 33 installed GUI obligations,
-12 import contracts, 60 focused checks and 76 artifact controls. Fresh fixed U
-acceptance completed all 78 attempts: cold maximum 20.3 ms, warm p95 72.0 ms,
-warm maximum 73.3 ms. Full 265-input/262-package-file identity, staged and
-clean-HEAD validation passed. The nine initial headed fixture failures and
-their passing corrections remain documented; failed R2 runs stay failed.
+Verification: 165 focused appearance/frontend/token checks; all 4 installed
+gallery headed tests on this LG WCG display, whose evidence records
+`advanced_color: true`, dark popup shadow `none` and light shadow retained;
+a live monitor move flipped the page flag LG true → Dell false → LG true
+(`transfer-w1-dataset/`); 1878 interfaces-department passes; 12 import
+contracts. Two `test_plan_review_scale.py` probes call bare `node` from PATH
+rather than `NAMISYNC_TEST_NODE`, so the department needs the codex Node
+runtime on PATH as well
+(`C:\Users\Spectrum\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin`).
+That harness inconsistency is pre-existing and not fixed here.
 
-After the verified merge, cleanup moves the candidate's `build/` intact under
-`build/m1-8-archive-20260924/evidence/`. Its `recovery-close-20260924/` directory
-contains delivery-01, RC/R3 reviews, raw run-01, captures and accounting.
-`evidence-move.json` and `cleanup.json` in the archive record the actual
-preservation and removal outcome; absent receipts mean cleanup is not complete.
-The seven historical recovery refs remain
-in a verified bundle, and the detached worktree's four dirty files are archived.
-Cleanup is limited to accounted M1-8 refs/worktrees; unrelated GUI refs and all five
-stashes remain. Historical absolute paths are provenance; the archive is their
-relocation, not a rewritten acceptance artifact.
-
-Stop after M1-8. Filter/Search, theme changes, M1-7 reduction-study resumption,
-M1-9, push and PR remain excluded. Future M1 and release obligations remain
-in M1_PLAN. Automatic probe bounds and safe fake-DOM assertions remain the
-resource safeguards; no routine memory watcher is required.
+Not verified: an actual HDR session and live ACM toggling with the app open
+(activation refresh is the fallback if Windows sends no display-change event).
+Filter/Search, theme changes, M1-7 reduction-study resumption, M1-9, push and
+PR remain excluded; DOC-2 remains pending.

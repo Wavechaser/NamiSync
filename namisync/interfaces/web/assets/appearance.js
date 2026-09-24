@@ -1,4 +1,4 @@
-const MESSAGE_KIND = "namisync.appearance.v2";
+const MESSAGE_KIND = "namisync.appearance.v3";
 const OPAQUE_COLOR = /^#[0-9A-F]{6}$/;
 const ALPHA_COLOR = /^#[0-9A-F]{8}$/;
 const KEYS = Object.freeze([
@@ -6,6 +6,7 @@ const KEYS = Object.freeze([
   "accentFillForeground",
   "accentFillHover",
   "accentFillPressed",
+  "advancedColor",
   "highContrast",
   "kind",
   "material",
@@ -33,6 +34,7 @@ function isAppearanceMessage(value, previousRevision) {
     && value.revision > previousRevision
     && (value.theme === "light" || value.theme === "dark")
     && typeof value.highContrast === "boolean"
+    && typeof value.advancedColor === "boolean"
     && (
       value.material === "mica"
       || value.material === "opaque"
@@ -66,6 +68,7 @@ export function installAppearanceReceiver(webview, root, onApplied = null) {
     root.dataset.theme = value.theme;
     root.dataset.highContrast = String(value.highContrast);
     root.dataset.windowMaterial = value.material;
+    root.dataset.advancedColor = String(value.advancedColor);
     root.style.setProperty("--color-accent-fill", value.accentFill);
     root.style.setProperty("--color-accent-fill-hover", value.accentFillHover);
     root.style.setProperty("--color-accent-fill-pressed", value.accentFillPressed);

@@ -409,7 +409,7 @@ unrealized unless an entry says otherwise.
   transcribed Microsoft Fluent light/dark neutral subset. Native appearance
   retains raw Windows `Accent`, `AccentLight1`, `AccentLight2`, and
   `AccentDark1` values, then publishes only semantic fill roles through the
-  revisioned appearance v2 host-to-page envelope. Light uses `AccentDark1`,
+  revisioned appearance v3 host-to-page envelope. Light uses `AccentDark1`,
   Dark uses `AccentLight2`, hover/press apply 90%/80% opacity, and one
   base-fill contrast foreground stays fixed through interaction; forced colors
   remain system-owned.
@@ -459,9 +459,10 @@ unrealized unless an entry says otherwise.
   hover/selected overlay with a weaker pressed state, subtle raised/flat
   closed-control boundaries, and keyboard-only focus indication. Task cards
   use the same transparent-rest, hover/selected, and weaker-pressed roles.
-  Ordinary SDR elevation remains; dark HDR
-  suppresses CSS flyout shadows to avoid transparent WebView2/Mica alpha halos,
-  while forced colors use system surfaces without acrylic or shadow.
+  Ordinary SDR elevation remains; in Dark, HDR and SDR WCG (Windows
+  Advanced Color) displays suppress CSS flyout shadows to mitigate a Windows
+  translucency-composition halo, while forced colors use system surfaces
+  without acrylic or shadow.
 - **File-List Row Foundation**. Packaged `file_row.js` owns the shared
   compact row skeleton, while `plan.js` and `integrity.js` expose narrow
   presentation-local renderers. Both consume already-projected 16 px checkbox,

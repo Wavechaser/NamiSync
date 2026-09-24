@@ -922,19 +922,20 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Desktop material composition
 
-- MINOR - DEFERRED (2026-09-11). Transparent-host color composition
-  interaction. The user reports dark flyout shadow halos over cards with Mica,
-  SDR automatic color management enabled and 10-bpc output. Repeated same-display
-  comparisons remove the halo with automatic color management off at unchanged
-  10 bpc; native probes confirm the Advanced Color/WCG transition. A fully opaque
-  diagnostic host also appears unaffected with matching card and popup CSS.
-  Cause: unconfirmed interaction in the transparent presentation path; evidence
-  does not identify WebView2, Mica, DWM or driver fault. Mica is retained and no
-  workaround is implemented. Follow-up GUI-D4 isolates the user's halo to key
-  or combined shadows over single/nested translucent receivers; ambient-only,
-  shadowless and opaque receivers appear unaffected. Alpha-zero black/white
-  controller RGB makes no noticeable difference. Fix remains deferred;
-  GUI-D2–D4 evidence is in `build/gui-tuning/halo-10bit/`.
+- MINOR - DEFERRED (2026-09-11; cause isolated and mitigated 2026-09-24).
+  Advanced Color translucency composition. Dark flyout key shadows over
+  translucent cards show a halo on Mica while the display composes in Windows
+  Advanced Color (SDR WCG; HDR showed a bright rim). Cause: Windows DWM's FP16
+  composition of per-pixel-alpha window content, outside NamiSync. GUI-D8–D10
+  reproduce it with a raw Win32 window, no WebView2, with or without Mica; the
+  legacy 8-bit composition is exact. The error is nonmonotonic and
+  channel-coupled (white at 5% ≈0.3×, dark grays up to ≈1.7× of a linear blend;
+  black and opaque exact), so shadow over a translucent card brightens into a ring.
+  Chromium flags, alpha-zero RGB and scRGB output are rejected (scRGB lightens
+  translucency and grays HDR). GUI-W1 mitigates, not fixes: dark flyouts drop
+  CSS elevation shadows when native appearance reports Advanced Color.
+  Translucent fills remain slightly miscomposited. Reopen on a Windows fix;
+  evidence and reproducer: `build/gui-tuning/halo-10bit/`.
 
 ### Application task lifecycle
 

@@ -45,7 +45,15 @@ _DEFAULT_ACCENT = "#0078D4"
 _DEFAULT_ACCENT_LIGHT_1 = "#0091F8"
 _DEFAULT_ACCENT_LIGHT_2 = "#4CC2FF"
 _DEFAULT_ACCENT_DARK_1 = "#0067C0"
-_APPEARANCE_MESSAGE_KIND = "namisync.appearance.v2"
+_APPEARANCE_MESSAGE_KIND = "namisync.appearance.v3"
+
+_MONITOR_DEFAULTTONEAREST = 2
+_QDC_ONLY_ACTIVE_PATHS = 2
+_DEVICE_INFO_SOURCE_NAME = 1
+_DEVICE_INFO_ADVANCED_COLOR = 9
+_DEVICE_INFO_ADVANCED_COLOR_2 = 15
+_ADVANCED_COLOR_ENABLED = 0x2
+_ADVANCED_COLOR_ACTIVE = 0x2
 
 
 class UnsafeSurfaceError(RuntimeError):
@@ -66,6 +74,88 @@ class _MARGINS(ctypes.Structure):
         ("cxRightWidth", ctypes.c_int),
         ("cyTopHeight", ctypes.c_int),
         ("cyBottomHeight", ctypes.c_int),
+    )
+
+
+class _MONITORINFOEXW(ctypes.Structure):
+    _fields_ = (
+        ("cbSize", wintypes.DWORD),
+        ("rcMonitor", wintypes.RECT),
+        ("rcWork", wintypes.RECT),
+        ("dwFlags", wintypes.DWORD),
+        ("szDevice", wintypes.WCHAR * 32),
+    )
+
+
+class _LUID(ctypes.Structure):
+    _fields_ = (("LowPart", wintypes.DWORD), ("HighPart", wintypes.LONG))
+
+
+class _DISPLAYCONFIG_PATH_SOURCE_INFO(ctypes.Structure):
+    _fields_ = (
+        ("adapterId", _LUID),
+        ("id", ctypes.c_uint32),
+        ("modeInfoIdx", ctypes.c_uint32),
+        ("statusFlags", ctypes.c_uint32),
+    )
+
+
+class _DISPLAYCONFIG_PATH_TARGET_INFO(ctypes.Structure):
+    _fields_ = (
+        ("adapterId", _LUID),
+        ("id", ctypes.c_uint32),
+        ("modeInfoIdx", ctypes.c_uint32),
+        ("outputTechnology", ctypes.c_uint32),
+        ("rotation", ctypes.c_uint32),
+        ("scaling", ctypes.c_uint32),
+        ("refreshRateNumerator", ctypes.c_uint32),
+        ("refreshRateDenominator", ctypes.c_uint32),
+        ("scanLineOrdering", ctypes.c_uint32),
+        ("targetAvailable", wintypes.BOOL),
+        ("statusFlags", ctypes.c_uint32),
+    )
+
+
+class _DISPLAYCONFIG_PATH_INFO(ctypes.Structure):
+    _fields_ = (
+        ("sourceInfo", _DISPLAYCONFIG_PATH_SOURCE_INFO),
+        ("targetInfo", _DISPLAYCONFIG_PATH_TARGET_INFO),
+        ("flags", ctypes.c_uint32),
+    )
+
+
+class _DISPLAYCONFIG_DEVICE_INFO_HEADER(ctypes.Structure):
+    _fields_ = (
+        ("type", ctypes.c_uint32),
+        ("size", ctypes.c_uint32),
+        ("adapterId", _LUID),
+        ("id", ctypes.c_uint32),
+    )
+
+
+class _DISPLAYCONFIG_SOURCE_DEVICE_NAME(ctypes.Structure):
+    _fields_ = (
+        ("header", _DISPLAYCONFIG_DEVICE_INFO_HEADER),
+        ("viewGdiDeviceName", wintypes.WCHAR * 32),
+    )
+
+
+class _DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO(ctypes.Structure):
+    _fields_ = (
+        ("header", _DISPLAYCONFIG_DEVICE_INFO_HEADER),
+        ("value", ctypes.c_uint32),
+        ("colorEncoding", ctypes.c_uint32),
+        ("bitsPerColorChannel", ctypes.c_uint32),
+    )
+
+
+class _DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO_2(ctypes.Structure):
+    _fields_ = (
+        ("header", _DISPLAYCONFIG_DEVICE_INFO_HEADER),
+        ("value", ctypes.c_uint32),
+        ("colorEncoding", ctypes.c_uint32),
+        ("bitsPerColorChannel", ctypes.c_uint32),
+        ("activeColorMode", ctypes.c_uint32),
     )
 
 
@@ -135,6 +225,7 @@ class SystemAppearance:
 class _Presentation:
     system: SystemAppearance
     material: Literal["mica", "opaque", "degraded"] | None
+    advanced_color: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -187,6 +278,14 @@ class AppearanceNative(Protocol):
     ) -> None: ...
 
     def subscribe(self, callback: Callable[[], None]) -> Callable[[], None]: ...
+
+    def advanced_color(self, native_window: object) -> bool: ...
+
+    def subscribe_display(
+        self,
+        native_window: object,
+        callback: Callable[[], None],
+    ) -> Callable[[], None]: ...
 
 
 class _CosmeticAuthority(Protocol):
@@ -411,6 +510,66 @@ class _WindowsAppearanceNative:
 
         return unsubscribe
 
+    def advanced_color(self, native_window: object) -> bool:
+        return _read_advanced_color(_window_handle(native_window))
+
+    def subscribe_display(
+        self,
+        native_window: object,
+        callback: Callable[[], None],
+    ) -> Callable[[], None]:
+        from Microsoft.Win32 import SystemEvents
+
+        monitor = _window_monitor(_window_handle(native_window))
+
+        def on_display_changed(_sender: object, _event: object) -> None:
+            callback()
+
+        def on_activated(_sender: object, _event: object) -> None:
+            callback()
+
+        def on_moved(_sender: object, _event: object) -> None:
+            nonlocal monitor
+            try:
+                current = _window_monitor(_window_handle(native_window))
+            except Exception as error:
+                _log_failure("appearance.display_monitor_read_failed", error)
+                return
+            if current != monitor:
+                monitor = current
+                callback()
+
+        SystemEvents.DisplaySettingsChanged += on_display_changed
+        try:
+            native_window.Move += on_moved
+            try:
+                native_window.Activated += on_activated
+            except Exception:
+                native_window.Move -= on_moved
+                raise
+        except Exception:
+            SystemEvents.DisplaySettingsChanged -= on_display_changed
+            raise
+
+        def unsubscribe() -> None:
+            failure: Exception | None = None
+            try:
+                SystemEvents.DisplaySettingsChanged -= on_display_changed
+            except Exception as error:
+                failure = error
+            try:
+                native_window.Move -= on_moved
+            except Exception as error:
+                failure = failure or error
+            try:
+                native_window.Activated -= on_activated
+            except Exception as error:
+                failure = failure or error
+            if failure is not None:
+                raise failure
+
+        return unsubscribe
+
     def _get_ui_settings(self) -> object | None:
         if not self._ui_settings_attempted:
             self._ui_settings_attempted = True
@@ -543,6 +702,8 @@ class WindowAppearanceController:
         self._presentation_revision_exhausted = False
         self._surface_safety_failure: UnsafeSurfaceError | None = None
         self._unsubscribe: Callable[[], None] | None = None
+        self._unsubscribe_display: Callable[[], None] | None = None
+        self._advanced_color = False
         self._cosmetic_subscription: CosmeticSubscription | None = None
         if initial_cosmetic is None:
             self._theme_mode = ThemeMode.SYSTEM
@@ -648,6 +809,8 @@ class WindowAppearanceController:
             self._closed = True
             unsubscribe = self._unsubscribe
             self._unsubscribe = None
+            unsubscribe_display = self._unsubscribe_display
+            self._unsubscribe_display = None
             cosmetic_subscription = self._cosmetic_subscription
             self._cosmetic_subscription = None
             self._observation_active = False
@@ -678,6 +841,7 @@ class WindowAppearanceController:
                 unsubscribe()
             except Exception as error:
                 _log_failure("appearance.preference_unsubscribe_failed", error)
+        self._close_display_subscription(unsubscribe_display)
         self._remove_event_handler("before_load", self._before_load)
         self._remove_event_handler("loaded", self._on_loaded)
 
@@ -714,6 +878,17 @@ class WindowAppearanceController:
             subscription.close()
         except Exception as error:
             _log_failure("appearance.cosmetic_unsubscribe_failed", error)
+
+    @staticmethod
+    def _close_display_subscription(
+        unsubscribe: Callable[[], None] | None,
+    ) -> None:
+        if unsubscribe is None:
+            return
+        try:
+            unsubscribe()
+        except Exception as error:
+            _log_failure("appearance.display_unsubscribe_failed", error)
 
     def request_initial_surface_settlement(
         self,
@@ -817,6 +992,22 @@ class WindowAppearanceController:
             except Exception as error:
                 _log_failure("appearance.preference_unsubscribe_failed", error)
             return
+        # Advanced Color only selects a cosmetic mitigation; observing it never
+        # gates material application or surface settlement.
+        try:
+            unsubscribe_display = self._native.subscribe_display(
+                native_window,
+                self._on_display_changed,
+            )
+        except Exception as error:
+            _log_failure("appearance.display_subscribe_failed", error)
+        else:
+            with self._lock:
+                keep_display = not self._closed and self._observation_active
+                if keep_display:
+                    self._unsubscribe_display = unsubscribe_display
+            if not keep_display:
+                self._close_display_subscription(unsubscribe_display)
         self._drain_observation()
 
     def _on_preference_changed(self) -> None:
@@ -850,6 +1041,64 @@ class WindowAppearanceController:
             return
         native_window, generation = dispatch
         self._dispatch_observation(native_window, generation, deferred=False)
+
+    def _on_display_changed(self) -> None:
+        with self._lock:
+            if self._closed or not self._observation_active:
+                return
+            native_window = self._native_window
+        if native_window is None:
+            return
+        try:
+            self._native.invoke(native_window, self._refresh_advanced_color)
+        except Exception as error:
+            _log_failure("appearance.ui_dispatch_failed", error)
+
+    def _observe_advanced_color(self, native_window: object) -> bool | None:
+        try:
+            advanced_color = self._native.advanced_color(native_window)
+            if type(advanced_color) is not bool:
+                raise TypeError("Advanced Color state must be Boolean")
+        except Exception as error:
+            _log_failure("appearance.advanced_color_read_failed", error)
+            return None
+        return advanced_color
+
+    def _refresh_advanced_color(self) -> None:
+        """Republish only Advanced Color; material stays as last applied."""
+
+        with self._lock:
+            if self._closed or not self._observation_active:
+                return
+            native_window = self._native_window
+        if native_window is None:
+            return
+        advanced_color = self._observe_advanced_color(native_window)
+        if advanced_color is None:
+            return
+        with self._lock:
+            if (
+                self._closed
+                or not self._observation_active
+                or advanced_color is self._advanced_color
+            ):
+                return
+            self._advanced_color = advanced_color
+            presentation = self._presentation
+            if presentation is None:
+                return
+            self._presentation = replace(
+                presentation,
+                advanced_color=advanced_color,
+            )
+            advanced, report_exhaustion = (
+                self._advance_presentation_revision_locked()
+            )
+            should_publish = advanced and self._loaded
+        if report_exhaustion:
+            self._report_presentation_revision_exhausted()
+        if should_publish:
+            self._schedule_publish()
 
     def _advance_observation_locked(self) -> tuple[object, object] | None:
         self._observation_token = object()
@@ -946,7 +1195,10 @@ class WindowAppearanceController:
                 )
         else:
             system = _effective_system_appearance(raw_system, theme_mode)
+            advanced_color = self._observe_advanced_color(native_window)
             with self._lock:
+                if advanced_color is not None:
+                    self._advanced_color = advanced_color
                 current_cosmetic = (
                     not self._closed
                     and self._observation_active
@@ -1004,11 +1256,14 @@ class WindowAppearanceController:
             self._initial_observation_pending = False
             unsubscribe = self._unsubscribe
             self._unsubscribe = None
+            unsubscribe_display = self._unsubscribe_display
+            self._unsubscribe_display = None
         if unsubscribe is not None:
             try:
                 unsubscribe()
             except Exception as error:
                 _log_failure("appearance.preference_unsubscribe_failed", error)
+        self._close_display_subscription(unsubscribe_display)
         self._settle_initial_surface(None)
         self._schedule_publish()
 
@@ -1120,7 +1375,11 @@ class WindowAppearanceController:
                 and material is None
                 else material
             )
-            self._presentation = _Presentation(system, presented_material)
+            self._presentation = _Presentation(
+                system,
+                presented_material,
+                self._advanced_color,
+            )
             advanced, report_exhaustion = (
                 self._advance_presentation_revision_locked()
             )
@@ -1178,6 +1437,7 @@ class WindowAppearanceController:
             "accentFillHover": system.accent_fill_hover,
             "accentFillPressed": system.accent_fill_pressed,
             "accentFillForeground": system.accent_fill_foreground,
+            "advancedColor": presentation.advanced_color,
         }
 
         channel.post(
@@ -1531,6 +1791,118 @@ def _require_background_landing(value: object) -> _BackgroundLanding:
 def _window_handle(native_window: object) -> int:
     handle = native_window.Handle
     return int(handle.ToInt64() if hasattr(handle, "ToInt64") else handle)
+
+
+def _window_monitor(hwnd: int) -> tuple[int, str]:
+    """Return the nearest monitor handle and its GDI device name."""
+
+    user32 = ctypes.WinDLL("user32", use_last_error=True)
+    user32.MonitorFromWindow.argtypes = (wintypes.HWND, wintypes.DWORD)
+    user32.MonitorFromWindow.restype = wintypes.HMONITOR
+    user32.GetMonitorInfoW.argtypes = (
+        wintypes.HMONITOR,
+        ctypes.POINTER(_MONITORINFOEXW),
+    )
+    user32.GetMonitorInfoW.restype = wintypes.BOOL
+    monitor = user32.MonitorFromWindow(hwnd, _MONITOR_DEFAULTTONEAREST)
+    info = _MONITORINFOEXW()
+    info.cbSize = ctypes.sizeof(info)
+    if not monitor or not user32.GetMonitorInfoW(monitor, ctypes.byref(info)):
+        raise OSError(ctypes.get_last_error(), "window monitor is unavailable")
+    return int(monitor), info.szDevice
+
+
+def _read_advanced_color(hwnd: int) -> bool:
+    """Read whether the window's display composes in Advanced Color."""
+
+    _monitor, device = _window_monitor(hwnd)
+    user32 = ctypes.WinDLL("user32")
+    user32.GetDisplayConfigBufferSizes.argtypes = (
+        ctypes.c_uint32,
+        ctypes.POINTER(ctypes.c_uint32),
+        ctypes.POINTER(ctypes.c_uint32),
+    )
+    user32.GetDisplayConfigBufferSizes.restype = wintypes.LONG
+    user32.QueryDisplayConfig.argtypes = (
+        ctypes.c_uint32,
+        ctypes.POINTER(ctypes.c_uint32),
+        ctypes.POINTER(_DISPLAYCONFIG_PATH_INFO),
+        ctypes.POINTER(ctypes.c_uint32),
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+    )
+    user32.QueryDisplayConfig.restype = wintypes.LONG
+    user32.DisplayConfigGetDeviceInfo.argtypes = (
+        ctypes.POINTER(_DISPLAYCONFIG_DEVICE_INFO_HEADER),
+    )
+    user32.DisplayConfigGetDeviceInfo.restype = wintypes.LONG
+
+    path_count = ctypes.c_uint32()
+    mode_count = ctypes.c_uint32()
+    result = user32.GetDisplayConfigBufferSizes(
+        _QDC_ONLY_ACTIVE_PATHS,
+        ctypes.byref(path_count),
+        ctypes.byref(mode_count),
+    )
+    if result:
+        raise OSError(result, "display configuration size is unavailable")
+    paths = (_DISPLAYCONFIG_PATH_INFO * path_count.value)()
+    # DISPLAYCONFIG_MODE_INFO is 64 bytes with 8-byte alignment; only its
+    # storage is needed because paths carry the source and target identities.
+    modes = (ctypes.c_uint64 * (8 * mode_count.value))()
+    result = user32.QueryDisplayConfig(
+        _QDC_ONLY_ACTIVE_PATHS,
+        ctypes.byref(path_count),
+        paths,
+        ctypes.byref(mode_count),
+        modes,
+        None,
+    )
+    if result:
+        raise OSError(result, "display configuration is unavailable")
+
+    def device_info(
+        structure: ctypes.Structure,
+        kind: int,
+        adapter: _LUID,
+        target: int,
+    ) -> bool:
+        structure.header.type = kind
+        structure.header.size = ctypes.sizeof(structure)
+        structure.header.adapterId = adapter
+        structure.header.id = target
+        return user32.DisplayConfigGetDeviceInfo(ctypes.byref(structure.header)) == 0
+
+    for path in paths[: path_count.value]:
+        source = _DISPLAYCONFIG_SOURCE_DEVICE_NAME()
+        if not device_info(
+            source,
+            _DEVICE_INFO_SOURCE_NAME,
+            path.sourceInfo.adapterId,
+            path.sourceInfo.id,
+        ) or source.viewGdiDeviceName != device:
+            continue
+        target = path.targetInfo
+        # The Windows 11 24H2 form reports SDR WCG as active Advanced Color;
+        # older builds expose only the original enabled bit.
+        current = _DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO_2()
+        if device_info(
+            current,
+            _DEVICE_INFO_ADVANCED_COLOR_2,
+            target.adapterId,
+            target.id,
+        ):
+            return bool(current.value & _ADVANCED_COLOR_ACTIVE)
+        legacy = _DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO()
+        if device_info(
+            legacy,
+            _DEVICE_INFO_ADVANCED_COLOR,
+            target.adapterId,
+            target.id,
+        ):
+            return bool(legacy.value & _ADVANCED_COLOR_ENABLED)
+        raise OSError("Advanced Color state is unavailable")
+    raise LookupError("window monitor has no active display path")
 
 
 def _log_failure(event: str, error: Exception) -> None:

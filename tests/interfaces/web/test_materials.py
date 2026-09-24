@@ -83,6 +83,10 @@ class _FakeNative:
         self.read_error: Exception | None = None
         self.subscribe_error: Exception | None = None
         self.force_opaque_result = True
+        self.advanced_color_value: object = False
+        self.advanced_color_error: Exception | None = None
+        self.display_subscribe_error: Exception | None = None
+        self.display_handlers: list[object] = []
 
     def read(self) -> SystemAppearance:
         self.calls.append("read")
@@ -130,6 +134,28 @@ class _FakeNative:
 
     def emit_preference_change(self) -> None:
         for handler in tuple(self.preference_handlers):
+            handler()
+
+    def advanced_color(self, native_window: object) -> object:
+        self.calls.append(("advanced_color", native_window))
+        if self.advanced_color_error is not None:
+            raise self.advanced_color_error
+        return self.advanced_color_value
+
+    def subscribe_display(self, native_window: object, callback):
+        self.calls.append(("subscribe_display", native_window))
+        if self.display_subscribe_error is not None:
+            raise self.display_subscribe_error
+        self.display_handlers.append(callback)
+
+        def unsubscribe() -> None:
+            self.calls.append("unsubscribe_display")
+            self.display_handlers.remove(callback)
+
+        return unsubscribe
+
+    def emit_display_change(self) -> None:
+        for handler in tuple(self.display_handlers):
             handler()
 
 
@@ -855,8 +881,15 @@ def test_initial_read_failure_rolls_back_observation_and_settles_safe() -> None:
 
     window.events.before_load.emit()
 
-    assert native.calls[:3] == ["subscribe", "read", "unsubscribe"]
+    assert native.calls[:5] == [
+        "subscribe",
+        ("subscribe_display", window.native),
+        "read",
+        "unsubscribe",
+        "unsubscribe_display",
+    ]
     assert native.preference_handlers == []
+    assert native.display_handlers == []
     assert results == [None]
     assert controller.surface_safety_failure is None
     controller.close()
@@ -1392,7 +1425,7 @@ def test_sh_g_12_loaded_document_gets_only_validated_inert_appearance_values() -
 
     assert window.appearance_messages.messages == [
         {
-            "kind": "namisync.appearance.v2",
+            "kind": "namisync.appearance.v3",
             "revision": 1,
             "theme": "dark",
             "highContrast": False,
@@ -1401,9 +1434,125 @@ def test_sh_g_12_loaded_document_gets_only_validated_inert_appearance_values() -
             "accentFillHover": "#A1B2C3E6",
             "accentFillPressed": "#A1B2C3CC",
             "accentFillForeground": "#000000",
+            "advancedColor": False,
         }
     ]
     controller.close()
+
+
+def _apply_count(native: _FakeNative) -> int:
+    return sum(
+        isinstance(call, tuple) and call[0] == "apply" for call in native.calls
+    )
+
+
+def test_advanced_color_is_published_with_the_applied_presentation() -> None:
+    window = _window()
+    native = _FakeNative(_system(dark=True))
+    native.advanced_color_value = True
+    controller = configure_window_appearance(window, native=native)
+    _request_initial(controller)
+
+    window.events.before_load.emit()
+    window.events.loaded.emit()
+
+    assert ("subscribe_display", window.native) in native.calls
+    assert [
+        (message["revision"], message["advancedColor"])
+        for message in window.appearance_messages.messages
+    ] == [(1, True)]
+    controller.close()
+
+
+def test_display_change_republishes_only_changed_advanced_color() -> None:
+    window = _window()
+    native = _FakeNative(_system(dark=True))
+    controller = configure_window_appearance(window, native=native)
+    _request_initial(controller)
+    window.events.before_load.emit()
+    window.events.loaded.emit()
+    applied = _apply_count(native)
+
+    native.emit_display_change()
+    native.advanced_color_value = True
+    native.emit_display_change()
+    native.emit_display_change()
+    native.advanced_color_value = False
+    native.emit_display_change()
+
+    assert _apply_count(native) == applied
+    assert [
+        (message["revision"], message["advancedColor"], message["material"])
+        for message in window.appearance_messages.messages
+    ] == [(1, False, "mica"), (2, True, "mica"), (3, False, "mica")]
+    controller.close()
+
+
+def test_advanced_color_read_failure_keeps_the_prior_value(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    window = _window()
+    native = _FakeNative(_system(dark=True))
+    native.advanced_color_value = True
+    controller = configure_window_appearance(window, native=native)
+    _request_initial(controller)
+    window.events.before_load.emit()
+    window.events.loaded.emit()
+
+    native.advanced_color_error = RuntimeError("injected display read failure")
+    native.emit_display_change()
+    native.system = _system(dark=True, accent="#ABCDEF")
+    native.emit_preference_change()
+    native.advanced_color_error = None
+    native.advanced_color_value = 1
+    native.emit_display_change()
+
+    assert [
+        (message["revision"], message["advancedColor"], message["accentFill"])
+        for message in window.appearance_messages.messages
+    ] == [(1, True, "#123ABC"), (2, True, "#ABCDEF")]
+    assert caplog.text.count("appearance.advanced_color_read_failed") == 3
+    assert controller.surface_safety_failure is None
+    controller.close()
+
+
+def test_display_subscription_failure_degrades_without_blocking_appearance(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    window = _window()
+    native = _FakeNative(_system(dark=True))
+    native.advanced_color_value = True
+    native.display_subscribe_error = RuntimeError("injected display refusal")
+    controller = configure_window_appearance(window, native=native)
+    results = _request_initial(controller)
+
+    window.events.before_load.emit()
+    window.events.loaded.emit()
+
+    assert results == [None]
+    assert "appearance.display_subscribe_failed" in caplog.text
+    assert window.appearance_messages.messages[-1]["advancedColor"] is True
+    assert window.appearance_messages.messages[-1]["material"] == "mica"
+    controller.close()
+
+
+def test_close_releases_display_observation_and_ignores_late_changes() -> None:
+    window = _window()
+    native = _FakeNative(_system(dark=True))
+    controller = configure_window_appearance(window, native=native)
+    _request_initial(controller)
+    window.events.before_load.emit()
+    window.events.loaded.emit()
+    handler = native.display_handlers[0]
+
+    controller.close()
+    native.advanced_color_value = True
+    handler()
+
+    assert "unsubscribe_display" in native.calls
+    assert native.display_handlers == []
+    assert len(window.appearance_messages.messages) == 1
+    assert native.calls.count(("advanced_color", window.native)) == 1
 
 
 def test_document_publication_uses_the_native_ui_dispatcher_without_dom_eval() -> None:
@@ -1793,7 +1942,7 @@ def test_reload_retirement_does_not_publish_appearance_before_readiness(
     assert controller._open_document_publication(1)
     assert [message["kind"] for message in window.appearance_messages.messages] == [
         "namisync.readiness.v1",
-        "namisync.appearance.v2",
+        "namisync.appearance.v3",
     ]
     native.system = _system(dark=True, accent="#222222")
     native.emit_preference_change()
@@ -1805,7 +1954,7 @@ def test_reload_retirement_does_not_publish_appearance_before_readiness(
     assert not controller._open_document_publication(1)
     assert [message["kind"] for message in window.appearance_messages.messages] == [
         "namisync.readiness.v1",
-        "namisync.appearance.v2",
+        "namisync.appearance.v3",
     ]
     readiness: list[Exception | None] = []
     channel.post(
@@ -1818,7 +1967,7 @@ def test_reload_retirement_does_not_publish_appearance_before_readiness(
 
     assert [message["kind"] for message in window.appearance_messages.messages] == [
         "namisync.readiness.v1",
-        "namisync.appearance.v2",
+        "namisync.appearance.v3",
         "namisync.readiness.v1",
     ]
     assert readiness == []
@@ -1829,7 +1978,7 @@ def test_reload_retirement_does_not_publish_appearance_before_readiness(
     assert readiness == [None]
     assert controller._open_document_publication(2)
     assert window.appearance_messages.messages[-1]["kind"] == (
-        "namisync.appearance.v2"
+        "namisync.appearance.v3"
     )
     assert "appearance.document_publish_failed" not in caplog.text
     controller.close()
@@ -2096,7 +2245,7 @@ def test_unconfirmed_live_fallback_publishes_degraded_opaque_page_state() -> Non
     native.emit_preference_change()
 
     assert window.appearance_messages.messages[-1] == {
-        "kind": "namisync.appearance.v2",
+        "kind": "namisync.appearance.v3",
         "revision": 2,
         "theme": "dark",
         "highContrast": False,
@@ -2105,6 +2254,7 @@ def test_unconfirmed_live_fallback_publishes_degraded_opaque_page_state() -> Non
         "accentFillHover": "#ABCDEFE6",
         "accentFillPressed": "#ABCDEFCC",
         "accentFillForeground": "#000000",
+        "advancedColor": False,
     }
     controller.close()
 

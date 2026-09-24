@@ -1581,6 +1581,7 @@ def test_component_gallery_report_parser_is_exact_and_nested(
             "forced": False,
             "reduced": False,
             "hdr": False,
+            "advanced_color": False,
         },
         "cosmetic": {
             "initial": dict(cosmetic_snapshot),
@@ -1916,6 +1917,7 @@ def test_component_gallery_report_parser_is_exact_and_nested(
                 "forced": False,
                 "reduced": False,
                 "hdr": False,
+                "advanced_color": False,
             },
             "cosmetic": report["cosmetic"],
             "part_count": len(part_values),
@@ -1947,6 +1949,7 @@ def test_component_gallery_report_parser_is_exact_and_nested(
                     "forced": False,
                     "reduced": False,
                     "hdr": False,
+                    "advanced_color": False,
                 },
                 "cosmetic": report["cosmetic"],
                 "part_count": len(part_values),
@@ -2224,8 +2227,9 @@ def test_sh_g_11_component_gallery_uses_installed_tokens_and_non_color_cues(
         "reduced": False,
     }
     assert all(
-        type(report["media"]["hdr"]) is bool
+        type(report["media"][name]) is bool
         for report in (light, dark, forced)
+        for name in ("hdr", "advanced_color")
     )
     for report in (light, dark, forced):
         theme = "dark" if report["media"]["dark"] else "light"
@@ -4093,7 +4097,9 @@ def _assert_complete_gallery_matrix(report: dict[str, object]) -> None:
         assert _color_alpha(combobox["popup_border"]) == pytest.approx(
             expected_stroke_alpha
         )
-        if report["media"]["dark"] and report["media"]["hdr"]:
+        if report["media"]["dark"] and (
+            report["media"]["hdr"] or report["media"]["advanced_color"]
+        ):
             assert combobox["popup_shadow"] == "none"
         else:
             assert combobox["popup_shadow"] != "none"

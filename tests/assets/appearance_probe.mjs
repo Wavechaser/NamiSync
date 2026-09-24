@@ -36,10 +36,11 @@ const firstApplication = receiver.whenApplied().then(() => {
   applied = true;
 });
 const base = {
-  kind: "namisync.appearance.v2",
+  kind: "namisync.appearance.v3",
   revision: 2,
   theme: "dark",
   highContrast: false,
+  advancedColor: false,
   material: "mica",
   accentFill: "#123456",
   accentFillHover: "#123456E6",
@@ -62,9 +63,21 @@ receive({ data: { ...base, revision: 3, accentFill: "red;url(x)" } });
 receive({ data: { ...base, revision: 4, accentFillHover: "#123456" } });
 receive({ data: { ...base, revision: 5, unexpected: true } });
 receive({ data: Object.assign(Object.create(null), { ...base, revision: 6 }) });
+receive({ data: { ...base, revision: 6, advancedColor: "true" } });
+const { advancedColor: _omitted, ...withoutAdvancedColor } = base;
+receive({ data: { ...withoutAdvancedColor, revision: 6 } });
+receive({ data: { ...base, revision: 6, kind: "namisync.appearance.v2" } });
 await Promise.resolve();
 const resolvedBeforeNewRevision = reapplied;
-receive({ data: { ...base, revision: 7, material: "degraded", theme: "light" } });
+receive({
+  data: {
+    ...base,
+    revision: 7,
+    material: "degraded",
+    theme: "light",
+    advancedColor: true,
+  },
+});
 await nextApplication;
 
 const result = {

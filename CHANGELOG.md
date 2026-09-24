@@ -27,6 +27,21 @@ and remembered locations, bounded Plan review/selection/sorting and same-task
 execution with live controls and bounded live/retained result review. Inventory review and beta
 packaging remain open.
 
+#### Isolate and mitigate the WCG shadow halo (2026-09-24)
+
+- Attributed the deferred dark flyout halo to Windows DWM Advanced Color
+  composition of translucent window pixels. FP16 Desktop Duplication captures,
+  model fits and a raw Win32 probe reproduce it without WebView2 or Mica; 8-bit
+  screenshots cannot see it. Chromium flags, alpha-zero RGB and scRGB output
+  were rejected; the bug stays deferred.
+- Mitigated it (GUI-W1): native appearance reads the window display's Advanced
+  Color state, refreshes it on display, monitor and activation changes without
+  reapplying material, and publishes it in appearance envelope v3. Dark
+  flyouts then drop CSS elevation shadows, as on HDR.
+- Verified 165 focused appearance/frontend/token checks, all 4 installed
+  gallery headed tests on the WCG display (dark popup shadow suppressed, light
+  retained), the interfaces department and 12 import contracts.
+
 #### Close M1-8 execution review and integration (2026-09-24)
 
 - Condense the verified R0–R2 series and recovery correction into the six-outcome
