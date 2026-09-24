@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import { assertSameNode } from "./fake_dom_assertions.mjs";
 
 const ROW_HEIGHT = 24;
 
@@ -19,6 +20,9 @@ class Style {
 }
 
 class ElementFake {
+  [Symbol.for("nodejs.util.inspect.custom")]() {
+    return `ElementFake<${this.tagName.slice(0, 24)}>`;
+  }
   get textContent() { return this._textContent ?? ""; }
   set textContent(value) {
     this._textContent = value;
@@ -435,7 +439,7 @@ assert.ok(findText(renderedNotice, "Risk: irreversible"));
 assert.ok(findText(renderedNotice, "Unsupported item"), "notices do not hide blockers");
 assert.equal(findByClass(renderedNotice, "nami-file-row__size").textContent, "",
   "overflow rows do not render a clamped or zero size");
-assert.equal(
+assertSameNode(
   findByClass(renderedRow, "nami-plan-review__spacer"),
   null,
 );
@@ -927,7 +931,7 @@ assert.ok(findText(executionPanel.element, "Trash location:"));
 assert.ok(findText(executionPanel.element, "Operation: Completed"));
 assert.ok(findText(executionPanel.element, "Automatic verification: Mismatch"));
 assert.ok(findText(executionPanel.element, "Stored evidence: Superseded"));
-assert.equal(findByClass(executionPanel.element, "nami-plan-review__detail-button"), null,
+assertSameNode(findByClass(executionPanel.element, "nami-plan-review__detail-button"), null,
   "rows use authoritative highlight instead of a separate detail button");
 assert.ok(findText(executionDetailCard, "Planned action"));
 assert.ok(findText(executionDetailCard, "zero-byte.bin"));
@@ -1196,7 +1200,7 @@ liveTask.progressPresentation = { phase: "verify", activeItem: null, itemPercent
 livePanel.render(liveTask);
 liveIntent = findByClass(liveElement, "nami-plan-row__intent");
 assert.equal(liveIntent.dataset.lifecycle, "completed", "retirement keeps copy outcome");
-assert.equal(findByClass(liveIntent, "nami-plan-row__verification"), null);
+assertSameNode(findByClass(liveIntent, "nami-plan-row__verification"), null);
 assert.ok(document.activeElement === liveElement, "retirement keeps row focus");
 const largeProgress = (bytes, at) => ({ phase: "execute", progressAt: at, activeItem: null,
   progress: { bytes_done: bytes, bytes_total: "9223372036854775807",
@@ -1233,7 +1237,7 @@ resizeBody.clientHeight = 700;
 resizeObserver.trigger();
 document.defaultView.flushAnimationFrame();
 assert.deepEqual(resizeCalls, [0], "reused review observes newly visible rows after resize");
-assert.equal(resizeObserver.observed, resizeBody);
+assertSameNode(resizeObserver.observed, resizeBody, "reused review observes its current body");
 const observedAfterReuse = resizeObserver.observeCount;
 resizePanel.render(resizeTask);
 assert.equal(resizeObserver.observeCount, observedAfterReuse,

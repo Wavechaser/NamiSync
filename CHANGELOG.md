@@ -27,6 +27,17 @@ and remembered locations, bounded Plan review/selection/sorting and same-task
 execution with live controls and bounded live/retained result review. Inventory review and beta
 packaging remain open.
 
+#### Contain frontend probe failures automatically (2026-09-24)
+
+- Route ordinary frontend Node probes through the existing prelaunch Windows Job
+  with a probe-specific memory limit, timeout cleanup and bounded diagnostic reads.
+- Keep fake-DOM assertion truth while making failure inspection concise. Prefer
+  these durable safeguards to routine memory watching; native launcher defaults
+  and historical quantitative instruments stay unchanged.
+- Verification: populated-graph failure, allocation/output/timeout and original
+  probe controls passed; 5,405 ordinary tests passed (five skips), 12 import
+  contracts and independent review passed.
+
 #### Correct U observers and continue M1-8-R2 consolidation (2026-09-24)
 
 - Restore the scoped U measurement owners, consolidate redundant controls and

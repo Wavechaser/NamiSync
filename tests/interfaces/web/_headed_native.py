@@ -12,7 +12,7 @@ import time
 from ctypes import wintypes
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Sequence
+from typing import BinaryIO, Callable, Sequence
 from uuid import uuid4
 
 from _headed_evidence import EvidenceReader
@@ -30,6 +30,7 @@ _ERROR_MORE_DATA = 234
 _STILL_ACTIVE = 259
 _JOB_OBJECT_EXTENDED_LIMIT_INFORMATION = 9
 _JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x00002000
+_JOB_OBJECT_LIMIT_JOB_MEMORY = 0x00000200
 _HOST_CHILD = Path(__file__).with_name("_headed_host_child.py")
 
 
@@ -148,6 +149,9 @@ def start_headed_process(
     cwd: Path,
     environment: dict[str, str],
     deadline: ScenarioDeadline,
+    job_memory_limit_bytes: int | None = None,
+    stdout: BinaryIO | None = None,
+    stderr: BinaryIO | None = None,
 ) -> HeadedProcess:
     """Start a command behind a pre-launch gate inside a hard Job Object."""
 
@@ -166,6 +170,13 @@ def start_headed_process(
     information.BasicLimitInformation.LimitFlags = (
         _JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
     )
+    if job_memory_limit_bytes is not None:
+        if job_memory_limit_bytes <= 0:
+            kernel32.CloseHandle(job)
+            kernel32.CloseHandle(gate)
+            raise ValueError("job memory limit must be positive")
+        information.BasicLimitInformation.LimitFlags |= _JOB_OBJECT_LIMIT_JOB_MEMORY
+        information.JobMemoryLimit = job_memory_limit_bytes
     if not kernel32.SetInformationJobObject(
         job,
         _JOB_OBJECT_EXTENDED_LIMIT_INFORMATION,
@@ -194,8 +205,8 @@ def start_headed_process(
             wrapper_command,
             cwd=cwd,
             env=environment,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stdout=subprocess.PIPE if stdout is None else stdout,
+            stderr=subprocess.PIPE if stderr is None else stderr,
             text=True,
         )
         if process.poll() is not None:

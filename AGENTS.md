@@ -93,6 +93,9 @@ Use the relevant routes below, not a mandatory full-document reading sequence:
   add focused tests for new core behavior.
 - Documentation-only work needs consistency, link and diff checks; product
   tests are needed when it changes an executable contract or test authority.
+- Use TESTS.md's automatic probe containment and bounded failure diagnostics.
+  Routine tests do not need a person or agent watching memory; inspect resource
+  evidence for failures or a named resource gate.
 
 ### Execution Priorities
 

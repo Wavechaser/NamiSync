@@ -744,6 +744,44 @@ cause permits a fresh full predeclared run under the existing execution scope,
 subject to AGENTS stops. Never replace individual attempts or retry unexplained
 breaches until green. Budget, metric or scope changes require user adjudication.
 
+### Post-R2 corrections — control feedback and probe containment
+
+User-authorized on 2026-09-24 from accepted R2 `c974447`, on isolated
+`codex/m1-8-control-edges`. R3, filter/Search and the M1-7 reduction stay excluded.
+
+| Id | Accepted outcome and owner | Gate / status |
+| --- | --- | --- |
+| PS-1 | Automatically contain ordinary frontend Node probes and bound fake-DOM failure formatting; preserve assertion truth without ad hoc Boolean rewrites or routine resource watching. | Complete: populated-graph identity failures, allocation/output/timeout controls, original probes and launcher tests; 5,405 ordinary passes (five skips), 12 imports and independent review. |
+| CE-1 | After task updates stop, execution controls report known unavailability without dispatch or a false uncertain-request message. Preserve last-known native session truth; offer only existing app-close cancellation guidance. | Production callback/renderer controls for lost/live drains and zero dispatch; native exact-session seam. Pending. |
+| CE-2 | A control attempt belongs to task/session/action across review replacement; preserve its pending/result feedback, prevent duplicate controls, and reject obsolete replies after newer progress, terminal, session replacement or task retirement. | Existing production task-shell probe interleavings for accepted/refused/error outcomes and same/new session; installed GUI control paths. Pending. |
+
+**Finite population and commits.** PS-1 is a separate test-safety commit before
+the product correction: `tests/interfaces/web/{_headed_native.py,
+_frontend_test_support.py,test_headed_native.py,test_frontend_static.py}` and
+`tests/assets/{plan_review_probe.mjs,task_shell_probe.mjs,fake_dom_assertions.mjs}`.
+The shared helper keeps DOM identity diagnostics scalar. TESTS and this register,
+AGENTS/CHANGELOG/HANDOFF own matching documentation. Keep existing native-launch defaults
+and frozen P2/M1-7/U instruments unchanged; this is probe containment, not a
+whole-suite or product memory bound. New direct consumers must be recorded first.
+
+CE-1/2 form one product commit: `namisync/interfaces/web/assets/{app.js,
+plan_review.js}`, existing task-shell/Plan probe controls and their frontend test
+entry; add the existing bridge-timeout probe only if needed to prove the native
+dispatch boundary. BRIDGE/DESKTOP_UI, BUGS and delivery docs own behavior and
+disposition. No backend, admission, mutation, automatic reattach or new recovery UI.
+The known lost-drain Close limitation is not a third repair outcome: do not
+promise task Close will complete without terminal delivery.
+
+**Verification and preservation.** Check the affected composed/native paths
+before broad gates, then ordinary tests/imports and fresh independent review.
+Product asset changes invalidate current-source reuse of R2 run-03; preserve it
+and obtain fresh full U authority/78-attempt evidence with unchanged budgets and
+fixtures before the product commit, including staged and clean-HEAD binding.
+Keep package/source identity exact. Use automatic Job containment and bounded
+failure diagnostics; inspect memory only for a failure or a named measurement
+gate, not by assigning a person/agent to watch normal tests. Existing mandatory
+stops apply; these three declared outcomes do not authorize adjacent repairs.
+
 ### M1-8-R3 — final sweep and integration
 
 **Objective.** Close M1-8 as an integrated outcome, not a pile of individually

@@ -81,7 +81,20 @@ bridge wrappers, and the production drain-manager live-event
 transport/replay and Progress reducer. Node.js must be available through
 `NAMISYNC_TEST_NODE` or `PATH`; the explicit environment setting takes
 precedence. A missing or unusable executable fails these gates rather than
-silently reducing the ordinary suite to source-text inspection. The drain probe
+silently reducing the ordinary suite to source-text inspection.
+
+Frontend static Node probes use `run_node_probe`: a prelaunch Windows Job caps
+their process tree at 512 MiB, keeps the caller's timeout and bounds file-backed
+diagnostic reads. Native headed launches retain their own defaults. Fake-DOM
+identity assertions use a shared exact-reference helper with scalar diagnostics;
+custom inspection also keeps ordinary object inspection concise. Keep graph fields
+enumerable so structural comparisons retain their meaning. Node's assertion
+formatter can bypass custom inspection, so it is not a substitute for the helper.
+Use these automatic safeguards, not routine memory polling or a watching agent.
+Inspect resource evidence when diagnosing a failure or running a named resource
+gate. This probe limit is neither whole-suite nor product memory acceptance.
+
+The drain probe
 executes the packaged transport check and proves whole-batch rejection: an
 invalid event envelope, wrapper, lifecycle transition, or reducer transition
 cannot partially deliver co-batched reliable updates or advance the accepted

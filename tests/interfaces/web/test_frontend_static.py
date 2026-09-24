@@ -13,6 +13,7 @@ import pytest
 
 from conftest import BuiltWheel
 
+import _frontend_test_support as frontend_support
 from _tree_window_fixture import (
     TREE_WINDOW_FIXTURE_SCHEMA,
     TreeWindowFixture,
@@ -25,7 +26,7 @@ from namisync.interfaces.web.commands import production_command_specs
 from namisync.workflows.views import ResultCategory
 
 from _frontend_test_support import (
-    ASSET_ROOT, INITIAL_ASSETS, _node_executable,
+    ASSET_ROOT, INITIAL_ASSETS, _node_executable, run_node_probe,
 )
 
 
@@ -356,15 +357,12 @@ def test_supplemental_node_appearance_receiver_accepts_latest_envelope() -> None
     node = _node_executable()
     if node is None:
         pytest.skip("Node.js is unavailable for the supplemental appearance probe")
-    completed = subprocess.run(
+    completed = run_node_probe(
         [
             str(node),
             str(PROJECT_ROOT / "tests" / "assets" / "appearance_probe.mjs"),
             str(PROJECT_ROOT / "namisync" / "interfaces" / "web" / "assets" / "appearance.js"),
         ],
-        capture_output=True,
-        check=False,
-        text=True,
         timeout=10,
     )
     assert completed.returncode == 0, completed.stderr
@@ -397,7 +395,7 @@ def test_supplemental_node_readiness_receiver_buffers_exact_envelopes() -> None:
     node = _node_executable()
     if node is None:
         pytest.skip("Node.js is unavailable for the supplemental readiness probe")
-    completed = subprocess.run(
+    completed = run_node_probe(
         [
             str(node),
             str(PROJECT_ROOT / "tests" / "assets" / "readiness_probe.mjs"),
@@ -410,9 +408,6 @@ def test_supplemental_node_readiness_receiver_buffers_exact_envelopes() -> None:
                 / "readiness.js"
             ),
         ],
-        capture_output=True,
-        check=False,
-        text=True,
         timeout=10,
     )
     assert completed.returncode == 0, completed.stderr
@@ -424,7 +419,7 @@ def test_supplemental_node_startup_rearms_per_bridge_generation() -> None:
     node = _node_executable()
     if node is None:
         pytest.skip("Node.js is unavailable for the supplemental startup probe")
-    completed = subprocess.run(
+    completed = run_node_probe(
         [
             str(node),
             str(PROJECT_ROOT / "tests" / "assets" / "app_startup_probe.mjs"),
@@ -437,9 +432,6 @@ def test_supplemental_node_startup_rearms_per_bridge_generation() -> None:
                 / "app.js"
             ),
         ],
-        capture_output=True,
-        check=False,
-        text=True,
         timeout=10,
     )
     assert completed.returncode == 0, completed.stderr
@@ -449,7 +441,7 @@ def test_process_live_task_shell_transitions_use_production_modules() -> None:
     node = _node_executable()
     assert node is not None, "Node.js is required for the task-shell witness"
     assets = PROJECT_ROOT / "namisync" / "interfaces" / "web" / "assets"
-    completed = subprocess.run(
+    completed = run_node_probe(
         [
             str(node),
             str(PROJECT_ROOT / "tests" / "assets" / "task_shell_probe.mjs"),
@@ -457,9 +449,6 @@ def test_process_live_task_shell_transitions_use_production_modules() -> None:
             str(assets / "rail.js"),
             str(assets / "panels.js"),
         ],
-        capture_output=True,
-        check=False,
-        text=True,
         timeout=10,
     )
     assert completed.returncode == 0, completed.stderr
@@ -469,7 +458,7 @@ def test_plan_review_component_keeps_actions_bounded_and_generation_safe() -> No
     node = _node_executable()
     assert node is not None, "Node.js is required for the plan-review witness"
     assets = PROJECT_ROOT / "namisync" / "interfaces" / "web" / "assets"
-    completed = subprocess.run(
+    completed = run_node_probe(
         [
             str(node),
             str(PROJECT_ROOT / "tests" / "assets" / "plan_review_probe.mjs"),
@@ -477,29 +466,99 @@ def test_plan_review_component_keeps_actions_bounded_and_generation_safe() -> No
             str(assets / "render.js"),
             str(assets / "icons.js"),
         ],
-        capture_output=True,
-        check=False,
-        text=True,
         timeout=10,
     )
     assert completed.returncode == 0, completed.stderr
     assert completed.stdout == "ok"
 
 
+@pytest.mark.parametrize(
+    ("probe_name", "asset_names"),
+    (
+        ("plan_review_probe.mjs", ("plan_review.js", "render.js", "icons.js")),
+        ("task_shell_probe.mjs", ("app.js", "rail.js", "panels.js")),
+    ),
+)
+def test_fake_dom_identity_failure_keeps_bounded_diagnostics(
+    tmp_path: Path, probe_name: str, asset_names: tuple[str, ...],
+) -> None:
+    node = _node_executable()
+    assert node is not None, "Node.js is required for the fake-DOM failure control"
+    source = (PROJECT_ROOT / "tests" / "assets" / probe_name).read_text(encoding="utf-8")
+    probe = tmp_path / probe_name
+    (tmp_path / "fake_dom_assertions.mjs").write_bytes(
+        (PROJECT_ROOT / "tests" / "assets" / "fake_dom_assertions.mjs").read_bytes()
+    )
+    if probe_name == "task_shell_probe.mjs":
+        graph, label = "app", "ElementFake<MAIN>"
+        mismatch = (
+            'assertSameNodes([app], [new ElementFake("main")], '
+            '"forced fake DOM identity mismatch");'
+        )
+    else:
+        graph, label = "document.documentElement", "ElementFake<HTML>"
+        mismatch = (
+            'assertSameNode(document.documentElement, new ElementFake("html"), '
+            '"forced fake DOM identity mismatch");'
+        )
+    probe.write_text(
+        source + '\nconst { inspect } = await import("node:util");\n'
+        + f'assert.equal(inspect({graph}), "{label}");\n' + mismatch + '\n',
+        encoding="utf-8",
+    )
+    assets = PROJECT_ROOT / "namisync" / "interfaces" / "web" / "assets"
+    completed = run_node_probe(
+        (str(node), str(probe), *(str(assets / name) for name in asset_names)),
+        timeout=10,
+    )
+    assert completed.returncode != 0
+    assert "forced fake DOM identity mismatch" in completed.stderr
+    assert "AssertionError" in completed.stderr
+    assert len(completed.stderr.encode("utf-8")) < 4096
+
+
+def test_node_probe_contains_a_modest_external_allocation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    node = _node_executable()
+    assert node is not None, "Node.js is required for the Job memory control"
+    monkeypatch.setattr(frontend_support, "_NODE_JOB_MEMORY_BYTES", 128 * 1024 * 1024)
+    completed = run_node_probe(
+        (
+            str(node), "-e",
+            'require("node:fs").writeSync(1, "allocation-started"); '
+            'Buffer.alloc(192 * 1024 * 1024, 1); process.stdout.write("survived")',
+        ),
+        timeout=10,
+    )
+    assert completed.returncode != 0
+    assert "allocation-started" in completed.stdout
+    assert "survived" not in completed.stdout
+
+
+def test_node_probe_binds_output_and_timeout() -> None:
+    node = _node_executable()
+    assert node is not None, "Node.js is required for the probe bounds control"
+    with pytest.raises(AssertionError, match="stdout exceeded 1 MiB"):
+        run_node_probe(
+            (str(node), "-e", 'process.stdout.write("x".repeat(1024 * 1024 + 1))'),
+            timeout=10,
+        )
+    with pytest.raises(subprocess.TimeoutExpired):
+        run_node_probe((str(node), "-e", "setTimeout(() => {}, 60000)"), timeout=2)
+
+
 def test_execution_review_projects_independent_terminal_and_row_axes() -> None:
     node = _node_executable()
     assert node is not None, "Node.js is required for the execution-review witness"
     assets = PROJECT_ROOT / "namisync" / "interfaces" / "web" / "assets"
-    completed = subprocess.run(
+    completed = run_node_probe(
         [
             str(node),
             str(PROJECT_ROOT / "tests" / "assets" / "execution_review_probe.mjs"),
             str(assets / "plan_review.js"),
             str(assets / "task_status.js"),
         ],
-        capture_output=True,
-        check=False,
-        text=True,
         timeout=10,
     )
     assert completed.returncode == 0, completed.stderr
@@ -510,15 +569,12 @@ def test_plan_window_bridge_preserves_overflow_null_and_signed_64_boundaries() -
     node = _node_executable()
     assert node is not None, "Node.js is required for the Plan-window bridge witness"
     assets = PROJECT_ROOT / "namisync" / "interfaces" / "web" / "assets"
-    completed = subprocess.run(
+    completed = run_node_probe(
         [
             str(node),
             str(PROJECT_ROOT / "tests" / "assets" / "plan_window_bridge_probe.mjs"),
             str(assets / "bridge.js"),
         ],
-        capture_output=True,
-        check=False,
-        text=True,
         timeout=10,
     )
     assert completed.returncode == 0, completed.stderr
@@ -529,15 +585,12 @@ def test_execution_detail_bridge_validates_full_shape_and_request_identity() -> 
     node = _node_executable()
     assert node is not None, "Node.js is required for the execution-detail witness"
     assets = PROJECT_ROOT / "namisync" / "interfaces" / "web" / "assets"
-    completed = subprocess.run(
+    completed = run_node_probe(
         [
             str(node),
             str(PROJECT_ROOT / "tests" / "assets" / "execution_detail_bridge_probe.mjs"),
             str(assets / "bridge.js"),
         ],
-        capture_output=True,
-        check=False,
-        text=True,
         timeout=10,
     )
     assert completed.returncode == 0, completed.stderr
@@ -548,15 +601,12 @@ def test_execution_confirmation_keeps_smoke_and_focus_native() -> None:
     node = _node_executable()
     assert node is not None, "Node.js is required for the execution-confirmation witness"
     assets = PROJECT_ROOT / "namisync" / "interfaces" / "web" / "assets"
-    completed = subprocess.run(
+    completed = run_node_probe(
         [
             str(node),
             str(PROJECT_ROOT / "tests" / "assets" / "execution_confirmation_probe.mjs"),
             str(assets / "execution_confirmation.js"),
         ],
-        capture_output=True,
-        check=False,
-        text=True,
         timeout=10,
     )
     assert completed.returncode == 0, completed.stderr
@@ -568,7 +618,7 @@ def test_supplemental_node_theme_selector_reconciles_authoritative_state() -> No
     node = _node_executable()
     if node is None:
         pytest.skip("Node.js is unavailable for the supplemental theme probe")
-    completed = subprocess.run(
+    completed = run_node_probe(
         [
             str(node),
             str(PROJECT_ROOT / "tests" / "assets" / "theme_selector_probe.mjs"),
@@ -581,9 +631,6 @@ def test_supplemental_node_theme_selector_reconciles_authoritative_state() -> No
                 / "theme.js"
             ),
         ],
-        capture_output=True,
-        check=False,
-        text=True,
         timeout=10,
     )
     assert completed.returncode == 0, completed.stderr
@@ -595,7 +642,7 @@ def test_supplemental_node_shared_test_bootstrap_is_generation_bound() -> None:
     node = _node_executable()
     if node is None:
         pytest.skip("Node.js is unavailable for the supplemental test bootstrap probe")
-    completed = subprocess.run(
+    completed = run_node_probe(
         [
             str(node),
             str(
@@ -611,9 +658,6 @@ def test_supplemental_node_shared_test_bootstrap_is_generation_bound() -> None:
                 / "bootstrap_test_bridge.js"
             ),
         ],
-        capture_output=True,
-        check=False,
-        text=True,
         timeout=10,
     )
     assert completed.returncode == 0, completed.stderr
@@ -1029,7 +1073,7 @@ def test_supplemental_node_tree_probe_uses_production_modules(
     assert "fixtureViews.empty" in probe_source
     assert "fixtureViews.tail" in probe_source
 
-    completed = subprocess.run(
+    completed = run_node_probe(
         [
             str(node),
             str(probe),
@@ -1038,9 +1082,6 @@ def test_supplemental_node_tree_probe_uses_production_modules(
             str(tree_window_fixture.path.resolve()),
             tree_window_fixture.sha256,
         ],
-        capture_output=True,
-        check=False,
-        text=True,
         timeout=10,
     )
 
@@ -1058,15 +1099,12 @@ def test_setup_form_keeps_stable_controls_and_raw_filter_text() -> None:
     node = _node_executable()
     if node is None:
         pytest.skip("Node.js is unavailable for the Setup probe")
-    completed = subprocess.run(
+    completed = run_node_probe(
         [
             str(node),
             str(PROJECT_ROOT / "tests" / "assets" / "setup_probe.mjs"),
             str(PROJECT_ROOT / "namisync" / "interfaces" / "web" / "assets" / "setup.js"),
         ],
-        capture_output=True,
-        check=False,
-        text=True,
         timeout=10,
     )
     assert completed.returncode == 0, completed.stdout + completed.stderr
@@ -1079,15 +1117,12 @@ def test_setup_app_guards_gestures_retries_and_serial_batch_ownership() -> None:
     node = _node_executable()
     if node is None:
         pytest.skip("Node.js is unavailable for the Setup app probe")
-    completed = subprocess.run(
+    completed = run_node_probe(
         [
             str(node),
             str(PROJECT_ROOT / "tests" / "assets" / "setup_app_probe.mjs"),
             str(PROJECT_ROOT / "namisync" / "interfaces" / "web" / "assets" / "app.js"),
         ],
-        capture_output=True,
-        check=False,
-        text=True,
         timeout=20,
     )
     assert completed.returncode == 0, completed.stdout + completed.stderr
@@ -1110,11 +1145,8 @@ def test_supplemental_node_inert_text_rejects_before_coercion() -> None:
         / "render.js"
     )
 
-    completed = subprocess.run(
+    completed = run_node_probe(
         [str(node), str(probe), str(renderer)],
-        capture_output=True,
-        check=False,
-        text=True,
         timeout=10,
     )
 
@@ -1136,11 +1168,8 @@ def test_supplemental_node_byte_formatter_uses_binary_units_and_bigints() -> Non
         / "render.js"
     )
 
-    completed = subprocess.run(
+    completed = run_node_probe(
         [str(node), str(probe), str(renderer)],
-        capture_output=True,
-        check=False,
-        text=True,
         timeout=10,
     )
 
