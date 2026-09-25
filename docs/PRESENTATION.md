@@ -145,7 +145,7 @@ retain their separate pending and revision guards, so a later window response
 cannot restore older interactive facts. The retained browser window stays bounded
 at 256 rows. Background execution refresh waits for complete foreground view,
 highlight, selection, and scroll reads. It adopts only while the same review and
-reload generation, foreground epoch, view, task/session, and displayed offset
+foreground epoch, view, task/session, and displayed offset
 remain current. Invalidated or rejected reads preserve one dirty replay at the
 accepted offset and cannot publish result facts or retire exact detail, including
 when the total population is larger.

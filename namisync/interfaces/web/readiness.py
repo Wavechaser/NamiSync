@@ -42,6 +42,7 @@ class _ReadinessState(Enum):
     REFUSED = "refused"
     CLOSING = "closing"
     CANCELED = "canceled"
+    RETIRED = "retired"
 
 
 class DesktopReadinessGate:
@@ -119,6 +120,7 @@ class DesktopReadinessGate:
                 _ReadinessState.REFUSED,
                 _ReadinessState.CANCELED,
                 _ReadinessState.CLOSING,
+                _ReadinessState.RETIRED,
             }:
                 return
             self._generation += 1
@@ -135,6 +137,20 @@ class DesktopReadinessGate:
             cancel = self._cancel_deadline
             self._cancel_deadline = None
         self._cancel_safely(cancel)
+
+    def retire_document(self) -> int:
+        """Permanently revoke this window's page admission without closing work."""
+
+        with self._lock:
+            if self._state is not _ReadinessState.RETIRED:
+                self._generation += 1
+                self._state = _ReadinessState.RETIRED
+                self._challenge = None
+            cancel = self._cancel_deadline
+            self._cancel_deadline = None
+            generation = self._generation
+        self._cancel_safely(cancel)
+        return generation
 
     def bind(
         self,
@@ -225,6 +241,7 @@ class DesktopReadinessGate:
             if self._state not in {
                 _ReadinessState.REFUSED,
                 _ReadinessState.CLOSING,
+                _ReadinessState.RETIRED,
             }:
                 self._state = _ReadinessState.CANCELED
             cancel = self._cancel_deadline

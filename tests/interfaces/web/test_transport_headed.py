@@ -369,14 +369,10 @@ def test_transport_gate_assets_keep_test_implementation_outside_package() -> Non
     assert 'import("./bridge.js")' in scripts
     assert 'import("./bootstrap_test_bridge.js")' in scripts
     transport = (_TEST_ASSETS / "transport.js").read_text(encoding="utf-8")
-    assert "function injectRendererOnlyReturnTableLoss()" in transport
-    assert "function reincarnateBridge()" not in transport
-    renderer_only = transport.split(
-        "function injectRendererOnlyReturnTableLoss()", 1
-    )[1].split("\n}", 1)[0]
-    assert 'window.dispatchEvent(new Event("pywebviewready"));' in renderer_only
-    assert "markBridgeOperational();" in renderer_only
-    assert "acknowledgeShellReady" not in renderer_only
+    assert 'window.dispatchEvent(new Event("pywebviewready"));' not in transport
+    assert 'deadlineFaultPhase = "start_plan";' in transport
+    assert 'deadlineFaultPhase = "main_drain";' in transport
+    assert 'targeted === null ? milliseconds : 500' in transport
     assert "pickFolder(" in scripts
     assert "startPlan(" in scripts
     assert '"next_events"' in scripts
@@ -1346,6 +1342,10 @@ def test_br_g_33_real_webview2_recovers_only_from_explicit_transport_evidence(
     assert browser["callback_release_order"] == ["record", "release"]
     assert browser["automatic_close_calls"] == 0
     assert browser["replacement_registration"] is True
+    assert browser["deadline_faults"] == {
+        "start_plan": {"armed": 1, "fired": 1},
+        "main_drain": {"armed": 1, "fired": 1},
+    }
     assert browser["cleanup"] == {
         "active_timers": 0,
         "ready_listeners": 1,

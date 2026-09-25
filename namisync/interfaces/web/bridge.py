@@ -322,6 +322,7 @@ class NativeDocumentState:
         self._attached = False
         self._attachment_error: str | None = None
         self._security_configuration_claimed = False
+        self._replacement_handler: Callable[[], None] | None = None
 
     @property
     def is_attached(self) -> bool:
@@ -342,6 +343,18 @@ class NativeDocumentState:
             if self._origin is not None:
                 raise RuntimeError("native document origin is already bound")
             self._origin = origin
+
+    def _set_replacement_handler(self, handler: Callable[[], None]) -> None:
+        if not callable(handler):
+            raise TypeError("document replacement handler must be callable")
+        with self._lock:
+            if self._replacement_handler is not None:
+                raise RuntimeError("document replacement handler is already bound")
+            self._replacement_handler = handler
+
+    def _get_replacement_handler(self) -> Callable[[], None] | None:
+        with self._lock:
+            return self._replacement_handler
 
     def require_trusted(self) -> None:
         with self._lock:
@@ -409,9 +422,13 @@ class _NativeNavigationGuard:
         self,
         origin: ExactOrigin,
         document: NativeDocumentState,
+        window: object,
     ) -> None:
         self._origin = origin
         self._document = document
+        self._window = window
+        self._pending_content_id: int | None = None
+        self._completion_filter: Callable[[object, object], None] | None = None
 
     def attach(self, core_webview2: object) -> None:
         try:
@@ -421,6 +438,9 @@ class _NativeNavigationGuard:
             )
             core_webview2.NewWindowRequested += self._on_new_window_requested
             core_webview2.SourceChanged += self._on_source_changed
+            if self._document._get_replacement_handler() is not None:
+                core_webview2.ContentLoading += self._on_content_loading
+                self._filter_pywebview_completions()
         except AttributeError as error:
             raise _AttachmentError(
                 "pywebview Edge Chromium backend does not expose required "
@@ -448,6 +468,42 @@ class _NativeNavigationGuard:
         del args
         self._document._record(_core_source(sender))
 
+    def _on_content_loading(self, sender: object, args: object) -> None:
+        del sender
+        self._pending_content_id = int(args.NavigationId)
+        handler = self._document._get_replacement_handler()
+        if handler is not None:
+            handler()
+
+    def _filter_pywebview_completions(self) -> None:
+        """Inject only after a new document, never after canceled navigation."""
+
+        try:
+            browser = self._window.native.browser
+            control = browser.webview
+            original = browser.on_navigation_completed
+            if not callable(original):
+                raise AttributeError("navigation completion handler is unavailable")
+            control.NavigationCompleted -= original
+            try:
+                def completed(sender: object, args: object) -> None:
+                    navigation_id = int(args.NavigationId)
+                    if navigation_id != self._pending_content_id:
+                        return
+                    self._pending_content_id = None
+                    original(sender, args)
+
+                control.NavigationCompleted += completed
+            except Exception:
+                control.NavigationCompleted += original
+                raise
+            self._completion_filter = completed
+        except AttributeError as error:
+            raise _AttachmentError(
+                "pywebview Edge Chromium backend does not expose required "
+                "navigation completion event"
+            ) from error
+
 
 def configure_pywebview2_security(
     window: object,
@@ -467,7 +523,7 @@ def configure_pywebview2_security(
         origin = document._require_bound_origin(origin)
     if not document._claim_security_configuration():
         return document
-    guard = _NativeNavigationGuard(origin, document)
+    guard = _NativeNavigationGuard(origin, document, window)
     attempted = False
 
     def attach_before_load() -> None:

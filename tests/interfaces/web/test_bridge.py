@@ -116,6 +116,10 @@ class EventHook:
         self.handlers.append(handler)
         return self
 
+    def __isub__(self, handler):
+        self.handlers.remove(handler)
+        return self
+
     def emit(self, args, *, sender=None) -> None:
         for handler in self.handlers:
             handler(sender, args)
@@ -141,6 +145,7 @@ class FakeCoreWebView2:
         self.FrameNavigationStarting = EventHook()
         self.NewWindowRequested = EventHook()
         self.SourceChanged = EventHook()
+        self.ContentLoading = EventHook()
 
 
 class BeforeLoadHook:
@@ -170,6 +175,7 @@ class FakeManagedWebView:
         self._window = window
         self._core = core
         self.core_accesses = 0
+        self.NavigationCompleted = EventHook()
 
     @property
     def CoreWebView2(self) -> FakeCoreWebView2:
@@ -2370,6 +2376,46 @@ def test_async_small_close_timeout_is_retryable_until_command_worker_exits() -> 
     resume.set()
     bridge.wait_for_handlers(1.0)
     assert bridge.dispatch(command)["error"]["code"] == "bridge_unavailable"
+
+
+def test_document_loading_filters_canceled_and_obsolete_pywebview_injection() -> None:
+    core = FakeCoreWebView2()
+    window = _window(core)
+    injected: list[int] = []
+    replacements: list[str] = []
+
+    def original_completion(_sender: object, args: object) -> None:
+        injected.append(args.NavigationId)
+
+    window.native.browser.on_navigation_completed = original_completion
+    window.managed_webview.NavigationCompleted += original_completion
+    document = NativeDocumentState()
+    document.bind_origin(ExactOrigin.from_url(core.Source))
+    document._set_replacement_handler(lambda: replacements.append("retired"))
+    configure_pywebview2_security(window, core.Source, document=document)
+    window.events.before_load.emit()
+
+    canceled = SimpleNamespace(NavigationId=3, IsSuccess=False)
+    window.managed_webview.NavigationCompleted.emit(canceled, sender=window.managed_webview)
+    assert injected == []
+    assert replacements == []
+
+    core.ContentLoading.emit(SimpleNamespace(NavigationId=4), sender=core)
+    core.ContentLoading.emit(SimpleNamespace(NavigationId=5), sender=core)
+    window.managed_webview.NavigationCompleted.emit(
+        SimpleNamespace(NavigationId=4, IsSuccess=True),
+        sender=window.managed_webview,
+    )
+    assert replacements == ["retired", "retired"]
+    assert injected == []
+    replacement = SimpleNamespace(NavigationId=5, IsSuccess=False)
+    window.managed_webview.NavigationCompleted.emit(
+        replacement, sender=window.managed_webview,
+    )
+    window.managed_webview.NavigationCompleted.emit(
+        replacement, sender=window.managed_webview,
+    )
+    assert injected == [5]
 
 
 def test_pinned_pywebview_keeps_serialization_and_return_on_one_worker() -> None:

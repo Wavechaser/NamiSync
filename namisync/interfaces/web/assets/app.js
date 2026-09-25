@@ -634,14 +634,11 @@ function retryTaskUpdates(taskId) {
   }
 }
 
-async function refreshTasks(epoch) {
+async function refreshTasks() {
   const mutationBaseline = taskMutationRevision;
   const result = await listTasks();
-  if (epoch !== startupEpoch) {
-    return;
-  }
   if (mutationBaseline !== taskMutationRevision) {
-    void refreshTasks(epoch);
+    void refreshTasks();
     return;
   }
   const retainedIds = new Set();
@@ -670,11 +667,9 @@ async function createBlankTask() {
     return;
   }
   if (createAttempt !== null && typeof createAttempt.retry !== "function") return;
-  const epoch = startupEpoch;
   const selectionBaseline = navigationRevision;
   const retry = createAttempt?.retry ?? null;
   const attempt = createAttempt ?? {
-    epoch,
     running: true,
     dispatched: true,
     retry: null,
@@ -687,11 +682,6 @@ async function createBlankTask() {
   try {
     const result = await (retry === null ? createTask() : retry());
     taskMutationRevision += 1;
-    if (epoch !== startupEpoch) {
-      if (createAttempt === attempt) createAttempt = null;
-      void refreshTasks(startupEpoch);
-      return;
-    }
     const task = adoptTask({
       task_id: result.task_id,
       session_id: null,
@@ -717,11 +707,9 @@ async function createBlankTask() {
       return;
     }
     createAttempt = null;
-    if (epoch === startupEpoch) {
-      renderHostStatus(
-        "A task could not be created. Close an unused task or wait, then try again.",
-      );
-    }
+    renderHostStatus(
+      "A task could not be created. Close an unused task or wait, then try again.",
+    );
   } finally {
     if (createAttempt === attempt && attempt.retry === null) createAttempt = null;
     renderTasks();
@@ -734,7 +722,6 @@ async function closeRetainedTask(taskId) {
     return;
   }
   if (batchTaskBlockReason(taskId) !== null) return;
-  const epoch = startupEpoch;
   task.closePending = true;
   task.closeFailed = false;
   task.error = null;
@@ -747,10 +734,6 @@ async function closeRetainedTask(taskId) {
     task.closeFailed = false;
     if (result.disposition === "closed") {
       taskMutationRevision += 1;
-    }
-    if (epoch !== startupEpoch) {
-      void refreshTasks(startupEpoch);
-      return;
     }
     if (tasks.get(taskId) !== task) {
       return;
@@ -769,7 +752,7 @@ async function closeRetainedTask(taskId) {
       remainsPending = true;
     }
   } catch (error) {
-    if (epoch === startupEpoch && tasks.get(taskId) === task) {
+    if (tasks.get(taskId) === task) {
       task.closeRetry = error instanceof TaskCloseUncertainError ? error.retry : null;
       task.closeFailed = true;
       task.error = task.closeRetry === null
@@ -779,7 +762,6 @@ async function closeRetainedTask(taskId) {
   } finally {
     if (
       !remainsPending &&
-      epoch === startupEpoch &&
       tasks.get(taskId) === task
     ) {
       task.closePending = false;
@@ -897,10 +879,9 @@ async function loadTaskSetup(task) {
 
 async function loadDefaultSetup() {
   const revision = ++defaultSetupRevision;
-  const epoch = startupEpoch;
   try {
     const result = await readSetup();
-    if (revision !== defaultSetupRevision || epoch !== startupEpoch) return;
+    if (revision !== defaultSetupRevision) return;
     defaultSetup = result;
     for (const task of tasks.values()) {
       if (task.form === null && task.taskKind === null) {
@@ -933,9 +914,8 @@ async function runRecentPairProbe() {
   if (recents === undefined || recents.pairs.length === 0) return;
   recentPairProbeRunning = true;
   const revision = recentPairProbeRevision;
-  const epoch = startupEpoch;
   const current = () => revision === recentPairProbeRevision
-    && epoch === startupEpoch && defaultSetup?.recents === recents;
+    && defaultSetup?.recents === recents;
   try {
     const result = await probeRecentPairs();
     if (!current()) return;
@@ -2066,7 +2046,6 @@ function beginFormAttempt(task, form, kind) {
   ) return null;
   const attempt = {
     kind,
-    epoch: startupEpoch,
     running: true,
     dispatched: false,
     retry: null,
@@ -2084,7 +2063,6 @@ function currentFormAttempt(task, form, attempt) {
 function freshFormAttempt(task, form, attempt, revision) {
   return currentFormAttempt(task, form, attempt)
     && !attempt.dispatched
-    && attempt.epoch === startupEpoch
     && form.revision === revision;
 }
 
@@ -2109,7 +2087,7 @@ async function dispatchFormAttempt(task, form, attempt, submit) {
     return;
   }
   if (currentFormAttempt(task, form, attempt)) form.attempt = null;
-  await refreshTasks(startupEpoch);
+  await refreshTasks();
 }
 
 async function retryFormAttempt(task, form, kind) {
@@ -2324,7 +2302,7 @@ async function startBatchRow(row, context) {
       row.recents = context.recents;
       if (!context.canSubmit()) {
         row.state = "stopped";
-        row.message = "Not submitted after the page was replaced.";
+        row.message = "Not submitted because the batch changed.";
         return;
       }
       row.stage = "creating";
@@ -2335,8 +2313,8 @@ async function startBatchRow(row, context) {
     }
     if (!context.canSubmit()) {
       row.state = "stopped";
-      row.message = "The blank task was retained; its plan was not submitted after the page was replaced.";
-      void refreshTasks(startupEpoch);
+      row.message = "The blank task was retained; its plan was not submitted because the batch changed.";
+      void refreshTasks();
       return;
     }
     row.stage = "starting";
@@ -2373,20 +2351,18 @@ async function startPairBatch() {
   if (queued.some((row) => row.options === null)) return;
   const owner = { originTaskId: task.taskId };
   const generation = batch.generation;
-  const epoch = startupEpoch;
   const context = {
-    epoch,
     snapshot: form.setup,
     recents: defaultSetup?.recents ?? form.setup.recents,
     contains: (row) => batch.rows.includes(row),
-    canSubmit: () => currentBatchRun(batch, owner, generation) && epoch === startupEpoch
+    canSubmit: () => currentBatchRun(batch, owner, generation)
       && tasks.get(task.taskId) === task && !task.closePending,
   };
   batch.running = owner;
   renderTasks();
   try {
     for (const row of rows) {
-      if (!currentBatchRun(batch, owner, generation) || epoch !== startupEpoch) break;
+      if (!currentBatchRun(batch, owner, generation)) break;
       if (!batch.rows.includes(row)) continue;
       if (!["queued", "uncertain"].includes(row.state)) continue;
       await startBatchRow(row, context);
@@ -2396,7 +2372,7 @@ async function startPairBatch() {
     if (batch.running === owner) batch.running = null;
     renderTasks();
   }
-  if (epoch === startupEpoch) await refreshTasks(epoch);
+  await refreshTasks();
 }
 
 async function admitBatchRow(row, purpose) {
@@ -2450,42 +2426,21 @@ async function startPlanAgain(task = currentTask()) {
   return true;
 }
 
-class StartupSupersededError extends Error {}
-
-let startupEpoch = 0;
-let rejectSupersededStartup = null;
-
-async function finishStartup(epoch, readinessBaseline) {
-  const superseded = new Promise((resolve, reject) => {
-    void resolve;
-    if (epoch !== startupEpoch) {
-      reject(new StartupSupersededError());
-      return;
-    }
-    rejectSupersededStartup = reject;
-  });
-  const awaitCurrent = async (value) => {
-    const result = await Promise.race([value, superseded]);
-    if (epoch !== startupEpoch) {
-      throw new StartupSupersededError();
-    }
-    return result;
-  };
-  await awaitCurrent(whenBridgeApiReady());
+async function finishStartup() {
+  const readinessBaseline = readiness.revision();
+  await whenBridgeApiReady();
   try {
-    await awaitCurrent(acknowledgeShellReady());
+    await acknowledgeShellReady();
   } catch (error) {
     if (!(error instanceof BridgeTransportError)) {
       throw error;
     }
   }
-  const challenge = await awaitCurrent(
-    readiness.whenReceivedAfter(readinessBaseline),
-  );
+  const challenge = await readiness.whenReceivedAfter(readinessBaseline);
   let acknowledged = false;
   for (let attempt = 0; attempt < 2 && !acknowledged; attempt += 1) {
     try {
-      const result = await awaitCurrent(echoReadiness(challenge));
+      const result = await echoReadiness(challenge);
       acknowledged = result.acknowledged;
     } catch (error) {
       if (!(error instanceof BridgeTransportError) || attempt > 0) {
@@ -2499,7 +2454,7 @@ async function finishStartup(epoch, readinessBaseline) {
     );
   }
   markBridgeOperational();
-  await awaitCurrent(refreshTasks(epoch));
+  await refreshTasks();
   void loadDefaultSetup();
   void theme.open(appliedPresentationRevision);
   if (status.textContent === "Starting...") {
@@ -2507,69 +2462,6 @@ async function finishStartup(epoch, readinessBaseline) {
   }
 }
 
-let startupAttempt = null;
-let startupRerunRequested = false;
-let startupRerunReadinessBaseline = null;
-
-function ensureStartup({
-  rerun = false,
-  readinessBaseline = readiness.revision(),
-} = {}) {
-  if (startupAttempt !== null) {
-    if (rerun) {
-      startupRerunRequested = true;
-      startupRerunReadinessBaseline = readinessBaseline;
-    }
-    return startupAttempt;
-  }
-  const attempt = finishStartup(startupEpoch, readinessBaseline);
-  startupAttempt = attempt;
-  void attempt.finally(() => {
-    if (startupAttempt === attempt) {
-      startupAttempt = null;
-      rejectSupersededStartup = null;
-      if (startupRerunRequested) {
-        const rerunReadinessBaseline = startupRerunReadinessBaseline;
-        startupRerunRequested = false;
-        startupRerunReadinessBaseline = null;
-        void ensureStartup({
-          readinessBaseline: rerunReadinessBaseline,
-        });
-      }
-    }
-  }).catch(() => {
-    // Native startup refusal owns the action-guiding terminal diagnostic.
-  });
-  return attempt;
-}
-
-window.addEventListener("pywebviewready", () => {
-  startupEpoch += 1;
-  recentPairProbeRevision += 1;
-  recentPairProbePending = false;
-  recentPairAvailability = Object.create(null);
-  renderTasks();
-  if (pageBatch !== null) {
-    pageBatch.generation += 1;
-    for (const row of pageBatch.rows) {
-      if (row.state === "queued") {
-        row.state = "stopped";
-        row.message = "Not submitted after the page was replaced.";
-      }
-    }
-  }
-  for (const task of tasks.values()) {
-    task.closePending = false;
-    if (task.form !== null && task.form.attempt !== null && !task.form.attempt.dispatched) {
-      task.form.attempt = null;
-      task.form.actionMessage = "The start was stopped before submission when the page was replaced.";
-    }
-  }
-  theme.invalidate();
-  rejectSupersededStartup?.(new StartupSupersededError());
-  if (status.textContent === "Ready") {
-    renderHostStatus("Starting...");
-  }
-  void ensureStartup({ rerun: true });
+void finishStartup().catch(() => {
+  // Native startup refusal owns the action-guiding terminal diagnostic.
 });
-void ensureStartup();

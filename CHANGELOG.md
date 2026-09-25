@@ -1027,6 +1027,20 @@ repeated machinery while preserving operational safety and boundary contracts.
 Safety, settlement, authority, and measurement work made high-risk release
 claims explicit, independently reviewable, and regression-backed.
 
+#### Replace desktop reload recovery with contained restart (2026-09-25)
+
+- Permanently retire page command and appearance authority on genuine document
+  replacement. Preserve admitted work and worker custody; show close/reopen and
+  fresh-review guidance, with normal bounded retryable shutdown on X even when
+  an early replacement never finishes loading.
+- Distinguish native content loading from canceled navigation and fragment
+  history. Suppress pywebview reinjection after canceled completions, and remove
+  browser reload counters and shell reconstruction while retaining host command
+  identity, task observation recovery and ordinary navigation/selection.
+- Migrate reload-based test journeys to same-document operations and retain
+  stale-response, progress, mutation-race and retry checks. AB-7 mutation deadline
+  policy remains a separate checkpoint.
+
 #### Repair native test interaction assumptions before ablation (2026-09-25)
 
 - Verify the folder dialog's typed Unicode path before one confirmation;

@@ -1,39 +1,41 @@
-# Latest session — native test interaction prerequisites
+# Latest session — AB-6 delivered
 
-2026-09-25; `milestone1`, delivery base `1cb75fb` (AB-5). AB-1–5 are integrated;
-M1_PLAN retains their commit identities. The user requested sorting the picker
-and gesture issues before continuing AB-6. No product files changed in this
-session; AB-6 reload containment and AB-7–10 remain pending.
+2026-09-25; `milestone1`, AB-6 checkpoint based on `f55a7dd`.
+AB-1–6 and H1/H2 are integrated. AB-7 implementation has not started; its
+existing admission/completion scope and settled D2 remain in M1_PLAN. The user
+requires Claude Opus 5.5/high review through `claude-code-reviewer` before AB-7
+closure, with independent fixtures allowed in a disposable copy and cleanup
+verified. This extra review requirement covers AB-6/7 only.
 
-The folder-picker helper now verifies exact Unicode edit readback, posts one
-confirmation and reports `dialog_closed`, leaving the actual selected-path
-verdict to the transport fixture. Wrong readback or ownership refuses the post;
-a still-open dialog does not trigger another click. The final focused controls
-pass, and executing the old helper against the open-dialog control produces
-two posts and the expected failure. This repairs the automation assumptions;
-the original intermittent wrong-directory cause remains unconfirmed.
+AB-6 permanently retires command/appearance authority on real replacement,
+retires response delivery on each later document, and removes browser reload
+reconstruction. Canceled navigation/fragment history remain usable. Admitted
+work keeps actual custody; normal X remains available even when early
+replacement never reaches loaded. Fixed guidance directs close/reopen/fresh
+folder review and planning. Initial readiness, D4 and observation retry remain;
+mutation deadlines/replay are untouched for AB-7.
 
-Gesture attempt 06 delivered all five native inputs to an owned foreground/
-focused window and closed cleanly. F5, Ctrl+R and Alt+Left did not navigate;
-mouse Back moved through fragment history without replacing the document.
-Right click produced a DOM context-menu event with no sampled owned native
-popup; other menu-rendering paths are not excluded by that observation.
-The user saw attempt 05 and then clicked another window during its hold;
-the causes of attempts 01–04 remain unknown. Native input checks now have
-documented brief uninterrupted foreground-input intervals.
+Final verification: 5,317 ordinary passes and four unavailable Windows
+symlink-privilege skips; all 34 headed cases passed in one final run; 12 import
+contracts kept. Native security/replacement, Unicode picker, Setup, task shell,
+execution and normal-close cases pass. Independent source/evidence review and
+the requested Claude review accepted the corrected candidate. Claude independently
+tested both early-X orderings and real held-worker custody. Original files were
+verified unchanged during review, and the isolated copy/private updated CLI and
+runtime fixtures were removed. Raw review/fixture source remains as evidence.
+The WinGet-managed CLI was not upgraded; its feed remained at 2.1.268, so the
+authorized review used official signed/hash-verified 2.1.282 only in the copy.
 
-Verification: 33 final focused tests, six installed transport cases, 1,771
-interface department tests and the complete 33-case headed gate passed.
-Fresh independent H1/H2 source/evidence reviews and documentation link/diff
-checks passed. Do not infer AB-6 completion from these
-prerequisites. All evidence, including failed diagnostics and the original
-picker failure, remains under ignored `build/post-m1-8-ablation-20260925/`;
-`harness-verification.md` maps receipts and evidence reuse.
+Ignored `build/post-m1-8-ablation-20260925/ab6-verification.md` maps final and
+failed receipts, installed identity, review findings and cleanup. The Claude
+report there records session continuity, separate token fields and cumulative
+Opus cost USD 6.1839226 (plus the separately recorded failed pre-review call).
+The earlier close-refusal popup was test-owned: a stalled driver held a worker.
+Its cleanup now releases fixture holds; no user action is needed on that popup.
 
-For eventual AB-6 work, read `ab6-design.md` and refresh its affected helpers.
-Pinned pywebview reinjects after canceled navigation/popup while retaining the
-same document; a second `before_load` alone cannot identify replacement.
-Preserve original mutation outcomes, worker custody and clean close; D2 and D4
-remain settled. The saved `56802606` recovery contains only superseded planning/
-handoff state, not product changes; do not merge or cherry-pick it. Keep that
-branch, the AB-3 worktree/branch and all raw evidence for AB-10 accounting.
+No foreground test is running. For the rest of this session, announce every
+foreground batch before launch and say when it ends so the user can leave the
+desktop available. Preserve old AB-6 recovery `56802606`, the AB-3 recovery
+worktree/ref and raw receipts for AB-10; never integrate a recovery WIP as-is.
+M1_PLAN owns the next checkpoint boundary; do not infer an expanded protocol or
+additional ablation scope from the review notes.

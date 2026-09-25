@@ -104,7 +104,7 @@ Gap recovery without retained `PhaseChanged` (including a newer self-described
 phase in the retained tail), retry attempts, overshoot,
 aggregate and attempt regression refusal, reliable outcome/Terminal
 precedence, compound post-copy identity, immutable callback projections, and
-bridge reincarnation cursor recovery. Its deferred-directory handoff case is a
+same-document observation cursor recovery. Its deferred-directory handoff case is a
 cross-boundary fixture: the public Python executor emits real envelopes through
 the lossy event subscriber and exact `SessionEventView`, then the packaged
 JavaScript reducer accepts the coalesced direct change from directory activity
@@ -149,9 +149,15 @@ the fixture must separately verify the returned source/target paths. A delayed
 or still-open dialog is not a reason to post another confirmation.
 Readiness changes require focused coverage of the order-independent gate,
 queued document-currentness check, exact bootstrap command policy, browser
-supersession/retry behavior, and both degradable and unsafe native-surface
+initial retry and replacement retirement, and both degradable and unsafe native-surface
 outcomes. Every headed page that performs startup must complete the neutral
 challenge/echo protocol; an appearance envelope is not a substitute witness.
+Reload containment must distinguish actual new content from canceled navigation
+and fragment history. Hold an admitted command across a forced document load,
+verify one effect and actual worker settlement, reject replacement-page commands,
+observe actionable restart guidance, and close through the normal host path.
+Same-document task/setup journeys retain navigation, independent selection,
+mutation races and Retry updates; page reconstruction is no longer their gate.
 Positive custom pages use `bootstrapTestBridge()` from
 `tests/assets/bootstrap_test_bridge.js`; positive host seams use
 `drive_startup_handshake()` from

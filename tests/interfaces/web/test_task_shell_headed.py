@@ -138,6 +138,43 @@ def test_task_shell_failure_records_do_not_expose_private_text(tmp_path: Path) -
     }
 
 
+def test_task_shell_page_failure_releases_held_fixture_workers(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> None:
+    from types import SimpleNamespace
+    import sys
+
+    monkeypatch.setitem(sys.modules, "System", SimpleNamespace(Action=lambda callback: callback))
+    paths = EvidencePaths(tmp_path.resolve())
+    recorder = child._Recorder(paths)
+    control = child._Control(recorder, tmp_path / "source", tmp_path / "target")
+    control.stage = "busy"
+    task = SimpleNamespace(GetAwaiter=lambda: SimpleNamespace(OnCompleted=lambda callback: callback()))
+    core = SimpleNamespace(CallDevToolsProtocolMethodAsync=lambda *_args: task)
+    native = SimpleNamespace(
+        InvokeRequired=False,
+        browser=SimpleNamespace(webview=SimpleNamespace(CoreWebView2=core)),
+        BeginInvoke=lambda callback: callback(),
+    )
+
+    def failed_page(_task: object) -> object:
+        raise RuntimeError("busy page probe failed")
+
+    monkeypatch.setattr(child, "_runtime_value", failed_page)
+    monkeypatch.setattr(child, "failure_site", lambda _task: {"exception": "Error", "lines": [42]})
+    child._begin_probe(
+        SimpleNamespace(native=native), recorder, control, [], tmp_path / "execution-confirmation.png",
+    )
+
+    assert EvidenceReader(paths).read_failure() == {
+        "failure": {"stage": "page_busy", "type": "RuntimeError"},
+    }
+    assert all(gate.is_set() for gate in (
+        control.create_gate, control.busy_gate, control.release_gate,
+        control.follow_release, control.execution_release,
+    ))
+
+
 @pytest.mark.headed
 @pytest.mark.parametrize("large_window", [False, True], ids=["default", "larger"])
 def test_m1_4_installed_task_shell_navigation_closure_and_recovery(
@@ -188,12 +225,6 @@ def test_m1_4_installed_task_shell_navigation_closure_and_recovery(
             "closeEnabled": True,
         },
     }
-    assert report["reinjected"] == {
-        "count": 47,
-        "newest": "Task 47",
-        "selected": "Task 47",
-        "work": "Task 47",
-    }
     busy = report["busy"]
     assert busy["retainedPending"] is True
     assert busy["pending"]["busy_state"] == "canceling"
@@ -215,7 +246,7 @@ def test_m1_4_installed_task_shell_navigation_closure_and_recovery(
     second = report["terminal_second"]
     assert second["count_before_close"] == 47
     assert second["status_before_close"] == "Completed"
-    assert second["retained"]["release_calls"] > first["before"]["release_calls"]
+    assert second["retained"]["release_calls"] == first["before"]["release_calls"]
     assert second["retained"]["terminal_present"] is True
     assert second["retained"]["session_released"] is False
     assert second["released"]["terminal_present"] is True
@@ -270,7 +301,7 @@ def test_m1_4_installed_task_shell_navigation_closure_and_recovery(
         "reopenExecutePointInViewport": True,
         "reopenExecuteHitTested": True,
         "reopenCancelInitiallyFocused": True,
-        "selectedBeforeBackgroundInput": "Task 48",
+        "selectedBeforeBackgroundInput": "Task 53",
         "railScrollBeforeBackgroundInput": 120,
         "firstTabFocusedConfirm": True,
         "secondTabFocusedCancel": True,
@@ -300,7 +331,7 @@ def test_m1_4_installed_task_shell_navigation_closure_and_recovery(
         "retainedSelectedTask": True,
         "countBeforePlanAgain": 47,
         "countAfterPlanAgain": 48,
-        "newTaskTitle": "Task 49",
+        "newTaskTitle": "Task 54",
     }
     assert plan_review["followNavigation"] == {
         "automaticMoved": True, "nativeOverride": True, "goStayedManual": True,
@@ -386,7 +417,7 @@ def _run_task_shell_scenario(
 
     if trace_enabled:
         verify_restored_assets(installed.root, trace_assets)
-        phases = {"task-47-48", "task-48-49"}
+        phases = {"task-52-53", "task-53-54"}
         if "plan_again_browser_trace" in initial:
             validate_trace_snapshot(initial["plan_again_browser_trace"], phases)
             validate_trace_snapshot(initial["plan_again_host_trace"], phases, allow_empty=True)
@@ -442,12 +473,17 @@ def test_driver_failure_reports_actual_checkpoint(
 
     paths = EvidencePaths(tmp_path.resolve())
     recorder = child._Recorder(paths)
-    control = SimpleNamespace(checkpoint=checkpoint, diagnostic_status=lambda: {})
+    control = child._Control(recorder, tmp_path / "source", tmp_path / "target")
+    control.checkpoint = checkpoint
     fail = child._drive_plan_confirmation(
         object(), SimpleNamespace(CallDevToolsProtocolMethodAsync=unavailable),
         recorder, control, [], tmp_path / "capture.png",
     )
     fail(RuntimeError("private diagnostic must remain hidden"))
+    assert all(gate.is_set() for gate in (
+        control.create_gate, control.busy_gate, control.release_gate,
+        control.follow_release, control.execution_release,
+    ))
     control.checkpoint = "plan_execute"
     fail(ValueError("later timeout must not replace first failure"))
     assert EvidenceReader(paths).read_failure() == {

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
@@ -28,6 +29,7 @@ from _headed_native import (
     terminate_process_tree,
     wait_for_accessible_text,
     wait_for_initial_evidence,
+    wait_for_path,
     wait_for_process,
     wait_for_window,
 )
@@ -37,6 +39,11 @@ _CHILD = Path(__file__).with_name("_native_gate_child.py")
 _INDEX = Path(__file__).parents[2] / "assets" / "native_host_gate" / "index.html"
 _BOOTSTRAP_DRIVER = _INDEX.parent.parent / "bootstrap_test_bridge.js"
 _SCRIPT = _INDEX.with_name("probe.js")
+_RELOADED_WINDOW_MESSAGE = (
+    "This NamiSync window was reloaded. Close it and reopen NamiSync. "
+    "Closing waits for running work to settle; after reopening, review "
+    "the folders and make a fresh plan."
+)
 _REQUIRED_SETTINGS = {
     "OPEN_EXTERNAL_LINKS_IN_BROWSER": False,
     "ALLOW_FILE_URLS": False,
@@ -172,7 +179,7 @@ def test_native_host_gate_page_keeps_the_probe_in_inert_page_data() -> None:
     assert 'await import("./bridge.js")' in packaged_probe
     assert "await bridge.whenBridgeReady();" in packaged_probe
     assert "await bridge.dispatchInteractive(" in packaged_probe
-    assert child.count("headed_command_extension(") == 2
+    assert child.count("headed_command_extension(") == 3
     assert "MappingProxyType" not in child
 
 
@@ -364,33 +371,37 @@ def test_br_g_30_real_installed_host_assumptions_are_measured(
     assert evidence["delayed_handler_completed"] is True
     delayed_transport = observations["delayedTransport"]
     assert delayed_transport["delayed_handler_joined"] is True
-    assert delayed_transport["delayed_evaluate_observed"] is False
+    assert evidence["delayed_return_evaluate_observed"] is True
     assert delayed_transport["delayed_evaluate_error"] is None
-    assert [
+    assert len([
         event for event in events if event["name"] == "delayed_return.evaluate"
-    ] == []
+    ]) == 1
     delayed_handler_complete = _only_event(events, "delayed_handler.complete")
     delayed_handler_joined = _only_event(events, "delayed_handler.joined")
     delayed_transport_dispatch = _phase_event(events, "wait_delayed_transport")
-    second_ready = next(
-        event
-        for event in events
-        if event["name"] == "pywebviewready" and event["count"] == 2
+    canceled_completion = next(
+        event for event in events
+        if event["name"] == "native_navigation_completed"
+        and event["navigation_id"] == navigation["navigation_id"]
     )
-    assert navigation["at"] < second_ready["at"]
-    assert second_ready["at"] < delayed_handler_complete["at"]
-    assert second_ready["at"] < delayed_transport_dispatch["at"]
+    assert canceled_completion["success"] is False
+    assert navigation["at"] < canceled_completion["at"]
+    assert canceled_completion["at"] < delayed_handler_complete["at"]
+    assert len([event for event in events if event["name"] == "before_load.enter"]) == 1
+    assert len([event for event in events if event["name"] == "pywebviewready"]) == 1
+    assert [event for event in events if event["name"] == "native_content_loading"] == []
     assert (
         max(delayed_handler_complete["at"], delayed_transport_dispatch["at"])
         < delayed_handler_joined["at"]
         < _phase_event(events, "after_navigation")["at"]
     )
-    assert page["lost_settled"] is False
-    assert observations["afterNavigation"]["page_ready_count"] == 2
-    assert observations["afterPopup"]["page_ready_count"] == 3
-    assert page["ready_count"] == 3
+    assert page["delayed_settled"] is True
+    assert observations["delayedReturn"] == "returned-delayed_return"
+    assert observations["afterNavigation"]["page_ready_count"] == 1
+    assert observations["afterPopup"]["page_ready_count"] == 1
+    assert page["ready_count"] == 1
     presentation_revisions = observations["presentationRevisions"]
-    assert len(presentation_revisions) == 3
+    assert len(presentation_revisions) == 1
     assert presentation_revisions == sorted(set(presentation_revisions))
     assert all(revision > 0 for revision in presentation_revisions)
     assert evidence["production_command_names"] == [
@@ -678,6 +689,62 @@ def test_br_g_31_installed_host_composition_preserves_security_boundaries(
     ]
 
 
+@pytest.mark.headed
+def test_ab6_replacement_retires_page_without_releasing_held_command(
+    headed_installed_wheel: HeadedInstalledWheel,
+    tmp_path_factory: pytest.TempPathFactory,
+) -> None:
+    root = require_absolute_local_test_root(
+        tmp_path_factory.mktemp("ab6-reload-containment")
+    )
+    index = _stage_live_page(headed_installed_wheel, root).with_name(
+        "reload_index.html"
+    )
+    evidence = _new_evidence_paths(root / "evidence")
+    result = _run_reload_containment_probe(
+        headed_installed_wheel,
+        data_root=require_absolute_local_test_root(root / "data"),
+        index=index,
+        evidence=evidence,
+    )
+    ready = result["ready"]
+    settled = result["settled"]
+    final = result["final"]
+    assert ready["startup_errors"] == []
+    assert ready["reloaded_status"] == _RELOADED_WINDOW_MESSAGE
+    assert ready["new_command_error"] == "bridge_unavailable"
+    assert ready["effects_before_release"] == 0
+    assert ready["retired_custody"] == ready["retirement_at_content"]
+    custody = ready["retired_custody"]
+    assert custody["generation"] == 2
+    assert custody["admitted"] == 1
+    assert custody["custodies"] == [{
+        "browser_released": True,
+        "completion_released": True,
+        "command_alive": True,
+    }]
+    assert settled == {
+        "custody": {"admitted": 0, "generation": 2, "custodies": []},
+        "effects": 1,
+        "service_close_before_x": 0,
+        "registry_close_before_x": 0,
+    }
+    events = final["events"]
+    assert len([event for event in events if event["name"] == "hold.enter"]) == 1
+    assert len([event for event in events if event["name"] == "hold.effect"]) == 1
+    assert len([event for event in events if event["name"] == "service.close"]) == 1
+    assert len([event for event in events if event["name"] == "registry.begin_close"]) == 1
+    assert _only_event(events, "replacement.content.retired")["at"] < next(
+        event["at"] for event in events
+        if event["name"] == "loaded" and event["count"] == 2
+    )
+    assert _only_event(events, "hold.effect")["at"] < _only_event(
+        events, "service.close",
+    )["at"]
+    assert final["effects_after_close"] == 1
+    assert final["exit_code"] == 0
+
+
 def _run_live_probe(
     installed: HeadedInstalledWheel,
     *,
@@ -723,6 +790,65 @@ def _run_live_probe(
     result = dict(ready)
     result["exit_code"] = final["exit_code"]
     return result
+
+
+def _run_reload_containment_probe(
+    installed: HeadedInstalledWheel,
+    *,
+    data_root: Path,
+    index: Path,
+    evidence: EvidencePaths,
+) -> dict[str, object]:
+    deadline = scenario_deadline(80.0)
+    process = _start_probe(
+        installed,
+        mode="reload-containment",
+        data_root=data_root,
+        index=index,
+        evidence=evidence,
+        deadline=deadline,
+    )
+    reader = EvidenceReader(evidence)
+    title = str(process.args[process.args.index("--title") + 1])
+    try:
+        milestone, ready = wait_for_initial_evidence(
+            reader, process, deadline=deadline,
+        )
+        assert milestone == "ready", ready
+        handle = wait_for_window(process, title, deadline=deadline)
+        wait_for_accessible_text(
+            handle,
+            _RELOADED_WINDOW_MESSAGE,
+            python=installed.python,
+            deadline=deadline,
+        )
+        wait_for_accessible_text(
+            handle, "bridge_unavailable", python=installed.python,
+            deadline=deadline,
+        )
+        (evidence.root / "release.flag").write_text("release", encoding="utf-8")
+        settlement_reader = EvidenceReader(EvidencePaths(evidence.root / "settlement"))
+        wait_for_path(evidence.root / "settlement" / "final.json", deadline=deadline)
+        settled = settlement_reader.read_final()
+        assert settled is not None
+        settlement_reader.assert_consistent(
+            require_final=True, allow_final_only=True,
+        )
+        close_window(handle)
+        completed = wait_for_process(process, deadline=deadline)
+    finally:
+        if process.poll() is None:
+            terminate_process_tree(process, deadline=deadline)
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    final = reader.read_final()
+    assert final is not None
+    assert final["schema_version"] == 1
+    assert final["mode"] == "reload-containment"
+    assert final["startup_errors"] == []
+    assert "child_failure" not in final
+    _require_probe_exit_code(final, expected=completed.returncode)
+    reader.assert_consistent(require_final=True)
+    return {"ready": ready, "settled": settled, "final": final}
 
 
 def _stage_live_page(
@@ -991,12 +1117,12 @@ def _assert_packaged_popup_evidence(
     ready_events = [
         event for event in events if event["name"] == "pywebviewready"
     ]
-    assert len(ready_events) >= 2
-    assert ready_events[1]["at"] < dispatch["at"]
+    assert len(ready_events) == 1
+    assert ready_events[0]["at"] < dispatch["at"]
     page = evidence["packaged_page"]
     assert page["initial_url"] == page["final_url"]
     assert page["document_token"].startswith("packaged-")
-    assert page["ready_count"] >= 2
+    assert page["ready_count"] == 1
     assert evidence["production_command_names"] == [
         "admit_location",
         "close_task",

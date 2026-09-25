@@ -104,7 +104,7 @@ cleanup commit. New findings do not silently add rows.
 | AB-3 | Unused database mapping API removed without changing current correspondence | AB-1 | 1,331 department tests, 12 import contracts, caller closure and independent review | Complete; reviewed `c5f1de8` integrated in `dd23c270` |
 | AB-4 | Desktop selection capture avoids redundant work with one revision-bound handoff | AB-2 | 2,605 neighborhood; 5,305 ordinary; 4 installed; 12 imports; independent review | Complete in `9cfd2a0` |
 | AB-5 | Bridge response adoption consolidates repeated traversal without weakening boundaries | AB-2 | 5,306 ordinary; 6 installed; 12 imports; response/custody/decoder checks and independent review | Complete in `1cb75fb` |
-| AB-6 | Unsupported reload has one contained restart behavior instead of reinjection recovery | AB-2 | Host/transport/lifecycle races and installed gestures | Pending |
+| AB-6 | Unsupported reload has one contained restart behavior instead of reinjection recovery | AB-2 | 5,317 ordinary; 34 installed; 12 imports; gestures, custody/close races and two independent reviews | Complete in this checkpoint commit |
 | AB-7 | Existing admission/completion preserves original outcomes without page-timeout result abandonment or replay | AB-6; D2 settled | Delayed/post-effect failed delivery, bounded observation recovery/exhaustion, duplicate protection and close | Pending |
 | AB-8 | Existing shell renders bounded authoritative Python task snapshots | AB-4/5/6/7 | Producer→snapshot→page, ordinary/imports and installed task journeys | Pending |
 | AB-9 | Remaining visual/source pins protect behavior rather than incidental spelling | AB-8 | Static/security, computed style, ordinary and installed gallery | Pending |
@@ -479,46 +479,46 @@ every adoption point; verify the optimization did not merely skip validation.
 
 #### AB-6 — One unsupported-reload path
 
-**Objective.** Retire reinjection recovery while preserving document containment.
-**Delivered harness prerequisites (2026-09-25).** At the user's request,
-H1/H2 were handled before AB-6 product work. H1 verifies Unicode edit readback
-before one native confirmation and reports only dialog closure; the existing
-transport fixture still checks the actual source/target paths. The old loop
-fails the new one-post control. The original wrong-directory cause remains
-unconfirmed; this is a test-harness repair, not a product-picker fix.
-H2 attempt 06 delivered all five inputs to the owned foreground/focused window
-and exited cleanly: F5/Ctrl+R/Alt+Left did not navigate, mouse Back traversed
+**Delivered (2026-09-25).** Genuine native content loading permanently retires
+page command/appearance authority and every predecessor's response delivery.
+Canceled navigation and fragment history do not retire authority; the native
+adapter filters pywebview's canceled-completion reinjection. Browser reload
+counters and shell reconstruction are removed. The replacement page gives fixed
+close/reopen/fresh-plan guidance. Initial readiness, command identity, admitted
+work and actual worker custody remain; X uses normal bounded retryable settlement,
+including early replacement with no successor loaded event. No automatic
+cancellation/release, renderer-crash recovery, S5 owner merger or AB-7 mutation
+deadline/replay change. D4 and ordinary task observation/Retry updates remain.
+
+**Verification and review.** Final corrected candidate: 5,317 ordinary passes,
+four unchanged Windows symlink-privilege skips; all 34 installed headed cases
+pass in one run; 12 import contracts kept. Installed reload holds an admitted
+command through retirement, refuses new commands, observes one effect/actual
+settlement and clean X. Same-document task/setup/execution journeys retain
+selection, progress, mutation races and retry assertions. The transport fixture
+now induces real same-document uncertainty instead of duplicate-ready recovery.
+Independent review corrected repeated-document delivery retirement; the requested
+Claude Opus 5.5/high review exposed the early-startup close latch, corrected and
+accepted in the same session. Its independent held-worker and no-successor-load
+witnesses pass. The original checkout was verified unchanged by both Claude
+rounds; its disposable copy/CLI/fixtures were removed, with source evidence kept.
+
+**Harness prerequisites and limits.** H1/H2 delivered in `f55a7dd` before product
+work: Unicode edit readback, one native confirmation and actual returned-path
+checks; original wrong-directory cause remains unconfirmed. Idle and active-work
+gesture receipts show F5/Ctrl+R/Alt+Left did not navigate, mouse Back traversed
 same-document fragments, and right click produced a DOM event without a sampled
-owned native menu. Only attempt 05 has confirmed user focus interference;
-earlier causes remain unknown. Verified 33 focused controls, 1,771 interface
-tests, six selected transport cases and all 33 headed cases, with independent
-review. TESTS owns the method; ignored
-`build/post-m1-8-ablation-20260925/harness-verification.md` maps raw passes,
-failed diagnostics and reviews. No product files changed. This closes idle
-gesture characterization, not forced second-load containment or AB-6.
-Recovery `56802606` remains preserved and must not be integrated as-is.
-**Scope and approach.** Host/bootstrap generation users, bridge/drain adoption,
-app state and relevant probes. Verify F5, Ctrl+R, Alt+Left, mouse Back and context
-menu in the installed build first. Keep startup, navigation/origin guards,
-shutdown and retired-document rejection. On unexpected second load, revoke that
-document's command authority and give an actionable restart path; do not cancel
-or release an admitted operation prematurely. Map real remaining generation uses
-before consolidation. No renderer-crash recovery claim or S5 lock merger.
-**Acceptance criteria.** Reload is not offered as a supported action; an unexpected
-load cannot submit effects or adopt stale callbacks. Current tasks finish/settle
-safely; normal navigation and observation retry still work.
-**Regression watchlist.** Late native returns, startup vs second load, close during
-execution, retirement releasing resources while workers are active.
-**Tests and evidence.** Host/bootstrap/bridge/drain/lifecycle tests; interfaces
-department, ordinary/imports and installed gestures during idle and active tasks,
-followed by clean close. Delete only reinjection-specific expectations with their
-mechanism, retain security/cleanup cases from the same modules.
-**Documentation and handoff.** INTERFACES/BRIDGE/FEATURES and M1-12's reinjection
-wording move together; state exact restart behavior and remaining limitations.
-**Adversarial review.** Verify disabling gestures did not substitute for actual
-stale-document containment; examine native callback and shutdown races.
-**Commit gate.** Supported flows and unexpected-load containment pass;
-`refactor(web): replace reload recovery with contained restart behavior`.
+owned native popup. This does not exclude other menu surfaces. The earlier
+test-owned close-refusal popup came from a fixture-held worker; failure cleanup
+now releases its own holds and preserves the initiating failure.
+
+**Evidence.** Ignored `build/post-m1-8-ablation-20260925/ab6-verification.md`
+maps raw successes, failed attempts, installed identity and both review reports;
+`harness-verification.md` owns H1/H2 provenance. Subject contracts are in
+INTERFACES/BRIDGE/FEATURES, presentation in DESKTOP_UI/PRESENTATION, and methods
+in TESTS. Keep recovery `56802606` and AB-3 recovery worktree/ref for AB-10
+accounting; never integrate recovery commits as-is. The extra Claude review
+requirement applies to AB-6 and AB-7 only, not later checkpoints.
 
 #### AB-7 — Simplify existing command completion and recovery
 
@@ -580,6 +580,9 @@ fails and an observation budget that expires before a late completion. Prove no
 duplicate effect, erased result, false terminal claim or unbounded wait/retention.
 If a new protocol proves necessary, explain the architectural boundary and return
 for scope adjudication rather than enlarging AB-7 implicitly.
+Before AB-7 closure, use the user-requested `claude-code-reviewer` with
+`claude-opus-5-5` at `high`, permitting independent fixtures only in a disposable
+copy and verifying cleanup. This extra review requirement covers AB-6/7 only.
 **Commit gate.** All retained failure/lifecycle paths and consumers pass;
 `refactor(web): simplify command completion without timed mutation replay`.
 
@@ -831,7 +834,7 @@ Each checkpoint is a closed register row. A new finding does not enlarge a row; 
 | M1-8 | Deliver live and retained execution review with bounded item windows, exact execution overlays, task/item recording issues, terminal axes, current ledger evidence, capacity/generic-I/O messages, and informational trash location. | Test filesystem/recording combinations, overlay and omission invariants, Gap plus terminal reconciliation, navigation/re-observation, generic unrun presentation, yellow capacity without hiding known failures, bounded evidence queries, and post-copy overlay independence. Trash counts require complete outcome evidence; location-only fallback must not assert a planned count, scan all trash, or imply purge. | Complete; A1–A5 verified and A6 integration receipt PASS. |
 | M1-9 | Deliver bounded inventory projections, current evidence, and the full inventory consumer for sibling sorting. | Test complete or prior-complete publication, warnings outside action scope, raw evidence provenance, search/filter/collapse/window/detail behavior, replacement/races, supported sort/reset production paths, and headed witnesses. | Pending |
 | M1-10 | Deliver baseline, verify, and rebaseline controls plus the first same-task manual post-copy verification without persistent operation-time hashes. Rebaseline includes eligible null-evidence files and always hashes/replaces evidence; matching content is not a verified match. | Test acknowledgement admission before claim/native work; all-null and mixed rebaseline through workflow, service/CLI, and desktop; conditional-recording and supersession races; handoff classification; live pause/resume/cancel and unchanged automatic failed-read retries; and overlay/result identity boundaries. Terminal Verify-remaining/subset retry is deferred. Independently review the operation matrix and conditional-recording races. | Pending |
-| M1-12 | First close integrated lifecycle/retention across activated task surfaces (absorbing former M1-11), then complete adversarial, documentation, ordinary, and headed verification. | Exercise plan-only, execution-only, linked/manual verification, inventory, refused, canceled, degraded, and failed tasks across navigation, reinjection, explicit close, and shutdown. Verify existing admission bounds, stale-response suppression, exact resource release and retained result truth; no aggregate-artifact or whole-owner-graph criterion. Run applicable settlement-oracle stability, ordinary/headed suites, installed-wheel/product witnesses, import checks, `git diff --check`, active-link checks, and independent cross-component review. | Pending |
+| M1-12 | First close integrated lifecycle/retention across activated task surfaces (absorbing former M1-11), then complete adversarial, documentation, ordinary, and headed verification. | Exercise plan-only, execution-only, linked/manual verification, inventory, refused, canceled, degraded, and failed tasks across same-document navigation, contained unsupported reload, explicit close, and shutdown. Verify existing admission bounds, stale-response suppression, exact resource release and retained result truth; no aggregate-artifact or whole-owner-graph criterion. Run applicable settlement-oracle stability, ordinary/headed suites, installed-wheel/product witnesses, import checks, `git diff --check`, active-link checks, and independent cross-component review. | Pending |
 | M1-Release | Produce beta packaging and release closure after delivery rows above are complete. | Build/test an installed artifact from a clean checkout; supply frozen specification/dependency/CI, notices and corresponding-source release material, standard-integrity host proof, and every applicable BR-G and SH-G gate. INTERFACES owns host/package and SH-G release criteria; BRIDGE owns BR-G evidence. | Pending |
 
 

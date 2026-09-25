@@ -23,6 +23,11 @@ The user's latest W2 instruction replaces the earlier proposed eligibility test;
 §8 records the small-change default and user-owned classification.
 The old M1-7 execution register is retired,
 not resumed or declared fully delivered; §13 accounts for its unfinished work.
+The AB-6 prerequisite now has installed gesture evidence: F5/Ctrl+R/Alt+Left
+did not navigate, mouse Back traversed same-document fragments, and right click
+produced a DOM event without a sampled native popup. The current register owns
+the receipt and its limits. The source descriptions below retain the study
+baseline and must not be read as current implementation status.
 
 ## Question and method
 
@@ -105,7 +110,7 @@ findings, not a general proof that the ordinary suite tolerates all refactors.
 | Review a 120,000-row plan | Workflow projection and window, dependency-closed selection, revision guard | `NodeTree` rebuilt on every folder gesture because layering keeps the service from the adapter's projection. Full dependency derivation four times per gesture, two unused. A full O(operations) preview built and discarded on each view open. A second round-trip re-reading membership already returned (*analyst*) |
 | Execute with pause/resume/cancel | Commitment digest, preflight, executor guards, progress, control flags | Execution-authority snapshot/revalidate/audit calls at 38 sites in `workflows/sync.py`. Progress attempt semantics enforced in Python and again by a JS reducer. Three envelope encoders/validators |
 | Close a task | Cancel when busy, release resources, remove the card | Four-phase settlement claims, a 48-entry close-response cache, and a six-step teardown chain whose steps must each tolerate repetition |
-| Survive page reload | No intended explicit user action: production uses `debug=False`; the pinned runtime disables browser accelerator keys/context menus from that flag. Unexpected document replacement still needs containment. Installed gesture verification remains outstanding. | Three generation owners react to `before_load` (`web/host.py`), with native-return and reinjection recovery. Test reload scenarios are real consumers. Ordinary observation recovery is distinct: M1-8 Retry updates must not be removed merely because reload recovery retires. |
+| Survive page reload | No intended explicit user action: production uses `debug=False`; the pinned runtime disables browser accelerator keys/context menus from that flag. Unexpected document replacement still needs containment. Installed gesture characterization is recorded in M1_PLAN's AB-6 prerequisite. | At the study baseline, three generation owners react to `before_load` (`web/host.py`), with native-return and reinjection recovery. Test reload scenarios are real consumers. Ordinary observation recovery is distinct: M1-8 Retry updates must not be removed merely because reload recovery retires. |
 
 ## 4. Structural proposals
 

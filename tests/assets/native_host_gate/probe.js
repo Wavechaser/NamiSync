@@ -15,9 +15,8 @@ import { installAppearanceReceiver } from "./appearance.js";
     initialUrl: window.location.href,
     readyCount: 0,
     request: 0,
-    stage: 0,
     running: false,
-    lostSettled: false,
+    delayedSettled: false,
     observations: {},
   };
   window.__namiNativeHostGate = state;
@@ -71,8 +70,7 @@ import { installAppearanceReceiver } from "./appearance.js";
     state.observations.presentationRevisions = revisions;
   }
 
-  async function onFirstReady() {
-    state.stage = 1;
+  async function runNativeGate() {
     state.observations.baseline = (await dispatch("baseline")).result;
 
     window.history.pushState({}, "", "#source-probe");
@@ -87,37 +85,34 @@ import { installAppearanceReceiver } from "./appearance.js";
     await delay(250);
     state.observations.afterFrame = (await dispatch("after_frame")).result;
 
-    dispatch("delayed_return")
+    const delayed = dispatch("delayed_return")
       .then(
-        () => { state.lostSettled = true; },
-        () => { state.lostSettled = true; }
+        (value) => {
+          state.delayedSettled = true;
+          state.observations.delayedReturn = value.result.token;
+        },
+        (error) => {
+          state.delayedSettled = true;
+          state.observations.delayedError = String(error);
+        }
       );
     await dispatch("wait_delayed_started");
     window.location.assign(NAVIGATION_TARGET);
-  }
-
-  async function onNavigationReinjection() {
-    state.stage = 2;
     state.observations.delayedTransport = (
       await dispatch("wait_delayed_transport")
     ).result;
+    await delayed;
     await delay(0);
     state.observations.afterNavigation = (
-      await dispatch("after_navigation", { lost_settled: state.lostSettled })
+      await dispatch("after_navigation", { delayed_settled: state.delayedSettled })
     ).result;
     state.observations.offOriginRefusal = (
       await dispatch("off_origin_refusal")
     ).result;
 
-    state.stage = 3;
-    window.setTimeout(() => {
-      const popup = window.open(POPUP_TARGET);
-      state.observations.popupReturn = popup === null ? "null" : typeof popup;
-    }, 100);
-  }
-
-  async function onPopupReinjection() {
-    state.stage = 4;
+    const popup = window.open(POPUP_TARGET);
+    state.observations.popupReturn = popup === null ? "null" : typeof popup;
+    await dispatch("wait_popup_completed");
     state.observations.afterPopup = (
       await dispatch("after_popup", {
         popup_return: state.observations.popupReturn || "not-recorded",
@@ -128,7 +123,7 @@ import { installAppearanceReceiver } from "./appearance.js";
       final_url: window.location.href,
       document_token: state.documentToken,
       ready_count: state.readyCount,
-      lost_settled: state.lostSettled,
+      delayed_settled: state.delayedSettled,
       observations: state.observations,
     };
     await dispatch("complete", finalPayload);
@@ -143,13 +138,7 @@ import { installAppearanceReceiver } from "./appearance.js";
     state.running = true;
     try {
       await completeReadinessHandshake();
-      if (state.stage === 0) {
-        await onFirstReady();
-      } else if (state.stage === 1) {
-        await onNavigationReinjection();
-      } else if (state.stage === 3) {
-        await onPopupReinjection();
-      }
+      await runNativeGate();
     } catch (error) {
       document.getElementById("status").textContent =
         "Native host gates failed: " + String(error);

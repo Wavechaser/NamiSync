@@ -193,11 +193,10 @@ def test_surface_or_post_failure_refuses_only_current_generation(
         assert refusals == [error] if failure_at == "surface" else len(refusals) == 1
 
 
-def test_reload_revokes_challenge_and_suppresses_stale_callbacks(
+def test_replaced_document_permanently_revokes_challenge_and_callbacks(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    challenges = iter((_CHALLENGE, "fedcba9876543210fedcba9876543210"))
-    monkeypatch.setattr(readiness.secrets, "token_hex", lambda _bytes: next(challenges))
+    monkeypatch.setattr(readiness.secrets, "token_hex", lambda _bytes: _CHALLENGE)
     scheduled: list[tuple[float, object]] = []
     surfaces: list[object] = []
     posts: list[tuple[int, str, object]] = []
@@ -219,20 +218,22 @@ def test_reload_revokes_challenge_and_suppresses_stale_callbacks(
     stale_post = posts[0][2]
     stale_deadline = scheduled[0][1]
 
-    gate.begin_generation()
+    assert gate.retire_document() == 1
+    assert gate.command_context() is None
     assert not gate.recognizes_echo(0, _CHALLENGE)
     assert not gate.acknowledge_echo(0, _CHALLENGE)
     stale_post(None)
     stale_deadline()
     assert refusals == []
 
+    gate.begin_generation()
     gate.native_loaded()
     gate.acknowledge_shell(1)
-    surfaces[1](None)
-    current = posts[1][1]
-    posts[1][2](None)
-    assert gate.acknowledge_echo(1, current)
-    assert opens == ["open"]
+    assert gate.retire_document() == 1
+    assert gate.command_context() is None
+    assert len(surfaces) == 1
+    assert len(posts) == 1
+    assert opens == []
 
 
 def test_cancel_revokes_exact_echo_and_suppresses_late_callbacks(
@@ -358,3 +359,37 @@ def test_concurrent_exact_echo_opens_at_most_once(
     assert not second.is_alive()
     assert opens == ["open"]
     assert sorted(results) == [False, True]
+
+
+def test_replacement_during_open_callback_cannot_publish_open(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(readiness.secrets, "token_hex", lambda _bytes: _CHALLENGE)
+    gate = _gate()
+    surfaces: list[object] = []
+    posts: list[tuple[int, str, object]] = []
+    entered = Event()
+    release = Event()
+    gate.bind(
+        request_surface_settlement=surfaces.append,
+        request_challenge_post=lambda generation, challenge, callback: posts.append(
+            (generation, challenge, callback)
+        ),
+        open_desktop=lambda _generation: entered.set() or release.wait(1.0),
+        refuse_desktop=lambda error: pytest.fail(str(error)),
+    )
+    gate.native_loaded()
+    gate.acknowledge_shell(0)
+    surfaces[0](None)
+    posts[0][2](None)
+    results: list[bool] = []
+    opening = Thread(target=lambda: results.append(gate.acknowledge_echo(0, _CHALLENGE)))
+    opening.start()
+    assert entered.wait(1.0)
+    assert gate.retire_document() == 1
+    release.set()
+    opening.join(1.0)
+    assert not opening.is_alive()
+    assert results == [False]
+    assert gate.command_context() is None
+    assert not gate.is_open()

@@ -231,9 +231,9 @@ let rawReadiness;
 let resolveRawReadiness;
 let operationalReadiness;
 let resolveOperationalReadiness;
-let bridgeGeneration = 0;
-let operationalGeneration = -1;
+let operational = false;
 let commandHostGeneration = null;
+let bridgeReadyObserved = false;
 const taskDrains = new Map();
 const taskCloseFences = new Map();
 const asyncCommandAttempts = new Map();
@@ -244,21 +244,12 @@ if (typeof documentMessages?.addEventListener === "function") {
 }
 
 window.addEventListener("pywebviewready", () => {
-  bridgeGeneration += 1;
-  operationalGeneration = -1;
-  commandHostGeneration = null;
+  if (bridgeReadyObserved) return;
+  bridgeReadyObserved = true;
   const resolve = resolveRawReadiness;
   rawReadiness = undefined;
   resolveRawReadiness = undefined;
   resolve?.();
-  for (const attempt of asyncCommandAttempts.values()) {
-    retireAsyncCommandAttempt(attempt);
-  }
-  for (const task of taskDrains.values()) {
-    if (!task.stopped && !task.terminal && task.pendingTerminalUpdate === null) {
-      pauseTaskForBridge(task);
-    }
-  }
 });
 
 export class BridgeCommandError extends Error {
@@ -314,7 +305,7 @@ function bridgeApi() {
 
 export function whenBridgeReady() {
   if (
-    operationalGeneration === bridgeGeneration &&
+    operational &&
     typeof bridgeApi()?.dispatch === "function"
   ) {
     return Promise.resolve();
@@ -340,13 +331,13 @@ export function whenBridgeApiReady() {
 }
 
 export function markBridgeOperational() {
-  if (operationalGeneration === bridgeGeneration) {
+  if (operational) {
     return;
   }
   if (typeof bridgeApi()?.dispatch !== "function") {
     throw new BridgeTransportError();
   }
-  operationalGeneration = bridgeGeneration;
+  operational = true;
   for (const task of taskDrains.values()) {
     if (!task.stopped && !task.terminal && task.pendingTerminalUpdate === null) {
       task.busyRearmUsed = false;
@@ -1187,7 +1178,6 @@ function createDispatchAttempt(
     });
     attempt.asyncEntry = {
       requestId,
-      browserGeneration: null,
       hostGeneration: null,
       completionToken: null,
       earlyCompletion: null,
@@ -1234,13 +1224,6 @@ async function dispatchReadyAttempt(
   if (attempt.cancelled) {
     throw new BridgeTransportError();
   }
-  const generation = bridgeGeneration;
-  let onReincarnation;
-  const reincarnated = new Promise((resolve, reject) => {
-    void resolve;
-    onReincarnation = () => reject(new BridgeTransportError());
-    window.addEventListener("pywebviewready", onReincarnation, { once: true });
-  });
   const cancelled = new Promise((resolve, reject) => {
     void resolve;
     attempt.rejectCancellation = reject;
@@ -1250,20 +1233,15 @@ async function dispatchReadyAttempt(
     const api = bridgeApi();
     if (
       attempt.cancelled ||
-      generation !== bridgeGeneration ||
       typeof api?.dispatch !== "function"
     ) {
       throw new BridgeTransportError();
     }
     // No await occurs between this final cancellation check and dispatch.
     const transport = Promise.resolve(api.dispatch(request)).then(
-      (nativeResponse) => detachNativeResponse(
-        api,
-        nativeResponse,
-        generation,
-      ),
+      (nativeResponse) => detachNativeResponse(api, nativeResponse),
     );
-    response = await Promise.race([transport, reincarnated, cancelled]);
+    response = await Promise.race([transport, cancelled]);
   } catch (error) {
     if (error instanceof BridgeTransportError) {
       throw error;
@@ -1271,10 +1249,6 @@ async function dispatchReadyAttempt(
     throw new BridgeTransportError();
   } finally {
     attempt.rejectCancellation = null;
-    window.removeEventListener("pywebviewready", onReincarnation);
-  }
-  if (generation !== bridgeGeneration) {
-    throw new BridgeTransportError();
   }
   return validateResponse(response, requestId, validateResult);
 }
@@ -1294,14 +1268,6 @@ async function dispatchSmallReadyAttempt(
   if (attempt.cancelled) {
     throw new BridgeTransportError();
   }
-  const generation = bridgeGeneration;
-  entry.browserGeneration = generation;
-  let onReincarnation;
-  const reincarnated = new Promise((resolve, reject) => {
-    void resolve;
-    onReincarnation = () => reject(new BridgeTransportError());
-    window.addEventListener("pywebviewready", onReincarnation, { once: true });
-  });
   const cancelled = new Promise((resolve, reject) => {
     void resolve;
     attempt.rejectCancellation = reject;
@@ -1310,33 +1276,27 @@ async function dispatchSmallReadyAttempt(
     const api = bridgeApi();
     if (
       attempt.cancelled ||
-      generation !== bridgeGeneration ||
       typeof api?.dispatch !== "function"
     ) {
       throw new BridgeTransportError();
     }
-    // The pending entry and generation are fixed before native admission.
+    // The pending entry is fixed before native admission.
     const transport = Promise.resolve(api.dispatch(request)).then(
       (nativeResponse) => detachSmallNativeResponse(
         api,
         nativeResponse,
-        generation,
         entry,
       ),
     );
-    const native = await Promise.race([transport, reincarnated, cancelled]);
+    const native = await Promise.race([transport, cancelled]);
     if (native.kind === "direct") {
       retireAsyncCommandAttempt(entry);
       return validateResponse(native.response, requestId, validateResult);
     }
     const response = await Promise.race([
       entry.completion,
-      reincarnated,
       cancelled,
     ]);
-    if (generation !== bridgeGeneration) {
-      throw new BridgeTransportError();
-    }
     return validateResponse(response, requestId, validateResult);
   } catch (error) {
     if (error instanceof BridgeCommandError) {
@@ -1348,7 +1308,6 @@ async function dispatchSmallReadyAttempt(
     throw new BridgeTransportError();
   } finally {
     attempt.rejectCancellation = null;
-    window.removeEventListener("pywebviewready", onReincarnation);
     retireAsyncCommandAttempt(entry);
   }
 }
@@ -1356,7 +1315,6 @@ async function dispatchSmallReadyAttempt(
 async function detachSmallNativeResponse(
   api,
   nativeResponse,
-  generation,
   entry,
 ) {
   const direct = isExactObject(nativeResponse, [
@@ -1418,15 +1376,8 @@ async function detachSmallNativeResponse(
   } finally {
     nativeResponse = null;
     if (responseToken !== null) {
-      await acknowledgeAsyncCleanup(
-        api,
-        `ack:${responseToken}`,
-        generation,
-      );
+      await acknowledgeAsyncCleanup(api, `ack:${responseToken}`);
     }
-  }
-  if (generation !== bridgeGeneration) {
-    throw new BridgeTransportError();
   }
   if (direct) {
     return value;
@@ -1453,7 +1404,6 @@ function receiveCommandCompletion(event) {
     return;
   }
   if (
-    entry.browserGeneration !== bridgeGeneration ||
     (
       entry.completionToken !== null &&
       (
@@ -1482,7 +1432,6 @@ function receiveCommandCompletion(event) {
 async function settleCommandCompletion(entry, message) {
   if (
     entry.settling ||
-    entry.browserGeneration !== bridgeGeneration ||
     entry.hostGeneration !== message.generation ||
     entry.requestId !== message.request_id ||
     entry.completionToken !== message.completion_token
@@ -1522,16 +1471,13 @@ async function acknowledgeCommandCompletion(message) {
     message.request_id,
     message.completion_token,
   ].join(":");
-  return acknowledgeAsyncCleanup(api, acknowledgment, bridgeGeneration);
+  return acknowledgeAsyncCleanup(api, acknowledgment);
 }
 
-async function acknowledgeAsyncCleanup(api, acknowledgment, generation) {
+async function acknowledgeAsyncCleanup(api, acknowledgment) {
   let firstDeliveryUncertain = false;
   for (let attempt = 0; attempt < 2; attempt += 1) {
-    if (
-      generation !== bridgeGeneration ||
-      typeof api?.dispatch !== "function"
-    ) {
+    if (typeof api?.dispatch !== "function") {
       throw new BridgeTransportError();
     }
     try {
@@ -1605,7 +1551,7 @@ function isCompletionResponse(value, requestId) {
   return ERROR_MESSAGES[value.error.code] === value.error.message;
 }
 
-async function detachNativeResponse(api, nativeResponse, generation) {
+async function detachNativeResponse(api, nativeResponse) {
   if (
     !isExactObject(nativeResponse, [
       "transport_version",
@@ -1630,22 +1576,16 @@ async function detachNativeResponse(api, nativeResponse, generation) {
   } finally {
     nativeResponse = null;
     if (responseToken !== null) {
-      await acknowledgeNativeResponse(api, responseToken, generation);
+      await acknowledgeNativeResponse(api, responseToken);
     }
-  }
-  if (generation !== bridgeGeneration) {
-    throw new BridgeTransportError();
   }
   return response;
 }
 
-async function acknowledgeNativeResponse(api, responseToken, generation) {
+async function acknowledgeNativeResponse(api, responseToken) {
   let firstDeliveryUncertain = false;
   for (let attempt = 0; attempt < 2; attempt += 1) {
-    if (
-      generation !== bridgeGeneration ||
-      typeof api?.dispatch !== "function"
-    ) {
+    if (typeof api?.dispatch !== "function") {
       throw new BridgeTransportError();
     }
     try {
@@ -1891,7 +1831,7 @@ function rearmTask(task, replayFrom, delayMs = 0) {
   task.active?.control.cancel();
   task.active = null;
   cancelTaskArm(task);
-  if (operationalGeneration !== bridgeGeneration) {
+  if (!operational) {
     if (task.desiredReplayFrom === null) {
       task.desiredReplayFrom = task.lastAcceptedSequence + 1;
     }
@@ -2081,14 +2021,6 @@ function validateCosmeticSectionFields(value) {
     isExactObject(value.value, ["theme"]) &&
     isOneOf(value.value.theme, THEMES)
   );
-}
-
-function pauseTaskForBridge(task) {
-  task.epoch += 1;
-  task.desiredReplayFrom = task.lastAcceptedSequence + 1;
-  task.active?.control.cancel();
-  task.active = null;
-  cancelTaskArm(task);
 }
 
 function validateShellReadyResult(value) {

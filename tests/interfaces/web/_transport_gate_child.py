@@ -588,6 +588,7 @@ def _valid_browser_report(value: object) -> bool:
         "automatic_close_calls",
         "busy_refusals",
         "cleanup",
+        "deadline_faults",
         "interactive_refusal",
         "malformed_refusal",
         "nested_dom",
@@ -597,6 +598,7 @@ def _valid_browser_report(value: object) -> bool:
     }:
         return False
     cleanup = value["cleanup"]
+    deadline_faults = value["deadline_faults"]
     nested_dom = value["nested_dom"]
     return (
         type(value["accepted_types"]) is list
@@ -613,6 +615,16 @@ def _valid_browser_report(value: object) -> bool:
         and all(type(item) is dict for item in value["nested_items"])
         and type(value["nested_record"]) is dict
         and value["replacement_registration"] is True
+        and type(deadline_faults) is dict
+        and set(deadline_faults) == {"start_plan", "main_drain"}
+        and all(
+            type(fault) is dict
+            and set(fault) == {"armed", "fired"}
+            and type(fault["armed"]) is int
+            and type(fault["fired"]) is int
+            and 0 <= fault["fired"] <= fault["armed"] <= 1
+            for fault in deadline_faults.values()
+        )
         and type(cleanup) is dict
         and set(cleanup) == {"active_timers", "ready_listeners"}
         and type(cleanup["active_timers"]) is int

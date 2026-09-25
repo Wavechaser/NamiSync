@@ -114,7 +114,7 @@ views are frozen copies, so presentation code cannot mutate retained authority.
 
 ## Command, retry, and concurrency rules
 
-Origin and readiness authorization occur before command dispatch. Navigation or bridge reinjection cannot roll back an admitted action. The allowlist, exact payload validation, native picker confinement, hostile-text sinks, and logging privacy are bridge security requirements; external text remains text, never markup, a URL, code, or path authority.
+Origin and readiness authorization occur before command dispatch. Document replacement cannot roll back an admitted action. A genuine replacement permanently retires this window's command authority; canceled navigation and same-document history leave it intact. Initial readiness, effect receipts, worker custody and normal close retain their owners. [INTERFACES.md](INTERFACES.md#logging-and-host-startup) owns the unsupported-reload presentation and restart contract. The allowlist, exact payload validation, native picker confinement, hostile-text sinks, and logging privacy are bridge security requirements; external text remains text, never markup, a URL, code, or path authority.
 
 A mutating user gesture with a receipt mints one `command_id` and reuses the identical intent after uncertain delivery. Lookup precedes live revision checks and outside work. The same id with changed intent is `command_conflict`; a new id alone may reach mutable authority. Replay means no repeated effect, not necessarily identical response bytes: return the current allowed projection. Reads, native picker interaction, drain recovery, and exact terminal release have their own finite retry rules and do not borrow mutating receipt semantics.
 
@@ -234,14 +234,14 @@ death. These count bounds make no whole-runtime memory or thread claim.
 The browser registers at most 64 pending attempts before dispatch, retaining at
 most one early completion per entry. Exact admission/completion identity and
 both required cleanup acknowledgments precede live result resolution. Async
-cleanup attempts have a one-second deadline and at most two attempts. Local
-page reinjection counters are separate from the host generation learned from
-validated admission, since a full page reload restarts JavaScript state. An
+cleanup attempts have a one-second deadline and at most two attempts. The host
+generation learned from validated admission remains completion identity; a
+replacement document cannot reopen command admission. An
 unsolicited completion cannot create an entry. Timeout frees the pending entry
 without a tombstone/history table; a valid same-generation late completion is
 cleanup-only and cannot adopt or resolve a result. Replacement retires old
-pending work. Unconfirmed cleanup or delivery remains transport uncertainty,
-using existing effect receipts and task/session reconstruction rather than a
+browser delivery without canceling admitted work. Unconfirmed cleanup or delivery remains transport uncertainty,
+using existing effect receipts and same-document task/session observation rather than a
 new effect owner or generic cancellation mechanism.
 
 DocumentChannel owns a separate command FIFO under the same exchange bound and
@@ -308,9 +308,9 @@ BOOTSTRAP rows, commands require OPEN.
 | `probe_recent_pairs` | `{}` | `{pairs:[{mapping_id:LocationId,source_id:LocationId,target_id:LocationId,source_state:LocationState,target_state:LocationState}]}` | async-small; 5 s; no automatic retry |
 | `prepare_setup` | `{options:SetupOptions}` | canonical `SetupOptions` | 5 s; one identical-payload retry |
 | `admit_location` | `{purpose:"source"\|"target"\|"inventory",candidate:LocationCandidate}` or `{purpose:"source"\|"target"\|"inventory",continuation_id:SlotId,mount_index:SafeInt}` | `LocationChoice` | 5 s; no automatic retry |
-| `create_task` | `{command_id:HexId}` | `{task_id:TaskId}` | 30 s; one same-command replay after uncertainty/reinjection/internal_error; manual Retry retains id |
+| `create_task` | `{command_id:HexId}` | `{task_id:TaskId}` | 30 s; one same-command replay after uncertainty/internal_error; manual Retry retains id |
 | `list_tasks` | `{}` | `{tasks:[{task_id:TaskId,task_kind:null\|"sync-plan"\|"inventory",request_id:null\|HexId,session_id:null\|HexId,session_state:null\|"active"\|"completed"\|"failed"\|"canceled"\|"refused",session_released:boolean}]}` | 5 s; one identical-payload retry |
-| `start_plan` | `{task_id:TaskId,command_id:HexId,source_id:SlotId,target_id:SlotId,options:SetupOptions}` | `{task_id:TaskId,request_id:HexId,session_id:HexId}` | 30 s; one same-command replay after uncertainty/reinjection/internal_error; manual Retry retains id |
+| `start_plan` | `{task_id:TaskId,command_id:HexId,source_id:SlotId,target_id:SlotId,options:SetupOptions}` | `{task_id:TaskId,request_id:HexId,session_id:HexId}` | 30 s; one same-command replay after uncertainty/internal_error; manual Retry retains id |
 | `start_inventory` | `{task_id:TaskId,command_id:HexId,root_id:SlotId}` | `{task_id:TaskId,request_id:HexId,session_id:HexId}` | 30 s; same-command recovery |
 | `plan_again` | `{task_id:TaskId,command_id:HexId,source_mount:null\|string,target_mount:null\|string}` | `{task_id:TaskId,request_id:HexId,session_id:HexId}` | 30 s; same-command recovery |
 | `open_plan_view` | `{task_id:TaskId}` | `PlanViewSummary` | 5 s; one identical-payload retry |
@@ -450,8 +450,8 @@ unknown; it does not cancel native work or authorize automatic retries. Online
 does not replace fresh admission when selecting or starting.
 
 `create_task` publishes a process-live shell with no session, request, plan, or
-result. `list_tasks` reconstructs published blank and session-backed tasks after
-document reinjection; an active session is reported as `active`, while a
+result. `list_tasks` observes published blank and session-backed tasks within
+the current document; an active session is reported as `active`, while a
 delivered terminal record keeps its actual terminal state before and after
 session release. Blank close uses the exact null-session owner path. A live
 session close first requests task-bound cancellation and returns `pending`; the

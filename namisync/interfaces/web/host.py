@@ -838,6 +838,38 @@ def run_desktop(
             close_appearance=close_appearance,
         )
 
+        replacement_retired = False
+        document_loads = 0
+
+        def retire_replaced_document() -> None:
+            nonlocal replacement_retired
+            first_replacement = not replacement_retired
+            if first_replacement:
+                replacement_retired = True
+                generation = startup_gate.retire_document()
+            dispatcher._retire_document_responses()
+            if first_replacement:
+                revoke_publication = getattr(
+                    appearance_controller, "_revoke_document_publication", None,
+                )
+                if callable(revoke_publication):
+                    try:
+                        revoke_publication(generation)
+                    except Exception as error:
+                        _log_presentation_failure(
+                            "appearance.document_revoke_failed", error,
+                        )
+            replace_document = getattr(document_channel, "replace_document", None)
+            if callable(replace_document):
+                try:
+                    replace_document()
+                except Exception as error:
+                    _log_presentation_failure(
+                        "readiness.document_channel_retire_failed", error,
+                    )
+            if first_replacement:
+                close_controller._mark_loaded()
+
         def refuse_startup(error: Exception) -> None:
             ordinary_close = close_controller._begin_readiness_refusal(
                 lambda: state.refuse(error)
@@ -861,10 +893,15 @@ def run_desktop(
             state.destroy_once(window)
 
         def initialize_security() -> None:
-            nonlocal appearance_controller, document_channel
+            nonlocal appearance_controller, document_channel, document_loads
             try:
                 real_url = window.real_url
                 _bind_document_origin(document, real_url)
+                set_replacement_handler = getattr(
+                    document, "_set_replacement_handler", None,
+                )
+                if callable(set_replacement_handler):
+                    set_replacement_handler(retire_replaced_document)
                 _configure_window_security(
                     window,
                     real_url,
@@ -874,9 +911,6 @@ def run_desktop(
             except Exception as error:
                 state.refuse(error)
                 raise
-            window.events.before_load += startup_gate.begin_generation
-            window.events.before_load += dispatcher._retire_document_responses
-
             def bind_document_channel() -> None:
                 nonlocal document_channel
                 channel = None
@@ -931,7 +965,18 @@ def run_desktop(
                     )
                     return
 
-            window.events.before_load += bind_document_channel
+            def before_document_load() -> None:
+                nonlocal document_loads
+                document_loads += 1
+                if document_loads != 1:
+                    if not replacement_retired:
+                        retire_replaced_document()
+                    return
+                startup_gate.begin_generation()
+                dispatcher._retire_document_responses()
+                bind_document_channel()
+
+            window.events.before_load += before_document_load
             try:
                 appearance_controller = _configure_window_appearance(
                     window,
@@ -1016,6 +1061,10 @@ def run_desktop(
 
         def loaded_watchdog() -> None:
             close_controller._bind_status_target()
+            if replacement_retired:
+                if close_controller._mark_loaded():
+                    _render_reloaded_window_status(window)
+                return
             attachment_error = document.attachment_error
             if document.is_attached and attachment_error is None:
                 startup_gate.native_loaded()
@@ -1372,6 +1421,17 @@ def _render_close_status(window: object, phase: _ClosePhase) -> None:
     _render_close_status_target(status, phase)
 
 
+def _render_reloaded_window_status(window: object) -> None:
+    try:
+        status = window.dom.get_element("#host-status")
+        if status is None:
+            raise RuntimeError("reloaded desktop status element is unavailable")
+        status.text = _RELOADED_WINDOW_MESSAGE
+        status.attributes["hidden"] = None
+    except Exception as error:
+        _log_presentation_failure("readiness.reloaded_status_failed", error)
+
+
 def _render_close_status_target(status: object, phase: _ClosePhase) -> None:
     messages = {
         _ClosePhase.CLOSING: "Closing safely…",
@@ -1388,6 +1448,12 @@ def _render_close_status_target(status: object, phase: _ClosePhase) -> None:
 
 
 _ORIGINAL_CLOSE_STATUS_RENDERER = _render_close_status
+
+_RELOADED_WINDOW_MESSAGE = (
+    "This NamiSync window was reloaded. Close it and reopen NamiSync. "
+    "Closing waits for running work to settle; after reopening, review "
+    "the folders and make a fresh plan."
+)
 
 
 def _show_retry_close_prompt(window_title: str) -> bool:

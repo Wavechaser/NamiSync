@@ -54,15 +54,9 @@ _PACKAGED_POPUP_SCRIPT = r"""
   window.__namiPackagedPopupGate = state;
   const onReady = async () => {
     state.readyCount += 1;
-    if (state.stage === 0) {
-      state.stage = 1;
-      window.open("https://example.invalid/packaged-popup");
-      return;
-    }
-    if (state.stage !== 1) {
-      return;
-    }
-    state.stage = 2;
+    if (state.stage !== 0) return;
+    state.stage = 1;
+    window.open("https://example.invalid/packaged-popup");
     const bridge = await import("./bridge.js");
     await bridge.whenBridgeReady();
     const result = await bridge.dispatchInteractive(
@@ -177,6 +171,7 @@ def _parse_arguments() -> argparse.Namespace:
         choices=(
             "live",
             "packaged-popup",
+            "reload-containment",
             "attachment-failure",
             "runtime-refusal",
         ),
@@ -441,11 +436,16 @@ def _install_native_observer(
                 del sender
                 uri = _event_uri(arguments)
                 cancel = _event_flag(arguments, "Cancel")
+                if uri.endswith("/navigation"):
+                    runtime["canceled_navigation_id"] = int(arguments.NavigationId)
+                if uri.endswith("/popup"):
+                    runtime["canceled_popup_id"] = int(arguments.NavigationId)
                 recorder.append(
                     "top_level_navigation",
                     {
                         "uri": uri,
                         "cancel": cancel,
+                        "navigation_id": int(arguments.NavigationId),
                         "at": time.monotonic(),
                         "thread": threading.get_ident(),
                     },
@@ -502,16 +502,45 @@ def _install_native_observer(
                     },
                 )
 
+            def content_loading(sender: object, arguments: object) -> None:
+                recorder.event(
+                    "native_content_loading",
+                    source=str(sender.Source),
+                    navigation_id=int(arguments.NavigationId),
+                    is_error_page=bool(arguments.IsErrorPage),
+                )
+
+            def navigation_completed(sender: object, arguments: object) -> None:
+                del sender
+                navigation_id = int(arguments.NavigationId)
+                recorder.event(
+                    "native_navigation_completed",
+                    navigation_id=navigation_id,
+                    success=bool(arguments.IsSuccess),
+                )
+                if navigation_id == runtime.get("canceled_navigation_id"):
+                    runtime.setdefault(
+                        "canceled_navigation_completed", threading.Event()
+                    ).set()
+                if navigation_id == runtime.get("canceled_popup_id"):
+                    runtime.setdefault(
+                        "canceled_popup_completed", threading.Event()
+                    ).set()
+
             core.NavigationStarting += navigation
             core.FrameNavigationStarting += frame_navigation
             core.NewWindowRequested += new_window
             core.SourceChanged += source_changed
+            core.ContentLoading += content_loading
+            core.NavigationCompleted += navigation_completed
             runtime["native_handlers"] = (
                 subscription_probe,
                 navigation,
                 frame_navigation,
                 new_window,
                 source_changed,
+                content_loading,
+                navigation_completed,
             )
 
         window.events.before_load += observe_before_load
@@ -520,9 +549,6 @@ def _install_native_observer(
             count = int(runtime.get("bridge_ready_count", 0)) + 1
             runtime["bridge_ready_count"] = count
             recorder.event("pywebviewready", count=count)
-            if count >= 2:
-                ready = runtime.setdefault("reinjection_ready", threading.Event())
-                ready.set()
 
         window.events._pywebviewready += observe_bridge_ready
         recorder.event("configure_security.end")
@@ -676,11 +702,12 @@ def _run_live(arguments: argparse.Namespace, recorder: _Recorder) -> int:
             if phase == "delayed_return":
                 runtime["delayed_handler_thread"] = threading.current_thread()
                 delayed_handler_started.set()
-                reinjection_ready = runtime.setdefault(
-                    "reinjection_ready",
+                navigation_completed = runtime.setdefault(
+                    "canceled_navigation_completed",
                     threading.Event(),
                 )
-                reinjection_ready.wait()
+                if not navigation_completed.wait(10.0):
+                    raise RuntimeError("canceled native navigation did not complete")
                 original_get_current_url = runtime["original_get_current_url"]
                 measured_managed_url = original_get_current_url()
                 recorder.set(
@@ -715,6 +742,12 @@ def _run_live(arguments: argparse.Namespace, recorder: _Recorder) -> int:
                 if delayed_worker.is_alive():
                     raise RuntimeError("delayed bridge worker did not exit")
                 recorder.event("delayed_handler.joined")
+            elif phase == "wait_popup_completed":
+                popup_completed = runtime.setdefault(
+                    "canceled_popup_completed", threading.Event()
+                )
+                if not popup_completed.wait(10.0):
+                    raise RuntimeError("canceled native popup did not complete")
 
             window = runtime["window"]
             managed_url = window.get_current_url()
@@ -1245,6 +1278,194 @@ def _run_runtime_refusal(
     return exit_code
 
 
+def _run_reload_containment(arguments: argparse.Namespace, recorder: _Recorder) -> int:
+    from namisync.interfaces.web import bridge, host
+    from namisync.interfaces.web.commands import (
+        CommandAccess, CommandRetry, CommandSpec, CommandTimeout,
+        CommandWork, FieldRequirement,
+    )
+    from namisync.interfaces.web.host import DesktopInstanceIdentity
+    from namisync.interfaces.web.paths import AppPaths
+
+    holder: dict[str, object] = {}
+    hold_entered = threading.Event()
+    release = threading.Event()
+    effects: list[str] = []
+    service_closes: list[str] = []
+    registry_closes: list[str] = []
+    original_load = host._load_webview
+    original_service = host._create_service
+    original_dispatcher = host._bridge_dispatcher
+    original_content_loading = bridge._NativeNavigationGuard._on_content_loading
+
+    def snapshot_custody() -> dict[str, object]:
+        dispatcher = holder["dispatcher"]
+        with dispatcher._handler_condition:
+            dispatcher._reap_native_returns_locked()
+            return {
+                "admitted": dispatcher._admitted,
+                "generation": dispatcher._document_generation,
+                "custodies": [
+                    {
+                        "browser_released": custody.browser_released,
+                        "completion_released": custody.completion_released,
+                        "command_alive": (
+                            custody.command_owner is not None
+                            and custody.command_owner.is_alive()
+                        ),
+                    }
+                    for custody in dispatcher._native_responses.values()
+                ],
+            }
+
+    def monitor_replacement(window: object) -> None:
+        deadline = time.monotonic() + 15.0
+        while time.monotonic() < deadline:
+            try:
+                status = window.dom.get_element("#host-status")
+                result = window.dom.get_element("#probe-result")
+                status_text = None if status is None else status.text
+                result_text = None if result is None else result.text
+            except Exception:
+                status_text = result_text = None
+            if (
+                hold_entered.is_set()
+                and status_text == host._RELOADED_WINDOW_MESSAGE
+                and result_text == "bridge_unavailable"
+            ):
+                custody = snapshot_custody()
+                if custody == recorder.get("retirement_at_content"):
+                    recorder.set("retired_custody", custody)
+                    recorder.set("reloaded_status", status_text)
+                    recorder.set("new_command_error", result_text)
+                    recorder.set("effects_before_release", len(effects))
+                    recorder.publish_ready()
+                    return
+            time.sleep(0.05)
+        recorder.publish_failure(RuntimeError("replacement page did not settle"))
+
+    def load_webview() -> object:
+        module = original_load()
+        original_create = module.create_window
+
+        def create_window(*values: object, **keywords: object) -> object:
+            window = original_create(*values, **keywords)
+            loaded_count = 0
+
+            def on_loaded() -> None:
+                nonlocal loaded_count
+                loaded_count += 1
+                recorder.event("loaded", count=loaded_count)
+                if loaded_count == 2:
+                    threading.Thread(
+                        target=monitor_replacement, args=(window,), daemon=True,
+                    ).start()
+
+            window.events.loaded += on_loaded
+            return window
+
+        module.create_window = create_window
+        return module
+
+    def create_service(paths: object) -> object:
+        service = original_service(paths)
+        original_close = service.close
+
+        def close(*values: object, **keywords: object) -> object:
+            service_closes.append("close")
+            recorder.event("service.close")
+            return original_close(*values, **keywords)
+
+        service.close = close
+        return service
+
+    def extension(_document: object, registry: object) -> dict[str, object]:
+        original_begin_close = registry.begin_close
+
+        def begin_close() -> None:
+            registry_closes.append("close")
+            recorder.event("registry.begin_close")
+            original_begin_close()
+
+        registry.begin_close = begin_close
+
+        def hold(_payload: object) -> object:
+            recorder.event("hold.enter")
+            hold_entered.set()
+            if not release.wait(30.0):
+                raise RuntimeError("held command was not released")
+            effects.append("once")
+            recorder.event("hold.effect")
+            return {"effects": len(effects)}
+
+        return {"ab6_hold": CommandSpec(
+            validate_payload=lambda payload: payload,
+            handler=hold,
+            access=CommandAccess.MUTATING,
+            command_id=FieldRequirement.FORBIDDEN,
+            revision=FieldRequirement.FORBIDDEN,
+            timeout=CommandTimeout.MUTATION_30_SECONDS,
+            retry=CommandRetry.SAME_PAYLOAD_BOUNDED,
+            work=CommandWork.ASYNC_SMALL,
+        )}
+
+    def capture_dispatcher(document: object, commands: object,
+                           startup_gate: object) -> object:
+        dispatcher = original_dispatcher(document, commands, startup_gate)
+        holder["dispatcher"] = dispatcher
+        return dispatcher
+
+    def observe_content_loading(guard: object, sender: object,
+                                arguments: object) -> None:
+        recorder.event(
+            "replacement.content.begin", navigation_id=int(arguments.NavigationId),
+        )
+        original_content_loading(guard, sender, arguments)
+        recorder.set("retirement_at_content", snapshot_custody())
+        recorder.event("replacement.content.retired")
+
+    def settle_after_release() -> None:
+        release_file = arguments.evidence_dir / "release.flag"
+        deadline = time.monotonic() + 45.0
+        while not release_file.exists() and time.monotonic() < deadline:
+            time.sleep(0.05)
+        if not release_file.exists():
+            return
+        release.set()
+        holder["dispatcher"].wait_for_handlers(10.0)
+        settled = {
+            "custody": snapshot_custody(),
+            "effects": len(effects),
+            "service_close_before_x": len(service_closes),
+            "registry_close_before_x": len(registry_closes),
+        }
+        settlement_publisher.publish_final(settled)
+
+    settlement_root = arguments.evidence_dir / "settlement"
+    settlement_root.mkdir()
+    settlement_publisher = EvidencePublisher(EvidencePaths(settlement_root))
+    threading.Thread(target=settle_after_release, daemon=True).start()
+    with ExitStack() as stack:
+        stack.enter_context(patch.object(host, "_load_webview", load_webview))
+        stack.enter_context(patch.object(host, "_create_service", create_service))
+        stack.enter_context(patch.object(host, "_bridge_dispatcher", capture_dispatcher))
+        stack.enter_context(patch.object(
+            bridge._NativeNavigationGuard, "_on_content_loading",
+            observe_content_loading,
+        ))
+        stack.enter_context(headed_command_extension(host, extension))
+        exit_code = host.run_desktop(
+            AppPaths.from_root(arguments.data_dir),
+            DesktopInstanceIdentity(arguments.mutex, arguments.title),
+            startup_error=recorder.startup_error,
+            index_path=arguments.index,
+        )
+    recorder.set("exit_code", exit_code)
+    recorder.set("effects_after_close", len(effects))
+    recorder.publish_final()
+    return exit_code
+
+
 def main() -> int:
     arguments = _parse_arguments()
     recorder = _Recorder(arguments.evidence_dir, arguments.mode)
@@ -1253,6 +1474,8 @@ def main() -> int:
             return _run_live(arguments, recorder)
         if arguments.mode == "packaged-popup":
             return _run_packaged_popup(arguments, recorder)
+        if arguments.mode == "reload-containment":
+            return _run_reload_containment(arguments, recorder)
         if arguments.mode == "attachment-failure":
             return _run_attachment_failure(arguments, recorder)
         return _run_runtime_refusal(arguments, recorder)

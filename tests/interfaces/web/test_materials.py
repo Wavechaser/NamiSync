@@ -1277,7 +1277,7 @@ def test_deferred_initial_refresh_latches_unconfirmed_surface_failure() -> None:
     controller.close()
 
 
-def test_reload_before_surface_settlement_replaces_the_stale_generation_waiter() -> None:
+def test_standalone_channel_generation_replaces_the_stale_surface_waiter() -> None:
     window = _window()
     native = _FakeNative(_system(accent="#111111"))
     deferred: list[object] = []
@@ -1346,7 +1346,7 @@ def test_unsettled_surface_completes_and_releases_superseded_waiters() -> None:
     assert all(isinstance(error, DocumentStaleError) for error in outcomes)
 
 
-def test_reload_automatically_publishes_to_the_new_receiver() -> None:
+def test_standalone_channel_publishes_to_each_owned_document() -> None:
     window = _window()
     native = _FakeNative(_system(accent="#123456"))
     controller = configure_window_appearance(window, native=native)
@@ -1367,7 +1367,7 @@ def test_reload_automatically_publishes_to_the_new_receiver() -> None:
     controller.close()
 
 
-def test_reload_invalidates_a_queued_prior_generation_publication() -> None:
+def test_standalone_channel_invalidates_queued_prior_generation_publication() -> None:
     window = _window()
     native = _FakeNative(_system(accent="#123456"))
     queued: list[object] = []
@@ -1388,7 +1388,7 @@ def test_reload_invalidates_a_queued_prior_generation_publication() -> None:
     assert len(window.appearance_messages.messages) == 1
     queue_posts = True
 
-    for _reload in range(2):
+    for _generation in range(2):
         window.events.before_load.emit()
         window.events.loaded.emit()
     while queued:
@@ -1906,7 +1906,7 @@ def test_queued_stale_publication_is_ignored_and_latest_revision_wins() -> None:
     controller.close()
 
 
-def test_reload_retirement_does_not_publish_appearance_before_readiness(
+def test_replaced_document_stays_without_appearance_publication(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     window = _window()
@@ -1956,30 +1956,6 @@ def test_reload_retirement_does_not_publish_appearance_before_readiness(
         "namisync.readiness.v1",
         "namisync.appearance.v3",
     ]
-    readiness: list[Exception | None] = []
-    channel.post(
-        {"kind": "namisync.readiness.v1", "challenge": "a" * 32},
-        still_current=lambda: True,
-        completion=readiness.append,
-        kind=DocumentPostKind.REQUIRED,
-        acknowledgment=(2, "a" * 32),
-    )
-
-    assert [message["kind"] for message in window.appearance_messages.messages] == [
-        "namisync.readiness.v1",
-        "namisync.appearance.v3",
-        "namisync.readiness.v1",
-    ]
-    assert readiness == []
-    assert channel.acknowledge(
-        DocumentPostKind.REQUIRED,
-        (2, "a" * 32),
-    )
-    assert readiness == [None]
-    assert controller._open_document_publication(2)
-    assert window.appearance_messages.messages[-1]["kind"] == (
-        "namisync.appearance.v3"
-    )
     assert "appearance.document_publish_failed" not in caplog.text
     controller.close()
     channel.close()

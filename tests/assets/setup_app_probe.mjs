@@ -390,12 +390,10 @@ async function loadScenario({
     "new-task uncertainty guidance",
   );
   assert.equal(harness.createStates.at(-1), false, "New task is enabled only for the retained retry");
-  for (const callback of harness.windowListeners.get("pywebviewready") ?? []) callback();
-  await turns();
   assert.match(
     globalThis.document.querySelector("#host-status").textContent,
     /Select New task to retry the same request/,
-    "reinjection retains the pending create guidance",
+    "the same-document retry retains its pending create guidance",
   );
   harness.railCallbacks.onCreate();
   harness.railCallbacks.onCreate();
@@ -479,8 +477,7 @@ async function loadScenario({
   callbacks.onAddPair();
   harness.railCallbacks.onClose(TASK_A);
   await until(() => harness.calls.some((call) => call[0] === "close"), "origin close");
-  for (const callback of harness.windowListeners.get("pywebviewready") ?? []) callback();
-  await until(() => harness.task?.taskId === TASK_A && harness.model !== null, "closed origin rehydration fixture");
+  await until(() => harness.task?.taskId === TASK_B && harness.model !== null, "closed origin selection");
   assert.deepEqual(harness.model.batch, [], "confirmed origin close discards its queued rows");
 }
 
@@ -885,10 +882,9 @@ for (const sessionState of ["active", "failed"]) {
   assert.equal(harness.calls.some((call) => call[0] === "start-plan"), false);
   callbacks.onRemoveBatchRow(harness.model.batch[1]);
   assert.equal(harness.model.batch.length, 1, "a later queued row is removable during the serial run");
-  for (const callback of harness.windowListeners.get("pywebviewready") ?? []) callback();
   firstCreate.resolve({ task_id: TASK_B });
-  await until(() => harness.model.batch.every((row) => row.state === "stopped"), "replacement stops unsent work");
-  assert.equal(harness.calls.some((call) => call[0] === "start-plan"), false);
+  await until(() => harness.model.batch.every((row) => row.state === "created"), "retained row completes after create");
+  assert.equal(harness.calls.filter((call) => call[0] === "start-plan").length, 1);
   assert.equal(harness.calls.filter((call) => call[0] === "create").length, 1);
 }
 

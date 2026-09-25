@@ -21,6 +21,7 @@ from _startup_test_support import (
 
 import namisync.interfaces.web.host as host
 from namisync.core.models import VolumeId
+from namisync.interfaces.web.bridge import AdmissionRefused, BridgeDispatcher
 from namisync.interfaces.web.commands import (
     CommandAccess,
     CommandRetry,
@@ -182,6 +183,14 @@ class _Document:
     def __init__(self) -> None:
         self.is_attached = False
         self.attachment_error: str | None = None
+        self.replacement_handler = None
+
+    def _set_replacement_handler(self, handler) -> None:
+        self.replacement_handler = handler
+
+    def emit_replacement(self) -> None:
+        assert self.replacement_handler is not None
+        self.replacement_handler()
 
 
 class _Service:
@@ -1885,6 +1894,210 @@ def test_reload_reuses_the_single_document_channel_owner(
     assert len(first_channel.posts) == 1
 
 
+def test_replacement_before_initial_open_waits_for_user_close(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def start(webview, *, on_initialized, storage_path) -> None:
+        del storage_path
+        on_initialized()
+        window = webview.window
+        window.events.before_load.emit()
+        document.emit_replacement()
+        window.events.before_load.emit()
+        window.events.loaded.emit()
+        assert window.startup_gate.command_context() is None
+        assert status.text == host._RELOADED_WINDOW_MESSAGE
+        assert "service.close" not in order
+        assert window.events.closing.emit() == [False]
+        assert window.destroyed.wait(1.0)
+
+    paths, order, webview, document, reports = _patch_primary(
+        monkeypatch, tmp_path, start=start,
+    )
+    status = SimpleNamespace(text="Starting...", attributes={})
+    webview.window.dom = SimpleNamespace(get_element=lambda _selector: status)
+
+    result = run_desktop(paths, _identity(), startup_error=reports.append)
+
+    assert result == 0
+    assert reports == []
+    assert order.count("service.close") == 1
+
+
+def test_x_before_replacement_closes_without_successor_loaded(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def start(webview, *, on_initialized, storage_path) -> None:
+        del storage_path
+        on_initialized()
+        window = webview.window
+        window.events.before_load.emit()
+        assert window.events.closing.emit() == [False]
+        assert "service.close" not in order
+        document.emit_replacement()
+        assert window.destroyed.wait(1.0)
+
+    paths, order, webview, document, reports = _patch_primary(
+        monkeypatch, tmp_path, start=start,
+    )
+
+    assert run_desktop(paths, _identity(), startup_error=reports.append) == 0
+    assert reports == []
+    assert order.count("service.close") == 1
+    assert order.index("reject_dispatch") < order.index("wait_handlers")
+    assert order.index("registry.begin_close") < order.index("wait_handlers")
+    assert order.index("wait_handlers") < order.index("service.close")
+    assert webview.window.destroy_count == 1
+
+
+def test_x_after_replacement_closes_without_successor_loaded_or_late_refusal(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    deadlines: list[object] = []
+    canceled: list[bool] = []
+
+    def schedule(_delay: float, callback: object) -> object:
+        deadlines.append(callback)
+        return lambda: canceled.append(True)
+
+    def start(webview, *, on_initialized, storage_path) -> None:
+        del storage_path
+        on_initialized()
+        window = webview.window
+        window.events.before_load.emit()
+        window.events.loaded.emit()
+        assert len(deadlines) == 1
+        document.emit_replacement()
+        assert canceled == [True]
+        deadlines[0]()
+        assert reports == []
+        assert window.startup_gate.command_context() is None
+        assert "service.close" not in order
+        assert window.events.closing.emit() == [False]
+        assert window.destroyed.wait(1.0)
+
+    paths, order, webview, document, reports = _patch_primary(
+        monkeypatch, tmp_path, start=start,
+    )
+
+    assert run_desktop(
+        paths,
+        _identity(),
+        startup_error=reports.append,
+        startup_deadline_scheduler=schedule,
+    ) == 0
+    assert reports == []
+    assert order.count("service.close") == 1
+    assert order.index("reject_dispatch") < order.index("wait_handlers")
+    assert order.index("registry.begin_close") < order.index("wait_handlers")
+    assert order.index("wait_handlers") < order.index("service.close")
+    assert webview.window.destroy_count == 1
+
+
+def test_third_document_contains_a_held_refused_native_return(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    returned = Event()
+    release_return = Event()
+    responses: list[object] = []
+    evaluations: list[object] = []
+    failures: list[BaseException] = []
+    inner_evaluations: list[str] = []
+    worker: Thread | None = None
+
+    def start(webview, *, on_initialized, storage_path) -> None:
+        nonlocal worker
+        del storage_path
+        on_initialized()
+        window = webview.window
+        drive_startup_handshake(window)
+        document.emit_replacement()
+        window.events.before_load.emit()
+        window.events.loaded.emit()
+        assert dispatcher._document_generation == 2
+
+        def delayed_return() -> None:
+            try:
+                response = window.exposed_functions[0](json.dumps({
+                    "schema_version": 1,
+                    "request_id": "a" * 32,
+                    "command": "refused_probe",
+                    "payload": {},
+                }))
+                responses.append(response)
+                returned.set()
+                assert release_return.wait(2.0)
+                evaluations.append(window.evaluate_js("obsolete native return"))
+            except BaseException as error:
+                failures.append(error)
+                returned.set()
+
+        worker = Thread(target=delayed_return)
+        worker.start()
+        assert returned.wait(1.0)
+        assert not failures
+        assert responses[0]["response"]["error"]["code"] == "bridge_unavailable"
+        assert dispatcher._admitted == 1
+
+        document.emit_replacement()
+        assert dispatcher._document_generation == 3
+        window.events.before_load.emit()
+        assert dispatcher._document_generation == 3
+        window.events.loaded.emit()
+        assert window.startup_gate.command_context() is None
+        with dispatcher._handler_condition:
+            custody = next(iter(dispatcher._native_responses.values()))
+            assert custody.browser_released
+            assert custody.completion_released
+            assert custody.owner.is_alive()
+            assert dispatcher._admitted == 1
+
+        release_return.set()
+        worker.join(1.0)
+        assert not worker.is_alive()
+        assert not failures
+        assert evaluations == [None]
+        assert inner_evaluations == []
+        dispatcher.wait_for_handlers(1.0)
+
+    paths, _order, webview, document, reports = _patch_primary(
+        monkeypatch, tmp_path, start=start,
+    )
+    document.require_trusted = lambda: None
+    webview.window.evaluate_js = (
+        lambda script: inner_evaluations.append(script) or "evaluated"
+    )
+    status = SimpleNamespace(text="Starting...", attributes={})
+    webview.window.dom = SimpleNamespace(get_element=lambda _selector: status)
+    dispatcher = BridgeDispatcher(
+        document=document,
+        commands={"refused_probe": CommandSpec(
+            validate_payload=lambda payload: payload,
+            handler=lambda _payload: pytest.fail("retired command ran"),
+            access=CommandAccess.READ_ONLY,
+            command_id=FieldRequirement.FORBIDDEN,
+            revision=FieldRequirement.FORBIDDEN,
+            timeout=CommandTimeout.INTERACTIVE,
+            retry=CommandRetry.NONE,
+        )},
+        admit=lambda _name: AdmissionRefused(),
+    )
+    dispatcher._bind_document_channel = lambda _channel: None
+    monkeypatch.setattr(host, "_bridge_dispatcher", lambda *_args: dispatcher)
+
+    try:
+        assert run_desktop(paths, _identity(), startup_error=reports.append) == 0
+    finally:
+        release_return.set()
+        if worker is not None:
+            worker.join(1.0)
+    assert reports == []
+
+
 def test_host_readiness_acknowledgment_is_exact_and_reload_retires_prior_post(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -1968,36 +2181,41 @@ def test_host_readiness_acknowledgment_is_exact_and_reload_retires_prior_post(
         assert gate.is_open()
         assert publication_openings == [channel]
 
-        webview.window.events.before_load.emit()
-        stale_generation = gate.command_context().generation
+        document.emit_replacement()
+        assert gate.command_context() is None
         assert generation_order[-2:] == ["revoke", "replace"]
-        gate.acknowledge_shell(stale_generation)
-        webview.window.events.loaded.emit()
-        stale_challenge = json.loads(core.encoded[-1])["challenge"]
         webview.window.events.before_load.emit()
+        webview.window.events.loaded.emit()
+        assert status.text == host._RELOADED_WINDOW_MESSAGE
+        assert status.attributes["hidden"] is None
+        assert len(core.encoded) == 1
+        revocations = generation_order.count("revoke")
+        retirements = _order.count("retire_document_responses")
+        document.emit_replacement()
+        assert generation_order.count("revoke") == revocations
+        assert generation_order.count("replace") == 2
+        assert _order.count("retire_document_responses") == retirements + 1
+        webview.window.events.before_load.emit()
+        assert generation_order.count("replace") == 2
+        assert _order.count("retire_document_responses") == retirements + 1
 
-        assert not readiness_echo(stale_generation, stale_challenge)
+        assert not readiness_echo(generation, challenge)
         assert channel.acknowledgments[-1] == (
             DocumentPostKind.REQUIRED,
-            (stale_generation, stale_challenge),
+            (generation, challenge),
             False,
         )
         assert not gate.is_open()
         assert publication_openings == [channel]
+        assert "service.close" not in _order
 
-        current_generation = gate.command_context().generation
-        gate.acknowledge_shell(current_generation)
-        webview.window.events.loaded.emit()
-        current_challenge = json.loads(core.encoded[-1])["challenge"]
-        assert readiness_echo(current_generation, current_challenge)
-        assert gate.is_open()
-        assert publication_openings == [channel, channel]
-
-    paths, _order, webview, _document, reports = _patch_primary(
+    paths, _order, webview, document, reports = _patch_primary(
         monkeypatch,
         tmp_path,
         start=start,
     )
+    status = SimpleNamespace(text="Starting...", attributes={})
+    webview.window.dom = SimpleNamespace(get_element=lambda _selector: status)
     original_commands = host._production_commands
 
     def capture_commands(**dependencies: object) -> object:
@@ -2903,7 +3121,7 @@ def _wait_until(predicate, *, timeout: float = 2.0) -> None:
     raise AssertionError("condition did not become true before timeout")
 
 
-def test_reload_readiness_refusal_records_before_normal_service_close() -> None:
+def test_startup_readiness_refusal_records_before_normal_service_close() -> None:
     order: list[str] = []
     window = _ControllerWindow(order)
     service = _ControllerService(order, [_shutdown_view(complete=True)])
@@ -2936,7 +3154,7 @@ def test_reload_readiness_refusal_records_before_normal_service_close() -> None:
     assert window.destroy_count == 1
 
 
-def test_reload_readiness_refusal_does_not_override_close_in_flight() -> None:
+def test_startup_readiness_refusal_does_not_override_close_in_flight() -> None:
     order: list[str] = []
     entered = Event()
     release = Event()
@@ -2974,7 +3192,7 @@ def test_reload_readiness_refusal_does_not_override_close_in_flight() -> None:
     assert window.destroy_count == 1
 
 
-def test_reload_handshake_reopens_with_the_existing_close_controller() -> None:
+def test_initial_handshake_opens_with_the_existing_close_controller() -> None:
     order: list[str] = []
     publications: list[object] = []
     posts: list[tuple[int, str, object]] = []

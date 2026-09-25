@@ -52,7 +52,6 @@ globalThis.window = {
 const shellAcknowledgements = [];
 const echoAttempts = [];
 let operationalMarks = 0;
-let themeInvalidations = 0;
 let themeOpens = 0;
 let themeRefreshes = 0;
 let rawApiReady = false;
@@ -214,9 +213,6 @@ source = source
 window.addEventListener("pywebviewready", () => {
   globalThis.startupHarness.signalBridgeApiReady();
 });
-globalThis.startupHarness.invalidateTheme = () => {
-  themeInvalidations += 1;
-};
 globalThis.startupHarness.openTheme = () => {
   themeOpens += 1;
   return new Promise(() => {});
@@ -234,115 +230,44 @@ assert.equal(
   "startup waits while the raw bridge API is absent",
 );
 
-const challengeBeforeDeferredRerun = "0".repeat(32);
+const challenge = "a".repeat(32);
 for (const callback of listeners.get("pywebviewready") ?? []) callback();
-emitChallenge(challengeBeforeDeferredRerun);
 for (let turn = 0; turn < 8; turn += 1) await Promise.resolve();
 assert.equal(
   shellAcknowledgements.length,
   1,
-  "raw readiness resolving before the app listener cannot acknowledge the superseded attempt",
+  "initial bridge readiness starts one shell acknowledgement",
 );
-shellAcknowledgements[0].resolve({ acknowledged: true });
-for (let turn = 0; turn < 8; turn += 1) await Promise.resolve();
-assert.deepEqual(
-  echoAttempts.map((attempt) => attempt.value),
-  [challengeBeforeDeferredRerun],
-  "a challenge delivered before the deferred rerun must remain visible to it",
+assert.equal(echoAttempts.length, 0);
+shellAcknowledgements[0].reject(
+  new globalThis.startupHarness.BridgeTransportError("lost shell response"),
 );
-echoAttempts[0].resolve({ acknowledged: true });
 for (let turn = 0; turn < 8; turn += 1) await Promise.resolve();
-assert.equal(status.textContent, "Ready");
-assert.equal(operationalMarks, 1);
-assert.equal(themeOpens, 1, "post-OPEN cosmetic initialization is fire-and-forget");
-
-shellAcknowledgements.length = 0;
-echoAttempts.length = 0;
-operationalMarks = 0;
-
-for (const callback of listeners.get("pywebviewready") ?? []) callback();
-for (let turn = 0; turn < 8; turn += 1) await Promise.resolve();
-assert.equal(shellAcknowledgements.length, 1);
-
-for (const callback of listeners.get("pywebviewready") ?? []) callback();
-for (let turn = 0; turn < 8; turn += 1) await Promise.resolve();
-assert.equal(
-  shellAcknowledgements.length,
-  2,
-  "reinjection while a shell acknowledgement is pending starts a fresh attempt",
-);
 assert.equal(status.textContent, "Starting...");
 assert.equal(operationalMarks, 0);
-
-shellAcknowledgements[1].resolve({ acknowledged: true });
-for (let turn = 0; turn < 4; turn += 1) await Promise.resolve();
 assert.equal(echoAttempts.length, 0);
-assert.equal(
-  status.textContent,
-  "Starting...",
-  "a shell acknowledgement without a native challenge cannot report Ready",
-);
-
-const firstChallenge = "a".repeat(32);
-emitChallenge(firstChallenge);
+emitChallenge(challenge);
 for (let turn = 0; turn < 8; turn += 1) await Promise.resolve();
-assert.deepEqual(echoAttempts.map((attempt) => attempt.value), [firstChallenge]);
+assert.deepEqual(echoAttempts.map((attempt) => attempt.value), [challenge]);
 echoAttempts[0].resolve({ acknowledged: false });
 for (let turn = 0; turn < 8; turn += 1) await Promise.resolve();
 assert.deepEqual(
   echoAttempts.map((attempt) => attempt.value),
-  [firstChallenge, firstChallenge],
+  [challenge, challenge],
   "a false result retries the identical challenge exactly once",
 );
 echoAttempts[1].resolve({ acknowledged: true });
 for (let turn = 0; turn < 8; turn += 1) await Promise.resolve();
 assert.equal(status.textContent, "Ready");
 assert.equal(operationalMarks, 1);
-assert.equal(themeOpens, 2);
+assert.equal(themeOpens, 1, "post-OPEN cosmetic initialization is fire-and-forget");
 
 for (const callback of listeners.get("pywebviewready") ?? []) callback();
-for (let turn = 0; turn < 8; turn += 1) await Promise.resolve();
-assert.equal(status.textContent, "Starting...");
-assert.equal(shellAcknowledgements.length, 3);
-shellAcknowledgements[2].reject(
-  new globalThis.startupHarness.BridgeTransportError("lost response"),
-);
-const secondChallenge = "b".repeat(32);
-emitChallenge(secondChallenge);
-for (let turn = 0; turn < 8; turn += 1) await Promise.resolve();
-assert.equal(echoAttempts.length, 3);
-echoAttempts[2].reject(
-  new globalThis.startupHarness.BridgeTransportError("lost response"),
-);
-for (let turn = 0; turn < 8; turn += 1) await Promise.resolve();
-assert.deepEqual(
-  echoAttempts.slice(2).map((attempt) => attempt.value),
-  [secondChallenge, secondChallenge],
-  "transport uncertainty retries the identical challenge exactly once",
-);
-echoAttempts[3].resolve({ acknowledged: true });
 for (let turn = 0; turn < 8; turn += 1) await Promise.resolve();
 assert.equal(status.textContent, "Ready");
-assert.equal(operationalMarks, 2);
-assert.equal(themeOpens, 3);
-
-for (const callback of listeners.get("pywebviewready") ?? []) callback();
-for (let turn = 0; turn < 8; turn += 1) await Promise.resolve();
-assert.equal(status.textContent, "Starting...");
-assert.equal(shellAcknowledgements.length, 4);
-shellAcknowledgements[3].reject(new Error("definitive refusal"));
-emitChallenge("c".repeat(32));
-for (let turn = 0; turn < 8; turn += 1) await Promise.resolve();
-assert.equal(
-  status.textContent,
-  "Starting...",
-  "a definitive non-transport failure cannot report Ready",
-);
-assert.equal(operationalMarks, 2);
-assert.equal(echoAttempts.length, 4);
-assert.ok(
-  themeInvalidations >= 4,
-  "every bridge reincarnation invalidates the older cosmetic attempt",
-);
+assert.equal(shellAcknowledgements.length, 1, "a second ready event cannot restart startup");
+assert.equal(echoAttempts.length, 2);
+assert.equal(operationalMarks, 1);
+assert.equal(themeOpens, 1);
 
 process.stdout.write("ok");

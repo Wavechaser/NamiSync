@@ -44,7 +44,7 @@ def test_setup_child_keeps_the_production_host_and_captures_real_screenshots() -
     assert 'document.querySelector(".nami-plan-review")' in source
     assert "[data-action=\"plan-again\"]" in source
     assert '"original completed Plan review navigation"' in source
-    assert '"reloaded completed Plan review"' in source
+    assert '"revisited completed Plan review"' in source
     assert 'screenshot_dir / "plan-review.png"' in source
     assert '"original frozen task navigation"' not in source
     assert '.nami-setup__actions .nami-button:last-child' not in source
@@ -200,9 +200,9 @@ def test_m1_6_installed_setup_flow(
     assert result["picker_continued"] is True
     assert result["start_refused_before_choice"] is True
     assert result["plan_review_before_capture"] is True
-    assert result["reload_task_count"] == result["task_count_before_reload"]
-    assert result["reload_plan_review_reconstructed"] is True
-    assert result["reload_selected_task"] == "Task 1"
+    assert result["revisit_task_count"] == result["task_count_before_revisit"]
+    assert result["revisit_plan_review_visible"] is True
+    assert result["revisit_selected_task"] == "Task 1"
     assert set(result["screenshots"]) == {"editable", "editable-expanded", "plan-review"}
 
 
@@ -396,7 +396,7 @@ def test_plan_again_host_trace_records_exact_phases_and_closed_entries() -> None
         trace.begin("outside")
     trace.begin("setup")
     with pytest.raises(ValueError, match="phase does not match"):
-        trace.end("task-47-48")
+        trace.end("task-52-53")
 
 
 @pytest.mark.parametrize(
@@ -426,14 +426,14 @@ def test_plan_again_trace_validator_handles_empty_host_case_and_overflow() -> No
         validate_trace_snapshot(empty.snapshot(), {"setup"})
 
     overflow = PlanAgainHostTrace()
-    overflow.begin("task-47-48")
+    overflow.begin("task-52-53")
     for _index in range(TRACE_LIMIT + 1):
         overflow.record("registry", "entered")
-    case = overflow.snapshot()["cases"]["task-47-48"]
+    case = overflow.snapshot()["cases"]["task-52-53"]
     assert len(case["entries"]) == TRACE_LIMIT
     assert case["overflow"] is True
     with pytest.raises(AssertionError, match="case bounds"):
-        validate_trace_snapshot(overflow.snapshot(), {"task-47-48"})
+        validate_trace_snapshot(overflow.snapshot(), {"task-52-53"})
 
 
 def test_plan_again_command_wrappers_delegate_once_and_preserve_results() -> None:
@@ -539,25 +539,25 @@ def test_plan_again_registry_wrapper_preserves_call_and_rethrow() -> None:
 
     result = object()
     trace = PlanAgainHostTrace()
-    trace.begin("task-47-48")
+    trace.begin("task-52-53")
     registry = Registry(result)
     trace_registry_plan_again(registry, trace)
     assert registry.replay_start("command", ("intent",)) is None
     assert registry.replay_calls == [(("command", ("intent",)), {})]
     assert registry.start_plan_again("task-47", expected_revision=8) is result
     assert registry.calls == [(('task-47',), {"expected_revision": 8})]
-    validate_trace_snapshot(trace.snapshot(), {"task-47-48"})
+    validate_trace_snapshot(trace.snapshot(), {"task-52-53"})
 
     failure = RuntimeError("registry")
     failed_trace = PlanAgainHostTrace()
-    failed_trace.begin("task-48-49")
+    failed_trace.begin("task-53-54")
     failed = Registry(object(), failure)
     trace_registry_plan_again(failed, failed_trace)
     with pytest.raises(RuntimeError) as raised:
         failed.start_plan_again("task-48", expected_revision=9)
     assert raised.value is failure
     assert failed.calls == [(('task-48',), {"expected_revision": 9})]
-    validate_trace_snapshot(failed_trace.snapshot(), {"task-48-49"})
+    validate_trace_snapshot(failed_trace.snapshot(), {"task-53-54"})
 
     replay_result = object()
     hit_trace = PlanAgainHostTrace()

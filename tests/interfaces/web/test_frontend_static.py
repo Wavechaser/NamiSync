@@ -416,7 +416,7 @@ def test_supplemental_node_readiness_receiver_buffers_exact_envelopes() -> None:
 
 
 @pytest.mark.supplemental_node
-def test_supplemental_node_startup_rearms_per_bridge_generation() -> None:
+def test_supplemental_node_startup_runs_once_per_document() -> None:
     node = _node_executable()
     if node is None:
         pytest.skip("Node.js is unavailable for the supplemental startup probe")
@@ -1231,7 +1231,8 @@ def test_br_g_32_browser_wrapper_owns_exact_ids_response_checks_and_retry() -> N
     assert source.count('"admit_location"') == 2
     assert "function submitStart(payload, command, timeoutMs)" in source
     assert "new StartPlanUncertainError(submit)" in source
-    assert "generation !== bridgeGeneration" in source
+    assert "let commandHostGeneration = null;" in source
+    assert "if (bridgeReadyObserved) return;" in source
     assert 'typeof sourceId !== "string"' in source
     assert 'typeof targetId !== "string"' in source
     assert "function validateLocationChoice(value)" in source
@@ -1239,10 +1240,8 @@ def test_br_g_32_browser_wrapper_owns_exact_ids_response_checks_and_retry() -> N
     assert 'typeof value.request_id === "string"' in source
     assert 'typeof value.session_id === "string"' in source
     assert "Object.getPrototypeOf(value) !== Object.prototype" in source
-    assert source.index("const generation = bridgeGeneration;") < source.index(
-        "const api = bridgeApi();",
-        source.index("async function dispatchAttempt"),
-    )
+    assert "bridgeGeneration" not in source
+    assert "entry.hostGeneration !== message.generation" in source
     assert "return dispatchAttempt(" in source
     assert "response.request_id !== requestId" in source
 
@@ -1372,15 +1371,10 @@ def test_ready_transition_cannot_overwrite_a_native_close_status(
     ) < startup.index('renderHostStatus("Ready");')
     assert "await theme.open()" not in startup
     assert "void theme.refresh(revision);" in app
-    assert 'window.addEventListener("pywebviewready"' in app
-    assert "theme.invalidate();" in app
-    assert "startupRerunReadinessBaseline = readinessBaseline;" in app
-    assert "readinessBaseline: rerunReadinessBaseline" in app
-    assert "readinessBaseline = readiness.revision()," in app
-    assert "rejectSupersededStartup?.(new StartupSupersededError());" in app
+    assert 'window.addEventListener("pywebviewready"' not in app
+    assert "const readinessBaseline = readiness.revision();" in startup
+    assert "StartupSupersededError" not in app
     assert "error instanceof BridgeTransportError" in app
-    assert 'status.textContent === "Ready"' in app
-    assert 'renderHostStatus("Starting...");' in app
     assert 'status.textContent === "Starting..."' in app
     assert app.count('renderHostStatus("Ready")') == 1
 
@@ -1438,7 +1432,8 @@ def test_sh_g_7_packaged_shell_has_accessible_process_live_blank_tasks(
     assert "result.disposition === \"closed\"" in app
     assert "task.closePending = true;" in app
     assert "tasks.get(task.taskId) !== task" in app
-    assert "epoch !== startupEpoch" in app
+    assert "mutationBaseline !== taskMutationRevision" in app
+    assert "navigationRevision === selectionBaseline" in app
     assert '"./plan_review.js"' in panels
     assert '"./integrity.js"' not in app + panels
     assert "createPlanReviewPanel" in panels

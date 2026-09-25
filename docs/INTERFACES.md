@@ -791,8 +791,8 @@ The native bridge separates admission from completion only for `create_task`,
 `close_task`. CommandSpec owns that
 classification; custom commands and ordinary Python dispatch retain synchronous
 results. The host binds the dispatcher to its existing DocumentChannel after
-construction. Reload retires old completion delivery before a new readiness
-exchange, while admitted handlers continue through their existing task/session
+construction. A genuine document replacement permanently retires command and
+completion delivery for this window, while admitted handlers continue through their existing task/session
 owners. Close rejects new admission, wakes drain waiters and retires completion
 delivery before waiting for both native and command workers. A bounded wait
 failure leaves shutdown retryable and cannot close the service under live work.
@@ -808,7 +808,21 @@ GUI logging is standard-library-only and configured before pywebview import. It 
 
 The host acquires fixed instance identity before logging or webview import, prepares the renderer before service/window composition, validates or initializes the database pair before command admission, binds its loopback origin once after renderer-checked initialization, and snapshots the bridge mapping before exposing the page. Startup refusal performs only the applicable owner-bound teardown and retains the initiating diagnosis; every post-logging failure records typed `startup.failed` before final cleanup.
 
-A loaded document has a fixed five-second readiness deadline. The packaged readiness receiver starts before appearance/shell, acknowledges its current generation through dispatch, waits for a host challenge, and echoes the identical nonce. Commands and retained drains remain unavailable until the truthful acknowledgement. Transport uncertainty permits one identical-payload retry. Reload/reinjection repeats the handshake. Appearance may degrade independently of readiness and command admission.
+The initial loaded document has a fixed five-second readiness deadline. The packaged readiness receiver starts before appearance/shell, acknowledges its current generation through dispatch, waits for a host challenge, and echoes the identical nonce. Commands and retained drains remain unavailable until the truthful acknowledgement. Transport uncertainty permits one identical-payload retry. Appearance may degrade independently of readiness and command admission.
+
+Reload is unsupported. A genuine later document retires command and appearance
+authority permanently for that window, including when initial startup has not
+completed. The host directs the user to close and reopen NamiSync, then review
+the folders and make a fresh plan. Retirement does not cancel admitted work,
+release sessions, or start service shutdown. Normal window close retains its
+bounded, retryable settlement path even if a successor document never finishes
+loading; reopening does not resume process-live tasks.
+Canceled navigation and same-document fragment history do not retire authority.
+Every genuine later document retires delivery from its predecessor, including
+refused responses issued after the window's command authority was retired.
+The pinned native adapter distinguishes content loading from pywebview's bridge
+reinjection after canceled navigation; repeated API-ready notifications do not
+restart the shell or its observation machinery.
 
 Window close is host-owned. It rejects new dispatch while waiting boundedly for admitted calls, closes adapter delivery and wakes waiters, then invokes service close. Incomplete or exceptional closure leaves the window open with one owned Retry/Cancel interaction; only a completed shutdown closes appearance and permits programmatic destroy. A repeated load replaces the cached status target, so a late worker never queries a destroyed document.
 

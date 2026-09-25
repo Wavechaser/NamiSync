@@ -1047,7 +1047,7 @@ _AMBIGUITY_SCRIPT = r"""
   await until(() => source.dataset.state === "resolved" && !start.disabled, "continued picker choice");
   const completedTask = Array.from(document.querySelectorAll(".nami-task-card"))
     .find((button) => button.dataset.taskLabel === "Task 1");
-  if (!(completedTask instanceof HTMLButtonElement)) throw new Error("completed task is unavailable before reload");
+  if (!(completedTask instanceof HTMLButtonElement)) throw new Error("completed task is unavailable before revisit");
   completedTask.click();
   await until(() => {
     const review = document.querySelector(".nami-plan-review");
@@ -1056,20 +1056,20 @@ _AMBIGUITY_SCRIPT = r"""
       && document.querySelector(".nami-work-panel")?.getAttribute("aria-label") === "Work area — Task 1"
       && review instanceof HTMLElement && review.checkVisibility()
       && table instanceof HTMLElement && table.checkVisibility();
-  }, "completed Plan review before screenshot and reload");
+  }, "completed Plan review before screenshot and revisit");
   return {
     picker_ambiguous: true,
     picker_mount_index: chosenIndex,
     picker_continued: source.dataset.state === "resolved",
     start_refused_before_choice: refusedBeforeChoice,
     plan_review_before_capture: true,
-    task_count_before_reload: document.querySelectorAll(".nami-task-rail__row").length,
+    task_count_before_revisit: document.querySelectorAll(".nami-task-rail__row").length,
   };
 })()
 """
 
 
-_RELOADED_SCRIPT = r"""
+_REVISITED_SCRIPT = r"""
 (async () => {
   const sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
   async function until(predicate, label) {
@@ -1080,12 +1080,16 @@ _RELOADED_SCRIPT = r"""
     }
     throw new Error(`timed out waiting for ${label}`);
   }
-  await until(() => document.querySelector("#host-status")?.textContent === "Ready", "reloaded host readiness");
-  await until(() => document.querySelectorAll(".nami-task-rail__row").length === __TASK_COUNT__, "reloaded task identities");
+  await until(() => document.querySelector("#host-status")?.textContent === "Ready", "host readiness");
+  await until(() => document.querySelectorAll(".nami-task-rail__row").length === __TASK_COUNT__, "retained task identities");
+  const settings = document.querySelector(".nami-task-rail__settings");
+  if (!(settings instanceof HTMLButtonElement)) throw new Error("Settings navigation is unavailable");
+  settings.click();
+  await until(() => document.querySelector("#settings-view")?.checkVisibility(), "Settings navigation");
   const cards = Array.from(document.querySelectorAll(".nami-task-rail__items .nami-task-card"));
   const original = cards.find((card) =>
     card.dataset.taskLabel === "Task 1");
-  if (!(original instanceof HTMLButtonElement)) throw new Error("reloaded completed task is unavailable");
+  if (!(original instanceof HTMLButtonElement)) throw new Error("completed task is unavailable after navigation");
   original.click();
   await until(() => {
     const review = document.querySelector(".nami-plan-review");
@@ -1094,14 +1098,14 @@ _RELOADED_SCRIPT = r"""
       && document.querySelector(".nami-work-panel")?.getAttribute("aria-label") === "Work area — Task 1"
       && review instanceof HTMLElement && review.checkVisibility()
       && table instanceof HTMLElement && table.checkVisibility();
-  }, "reloaded completed Plan review");
+  }, "revisited completed Plan review");
   const marker = document.createElement("p");
   marker.textContent = "Setup headed gate complete";
   document.body.append(marker);
   return {
-    reload_task_count: cards.length,
-    reload_plan_review_reconstructed: true,
-    reload_selected_task: "Task 1",
+    revisit_task_count: cards.length,
+    revisit_plan_review_visible: true,
+    revisit_selected_task: "Task 1",
   };
 })()
 """
@@ -1371,19 +1375,13 @@ def _begin(
                                             **ambiguity,
                                         }
 
-                                        def reload_page() -> None:
+                                        def revisit_plan_review() -> None:
                                             state["report"] = report
-                                            state["stage"] = "reload"
-                                            reload_settings = json.dumps({
-                                                "expression": "location.reload();",
-                                                "awaitPromise": False,
-                                                "returnByValue": True,
-                                            })
-                                            core.CallDevToolsProtocolMethodAsync("Runtime.evaluate", reload_settings)
+                                            _begin_revisited(window, recorder, retained, state)
 
                                         _capture(
                                             core, screenshot_dir / "plan-review.png", retained,
-                                            reload_page,
+                                            revisit_plan_review,
                                             lambda error: recorder.failure("plan-review-screenshot", error),
                                         )
                                     except BaseException as error:
@@ -1444,27 +1442,27 @@ def _begin(
     editable_task.GetAwaiter().OnCompleted(action)
 
 
-def _begin_reloaded(window: object, recorder: _Recorder, retained: list[object], state: dict[str, object]) -> None:
+def _begin_revisited(window: object, recorder: _Recorder, retained: list[object], state: dict[str, object]) -> None:
     from System import Action
 
     report = state.get("report")
-    if type(report) is not dict or type(report.get("task_count_before_reload")) is not int:
-        recorder.failure("reload", RuntimeError("reload report is unavailable"))
+    if type(report) is not dict or type(report.get("task_count_before_revisit")) is not int:
+        recorder.failure("revisit", RuntimeError("revisit report is unavailable"))
         return
-    script = _RELOADED_SCRIPT.replace("__TASK_COUNT__", str(report["task_count_before_reload"]))
+    script = _REVISITED_SCRIPT.replace("__TASK_COUNT__", str(report["task_count_before_revisit"]))
     settings = json.dumps({"expression": script, "awaitPromise": True, "returnByValue": True})
     core = window.native.browser.webview.CoreWebView2
     task = core.CallDevToolsProtocolMethodAsync("Runtime.evaluate", settings)
 
-    def reloaded_done() -> None:
+    def revisited_done() -> None:
         try:
-            reloaded = _runtime_value(task)
+            revisited = _runtime_value(task)
             state["stage"] = "complete"
-            recorder.ready({**report, **reloaded, "screenshots": ["editable", "editable-expanded", "plan-review"]})
+            recorder.ready({**report, **revisited, "screenshots": ["editable", "editable-expanded", "plan-review"]})
         except BaseException as error:
-            recorder.failure("reload", error)
+            recorder.failure("revisit", error)
 
-    action = Action(reloaded_done)
+    action = Action(revisited_done)
     retained.append(action)
     task.GetAwaiter().OnCompleted(action)
 
@@ -1509,9 +1507,6 @@ def _configure_probe(window: object, recorder: _Recorder, screenshot_dir: Path, 
         if stage == "initial":
             state["stage"] = "running"
             callback = lambda: _begin(window, recorder, screenshot_dir, source, target, retained, state)
-        elif stage == "reload":
-            state["stage"] = "reloading"
-            callback = lambda: _begin_reloaded(window, recorder, retained, state)
         else:
             return
         action = Action(callback)

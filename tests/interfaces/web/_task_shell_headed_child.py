@@ -36,9 +36,6 @@ _FAILURE_STAGES = frozenset(
         "page_initial_navigation",
         "page_initial_navigation_cleanup",
         "page_initial_navigation_recorded",
-        "page_initial_reinjection_armed",
-        "page_initial_reinjection_wait",
-        "page_reinjected",
         "page_busy",
         "page_terminal_first",
         "page_terminal_second",
@@ -82,7 +79,7 @@ _DRIVER_DIAGNOSTIC_KEYS = frozenset(
 
 
 _COMMON_JS = r"""
-const sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+var sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 async function until(predicate, label) {
   for (let attempt = 0; attempt < 300; attempt += 1) {
     if (window.__namiFirstAsyncError) throw new Error("browser asynchronous error");
@@ -154,6 +151,71 @@ function detailFor(title) { return rowByTitle(title)?.querySelector(".nami-task-
 function clickNew() { document.querySelector(".nami-task-rail__create")?.click(); }
 function clickSelect(title) { rowByTitle(title)?.querySelector(".nami-task-card")?.click(); }
 function clickClose(title) { rowByTitle(title)?.querySelector(".nami-task-rail__close")?.click(); }
+async function submitPlan(title, reviewOptions = false) {
+  clickSelect(title);
+  let source = await until(() => {
+    const input = document.querySelector("#setup-source-path");
+    return selectedTitle() === title && input instanceof HTMLInputElement && !input.disabled ? input : null;
+  }, "editable Plan Setup");
+  const paths = await control("paths");
+  source.value = paths.source;
+  source.dispatchEvent(new Event("input", {bubbles: true}));
+  source = await until(() => document.querySelector("#setup-source-path"), "current source input");
+  source.dispatchEvent(new Event("blur", {bubbles: true}));
+  await until(() => document.querySelector("#setup-source-path")?.dataset.state === "resolved", "source admission");
+  let target = await until(() => document.querySelector("#setup-target-path"), "current target input");
+  if (!(target instanceof HTMLInputElement)) throw new Error("Plan target input is unavailable");
+  target.value = paths.target;
+  target.dispatchEvent(new Event("input", {bubbles: true}));
+  target = await until(() => document.querySelector("#setup-target-path"), "current target input");
+  target.dispatchEvent(new Event("blur", {bubbles: true}));
+  await until(() => document.querySelector("#setup-target-path")?.dataset.state === "resolved", "target admission");
+  if (reviewOptions) {
+    const more = document.querySelector(".nami-setup__more-summary");
+    if (!(more instanceof HTMLButtonElement)) throw new Error("Plan advanced options are unavailable");
+    more.click();
+    await until(() => more.ariaExpanded === "true", "expanded Plan options");
+    for (const key of ["verify_after_execute", "deletion_policy", "trash_on_update",
+      "preserve_created", "preserve_acl", "propagate_source_casing"]) {
+      const option = document.querySelector(`[data-option="${key}"]`);
+      if (!(option instanceof HTMLInputElement)) throw new Error(`Plan option ${key} is unavailable`);
+      if (option.checked) option.click();
+      await until(() => document.querySelector(`[data-option="${key}"]`)?.checked === false,
+        `Plan option ${key} disabled`);
+    }
+  }
+  const start = await until(() => {
+    const button = Array.from(document.querySelectorAll(".nami-setup__actions button"))
+      .find((item) => item.textContent === "Create plan");
+    return document.querySelector("#setup-source-path")?.dataset.state === "resolved" &&
+      document.querySelector("#setup-target-path")?.dataset.state === "resolved" &&
+      button instanceof HTMLButtonElement && !button.disabled ? button : null;
+  }, "admitted Plan Setup");
+  start.click();
+}
+async function submitInventory(title) {
+  clickSelect(title);
+  const mode = await until(() => document.querySelector('.nami-setup__mode [data-value="inventory"]'),
+    "Inventory Setup mode");
+  mode.click();
+  const source = await until(() => {
+    const input = document.querySelector("#setup-source-path");
+    return selectedTitle() === title && input instanceof HTMLInputElement && !input.disabled &&
+      document.querySelector('[for="setup-source-path"]')?.textContent === "Root" ? input : null;
+  }, "editable Inventory root");
+  const paths = await control("paths");
+  source.value = paths.source;
+  source.dispatchEvent(new Event("input", {bubbles: true}));
+  const current = await until(() => document.querySelector("#setup-source-path"), "current Inventory root");
+  current.dispatchEvent(new Event("blur", {bubbles: true}));
+  const start = await until(() => {
+    const button = Array.from(document.querySelectorAll(".nami-setup__actions button"))
+      .find((item) => item.textContent === "Create inventory");
+    return document.querySelector("#setup-source-path")?.dataset.state === "resolved" &&
+      button instanceof HTMLButtonElement && !button.disabled ? button : null;
+  }, "admitted Inventory Setup");
+  start.click();
+}
 function resolvedBackground(variable) {
   const witness = document.createElement("span");
   witness.style.background = `var(${variable})`;
@@ -219,10 +281,9 @@ function railGeometry(title) {
     createLargeIcon: getComputedStyle(create.querySelector(".nami-icon")).width === "24px",
   };
 }
-let rawSequence = 0;
 async function control(action, value = null) {
-  rawSequence += 1;
-  const requestId = rawSequence.toString(16).padStart(32, "0");
+  window.__namiTaskShellSequence = (window.__namiTaskShellSequence ?? 0) + 1;
+  const requestId = window.__namiTaskShellSequence.toString(16).padStart(32, "0");
   const api = window.pywebview?.api;
   if (typeof api?.dispatch !== "function") throw new Error("native bridge is unavailable");
   const native = await api.dispatch(JSON.stringify({
@@ -333,52 +394,36 @@ _INITIAL_SCRIPT = _COMMON_JS + r"""
 
   await control("record", { initial: { newest, setupVisible, refusedCount, retainedAfterFailure, failureDetail, navigationStayed, olderAppearance, newerAppearance, olderSelectionCleared, idleGeometry, pointerFocusHidden, keyboardFocusVisible, independentRail, settingsSurface, settingsDraftRetained } });
   await control("checkpoint", "navigation_recorded");
-  await control("arm_create_delay");
-  await control("checkpoint", "reinjection_armed");
   clickNew();
-  await untilAsync(async () => (await control("status")).create_waiting === true, "reinjection create");
-  await control("checkpoint", "reinjection_wait");
-  await control("set_stage", "reinjected");
-  location.reload();
-})()
-"""
-
-
-_REINJECTED_SCRIPT = _COMMON_JS + r"""
-(async () => {
-  await ready();
-  await until(() => rows().length === 47, "reinjected task list");
-  const evidence = {
-    count: rows().length,
-    newest: rows()[0]?.querySelector(".nami-task-card")?.dataset.taskLabel ?? null,
-    selected: selectedTitle(),
-    work: workTitle(),
-  };
-  clickClose("Task 47");
-  await until(() => rows().length === 46, "reinjected task cleanup");
-  await control("record", { reinjected: evidence });
+  await until(() => rows().length === 47 && statusFor("Task 50") === "New task", "busy Setup task");
   await control("start_busy");
   await control("set_stage", "busy");
-  location.reload();
 })()
 """
 
 
 _BUSY_SCRIPT = _COMMON_JS + r"""
 (async () => {
-  await ready();
-  await until(() => rows().length === 47 && statusFor("Task 47") === "Planning", "busy task");
+  await submitPlan("Task 50");
+  await until(() => rows().length === 47 && statusFor("Task 50") === "Planning", "busy task");
+  await untilAsync(async () => (await control("track_busy")).ready === true, "published busy session");
+  await untilAsync(async () => (await control("status")).busy_entered === true, "busy scanner");
+  await until(() => {
+    const guidance = document.querySelector(".nami-setup__card > p:first-of-type");
+    return guidance?.hidden === false && guidance.textContent ===
+      "Planning is in progress. Reviewed folders and options are frozen.";
+  }, "observed frozen busy Setup");
   await control("arm_busy_drain_failure");
-  clickClose("Task 47");
-  await until(() => detailFor("Task 47") === "Canceling and closing…", "pending cancellation");
+  clickClose("Task 50");
+  await until(() => detailFor("Task 50") === "Canceling and closing…", "pending cancellation");
   const pending = await control("status");
-  const retainedPending = rows().length === 47 && rowByTitle("Task 47") !== undefined;
+  const retainedPending = rows().length === 47 && rowByTitle("Task 50") !== undefined;
   const retry = await until(() => {
-    const button = rowByTitle("Task 47")?.querySelector(".nami-task-rail__retry");
+    const button = rowByTitle("Task 50")?.querySelector(".nami-task-rail__retry");
     return button && !button.hidden && !button.disabled ? button : null;
   }, "stopped busy-task updates");
   retry.click();
-  await until(() => rowByTitle("Task 47")?.querySelector(".nami-task-rail__retry")?.hidden === true,
+  await until(() => rowByTitle("Task 50")?.querySelector(".nami-task-rail__retry")?.hidden === true,
     "exact busy-task observation recovery");
   const recovered = await control("status");
   await control("settle_busy");
@@ -386,36 +431,35 @@ _BUSY_SCRIPT = _COMMON_JS + r"""
   const settled = await control("status");
   await control("record", { busy: { pending, retainedPending, recovered, settled } });
   await control("arm_release_delay");
+  clickNew();
+  await until(() => rows().length === 47 && statusFor("Task 51") === "New task", "terminal Setup task");
   await control("start_terminal");
   await control("set_stage", "terminal_first");
-  location.reload();
 })()
 """
 
 
 _TERMINAL_FIRST_SCRIPT = _COMMON_JS + r"""
 (async () => {
-  await ready();
-  await until(() => rows().length === 47 && statusFor("Task 47") === "Completed", "terminal presentation");
+  await submitInventory("Task 51");
+  await until(() => rows().length === 47 && statusFor("Task 51") === "Completed", "terminal presentation");
   await untilAsync(async () => (await control("status")).release_waiting === true, "blocked terminal release");
   const before = await control("status");
-  await control("record", { terminal_first: { count: rows().length, status: statusFor("Task 47"), before } });
+  await control("record", { terminal_first: { count: rows().length, status: statusFor("Task 51"), before } });
   await control("set_stage", "terminal_second");
-  location.reload();
 })()
 """
 
 
 _TERMINAL_SECOND_SCRIPT = _COMMON_JS + r"""
 (async () => {
-  await ready();
-  await until(() => rows().length === 47 && statusFor("Task 47") === "Completed", "terminal reinjection");
-  await untilAsync(async () => (await control("status")).release_calls >= 2, "reconstructed terminal release");
+  await until(() => rows().length === 47 && statusFor("Task 51") === "Completed", "terminal presentation");
+  await untilAsync(async () => (await control("status")).release_waiting === true, "held terminal release");
   const retained = await control("status");
   await control("release_cleanup");
   await untilAsync(async () => (await control("status")).session_released === true, "terminal release");
   const released = await control("status");
-  clickClose("Task 47");
+  clickClose("Task 51");
   await until(() => rows().length === 46, "terminal explicit close");
   const closed = await control("status");
   const report = {
@@ -430,7 +474,6 @@ _TERMINAL_SECOND_SCRIPT = _COMMON_JS + r"""
   await control("record", report);
   await control("start_plan_review");
   await control("set_stage", "plan_review");
-  location.reload();
 })()
 """
 
@@ -461,8 +504,11 @@ window.addEventListener("error", (event) => {
       if (event.isTrusted) window.__namiConfirmationTrustedInput[type] += 1;
     }, true);
   }
-  await ready();
-  await until(() => rows().length === 47 && statusFor("Task 47") === "Plan ready", "reviewed plan task");
+  clickNew();
+  await until(() => rows().length === 47 && statusFor("Task 52") === "New task", "review Setup task");
+  await submitPlan("Task 52", true);
+  await until(() => rows().length === 47 && statusFor("Task 52") === "Plan ready", "reviewed plan task");
+  await control("track_review_task");
   await until(() => document.querySelector(".nami-plan-review"), "Plan review surface");
   await until(() => document.querySelector(".nami-plan-review__rows [data-node-id]"), "Plan review rows");
   await control("checkpoint", "plan_surface");
@@ -549,8 +595,8 @@ window.addEventListener("error", (event) => {
   await control("prepare_plan_again");
   const planAgainTraceEnabled = globalThis.__namiPlanAgainTrace !== undefined;
   if (planAgainTraceEnabled) {
-    await control("begin_plan_again_trace", "task-47-48");
-    globalThis.__namiPlanAgainTrace.begin("task-47-48");
+    await control("begin_plan_again_trace", "task-52-53");
+    globalThis.__namiPlanAgainTrace.begin("task-52-53");
   }
   let firstPlanAgainError = null;
   try {
@@ -562,7 +608,7 @@ window.addEventListener("error", (event) => {
   if (planAgainTraceEnabled) {
     try {
       const trace = globalThis.__namiPlanAgainTrace.snapshot();
-      if (!globalThis.__namiPlanAgainTrace.end("task-47-48")) {
+      if (!globalThis.__namiPlanAgainTrace.end("task-52-53")) {
         throw new Error("first Plan-again trace phase did not end");
       }
       await control("record_plan_again_trace", trace);
@@ -571,8 +617,8 @@ window.addEventListener("error", (event) => {
     }
   }
   if (firstPlanAgainError !== null) throw firstPlanAgainError;
-  clickSelect("Task 48");
-  await until(() => selectedTitle() === "Task 48", "fresh Plan-again selection");
+  clickSelect("Task 53");
+  await until(() => selectedTitle() === "Task 53", "fresh Plan-again selection");
   await until(() => document.querySelector(".nami-plan-review__rows")?.textContent.includes("source-added.txt"), "changed source plan row");
   await until(() => document.querySelector(".nami-plan-review__rows")?.textContent.includes("target-added.txt"), "changed target plan row");
   await control("checkpoint", "plan_again");
@@ -729,7 +775,7 @@ window.addEventListener("error", (event) => {
   await until(() => !document.querySelector("#execution-confirmation")?.open, "confirmation exit");
   await control("checkpoint", "plan_execute");
   await until(
-    () => statusFor("Task 48") === "Execution did not start",
+    () => statusFor("Task 53") === "Execution did not start",
     "post-admission preflight refusal",
   );
   await control("checkpoint", "plan_refused");
@@ -742,7 +788,7 @@ window.addEventListener("error", (event) => {
       .includes("Disposition: Unrun"), "refused execution review refresh");
   const refused = {
     committed: fresh.querySelector('[data-action="execute"]').hidden,
-    unrun: statusFor("Task 48") === "Execution did not start",
+    unrun: statusFor("Task 53") === "Execution did not start",
     message: fresh.querySelector(".nami-plan-review__status").textContent,
     executionHeader: fresh.querySelector(".nami-plan-review__status-title").textContent,
     executionAxes: fresh.querySelector(".nami-plan-review__execution").textContent,
@@ -760,7 +806,7 @@ window.addEventListener("error", (event) => {
   clickClose(freedTaskTitle);
   await until(
     () => rows().length === 47 && rowByTitle(freedTaskTitle) === undefined
-      && selectedTitle() === "Task 48" && workTitle() === "Task 48",
+      && selectedTitle() === "Task 53" && workTitle() === "Task 53",
     "unused capacity task close",
   );
   const capacitySlot = {
@@ -768,20 +814,20 @@ window.addEventListener("error", (event) => {
     closedStatus: freedTaskStatus,
     closedWasSelected: freedTaskWasSelected,
     closedIdentityRemoved: rowByTitle(freedTaskTitle) === undefined,
-    retainedSelectedTask: selectedTitle() === "Task 48" && workTitle() === "Task 48",
+    retainedSelectedTask: selectedTitle() === "Task 53" && workTitle() === "Task 53",
     countBeforePlanAgain: rows().length,
   };
 
   await control("prepare_live_execution");
   if (planAgainTraceEnabled) {
-    await control("begin_plan_again_trace", "task-48-49");
-    globalThis.__namiPlanAgainTrace.begin("task-48-49");
+    await control("begin_plan_again_trace", "task-53-54");
+    globalThis.__namiPlanAgainTrace.begin("task-53-54");
   }
   let secondPlanAgainError = null;
   try {
     fresh.querySelector('[data-action="plan-again"]').click();
     await until(
-      () => rows().length === 48 && rowByTitle("Task 49") !== undefined,
+      () => rows().length === 48 && rowByTitle("Task 54") !== undefined,
       "live Plan-again task",
     );
   } catch (error) {
@@ -790,7 +836,7 @@ window.addEventListener("error", (event) => {
   if (planAgainTraceEnabled) {
     try {
       const trace = globalThis.__namiPlanAgainTrace.snapshot();
-      if (!globalThis.__namiPlanAgainTrace.end("task-48-49")) {
+      if (!globalThis.__namiPlanAgainTrace.end("task-53-54")) {
         throw new Error("second Plan-again trace phase did not end");
       }
       await control("record_plan_again_trace", trace);
@@ -799,8 +845,8 @@ window.addEventListener("error", (event) => {
     }
   }
   if (secondPlanAgainError !== null) throw secondPlanAgainError;
-  clickSelect("Task 49");
-  await until(() => selectedTitle() === "Task 49", "live Plan-again selection");
+  clickSelect("Task 54");
+  await until(() => selectedTitle() === "Task 54", "live Plan-again selection");
   await until(() => document.querySelector(".nami-plan-review__rows [data-node-id]"), "live Plan rows");
   const live = document.querySelector(".nami-plan-review");
   const liveExecute = live.querySelector('[data-action="execute"]');
@@ -862,7 +908,7 @@ window.addEventListener("error", (event) => {
   await until(() => live.querySelector('[data-action="resume"]').hidden, "resumed execution");
   await control("checkpoint", "plan_resumed");
   live.querySelector('[data-action="cancel"]').click();
-  await until(() => statusFor("Task 49") === "Canceled", "canceled execution");
+  await until(() => statusFor("Task 54") === "Canceled", "canceled execution");
   await until(
     () => live.querySelector(".nami-plan-review__execution")?.textContent.includes("Filesystem: Canceled"),
     "canceled execution review",
@@ -876,11 +922,11 @@ window.addEventListener("error", (event) => {
   await control("prepare_empty_plan");
   live.querySelector('[data-action="plan-again"]').click();
   await control("checkpoint", "plan_empty_wait");
-  await until(() => rows().length === 48 && rowByTitle("Task 50") !== undefined, "empty Plan-again task");
-  clickSelect("Task 50");
-  await until(() => selectedTitle() === "Task 50", "empty Plan selection");
+  await until(() => rows().length === 48 && rowByTitle("Task 55") !== undefined, "empty Plan-again task");
+  clickSelect("Task 55");
+  await until(() => selectedTitle() === "Task 55", "empty Plan selection");
   const emptyReview = await until(
-    () => statusFor("Task 50") === "Plan ready" && document.querySelector(".nami-plan-review"),
+    () => statusFor("Task 55") === "Plan ready" && document.querySelector(".nami-plan-review"),
     "empty Plan review",
   );
   await until(
@@ -898,12 +944,12 @@ window.addEventListener("error", (event) => {
       capacitySlot: {
         ...capacitySlot,
         countAfterPlanAgain: countBeforeEmptyPlanAgain,
-        newTaskTitle: rowByTitle("Task 49")?.querySelector(".nami-task-card")?.dataset.taskLabel ?? null,
+        newTaskTitle: rowByTitle("Task 54")?.querySelector(".nami-task-card")?.dataset.taskLabel ?? null,
       },
       confirmationInput: window.__namiConfirmationInputEvidence,
       paused: paused.length > 0,
       resumed: live.querySelector('[data-action="resume"]').hidden,
-      canceled: statusFor("Task 49") === "Canceled",
+      canceled: statusFor("Task 54") === "Canceled",
       canceledExecutionHeader,
       followNavigation,
       emptyPlanGeometry,
@@ -1010,7 +1056,6 @@ class _Control:
         self.busy_drain_failures = 0
         self.busy_reobservations = 0
         self.terminal_task_id: str | None = None
-        self.terminal_session_id: str | None = None
         self.release_gate = threading.Event()
         self.release_waiting = threading.Event()
         self.delay_release = False
@@ -1028,6 +1073,13 @@ class _Control:
         self.preflight_hook_count = 0
         self.diagnostic_lock = threading.Lock()
         self.plan_again_trace = plan_again_trace
+
+    def release_probe_holds(self) -> None:
+        self.create_gate.set()
+        self.busy_gate.set()
+        self.release_gate.set()
+        self.follow_release.set()
+        self.execution_release.set()
 
     def bind(self, registry: object) -> None:
         if self.registry is not None:
@@ -1225,13 +1277,14 @@ class _Control:
         value = payload["value"]
         if action == "status":
             return self.status()
+        if action == "paths":
+            return {"source": str(self.source), "target": str(self.target)}
         if action == "record" and type(value) is dict:
             self.recorder.merge_report(value)
             return {"accepted": True}
         if action == "checkpoint" and value in {
             "ready", "capacity", "basic_close", "retry", "navigation",
-            "navigation_cleanup", "navigation_recorded", "reinjection_armed",
-            "reinjection_wait"
+            "navigation_cleanup", "navigation_recorded"
             , "plan_surface", "plan_offset", "plan_notice", "plan_refused",
             "plan_release", "plan_again", "plan_live", "plan_paused",
             "plan_resumed", "plan_force", "plan_ack", "plan_execute",
@@ -1240,7 +1293,7 @@ class _Control:
             self.checkpoint = value
             return {"accepted": True}
         if action == "set_stage" and value in {
-            "reinjected", "busy", "terminal_first", "terminal_second",
+            "busy", "terminal_first", "terminal_second",
             "plan_review"
         }:
             self.stage = value
@@ -1259,6 +1312,14 @@ class _Control:
         if action == "start_busy":
             self._start_busy()
             return {"accepted": True}
+        if action == "track_busy":
+            task = self._registry().list_tasks().tasks[-1]
+            if task.task_id != self.busy_task_id:
+                raise RuntimeError("busy UI task identity changed")
+            if task.session_id is None:
+                return {"ready": False}
+            self.busy_session_id = task.session_id
+            return {"ready": True}
         if action == "arm_busy_drain_failure":
             self.fail_busy_drain = True
             return {"accepted": True}
@@ -1270,7 +1331,7 @@ class _Control:
             self._start_terminal()
             return {"accepted": True}
         if action == "begin_plan_again_trace" and value in {
-            "task-47-48", "task-48-49",
+            "task-52-53", "task-53-54",
         } and self.plan_again_trace is not None:
             self.plan_again_trace.begin(value)
             return {"accepted": True}
@@ -1278,13 +1339,13 @@ class _Control:
             if type(value) is not dict or type(value.get("cases")) is not dict:
                 raise ValueError("browser Plan-again trace payload is invalid")
             phases = set(value["cases"])
-            if phases not in ({"task-47-48"}, {"task-47-48", "task-48-49"}):
+            if phases not in ({"task-52-53"}, {"task-52-53", "task-53-54"}):
                 raise ValueError("browser Plan-again trace phases are invalid")
             validate_trace_snapshot(value, phases, allow_overflow=True)
             self.recorder.set("plan_again_browser_trace", value)
             host = self.plan_again_trace.snapshot()
             self.plan_again_trace.end(
-                "task-48-49" if "task-48-49" in phases else "task-47-48"
+                "task-53-54" if "task-53-54" in phases else "task-52-53"
             )
             validate_trace_snapshot(host, phases, allow_empty=True, allow_overflow=True)
             self.recorder.set("plan_again_host_trace", host)
@@ -1344,6 +1405,7 @@ class _Control:
     def _start_busy(self) -> None:
         service = self._service()
         self.original_deps = service._runtime._deps
+        self.busy_task_id = self._registry().list_tasks().tasks[-1].task_id
 
         def blocked_scanner(root: object, ignores: object, ctx: object, **kwargs: object) -> object:
             self.busy_entered.set()
@@ -1353,27 +1415,12 @@ class _Control:
             return self.original_deps.scanner(root, ignores, ctx, **kwargs)
 
         service._runtime._deps = replace(self.original_deps, scanner=blocked_scanner)
-        started = self._registry().start_plan(
-            str(self.source), str(self.target), deletion_policy=None,
-            command_id=f"{2001:032x}", wire_intent=None,
-        )
-        self.busy_task_id = started.task_id
-        self.busy_session_id = started.session_id
-        if not self.busy_entered.wait(5):
-            raise RuntimeError("busy scanner did not enter")
 
     def _start_terminal(self) -> None:
-        started = self._registry().start_plan(
-            str(self.source), str(self.target), deletion_policy=None,
-            command_id=f"{2002:032x}", wire_intent=None,
-        )
-        self.terminal_task_id = started.task_id
-        self.terminal_session_id = started.session_id
+        self.terminal_task_id = self._registry().list_tasks().tasks[-1].task_id
 
     def _start_plan_review(self) -> None:
         from namisync.core.preflight import Refusal, RefusalCode, Verdict
-        from namisync.workflows import LocationCandidate
-        from namisync.workflows.views import PreservationSettingsView, SetupOptionsView
 
         self.source.mkdir(parents=True, exist_ok=True)
         self.target.mkdir(parents=True, exist_ok=True)
@@ -1432,24 +1479,6 @@ class _Control:
             executor=executor,
         )
         self.force_preflight_refusal = True
-        shell = self._registry().create_task_shell(f"{3001:032x}")
-        self.review_task_id = shell.task_id
-        options = SetupOptionsView(
-            (),
-            "trash",
-            False,
-            PreservationSettingsView(False, False, False),
-            False,
-            False,
-        )
-        self._registry().start_setup_plan(
-            shell.task_id,
-            LocationCandidate.literal(str(self.source)),
-            LocationCandidate.literal(str(self.target)),
-            options,
-            command_id=f"{3002:032x}",
-            wire_intent=("headed-plan-review",),
-        )
 
     def _prepare_plan_again(self) -> None:
         (self.source / "shared.txt").write_text("source-v2", encoding="utf-8")
@@ -1651,6 +1680,7 @@ def _drive_plan_confirmation(
                 base["browser_async_error"] = _sanitized_browser_error(
                     page.get("browser_async_error")
                 )
+            control.release_probe_holds()
             _write_driver_diagnostic(diagnostic_path, base)
             recorder.failure(f"page_plan_review_{control.checkpoint}", error)
 
@@ -1818,7 +1848,7 @@ def _drive_plan_confirmation(
       const dialog = document.querySelector("#execution-confirmation");
       const confirm = dialog?.querySelector("[data-confirm-execution]");
       const background = Array.from(document.querySelectorAll(".nami-task-rail__row"))
-        .find((row) => row.querySelector(".nami-task-card")?.dataset.taskLabel === "Task 47")
+        .find((row) => row.querySelector(".nami-task-card")?.dataset.taskLabel === "Task 52")
         ?.querySelector(".nami-task-card");
       const rail = document.querySelector(".nami-task-rail__items");
       if (!(dialog instanceof HTMLDialogElement) || !(confirm instanceof HTMLButtonElement)
@@ -1956,7 +1986,7 @@ def _drive_plan_confirmation(
   for (let attempt = 0; attempt < 200; attempt += 1) {
     if (window.__namiConfirmationStage === "confirm-closing") {
       const background = Array.from(document.querySelectorAll(".nami-task-rail__row"))
-        .find((row) => row.querySelector(".nami-task-card")?.dataset.taskLabel === "Task 47")
+        .find((row) => row.querySelector(".nami-task-card")?.dataset.taskLabel === "Task 52")
         ?.querySelector(".nami-task-card");
       if (!(background instanceof HTMLButtonElement)) throw new Error("closing background missing");
       const rect = background.getBoundingClientRect();
@@ -2138,7 +2168,6 @@ def _begin_probe(
     starting_stage = control.stage
     script = {
         "initial": _INITIAL_SCRIPT,
-        "reinjected": _REINJECTED_SCRIPT,
         "busy": _BUSY_SCRIPT,
         "terminal_first": _TERMINAL_FIRST_SCRIPT,
         "terminal_second": _TERMINAL_SECOND_SCRIPT,
@@ -2159,7 +2188,10 @@ def _begin_probe(
                 value = _runtime_value(task)
                 if starting_stage == "plan_review" and value != {"complete": True}:
                     raise RuntimeError("final page probe returned invalid evidence")
+                if control.stage != starting_stage:
+                    _begin_probe(window, recorder, control, retained, screenshot)
             except BaseException as error:
+                control.release_probe_holds()
                 screenshot.with_name("runtime-thread-sites.json").write_text(
                     json.dumps(_thread_sites(), sort_keys=True), encoding="utf-8",
                 )
@@ -2169,11 +2201,10 @@ def _begin_probe(
                 if driver_failure is not None:
                     driver_failure(error, task)
                     return
-                if control.stage == starting_stage or starting_stage == "terminal_second":
-                    failure_stage = f"page_{starting_stage}"
-                    if starting_stage in {"initial", "plan_review"}:
-                        failure_stage += f"_{control.checkpoint}"
-                    recorder.failure(failure_stage, error)
+                failure_stage = f"page_{starting_stage}"
+                if starting_stage in {"initial", "plan_review"}:
+                    failure_stage += f"_{control.checkpoint}"
+                recorder.failure(failure_stage, error)
 
         finish_action = Action(finish)
         retained.append(finish_action)
@@ -2200,9 +2231,6 @@ def _configure_probe(
     def loaded() -> None:
         from System import Action
 
-        if control.stage == "reinjected":
-            control.create_gate.set()
-
         def begin() -> None:
             try:
                 if large_window and control.stage == "initial":
@@ -2211,6 +2239,7 @@ def _configure_probe(
                     window.native.Height += int(100 * scale)
                 _begin_probe(window, recorder, control, retained, screenshot)
             except BaseException as error:
+                control.release_probe_holds()
                 recorder.failure("page_probe", error)
 
         action = Action(begin)
@@ -2285,11 +2314,14 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
                 ),
             )
         )
-        exit_code = host.run_desktop(
-            AppPaths.from_root(arguments.data_dir),
-            DesktopInstanceIdentity(arguments.mutex, arguments.title),
-            startup_error=recorder.startup_error,
-        )
+        try:
+            exit_code = host.run_desktop(
+                AppPaths.from_root(arguments.data_dir),
+                DesktopInstanceIdentity(arguments.mutex, arguments.title),
+                startup_error=recorder.startup_error,
+            )
+        finally:
+            control.release_probe_holds()
     if not recorder.settled:
         recorder.failure("child", RuntimeError("host returned before task-shell evidence completed"))
     recorder.finish(exit_code, host_returned=True)

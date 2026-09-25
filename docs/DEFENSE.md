@@ -419,7 +419,8 @@ classes separately decide what disposition is allowed.
 | Process cancellation or crash | Settle confirmed effects, preserve atomic live names, and rescan/replan after restart | Partial operation set, exact temp/trash artifacts, process-local task loss |
 | Power loss | Claim durability only for barriers known to have succeeded | Explicitly unknown durability; never an invented power-loss guarantee |
 | Recorder, history, or audit failure | Keep filesystem truth separate and visibly degrade the failed axis | Bounded ledger lag or audit loss under its owning retention contract |
-| Renderer crash, reload, timeout, or uncertain response | Recover through receipts, sequence replay, or safe retry | Lost cosmetic state, delayed feedback, or bounded task refusal |
+| Renderer replacement or reload | Retire page authority without replaying or prematurely releasing admitted work; use normal close and fresh review after reopening | Process-local task presentation loss; no new or duplicate effect |
+| Renderer communication failure, timeout, or uncertain response | Preserve effects and original-outcome receipts; use bounded observation recovery where available, otherwise report unavailability | Delayed feedback or explicit unavailable outcome; never invented success or duplicate effect |
 | Malformed or oversized interface value | Reject before handler/domain authority or large presentation construction | Request/item refusal only |
 | Unsupported filesystem semantics | Refuse or disclose before commitment | Loss of the unsupported feature only when the user explicitly accepted it |
 | External mutation observed before the final effect | Refuse, retry where safe, or fail the item | Availability loss or truthful partial completion |

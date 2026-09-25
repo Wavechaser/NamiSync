@@ -126,7 +126,7 @@ assert.equal(timers.size, 0, "the completed replay clears its deadline");
 assert.equal(
   testWindow.listenerCount("pywebviewready"),
   1,
-  "the attempt-specific reincarnation listener is removed",
+  "one document-readiness listener remains",
 );
 
 // A dispatched but uncertain attempt retries with a fresh transport request id
@@ -189,8 +189,8 @@ for (let turn = 0; turn < 12; turn += 1) await Promise.resolve();
 assert.equal(timers.size, 0, "late settlement cannot restore an old deadline");
 
 // Exercise the packaged asynchronous wrappers against a bounded, deterministic
-// native/document peer. Host generation deliberately differs from the page's
-// reinjection counter, as it does after a real page reload.
+// native/document peer. Host generation is independent of the page's local
+// readiness count.
 const asyncTimers = new Map();
 globalThis.setTimeout = (callback, milliseconds) => {
   assert.ok([0, 100, 250, 500, 1000, 5000, 30000].includes(milliseconds));
@@ -283,7 +283,6 @@ page.pywebview = { api: { dispatch(raw) {
     admission: { transport_version: 1, response_token: nativeToken, completion },
     message: { kind: "namisync.command-completion.v1", ...completion, response: success(request) } });
 } } };
-page.emit("pywebviewready");
 asyncBridge.markBridgeOperational();
 
 let early;
@@ -298,6 +297,11 @@ const beforeAdmission = asyncBridge.createTask().then((result) => { settled += 1
 await flush();
 assert.equal(settled, 0, "early completion cannot resolve before admission");
 assert.equal(cleanup.length, 0, "early completion waits for admission identity");
+page.emit("pywebviewready");
+page.emit("pywebviewready");
+await flush();
+assert.equal(settled, 0, "late or duplicate ready cannot abandon admitted work");
+assert.equal(asyncRequests.length, 1, "ready events cannot replay an effect");
 releaseAdmission();
 assert.deepEqual(await beforeAdmission, early.message.response.result);
 assert.deepEqual(cleanup.slice(-2), [
@@ -348,28 +352,6 @@ for (const command of ["create_task", "start_plan", "close_task", "release_termi
   assert.equal(cleanup.length, beforeCleanup + 1, "late completion is cleanup-only");
   assert.equal(asyncTimers.size, 0, "late cleanup leaves no deadline/history work");
 }
-
-// A new document has a fresh local counter but a later persistent host epoch.
-let old;
-let oldAdmission;
-delivery = (exchange) => {
-  if (old === undefined) {
-    old = exchange;
-    return new Promise((resolve) => { oldAdmission = () => resolve(exchange.admission); });
-  }
-  return immediate(exchange);
-};
-const reloaded = asyncBridge.createTask();
-await flush();
-hostGeneration += 1;
-page.emit("pywebviewready");
-asyncBridge.markBridgeOperational();
-await reloaded;
-oldAdmission();
-send(old.message);
-await flush();
-assert.equal(asyncTimers.size, 0);
-assert.equal(page.listenerCount("pywebviewready"), 1);
 
 // Wrong phase/token/request envelopes cannot deliver a result or clean custody.
 let pending;

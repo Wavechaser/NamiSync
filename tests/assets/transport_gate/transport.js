@@ -17,12 +17,21 @@ window.removeEventListener = (name, handler, options) => {
 const nativeSetTimeout = globalThis.setTimeout.bind(globalThis);
 const nativeClearTimeout = globalThis.clearTimeout.bind(globalThis);
 const activeTimers = new Set();
+const deadlineFaults = {
+  start_plan: { armed: 0, fired: 0 },
+  main_drain: { armed: 0, fired: 0 },
+};
+let deadlineFaultPhase = null;
 globalThis.setTimeout = (callback, milliseconds, ...args) => {
+  const fault = milliseconds === 30000 ? deadlineFaults[deadlineFaultPhase] : null;
+  const targeted = fault !== undefined && fault !== null && fault.armed === 0 ? fault : null;
+  if (targeted !== null) targeted.armed += 1;
   let token;
   token = nativeSetTimeout(() => {
     activeTimers.delete(token);
+    if (targeted !== null) targeted.fired += 1;
     callback(...args);
-  }, milliseconds);
+  }, targeted === null ? milliseconds : 500);
   activeTimers.add(token);
   return token;
 };
@@ -40,7 +49,6 @@ const {
   closeTask,
   createTask,
   dispatchInteractive,
-  markBridgeOperational,
   pickFolder,
   startPlan,
   startTaskDrain,
@@ -136,11 +144,6 @@ async function waitFor(predicate, message, timeoutMs = 12000) {
   }
 }
 
-function injectRendererOnlyReturnTableLoss() {
-  window.dispatchEvent(new Event("pywebviewready"));
-  markBridgeOperational();
-}
-
 async function probeRawPrivateReceiverNames() {
   const attempts = [
     ["_document._record", ["https://attacker.invalid/"]],
@@ -223,40 +226,54 @@ async function proveBrowserGate(sourceId, targetId) {
 
   await report({ phase: "arm_start_uncertainty" }, validAccepted);
   browserStage = "start-plan-uncertainty";
-  setTimeout(injectRendererOnlyReturnTableLoss, 50);
-  const mainPlan = await startTestPlan(sourceId, targetId);
+  const mainTask = await createTask();
+  let mainStart;
+  deadlineFaultPhase = "start_plan";
+  try {
+    mainStart = startPlan(mainTask.task_id, sourceId, targetId, BASE_OPTIONS);
+    await waitFor(() => deadlineFaults.start_plan.armed === 1, "start_plan deadline was not armed");
+  } finally {
+    deadlineFaultPhase = null;
+  }
+  const mainPlan = await mainStart;
 
   const mainAccepted = [];
   const mainRefusals = [];
   const callbackReleaseOrder = [];
   const nestedItems = [];
   let nestedRecord;
-  const stopMain = startTaskDrain(
-    mainPlan.task_id,
-    mainPlan.session_id,
-    (update) => {
-      mainAccepted.push(update);
-      if (
-        update.update_type === "event" &&
-        ["ItemOutcome", "IntegrityOutcome"].includes(update.event.body_type)
-      ) {
-        nestedItems.push(update.event.body);
-        if (update.event.body_type === "ItemOutcome") {
-          renderText(nestedTarget, update.event.body.path);
+  let stopMain;
+  deadlineFaultPhase = "main_drain";
+  try {
+    stopMain = startTaskDrain(
+      mainPlan.task_id,
+      mainPlan.session_id,
+      (update) => {
+        mainAccepted.push(update);
+        if (
+          update.update_type === "event" &&
+          ["ItemOutcome", "IntegrityOutcome"].includes(update.event.body_type)
+        ) {
+          nestedItems.push(update.event.body);
+          if (update.event.body_type === "ItemOutcome") {
+            renderText(nestedTarget, update.event.body.path);
+          }
         }
-      }
-      if (update.update_type === "record") {
-        callbackReleaseOrder.push("record");
-        nestedRecord = update.record;
-      }
-    },
-    (error) => mainRefusals.push(error),
-  );
-  browserStage = "stale-drain-reincarnation";
-  setTimeout(injectRendererOnlyReturnTableLoss, 50);
+        if (update.update_type === "record") {
+          callbackReleaseOrder.push("record");
+          nestedRecord = update.record;
+        }
+      },
+      (error) => mainRefusals.push(error),
+    );
+    await waitFor(() => deadlineFaults.main_drain.armed === 1, "main drain deadline was not armed");
+  } finally {
+    deadlineFaultPhase = null;
+  }
+  browserStage = "stale-drain-timeout";
   await waitFor(
     () => mainAccepted.length >= 2,
-    "reincarnated drain did not recover its retained prefix",
+    "timed-out drain did not recover its retained prefix",
   );
   requireGate(
     mainAccepted[0].event.sequence === 1 &&
@@ -364,6 +381,7 @@ async function proveBrowserGate(sourceId, targetId) {
     callback_release_order: callbackReleaseOrder,
     automatic_close_calls: automaticCloseCalls,
     busy_refusals: busyRefusals,
+    deadline_faults: deadlineFaults,
     cleanup: {
       active_timers: activeTimers.size,
       ready_listeners: readyListeners.size,

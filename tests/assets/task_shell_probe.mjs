@@ -388,7 +388,8 @@ appSource = appSource
   .replace("./panels.js", moduleUrl(preparedPanelSource))
   .replace("./render.js", renderUrl);
 appSource += "\nglobalThis.taskHarness.forceReview = loadPlanReview;\n"
-  + "globalThis.taskHarness.adoptTask = adoptTask;\n";
+  + "globalThis.taskHarness.adoptTask = adoptTask;\n"
+  + "globalThis.taskHarness.refreshTasks = refreshTasks;\n";
 
 function walk(root) {
   return [root, ...root.children.flatMap(walk)];
@@ -559,20 +560,20 @@ assert.ok(byText("Task 4"));
 
 createButton().click();
 await until(() => creates.length === 2);
-for (const callback of windowListeners.get("pywebviewready") ?? []) callback();
+void globalThis.taskHarness.refreshTasks();
 await until(() => lists.length === 2);
 creates[1].resolve({ task_id: TASK_D });
 await turns();
-assert.ok(byText("Task 5") === undefined, "pre-reinjection create response is stale");
+assert.ok(byText("Task 5"), "an admitted create remains visible in its document");
 lists[1].resolve({ tasks: [
   { task_id: TASK_A, session_id: null, session_state: null, session_released: false },
   { task_id: TASK_B, session_id: null, session_state: null, session_released: false },
   { task_id: TASK_C, session_id: null, session_state: null, session_released: false },
   { task_id: TASK_E, session_id: SESSION_E, session_state: "active", session_released: false },
 ] });
-await until(() => lists.length === 4);
+await until(() => lists.length === 3);
 await turns();
-assert.ok(byText("Task 5") === undefined, "a list overtaken by create is stale");
+assert.ok(byText("Task 5"), "a list overtaken by create is stale");
 const retainedThroughD = { tasks: [
   { task_id: TASK_A, session_id: null, session_state: null, session_released: false },
   { task_id: TASK_B, session_id: null, session_state: null, session_released: false },
@@ -581,27 +582,26 @@ const retainedThroughD = { tasks: [
   { task_id: TASK_E, session_id: SESSION_E, session_state: "active", session_released: false },
 ] };
 lists[2].resolve(retainedThroughD);
-lists[3].resolve(retainedThroughD);
 await turns();
-assert.ok(byText("Task 5"), "current rehydration adopts the retained task");
-assert.ok(taskButton("Task 2") === stableTaskBButton, "reinjection preserves existing cards");
+assert.ok(byText("Task 5"), "current list retains the admitted task");
+assert.ok(taskButton("Task 2") === stableTaskBButton, "refresh preserves existing cards");
 
-for (const callback of windowListeners.get("pywebviewready") ?? []) callback();
-await until(() => lists.length === 5);
+void globalThis.taskHarness.refreshTasks();
+await until(() => lists.length === 4);
 createButton().click();
 await until(() => creates.length === 3);
 creates[2].resolve({ task_id: TASK_F });
 await turns();
 assert.ok(byText("Task 6"));
-lists[4].resolve({ tasks: [
+lists[3].resolve({ tasks: [
   { task_id: TASK_A, session_id: null, session_state: null, session_released: false },
   { task_id: TASK_B, session_id: null, session_state: null, session_released: false },
   { task_id: TASK_C, session_id: null, session_state: null, session_released: false },
   { task_id: TASK_D, session_id: null, session_state: null, session_released: false },
   { task_id: TASK_E, session_id: SESSION_E, session_state: "active", session_released: false },
 ] });
-await until(() => lists.length === 6);
-lists[5].resolve({ tasks: [
+await until(() => lists.length === 5);
+lists[4].resolve({ tasks: [
   ...retainedThroughD.tasks,
   { task_id: TASK_F, session_id: null, session_state: null, session_released: false },
 ] });
@@ -609,8 +609,8 @@ await turns();
 assert.ok(byText("Task 6"), "a delayed list cannot erase a completed create");
 
 taskButton("Task 1").click();
-for (const callback of windowListeners.get("pywebviewready") ?? []) callback();
-await until(() => lists.length === 7);
+void globalThis.taskHarness.refreshTasks();
+await until(() => lists.length === 6);
 const firstClose = walk(app).find((element) => element.ariaLabel === "Close Task 1");
 firstClose.click();
 await until(() => closes.length === 1);
@@ -619,7 +619,7 @@ closes[0].resolve({ task_id: TASK_A, session_id: null, disposition: "closed" });
 await turns();
 assert.ok(byText("Task 1") === undefined, "closed task is absent");
 assert.equal(taskButton("Task 6")?.ariaCurrent, "page", "close selects the newest task");
-lists[6].resolve({ tasks: [
+lists[5].resolve({ tasks: [
   { task_id: TASK_A, session_id: null, session_state: null, session_released: false },
   { task_id: TASK_B, session_id: null, session_state: null, session_released: false },
   { task_id: TASK_C, session_id: null, session_state: null, session_released: false },
@@ -627,8 +627,8 @@ lists[6].resolve({ tasks: [
   { task_id: TASK_E, session_id: SESSION_E, session_state: "active", session_released: false },
   { task_id: TASK_F, session_id: null, session_state: null, session_released: false },
 ] });
-await until(() => lists.length === 8);
-lists[7].resolve({ tasks: [
+await until(() => lists.length === 7);
+lists[6].resolve({ tasks: [
   { task_id: TASK_B, session_id: null, session_state: null, session_released: false },
   { task_id: TASK_C, session_id: null, session_state: null, session_released: false },
   { task_id: TASK_D, session_id: null, session_state: null, session_released: false },
@@ -651,9 +651,9 @@ closes[2].resolve({ task_id: TASK_E, session_id: SESSION_E, disposition: "closed
 await turns();
 assert.ok(byText("Task 3") === undefined, "closed active task is absent");
 
-for (const callback of windowListeners.get("pywebviewready") ?? []) callback();
-await until(() => lists.length === 9);
-lists[8].resolve({ tasks: [
+void globalThis.taskHarness.refreshTasks();
+await until(() => lists.length === 8);
+lists[7].resolve({ tasks: [
   { task_id: TASK_B, session_id: null, session_state: null, session_released: false },
   { task_id: TASK_C, session_id: null, session_state: null, session_released: false },
   { task_id: TASK_D, session_id: null, session_state: null, session_released: false },
@@ -668,7 +668,7 @@ assert.ok(byText("Completed"));
 assert.deepEqual(
   calls.find((call) => call[0] === "drain" && call[1] === TASK_G),
   ["drain", TASK_G, SESSION_G, { terminal: true, sessionReleased: false }],
-  "reinjection resumes terminal-session release without losing terminal truth",
+  "a retained terminal task resumes release without losing terminal truth",
 );
 
 globalThis.taskHarness.deferTaskGSetup = true;

@@ -12,7 +12,7 @@ from threading import Lock
 from types import MappingProxyType, MethodType
 
 
-PHASES = frozenset({"setup", "task-47-48", "task-48-49"})
+PHASES = frozenset({"setup", "task-52-53", "task-53-54"})
 TRACE_LIMIT = 48
 TRACE_VALUES = {
     "button-event": frozenset(
@@ -53,7 +53,7 @@ _BRIDGE_TRACE = r'''const NAMI_PLAN_AGAIN_TRACE_LIMIT = 48;
 globalThis.__namiPlanAgainTrace = (() => {
   const cases = Object.create(null);
   let phase = null;
-  const allowed = new Set(["setup", "task-47-48", "task-48-49"]);
+  const allowed = new Set(["setup", "task-52-53", "task-53-54"]);
   const begin = (value) => {
     if (!allowed.has(value)) return false;
     phase = value;
@@ -156,10 +156,10 @@ _BRIDGE_READY_TRACE = r'''  if (entry === null || asyncCommandAttempts.get(reque
   if (attempt.cancelled) {
 '''
 
-_BRIDGE_NATIVE = r'''    const native = await Promise.race([transport, reincarnated, cancelled]);
+_BRIDGE_NATIVE = r'''    const native = await Promise.race([transport, cancelled]);
     if (native.kind === "direct") {
 '''
-_BRIDGE_NATIVE_TRACE = r'''    const native = await Promise.race([transport, reincarnated, cancelled]);
+_BRIDGE_NATIVE_TRACE = r'''    const native = await Promise.race([transport, cancelled]);
     if (entry.planAgainTrace) namiPlanAgainTrace("native-response", native.kind);
     if (native.kind === "direct") {
 '''
@@ -302,12 +302,12 @@ _APP_DISPATCH_CATCH_TRACE = r'''  } catch (error) {
 '''
 
 _APP_REFRESH = r'''  if (currentFormAttempt(task, form, attempt)) form.attempt = null;
-  await refreshTasks(startupEpoch);
+  await refreshTasks();
 }
 '''
 _APP_REFRESH_TRACE = r'''  if (currentFormAttempt(task, form, attempt)) form.attempt = null;
   const countBeforeRefresh = attempt.kind === "plan-again" ? tasks.size : null;
-  await refreshTasks(startupEpoch);
+  await refreshTasks();
   if (attempt.kind === "plan-again") globalThis.__namiPlanAgainTrace?.record("task-refresh", tasks.size > countBeforeRefresh ? "added" : "unchanged");
 }
 '''

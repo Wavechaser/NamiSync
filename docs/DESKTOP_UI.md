@@ -21,8 +21,9 @@ retained history. It makes the workflow's existing facts comprehensible; it
 does not decide sync policy, calculate plans, write SQLite, mutate files, or
 own a second session lifecycle. Live execution refresh does not interrupt a
 foreground view, highlight, selection, or scroll interaction; changed ownership
-replays the refresh at the accepted window, while navigation, Settings, reload,
+replays the refresh at the accepted window, while navigation, Settings,
 and stale or failed receipts remain inert toward visible result/detail facts.
+A replacement document retires the window's authority and requires reopening.
 
 The Stage 6 target is a `pywebview` host forced to Edge Chromium/WebView2 with
 packaged web assets. The earlier PySide6 proof-of-concept is historical input,
@@ -889,23 +890,23 @@ sends `shell_ready` through the existing sole `dispatch` function. After safe
 base-surface settlement, the host posts a current-generation nonce; the page
 echoes it through `readiness_echo` and records `Ready` only after a truthful
 acknowledgement. The ordinary Ready label is hidden; other host status messages
-remain visible. Startup rechecks document-epoch ownership after each wait, so
-a raw API notification cannot advance a superseded attempt. Ordinary commands
+remain visible. Repeated raw API notifications do not restart shell startup.
+Ordinary commands
 remain unavailable until native security/load, shell acknowledgement, safe
 surface settlement, and the neutral post/echo roundtrip converge. The nonce is
 liveness evidence only, never authorization, and is neither logged nor
-persisted. A fixed five-second product deadline starts at each native `loaded`.
-Before the first open generation, missing acknowledgement, unsafe surface, or
+persisted. A fixed five-second product deadline applies to the initial document.
+During initial startup, missing acknowledgement, unsafe surface, or
 failed neutral publication enters the direct fail-closed startup-refusal path.
-Appearance publication continues independently and may degrade. After an
-earlier generation opened, a reload refusal that
-wins while the host remains open records the diagnosis and uses the ordinary
-bounded service-close state machine, preserving active-work teardown. A close
-already in flight retains ownership and the later refusal cannot replace it.
-The internal `Ready` state waits for the bilateral readiness acknowledgement. A
-same-origin reload closes normal admission until the new packaged document
-completes the same handshake; stale timers, acknowledgements, and queued posts
-cannot settle a later generation.
+Appearance publication continues independently and may degrade. Reload is not
+a supported user action. A genuine replacement document permanently loses
+command and appearance authority, including during initial startup. Host-owned
+guidance tells the user to close and reopen NamiSync, review the folders and make
+a fresh plan. Admitted work retains its existing owners and settles normally;
+reload does not automatically cancel work, release a task, or close the service.
+The normal X action still performs bounded, retryable shutdown. Stale timers,
+acknowledgements and queued posts cannot reopen authority. Canceled navigation,
+blocked popups and same-document fragment history leave the current shell usable.
 
 `NamiSyncService.close()` is bounded but not instantaneous: its derived
 allowance is twelve seconds, reached only when the audit writer is genuinely
@@ -1037,7 +1038,7 @@ document. A canceled request leaves the snapshot unchanged, while a genuinely
 committed off-origin source replaces it and causes dispatch to fail closed.
 Origin authorization is an entry-time admission check; the bridge neither
 holds the document lock across a handler nor rolls back completed work if
-navigation or reinjection makes its response undeliverable. That state is
+document replacement makes its response undeliverable. That state is
 uncertain delivery, not uncertain commit; `BRIDGE.md` owns the corresponding
 retry and recovery rules. The packaged static-asset server is not an API or
 event channel.
@@ -1046,9 +1047,10 @@ Each native response carries a private transport token around the unchanged
 bridge envelope. JavaScript validates the wrapper, clones the response, and
 then acknowledges that token; provider mutation during acknowledgment cannot
 change the delivered clone. A late response that loses a timeout race still
-performs the same clone-and-receipt cleanup. Reinjection advances the bridge
-generation so an older worker cannot publish newly retained custody into the
-successor page.
+performs the same clone-and-receipt cleanup. Genuine replacement retires host
+response custody and permanently revokes page admission. Older workers retain
+their execution ownership until exit, without delivering results to a successor
+page or reopening it.
 
 The frontend places the restrictive CSP meta element first in `<head>` so no
 earlier resource escapes it; `frame-src 'none'` independently blocks frames
@@ -1531,16 +1533,16 @@ opaque system surfaces and boundaries.
 
 The accepted rail presents process-live adapter tasks, not dispatcher history.
 A task may outlive its serial sessions but is not durable across application
-restart. Task enumeration/detail reconstructs the rail and selected pane after
-navigation or reinjection. Cards show truthful activity, scope, phase, progress,
+restart. Task enumeration/detail observes the rail and selected pane during
+same-document navigation. Cards show truthful activity, scope, phase, progress,
 and terminal headline; subject-only work never fabricates a source-to-target
 label. Exact task/result revisions and named-generation rules are bridge
 authority.
 
 M1-4 activates task page creation, selection/navigation, rail interactions, and
 explicit closure. The rail is newest-first, keeps stable process-local labels
-and card elements across re-observation, and restores published blank,
-active-session, and terminal/released tasks after document reinjection. Page
+and card elements across re-observation of published blank,
+active-session, and terminal/released tasks within the current document. Page
 bodies now show editable or frozen Setup; review, execution and inventory
 content await their owning checkpoints. Task identity, activity/terminal state,
 and pending/failed close remain truthful and observable; this slice does not
@@ -1594,7 +1596,7 @@ and every row come from one coherent bounded Plan window; live update bursts
 coalesce into one selected-window read at a time, while a hidden task keeps only
 a dirty marker until it is selected. The browser never builds a complete result
 map. Every read is pinned to the task, session, reviewed request, view action and
-execution revision; Settings navigation, task navigation, reinjection, Close and
+execution revision; Settings navigation, task navigation, document retirement, Close and
 replacement generations make older replies inert. Terminal release explicitly reopens the retained Plan
 truth. The task rail may use the exact terminal session result immediately so a
 known failure or degradation cannot remain labelled as green completion while
@@ -1904,7 +1906,7 @@ Contrast and no-color-only signaling remain requirements in every theme.
   selection, process-local restart limits, and one-instance behavior.
 - Setup and task-review headed evidence covers editable typed/picker/recent
   admission, serial multi-pair behavior, immutable plan review, bounded
-  reinjection, stale-response suppression, admission rollback versus retained
+  same-document re-observation, stale-response suppression, admission rollback versus retained
   preflight refusal, reviewed-
   identity Plan again, and action-guiding refusal/close states.
 - Plan and inventory headed evidence proves server-owned hierarchy, accessible

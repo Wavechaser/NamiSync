@@ -171,11 +171,6 @@ const moduleUrl = `data:text/javascript;base64,${Buffer.from(source).toString("b
 const bridge = await import(moduleUrl);
 bridge.markBridgeOperational();
 
-function reinjectBridge() {
-  testWindow.emit("pywebviewready");
-  bridge.markBridgeOperational();
-}
-
 const session = (digit) => digit.repeat(32);
 const task = (digit) => `task-${digit.repeat(32)}`;
 const at = "2026-08-12T00:00:00+00:00";
@@ -318,9 +313,7 @@ assert.deepEqual(await operationAnchorPromise, {
 });
 requests.splice(operationAnchorIndex, 1);
 
-// Numeric holes are legal, and bridge reincarnation recovers from the first
-// sequence after the last accepted event. A matching leading Gap remains
-// visible, permits its retained tail, and a terminal record suppresses rearm.
+// Numeric holes are legal, and a terminal record suppresses rearm.
 const acceptedOne = [];
 const refusedOne = [];
 const stopOne = bridge.startTaskDrain(
@@ -353,15 +346,8 @@ assert.deepEqual(
   acceptedOne.map((update) => update.event.sequence),
   [1, 3],
 );
-testWindow.emit("pywebviewready");
-await turns();
-assert.equal(requests.length, 2);
-bridge.markBridgeOperational();
-const one2 = await nextRequest(2);
-assert.equal(one2.request.payload.replay_from, 4);
-success(one1, [event(session("1"), 4)]);
-success(one2, [
-  event(session("1"), 4, "Gap", { first_missed_seq: 4 }),
+success(one1, [
+  event(session("1"), 4),
   event(session("1"), 6),
   event(session("1"), 7, "Terminal", { result: coreOperationResult }),
   terminalRecord(session("1")),
@@ -373,7 +359,7 @@ assert.deepEqual(
   [
     "StateChanged",
     "Progress",
-    "Gap",
+    "StateChanged",
     "StateChanged",
     "Terminal",
     "record",
@@ -387,8 +373,6 @@ assert.deepEqual(
 );
 assert.equal(refusedOne.length, 0);
 const countAfterTerminal = requests.length;
-await turns();
-reinjectBridge();
 await turns();
 assert.equal(requests.length, countAfterTerminal);
 
@@ -1342,107 +1326,52 @@ success(samePhase2, [terminalRecord(samePhaseSession)]);
 await turns();
 stopSamePhase();
 
-// Bridge reincarnation changes transport custody but does not reset reducer
-// comparisons. The stale response is ignored, and the same regression from the
-// current recovery attempt is refused without moving its replay cursor.
-const reducerReincarnationSession = "9b".repeat(16);
-const reducerReincarnationTask = `task-${"ac".repeat(16)}`;
-const acceptedReducerReincarnation = [];
-const stopReducerReincarnation = bridge.startTaskDrain(
-  reducerReincarnationTask,
-  reducerReincarnationSession,
-  (update, progressState) => {
-    acceptedReducerReincarnation.push({ update, progressState });
-  },
+// A local transport timeout rearms the same task from its accepted cursor.
+// The late native response is stale, while the current response still has to
+// obey the retained progress reducer state.
+const resumedSession = "9b".repeat(16);
+const resumedTask = `task-${"ac".repeat(16)}`;
+const acceptedResumed = [];
+const stopResumed = bridge.startTaskDrain(
+  resumedTask,
+  resumedSession,
+  (update, progressState) => acceptedResumed.push({ update, progressState }),
   assert.fail,
 );
-const reducerReincarnation0 = await nextRequest(requests.length);
-success(reducerReincarnation0, [
-  event(reducerReincarnationSession, 1, "PhaseChanged", { phase: "execute" }),
-  event(reducerReincarnationSession, 2, "Progress", reducerProgress({
-    items_done: 0,
-    bytes_done: "4",
-    item_bytes_done: "4",
+const resumed0 = await nextRequest(requests.length);
+success(resumed0, [
+  event(resumedSession, 1, "PhaseChanged", { phase: "execute" }),
+  event(resumedSession, 2, "Progress", reducerProgress({
+    items_done: 0, bytes_done: "4", item_bytes_done: "4",
   })),
 ]);
-const staleReducerReincarnation = await nextRequest(requests.length);
-reinjectBridge();
-const currentReducerReincarnation = await nextRequest(requests.length);
-assert.equal(currentReducerReincarnation.request.payload.replay_from, 3);
-const regressingReincarnationProgress = event(
-  reducerReincarnationSession,
-  3,
-  "Progress",
-  reducerProgress({
-    items_done: 0,
-    bytes_done: "3",
-    item_bytes_done: null,
-    item_bytes_total: null,
-  }),
-);
-success(staleReducerReincarnation, [regressingReincarnationProgress]);
-success(currentReducerReincarnation, [regressingReincarnationProgress]);
-const reducerReincarnationRecovery = await nextRequest(requests.length);
-assert.equal(reducerReincarnationRecovery.request.payload.replay_from, 3);
-assert.equal(acceptedReducerReincarnation.length, 2);
-assert.equal(
-  acceptedReducerReincarnation.at(-1).progressState.progress.bytes_done,
-  "4",
-);
-success(reducerReincarnationRecovery, [
-  event(reducerReincarnationSession, 3, "Progress", reducerProgress({
-    items_done: 0,
-    bytes_done: "5",
-    item_bytes_done: "5",
+const staleResumed = await nextRequest(requests.length);
+assert.equal(timers.size, 1);
+const [staleTimer, expireStale] = timers.entries().next().value;
+timers.delete(staleTimer);
+expireStale();
+const currentResumed = await nextRequest(requests.length);
+assert.equal(currentResumed.request.payload.replay_from, 3);
+const regressingProgress = event(resumedSession, 3, "Progress", reducerProgress({
+  items_done: 0, bytes_done: "3", item_bytes_done: null, item_bytes_total: null,
+}));
+success(staleResumed, [regressingProgress]);
+await turns();
+assert.equal(acceptedResumed.length, 2, "late response cannot change task state");
+success(currentResumed, [regressingProgress]);
+const correctedResumed = await nextRequest(requests.length);
+assert.equal(correctedResumed.request.payload.replay_from, 3);
+assert.equal(acceptedResumed.at(-1).progressState.progress.bytes_done, "4");
+success(correctedResumed, [
+  event(resumedSession, 3, "Progress", reducerProgress({
+    items_done: 0, bytes_done: "5", item_bytes_done: "5",
   })),
 ]);
-const reducerReincarnationTail = await nextRequest(requests.length);
-assert.equal(
-  acceptedReducerReincarnation.at(-1).progressState.progress.bytes_done,
-  "5",
-);
-success(reducerReincarnationTail, [
-  terminalRecord(reducerReincarnationSession),
-]);
+const resumedTail = await nextRequest(requests.length);
+assert.equal(acceptedResumed.at(-1).progressState.progress.bytes_done, "5");
+success(resumedTail, [terminalRecord(resumedSession)]);
 await turns();
-stopReducerReincarnation();
-
-// Bridge reincarnation resets the one drain-busy convergence allowance. A busy
-// reply from the freshly abandoned call therefore cannot prematurely stop the
-// current generation.
-const busyRefusals = [];
-const stopFour = bridge.startTaskDrain(
-  task("d"),
-  session("4"),
-  () => {},
-  (error) => busyRefusals.push(error),
-);
-const four0 = await nextRequest(requests.length);
-refusal(
-  four0,
-  "drain_busy",
-  "That desktop task already has an event request in progress.",
-);
-const four1 = await nextRequest(requests.length);
-reinjectBridge();
-const four2 = await nextRequest(requests.length);
-refusal(
-  four1,
-  "drain_busy",
-  "That desktop task already has an event request in progress.",
-);
-refusal(
-  four2,
-  "drain_busy",
-  "That desktop task already has an event request in progress.",
-);
-const four3 = await nextRequest(requests.length);
-success(four3, [terminalRecord(session("4"))]);
-await turns();
-assert.deepEqual(
-  busyRefusals.map((error) => [error.name, error.code, error.message]),
-  [],
-);
+stopResumed();
 
 // A second busy result in one uninterrupted generation suspends the exact
 // browser entry until explicit replay or stop.
@@ -1494,91 +1423,23 @@ await nextRequest(requests.length);
 stopFourReplacement();
 stopDefinitiveBusy();
 
-// Repeated readiness while one call is outstanding invalidates it but coalesces
-// into one current recovery arm. A terminal record lost with the stale response
-// is reconciled by the current recovery response and then suppresses rearm.
-const acceptedFive = [];
-const stopFive = bridge.startTaskDrain(
-  task("e"),
-  session("5"),
-  (update) => acceptedFive.push(update),
-  assert.fail,
-);
-const fiveIndex = requests.length;
-const five0 = await nextRequest(fiveIndex);
-testWindow.emit("pywebviewready");
-testWindow.emit("pywebviewready");
-await turns();
-assert.equal(requests.length, fiveIndex + 1);
-bridge.markBridgeOperational();
-const five1 = await nextRequest(fiveIndex + 1);
-await turns();
-assert.equal(requests.length, fiveIndex + 2);
-assert.equal(five1.request.payload.replay_from, 1);
-success(five0, [terminalRecord(session("5"))]);
-await turns();
-assert.equal(acceptedFive.length, 0);
-success(five1, [terminalRecord(session("5"))]);
-await turns();
-assert.equal(acceptedFive.length, 1);
-assert.equal(acceptedFive[0].update_type, "record");
-const countAfterRecoveredTerminal = requests.length;
-reinjectBridge();
-await turns();
-assert.equal(requests.length, countAfterRecoveredTerminal);
-
-// A stale nonterminal reliable response is not applied. Recovery may return
-// that retained event without a Gap, and it is then delivered exactly once.
-const acceptedReliable = [];
-const stopReliable = bridge.startTaskDrain(
-  task("9"),
-  session("9"),
-  (update) => acceptedReliable.push(update),
-  assert.fail,
-);
-const reliable0 = await nextRequest(requests.length);
-reinjectBridge();
-const reliable1 = await nextRequest(requests.length);
-success(reliable0, [event(session("9"), 1, "PhaseChanged", { phase: "scan" })]);
-await turns();
-assert.equal(acceptedReliable.length, 0);
-success(reliable1, [
-  event(session("9"), 1, "PhaseChanged", { phase: "scan" }),
-  terminalRecord(session("9")),
-]);
-await turns();
-assert.deepEqual(
-  acceptedReliable.map((update) =>
-    update.update_type === "event" ? update.event.body_type : "record"),
-  ["PhaseChanged", "record"],
-);
-
-// Cursor acceptance precedes presentation. If a callback synchronously
-// observes bridge reincarnation, recovery starts at sequence+1 and the stale
-// tail from that just-invalidated batch cannot render.
-const acceptedCursor = [];
-const stopCursor = bridge.startTaskDrain(
+// A consumer can synchronously stop observation after one accepted event.
+// The rest of that response must not escape the retired task epoch.
+const acceptedStoppedTail = [];
+let stopStoppedTail;
+stopStoppedTail = bridge.startTaskDrain(
   task("0"),
   session("0"),
   (update) => {
-    acceptedCursor.push(update);
-    if (acceptedCursor.length === 1) {
-      reinjectBridge();
-    }
+    acceptedStoppedTail.push(update);
+    stopStoppedTail();
   },
   assert.fail,
 );
-const cursor0 = await nextRequest(requests.length);
-success(cursor0, [event(session("0"), 1), event(session("0"), 2)]);
-const cursor1 = await nextRequest(requests.length);
-assert.equal(cursor1.request.payload.replay_from, 2);
-assert.deepEqual(
-  acceptedCursor.map((update) => update.event.sequence),
-  [1],
-);
-success(cursor1, [terminalRecord(session("0"))]);
+const stoppedTail = await nextRequest(requests.length);
+success(stoppedTail, [event(session("0"), 1), event(session("0"), 2)]);
 await turns();
-assert.equal(acceptedCursor.length, 2);
+assert.deepEqual(acceptedStoppedTail.map((update) => update.event.sequence), [1]);
 
 // Consumer failure suspends before rearm and preserves the failed event for
 // exact manual replay. Duplicate task registration is refused synchronously.
@@ -1944,12 +1805,8 @@ stopOne();
 stopOne();
 stopTwo();
 stopThree();
-stopFour();
-stopFive();
 stopSix();
 stopSeven();
-stopReliable();
-stopCursor();
 stopRelease();
 stopTerminalCallback();
 stopExhaustedRelease();
