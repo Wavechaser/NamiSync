@@ -1,45 +1,30 @@
-# Latest session — AB-7 delivered; pause for recap
+# Latest session — AB-7 review and recovery tiering (synopsis)
 
-2026-09-25–26, milestone1. AB-7 is the atomic commit titled
-`refactor(web): simplify command completion without timed mutation replay`.
-The user requested a pause after this checkpoint. Do not start AB-8 without
-further instruction; its accepted plan is not implementation authorization.
+2026-09-26, `milestone1` after AB-7 (`6287db0c`). Documentation-only: the user
+asked for a read-only review of AB-7 and a tiering assessment, recorded as
+[POST_M1_8_ABLATION §14](POST_M1_8_ABLATION.md#14-ab-7-follow-up-review-original-outcome-recovery-2026-09-26).
+No product, test, tool or M1_PLAN change.
 
-AB-7 removes elapsed-time mutation abandonment/replay, observes original results
-through existing native custody, and retains identity, duplicate protection,
-bounded observation and lifecycle/resource deadlines. Delayed/unavailable
-feedback and unresolved-intent fences remain explicit. Fixed-unknown review
-results keep their warning/fence while the reviewed independent Cancel uses its
-existing owner. Close affordances agree with their handler. D4 is unchanged.
-M1_PLAN contains the compact delivery/limitations record; BRIDGE owns contracts.
+Synopsis: the requirement to learn an original outcome without repeating its
+effect stands, but retaining transport responses and observing them is
+redundant. It created a third outcome record while the domain receipts and
+drain start cache became reachable only from tests, and it reports a healthy
+command still `pending` after about 5.4 s as "outcome unavailable". The
+recommendation makes domain records the single authority: user-triggered
+identical resend for `command_id` commands, resend or settlement for
+Close/release/control, and authoritative re-read for view and cosmetic
+commands, as one declared per-command recovery column with no outcome timers
+or cross-surface fences. It is a proposal awaiting the user's decision.
 
-Verification: complete run 5,353 passed, three installed failures, four skips;
-all ordinary cases passed. Final installed coverage is 34 passing cases across
-qualified runs: 32 unaffected cases from the 33-pass/one-failure installed run,
-and both task-shell cases after test sampling/eligibility corrections. The
-same-file seven nonheaded checks also passed. Twelve import contracts passed.
-Do not describe this as a single clean complete-suite run. Raw receipts and
-installed identities live under ignored build/post-m1-8-ablation-20260925/;
-ab7-verification.md indexes passes, failed runs and dependency reuse.
+Verification: findings were traced in the AB-7 diff, current source and the
+retained AB-7 evidence; no tests or experiments were run. `git diff --check`
+and local documentation-link checks passed.
 
-Two observations remain unexplained: a real Setup start exception normalized to
-an internal error, and earlier Plan-again timeouts. Setup correctly kept outcome
-unknown and stopped later batch starts; later installed runs passed. The helper's
-text-only eligibility wait was corrected, but no failing pre-click snapshot
-established the original timeout cause. Preserve failed receipts and diagnostics;
-do not claim these causes fixed. Picker never-return and process-loss recovery
-limitations remain as documented in BRIDGE and M1_PLAN.
-
-Independent review and both Claude Opus5.5/high rounds completed. Claude session
-3f69c6a3-f4d1-4c86-b563-d9d762ed67e2; cumulative list cost $7.0873702.
-Validated findings were addressed after the recorded recurrence reviews. The
-follow-up found no remaining blocker in its reviewed correction. Raw JSON,
-independent fixtures and integrity/cleanup receipts are retained; disposable
-review copy/private CLI were removed. No further paid review is needed.
-
-No foreground test is running. Announce any future foreground batch before it
-starts and when it ends. Use unique test basetemp OUTSIDE the source repository.
-The root agent will remove the empty AB-7 recovery worktree/ref only after this
-verified commit (base 2b4a2214, no copied draft or WIP), then write ab7-cleanup.json
-as the final accounting receipt. Keep AB-6 recovery 56802606
-and AB-3 worktree/ref for AB-10; they are not part of AB-7 cleanup.
+Operational context: AB-8 remains paused and unauthorized; decide §14 before
+AB-8 freezes its snapshot shape, which currently preserves AB-7's outcome
+states. AB-7 cleanup is recorded in `ab7-cleanup.json`. Keep the AB-3
+worktree/ref `codex/ab3-mapping` and AB-6 recovery `56802606` for AB-10
+accounting. Use unique test basetemps outside the source repository and
+announce foreground batches. Two AB-7 installed observations (Setup start
+`internal_error`, Plan-again timeouts) remain unexplained; do not claim them
+fixed.

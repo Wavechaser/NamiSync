@@ -525,6 +525,7 @@ and S3 remain separate boundaries; settled D2 makes AB-7 a bounded simplificatio
 of existing admission/completion, completed before S3. Genuine delivery uncertainty
 and original-outcome recovery remain. D4 stays intact.
 S5 stays deferred. L5/L7/L8/L9 remain in the compact rejected table in §5.
+§14 reviews delivered AB-7 and proposes a follow-up; it is not yet a decision.
 
 ## 13. Earlier studies: absorption and archival accounting
 
@@ -565,6 +566,108 @@ documents govern. When a proposal above changes a retained mechanism or evidence
 obligation, update that owner during activation. No other open delivery row was
 found in the four completed studies; their deferred alternatives remain ideas,
 not latent authorization or mandatory future work.
+
+## 14. AB-7 follow-up review: original-outcome recovery (2026-09-26)
+
+User-requested read-only review of delivered AB-7 (`6287db0c`, base `2b4a2214`):
+is anything redundant, including original-outcome recovery itself? Method: the
+diff, current source, the retained AB-7 evidence under
+`build/post-m1-8-ablation-20260925/` and the study's own tiering follow-up.
+No tests or experiments were run; line counts are diagnostics. This section
+proposes; it changes no delivered contract and authorizes no implementation.
+
+### Findings
+
+AB-7 was a logical simplification that grew product source by about 936 lines
+(+1,308/−372: `app.js` +463, `bridge.js` +230, `bridge.py` +157). Most of the
+growth is one mechanism: each observed command's response is retained in
+native custody until the page releases it, a new `observe:<request_id>:<command>`
+message reports `pending`/`ready`/`unavailable`, `bridge.js` adds an observed-
+attempt path (11 functions, about 275 lines), and `app.js`/`theme.js` add
+per-surface outcome retry/unknown state and cross-surface fences.
+
+| ID | Finding | Evidence |
+| --- | --- | --- |
+| F1 | Three records of a command outcome now exist: `TaskLifecycle` start and plan-mutation receipts, the drain's 48-entry start-response cache and the new native-custody response. The page mints a fresh `command_id` at all eight sites, every mutating command policy became `retry=NONE`, and Retry only observes. The receipt/cache replay hit paths are therefore reachable only from tests. D2 asked for one authoritative record. | `service.py` `command_guard`/`replay_start` callers; `task_lifecycle.py` `replay_start`; `commands.py` policy table; `bridge.js` `mintId()` sites |
+| F2 | Observation counts `pending` as exhaustion. After 5 s feedback and three polls (+0/+100/+350 ms), a healthy running command becomes "outcome unavailable" at about 5.4 s; a later original result is stored but does not update the screen until the user presses Retry. A busy Close can legitimately wait up to 25 s server-side. Pre-AB-7 mutating starts had a 30 s deadline, so slow commands now reach an unavailable state sooner. The behavior is pinned as intended. | `bridge.js` `recoverObservedResult`, `acceptObservedResponse`; `tests/assets/bridge_timeout_probe.mjs:553-579` |
+| F3 | "Fixed unknown" and its fences follow from recovering from the transport record: after a post-effect internal error the retained record is the error itself. A domain receipt can answer whether the start committed. The documented gap between `Dispatcher.submit` return and start publication still needs one narrow guard. | `taskCloseBlockReason` (seven outcome flags); `canCancelAfterFixedReviewOutcome` (20 conditions) |
+| F4 | Observation also covers commands with no effect to recover (view, highlight, location admission) and commands without `command_id` whose results are visible in drain state or revisioned reads (execution control, Close, release, cosmetic replacement). | `commands.py` `MUTATION_OBSERVED` rows; BRIDGE command table |
+| F5 | Observation was layered on the existing asynchronous completion channel, so it reconciles response tokens, completion tokens, early completions and generations. S2's alternative (return after admission; long waits such as Close become task state) was not taken, which is where both `pending` and the double token bookkeeping come from. | `bridge.js` `acceptObservedObservation` |
+| F6 | No real lost delivery was observed. Every delivery-failure case in AB-7 evidence is fixture-injected. The one real anomaly (a Setup start normalized to `internal_error`) is a product exception that observation cannot resolve. No captured receipt text links the unexplained Plan-again timeouts to this path. | `ab7-verification.md`, `ab7-installed-failures-readonly.md`; receipt text search |
+
+Verdict: the requirement (after lost delivery, do not repeat the effect and let
+the user learn the outcome) remains valid. Safety never depended on transport
+recovery: duplicate protection is domain-owned (receipts, commitment freeze,
+one session per task, task/session-keyed close). Retaining and observing
+transport responses is the redundant mechanism; it duplicates records that
+already exist and has made them unreachable.
+
+### Recommendation
+
+Make the domain record the single outcome authority and retire transport
+response retention:
+
+- Retry is a user-initiated resend of the identical command (same `command_id`
+  and intent). The owner replays its receipt or, while the original still runs,
+  waits for it under the existing equal-id lock. No automatic resubmission, so
+  D2 holds.
+- No page deadline on mutating results: keep the 5 s delayed/still-working
+  feedback with a check action; `pending` is never failure.
+- Commands without `command_id`: resend Close and release (idempotent by
+  task/session); re-read authoritative state for control, view, highlight and
+  cosmetic commands.
+- Remove the `observe:` message, retained responses, the observed-attempt path
+  and most per-surface unknown/fence state. Keep one narrow unknown-outcome
+  message for the submit-to-publication gap, without automatic resend.
+- Later, separately: S2 proper (Close returns "closing"; completion through the
+  drain) could remove most long-running commands and possibly the asynchronous
+  completion channel.
+
+Second-ranked alternative: keep AB-7 observation, delete the unreachable domain
+replay-hit paths and stop treating `pending` as exhaustion. It retains the
+weaker record: document-bound, and unable to establish an effect after errors.
+
+### Tiered recovery
+
+Tiering is sensible when it is data, not code. Classify commands by the kind of
+effect, not by perceived value; that yields two recovery actions:
+
+| Commands | Effect | Recovery action | Duplicate guard |
+| --- | --- | --- | --- |
+| `create_task`, `start_plan`, `start_inventory`, `plan_again`, `start_execution`, selection mutations | Keyed by `command_id` | Resend the identical command | Domain receipts; in-flight resend waits for the original |
+| `close_task`, `release_terminal_session`, `control_execution` | Idempotent per task/session | Resend, or let the drain show settlement | Lifecycle settlement and close receipts |
+| View, highlight, theme/cosmetic, `admit_location`, `pick_folder` | None to recover, or revision-guarded | Re-read current state (or choose again) | Revisions |
+
+The middle tier merges into resend; observing settlement also works but adds a
+second mechanism. Value ranking only decides presentation polish, because a
+wrong low-tier answer costs clarity, not data. The pre-AB-7 `CommandRetry`
+policy column already expressed this tiering; its defect was the timer-driven
+automatic trigger. A declared per-command recovery action with a user trigger
+keeps D2's intent without transport retention.
+
+Rules that keep the removed complexity out:
+
+- No timer decides an outcome; timers only change feedback text.
+- One uncertainty state per pending command, owned by the issuing surface:
+  working, delayed, or retry available. No per-surface unknown flags.
+- No page-side cross-surface fences; the domain refuses conflicting actions
+  and the page shows that refusal.
+- The submit-to-publication gap is one message, not a fence system.
+
+Net effect: one table column and one generic recovery call (tens of lines)
+against the removal of the observation channel, retained responses, most of the
+observed-attempt path and most per-surface outcome state.
+
+### Before adoption
+
+Confirm by test, not only by reading: identical resend returns the original
+outcome without a second effect for each keyed command (BRIDGE's replay rule);
+waiting on the equal-id lock holds one of the 64 bounded handler slots; and a
+second `start_execution` after committed admission returns an existing
+disposition (`in-flight`, `frozen` or `conflict`) rather than a new session.
+Decide this before AB-8 freezes its snapshot shape, which currently preserves
+AB-7's outcome-unavailable and original-result states. Status: proposal
+awaiting user decision; no M1_PLAN row yet.
 
 ## Evidence
 

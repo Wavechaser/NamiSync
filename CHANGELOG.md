@@ -1027,6 +1027,17 @@ repeated machinery while preserving operational safety and boundary contracts.
 Safety, settlement, authority, and measurement work made high-risk release
 claims explicit, independently reviewable, and regression-backed.
 
+#### Review AB-7 original-outcome recovery (2026-09-26)
+
+- Record a read-only AB-7 review in POST_M1_8_ABLATION §14: transport response
+  retention duplicates domain outcome records that became test-only reachable,
+  and pending observations turn healthy slow commands into "outcome
+  unavailable" after about 5.4 s.
+- Propose domain records as the single outcome authority with a declared
+  per-command recovery action (identical resend, settlement or authoritative
+  re-read) and no outcome timers or page fences. No implementation or M1_PLAN
+  decision; confirm before AB-8 freezes its snapshot shape.
+
 #### Preserve original command outcomes without timed replay (2026-09-25 – 2026-09-26)
 
 - Remove page-side mutation abandonment/replay deadlines; recover the original
