@@ -1,46 +1,33 @@
-r"""Opt-in release benchmark for bounded history recording and readback.
-
-Run from the repository root with::
-
-    .\.venv\Scripts\python.exe tests\history_benchmark.py
-
-The script intentionally is not named ``test_*.py`` so the million-item
-fixture is excluded from the normal pytest suite.
-"""
+"""Selected bounded history diagnostics and the unchanged release profile."""
 
 from __future__ import annotations
 
-import json
 import os
 import platform
 import sqlite3
 import statistics
-import sys
 import tempfile
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from time import perf_counter
 
 
-REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
-if str(REPOSITORY_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPOSITORY_ROOT))
-
-from namisync.core.events import (  # noqa: E402
+from namisync.core.events import (
     Envelope,
     ItemOutcome,
     PhaseChanged,
     CORE_EVENT_SCHEMA_VERSION,
     StateChanged,
 )
-from namisync.core.evidence import Outcome, RecordingStatus  # noqa: E402
-from namisync.core.session import (  # noqa: E402
+from namisync.core.evidence import Outcome, RecordingStatus
+from namisync.core.session import (
     OperationResult,
     SessionId,
     SessionRecord,
     SessionState,
 )
-from namisync.db.history import (  # noqa: E402
+from namisync.db.history import (
     DEFAULT_HISTORY_WINDOW_POLICY,
     HistoryContext,
     HistoryObserver,
@@ -54,6 +41,21 @@ TOTAL_ITEMS = 1_000_000
 LARGE_RUN_ITEMS = 100_000
 PAGE_SIZE = 256
 PAGE_SAMPLE_COUNT = 40
+CASES = ("smoke", "release")
+
+
+@dataclass(frozen=True)
+class _Fixture:
+    name: str
+    runs: int
+    items: int
+    largest_run_items: int
+    page_size: int
+    page_samples: int
+
+
+_RELEASE = _Fixture("release", RUN_COUNT, TOTAL_ITEMS, LARGE_RUN_ITEMS, PAGE_SIZE, PAGE_SAMPLE_COUNT)
+_SMOKE = _Fixture("smoke", 2, 96, 64, 16, 4)
 
 SUMMARY_MAX_SECONDS = 3.0
 PAGE_P95_MAX_SECONDS = 0.5
@@ -68,15 +70,15 @@ class _Clock:
         return NOW
 
 
-def _run_sizes() -> tuple[int, ...]:
-    remaining = TOTAL_ITEMS - LARGE_RUN_ITEMS
-    base, extra = divmod(remaining, RUN_COUNT - 1)
-    sizes = (LARGE_RUN_ITEMS,) + tuple(
+def _run_sizes(fixture: _Fixture) -> tuple[int, ...]:
+    remaining = fixture.items - fixture.largest_run_items
+    base, extra = divmod(remaining, fixture.runs - 1)
+    sizes = (fixture.largest_run_items,) + tuple(
         base + (1 if index < extra else 0)
-        for index in range(RUN_COUNT - 1)
+        for index in range(fixture.runs - 1)
     )
-    assert len(sizes) == RUN_COUNT
-    assert sum(sizes) == TOTAL_ITEMS
+    assert len(sizes) == fixture.runs
+    assert sum(sizes) == fixture.items
     return sizes
 
 
@@ -94,7 +96,7 @@ def _timed(call):
     return result, perf_counter() - started
 
 
-def _record_fixture(path: Path) -> dict[str, object]:
+def _record_fixture(path: Path, fixture: _Fixture) -> dict[str, object]:
     policy = DEFAULT_HISTORY_WINDOW_POLICY
     transaction_seconds: list[float] = []
     peak_pending_count = 0
@@ -123,13 +125,13 @@ def _record_fixture(path: Path) -> dict[str, object]:
 
         store._writer.transact = timed_transact
         expected_transactions = 0
-        for run_index, item_count in enumerate(_run_sizes()):
+        for run_index, item_count in enumerate(_run_sizes(fixture)):
             record = SessionRecord(
-                session_id=SessionId(f"benchmark-session-{run_index:02d}"),
+                session_id=SessionId(f"{run_index + 1:032x}"),
                 kind="sync",
                 state=SessionState.PENDING,
                 resources=(),
-                payload=b"benchmark",
+                checkpoint=b"benchmark",
                 supports_pause=True,
                 admission_order=run_index,
                 created_at=NOW,
@@ -166,7 +168,7 @@ def _record_fixture(path: Path) -> dict[str, object]:
                         NOW,
                         CORE_EVENT_SCHEMA_VERSION,
                         ItemOutcome(
-                            item_id=f"operation-{item_index:06d}",
+                            item_id=f"{item_index + 1:032x}",
                             kind="copy",
                             path=f"directory/file-{item_index:06d}.bin",
                             outcome=Outcome.SUCCEEDED,
@@ -188,6 +190,7 @@ def _record_fixture(path: Path) -> dict[str, object]:
     return {
         "recording_seconds": recording_seconds,
         "transaction_count": len(transaction_seconds),
+        "transaction_samples_ms": [value * 1_000 for value in transaction_seconds],
         "transaction_p50_ms": statistics.median(transaction_seconds) * 1_000,
         "transaction_p95_ms": _percentile(transaction_seconds, 95) * 1_000,
         "transaction_max_ms": max(transaction_seconds) * 1_000,
@@ -197,16 +200,16 @@ def _record_fixture(path: Path) -> dict[str, object]:
     }
 
 
-def _measure_readback(path: Path) -> dict[str, object]:
+def _measure_readback(path: Path, fixture: _Fixture) -> dict[str, object]:
     with HistoryRepository(path) as repository:
         summaries, cold_summary_seconds = _timed(
-            lambda: repository.list_summaries(RUN_COUNT)
+            lambda: repository.list_summaries(fixture.runs)
         )
         _, warm_summary_seconds = _timed(
-            lambda: repository.list_summaries(RUN_COUNT)
+            lambda: repository.list_summaries(fixture.runs)
         )
-        assert len(summaries) == RUN_COUNT
-        assert sum(summary.item_count for summary in summaries) == TOTAL_ITEMS
+        assert len(summaries) == fixture.runs
+        assert sum(summary.item_count for summary in summaries) == fixture.items
         assert all(summary.finalized for summary in summaries)
         assert all(summary.audit is RecordingStatus.OK for summary in summaries)
 
@@ -215,55 +218,55 @@ def _measure_readback(path: Path) -> dict[str, object]:
         _, item_cold_seconds = _timed(
             lambda: repository.get_item_page(
                 large_run,
-                through_order=LARGE_RUN_ITEMS,
-                limit=PAGE_SIZE,
+                through_order=fixture.largest_run_items,
+                limit=fixture.page_size,
             )
         )
     with HistoryRepository(path) as repository:
         _, event_cold_seconds = _timed(
             lambda: repository.get_event_page(
                 large_run,
-                through_seq=LARGE_RUN_ITEMS + 2,
-                limit=PAGE_SIZE,
+                through_seq=fixture.largest_run_items + 2,
+                limit=fixture.page_size,
             )
         )
 
     with HistoryRepository(path) as repository:
         repository.get_item_page(
             large_run,
-            through_order=LARGE_RUN_ITEMS,
-            limit=PAGE_SIZE,
+            through_order=fixture.largest_run_items,
+            limit=fixture.page_size,
         )
         repository.get_event_page(
             large_run,
-            through_seq=LARGE_RUN_ITEMS + 2,
-            limit=PAGE_SIZE,
+            through_seq=fixture.largest_run_items + 2,
+            limit=fixture.page_size,
         )
         item_page_seconds: list[float] = []
         event_page_seconds: list[float] = []
-        for sample in range(PAGE_SAMPLE_COUNT):
-            item_after = sample * LARGE_RUN_ITEMS // PAGE_SAMPLE_COUNT
+        for sample in range(fixture.page_samples):
+            item_after = sample * fixture.largest_run_items // fixture.page_samples
             item_page, elapsed = _timed(
                 lambda item_after=item_after: repository.get_item_page(
                     large_run,
                     after_order=item_after,
-                    through_order=LARGE_RUN_ITEMS,
-                    limit=PAGE_SIZE,
+                    through_order=fixture.largest_run_items,
+                    limit=fixture.page_size,
                 )
             )
-            assert 1 <= len(item_page.items) <= PAGE_SIZE
+            assert 1 <= len(item_page.items) <= fixture.page_size
             item_page_seconds.append(elapsed)
 
-            event_after = sample * (LARGE_RUN_ITEMS + 2) // PAGE_SAMPLE_COUNT
+            event_after = sample * (fixture.largest_run_items + 2) // fixture.page_samples
             event_page, elapsed = _timed(
                 lambda event_after=event_after: repository.get_event_page(
                     large_run,
                     after_seq=event_after,
-                    through_seq=LARGE_RUN_ITEMS + 2,
-                    limit=PAGE_SIZE,
+                    through_seq=fixture.largest_run_items + 2,
+                    limit=fixture.page_size,
                 )
             )
-            assert 1 <= len(event_page.events) <= PAGE_SIZE
+            assert 1 <= len(event_page.events) <= fixture.page_size
             event_page_seconds.append(elapsed)
 
     return {
@@ -271,12 +274,14 @@ def _measure_readback(path: Path) -> dict[str, object]:
         "summary_warm_reader_seconds": warm_summary_seconds,
         "item_page_cold_reader_ms": item_cold_seconds * 1_000,
         "item_page_p50_ms": statistics.median(item_page_seconds) * 1_000,
+        "item_page_samples_ms": [value * 1_000 for value in item_page_seconds],
         "item_page_p95_ms": _percentile(item_page_seconds, 95) * 1_000,
         "item_page_max_ms": max(item_page_seconds) * 1_000,
         "item_page_p95_seconds": _percentile(item_page_seconds, 95),
         "item_page_max_seconds": max(item_page_seconds),
         "event_page_cold_reader_ms": event_cold_seconds * 1_000,
         "event_page_p50_ms": statistics.median(event_page_seconds) * 1_000,
+        "event_page_samples_ms": [value * 1_000 for value in event_page_seconds],
         "event_page_p95_ms": _percentile(event_page_seconds, 95) * 1_000,
         "event_page_max_ms": max(event_page_seconds) * 1_000,
         "event_page_p95_seconds": _percentile(event_page_seconds, 95),
@@ -284,23 +289,33 @@ def _measure_readback(path: Path) -> dict[str, object]:
     }
 
 
-def main() -> int:
+def run_case(
+    case: str, *, output: Path, installed_root: Path | None = None
+) -> dict[str, object]:
+    if case not in CASES:
+        raise ValueError(f"unknown history case: {case}")
+    fixture = _SMOKE if case == "smoke" else _RELEASE
     with tempfile.TemporaryDirectory(prefix="namisync-history-benchmark-") as temp:
         path = Path(temp) / "history.db"
-        recording = _record_fixture(path)
-        readback = _measure_readback(path)
+        recording = _record_fixture(path, fixture)
+        readback = _measure_readback(path, fixture)
         report = {
+            "case": case,
+            "status": "complete",
+            "release_gates_applied": case == "release",
             "fixture": {
-                "runs": RUN_COUNT,
-                "items": TOTAL_ITEMS,
-                "largest_run_items": LARGE_RUN_ITEMS,
+                "profile": fixture.name,
+                "runs": fixture.runs,
+                "items": fixture.items,
+                "largest_run_items": fixture.largest_run_items,
                 "window_policy": {
                     "max_events": DEFAULT_HISTORY_WINDOW_POLICY.max_events,
                     "max_bytes": DEFAULT_HISTORY_WINDOW_POLICY.max_bytes,
                     "max_event_bytes": DEFAULT_HISTORY_WINDOW_POLICY.max_event_bytes,
                     "max_age_seconds": DEFAULT_HISTORY_WINDOW_POLICY.max_age_seconds,
                 },
-                "page_samples": PAGE_SAMPLE_COUNT,
+                "page_size": fixture.page_size,
+                "page_samples": fixture.page_samples,
                 "database_bytes": path.stat().st_size,
             },
             "environment": {
@@ -321,26 +336,21 @@ def main() -> int:
                 if not key.endswith("_seconds")
                 or key.startswith("summary_")
             },
-            "thresholds": {
+            "thresholds": None if case == "smoke" else {
                 "summary_max_seconds": SUMMARY_MAX_SECONDS,
                 "page_p95_max_seconds": PAGE_P95_MAX_SECONDS,
                 "page_max_seconds": PAGE_MAX_SECONDS,
                 "window_commit_max_seconds": WINDOW_COMMIT_MAX_SECONDS,
             },
         }
-        print(json.dumps(report, indent=2, sort_keys=True))
-
         assert recording["peak_pending_events"] <= 256
         assert recording["peak_pending_bytes"] <= 1_048_576
-        assert recording["transaction_max_seconds"] < WINDOW_COMMIT_MAX_SECONDS
-        assert readback["summary_cold_reader_seconds"] < SUMMARY_MAX_SECONDS
-        assert readback["summary_warm_reader_seconds"] < SUMMARY_MAX_SECONDS
-        assert readback["item_page_p95_seconds"] < PAGE_P95_MAX_SECONDS
-        assert readback["item_page_max_seconds"] < PAGE_MAX_SECONDS
-        assert readback["event_page_p95_seconds"] < PAGE_P95_MAX_SECONDS
-        assert readback["event_page_max_seconds"] < PAGE_MAX_SECONDS
-    return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+        if case == "release":
+            assert recording["transaction_max_seconds"] < WINDOW_COMMIT_MAX_SECONDS
+            assert readback["summary_cold_reader_seconds"] < SUMMARY_MAX_SECONDS
+            assert readback["summary_warm_reader_seconds"] < SUMMARY_MAX_SECONDS
+            assert readback["item_page_p95_seconds"] < PAGE_P95_MAX_SECONDS
+            assert readback["item_page_max_seconds"] < PAGE_MAX_SECONDS
+            assert readback["event_page_p95_seconds"] < PAGE_P95_MAX_SECONDS
+            assert readback["event_page_max_seconds"] < PAGE_MAX_SECONDS
+        return report

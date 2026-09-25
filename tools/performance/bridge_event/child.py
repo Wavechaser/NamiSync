@@ -20,6 +20,10 @@ from types import MappingProxyType
 from typing import Any
 from unittest.mock import patch
 
+WEB_TEST_ROOT = Path(__file__).resolve().parents[3] / "tests" / "interfaces" / "web"
+if str(WEB_TEST_ROOT) not in sys.path:
+    sys.path.insert(0, str(WEB_TEST_ROOT))
+
 from _headed_evidence import EvidencePaths, EvidencePublisher
 from _startup_test_support import headed_command_extension
 

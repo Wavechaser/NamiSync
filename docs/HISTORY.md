@@ -399,6 +399,9 @@ terminal history row.
 The four `HistoryWindowPolicy` fields are the only tuning point. Do not change
 them from anecdotal timing. [PERFORMANCE](PERFORMANCE.md#history-methods-and-observations) owns the
 fixture, profile, collection statistics and historical observations.
+`python -m tools performance history release --json build/history-release.json`
+runs the full named fixture and applies these release criteria. The `smoke`
+case checks a smaller diagnostic fixture and cannot close the release gate.
 
 The release gates are at most three seconds for the 50-run summary; 500 ms p95
 and one second maximum for either 256-row page; and no normal window commit at
@@ -440,5 +443,5 @@ remaining history criteria are a 50-run summary over 1,000,000 retained items,
 including a 100,000-item run, in at most 3 seconds; and a 256-row detail window in
 500 ms p95 / 1 second maximum. These scoped Tier-2 targets remain separate from
 query-boundedness proofs and do not activate the deferred history page.
-[PERFORMANCE](PERFORMANCE.md#other-measurement-families) owns raw sample and
+[PERFORMANCE](PERFORMANCE.md#history-methods-and-observations) owns raw sample and
 rerun-method recording for these criteria.

@@ -766,6 +766,14 @@ may close a gate.
   count for a noisy one; committed raw evidence; and a separate validator.
   **Tier 3** is protected authority with the empirical and deterministic forms
   below.
+- The recorded M1-7/M1-8 Plan and execution-UI latency and empirical
+  representation-memory budgets are now advisory comparison points. A selected
+  `tools/performance` observation is useful for diagnosis, but missing, slow or
+  noisy samples do not automatically block an ordinary change. Wrong fixture,
+  failed action or incomplete child is invalid evidence. This demotion does not
+  change runtime admission/population bounds, counted-work witnesses, the
+  SH-G-8 custody authority, history release criteria, SH-G-15, or executor
+  settlement. New acceptance claims still follow the tier rules here.
 - SH-G-15 is scoped release acceptance for cold-start resource budgets and
   repeated/long-workload leak and growth checks on declared supported profiles.
   It is not a hard whole-runtime memory guarantee. Existing runtime-enforced
@@ -799,10 +807,12 @@ may close a gate.
   rather than empirical calibration and holdout. The executor settlement
   oracle additionally declares repeated identical normalized runs because
   stability is part of that gate's claim.
-- Every measured quantity names its roots, scaling axes, aggregation/retention
+- Every acceptance quantity names its roots, scaling axes, aggregation/retention
   policy, tier, artifacts, and rerun/version trigger in `PERFORMANCE.md`, linked
-  to its owning component criterion. Before accepting a new or changed retained-memory representation,
-  its corpus must classify every retained dataclass field and reachable mapping
+  to its owning component criterion. Optional diagnostics identify their
+  fixture, source and raw samples without implying acceptance. For a new
+  retained-memory acceptance claim, its corpus must classify every retained
+  dataclass field and reachable mapping
   family/key as populated at its declared envelope or intentionally absent/non-
   retained. An unclassified representation change invalidates that acceptance
   evidence.

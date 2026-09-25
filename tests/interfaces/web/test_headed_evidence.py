@@ -340,7 +340,6 @@ def test_headed_evidence_protocol_stays_test_only_and_owns_milestone_paths() -> 
         assert "_headed_evidence" not in source.read_text(encoding="utf-8"), source
 
     children = (
-        "_bridge_event_benchmark_child.py",
         "_component_gallery_child.py",
         "_headed_host_child.py",
         "_materials_gate_child.py",
@@ -348,8 +347,8 @@ def test_headed_evidence_protocol_stays_test_only_and_owns_milestone_paths() -> 
         "_shell_gate_child.py",
         "_transport_gate_child.py",
     )
-    for name in children:
-        source = Path(__file__).with_name(name)
+    bridge_child = repository / "tools" / "performance" / "bridge_event" / "child.py"
+    for source in (bridge_child, *(Path(__file__).with_name(name) for name in children)):
         text = source.read_text(encoding="utf-8")
         tree = ast.parse(text, filename=str(source))
         assert not any(

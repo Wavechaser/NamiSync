@@ -6,9 +6,9 @@ historical observations at their measured revisions; it does not turn them
 into a guarantee for the current checkout. [DEFENSE](DEFENSE.md#7-quantitative-evidence-and-measurement-authority)
 owns evidence authority and consequence. [PRESENTATION](PRESENTATION.md#focused-scale-acceptance),
 [BRIDGE](BRIDGE.md#evidence-and-ongoing-checks) and [INTERFACES](INTERFACES.md#sh-g-release-criteria)
-retain behavior and gate decisions. AB-2 will change the named latency and
-empirical representation-memory families to optional developer measurements;
-until that atomic transition, the existing acceptance and validators remain.
+retain behavior and gate decisions. AB-2 moved Plan/UI latency and empirical
+representation-memory collection to optional developer observations while
+preserving fixture/action, counted-work and independent release/custody gates.
 
 ## Reference profile and collection
 
@@ -20,6 +20,9 @@ samples; cold maxima use at least five fresh-process or cold-projection
 samples. Record raw samples, source/runtime/profile, fixture seed, statistic,
 child count, p95 and maximum. These identify reference evidence, not exact-
 version launch admission. DEFENSE §7 governs changed-profile decisions.
+The five-child counts describe historical acceptance collections and any
+separately retained gate; a selected optional Plan/UI case below is a single
+diagnostic child, not a replacement aggregate.
 
 The Plan corpus has 100,000 operations plus up to 20,000 structural/group/
 ghost rows; the information-heavy variant adds 120,000 notices for 240,000
@@ -63,352 +66,75 @@ carry the source and profile bindings and raw sample membership. The P2
 the earlier 6.8/7.3 ms window and 58.8/65.1 ms start p95/max observations.
 Do not combine maxima and p95 across endpoints into one score.
 
-## Plan, receipt and execution UI procedures
+## Selected Plan and execution UI observations
 
-### Scoped selection witness
+Run an optional case through `python -m tools performance --list`, then
+`python -m tools performance FAMILY CASE --json build/REPORT.json`. Installed
+Execution-receipt and execution-ui cases also require `--installed-root`
+pointing to the wheel's `site-packages`; a relative path resolves from the
+invoking directory. The driver executes the real component or installed headed
+endpoint in a bounded child and writes one report plus a sibling raw child log.
+The report names the case, fixture/action correctness, raw samples, current
+revision/dirty state and runtime. Failure or timeout is an incomplete report
+with a nonzero command exit; an elapsed time cannot turn a wrong or unfinished
+action into a successful observation. Each invocation is a diagnostic sample,
+not an acceptance run or a new speed/memory guarantee. The historical targets
+above remain comparison context only.
 
-`test_plan_review_scale.py` constructs the 120,000-operation base fixture,
-activates Copy, and times complete server membership resolution, workflow
-deselection/decision derivation and Plan projection/summary refresh as one
-diagnostic interval. It excludes fixture construction, WebView transport and
-filesystem execution. A scope-matcher, workflow mutation or projection refresh
-change reruns it. On 2026-09-17 the fixture matched 16,667 operations and the
-interval was 1.207 seconds. This observation does not renew the Plan contract
-at today's checkout.
+The Plan fixture uses seed `0x4E414D49`, 100,000 operations, 120,000 base
+projection rows and a 240,000-row information-heavy variant with 120,000
+warnings. It exercises depth 32, prior-path rows, widest siblings, raw-key
+order, selection and actual changed/unchanged views. The public Plan cases
+are component measurements selected by their compact-contract metric IDs;
+the receipt/UI adapters own the current installed headed cases.
+Cold cases retain one sample; warm cases retain six. The optional projection
+memory case measures retained construction overlap but does not certify a
+fixed object graph or SH-G-15. Functional tests independently check fixture
+counts, sibling/order witnesses, exact selection membership, scoped actions,
+typed replies, settlement and false fast responses. Counted-work tests remain
+in the owning presentation/interface tests.
 
-### Scoped M1-8 receipt revalidation
+Four Plan component observations use the delivered rootless public view while
+the frozen historical contract records the earlier rootful view: unchanged
+window total 239,999 rather than 240,000, hostile search two rather than three
+visible rows, and memory-overlap base/staged window totals 119,999/239,999.
+The changed-collapse case now collapses the visible Previous paths folder and
+reads its 256-row window, instead of collapsing the hidden synthetic Plan root.
+Those endpoints are not direct apples-to-apples latency comparisons with the
+old rootful observations. The underlying 120,000/240,000 projection populations
+and the other contract correctness witnesses remain checked; no historical JSON
+or contract byte was rewritten.
 
-Historical A8-03 permits a separately identified Tier-2 report for
-`ui_get_plan_window_one_row_receipt` and `ui_start_execution_receipt`. Adapter
-window enrichment and live-epoch setup before the execution receipt affect
-these paths. Preserve the compact M1-7 contract, installed full-base fixture,
-reference profile, untimed readiness/warmup, five fresh children per metric and
-six samples per child. Each metric must meet nearest-rank p95 <=100 ms and
-maximum <=250 ms; retain child identities and within/across-child dispersion.
-All failed attempts and timeouts remain recorded. This scoped acceptance does
-not renew the full 35-case collection or change its protected validator.
+The M1-8 receipt adapter settles the installed rootless public view with
+119,999 visible rows from 120,000 projection nodes. Its first group is the
+independently derived `NamiSyncPriorV1` Previous paths row. Each selected
+receipt case uses six samples after an equivalent untimed warmup. The execution
+UI adapter keeps eight cold click-feedback and five warm receipt endpoints;
+cold cases have one sample and warm cases six. Its guarded JavaScript probe is
+`tools/performance/execution_ui_probe.mjs`. It observes actual command/reply
+identity and first-frame feedback, verifies eventual settlement, and rejects
+refusal, unrelated state and missing dispatch. These observations use the
+installed host and do not exercise filesystem execution as a timing endpoint.
 
-Use existing headed workload/child/readiness and authority-freezing primitives
-through the A8-05 two-metric adapter/collector, with a separate scoped checker
-reusing unchanged independent receipt/profile/byte checks. Freeze
-the exact instrument/checker and additional product dependencies outside the
-historical source manifest, including `workflows/execution_review.py`. Verify
-physical source, wheel-member and installed bytes and Git-clean identities;
-commit versioned raw provenance/receipts and a separate validation result.
-Require controls for missing/reused samples, wrong identities and a maximum-only
-failure. The historical finite method is retained here; the committed
-[P2 authority](../tests/interfaces/web/m1_8_execution_receipt_authority.json),
-[receipts](../tests/interfaces/web/m1_8_execution_receipt_receipts.json),
-[result](../tests/interfaces/web/m1_8_execution_receipt_result.json), and
-`tests/interfaces/web/_m1_8_execution_receipt_scale.py` retain exact artifact,
-case and checker identities. Never filter
-the full contract to make its terminal validator accept partial evidence.
+For a fresh installed observation, build and install a wheel into a separate
+tool-owned directory and pass that installation as `--installed-root`. The
+selected runner checks that NamiSync imports from the installed tree; the
+project Python supplies development dependencies. Record the wheel and
+installation used alongside the JSON, and preserve the raw log when diagnosing
+failure. The 300-second child deadline is containment, not a latency target.
 
-Historical A8-05 versions this scoped report for the accepted rootless surface: the unchanged
-base has 100,000 operations and 120,000 projection nodes, while its public window
-has 119,999 rows. Initial settlement requires 256 current rows at revision/offset
-zero and the independently derived `NamiSyncPriorV1` Previous paths first group.
-Retain per-plan identities and the existing fresh-unused Plan population for the
-start metric. Adapt only scoped fixture settlement/validation; preserve historical
-producer, checker, contract and artifacts without fabricating a public root.
-
-Before each launch durably publish the fixed ordered plan of two readiness
-children (window, start), five window children and five start children, plus the
-current launching state. Record accepted receipt/path/hash/process or the first
-failure/timeout and bounded error/log evidence. Refuse restart/overwrite; stop on
-first failure and obtain disposition before another collection. Independently
-validate the final index embedded in raw evidence against exact receipt membership,
-order, identities and hashes. Failed, launching or incomplete states cannot pass.
-This preserves evidence custody in the trusted local collection model, not
-protection against malicious rewriting. Both actual installed headed readiness
-cases precede timed acceptance; headless fixture probes are only compatibility
-evidence. Derive embedded authority OID from declared canonical bytes and bind
-the named authority through filtered repository bytes to final HEAD and raw
-receipts. Corruption controls cover these identities, rootless fixture premises,
-attempt custody and budgets. Freeze the new adapter/checker/test dependencies
-and verify postcommit source/evidence bindings; changed measured bytes invalidate
-affected observations.
-
-The P2 collection on 2026-09-20 completed its fixed 12 attempts with no failure.
-The named `m1_8_execution_receipt_{authority,receipts,result}.json` artifacts
-retain frozen provenance, exact attempt/sample membership and separate results.
-Window receipt p95/max is 6.8/7.3 ms; execution-start receipt is 58.8/65.1 ms.
-The full unmocked workspace validator passed before and after collection.
-Ignored `build/m1-8-p2/run-01/` retains child receipts, launch index and logs.
-These results apply to the P2 measured build; later UI edits reopen affected
-cases under their own declared evidence. Final committed-source validation is
-required in addition to receipt/result validation.
-
-For historical P2 terminal reproduction, check out its recorded accepted
-revision (`4bbf943`) with matching retained package bytes, then load the three
-named artifacts and the unchanged compact contract, import
-`tests/interfaces/web/_m1_8_execution_receipt_scale.py`, and invoke
-`validate_authority_workspace` with the retained wheel/installed paths, then
-`validate_receipts`, `validate_result` and `validate_committed_sources`.
-`compact_authority` uses `plan_scale.canonical_json_bytes`; use its recorded
-receipt OID and the raw artifact's authority OID. The exact retained invocation
-is `build/m1-8-p2-terminal-validate.py --installed-root <site-packages>
---installed-wheel <wheel>`, executed with the project Python. It calls both
-historical and supplemental checks unmocked and finishes with named-artifact
-and clean-HEAD binding. The archived evidence records the retained installation.
-The validator intentionally rejects later changed source bytes. Accepted U
-evidence includes both P2 receipt metrics in its thirteen-case collection
-and supersedes P2's measurements for the corresponding U build.
-Do not rewrite frozen P2 artifacts or require their clean-HEAD check on U's tree.
-Receipt/result checks use committed artifacts; workspace validation additionally
-requires the matching retained wheel and installation. Missing package evidence
-must not be described as a successful workspace reproduction.
-
-Component windows, changed views, construction and projection-memory acceptance
-retain their existing premises only while PlanReviewState, projection/order/
-visible-sequence paths and measured retained graphs are unchanged. Live adapter
-maps reference the existing membership mapping and stay outside those graphs.
-Control receipt paths likewise require an unchanged timed dependency path.
-Changing a premise reopens affected cases; later GUI changes rerun affected
-receipts. The new execution overlay has structural population/work/byte bounds,
-not a new numeric latency or memory claim.
-
-### Scoped M1-8 execution UI revalidation
-
-Gate U uses a separately versioned affected-path report rather than changing
-the protected P2 or historical M1-7 authorities. Its fixed order is eight cold
-interaction cases—update view, mutate selection, destructive start, confirm,
-nondestructive start, pause, resume and cancel click feedback—followed by five
-warm receipt cases: one-row window, start, pause, resume and cancel. Run all 13
-untimed readiness children first, then five fresh children per case in that
-order, for exactly 78 attempts. Each cold child contributes one sample and must
-finish within 50 ms. Each warm child contributes six samples; nearest-rank p95
-must be at most 100 ms and the maximum at most 250 ms.
-
-Keep the compact contract's fixtures, equivalent untimed warmup, fresh unused-Plan
-population and installed headed path. The scoped rootless adapter retains
-120,000 projection nodes, 119,999 public rows and independently checks the
-first Previous paths group. The approved U-v2 observation contract supersedes
-pending-only feedback for the seven transient cold cases; historical M1-7/P2
-contracts and observations remain unchanged.
-
-At the first frame after an eligible connected control is clicked, require either
-action-specific pending feedback or an exact successful typed outcome already
-reflected in truthful action-correlated UI. Retain eventual exact settlement in
-both cases. Empty pending, refusal, uncertainty, no dispatch or an unrelated state
-never counts as success. Valid authoritative progress may advance beyond the
-reply's immediate state: Pause initially returns pausing, Resume pending and
-Cancel canceling. Do not force those intermediate states to linger. Destructive
-Execute keeps its exact modal/snapshot endpoint; Confirm preserves its modal
-safety requirements and proves the actual admission outcome separately.
-
-Selection and control warmups prove an equivalent successful action, untimed.
-Start observations bind the outgoing command to the expected plan request and
-its transport-correlated reply to the current task/session. The reply carries
-an execution run ID; the task summary retains its plan ID.
-Warm control correctness retains accepted/code/before/after and identity facts
-for independent validation, rather than treating session equality as acceptance.
-The U adapter uses guarded replacements and one scoped JavaScript probe, with
-exact source binding and byte identity outside the declared sites. The historical
-producer remains untouched. Keep click-to-first-frame timing and all budgets;
-no extra frame wait, post-frame repair or delayed product reply is permitted.
-Failure details contain bounded scalar operands, never DOM graphs or unbounded
-event histories. Failed observations remain failures, not acceptance samples.
-
-Before launch, freeze and independently validate the exact source, CSS,
-instrument, adapter, checker, control, wheel, installed-runtime and profile
-bindings. Durably publish the complete attempt plan and current launch state;
-stop at the first failure and refuse overwrite, restart or favorable retry.
-Publish the existing immutable failure packet before updating the mutable index,
-so a refused index replacement cannot suppress that packet. External monitoring
-must not hold the index open while its writer replaces it on Windows.
-Raw receipts and derived results have separate validators for exact identities,
-order, samples, hashes and budgets. Positive and corruption controls must reach
-the real supplemental byte and Git checks. Component construction, general
-window/sort/selection and process-memory observations remain excluded only when
-the final diff proves their measured code and retained graphs unchanged. Actual
-collection occurs only after final source/control review.
-
-The active U adapter is `tests/m1_8_execution_ui_benchmark.py`; its independent
-checker and focused controls are `_m1_8_execution_ui_scale.py` and
-`test_m1_8_execution_ui_scale.py` under `tests/interfaces/web/`;
-`tests/assets/m1_8_execution_ui_probe.mjs` owns its shared observation mechanics
-and is frozen as instrument source. Reuse unchanged
-P2 rootless settlement and historical profile helpers; keep U metric membership,
-cold/warm policy and attempt custody here. The three versioned artifacts are
-`m1_8_execution_ui_{authority,receipts,result}.json` in that same test directory.
-Acceptance requires the fixed collection and both source-binding
-stages: full workspace/raw validation against the staged candidate before
-commit, then clean-HEAD validation including the raw authority binding afterward.
-Changes to measured product, instrument, checker, controls, package or native
-profile reopen the affected evidence; unchanged product alone is insufficient.
-
-The 2026-09-24 post-R2 recovery correction reran all 78 attempts with the fixed
-profile and populations. Independent derivation gives a 20.3 ms worst cold
-maximum, 72.0 ms worst warm p95 and 73.3 ms warm maximum, within the unchanged
-limits. The three artifacts above retain evidence for the measured RC-1 source;
-`build/m1-8-archive-20260924/evidence/recovery-close-20260924/delivery-01.json`
-records staged and clean-HEAD
-closure. Accepted predecessor run-03 remains under `build/r2-20260924/`;
-historical failed runs remain separate and contribute no accepted samples.
-R3 preserves that candidate's entire `build/` tree under the main checkout's
-`build/m1-8-archive-20260924/evidence/`; the delivery register records integration
-and the original-to-archive path mapping.
-
-
-## Complete Plan collection and authority
-
-The M1-7 plan projection, gesture and receipt budgets in PRESENTATION are independently
-predeclared, profile-scoped **Tier 2** SLOs under DEFENSE §7. Crossing workflow,
-bridge and browser layers within the plan slice is not a cross-slice operation
-gate. This evidence closes no setup/execution/inventory/integrity aggregate or
-release-resource criterion; it derives no ceiling from calibration. Preserve
-the budgets and fixed reference profile rather than tuning thresholds to runs.
-
-The compact representation uses the successor
-`tests/interfaces/web/m1_7_plan_compact_contract.json`, with separately frozen
-compact authority and measurement files. The legacy contract/authority/results
-remain preserved under their original names and meaning. The successor records
-the actual source projection, cached canonical/current orders, compact buffer
-widths and populations, and reference sharing. Its memory case retains a complete
-120,000-row base review while constructing a 240,000-row heavy review; both
-realize canonical and filename-descending orders and current 256-row windows.
-Baseline follows artifact construction but precedes review construction; sampling
-continues through both reviews, sort/window work and final retained-state checks.
-This includes the original projection-construction overlap and added order/visible
-storage, without changing the existing metric ID, 320 MiB maximum or five cold
-children. It makes no six-view or whole-headed-process memory claim. The current
-producer cannot label this representation as legacy evidence; validators reject
-mixed contract/authority/artifact families. Legacy compatibility is confined to
-reading and checking preserved evidence. There is no legacy fixture generator,
-product-data admission path or second runtime representation; retire the legacy
-reader when its evidence is archived and no longer needs active validation.
-
-Ordinary synthetic authority, receipt and corruption tests take fresh deep
-copies of the frozen compact fixture expectations. Their expected answers do
-not invoke the live generator. Separate live tests construct both actual fixture
-families and compare population, raw-order witnesses and retained descriptors
-against those frozen expectations; actual sibling sorting is checked against
-the frozen order. These test expectations never supply measurement observations.
-
-Before measurement, freeze the finite source/instrument/validator file identities,
-actual native runtime/dependencies/profile, installed wheel and measured installed
-file hashes, exact fixture family counts and expected raw-key order witnesses.
-For the completed P9 candidate, the historical file population is supplemented
-by a before/after source/installed/wheel-member binding for `core/execution.py`;
-M1_PLAN records its digest and raw evidence. This covers the shared execution
-structure without changing the fixed contract or claiming that review memory
-measures a paused execution index. Final integration checks the supplemental
-physical bytes and Git-clean HEAD identity as well as the named population.
-The separately reviewed authority manifest admits those exact values; syntactic
-hash validity or a self-reported profile is insufficient. The candidate may be
-frozen by immutable file/blob hashes before its final atomic commit; no unverified
-product commit is required. That final commit must contain the measured bytes.
-Bind measured product files across source, wheel archive and installed files,
-not merely three independent self-reported hashes. After the atomic commit,
-verify clean measured paths and matching HEAD Git-clean blob identities against
-the authority; retain physical measured-file hashes separately from checkout
-line-ending normalization.
-
-Use five fresh children for each cold case and five fresh children with six timed
-warm samples each for every warm case (30 total). Record child identities, case
-membership and per-child sample ordinals; report process count and within/across-
-child dispersion with each statistic. P95 is nearest rank, index
-`ceil(0.95 * n) - 1` in ascending samples. Every changed-view sample restores its
-prescribed initial state outside timing; every timed Execute uses a fresh eligible
-plan. A repeated no-op cannot stand in for a changed search/filter/collapse/sort.
-
-Installed headed cases publish one plan by default, or two cold/seven warm plans
-for fresh execution/control samples. These are valid completed/released tasks
-published before startup. Settle each fresh view sequentially with exactly one
-public open followed by one public 256-row window read. Retain proof of the
-initial `opened` disposition, current revision zero, exact task/request/session/
-path identities, total row count and first-row identity; the independent validator
-checks this fixture receipt. Ordinary selection still waits for every exact source
-view outside timing. This prepares a current review for interaction measurements,
-not concurrent cold-start latency; separate cold-construction cases remain timed.
-Freeze their distinct task/request/plan-session/path identities
-and prove each execution sample unused before admission. No private task/view
-rewrite or synthetic startup event prepares a sample. Related idle views are
-part of this finite fixture; the separate component memory case does not certify
-their aggregate headed-process memory.
-
-The fixed Plan case set contains 35 cases. Destructive Execute-to-modal,
-Confirm-to-pending-frame and non-destructive Execute-to-pending-frame feedback
-are separate 50 ms maximum cases. The non-destructive fixture deselects risk-bearing
-operations through the authoritative service outside timing. The typed Execute
-receipt starts at Confirm submission and ends at the actual TaskStartView,
-including selection commitment and admission but excluding human decision time
-and admitted execution work. It retains the 100 ms p95 / 250 ms maximum budget;
-an outer asynchronous transport token is not that endpoint.
-The passive headed receipt observer registers on the production document-message
-channel before submission and removes its listener on settlement or timeout;
-executable controls verify delivery alongside other listeners and reject missing
-registration. Execution/control cases share this observer.
-
-The contract identifies each fixture variant, untimed setup, timed transition,
-endpoint and correctness assertion. Evaluate search, filter, collapse, all allowed
-sort directions, reset and subsequent unchanged windows separately; do not pool
-fast cases. Reset begins in a non-path sort and may cover explicit path-ascending
-sorting only when deterministic tests prove the same measured mechanism. Include
-balanced/widest siblings, ties/unavailable keys, raw numeric/Unicode cases, depth
-32 and construction/staging overlap in the existing fixtures. The synthetic root
-counts within the 20,000 structural allowance, not in addition to it.
-
-Before the expensive sample set, run a separate untimed readiness pass against
-the current frozen inputs. It covers all 35 contract IDs in 15 children: one
-shared component child for the 21 non-memory cases, one isolated memory/staging
-construction, and the 13 existing headed cases in fresh children. Selection runs
-first and a failure stops the pass. Each case uses its existing setup and
-correctness path with one transition; cold construction and memory have no
-warmup. Full fixture populations remain intact. Readiness carries no timing or
-retained-byte samples, does not replace quantitative acceptance, and cannot warm
-or provide task state to the fresh measurement processes.
-The parent process allows 600 seconds for the shared 21-case component readiness
-group and 300 seconds for every other readiness child and each measurement child.
-These are process liveness safeguards, separate from the fixed measurement
-budgets; timeout leaves the collection incomplete and supplies no acceptance.
-
-Selection setup identifies an enabled, checked operation row through the public
-view and its connected checkbox. Warmup must publish pending and settle to an
-advanced authoritative selection revision with that same row unchecked; the
-measured action requeries that row. Public summary/window reads are untimed
-witnesses, not asynchronous completion events for the synchronous mutation path.
-The historical M1-7 pending-frame criterion is unchanged; failure after verified
-eligibility is a stop for review, not permission to delay product receipts or
-weaken that test. Scoped U uses the separately approved observation contract above.
-
-Retain each checked child receipt atomically under a unique ignored run evidence
-directory. A separate atomic index binds its frozen authority, case, planned
-ordinal, launch/process identities, path and hash. Record attempts before launch;
-failures and interruptions leave the collection incomplete and preserve receipts
-already produced. This does not change measurement child or terminal schemas.
-Partial evidence cannot satisfy the terminal validator and is not automatically
-resumed, merged or reused. Any future reuse requires explicit validity review;
-changing measured instrument bytes invalidates cross-revision reuse.
-
-One verdict-free terminal artifact records genuine observations and provenance;
-the independent validator checks exact case/count membership, source/profile and
-fixture authority, P95 and maximum budgets. Validator corruption controls must
-reach wrong-but-well-formed identities, wrong populations, missing/extra cases,
-reused child identities and maximum-only failures. Local click feedback and typed
-receipts use the installed headed production path; projection-only measurements
-do not establish either. Deterministic structure/permutation and bounded-work
-witnesses remain separate from elapsed time. Rerun after changes to any measured
-source, key, comparator, index, publication, retention or admitted profile.
-
-Common receipt checks belong to validator-local helpers, independent of producer
-checks and constants. Collection callers retain path, byte hash, planned order
-and partial-prefix validation; readiness retains complete coverage; terminal
-acceptance retains complete membership and aggregate budgets. Each entry keeps
-its own identity-reuse checks. Inspecting valid partial evidence never grants
-terminal acceptance. Baseline/candidate public-entry corruption comparisons
-protect these boundaries when consolidating their implementation.
-
-The former R7 consolidation batch delivered R7-1–R7-4 before suspension; its
-R7-G full acceptance was not completed. Its checkpoint-specific Tier 1/Q-local
-and final-run procedure is historical in the
-[retired register](obsolete/M1_7_ABLATION_STUDY.md). It is not a standing
-instruction to resume or requalify that abandoned batch. Historical evidence
-remains immutable. The current performance contracts and acceptance policy
-above are unchanged; [POST_M1_8_ABLATION E1](POST_M1_8_ABLATION.md#7-measurement-and-evidence)
-proposes optional benchmark treatment but does not enact it. Newly activated
-work uses its named verification under the then-operative policy.
+The committed [M1-7 compact contract](../tests/interfaces/web/m1_7_plan_compact_contract.json),
+[authority](../tests/interfaces/web/m1_7_plan_compact_authority.json) and
+[measurements](../tests/interfaces/web/m1_7_plan_compact_measurements.json),
+and the M1-8 [P2](../tests/interfaces/web/m1_8_execution_receipt_result.json)
+and [U-v2](../tests/interfaces/web/m1_8_execution_ui_result.json) records
+remain byte-identical historical evidence at their stated revisions. Their
+readiness children, 35-case/78-attempt collection indexes, source-hash
+certificates and legacy validators were retired from current execution by
+AB-2. They neither authenticate a new checkout nor prescribe a new selected
+case. The old full methods and exact validators remain recoverable from the
+recorded Git revisions; use the current selected-case procedure above for
+new exploratory observations.
 
 ## Executor and verifier methods
 
@@ -664,6 +390,15 @@ observations use their recorded Python/host profile and do not certify
 current-source behavior. Raw historical benchmark output was not committed
 as a compact JSON authority; retain its available original logs.
 
+Current selected cases are `python -m tools performance history smoke --json
+build/history-smoke.json` for a bounded diagnostic and `python -m tools
+performance history release --json build/history-release.json` for the full
+release fixture and its unchanged limits. Both reports retain every raw
+transaction, item-page and event-page sample alongside derived statistics.
+The release case uses the 50-run/1,000,000-item population below; the smoke
+case uses two runs/96 items and cannot close the release criteria. A failed
+release limit is a failed case, not a favorable diagnostic sample.
+
 Use a fixture with 50 runs and 1,000,000 items,
 including one 100,000-item run, and record:
 
@@ -674,7 +409,7 @@ including one 100,000-item run, and record:
 - peak pending event count and serialized bytes;
 - 50-run summary latency and 256-row item/event page latency.
 
-The 2026-08-05 baseline ran
+The 2026-08-05 baseline ran the then-current
 `.\.venv\Scripts\python.exe tests\history_benchmark.py` on Windows 11
 10.0.26200, Intel64 Family 6 Model 189 with 8 logical CPUs, Python 3.14.6, and
 SQLite 3.50.4. The 650,465,280-byte fixture contained exactly 50 runs and
@@ -713,6 +448,16 @@ passed; no window-policy default changed.
 
 ### Bridge transport custody
 
+`python -m tools performance --list` lists the current optional diagnostic
+cases; `python -m tools performance bridge-event installed --json
+build/bridge-event.json` runs the bridge case. It stages driver and page assets from the
+working tree but builds the measured product wheel from archived HEAD; the
+report labels `driver_source` and `product_source` separately. Its bounded
+native child and incomplete failures retain available child evidence and failure context.
+An incomplete or v4-only observation does not satisfy current event-v5
+transport correctness or the frozen SH-G-8 custody claim. Use the unchanged
+custody tests and their authority below for that gate.
+
 The frozen v1 [calibration](../tests/interfaces/web/sh_g_8_transport_calibration.json),
 [ceiling](../tests/interfaces/web/sh_g_8_transport_ceiling.json) and
 [holdout](../tests/interfaces/web/sh_g_8_transport_holdout.json) belong to
@@ -746,4 +491,4 @@ reports under ignored `build/` remain at their recorded paths, including
 samples and authority, not necessarily every native or visual artifact.
 Ignored `build/` is not durable archival storage; preserve existing raw
 directories and consider a separately managed archive before cleanup of
-irreplaceable evidence. No raw file is moved or deleted by AB-1.
+irreplaceable evidence.

@@ -1,36 +1,41 @@
-# Latest session — AB-1 documentation ownership
+# Latest session — AB-2 optional performance tools
 
-2026-09-25; execution baseline `6a55239` on `milestone1`. The user activated
-the full [AB-1–AB-10 batch](M1_PLAN.md#post-m1-8-reduction-plan). AB-1 is complete;
-AB-2–AB-10 retain their dependencies and
-need no repeated activation. No product, test, tool or evidence JSON was edited
-for AB-1.
+2026-09-25; `milestone1` baseline `29d9b8f` (AB-1 complete). The full
+AB-1–AB-10 batch remains active. AB-2 passed its ordinary and installed interface
+gates and independent review; this checkpoint is ready to commit.
+No product/protocol source or historical JSON/contract/
+authority file was changed.
 
-[PERFORMANCE](PERFORMANCE.md) now owns methods, reference profiles, fixture and
-sample rules, raw provenance and source-linked historical observations. The
-component docs retain criteria, and [DEFENSE](DEFENSE.md#7-quantitative-evidence-and-measurement-authority)
-retains evidence authority. AB-1 does not demote any executable gate. AB-2 will
-move performance drivers with their consumers and make its named families
-optional while preserving correctness, custody, settlement and SH-G-15.
+`python -m tools performance --list` and selected cases now own Plan component,
+installed execution receipt/UI, bridge-event and history observations. The
+three old Plan/M1-8 benchmark scripts and their three certification validators
+were retired with callers; functional/rootless fixture, action, false-result,
+counted-work and native custody tests remain. History `release` still applies
+its million-item criteria; SH-G-8, SH-G-15 and executor settlement remain in
+their owners. The bridge retained-memory sizer stays byte-identical at its
+frozen test path. The bridge event-v5 fixture migration remains unassigned.
 
-[M1_PLAN](M1_PLAN.md) condenses completed M1/GUI/MOVE/study records and retains
-DOC-2 and M1-9/10/12/Release pending. M1-8 A6 is closed from
-`build/m1-8-archive-20260924/integration.json`: merge
-`6c00ec731dd176d201e2a2c3a2a53b47652c544e`, tree
-`f7691c518a31a160f888db299faa9342bd9a4349`, postmerge PASS.
-The five earlier studies were already moved; no archive migration was repeated.
+`build/post-m1-8-ablation-20260925/ab2-migration.md` records the finite
+consumer and four rootless observation adaptations. The combined focused suite
+passed 95 tests. Selected Plan cold/collapse/memory cases and a real installed
+receipt case completed; the latter used a newly built wheel and relative
+installed root, yielding six exact samples and a released session. A first
+sandboxed native receipt attempt and the bridge launch remain truthful
+incomplete receipts with bounded child cleanup and raw context; the receipt
+completed under normal desktop access. The installed bridge timeout has no
+attributed product/protocol cause. Raw reports and logs remain in that ignored
+evidence directory. `ab2-raw-json-verification.json` records 13 files matching
+Git blobs exactly and two frozen custody files matching the independent AB-3
+baseline bytes (their pre-existing checkout CRLF differs from Git blobs).
 
-AB-1 verification: `ab1-checks.json` and `ab1-review.md` in
-`build/post-m1-8-ablation-20260925/` record 320 links, independent figures/A6
-trees, unchanged executable/evidence population and passing independent review
-after provenance/routing corrections. Documentation-only checks suffice here.
-
-Next: refresh `ab2-design.md` against the AB-1 commit and implement AB-2.
-Its early characterization has five bridge source/schedule passes, three Plan
-fixture/order/folder passes and one receipt-observer pass. The latter first hit
-sandbox temp-directory denial, then passed unchanged with normal temp access;
-both logs remain in the evidence root. These are not a full runtime gate.
-Preserve raw JSON/log paths,
-unrelated refs and stashes. DOC-2 branch rewriting, push and PR remain outside
-this batch. D2/D4 and rejected/deferred dispositions remain in the current
-register and study.
+The ordinary gate passed 5,302 tests (four skipped, 33 deselected); 12 import
+checks and 233 active/incoming documentation links passed. A later test-only
+exact COPY-ID assertion passed its focused rerun; unaffected ordinary results
+remain valid. `ab2-ui-smoke-01.json` is a second complete installed observation
+with six UI samples and a released session. All 33 installed interface tests
+passed; `ab2-headed.log/xml` retains the result. Independent review approved
+after correcting tool result handling, source provenance and current fixtures.
+Next: commit AB-2, then integrate AB-3's reviewed database-mapping commit
+`c5f1de8` from `build/post-m1-8-ablation-20260925/ab3-worktree`. Preserve raw
+build evidence, unrelated refs/stashes and DOC-2 exclusion. Do not push or
+create a PR as part of this batch.

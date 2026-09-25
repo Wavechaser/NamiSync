@@ -125,7 +125,7 @@ atomic workflow mutation.
 
 Scoped highlighted selection retains a finite under-10-second cost gate on the
 supported Windows host, with exact matched count and post-mutation scope and
-selection assertions. [PERFORMANCE](PERFORMANCE.md#scoped-selection-witness)
+selection assertions. [PERFORMANCE](PERFORMANCE.md#selected-plan-and-execution-ui-observations)
 owns the fixture, measured interval, rerun triggers and historical observation.
 
 A plan or inventory window indexes the complete post-filter visible sequence, not lexical database order. Fixed-height virtual rows and leading/trailing spacers keep scrolling stable. Window requests carry the appropriate revision, offset, and limit; a renderer requests the index it needs, commits only under its request generation, and suppresses duplicate uncovered-range requests. Changing search, collapse, filters, sorting, task detail, publication state, or retirement advances the local generation. Stale responses and queued animation frames are inert. `dispose()` disconnects observers/listeners and invalidates pending work before a root is removed.
@@ -241,35 +241,32 @@ Neither navigation nor these labels change execution eligibility or selection.
 
 ## Focused scale acceptance
 
-These remaining BR-G-42 criteria retain the reference profile and sampling
-in [PERFORMANCE](PERFORMANCE.md#reference-profile-and-collection). They remain
-open acceptance work; the runtime population target alone does not close them.
+The inventory projection criterion retains the reference profile and sampling
+in [PERFORMANCE](PERFORMANCE.md#reference-profile-and-collection). It remains
+open acceptance work; the runtime population target alone does not close it.
 
 | Behavior | Retained criterion |
 | --- | --- |
-| Local critical-click feedback | 50 ms maximum |
-| Typed execute/control/one-row receipt, excluding admitted work | 100 ms p95; 250 ms maximum |
-| Freeze/normalize a 100,000-subject scope | 500 ms p95; 1 s maximum |
-| Cold 120,000-row base / 240,000-row information-heavy plan projection | 2 s / 4 s maximum |
 | Cold base / information-heavy inventory projection | 3 s / 6 s maximum |
-| Unchanged-parameter 256-row window | 250 ms p95; 500 ms maximum |
-| Changed search/filter/collapse/sort/reset plus 256-row window at 240,000 rows | 1.5 s p95; 3 s maximum |
-| Selection preview at depth 32 | 500 ms p95; 1 s maximum |
-| Incremental plan projection process-memory measurement | 320 MiB maximum |
-| Incremental inventory projection process-memory measurement | 384 MiB each; 2,304 MiB for a six-projection workload |
 
-These process-memory measurements are scoped empirical criteria, not resurrected
-128/192-MiB deterministic graph walls or a required six-entry cache topology.
-Fixture construction, sample aggregation, raw provenance, rerun triggers and
-historical observations are in [PERFORMANCE](PERFORMANCE.md). The retired
-per-object byte-fill/maximum-task reservation companion remains historical,
-not acceptance authority.
+The former Plan/UI click, receipt, projection, view, selection and scoped
+process-memory numbers, including inventory representation memory, are
+advisory historical comparison points under [DEFENSE §7](DEFENSE.md#7-quantitative-evidence-and-measurement-authority).
+Selected Plan/UI cases are available as optional observations in
+[PERFORMANCE](PERFORMANCE.md#selected-plan-and-execution-ui-observations);
+the inventory memory number remains historical without a current selected
+driver.
+Fixture/action correctness, actual 120,000/240,000-row populations, bounded
+work and counted scaling remain required where owned by tests and runtime
+contracts. No deterministic object-graph wall or six-entry cache topology is
+introduced by the old memory figures.
 
 ## Measurement methods
 
-[PERFORMANCE](PERFORMANCE.md) owns the Plan, receipt and execution UI methods,
-provenance and results. The acceptance criteria above remain operative until
-AB-2 changes their role with the driver and consumer migration.
+[PERFORMANCE](PERFORMANCE.md) owns the selected Plan, receipt and execution UI
+methods, provenance and historical results. Their timing and empirical
+representation-memory observations are optional; the inventory projection
+criterion above and separate release, custody and settlement gates remain.
 
 ### Current Plan projection implementation
 

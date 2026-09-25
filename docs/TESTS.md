@@ -227,9 +227,19 @@ crosses departments. Exact primary ownership remains only in
 witnesses with default addopts cleared. Quantitative evidence authority follows
 `DEFENSE.md`; `PERFORMANCE.md` owns measurement methods, fixture/profile,
 aggregation and recorded results. A benchmark is not acceptance merely because
-it ran. AB-1 changes documentation ownership only: current mandatory
-measurements and validators remain operative until AB-2 migrates a driver and
-all its direct consumers together.
+it ran. Selected measurement drivers live under `tools/performance/` and run
+through `python -m tools performance`; methods and commands belong in
+[PERFORMANCE](PERFORMANCE.md). Ordinary pytest does not collect demoted Plan/UI
+latency or empirical representation-memory benchmarks, require their historical
+certificates, or replay retired validators. It retains independent fixture,
+action, failure and scale-behavior checks. Frozen transport custody, SH-G-15,
+history write/readback and release limits, lifecycle/resource containment and
+executor settlement are not demoted by moving measurement tools.
+
+For reduction work, a failing test may describe a deliberately retired mechanism;
+classify its observable guarantee before changing or deleting it. Passing tests
+alone do not establish that no guarantee was lost. Review the affected producer,
+consumer and failure seams as well as the retained tests.
 
 ## Departments
 

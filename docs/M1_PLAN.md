@@ -99,9 +99,9 @@ cleanup commit. New findings do not silently add rows.
 
 | ID | Accepted outcome | Depends on | Primary verification | Status |
 | --- | --- | --- | --- | --- |
-| AB-1 | Documentation/workflow ownership is clear; delivered records compact; PERFORMANCE established | Active batch | 320 links; independently extracted figures; A6 receipt/tree verification; diff and independent review with corrections | Complete in this checkpoint commit |
-| AB-2 | Optional, usable performance drivers live in tools with required correctness/release checks preserved | AB-1 | Tools/interface consumers, ordinary/imports, installed helper consumers and representative driver smokes | Pending |
-| AB-3 | Unused database mapping API removed without changing current correspondence | AB-1 | Database/planner/workflow neighborhood and caller closure | Pending |
+| AB-1 | Documentation/workflow ownership is clear; delivered records compact; PERFORMANCE established | Active batch | 320 links; independently extracted figures; A6 receipt/tree verification; diff and independent review with corrections | Complete in `29d9b8f` |
+| AB-2 | Optional, usable performance drivers live in tools with required correctness/release checks preserved | AB-1 | 5,302 ordinary, 33 installed, 12 import passes; selected drivers, preserved evidence and independent review | Complete in this checkpoint commit |
+| AB-3 | Unused database mapping API removed without changing current correspondence | AB-1 | Database/planner/workflow neighborhood and caller closure | Reviewed as `c5f1de8` in isolated worktree; awaiting integration after AB-2 |
 | AB-4 | Desktop selection capture avoids redundant work with one revision-bound handoff | AB-2 | Selection/service/task-port consumers, counted work and installed Plan | Pending |
 | AB-5 | Bridge response adoption consolidates repeated traversal without weakening boundaries | AB-2 | Response/custody/decoder consumers, ordinary and installed transport | Pending |
 | AB-6 | Unsupported reload has one contained restart behavior instead of reinjection recovery | AB-2 | Host/transport/lifecycle races and installed gestures | Pending |
@@ -192,17 +192,67 @@ losing useful drivers or correctness checks. Policy, driver movement and direct
 consumer changes form one atomic migration; a move-only commit would preserve
 the expensive coupling and invalidate old source certificates unnecessarily.
 
-**Scope and approach.** Move Plan, M1-8 receipt/UI, bridge-event and history
-measurement entry points and measurement-only helpers/assets into
-`tools/performance/`. Reuse the existing `python -m tools` entry point with a
-planned `performance` subcommand for listing/selecting cases and output paths;
-these commands do not exist yet. Keep safety/custody and release assertions in
-their existing test owners. Before edits inventory references in all `tests/`,
-`tools/`, docs and packaging: especially `_setup_headed_child.py`,
-`_task_shell_headed_child.py`, `test_headed_evidence.py`, the three scale test
-modules, benchmark tests and `_departments.py`. Separate shared functional
-fixtures from obsolete readiness/authority machinery instead of copying them.
-Tools must not import collected tests; tests may use tools-owned fixtures.
+**Activated population at `29d9b8f` (2026-09-25).** Tool producers are the five
+`tests/{plan_review,m1_8_execution_receipt,m1_8_execution_ui,bridge_event,history}_benchmark.py`
+drivers, the dedicated bridge child/page assets, the M1-8 UI probe,
+and the existing `tools/__main__.py` command router. Direct consumers are the
+three `tests/interfaces/web/test_*_scale.py` modules and their three private
+validators, `test_bridge_event_benchmark.py`, `test_headed_evidence.py`,
+`tests/_departments.py`, and shared headed helper imports. The bridge retained-state
+sizer stays byte-identical at its current test path because frozen SH-G-8 custody
+imports and hashes it; the moved driver uses that helper through an explicit path.
+Setup/task-shell headed
+children and tests are regression consumers; they do not import these benchmark
+drivers. `tools/performance/` owns selected-case drivers and their dedicated
+assets; `tests/` retains independent fixture, action, failure and counted-work
+assertions. Documentation population is DEFENSE, PERFORMANCE, BRIDGE,
+PRESENTATION, HISTORY, TESTS, TOOLS, this register, CHANGELOG and HANDOFF, plus
+README only if its phase synopsis changes. Historical JSON/contract/authority
+files remain byte-identical in `tests/interfaces/web/`.
+
+Preserve real installed endpoints, exact fixture/action witnesses, bounded child
+and Job cleanup, truthful incomplete output, runtime/revision provenance,
+database readback and release limits, frozen SH-G-8 custody, SH-G-15 and executor
+settlement. Demote only Plan/UI latency and empirical representation memory;
+retire their active readiness/index/hash/legacy certificates with their callers.
+No product/protocol change, tracer retirement, broad helper relocation, new speed
+target or replacement evidence framework belongs to AB-2. The existing bridge
+diagnostic's unassigned v5 migration is not implied by moving it. A required
+protocol repair changes scope; a truthful failed smoke alone does not block
+independent migration. One reviewed commit includes tools, consumers and policy.
+Gate: focused live fixture/action and failure controls; selected Plan, installed
+UI receipt, bridge launch and bounded history smokes; tools/interfaces/database,
+ordinary and installed interface suites; import law; unchanged historical JSON
+hashes; final adversarial source/evidence review. Stop on any repository mandatory
+consequence or a mechanism/safety boundary change.
+
+**Implemented.** `python -m tools performance --list` exposes
+Plan component, installed execution-receipt/UI, bridge-event and history cases;
+selected runs write one report and raw child evidence under the caller's named
+output. The five drivers, bridge child/page assets and UI probe now live in
+`tools/performance/`. Three Plan/receipt/UI benchmark scripts, three private
+certification validators and the old UI probe were retired with their direct
+callers; the three collected test modules retain independent fixture/action,
+failure and current rootless-view assertions. Setup/task-shell children and
+shared headed helpers were inspected as regression consumers. Tools use the
+uncollected native helper, not collected test modules; the frozen SH-G-8 sizer
+remains at its custody path. The bridge case labels archived-HEAD product and
+working-tree driver source separately. Retained history release checks remain
+in its selected `release` case; the small `smoke` case does not close them.
+
+The 22 Plan component IDs underwent a finite result-kind and current-fixture
+audit. Twenty-one non-memory cases matched after explicit rootless adaptation
+of unchanged-window total, hostile-search row count and the visible-folder
+collapse action; the memory case matched after rootless base/staged window
+totals and retained-byte sample-kind correction. The frozen contract and raw
+JSON remain unchanged. Installed receipt cases and execution UI cases reuse
+the current rootless view adapter and include resolved installed package path
+and version in child observations. A selected real installed receipt case
+completed with six exact samples and a released session; the earlier sandboxed
+attempt timed out with bounded Job cleanup and remains incomplete evidence.
+Bridge native timeout remains an unknown-cause diagnostic, not a claimed v5
+repair. The finite retirement and evidence dispositions are in ignored
+`build/post-m1-8-ablation-20260925/ab2-migration.md`.
 
 Activate E1 atomically in DEFENSE, PERFORMANCE, affected BRIDGE/PRESENTATION
 criteria, TESTS/TOOLS and callers: Plan/UI latency and empirical representation
@@ -547,16 +597,25 @@ before closeout; unsupported pre-existing leads remain explicitly deferred.
 
 ### Resumption block
 
-- Current checkpoint: AB-1 complete; the full AB batch is active. AB-2 is next;
+- Current checkpoint: AB-1/AB-2 complete; the full AB batch is active;
   remaining rows await their named dependencies, not repeated activation.
-- Existing evidence: `build/post-m1-8-ablation-20260925/` contains study runs,
-  scripts and `reconciliation-checks.json`; five archived studies are accounted
-  in the current study §13. No product tests or new benchmarks run for this plan.
+- Existing evidence: `build/post-m1-8-ablation-20260925/` contains the study,
+  AB-1 checks and AB-2 migration map, selected reports, raw failed child logs,
+  focused results, `ab2-ordinary.log/xml`, `ab2-raw-json-verification.json`
+  and history/bridge lane receipts. Five archived studies are accounted in the
+  current study §13.
 - AB-1 verification: `ab1-checks.json` and `ab1-review.md` in that evidence root
   record documentation-only scope, 320 links, source figures, matching A6 trees
   and independent review/correction. No product tests are an AB-1 gate.
-- Next action: refresh `ab2-design.md` against this commit, then implement AB-2.
-  Preserve current gate status until its producers and consumers move together.
+- Next action: integrate reviewed AB-3 commit `c5f1de8`, then refresh AB-4's
+  prepared design against the integrated tree. The frozen AB-2 tool/consumer source
+  passed 95 focused tests, 5,302 ordinary tests (four skipped, 33 deselected),
+  33 installed interface tests, 12 import checks, 233 active/incoming links,
+  independent review and selected installed receipt/UI
+  cases. A later test-only stronger exact COPY-ID assertion passed its focused
+  rerun; unaffected ordinary evidence remains valid by dependency. Historical
+  bytes were checked in `ab2-raw-json-verification.json`. A product or test
+  correction invalidates its dependent gate evidence.
 - Current AB-1 documentation check:
   `.\.venv\Scripts\python.exe build\post-m1-8-ablation-20260925\scripts\ab1_checks.py`.
   It checks source-linked figures, integration identity, changed/incoming links,
@@ -567,7 +626,8 @@ before closeout; unsupported pre-existing leads remain explicitly deferred.
   without feature reduction. D6 scheduled allocation later, S5/L6/tracer
   retirement deferred. Rejected L5/L7/L8/L9 stay in the study's compact table.
 - Preserve all raw JSON, existing build evidence, unrelated work, branch refs and
-  stashes. No DOC-2 operations, push or PR. Commit only verified task-owned docs.
+  stashes. No DOC-2 operations, push or PR. Commit only verified task-owned
+  tools, tests and matching docs.
 - Stop for AGENTS mandatory safety conditions, changed accepted outcome/ownership/
   safety boundary, or recurrence thresholds. Investigate finite affected consumers
   before proposing escalation; do not silently grow this register. A red test of

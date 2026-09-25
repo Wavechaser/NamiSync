@@ -9,6 +9,7 @@ import os
 import sys
 import zipfile
 from collections import deque
+from contextlib import nullcontext
 from datetime import datetime, timezone
 from pathlib import Path
 from threading import Condition, Lock
@@ -21,10 +22,11 @@ from namisync.interfaces.web.readiness import CommandPhase, ReadinessContext
 
 
 ROOT = Path(__file__).parents[2]
-PARENT = ROOT / "bridge_event_benchmark.py"
-CHILD = Path(__file__).with_name("_bridge_event_benchmark_child.py")
+FAMILY = ROOT.parent / "tools" / "performance" / "bridge_event"
+PARENT = FAMILY / "__init__.py"
+CHILD = FAMILY / "child.py"
 RETAINED = Path(__file__).with_name("_bridge_retained_memory.py")
-ASSETS = ROOT / "assets" / "bridge_event_benchmark"
+ASSETS = FAMILY / "assets"
 _OPEN_CONTEXT = ReadinessContext(CommandPhase.OPEN, 0)
 
 
@@ -64,6 +66,97 @@ def _retained_module():
     return module
 
 
+def test_bridge_event_benchmark_keeps_structured_incomplete_evidence(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    benchmark = _benchmark_module()
+    monkeypatch.setattr(benchmark, "_benchmark_root", lambda *_args: nullcontext(tmp_path))
+    monkeypatch.setattr(
+        benchmark,
+        "_build_archived_wheel",
+        lambda _root: (tmp_path / "wheel.whl", "a" * 40, (" M driver",)),
+    )
+    def fail_install(*_args):
+        raise RuntimeError("install failed")
+
+    monkeypatch.setattr(benchmark, "_install_wheel", fail_install)
+
+    result = benchmark.run_case("installed", output=tmp_path / "report.json")
+
+    assert result["status"] == "incomplete"
+    assert result["failure"] == {
+        "exception_type": "RuntimeError",
+        "message": "install failed",
+    }
+    assert result["tested_commit"] == "a" * 40
+    assert result["worktree_status"] == [" M driver"]
+    assert result["product_source"] == {
+        "kind": "git-archive-head", "revision": "a" * 40,
+    }
+    assert result["driver_source"]["kind"] == "working-tree"
+    assert result["memory"]["job_private_memory"] == {}
+    assert result["partial_evidence"] == {}
+
+
+def test_bridge_event_benchmark_cli_publishes_incomplete_observation(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from tools import __main__ as tool_cli
+    from tools.performance import bridge_event
+
+    monkeypatch.setattr(bridge_event, "_benchmark_root", lambda *_args: nullcontext(tmp_path))
+    monkeypatch.setattr(
+        bridge_event,
+        "_build_archived_wheel",
+        lambda _root: (tmp_path / "wheel.whl", "b" * 40, (" M driver",)),
+    )
+
+    def fail_install(*_args):
+        raise RuntimeError("install failed")
+
+    monkeypatch.setattr(bridge_event, "_install_wheel", fail_install)
+    output = tmp_path / "report.json"
+    args = SimpleNamespace(
+        list_cases=False, family="bridge-event", case="installed",
+        json=output, installed_root=None,
+    )
+
+    assert tool_cli._run_performance_command(args) == 2
+    report = json.loads(output.read_text(encoding="utf-8"))
+    assert report["status"] == "incomplete"
+    assert report["observation"]["tested_commit"] == "b" * 40
+    assert report["observation"]["worktree_status"] == [" M driver"]
+    assert report["observation"]["failure"]["message"] == "install failed"
+
+
+def test_bridge_event_benchmark_preserves_raw_child_failure_without_overwrite(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> None:
+    benchmark = _benchmark_module()
+    monkeypatch.setattr(benchmark, "REPOSITORY_ROOT", tmp_path / "repository")
+    output = tmp_path / "report.json"
+    raw_artifacts: dict[str, str] = {}
+
+    with pytest.raises(RuntimeError, match="child stopped"):
+        with benchmark._benchmark_root(output, raw_artifacts) as root:
+            milestones = root / "child-evidence"
+            milestones.mkdir()
+            (milestones / "failure.json").write_bytes(b'{"failure":true}')
+            (root / "child-evidence.json.samples.jsonl").write_bytes(b'{"sample":1}\n')
+            raise RuntimeError("child stopped")
+
+    preserved = Path(raw_artifacts["path"])
+    assert preserved == tmp_path / "report.json.raw-incomplete"
+    assert not root.exists()
+    assert (preserved / "child-evidence" / "failure.json").read_bytes() == b'{"failure":true}'
+    assert (preserved / "child-evidence.json.samples.jsonl").read_bytes() == b'{"sample":1}\n'
+    scratch = tmp_path / "scratch" / "child-evidence"
+    scratch.mkdir(parents=True)
+    (scratch / "failure.json").write_bytes(b"later")
+    with pytest.raises(FileExistsError):
+        benchmark._preserve_failure_evidence(output, scratch.parent)
+
+
 def test_bridge_event_benchmark_sources_compile_and_keep_test_seams_external() -> None:
     parent = PARENT.read_text(encoding="utf-8")
     child = CHILD.read_text(encoding="utf-8")
@@ -76,7 +169,7 @@ def test_bridge_event_benchmark_sources_compile_and_keep_test_seams_external() -
     compile(parent, str(PARENT), "exec")
     compile(child, str(CHILD), "exec")
     compile(retained, str(RETAINED), "exec")
-    assert "git archive" in parent
+    assert '"archive", "--format=zip"' in parent
     assert "pip\",\n            \"wheel" in parent
     assert "WorkflowRegistration" in child
     assert "TaskRegistry" not in browser

@@ -1027,6 +1027,28 @@ repeated machinery while preserving operational safety and boundary contracts.
 Safety, settlement, authority, and measurement work made high-risk release
 claims explicit, independently reviewable, and regression-backed.
 
+#### Move optional performance cases into tools (2026-09-25)
+
+- Add selected Plan component, installed execution receipt/UI, bridge-event and
+  history cases under `python -m tools performance`; retain raw samples,
+  installed/runtime and driver provenance, bounded children and truthful
+  incomplete reports. Bridge's archived product and working-tree driver are
+  labeled separately; the unassigned event-v5 migration remains outside scope.
+- Retire the Plan/M1-8 readiness, collection-index, source-hash and legacy
+  certificate runners with their direct test callers. Preserve unchanged
+  historical JSON/contract/authority bytes, actual rootless fixture/action
+  checks, counted-work witnesses, SH-G-8 custody, history release criteria,
+  SH-G-15 and executor settlement. Plan/UI latency and empirical
+  representation-memory observations are advisory under DEFENSE §7.
+- Verify 95 focused Plan/receipt/UI/bridge/headed-evidence controls, 5,302
+  ordinary passes (four skips), 12 import checks, and real selected Plan cold,
+  visible-folder collapse, memory and installed receipt/UI cases. A stronger
+  independent scoped COPY-ID assertion passed its focused rerun. One sandboxed
+  native receipt launch and the bridge launch remain incomplete, with bounded
+  cleanup and available failure evidence; the same receipt endpoint completed
+  under normal desktop access. All 33 installed interface tests passed, along
+  with independent adversarial review and 233 documentation links.
+
 #### Centralize measurement records and simplify delivery history (2026-09-25)
 
 - Activate the accepted AB-1–AB-10 batch. AB-1 makes the user-owned small-change

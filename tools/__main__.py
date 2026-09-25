@@ -198,6 +198,16 @@ def _parser() -> argparse.ArgumentParser:
     )
     executor.set_defaults(handler=_run_executor_command)
 
+    performance = subcommands.add_parser(
+        "performance", help="run a selected optional performance case"
+    )
+    performance.add_argument("family", nargs="?")
+    performance.add_argument("case", nargs="?")
+    performance.add_argument("--list", action="store_true", dest="list_cases")
+    performance.add_argument("--json", type=Path)
+    performance.add_argument("--installed-root", type=Path)
+    performance.set_defaults(handler=_run_performance_command)
+
     generate = subcommands.add_parser("generate", help="write a deterministic corpus")
     generate.add_argument("root", type=Path)
     generate.add_argument("spec", help="count@size groups, e.g. 2000@4KiB,100@1MiB")
@@ -218,6 +228,43 @@ def _parser() -> argparse.ArgumentParser:
     )
     clean.set_defaults(handler=_run_clean_command)
     return parser
+
+
+def _run_performance_command(args: argparse.Namespace) -> int:
+    from . import performance
+
+    if args.list_cases:
+        if args.family is not None or args.case is not None or args.json is not None:
+            raise ToolError("--list takes no family, case, or output")
+        for family, cases in performance.list_cases().items():
+            print(f"{family}: {', '.join(cases)}")
+        return 0
+    if not args.family or not args.case or args.json is None:
+        raise ToolError("performance requires family, case, and --json output")
+    repository = Path(__file__).resolve().parents[1]
+    requested = args.json.resolve()
+    if requested.is_relative_to(repository) and not requested.is_relative_to(repository / "build"):
+        raise ToolError("performance output inside the repository must be under build/")
+    destination = _output_destination(
+        args.json, "performance report", roots=(("source tree", repository / "namisync"),),
+        replace=False,
+    )
+    destination.path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        report = performance.run_case(
+            args.family, args.case, output=destination.path,
+            installed_root=args.installed_root.resolve() if args.installed_root else None,
+        )
+    except Exception as error:
+        report = performance.failure_report(args.family, args.case, error)
+        _write_report(destination, report)
+        print(f"performance case failed: {error}", file=sys.stderr)
+        return 2
+    _write_report(destination, report)
+    if report["status"] == "incomplete":
+        print(f"performance case incomplete; see {destination.path}", file=sys.stderr)
+        return 2
+    return 0
 
 
 def _positive_int(value: str) -> int:

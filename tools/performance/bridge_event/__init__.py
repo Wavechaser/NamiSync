@@ -1,16 +1,7 @@
-r"""Opt-in installed-wheel WebView2 benchmark for SH-G-8/BR-G-42.
-
-Run from the repository root after committing the harness::
-
-    .\.venv\Scripts\python.exe tests\bridge_event_benchmark.py --output "$env:TEMP\namisync-bridge-event-benchmark.json"
-
-The wheel is built from ``git archive HEAD``. The script is intentionally not
-named ``test_*.py`` because its event fixture runs for a real 60 seconds.
-"""
+"""Selected installed-wheel WebView2 bridge event diagnostic."""
 
 from __future__ import annotations
 
-import argparse
 import ctypes
 import hashlib
 import json
@@ -25,14 +16,15 @@ import sys
 import tempfile
 import time
 import zipfile
+from contextlib import contextmanager
 from ctypes import wintypes
 from functools import lru_cache
 from pathlib import Path
 from uuid import uuid4
 
 
-REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
-WEB_TEST_ROOT = Path(__file__).resolve().parent / "interfaces" / "web"
+REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
+WEB_TEST_ROOT = REPOSITORY_ROOT / "tests" / "interfaces" / "web"
 if str(WEB_TEST_ROOT) not in sys.path:
     sys.path.insert(0, str(WEB_TEST_ROOT))
 
@@ -53,8 +45,60 @@ from _headed_native import (  # noqa: E402
 from _headed_evidence import EvidencePaths, EvidenceReader  # noqa: E402
 
 
-_CHILD = WEB_TEST_ROOT / "_bridge_event_benchmark_child.py"
-_ASSETS = Path(__file__).resolve().parent / "assets" / "bridge_event_benchmark"
+_CHILD = Path(__file__).with_name("child.py")
+_ASSETS = Path(__file__).with_name("assets")
+CASES = ("installed",)
+
+
+def _source_labels(commit: str | None, status: tuple[str, ...]) -> dict[str, object]:
+    return {
+        "product_source": {"kind": "git-archive-head", "revision": commit},
+        "driver_source": {
+            "kind": "working-tree",
+            "path": "tools/performance/bridge_event",
+            "checkout_dirty": None if commit is None else bool(status),
+        },
+    }
+
+
+def _preserve_failure_evidence(output: Path, root: Path) -> Path | None:
+    files = [
+        *(path for path in (root / "child-evidence").glob("*") if path.is_file()),
+        *(path for path in root.glob("child-evidence.json*") if path.is_file()),
+        *(path for path in (root / "data").glob("benchmark.*") if path.is_file()),
+    ]
+    if not files:
+        return None
+    destination = output.with_name(output.name + ".raw-incomplete")
+    if destination.exists():
+        raise FileExistsError(f"raw bridge evidence already exists: {destination}")
+    with tempfile.TemporaryDirectory(prefix=".bridge-raw-", dir=output.parent) as raw:
+        stage = Path(raw)
+        for source in files:
+            relative = source.relative_to(root)
+            target = stage / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, target)
+        stage.rename(destination)
+    return destination
+
+
+@contextmanager
+def _benchmark_root(output: Path, raw_artifacts: dict[str, str]):
+    with tempfile.TemporaryDirectory(
+        prefix=".namisync-bridge-benchmark-", dir=REPOSITORY_ROOT.parent
+    ) as raw:
+        root = Path(raw).resolve()
+        try:
+            yield root
+        except BaseException:
+            try:
+                retained = _preserve_failure_evidence(output, root)
+                if retained is not None:
+                    raw_artifacts["path"] = str(retained)
+            except Exception as error:
+                raw_artifacts["preservation_error"] = f"{type(error).__name__}: {error}"
+            raise
 _RELIABLE_P95_MAX_MS = 100.0
 _RELIABLE_MAX_MS = 250.0
 _PROGRESS_P95_MAX_MS = 1_000.0
@@ -144,12 +188,6 @@ class _ThreadEntry32(ctypes.Structure):
         ("tpDeltaPri", wintypes.LONG),
         ("dwFlags", wintypes.DWORD),
     )
-
-
-def _arguments() -> argparse.Namespace:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--output", required=True, type=Path)
-    return parser.parse_args()
 
 
 def _run(
@@ -258,8 +296,7 @@ def _install_wheel(root: Path, wheel: Path) -> Path:
 
 def _stage_page(root: Path, python: Path, archived_source: Path) -> Path:
     page = root / "page"
-    archived_assets = archived_source / "tests" / "assets" / _ASSETS.name
-    shutil.copytree(archived_assets, page)
+    shutil.copytree(_ASSETS, page)
     shutil.copy2(
         archived_source / "tests" / "assets" / "bootstrap_test_bridge.js",
         page / "bootstrap_test_bridge.js",
@@ -1967,6 +2004,34 @@ def _summarize(
         and "Runtime: .NET Framework" in evidence["clr_runtime"]
     )
     machine = _machine(benchmark_root)
+    measurement_valid = bool(
+        samples_valid
+        and sessions_valid
+        and {sample["session_id"] for sample in samples} == set(session_ids)
+        and len(session_evidence) == 4
+        and all(session["valid"] for session in session_evidence)
+        and len(terminal_event_samples) == 4
+        and len(terminal_record_samples) == 4
+        and terminal_arrays_match
+        and browser.get("terminal_record_count") == 4
+        and browser.get("task_count") == 4
+        and "failure" not in browser
+        and gaps == []
+        and browser.get("progress_monotonic") is True
+        and evidence.get("browser_presented") is True
+        and evidence.get("complete") is True
+        and len(progress) >= 120
+        and producer_counts_exact
+        and evidence.get("startup_errors") == []
+        and evidence.get("exit_code") == 0
+        and evidence.get("production_command_names") == production_names
+        and evidence.get("combined_command_names") == combined_names
+        and type(packages.get("namisync")) is str
+        and bool(packages["namisync"])
+        and type(evidence.get("webview2")) is str
+        and bool(evidence["webview2"])
+        and memory_evidence_complete
+    )
     event_passed = bool(
         samples_valid
         and sessions_valid
@@ -2004,9 +2069,11 @@ def _summarize(
     )
     return {
         "schema_version": 1,
+        **_source_labels(commit, status),
         "gate": "SH-G-8 event limb / BR-G-42 bridge event envelope",
         "passed": event_passed,
         "event_passed": event_passed,
+        "measurement_valid": measurement_valid,
         "sh_g_8_acceptance": "incomplete-without-custody",
         "tested_commit": commit,
         "worktree_status": list(status),
@@ -2052,9 +2119,12 @@ def _failure_result(
     status: tuple[str, ...],
     evidence: dict[str, object],
     job_memory: dict[str, object],
+    raw_artifacts: dict[str, str],
 ) -> dict[str, object]:
     return {
         "schema_version": 1,
+        "status": "incomplete",
+        **_source_labels(commit, status),
         "gate": "SH-G-8 event limb / BR-G-42 bridge event envelope",
         "passed": False,
         "event_passed": False,
@@ -2071,34 +2141,30 @@ def _failure_result(
             "whole_runtime_acceptance": "not-defined",
         },
         "partial_evidence": evidence,
+        "raw_evidence": raw_artifacts,
     }
 
 
-def main() -> int:
-    arguments = _arguments()
-    output = arguments.output.resolve()
-    output.parent.mkdir(parents=True, exist_ok=True)
+def run_case(
+    case: str, *, output: Path, installed_root: Path | None = None
+) -> dict[str, object]:
+    if case not in CASES:
+        raise ValueError(f"unknown bridge event case: {case}")
+    if installed_root is not None:
+        raise ValueError("bridge event builds its own archived installed wheel")
     commit: str | None = None
     status: tuple[str, ...] = ()
     evidence: dict[str, object] = {}
     job_memory: dict[str, object] = {}
+    raw_artifacts: dict[str, str] = {}
     try:
-        with tempfile.TemporaryDirectory(
-            prefix=".namisync-bridge-benchmark-",
-            dir=REPOSITORY_ROOT.parent,
-        ) as raw:
-            root = Path(raw).resolve()
+        with _benchmark_root(output, raw_artifacts) as root:
             wheel, commit, status = _build_archived_wheel(root)
             python = _install_wheel(root, wheel)
             index = _stage_page(root, python, root / "source")
-            child = (
-                root
-                / "source"
-                / "tests"
-                / "interfaces"
-                / "web"
-                / _CHILD.name
-            )
+            child = root / "source" / "tools" / "performance" / "bridge_event" / "child.py"
+            child.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(_CHILD, child)
             data_dir = root / "data"
             evidence_path = root / "child-evidence.json"
             evidence_root = root / "child-evidence"
@@ -2203,20 +2269,14 @@ def main() -> int:
             status=status,
             evidence=evidence,
             job_memory=job_memory,
+            raw_artifacts=raw_artifacts,
         )
-    output.write_text(
-        json.dumps(result, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
-    summary_keys = ("passed", "progress", "reliable_and_terminal", "memory")
-    print(
-        json.dumps(
-            {key: result.get(key) for key in summary_keys},
-            indent=2,
-        )
-    )
-    return 0 if result["passed"] else 1
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+    if result.get("measurement_valid") is not True:
+        result["status"] = "incomplete"
+        result.setdefault("failure", {
+            "exception_type": "IncompleteEvidence",
+            "message": "bridge event fixture or sample evidence is incomplete",
+        })
+    else:
+        result["status"] = "complete"
+    return result

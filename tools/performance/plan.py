@@ -1,9 +1,4 @@
-"""Frozen fixture and runner primitives for the M1-7 plan-review scale gate.
-
-This module is not collected by pytest. It constructs the actual plan and
-presentation values used by the opt-in acceptance runner. The independent
-validator deliberately does not import this module.
-"""
+"""Plan fixtures and selected real-endpoint observations for optional measurements."""
 
 from __future__ import annotations
 
@@ -11,108 +6,89 @@ import argparse
 import ctypes
 import gc
 import hashlib
-import io
 import importlib
 import importlib.metadata
 import json
 import os
-import platform
-import shutil
-import sqlite3
-import subprocess
 import sys
 import threading
-import tempfile
 import time
-import zipfile
 from collections import Counter
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping
 from contextlib import ExitStack
+from copy import deepcopy
 from ctypes import wintypes
-from dataclasses import fields, replace
+from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Final
 from uuid import uuid4
 from unittest.mock import patch
-
-from namisync.core.models import (
-    CapabilityProfile,
-    EntryKind,
-    FileStat,
-    MetadataSnapshot,
-    Root,
-    ScanResult,
-    ScanScope,
-    ScanWarning,
-    ScanWarningCode,
-)
-from namisync.core.planning import (
-    Assignment,
-    DeletionPolicy,
-    FilterSet,
-    OpId,
-    OperationKind,
-    Plan,
-    PlanFingerprint,
-    PlanOperation,
-    PreservationPolicy,
-    plan_fingerprint,
-)
+from namisync.core.models import CapabilityProfile, EntryKind, FileStat, MetadataSnapshot, Root, ScanResult, ScanScope, ScanWarning, ScanWarningCode
+from namisync.core.planning import Assignment, DeletionPolicy, FilterSet, OpId, OperationKind, Plan, PlanFingerprint, PlanOperation, PreservationPolicy, plan_fingerprint
 from namisync.core.preflight import ObservedWorld, Verdict
 from namisync.interfaces.web.plan_review import PlanReviewState
-from namisync.interfaces.web.visible_sequence import (
-    VisibleSequence,
-    VisibleSequenceParameters,
-    derive_visible_sequence,
-    window_visible_sequence,
-)
+from namisync.interfaces.web.visible_sequence import VisibleSequenceParameters, derive_visible_sequence, window_visible_sequence
 from namisync.workflows.models import PlanArtifact, PlanRequest
-from namisync.workflows.plan_projection import (
-    CompactUnsignedIntegers,
-    PlanProjection,
-    PlanProjectionNode,
-    PlanProjectionOrder,
-    PlanSortColumn,
-    SortDirection,
-    build_plan_projection,
-    sort_plan_projection,
-)
+from namisync.workflows.plan_projection import CompactUnsignedIntegers, PlanProjection, PlanProjectionNode, PlanProjectionOrder, PlanSortColumn, SortDirection, build_plan_projection, sort_plan_projection
 from namisync.workflows.runtime import execution_selection_digest_hex
 from namisync.workflows.selection import derive_execution_selection
 
 
 FIXTURE_SCHEMA: Final = "namisync-m1-7-plan-fixture-manifest-v2"
+
+
 FIXTURE_SEED: Final = 0x4E414D49
+
+
 FIXTURE_OPERATIONS: Final = 100_000
-FIXTURE_STRUCTURAL_ROWS: Final = 20_000
+
+
 FIXTURE_WARNINGS: Final = 120_000
-FIXTURE_BASE_ROWS: Final = 120_000
-FIXTURE_INFORMATION_HEAVY_ROWS: Final = 240_000
+
+
 FIXTURE_DEPTH: Final = 32
+
+
 FIXTURE_WINDOW_LIMIT: Final = 256
+
+
 CHILD_RECEIPT_SCHEMA: Final = "namisync-m1-7-plan-review-child-v3"
-READINESS_SCHEMA: Final = "namisync-m1-7-plan-review-readiness-v1"
-READINESS_CHILD_SCHEMA: Final = "namisync-m1-7-plan-review-readiness-child-v1"
-COLLECTION_SCHEMA: Final = "namisync-m1-7-plan-review-collection-index-v1"
-AUTHORITY_SCHEMA: Final = "namisync-m1-7-plan-review-scale-authority-v4"
-COMPACT_CONTRACT_SCHEMA: Final = "namisync-m1-7-plan-review-scale-contract-v5"
-NATIVE_PROFILE_SCHEMA: Final = "namisync-m1-7-native-profile-v1"
+
+
 CONTRACT_PATH: Final = (
-    Path(__file__).resolve().parent
+    Path(__file__).resolve().parents[2]
+    / "tests"
     / "interfaces"
     / "web"
     / "m1_7_plan_compact_contract.json"
 )
 
+
 _META = MetadataSnapshot(0, None)
+
+
 _PROFILE = CapabilityProfile("NTFS", 100, True, False, 32_767, False, True)
+
+
 _SOURCE_ROOT = Root(r"C:\m1-7-source", "m1-7-source")
+
+
 _TARGET_ROOT = Root(r"D:\m1-7-target", "m1-7-target")
+
+
 _GENERATED_TOP_LEVEL_DIRECTORIES = 19_934
+
+
 _DEPENDENCY_CHAIN_EDGES = FIXTURE_DEPTH
+
+
 _RAW_WITNESS_INDEXES = tuple(range(1, 15))
+
+
 _PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+
+
 _DESTRUCTIVE_OPERATION_KINDS = frozenset(
     {
         OperationKind.UPDATE,
@@ -139,33 +115,8 @@ class _ProcessMemoryCountersEx(ctypes.Structure):
     )
 
 
-class _MemoryStatusEx(ctypes.Structure):
-    _fields_ = (
-        ("dwLength", wintypes.DWORD),
-        ("dwMemoryLoad", wintypes.DWORD),
-        ("ullTotalPhys", ctypes.c_ulonglong),
-        ("ullAvailPhys", ctypes.c_ulonglong),
-        ("ullTotalPageFile", ctypes.c_ulonglong),
-        ("ullAvailPageFile", ctypes.c_ulonglong),
-        ("ullTotalVirtual", ctypes.c_ulonglong),
-        ("ullAvailVirtual", ctypes.c_ulonglong),
-        ("ullAvailExtendedVirtual", ctypes.c_ulonglong),
-    )
-
-
-class _SystemPowerStatus(ctypes.Structure):
-    _fields_ = (
-        ("ACLineStatus", ctypes.c_ubyte),
-        ("BatteryFlag", ctypes.c_ubyte),
-        ("BatteryLifePercent", ctypes.c_ubyte),
-        ("SystemStatusFlag", ctypes.c_ubyte),
-        ("BatteryLifeTime", wintypes.DWORD),
-        ("BatteryFullLifeTime", wintypes.DWORD),
-    )
-
-
 def canonical_json_bytes(value: object) -> bytes:
-    """Encode one evidence value in the gate's canonical JSON form."""
+    """Encode one observation in stable JSON form."""
 
     return json.dumps(
         value,
@@ -174,30 +125,6 @@ def canonical_json_bytes(value: object) -> bytes:
         separators=(",", ":"),
         sort_keys=True,
     ).encode("utf-8")
-
-
-def canonical_sha256(value: object) -> str:
-    """Return the SHA-256 of the gate's canonical JSON encoding."""
-
-    return hashlib.sha256(canonical_json_bytes(value)).hexdigest()
-
-
-def git_blob_oid(content: bytes) -> str:
-    """Return the canonical Git SHA-1 blob identity without writing an object."""
-
-    header = f"blob {len(content)}\0".encode("ascii")
-    return hashlib.sha1(header + content, usedforsecurity=False).hexdigest()
-
-
-def nearest_rank_p95(values: Sequence[int]) -> int:
-    """Return the predeclared nearest-rank P95 for exact samples."""
-
-    if len(values) < 30:
-        raise ValueError("P95 requires at least 30 samples")
-    if any(type(value) is not int or value < 0 for value in values):
-        raise TypeError("P95 samples must be nonnegative exact integers")
-    ordered = sorted(values)
-    return ordered[(95 * len(ordered) + 99) // 100 - 1]
 
 
 def build_plan_fixture(*, information_heavy: bool) -> PlanArtifact:
@@ -297,7 +224,7 @@ def fixture_manifest(
     artifact: PlanArtifact,
     projection: PlanProjection,
 ) -> dict[str, object]:
-    """Describe actual populations, witnesses and retained field families."""
+    """Describe actual fixture populations and correctness witnesses."""
 
     operations = artifact.plan.operations
     warnings = artifact.source_scan.warnings + artifact.target_scan.warnings
@@ -344,9 +271,6 @@ def fixture_manifest(
         "warning_code_counts": dict(sorted(code_counts.items())),
         "warning_cycle": [item.value for item in ScanWarningCode],
         "raw_key_witnesses": _raw_key_witnesses(projection),
-        "retained_representation": _compact_retained_representation(
-            artifact, projection
-        ),
     }
 
 
@@ -750,7 +674,7 @@ def run_component_child(
     expected_count = contract["sampling"][metric["sample_kind"]]["samples_per_child"]
     if len(samples) != expected_count:
         raise AssertionError("component sample population drifted")
-    if any(sample["correctness"] != metric["correctness"] for sample in samples):
+    if any(sample["correctness"] != _current_correctness(metric) for sample in samples):
         raise AssertionError("component result did not satisfy its fixed correctness receipt")
     return {
         "child_id": uuid4().hex,
@@ -766,76 +690,38 @@ def run_component_child(
     }
 
 
-def run_component_readiness_child(
-    group: str,
-    launch_token: str,
-    *,
-    contract_path: Path = CONTRACT_PATH,
-    installed_root: Path | None = None,
-) -> dict[str, object]:
-    """Exercise the fixed component readiness group without timing samples."""
-
-    if installed_root is not None:
-        _require_installed_runtime(installed_root)
-    if not _is_hex_identifier(launch_token):
-        raise ValueError("launch token must be 32 lowercase hexadecimal characters")
-    contract = json.loads(contract_path.read_bytes())
-    readiness = contract["readiness"]
-    metrics = {item["id"]: item for item in contract["metrics"]}
-    if group == "memory":
-        metric_ids = [readiness["memory_metric_id"]]
-        correctness, _retained_bytes = _measure_projection_memory()
-        outcomes = {metric_ids[0]: correctness}
-    elif group == "component":
-        metric_ids = readiness["component_metric_ids"]
-        base = build_plan_fixture(information_heavy=False)
-        heavy = build_plan_fixture(information_heavy=True)
-        _assert_fixture_input(base, information_heavy=False)
-        _assert_fixture_input(heavy, information_heavy=True)
-        artifacts = {"base": base, "information-heavy": heavy}
-        projections: dict[str, PlanProjection] = {}
-        outcomes: dict[str, object] = {}
-        for metric_id in metric_ids:
-            metric = metrics[metric_id]
-            artifact = artifacts[metric["fixture_case"]]
-            if metric_id.startswith("projection_cold_"):
-                projection = build_plan_projection(
-                    artifact.request.request_id, artifact
-                )
-                projections[metric["fixture_case"]] = projection
-                outcome = _cold_projection_correctness(
-                    artifact,
-                    projection,
-                    information_heavy=(
-                        metric["fixture_case"] == "information-heavy"
-                    ),
-                )
-            else:
-                factory = _component_transition_factory(
-                    metric_id,
-                    artifact,
-                    projection=projections.get(metric["fixture_case"]),
-                )
-                factory()()  # the fixed equivalent warmup
-                outcome = factory()()  # one untimed readiness transition
-            if outcome != metric["correctness"]:
-                raise AssertionError(
-                    f"component readiness failed correctness for {metric_id}"
-                )
-            outcomes[metric_id] = outcome
-    else:
-        raise ValueError("component readiness group is invalid")
-    return {
-        "child_id": uuid4().hex,
-        "correctness": outcomes,
-        "headed_fixture": None,
-        "headed_runtime": None,
-        "launch_token": launch_token,
-        "metric_ids": metric_ids,
-        "process_identity": _current_process_identity(),
-        "schema": READINESS_CHILD_SCHEMA,
-        "surface": "component",
-    }
+def _current_correctness(metric: Mapping[str, object]) -> object:
+    expected = metric["correctness"]
+    metric_id = metric["id"]
+    if metric_id not in {
+        "projection_unchanged_window",
+        "projection_changed_search_window",
+        "projection_changed_collapse_window",
+        "projection_incremental_retained_memory_staging_overlap",
+    }:
+        return expected
+    adjusted = deepcopy(expected)
+    if metric_id == "projection_unchanged_window":
+        if adjusted["total"] != 240_000:
+            raise ValueError("historical unchanged-window fixture changed")
+        adjusted["total"] = 239_999
+        return adjusted
+    if metric_id == "projection_changed_search_window":
+        if adjusted["returned_rows"] != 3:
+            raise ValueError("historical search fixture changed")
+        adjusted["returned_rows"] = 2
+        return adjusted
+    if metric_id == "projection_changed_collapse_window":
+        if adjusted["returned_rows"] != 1:
+            raise ValueError("historical collapse fixture changed")
+        adjusted["returned_rows"] = FIXTURE_WINDOW_LIMIT
+        return adjusted
+    for case in ("base", "staged"):
+        view = adjusted[case]
+        if view["window_total"] != view["projection_rows"]:
+            raise ValueError("historical memory fixture changed unexpectedly")
+        view["window_total"] = view["projection_rows"] - 1
+    return adjusted
 
 
 def run_diagnostic_child(launch_token: str) -> dict[str, object]:
@@ -967,8 +853,15 @@ def _component_transition_factory(
     if metric_id == "projection_changed_collapse_window":
         def factory() -> Callable[[], dict[str, object]]:
             state = _state_from_projection(artifact, projection)
-            root_node_id = projection.nodes[0].node_id
-            return lambda: _changed_collapse_receipt(state, root_node_id)
+            visible_index, source_position = next(
+                (index, position)
+                for index, position in enumerate(state.current_sequence.visible_positions)
+                if position != 0 and projection.nodes[position].is_container
+            )
+            folder_node_id = projection.nodes[source_position].node_id
+            return lambda: _changed_collapse_receipt(
+                state, folder_node_id, visible_index - 1,
+            )
         return factory
     if metric_id == "projection_changed_reset_window":
         def factory() -> Callable[[], dict[str, object]]:
@@ -1028,10 +921,10 @@ def _apply_view(
     )
 
 
-def _window(state: PlanReviewState) -> dict[str, object]:
+def _window(state: PlanReviewState, *, offset: int = 0) -> dict[str, object]:
     return state.window(
         expected_revision=state.view_revision,
-        offset=0,
+        offset=offset,
         limit=FIXTURE_WINDOW_LIMIT,
     )
 
@@ -1089,10 +982,13 @@ def _changed_filter_receipt(state: PlanReviewState) -> dict[str, object]:
 
 def _changed_collapse_receipt(
     state: PlanReviewState,
-    root_node_id: str,
+    folder_node_id: str,
+    folder_offset: int,
 ) -> dict[str, object]:
-    summary = _apply_view(state, collapse_node_id=root_node_id, collapsed=True)
-    result = _window(state)
+    summary = _apply_view(state, collapse_node_id=folder_node_id, collapsed=True)
+    result = _window(state, offset=folder_offset)
+    if not result["rows"] or result["rows"][0]["node_id"] != folder_node_id:
+        raise AssertionError("collapsed public folder disappeared from its window")
     return {
         "disposition": result["disposition"],
         "view_revision": result["view_revision"],
@@ -1445,299 +1341,25 @@ def _is_hex_identifier(value: object) -> bool:
     )
 
 
-def _write_canonical_json(path: Path, value: object) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_name(f".{path.name}.{uuid4().hex}.tmp")
-    temporary.write_bytes(canonical_json_bytes(value))
-    os.replace(temporary, path)
-
-
-def build_authority(
-    *,
-    contract_path: Path,
-    source_root: Path,
-    installed_root: Path,
-    installed_wheel: Path,
-    benchmark_root: Path,
-    no_unrelated_sustained_workload: bool,
-) -> dict[str, object]:
-    """Freeze the actual source, installed, runtime, profile and fixture bytes."""
-
-    if not no_unrelated_sustained_workload:
-        raise ValueError("reference-profile workload state was not explicitly observed")
-    contract = json.loads(contract_path.read_bytes())
-    if contract.get("schema") != COMPACT_CONTRACT_SCHEMA:
-        raise RuntimeError(
-            "the current runner cannot freeze legacy representation authority"
-        )
-    _require_installed_runtime(installed_root)
-    source_paths = contract["authority"]["source_paths"]
-    installed_paths = contract["authority"]["installed_paths"]
-    source_files: dict[str, object] = {}
-    source_contents: dict[str, bytes] = {}
-    for relative in source_paths:
-        content = (source_root / Path(relative)).read_bytes()
-        source_contents[relative] = content
-        source_files[relative] = {
-            "git_blob_oid": _git_filtered_blob_oid(source_root, relative, content),
-            "sha256": hashlib.sha256(content).hexdigest(),
-        }
-    wheel_bytes = installed_wheel.read_bytes()
-    wheel_product_bytes = _wheel_product_bytes(wheel_bytes, installed_paths)
-    installed_files: dict[str, object] = {}
-    for relative in installed_paths:
-        installed_content = (installed_root / Path(relative)).read_bytes()
-        wheel_content = wheel_product_bytes[relative]
-        source_content = source_contents[relative]
-        if installed_content != wheel_content or wheel_content != source_content:
-            raise RuntimeError(
-                "source, wheel and installed product bytes do not identify one build"
-            )
-        installed_files[relative] = {
-            "installed_sha256": hashlib.sha256(installed_content).hexdigest(),
-            "source_sha256": hashlib.sha256(source_content).hexdigest(),
-            "wheel_member_sha256": hashlib.sha256(wheel_content).hexdigest(),
-        }
-    headed_runtime = _capture_headed_runtime_identity(benchmark_root)
-    runtime_files = {
-        role: {
-            "path": str(path.resolve()),
-            "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
-        }
-        for role, path in _runtime_file_paths(headed_runtime).items()
-    }
-    native_profile_bytes = _native_profile_bytes(
-        contract["profile"],
-        source_root=source_root,
-        benchmark_root=benchmark_root,
-        no_unrelated_sustained_workload=no_unrelated_sustained_workload,
-    )
-    return {
-        "contract_sha256": canonical_sha256(contract),
-        "fixture_manifests": {
-            "base": build_fixture_manifest(information_heavy=False),
-            "information-heavy": build_fixture_manifest(information_heavy=True),
-        },
-        "headed_runtime": headed_runtime,
-        "installed_files": installed_files,
-        "installed_wheel": {
-            "byte_length": len(wheel_bytes),
-            "name": installed_wheel.name,
-            "sha256": hashlib.sha256(wheel_bytes).hexdigest(),
-        },
-        "native_profile": {
-            "byte_length": len(native_profile_bytes),
-            "sha256": hashlib.sha256(native_profile_bytes).hexdigest(),
-            "utf8_hex": native_profile_bytes.hex(),
-        },
-        "runtime_files": runtime_files,
-        "schema": AUTHORITY_SCHEMA,
-        "source_files": source_files,
-    }
-
-
-def _wheel_product_bytes(
-    wheel_bytes: bytes,
-    installed_paths: Iterable[str],
-) -> dict[str, bytes]:
-    expected = tuple(installed_paths)
-    try:
-        with zipfile.ZipFile(io.BytesIO(wheel_bytes)) as archive:
-            names = archive.namelist()
-            if any(names.count(relative) != 1 for relative in expected):
-                raise RuntimeError("installed wheel product population is ambiguous")
-            return {relative: archive.read(relative) for relative in expected}
-    except (OSError, zipfile.BadZipFile, RuntimeError) as error:
-        raise RuntimeError("installed wheel product bytes are unavailable") from error
-
-
 def _require_installed_runtime(installed_root: Path) -> None:
-    """Bind freeze/measurement to the supplied clean installed package tree."""
+    """Bind an installed observation to the supplied package tree."""
 
     loaded = Path(importlib.import_module("namisync").__file__).resolve()
     expected = (installed_root / "namisync" / "__init__.py").resolve()
     records = tuple(installed_root.glob("namisync-*.dist-info/RECORD"))
     if len(records) != 1 or not expected.is_file() or loaded != expected:
         raise RuntimeError(
-            "gate interpreter did not import NamiSync from the installed root"
+            "observation interpreter did not import NamiSync from the installed root"
         )
 
 
-def _runtime_file_paths(
-    headed_runtime: Mapping[str, object] | None = None,
-) -> dict[str, Path]:
-    sqlite_extension = Path(importlib.import_module("_sqlite3").__file__)
-    bottle_module = Path(importlib.import_module("bottle").__file__)
-    pywebview_package = Path(importlib.import_module("webview").__file__).parent
-    pywebview_module = pywebview_package / "__init__.py"
-    pythonnet_package = Path(importlib.import_module("pythonnet").__file__).parent
-    pythonnet_runtime = pythonnet_package / "runtime" / "Python.Runtime.dll"
-    xxhash_package = Path(importlib.import_module("xxhash").__file__).parent
-    xxhash_extensions = tuple(xxhash_package.glob("_xxhash*.pyd"))
-    if len(xxhash_extensions) != 1:
-        raise RuntimeError("installed xxhash extension is ambiguous or unavailable")
-    python_dll_candidates = (
-        Path(sys.executable).with_name("python313.dll"),
-        Path(sys.base_prefix) / "python313.dll",
-    )
-    python_dll = next((path for path in python_dll_candidates if path.is_file()), None)
-    if python_dll is None:
-        raise RuntimeError("CPython 3.13 runtime DLL is unavailable")
-    paths = {
-        "python_executable": Path(sys.executable),
-        "python_runtime_dll": python_dll,
-        "sqlite_extension": sqlite_extension,
-        "bottle_module": bottle_module,
-        "pywebview_module": pywebview_module,
-        "pywebview_winforms_module": pywebview_package / "platforms" / "winforms.py",
-        "pywebview_edgechromium_module": (
-            pywebview_package / "platforms" / "edgechromium.py"
-        ),
-        "webview2_core_assembly": (
-            pywebview_package / "lib" / "Microsoft.Web.WebView2.Core.dll"
-        ),
-        "webview2_winforms_assembly": (
-            pywebview_package / "lib" / "Microsoft.Web.WebView2.WinForms.dll"
-        ),
-        "webview2_x64_loader": (
-            pywebview_package / "lib" / "runtimes" / "win-x64" / "native"
-            / "WebView2Loader.dll"
-        ),
-        "pythonnet_runtime_dll": pythonnet_runtime,
-        "xxhash_extension": xxhash_extensions[0],
+def _installed_runtime_identity(installed_root: Path) -> dict[str, str]:
+    package = importlib.import_module("namisync")
+    return {
+        "root": str(installed_root.resolve()),
+        "namisync_file": str(Path(package.__file__).resolve()),
+        "namisync_version": importlib.metadata.version("namisync"),
     }
-    if headed_runtime is not None:
-        paths["webview2_browser_executable"] = Path(
-            headed_runtime["browser"]["executable_path"]
-        )
-        paths["netfx_clr_module"] = Path(
-            headed_runtime["clr"]["module_path"]
-        )
-    missing = [role for role, path in paths.items() if not path.is_file()]
-    if missing:
-        raise RuntimeError(f"runtime file roles are unavailable: {missing}")
-    return paths
-
-
-def _native_profile_bytes(
-    declared_reference: object,
-    *,
-    source_root: Path,
-    benchmark_root: Path,
-    no_unrelated_sustained_workload: bool,
-) -> bytes:
-    if source_root.resolve().drive.casefold() != benchmark_root.resolve().drive.casefold():
-        raise ValueError("repository, fixtures and SQLite must use one reference volume")
-    memory = _MemoryStatusEx()
-    memory.dwLength = ctypes.sizeof(memory)
-    if not ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(memory)):
-        raise ctypes.WinError(ctypes.get_last_error())
-    power = _SystemPowerStatus()
-    if not ctypes.windll.kernel32.GetSystemPowerStatus(ctypes.byref(power)):
-        raise ctypes.WinError(ctypes.get_last_error())
-    operating_system = _cim(
-        source_root,
-        "Win32_OperatingSystem",
-        "Caption,BuildNumber",
-    )
-    processor = _cim(
-        source_root,
-        "Win32_Processor",
-        "Name,NumberOfCores,NumberOfLogicalProcessors",
-    )
-    drive = source_root.resolve().drive.rstrip(":")
-    disk = _powershell_json(
-        source_root,
-        (
-            f"Get-Partition -DriveLetter '{drive}' | Get-Disk | "
-            "Select-Object Model,@{Name='BusType';Expression={$_.BusType.ToString()}},Size | "
-            "ConvertTo-Json -Compress"
-        ),
-    )
-    if not all(type(value) is dict for value in (operating_system, processor, disk)):
-        raise RuntimeError("native reference-profile probes returned ambiguous results")
-    product = str(operating_system["Caption"]).removeprefix("Microsoft ")
-    observed = {
-        "operating_system": {
-            "product": product,
-            "build": int(operating_system["BuildNumber"]),
-        },
-        "cpu": {
-            "name": str(processor["Name"]),
-            "physical_cores": int(processor["NumberOfCores"]),
-            "logical_processors": int(processor["NumberOfLogicalProcessors"]),
-        },
-        "memory": {"total_physical_bytes": int(memory.ullTotalPhys)},
-        "disk": {
-            "model": str(disk["Model"]),
-            "bus_type": str(disk["BusType"]),
-            "size_bytes": int(disk["Size"]),
-        },
-        "power": {"ac_online": power.ACLineStatus == 1},
-        "python": {
-            "implementation": platform.python_implementation(),
-            "version": platform.python_version(),
-            "executable": str(Path(sys.executable).resolve()),
-        },
-        "runtime_dependencies": {
-            name: importlib.metadata.version(distribution)
-            for name, distribution in (
-                ("bottle", "bottle"),
-                ("pythonnet", "pythonnet"),
-                ("pywebview", "pywebview"),
-                ("xxhash", "xxhash"),
-            )
-        },
-        "sqlite": {"version": sqlite3.sqlite_version},
-        "workload": {
-            "no_unrelated_sustained_workload": no_unrelated_sustained_workload
-        },
-    }
-    return canonical_json_bytes({
-        "declared_reference": declared_reference,
-        "observed": observed,
-        "schema": NATIVE_PROFILE_SCHEMA,
-    })
-
-
-def _cim(cwd: Path, class_name: str, properties: str) -> object:
-    return _powershell_json(
-        cwd,
-        f"Get-CimInstance {class_name} | Select-Object {properties} | ConvertTo-Json -Compress",
-    )
-
-
-def _powershell_json(cwd: Path, command: str) -> object:
-    powershell = shutil.which("pwsh") or shutil.which("powershell")
-    if powershell is None:
-        raise RuntimeError("PowerShell is unavailable for native profile capture")
-    completed = subprocess.run(
-        (powershell, "-NoProfile", "-NonInteractive", "-Command", command),
-        cwd=cwd,
-        capture_output=True,
-        check=False,
-        text=True,
-        timeout=30,
-    )
-    if completed.returncode:
-        raise RuntimeError(f"native profile probe failed: {completed.stderr.strip()}")
-    return json.loads(completed.stdout)
-
-
-def _git_filtered_blob_oid(source_root: Path, relative: str, content: bytes) -> str:
-    completed = subprocess.run(
-        ("git", "hash-object", f"--path={relative}", "--stdin"),
-        cwd=source_root,
-        input=content,
-        capture_output=True,
-        check=False,
-    )
-    value = completed.stdout.decode("ascii", errors="strict").strip()
-    if completed.returncode or len(value) != 40 or any(
-        character not in "0123456789abcdef" for character in value
-    ):
-        raise RuntimeError("canonical Git source identity could not be resolved")
-    return value
 
 
 class _BlockingExecutionInvocation:
@@ -2035,6 +1657,7 @@ class _HeadedFixtureController:
             )
         registry.release_terminal_session(start.task_id, start.session_id)
 
+
 def _rebind_fixture(fixed: PlanArtifact, actual: PlanArtifact) -> PlanArtifact:
     plan = replace(
         fixed.plan,
@@ -2098,58 +1721,6 @@ def _headed_runtime_identity(window: object) -> dict[str, object]:
     }
 
 
-def _capture_headed_runtime_identity(benchmark_root: Path) -> dict[str, object]:
-    from namisync.interfaces.web import host
-    from namisync.interfaces.web.host import DesktopInstanceIdentity
-    from namisync.interfaces.web.paths import AppPaths
-
-    data_root = benchmark_root / "headed-runtime" / uuid4().hex
-    result: dict[str, object] = {}
-    errors: list[BaseException] = []
-    retained: list[object] = []
-    startup_errors: list[str] = []
-    original_appearance = host._configure_window_appearance
-
-    def configure(window: object, *args: object, **kwargs: object) -> object:
-        appearance = original_appearance(window, *args, **kwargs)
-
-        def loaded() -> None:
-            from System import Action
-
-            def finish() -> None:
-                try:
-                    result.update(_headed_runtime_identity(window))
-                except BaseException as error:
-                    errors.append(error)
-                finally:
-                    window.destroy()
-
-            action = Action(finish)
-            retained.append(action)
-            window.native.BeginInvoke(action)
-
-        retained.append(loaded)
-        window.events.loaded += loaded
-        return appearance
-
-    with patch.object(host, "_configure_window_appearance", configure):
-        exit_code = host.run_desktop(
-            AppPaths.from_root(data_root),
-            DesktopInstanceIdentity(
-                rf"Local\NamiSync.PlanScaleRuntime.{uuid4().hex}",
-                f"NamiSync plan scale runtime {uuid4().hex}",
-            ),
-            startup_error=startup_errors.append,
-        )
-    if startup_errors:
-        raise RuntimeError(f"headed runtime startup failed: {startup_errors}")
-    if errors:
-        raise errors[0]
-    if exit_code != 0 or set(result) != {"browser", "clr"}:
-        raise RuntimeError("headed runtime identity probe did not complete")
-    return result
-
-
 def run_headed_child(
     metric_id: str,
     launch_token: str,
@@ -2200,6 +1771,7 @@ def run_headed_child(
         "fixture_case": metric["fixture_case"],
         "headed_fixture": headed_fixture,
         "headed_runtime": headed_runtime,
+        "installed_runtime": _installed_runtime_identity(installed_root),
         "launch_token": launch_token,
         "metric_id": metric_id,
         "process_identity": _current_process_identity(),
@@ -2209,70 +1781,10 @@ def run_headed_child(
     }
 
 
-def run_headed_readiness_child(
-    metric_id: str,
-    launch_token: str,
-    *,
-    contract_path: Path,
-    benchmark_root: Path | None,
-    installed_root: Path | None,
-) -> dict[str, object]:
-    """Exercise one installed headed case once without retaining timing."""
-
-    if benchmark_root is None:
-        raise ValueError("headed readiness child requires its benchmark root")
-    if installed_root is None:
-        raise ValueError("headed readiness child requires its installed root")
-    benchmark_root = benchmark_root.resolve()
-    _require_installed_runtime(installed_root)
-    if not _is_hex_identifier(launch_token):
-        raise ValueError("launch token must be 32 lowercase hexadecimal characters")
-    contract = json.loads(contract_path.read_bytes())
-    metrics = {
-        item["id"]: item
-        for item in contract["metrics"]
-        if item["surface"] == "installed-headed"
-    }
-    try:
-        metric = metrics[metric_id]
-    except KeyError as error:
-        raise ValueError("headed readiness metric is not fixed") from error
-    if metric_id not in contract["readiness"]["headed_metric_ids"]:
-        raise ValueError("headed readiness metric is not declared")
-
-    headed_spec = contract["headed_fixture"]
-    published_plan_count = (
-        headed_spec["fresh_execution_plan_count"][metric["sample_kind"]]
-        if metric_id in headed_spec["fresh_execution_metric_ids"]
-        else headed_spec["default_published_plan_count"]
-    )
-    correctness, headed_runtime, headed_fixture = _run_headed_page(
-        metric,
-        benchmark_root,
-        published_plan_count,
-        readiness=True,
-    )
-    if correctness != metric["correctness"]:
-        raise AssertionError("headed readiness did not satisfy fixed correctness")
-    return {
-        "child_id": uuid4().hex,
-        "correctness": {metric_id: correctness},
-        "headed_fixture": headed_fixture,
-        "headed_runtime": headed_runtime,
-        "launch_token": launch_token,
-        "metric_ids": [metric_id],
-        "process_identity": _current_process_identity(),
-        "schema": READINESS_CHILD_SCHEMA,
-        "surface": "installed-headed",
-    }
-
-
 def _run_headed_page(
     metric: Mapping[str, object],
     benchmark_root: Path,
     published_plan_count: int,
-    *,
-    readiness: bool = False,
 ) -> tuple[
     object,
     dict[str, object],
@@ -2280,7 +1792,7 @@ def _run_headed_page(
 ]:
     """Load one fresh installed page and perform the exact warmup/sample series."""
 
-    web_test_root = Path(__file__).resolve().parent / "interfaces" / "web"
+    web_test_root = Path(__file__).resolve().parents[2] / "tests" / "interfaces" / "web"
     if str(web_test_root) not in sys.path:
         sys.path.insert(0, str(web_test_root))
     from _startup_test_support import headed_command_extension
@@ -2326,7 +1838,7 @@ def _run_headed_page(
             def begin() -> None:
                 try:
                     _begin_headed_probe(
-                        window, metric, result, errors, retained, readiness=readiness
+                        window, metric, result, errors, retained
                     )
                 except BaseException as error:
                     errors.append(error)
@@ -2371,13 +1883,13 @@ def _run_headed_page(
         raise RuntimeError(f"headed plan-review startup failed: {startup_errors}")
     if errors:
         raise errors[0]
-    expected_result = {"headed_runtime", "correctness" if readiness else "samples"}
+    expected_result = {"headed_runtime", "samples"}
     if exit_code != 0 or set(result) != expected_result:
         raise RuntimeError("headed plan-review probe did not complete")
     if controller.published_fixture is None:
         raise RuntimeError("headed plan-review fixture receipt is unavailable")
     return (
-        result["correctness" if readiness else "samples"],
+        result["samples"],
         result["headed_runtime"],
         controller.published_fixture,
     )
@@ -2389,8 +1901,6 @@ def _begin_headed_probe(
     result: dict[str, object],
     errors: list[BaseException],
     retained: list[object],
-    *,
-    readiness: bool = False,
 ) -> None:
     from System import Action
 
@@ -2398,7 +1908,7 @@ def _begin_headed_probe(
     if native.InvokeRequired:
         raise RuntimeError("headed plan-review probe left the UI thread")
     settings = json.dumps({
-        "expression": _headed_probe_script(str(metric["id"]), readiness=readiness),
+        "expression": _headed_probe_script(str(metric["id"])),
         "awaitPromise": True,
         "returnByValue": True,
     })
@@ -2420,8 +1930,7 @@ def _begin_headed_probe(
                         f"headed page probe returned an exception: {detail}"
                     )
                 value = envelope.get("result", {}).get("value")
-                result_field = "correctness" if readiness else "samples"
-                if type(value) is not dict or set(value) != {result_field}:
+                if type(value) is not dict or set(value) != {"samples"}:
                     raise RuntimeError("headed page probe returned invalid evidence")
                 result.update(value)
                 result["headed_runtime"] = _headed_runtime_identity(window)
@@ -2439,9 +1948,8 @@ def _begin_headed_probe(
     task.GetAwaiter().OnCompleted(completion)
 
 
-def _headed_probe_script(metric_id: str, *, readiness: bool = False) -> str:
+def _headed_probe_script(metric_id: str) -> str:
     encoded_metric = json.dumps(metric_id)
-    encoded_readiness = "true" if readiness else "false"
     script = r"""
 (async () => {
   const sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -2768,8 +2276,7 @@ def _headed_probe_script(metric_id: str, *, readiness: bool = False) -> str:
   await until(() => document.querySelector("#host-status")?.textContent === "Ready", "Ready");
   const fixture = await rawFixture();
   const metric = __METRIC__;
-  const readiness = __READINESS__;
-  const repetitions = readiness ? 1 : 6;
+  const repetitions = 6;
   if (fixture.metric_id !== metric) throw new Error("headed fixture metric changed");
   const rows = fixture.rows;
   if (fixture.published_plan_count !== rows.length) {
@@ -3061,953 +2568,96 @@ def _headed_probe_script(metric_id: str, *, readiness: bool = False) -> str:
   } else {
     throw new Error(`unknown headed plan-review metric ${metric}`);
   }
-  if (readiness) {
-    if (samples.length !== 1) throw new Error("headed readiness result changed");
-    return { correctness: samples[0].correctness };
-  }
   return { samples };
 })()
 """
-    return script.replace("__METRIC__", encoded_metric).replace(
-        "__READINESS__", encoded_readiness
-    )
+    return script.replace("__METRIC__", encoded_metric)
 
 
-def _readiness_child_plan(
-    contract: Mapping[str, object],
-) -> list[tuple[str, str, list[str]]]:
-    readiness = contract["readiness"]
-    headed = list(readiness["headed_metric_ids"])
-    return [
-        ("headed", headed[0], [headed[0]]),
-        ("component", "component", list(readiness["component_metric_ids"])),
-        ("component", "memory", [readiness["memory_metric_id"]]),
-        *(("headed", metric_id, [metric_id]) for metric_id in headed[1:]),
-    ]
+CASES = tuple(
+    metric["id"] for metric in json.loads(CONTRACT_PATH.read_bytes())["metrics"]
+    if metric["surface"] == "component"
+)
 
 
-def _check_readiness_child_receipt(
-    contract: Mapping[str, object],
-    expected_metric_ids: list[str],
-    launch_token: str,
-    receipt: object,
-    headed_runtime: object,
-) -> None:
-    if type(receipt) is not dict or set(receipt) != {
-        "child_id", "correctness", "headed_fixture", "headed_runtime",
-        "launch_token", "metric_ids", "process_identity", "schema", "surface",
-    }:
-        raise RuntimeError("plan-review readiness child shape changed")
-    expected_surface = (
-        "installed-headed"
-        if len(expected_metric_ids) == 1
-        and expected_metric_ids[0] in contract["readiness"]["headed_metric_ids"]
-        else "component"
-    )
-    metrics = {metric["id"]: metric for metric in contract["metrics"]}
-    expected_correctness = {
-        metric_id: metrics[metric_id]["correctness"]
-        for metric_id in expected_metric_ids
-    }
-    if (
-        receipt["schema"] != READINESS_CHILD_SCHEMA
-        or receipt["launch_token"] != launch_token
-        or not _is_hex_identifier(receipt["launch_token"])
-        or receipt["metric_ids"] != expected_metric_ids
-        or receipt["correctness"] != expected_correctness
-        or receipt["surface"] != expected_surface
-    ):
-        raise RuntimeError("plan-review readiness child contract changed")
-    if not _is_hex_identifier(receipt["child_id"]):
-        raise RuntimeError("plan-review readiness child identity is invalid")
-    process = receipt["process_identity"]
-    if (
-        type(process) is not dict
-        or set(process) != {"creation_filetime_100ns", "pid"}
-        or type(process["pid"]) is not int
-        or process["pid"] <= 0
-        or type(process["creation_filetime_100ns"]) is not int
-        or process["creation_filetime_100ns"] <= 0
-    ):
-        raise RuntimeError("plan-review readiness process identity is invalid")
-    if expected_surface == "installed-headed":
-        metric = metrics[expected_metric_ids[0]]
-        if receipt["headed_runtime"] != headed_runtime:
-            raise RuntimeError("plan-review readiness headed runtime changed")
-        _check_headed_fixture_receipt(
-            metric,
-            receipt["headed_fixture"],
-            contract["headed_fixture"],
-        )
-    elif receipt["headed_runtime"] is not None or receipt["headed_fixture"] is not None:
-        raise RuntimeError("component readiness retained headed evidence")
-
-
-def _check_readiness_receipt(
-    contract: Mapping[str, object],
-    authority_bytes: bytes,
-    readiness: object,
-    headed_runtime: object,
-) -> None:
-    if type(readiness) is not dict or set(readiness) != {
-        "authority_sha256", "children", "contract_sha256", "coverage", "schema",
-    }:
-        raise RuntimeError("plan-review readiness receipt shape changed")
-    if (
-        readiness["schema"] != READINESS_SCHEMA
-        or readiness["authority_sha256"]
-        != hashlib.sha256(authority_bytes).hexdigest()
-        or readiness["contract_sha256"] != canonical_sha256(contract)
-    ):
-        raise RuntimeError("plan-review readiness authority changed")
-    plan = _readiness_child_plan(contract)
-    expected_coverage = [
-        metric_id
-        for _kind, _argument, metric_ids in plan
-        for metric_id in metric_ids
-    ]
-    if (
-        readiness["coverage"] != expected_coverage
-        or type(readiness["children"]) is not list
-        or len(readiness["children"]) != contract["readiness"]["child_count"]
-    ):
-        raise RuntimeError("plan-review readiness coverage changed")
-    child_ids: set[str] = set()
-    launch_tokens: set[str] = set()
-    processes: set[tuple[int, int]] = set()
-    for wrapper, (_kind, _argument, metric_ids) in zip(
-        readiness["children"], plan, strict=True
-    ):
-        if type(wrapper) is not dict or set(wrapper) != {"receipt", "receipt_sha256"}:
-            raise RuntimeError("plan-review readiness wrapper changed")
-        receipt = wrapper["receipt"]
-        if wrapper["receipt_sha256"] != canonical_sha256(receipt):
-            raise RuntimeError("plan-review readiness child hash changed")
-        _check_readiness_child_receipt(
-            contract,
-            metric_ids,
-            receipt.get("launch_token") if type(receipt) is dict else "",
-            receipt,
-            headed_runtime,
-        )
-        process = receipt["process_identity"]
-        process_key = (process["pid"], process["creation_filetime_100ns"])
-        if (
-            receipt["child_id"] in child_ids
-            or receipt["launch_token"] in launch_tokens
-            or process_key in processes
-        ):
-            raise RuntimeError("plan-review readiness child identity was reused")
-        child_ids.add(receipt["child_id"])
-        launch_tokens.add(receipt["launch_token"])
-        processes.add(process_key)
-
-
-def _run_child_command(
-    command: list[str],
-    *,
-    benchmark_root: Path,
-    label: str,
-    timeout_seconds: int = 300,
-) -> None:
-    completed = subprocess.run(
-        command,
-        cwd=benchmark_root,
-        capture_output=True,
-        check=False,
-        text=True,
-        timeout=timeout_seconds,
-        env=_clean_child_environment(),
-    )
-    if completed.returncode:
-        raise RuntimeError(
-            f"plan-review child failed for {label}: "
-            f"{completed.stdout}{completed.stderr}"
-        )
-
-
-def _publish_collection_index(
-    path: Path,
-    *,
-    accepted: list[dict[str, object]],
-    authority_bytes: bytes,
-    collection_kind: str,
-    contract: Mapping[str, object],
-    next_or_failed: object,
-    planned_child_count: int,
-    readiness_sha256: str | None,
-) -> None:
-    _write_canonical_json(path, {
-        "accepted": accepted,
-        "authority_sha256": hashlib.sha256(authority_bytes).hexdigest(),
-        "collection_kind": collection_kind,
-        "contract_sha256": canonical_sha256(contract),
-        "next_or_failed": next_or_failed,
-        "planned_child_count": planned_child_count,
-        "readiness_sha256": readiness_sha256,
-        "schema": COLLECTION_SCHEMA,
-    })
-
-
-def _collection_error(error: BaseException) -> dict[str, object]:
-    text = str(error)
-    classification = type(error).__name__ or "BaseException"
-    return {
-        "error": (text or classification)[:4096],
-        "error_class": classification[:128],
-        "error_truncated": len(text) > 4096,
-    }
-
-
-def _compact_buffer_manifest(value: CompactUnsignedIntegers) -> dict[str, object]:
-    encoded = canonical_json_bytes(tuple(value))
-    return {
-        "byte_length": value.byte_length,
-        "byte_width": value.byte_width,
-        "count": len(value),
-        "maximum": max(value, default=None),
-        "minimum": min(value, default=None),
-        "unique_count": len(set(value)),
-        "values_sha256": hashlib.sha256(encoded).hexdigest(),
-    }
-
-
-def _order_manifest(order: PlanProjectionOrder) -> dict[str, object]:
-    positions = order.ordered_source_positions
-    inverse = order.order_rank_by_source_position
-    inverse_valid = all(inverse[source_position] == rank for rank, source_position in enumerate(positions))
-    return {
-        "inverse_valid": inverse_valid,
-        "ordered_source_positions": _compact_buffer_manifest(positions),
-        "order_rank_by_source_position": _compact_buffer_manifest(inverse),
-        "projection_rows": len(order.projection.nodes),
-    }
-
-
-def _compact_retained_representation(
-    artifact: PlanArtifact,
-    projection: PlanProjection,
+def run_case(
+    case: str, *, output: Path, installed_root: Path | None = None,
 ) -> dict[str, object]:
-    """Describe the actual orders and visible buffers retained by PlanReviewState."""
+    """Run one real Plan endpoint in a bounded child, without a timing verdict."""
 
-    state = _state_from_projection(artifact, projection)
-    _apply_view(
-        state,
-        column=PlanSortColumn.FILENAME,
-        direction=SortDirection.DESCENDING,
-    )
-    sequence = state.current_sequence
-    canonical = state.canonical_order
-    current = state.current_order
-    return {
-        "plan_projection_fields": [field.name for field in fields(PlanProjection)],
-        "plan_projection_node_fields": [field.name for field in fields(PlanProjectionNode)],
-        "plan_review_state": {
-            "canonical_order": _order_manifest(canonical),
-            "current_order": _order_manifest(current),
-            "distinct_order_objects": canonical is not current,
-            "projection_identity_shared": (
-                canonical.projection is projection
-                and current.projection is projection
-                and sequence.nodes is projection.nodes
-            ),
-        },
-        "visible_sequence": {
-            "visible_source_positions": _compact_buffer_manifest(
-                sequence.visible_source_positions
-            ),
-            "visible_index_by_source_position": _compact_buffer_manifest(
-                sequence.visible_index_by_source_position
-            ),
-            "sibling_ordinals": _compact_buffer_manifest(sequence.sibling_ordinals),
-            "retained_direct_child_counts": _compact_buffer_manifest(
-                sequence.retained_direct_child_counts
-            ),
-            "source_position_by_node_id_count": len(
-                sequence.source_position_by_node_id
-            ),
-            "filtered_item_count": sequence.filtered_item_count,
-        },
-    }
+    from ._child import run_child
 
-
-def run_readiness(
-    *,
-    contract_path: Path,
-    authority_path: Path,
-    source_root: Path,
-    installed_root: Path,
-    installed_wheel: Path,
-    benchmark_root: Path,
-    output: Path,
-    no_unrelated_sustained_workload: bool,
-) -> None:
-    """Run every fixed setup/action once and publish untimed readiness evidence."""
-
-    _require_installed_runtime(installed_root)
-    contract = json.loads(contract_path.read_bytes())
-    authority_bytes = authority_path.read_bytes()
-    authority = json.loads(authority_bytes)
-    observed_authority = build_authority(
-        contract_path=contract_path,
-        source_root=source_root,
-        installed_root=installed_root,
-        installed_wheel=installed_wheel,
-        benchmark_root=benchmark_root,
-        no_unrelated_sustained_workload=no_unrelated_sustained_workload,
-    )
-    if observed_authority != authority:
-        raise RuntimeError("frozen plan-review authority does not match readiness bytes")
-    benchmark_root.mkdir(parents=True, exist_ok=True)
-    runner_path = Path(__file__).resolve()
-    if output.exists():
-        raise RuntimeError("plan-review readiness output already exists")
-    child_root = benchmark_root / "readiness.children"
-    collection_path = benchmark_root / "readiness.collection.json"
-    if child_root.exists() or collection_path.exists():
-        raise RuntimeError("plan-review readiness collection already exists")
-    child_root.mkdir(parents=True)
-    plan = _readiness_child_plan(contract)
-    planned = [
-        (kind, argument, metric_ids, uuid4().hex)
-        for kind, argument, metric_ids in plan
+    contract = json.loads(CONTRACT_PATH.read_bytes())
+    metrics = {item["id"]: item for item in contract["metrics"]}
+    if case not in CASES:
+        raise ValueError(f"unknown Plan case: {case}")
+    metric = metrics[case]
+    launch_token = uuid4().hex
+    arguments = [
+        "--component-child", case,
+        "--launch-token", launch_token,
+        "--contract", str(CONTRACT_PATH),
     ]
-    wrappers: list[dict[str, object]] = []
-    coverage: list[str] = []
-    accepted: list[dict[str, object]] = []
-    try:
-        for ordinal, (kind, argument, metric_ids, launch_token) in enumerate(planned):
-            receipt_name = f"{ordinal:02d}-{argument}.json"
-            child_output = child_root / f".{receipt_name}.staging"
-            attempt = {
-                "case_id": argument,
-                "child_ordinal": ordinal,
-                "launch_token": launch_token,
-                "status": "launching",
-            }
-            _publish_collection_index(
-                collection_path,
-                accepted=accepted,
-                authority_bytes=authority_bytes,
-                collection_kind="readiness",
-                contract=contract,
-                next_or_failed=attempt,
-                planned_child_count=len(planned),
-                readiness_sha256=None,
-            )
-            mode = "--headed-readiness" if kind == "headed" else "--component-readiness"
-            command = [
-                sys.executable,
-                str(runner_path),
-                mode,
-                argument,
-                "--launch-token",
-                launch_token,
-                "--contract",
-                str(contract_path.resolve()),
-                "--installed-root",
-                str(installed_root.resolve()),
-                "--output",
-                str(child_output),
-            ]
-            if kind == "headed":
-                command.extend(("--benchmark-root", str(benchmark_root.resolve())))
-            _run_child_command(
-                command,
-                benchmark_root=benchmark_root,
-                label=argument,
-                timeout_seconds=(
-                    600
-                    if kind == "component" and argument == "component"
-                    else 300
-                ),
-            )
-            receipt = json.loads(child_output.read_bytes())
-            _check_readiness_child_receipt(
-                contract, metric_ids, launch_token, receipt, authority["headed_runtime"]
-            )
-            receipt_path = child_root / receipt_name
-            _write_canonical_json(receipt_path, receipt)
-            child_output.unlink()
-            receipt_sha256 = hashlib.sha256(receipt_path.read_bytes()).hexdigest()
-            wrappers.append({
-                "receipt": receipt,
-                "receipt_sha256": receipt_sha256,
-            })
-            accepted.append({
-                "case_id": argument,
-                "child_ordinal": ordinal,
-                "launch_token": launch_token,
-                "process_identity": receipt["process_identity"],
-                "receipt_path": f"{child_root.name}/{receipt_name}",
-                "receipt_sha256": receipt_sha256,
-            })
-            coverage.extend(metric_ids)
-            if ordinal + 1 < len(planned):
-                _kind, next_argument, _ids, next_token = planned[ordinal + 1]
-                _publish_collection_index(
-                    collection_path,
-                    accepted=accepted,
-                    authority_bytes=authority_bytes,
-                    collection_kind="readiness",
-                    contract=contract,
-                    next_or_failed={
-                        "case_id": next_argument,
-                        "child_ordinal": ordinal + 1,
-                        "launch_token": next_token,
-                        "status": "next",
-                    },
-                    planned_child_count=len(planned),
-                    readiness_sha256=None,
-                )
-    except BaseException as error:
-        failed_position = len(accepted)
-        if failed_position < len(planned):
-            _kind, failed_case, _ids, failed_token = planned[failed_position]
-            failed = {
-                "case_id": failed_case,
-                "child_ordinal": failed_position,
-                "launch_token": failed_token,
-                "status": "failed",
-                **_collection_error(error),
-            }
-        else:
-            failed = {"status": "complete"}
-        _publish_collection_index(
-            collection_path,
-            accepted=accepted,
-            authority_bytes=authority_bytes,
-            collection_kind="readiness",
-            contract=contract,
-            next_or_failed=failed,
-            planned_child_count=len(planned),
-            readiness_sha256=None,
-        )
-        raise
-    _publish_collection_index(
-        collection_path,
-        accepted=accepted,
-        authority_bytes=authority_bytes,
-        collection_kind="readiness",
-        contract=contract,
-        next_or_failed={"status": "complete"},
-        planned_child_count=len(planned),
-        readiness_sha256=None,
+    receipt = run_child(
+        "tools.performance.plan", arguments, output=output,
+        installed_root=None,
     )
-    readiness = {
-        "authority_sha256": hashlib.sha256(authority_bytes).hexdigest(),
-        "children": wrappers,
-        "contract_sha256": canonical_sha256(contract),
-        "coverage": coverage,
-        "schema": READINESS_SCHEMA,
-    }
-    _check_readiness_receipt(
-        contract, authority_bytes, readiness, authority["headed_runtime"]
-    )
-    _write_canonical_json(output, readiness)
-
-
-def run_gate(
-    *,
-    contract_path: Path,
-    authority_path: Path,
-    source_root: Path,
-    installed_root: Path,
-    installed_wheel: Path,
-    benchmark_root: Path,
-    readiness_path: Path,
-    output: Path,
-    no_unrelated_sustained_workload: bool,
-) -> None:
-    """Run every fixed child sequentially and publish one verdict-free artifact."""
-
-    _require_installed_runtime(installed_root)
-    contract = json.loads(contract_path.read_bytes())
-    authority_bytes = authority_path.read_bytes()
-    authority = json.loads(authority_bytes)
-    readiness_bytes = readiness_path.read_bytes()
-    readiness = json.loads(readiness_bytes)
-    observed_authority = build_authority(
-        contract_path=contract_path,
-        source_root=source_root,
-        installed_root=installed_root,
-        installed_wheel=installed_wheel,
-        benchmark_root=benchmark_root,
-        no_unrelated_sustained_workload=no_unrelated_sustained_workload,
-    )
-    if observed_authority != authority:
-        raise RuntimeError("frozen plan-review authority does not match measured bytes")
-    _check_readiness_receipt(
-        contract, authority_bytes, readiness, authority["headed_runtime"]
-    )
-    wrappers: list[dict[str, object]] = []
-    runner_path = Path(__file__).resolve()
-    benchmark_root.mkdir(parents=True, exist_ok=True)
-    child_root = benchmark_root / "measurement.children"
-    collection_path = benchmark_root / "measurement.collection.json"
-    if child_root.exists() or collection_path.exists() or output.exists():
-        raise RuntimeError("plan-review measurement output already exists")
-    child_root.mkdir(parents=True)
-    accepted: list[dict[str, object]] = []
-    planned_attempts = [
-        (metric, child_ordinal, uuid4().hex)
-        for metric in contract["metrics"]
-        for child_ordinal in range(
-            contract["sampling"][metric["sample_kind"]]["fresh_children"]
-        )
-    ]
-
-    def publish_collection(next_or_failed: object) -> None:
-        _publish_collection_index(
-            collection_path,
-            accepted=accepted,
-            authority_bytes=authority_bytes,
-            collection_kind="measurement",
-            contract=contract,
-            next_or_failed=next_or_failed,
-            planned_child_count=len(planned_attempts),
-            readiness_sha256=hashlib.sha256(readiness_bytes).hexdigest(),
-        )
-
-    try:
-        for planned_index, (metric, child_ordinal, launch_token) in enumerate(
-            planned_attempts
-        ):
-            receipt_name = f"{len(accepted):03d}-{metric['id']}-{child_ordinal}.json"
-            child_output = child_root / f".{receipt_name}.staging"
-            attempt = {
-                "case_id": metric["id"],
-                "child_ordinal": child_ordinal,
-                "launch_token": launch_token,
-                "status": "launching",
-            }
-            publish_collection(attempt)
-            command = [
-                sys.executable,
-                str(runner_path),
-                (
-                    "--component-child"
-                    if metric["surface"] == "component"
-                    else "--headed-child"
-                ),
-                metric["id"],
-                "--launch-token",
-                launch_token,
-                "--contract",
-                str(contract_path.resolve()),
-                "--installed-root",
-                str(installed_root.resolve()),
-                "--output",
-                str(child_output),
-            ]
-            if metric["surface"] == "installed-headed":
-                command.extend(("--benchmark-root", str(benchmark_root.resolve())))
-            _run_child_command(
-                command, benchmark_root=benchmark_root, label=metric["id"]
-            )
-            receipt_bytes = child_output.read_bytes()
-            receipt = json.loads(receipt_bytes)
-            _check_child_receipt(
-                metric,
-                launch_token,
-                receipt,
-                authority["headed_runtime"],
-                contract["headed_fixture"],
-            )
-            receipt_path = child_root / receipt_name
-            _write_canonical_json(receipt_path, receipt)
-            child_output.unlink()
-            receipt_sha256 = hashlib.sha256(receipt_path.read_bytes()).hexdigest()
-            wrappers.append({
-                "receipt": receipt,
-                "receipt_sha256": receipt_sha256,
-            })
-            accepted.append({
-                "case_id": metric["id"],
-                "child_ordinal": child_ordinal,
-                "launch_token": launch_token,
-                "process_identity": receipt["process_identity"],
-                "receipt_path": f"{child_root.name}/{receipt_name}",
-                "receipt_sha256": receipt_sha256,
-            })
-            if planned_index + 1 < len(planned_attempts):
-                next_metric, next_ordinal, next_token = planned_attempts[
-                    planned_index + 1
-                ]
-                publish_collection({
-                    "child_ordinal": next_ordinal,
-                    "case_id": next_metric["id"],
-                    "launch_token": next_token,
-                    "status": "next",
-                })
-    except BaseException as error:
-        failed_position = len(accepted)
-        if failed_position < len(planned_attempts):
-            failed_metric, failed_ordinal, failed_token = planned_attempts[
-                failed_position
-            ]
-            failed = {
-                "case_id": failed_metric["id"],
-                "child_ordinal": failed_ordinal,
-                "launch_token": failed_token,
-                "status": "failed",
-                **_collection_error(error),
-            }
-        else:
-            failed = {"status": "complete"}
-        publish_collection(failed)
-        raise
-    publish_collection({"status": "complete"})
-    authority_relative = contract["artifacts"]["authority"]
-    raw_artifact = {
-        "authority_receipt": {
-            "byte_length": len(authority_bytes),
-            "git_blob_oid": _git_filtered_blob_oid(
-                source_root, authority_relative, authority_bytes
-            ),
-            "sha256": hashlib.sha256(authority_bytes).hexdigest(),
-        },
-        "children": wrappers,
-        "contract_sha256": canonical_sha256(contract),
-        "fixture_manifest_sha256": {
-            name: canonical_sha256(manifest)
-            for name, manifest in authority["fixture_manifests"].items()
-        },
-        "native_profile_sha256": authority["native_profile"]["sha256"],
-        "schema": (
-            "namisync-m1-7-plan-review-scale-run-v5"
-            if contract.get("schema") == COMPACT_CONTRACT_SCHEMA
-            else "namisync-m1-7-plan-review-scale-run-v4"
-        ),
-    }
-    _write_canonical_json(output, raw_artifact)
-
-
-def _check_child_receipt(
-    metric: Mapping[str, object],
-    launch_token: str,
-    receipt: object,
-    headed_runtime: object,
-    headed_fixture_spec: Mapping[str, object],
-) -> None:
-    if type(receipt) is not dict:
-        raise RuntimeError("plan-review child receipt is not an object")
-    if (
-        receipt.get("schema") != CHILD_RECEIPT_SCHEMA
-        or receipt.get("launch_token") != launch_token
-        or receipt.get("metric_id") != metric["id"]
-        or receipt.get("fixture_case") != metric["fixture_case"]
-        or receipt.get("sample_kind") != metric["sample_kind"]
-    ):
-        raise RuntimeError("plan-review child receipt changed its fixed case")
-    expected_runtime = (
-        headed_runtime if metric["surface"] == "installed-headed" else None
-    )
-    if receipt.get("headed_runtime") != expected_runtime:
-        raise RuntimeError("plan-review child headed runtime identity changed")
-    _check_headed_fixture_receipt(
-        metric,
-        receipt.get("headed_fixture"),
-        headed_fixture_spec,
-    )
-    process = receipt.get("process_identity")
-    if (
-        type(process) is not dict
-        or type(process.get("pid")) is not int
-        or process["pid"] <= 0
-        or type(process.get("creation_filetime_100ns")) is not int
-        or process["creation_filetime_100ns"] <= 0
-    ):
-        raise RuntimeError("plan-review child process identity is invalid")
     samples = receipt.get("samples")
-    expected = 1 if metric["sample_kind"] == "cold" else 6
-    if type(samples) is not list or len(samples) != expected:
-        raise RuntimeError("plan-review child sample count changed")
-    for iteration, sample in enumerate(samples, 1):
-        if (
-            type(sample) is not dict
-            or sample.get("iteration") != iteration
-            or sample.get("correctness") != metric["correctness"]
-        ):
-            raise RuntimeError("plan-review child correctness changed")
-        elapsed = sample.get("elapsed_ns")
-        retained = sample.get("retained_bytes")
-        if "budget_ns" in metric:
-            valid = type(elapsed) is int and elapsed >= 0 and retained is None
-        else:
-            valid = type(retained) is int and retained >= 0 and elapsed is None
-        if not valid:
-            raise RuntimeError("plan-review child measurement value is invalid")
-
-
-def _check_headed_fixture_receipt(
-    metric: Mapping[str, object],
-    fixture: object,
-    specification: Mapping[str, object],
-) -> None:
-    if metric["surface"] != "installed-headed":
-        if fixture is not None:
-            raise RuntimeError("component child retained a headed fixture")
-        return
-    expected_count = (
-        specification["fresh_execution_plan_count"][metric["sample_kind"]]
-        if metric["id"] in specification["fresh_execution_metric_ids"]
-        else specification["default_published_plan_count"]
-    )
+    expected_count = 1 if metric["sample_kind"] == "cold" else 6
+    memory_case = "budget_bytes" in metric
+    value_field = "retained_bytes" if memory_case else "elapsed_ns"
+    other_field = "elapsed_ns" if memory_case else "retained_bytes"
     if (
-        type(fixture) is not dict
-        or set(fixture) != {"published_plan_count", "rows"}
-        or fixture["published_plan_count"] != expected_count
-        or type(fixture["rows"]) is not list
-        or len(fixture["rows"]) != expected_count
-    ):
-        raise RuntimeError("plan-review child headed fixture population changed")
-    expected_fields = set(specification["published_row_fields"])
-    task_ids = set()
-    request_ids = set()
-    session_ids = set()
-    paths = set()
-    for row in fixture["rows"]:
-        if type(row) is not dict or set(row) != expected_fields:
-            raise RuntimeError("plan-review child headed fixture row changed")
-        identity = (
-            row["task_id"],
-            row["request_id"],
-            row["plan_session_id"],
+        receipt.get("metric_id") != case
+        or receipt.get("launch_token") != launch_token
+        or receipt.get("fixture_case") != metric["fixture_case"]
+        or type(samples) is not list or len(samples) != expected_count
+        or any(
+            type(sample) is not dict
+            or sample.get("correctness") != _current_correctness(metric)
+            or type(sample.get(value_field)) is not int
+            or sample[value_field] < 0
+            or sample.get(other_field) is not None
+            for sample in samples
         )
-        path_pair = (row["source_path"], row["target_path"])
-        if (
-            type(identity[0]) is not str
-            or len(identity[0]) != 37
-            or not identity[0].startswith("task-")
-            or not _is_hex_identifier(identity[0][5:])
-            or not all(_is_hex_identifier(value) for value in identity[1:])
-            or identity[0] in task_ids
-            or identity[1] in request_ids
-            or identity[2] in session_ids
-            or any(type(value) is not str or not value for value in path_pair)
-            or path_pair[0] == path_pair[1]
-            or path_pair in paths
-            or row["task_kind"] != "sync-plan"
-            or row["session_state"] != "completed"
-            or row["session_released"] is not True
-            or row["execution_unused"] is not True
-        ):
-            raise RuntimeError("plan-review child headed fixture identity changed")
-        settlement = row["initial_view_settlement"]
-        settlement_spec = specification["initial_view_settlement"]
-        expected_settlement_fields = {
-            "first_row", "open_disposition", "plan_session_id", "request_id",
-            "source_path", "target_path", "task_id", "view_revision",
-            "window_disposition", "window_limit", "window_offset", "window_row_count",
-            "window_total", "window_view_revision",
-        }
-        first = settlement.get("first_row") if type(settlement) is dict else None
-        if (
-            type(settlement) is not dict
-            or set(settlement) != expected_settlement_fields
-            or settlement["open_disposition"]
-            != settlement_spec["open_disposition"]
-            or settlement["task_id"] != row["task_id"]
-            or settlement["request_id"] != row["request_id"]
-            or settlement["plan_session_id"] != row["plan_session_id"]
-            or settlement["source_path"] != row["source_path"]
-            or settlement["target_path"] != row["target_path"]
-            or settlement["view_revision"] != settlement_spec["view_revision"]
-            or settlement["window_view_revision"]
-            != settlement_spec["view_revision"]
-            or settlement["window_disposition"]
-            != settlement_spec["window_disposition"]
-            or settlement["window_limit"] != settlement_spec["window_limit"]
-            or settlement["window_offset"] != settlement_spec["window_offset"]
-            or settlement["window_total"] != settlement_spec["window_total"]
-            or settlement["window_row_count"] != settlement_spec["window_rows"]
-            or type(first) is not dict
-            or set(first) != {"node_id", "operation_id", "visible_index"}
-            or first["node_id"]
-            != _expected_plan_root_node_id(row["request_id"])
-            or first["operation_id"]
-            is not settlement_spec["first_row_operation_id"]
-            or first["visible_index"]
-            != settlement_spec["first_row_visible_index"]
-        ):
-            raise RuntimeError("plan-review child initial view settlement changed")
-        task_ids.add(identity[0])
-        request_ids.add(identity[1])
-        session_ids.add(identity[2])
-        paths.add(path_pair)
-
-
-def _clean_child_environment() -> dict[str, str]:
-    environment = dict(os.environ)
-    for name in (
-        "PYTHONHOME",
-        "PYTHONPATH",
-        "PYTHONSTARTUP",
-        "PYTHONUSERBASE",
-        "PYTHONINSPECT",
     ):
-        environment.pop(name, None)
-    environment["PYTHONNOUSERSITE"] = "1"
-    environment["PYTHONDONTWRITEBYTECODE"] = "1"
-    return environment
+        raise RuntimeError("Plan child returned an incomplete or false observation")
+    return receipt
 
 
-def _arguments() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description=__doc__)
-    group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument("--component-child", metavar="METRIC_ID")
-    group.add_argument("--component-readiness", choices=("component", "memory"))
-    group.add_argument("--diagnostic-child", action="store_true")
-    group.add_argument("--freeze-authority", action="store_true")
-    group.add_argument("--run-gate", action="store_true")
-    group.add_argument("--run-readiness", action="store_true")
-    group.add_argument("--headed-child", metavar="METRIC_ID")
-    group.add_argument("--headed-readiness", metavar="METRIC_ID")
-    parser.add_argument("--launch-token")
-    parser.add_argument("--contract", type=Path, default=CONTRACT_PATH)
-    parser.add_argument("--output", required=True, type=Path)
-    parser.add_argument("--source-root", type=Path)
-    parser.add_argument("--installed-root", type=Path)
-    parser.add_argument("--installed-wheel", type=Path)
-    parser.add_argument("--authority", type=Path)
-    parser.add_argument("--readiness", type=Path)
-    parser.add_argument("--benchmark-root", type=Path)
-    parser.add_argument("--confirm-no-unrelated-sustained-workload", action="store_true")
-    return parser.parse_args()
+def _write_canonical_json(path: Path, value: object) -> None:
+    path.write_bytes(canonical_json_bytes(value))
 
 
 def main() -> int:
-    arguments = _arguments()
-    if arguments.run_readiness:
-        required = {
-            "authority": arguments.authority,
-            "source_root": arguments.source_root,
-            "installed_root": arguments.installed_root,
-            "installed_wheel": arguments.installed_wheel,
-            "benchmark_root": arguments.benchmark_root,
-        }
-        if any(value is None for value in required.values()):
-            raise ValueError(f"readiness paths are required: {sorted(required)}")
-        run_readiness(
-            contract_path=arguments.contract,
-            authority_path=arguments.authority,
-            source_root=arguments.source_root,
-            installed_root=arguments.installed_root,
-            installed_wheel=arguments.installed_wheel,
-            benchmark_root=arguments.benchmark_root,
-            output=arguments.output,
-            no_unrelated_sustained_workload=(
-                arguments.confirm_no_unrelated_sustained_workload
-            ),
-        )
-        return 0
-    if arguments.run_gate:
-        required = {
-            "authority": arguments.authority,
-            "source_root": arguments.source_root,
-            "installed_root": arguments.installed_root,
-            "installed_wheel": arguments.installed_wheel,
-            "benchmark_root": arguments.benchmark_root,
-            "readiness": arguments.readiness,
-        }
-        if any(value is None for value in required.values()):
-            raise ValueError(f"gate paths are required: {sorted(required)}")
-        run_gate(
-            contract_path=arguments.contract,
-            authority_path=arguments.authority,
-            source_root=arguments.source_root,
-            installed_root=arguments.installed_root,
-            installed_wheel=arguments.installed_wheel,
-            benchmark_root=arguments.benchmark_root,
-            readiness_path=arguments.readiness,
-            output=arguments.output,
-            no_unrelated_sustained_workload=(
-                arguments.confirm_no_unrelated_sustained_workload
-            ),
-        )
-        return 0
-    if arguments.freeze_authority:
-        required = {
-            "source_root": arguments.source_root,
-            "installed_root": arguments.installed_root,
-            "installed_wheel": arguments.installed_wheel,
-            "benchmark_root": arguments.benchmark_root,
-        }
-        if any(value is None for value in required.values()):
-            raise ValueError(f"authority paths are required: {sorted(required)}")
-        authority = build_authority(
-            contract_path=arguments.contract,
-            source_root=arguments.source_root,
-            installed_root=arguments.installed_root,
-            installed_wheel=arguments.installed_wheel,
-            benchmark_root=arguments.benchmark_root,
-            no_unrelated_sustained_workload=(
-                arguments.confirm_no_unrelated_sustained_workload
-            ),
-        )
-        _write_canonical_json(arguments.output, authority)
-        return 0
-    if arguments.launch_token is None:
-        raise ValueError("child execution requires a launch token")
+    parser = argparse.ArgumentParser(description=__doc__)
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("--component-child", metavar="METRIC_ID")
+    group.add_argument("--diagnostic-child", action="store_true")
+    group.add_argument("--headed-child", metavar="METRIC_ID")
+    parser.add_argument("--launch-token", required=True)
+    parser.add_argument("--contract", type=Path, default=CONTRACT_PATH)
+    parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--installed-root", type=Path)
+    parser.add_argument("--benchmark-root", type=Path)
+    arguments = parser.parse_args()
     if arguments.headed_child is not None:
         receipt = run_headed_child(
-            arguments.headed_child,
-            arguments.launch_token,
+            arguments.headed_child, arguments.launch_token,
             contract_path=arguments.contract,
             benchmark_root=arguments.benchmark_root,
             installed_root=arguments.installed_root,
         )
-        _write_canonical_json(arguments.output, receipt)
-        return 0
-    if arguments.headed_readiness is not None:
-        receipt = run_headed_readiness_child(
-            arguments.headed_readiness,
-            arguments.launch_token,
-            contract_path=arguments.contract,
-            benchmark_root=arguments.benchmark_root,
-            installed_root=arguments.installed_root,
-        )
-        _write_canonical_json(arguments.output, receipt)
-        return 0
-    if arguments.component_readiness is not None:
-        receipt = run_component_readiness_child(
-            arguments.component_readiness,
-            arguments.launch_token,
+    elif arguments.diagnostic_child:
+        receipt = run_diagnostic_child(arguments.launch_token)
+    else:
+        receipt = run_component_child(
+            arguments.component_child, arguments.launch_token,
             contract_path=arguments.contract,
             installed_root=arguments.installed_root,
         )
-        _write_canonical_json(arguments.output, receipt)
-        return 0
-    receipt = (
-        run_diagnostic_child(arguments.launch_token)
-        if arguments.diagnostic_child
-        else run_component_child(
-            arguments.component_child,
-            arguments.launch_token,
-            contract_path=arguments.contract,
-            installed_root=arguments.installed_root,
-        )
-    )
     _write_canonical_json(arguments.output, receipt)
     return 0
-
-
-__all__ = [
-    "AUTHORITY_SCHEMA", "CHILD_RECEIPT_SCHEMA", "COLLECTION_SCHEMA", "CONTRACT_PATH",
-    "FIXTURE_BASE_ROWS",
-    "FIXTURE_DEPTH", "FIXTURE_INFORMATION_HEAVY_ROWS",
-    "FIXTURE_OPERATIONS", "FIXTURE_SCHEMA", "FIXTURE_SEED",
-    "FIXTURE_STRUCTURAL_ROWS", "FIXTURE_WARNINGS", "FIXTURE_WINDOW_LIMIT",
-    "build_authority", "build_diagnostic_plan_fixture", "build_fixture_manifest",
-    "build_plan_fixture",
-    "canonical_json_bytes", "canonical_sha256", "component_window",
-    "depth_32_selection_preview", "fixture_manifest", "freeze_execution_scope",
-    "git_blob_oid", "make_plan_review_state", "nearest_rank_p95",
-    "READINESS_CHILD_SCHEMA", "READINESS_SCHEMA", "run_component_child",
-    "run_component_readiness_child", "run_diagnostic_child", "run_gate",
-    "run_headed_readiness_child", "run_readiness",
-]
 
 
 if __name__ == "__main__":

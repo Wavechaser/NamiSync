@@ -1,8 +1,8 @@
 # Development Tools
 
 `tools/` contains development-only utilities. `python -m tools`
-owns the executor/verifier measurement harness and deterministic corpus
-generator. `tools/gui.ps1` is a standalone editable-source desktop convenience
+owns the executor/verifier measurement harness, deterministic corpus generator
+and selected performance cases. `tools/gui.ps1` is a standalone editable-source desktop convenience
 launcher. `tools/icons.py` maintains the fixed local icon vocabulary from
 `tools/icons.json`. None is part of the shipped `namisync` package. Pytest covers
 their behavior; measurement output remains subject to the authority rules below.
@@ -267,8 +267,8 @@ JSON output records `"correspondence": "empty"`. Adding invented mapping state
 would make the harness less trustworthy; a move benchmark should be added only
 with an explicit persisted-correspondence input contract.
 
-The package may import `core`, `modules`, and the pure
-`workflows.selection` helper. It does not import `db`, `dispatcher`,
+The executor/verifier rigs may import `core`, `modules`, and the pure
+`workflows.selection` helper. They do not import `db`, `dispatcher`,
 `interfaces`, or workflow runtime composition.
 
 ## Executor settlement oracle
@@ -486,8 +486,26 @@ interpretation, reports and rerun policy. Driver structure is under
 `tools/`; tests stay under `tests/`; generated output belongs in ignored
 `build/` or an explicitly owned external workspace.
 
-AB-2 will introduce `tools/performance/` for family-named optional drivers.
-Place assets beside their driver and add small shared fixture/runner helpers
-only when actually shared. Existing executor/verifier commands need no
-gratuitous relocation. Keep their current gate classification until AB-2
-migrates each driver with its tests and consumers.
+`tools/performance/` owns selected Plan, execution receipt/UI, bridge-event and
+history measurements. Assets live beside their driver; small fixture/runner
+helpers are shared only where used. These drivers may compose the real
+interface and database endpoints they measure. They may reuse uncollected
+native test helpers; they must not import collected test modules. Tests stay
+under `tests/`, including independent fixture/action and failure controls.
+The frozen custody memory helper remains at its existing test path.
+
+Use `python -m tools performance --list` to discover cases, then
+`python -m tools performance FAMILY CASE --json OUTPUT` to run one. Installed
+receipt/UI cases additionally take `--installed-root`; Plan's public cases use
+component endpoints. Bridge-event builds
+its own wheel from committed HEAD and uses the working-tree driver. Reports
+distinguish those sources. See [PERFORMANCE](PERFORMANCE.md) for exact cases,
+installation methods, profiles and interpretation.
+
+Reports are published without overwriting an existing result. Repository-local
+output belongs under ignored `build/`; keep raw child evidence beside its report.
+An incomplete measurement returns nonzero and remains explicitly incomplete;
+completion means a valid observation, not acceptance of the historical timing
+target. Plan/UI latency and empirical representation memory are advisory.
+Correctness, counted scale behavior, custody, lifecycle/resource containment,
+history release limits, SH-G-15 and executor settlement retain their named gates.
