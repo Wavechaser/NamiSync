@@ -1029,6 +1029,12 @@ claims explicit, independently reviewable, and regression-backed.
 
 #### Study post-M1-8 mechanism, test and workflow reduction (2026-09-25)
 
+- Settle D2: remove page-side elapsed-time abandonment/replay of mutations while
+  retaining bounded observation, identity/duplicate protection, original-outcome
+  recovery, lifecycle/resource deadlines and explicit outcome unavailability.
+  Narrow AB-7 to existing asynchronous admission/completion, including delivery
+  failure after an effect; retain D4 highlighting/focus without feature reduction.
+  Update dependencies and regression gates; implementation remains pending.
 - Expand the study into AB-1–AB-10 in M1_PLAN: documentation and compacted
   delivery records first, then optional measurement tools, bounded reductions,
   server snapshots and integrated verification. Plan PERFORMANCE as the central

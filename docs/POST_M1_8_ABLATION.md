@@ -11,7 +11,9 @@ plan and sole checkpoint register are in
 
 S3's server-snapshot direction is accepted. L5/L7/L8/L9 are rejected. D1–D7
 are distinguished as settled directions, preferences or unresolved choices in
-§11; recommendations do not silently become user decisions. PA-1–PA-3 in
+§11; D2 now removes elapsed-time mutation abandonment/replay while preserving
+original-outcome recovery, and D4 is retained without feature reduction.
+Recommendations do not silently become user decisions. PA-1–PA-3 in
 [M1_PLAN](M1_PLAN.md) authorize this documentation reconciliation and study
 retirement only. Product, tests, operative evidence policy and AGENTS are
 unchanged by this planning revision. AB-1–AB-10 are planned, not activated;
@@ -59,10 +61,12 @@ The filesystem engine (scan, plan, preflight, execute, verify and ledger) mostly
 earns its complexity: nearly every executor guard examined maps to a SEVERE
 entry in [BUGS](BUGS.md). The avoidable cost comes from three sources:
 
-1. **Orchestration sized for situations the shipped app does not have.** One
+1. **Orchestration partly driven by avoidable recovery scenarios.** One
    desktop task spans about 28 named types in six owners. The transport recovers
    from page reloads not exposed by the inspected production configuration, and from deadlines the page imposes
-   on its own local calls. Interface and dispatcher/history entries are 47% of
+   on its own local calls. Local delivery can nevertheless fail after an effect;
+   some identity, result retention and observation recovery remain necessary.
+   Interface and dispatcher/history entries are 47% of
    all recorded bugs, and their titles describe the machinery (custody,
    generations, receipts, races) rather than file synchronization.
 2. **Repeated internal work needs boundary-specific examination.** ARCHITECTURE
@@ -119,24 +123,35 @@ promise deletion of all native-return containment. Ordinary lost-observation
 recovery remains separate. Risk: medium at the host boundary, not proven low
 by disabling F5 alone. No renderer-crash recovery claim is added.
 
-**S2 — Remove self-inflicted command uncertainty.** The page applies 5 s and
+**S2 — Remove elapsed-time mutation abandonment and replay.** The page applies 5 s and
 30 s deadlines to local cross-runtime calls (`assets/bridge.js:55-108`). A deadline turns
 a call into "uncertain", which drives automatic replay (`createTask`,
 `submitStart`, `startExecution`), the delayed `closeTask` retry loop, the
 manual-retry UI and attempt machines in `app.js` (*analyst*), the server replay
 caches and the asynchronous completion channel. The M1-async design was framed
 around reload survival and a 30 s browser deadline over a 25 s server close
-wait. Alternative: commands return right after admission, long waits (close
-settlement) become task state reported through the existing drain, and the page
-shows pending state instead of automatically resubmitting. Keep an authoritative
-command identity/result at the task owner against double submission. Slow-call
-feedback is not cancellation; observation must distinguish an active task from
-an unavailable backend and provide a recovery path. Do not leave an indefinite
-"still working" message as the only failure behavior. Shutdown, resource bounds
-and bootstrap deadlines are not ordinary mutation retry policy and remain
-outside this reduction. D2 remains a recommendation requiring a decision.
-Risk: medium; settle its command-result observation contract before S3's wire
-shape so the two changes do not create successive replacement protocols.
+wait. **D2 is settled:** remove page-side elapsed-time deadlines that abandon
+mutating command results or automatically replay mutations. Keep delayed-response
+feedback, bounded attempts to recover observation, authoritative command identity,
+duplicate-effect protection and original-outcome retention/recovery. Keep startup,
+shutdown, worker/resource and genuinely bounded observation timeouts. Failed
+communication must produce explicit "outcome unavailable" feedback instead of
+unqualified "working…" indefinitely; a later valid observation may resolve it.
+
+Native delivery can fail after an effect. Removing reload or arbitrary deadlines
+does not remove that uncertain outcome, and delivery cleanup must not erase effect
+truth. Recover the original result when available; do not equate unavailable
+observation with operation failure, cancellation or permission to repeat mutation.
+Retain bounded result lifetimes and existing process-lifetime recovery limits.
+
+The delivered M1-async path already separates admission/completion for several
+commands through `CommandSpec`, bridge custody and `DocumentChannel`, with
+browser correlation and existing task/session effect receipts. AB-7 simplifies
+that path and its direct-command consumers; it does not introduce a parallel
+admission/result protocol or redesign the whole command system. Delays may
+prompt observation checks without abandoning the original result. Risk: medium;
+complete this bounded change before S3 freezes its wire shape. New protocol needs
+would require explicit scope adjudication, not follow automatically from D2.
 
 **S3 — Render server snapshots instead of reducing events in the browser.**
 Accepted direction; recommended before M1-9 adds an inventory consumer to the
@@ -482,9 +497,9 @@ These look reducible but protect real behavior:
 | ID | User disposition and current recommendation |
 | --- | --- |
 | D1 | Reload probably will not be exposed. Adopt that design direction; S1 recommends retiring recovery after installed verification while keeping stale-document containment. It does not automatically approve all of S2. |
-| D2 | User remains unsure. Recommend no timer-triggered mutation resubmission, with prompt admission, authoritative command result and recoverable observation. Exact timeout/failure behavior awaits activation/design. |
+| D2 | **Settled.** Remove page-side elapsed-time mutation-result abandonment and replay triggered by those deadlines. Keep delay feedback, bounded observation recovery, command identity/duplicate protection and original-result retention/recovery, including failure after an effect. Show explicit outcome unavailability when communication fails; retain lifecycle/resource and genuinely bounded observation timeouts. Simplify existing asynchronous admission/completion, not a new command protocol. |
 | D3 | No chosen speed targets. User favors optional useful performance benching. E1 demotes the performance families without inventing new targets; enforced bounds and separate release/correctness gates remain distinct. Exact case selection is not yet decided. |
-| D4 | User remains unsure. Recommend keeping row highlight/focus separate from execution checkboxes: navigation and range inspection should not silently change execution intent. Simplify mechanics first; feature removal needs its own decision. |
+| D4 | **Settled: retain without feature reduction.** Keep row highlighting/focus, range/navigation behavior and their separation from execution checkboxes. This reduction plan does not remove or diminish that capability. |
 | D5 | Keep the native Advanced Color mitigation. L9 rejected; no CSS replacement work. |
 | D6 | Keep the expected inventory acknowledgement/restore capability. M1-10 explicitly owns baseline/verify/rebaseline and post-copy verification; its rebaseline acknowledgement is different from hiding/restoring missing rows. Service methods and FEATURES already support the latter intent. Allocate its desktop delivery explicitly when M1-9/10 activates; do not shelve it as dead code or claim M1-10 already names it. |
 | D7 | User considers §7 excessive. Plan optional performance tooling and a central PERFORMANCE methods/results owner, retaining correctness, enforced bounds and distinct safety/release gates. W2 is now explicitly the user's small-change default with user-owned classification. Durable policy edits are AB-1/AB-2; this planning revision does not demote executable gates. |
@@ -499,8 +514,9 @@ on the investigation's recommendation; no full task-owner merger is scheduled.
 regression mapping, acceptance, commit gates and resumption. Documentation is
 first; benchmark migration follows its ownership rules. Independent database,
 selection, response-boundary and test reductions get coherent commits. S1/S2
-and S3 remain separate boundaries; D2 must be settled or explicitly retained
-before S3, without inventing a replacement command protocol by assumption.
+and S3 remain separate boundaries; settled D2 makes AB-7 a bounded simplification
+of existing admission/completion, completed before S3. Genuine delivery uncertainty
+and original-outcome recovery remain. D4 stays intact.
 S5 stays deferred. L5/L7/L8/L9 remain in the compact rejected table in §5.
 
 ## 13. Earlier studies: absorption and archival accounting
@@ -526,7 +542,7 @@ disposition map; archived instructions cannot restart their old checkpoints.
 | Option B replacement protected acceptance system | Do not build it for demoted optional benchmarks. It was recommended under unchanged hard SLOs, which is not the current proposed direction. Preserve its useful distinction between observations and independently authored correctness expectations. |
 | Option C numeric contract rationalization | Absorb into D3/E1: no new hard targets now; retain useful measurements while dropping their proposed automatic gating role. Release-resource decisions remain separate. |
 | R7-5 publication helper; R7-8 tracer-oracle rewrite | Supersede the old checkpoints, not their outcomes as "passed". Do not polish partial-index machinery proposed for retirement. The tracer remains for now; any touched instrumentation must still prove actual insertion/restoration independently rather than mirror its replacement algorithm. |
-| R7-6 / A4 shared replay helper | Retire the old standalone checkpoint; await S2's still-pending command-policy decision before choosing a replacement. Avoid consolidating a retry algorithm immediately before potentially retiring it. Retained duplicate-command/intent protection remains required. |
+| R7-6 / A4 shared replay helper | Retire the old standalone checkpoint. Settled D2 removes elapsed-time mutation replay through AB-7's existing admission/completion path; do not first build a shared replay framework. Keep authoritative identity, duplicate protection and bounded recovery of the original outcome after genuine delivery failure. |
 | R7-7 / A12 lazy resolver | Absorb into L2. Broader cross-call safety derivation/cache reuse is deferred; no bypass flag or trusted context framework. |
 | A5 shared selection admission | Defer with S5. Task and general/CLI wrappers have different replay, revision and verification semantics; external work remains outside locks. No callback-heavy admission framework. |
 | A6 scenario-local receipts, disconnected checkbox and driver spelling | M1-8 R1 already adopted functional consolidation. Current follow-ups belong to T1/T2 only after rechecking surviving scenarios; do not rerun the old list or build a universal fake DOM. Retain actual stale-response, captured-intent and native input/focus witnesses. |
@@ -556,8 +572,14 @@ Reconciliation checks at `a7f8402`: `reconciliation-checks.json` records the
 changed-document link/anchor scan, diff check, unchanged product/test/tool and
 AGENTS/DEFENSE paths, and comparison proving that all five archived bodies are
 preserved except banners and relocated links. Final adversarial self-review
-checked that proposals were not promoted to user decisions (especially D2/D4),
+checked that proposals were not promoted to user decisions (D2/D4 were then open),
 that S3 preserves unknown/Gap and bounded-result behavior, that S4 retains
 storage and mutable-ownership checks, and that S5 does not collapse complementary
 cleanup owners. It also found and removed stale R7-resumption wording from
 M1_PLAN. No independent agent review, fresh test run or measured benefit is claimed.
+
+Subsequent plan revision based on `0c74ee7` records the user's explicit D2/D4 decisions.
+BRIDGE's existing small asynchronous command contract and current command-policy
+consumers were inspected: admission/completion and post-effect delivery failure
+already exist. AB-7 therefore reuses that machinery, preserves bounded observation
+and unavailable outcomes, and does not promise that all uncertainty disappears.

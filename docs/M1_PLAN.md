@@ -26,6 +26,8 @@ revision; recheck changed seams before implementation. The
 dispositions. This section is the sole AB register. The requested commit records
 the plan and prior reconciliation; **all AB checkpoints remain pending**. Plan
 creation/approval does not by itself activate implementation.
+Revision based on `0c74ee7` settles D2/D4 from the user's instructions without executing
+AB-7 or changing the current transport contract in BRIDGE.
 
 - In scope: W1–W4 documentation/workflow, E1 optional benchmarks, L1–L4,
   bounded S1/S2/S3, S4 only at the response adoption boundary, T1 and the T2
@@ -48,11 +50,17 @@ creation/approval does not by itself activate implementation.
   rubric, size threshold or automatic register for every audit finding.
 - D1 is a design direction, not a demonstrated absence of reload gestures.
   AB-6 must establish unsupported-reload behavior in the installed host.
-  D2 remains a user decision: AB-7 recommends prompt admission and authoritative
-  result observation without timer-driven mutation replay. The user may instead
-  retain current commands; AB-8 can then proceed using them. No silent timeout
-  deletion or indefinite pending state. D4 remains unchanged: keep highlighting
-  separate from execution checkboxes. D6's missing-row acknowledge/restore UI
+  D2 is settled: remove page-side elapsed-time deadlines that abandon mutating
+  command results or automatically replay mutations. Keep delayed-response
+  feedback, bounded observation recovery, authoritative identity, duplicate-effect
+  protection and original-outcome retention/recovery. Native delivery can fail
+  after an effect; uncertainty does not disappear with reload/deadline removal.
+  Failed communication must show an explicit "outcome unavailable" state rather
+  than unqualified "working…" indefinitely. Retain startup, shutdown, worker/
+  resource and genuinely bounded observation timeouts. AB-7 simplifies existing
+  asynchronous admission/completion before considering any new protocol.
+  D4 is settled: retain highlighting/focus and its separation from execution
+  checkboxes without feature reduction. D6's missing-row acknowledge/restore UI
   needs explicit allocation when M1-9/10 is activated, not deletion as dead code.
 - E1 loses automatic latency/empirical-memory gating for the named performance
   families. That is an intentional acceptance-policy change, not proof of zero
@@ -79,7 +87,7 @@ Do not weaken a detector of an unchanged guarantee to make the suite pass.
 | `db/repositories.py` unused mapping API vs live `find_current_mapping`; planner/workflow consumers | Delete live correspondence or revive retained-alias rejection | AB-3: all caller search plus MOVE-1 repository/planner/workflow behavior |
 | Service `_resolve_plan_selection_ids`, `_selection_preview_locked`, task port and drain `open_plan_view`; CLI/API public preview | Full preview allocation remains; torn revision/membership transfer, altered dependency closure or stale execution intent | AB-4: exact current/stale capture, folder/leaf/empty/mixed selection, public preview compatibility, 120k counted-work witness |
 | Bridge response capture/validation/projection and longest drain-prefix admission; page decoder | Aliasing after adoption, cycle/unsafe type acceptance, wrong byte limit, task mismatch or lost custody on failure | AB-5: existing boundary/custody cases, mutation-after-capture and exact-limit cases; AB-8 page identity adoption |
-| Host document generations and `bridge.js`/`app.js` command attempts; lifecycle/observer cleanup | Late retired-page callback gains authority, timeout duplicates an effect, close drops live ownership, unavailable backend looks perpetually active | AB-6/7: installed gestures, delayed/duplicate returns, close races and failed observation; preserve task-lifecycle concurrency tests |
+| Host document generations; `commands.py::CommandSpec`, `bridge.py` asynchronous admission/completion, `document_channel.py::DocumentChannel`, `bridge.js`/`app.js` attempts and lifecycle receipts | Late retired-page callback gains authority; elapsed time abandons a recoverable result or duplicates an effect; native delivery fails after mutation; observation exhaustion hides uncertainty; close drops live ownership | AB-6/7: installed gestures, delayed/duplicate returns, post-effect delivery failure, bounded observation exhaustion/late recovery and close races; preserve task-lifecycle concurrency tests |
 | Event bus Gap → SessionObserver → drain `_TaskState` → JS reducers → shell controls/windows/details | Removing browser reduction fabricates completeness, loses terminal axes, misroutes task state, rounds large integers or drops control/Close feedback | AB-8: real producer→snapshot→page scenarios, bounded windows/one detail, navigation and deferred-response probes plus installed journeys |
 | Static CSS/source pins, design tokens and gallery | Removing a spelling assertion also removes focus, reduced-motion, forced-color or safe-sink detection | AB-9: retained semantic/computed-style/native witnesses; no whole-cohort deletion |
 
@@ -98,10 +106,10 @@ cleanup commit. New findings do not silently add rows.
 | AB-4 | Desktop selection capture avoids redundant work with one revision-bound handoff | AB-2 | Selection/service/task-port consumers, counted work and installed Plan | Pending |
 | AB-5 | Bridge response adoption consolidates repeated traversal without weakening boundaries | AB-2 | Response/custody/decoder consumers, ordinary and installed transport | Pending |
 | AB-6 | Unsupported reload has one contained restart behavior instead of reinjection recovery | AB-2 | Host/transport/lifecycle races and installed gestures | Pending |
-| AB-7 | Command admission/result observation no longer requires timer-driven mutation replay | AB-6 and explicit D2 decision | Duplicate/delayed/failed command and close composition | Pending, decision required |
-| AB-8 | Existing shell renders bounded authoritative Python task snapshots | AB-4/5/6; AB-7 completed or explicit current-command retention | Producer→snapshot→page, ordinary/imports and installed task journeys | Pending |
+| AB-7 | Existing admission/completion preserves original outcomes without page-timeout result abandonment or replay | AB-6; D2 settled | Delayed/post-effect failed delivery, bounded observation recovery/exhaustion, duplicate protection and close | Pending |
+| AB-8 | Existing shell renders bounded authoritative Python task snapshots | AB-4/5/6/7 | Producer→snapshot→page, ordinary/imports and installed task journeys | Pending |
 | AB-9 | Remaining visual/source pins protect behavior rather than incidental spelling | AB-8 | Static/security, computed style, ordinary and installed gallery | Pending |
-| AB-10 | Integrated reductions preserve the complete retained workflow and have coherent docs/evidence | All above; AB-7 disposition recorded | Overall final sweep below | Pending |
+| AB-10 | Integrated reductions preserve the complete retained workflow and have coherent docs/evidence | All above | Overall final sweep below | Pending |
 
 ### Detailed checkpoints
 
@@ -341,34 +349,68 @@ stale-document containment; examine native callback and shutdown races.
 **Commit gate.** Supported flows and unexpected-load containment pass;
 `refactor(web): replace reload recovery with contained restart behavior`.
 
-#### AB-7 — Command result observation (D2 conditional)
+#### AB-7 — Simplify existing command completion and recovery
 
-**Objective.** Remove timer-induced mutation uncertainty without losing duplicate
-protection or feedback. Requires explicit user choice of the proposed behavior;
-retaining current commands is a valid disposition, not a failed implementation.
-**Scope and approach.** Existing command admission/completion owner, task-port,
-bridge exchange, app attempt handling and lifecycle consumers. Before editing,
-record command-by-command admission/result/close transitions in BRIDGE. Reuse
-authoritative identities and bounded result observation. Long close settlement
-becomes observable task state; a slow response is neither cancellation nor a
-reason to resubmit mutation. Keep bootstrap/shutdown/job bounds. Backend loss
-must become visible with a safe observation/restart route, not perpetual pending.
-**Acceptance criteria.** Duplicate gestures/late returns produce at most one
-effect; response loss recovers the original result; pending Close reaches an
-honest settled or unavailable state. No automatic timeout-triggered mutation
-replay. CLI behavior, admission rollback and current recovery limitations remain.
-**Regression watchlist.** Result eviction before observation, close/start races,
-ambiguous native failure, double confirmation and stale task navigation.
-**Tests and evidence.** Command, lifecycle and transport tests with deliberately
-delayed/lost/duplicate results and unavailable backend; interfaces/workflows
+**Objective.** Apply settled D2: elapsed time alone neither abandons a mutating
+command's result nor automatically replays its mutation. Preserve recovery of
+the original outcome when local communication genuinely fails.
+**Scope and approach.** Start with the delivered M1-async path:
+`commands.py::CommandSpec`, asynchronous admission/completion in `bridge.py`,
+`document_channel.py::DocumentChannel`, browser correlation in `bridge.js`,
+app attempt handling and existing task/session effect receipts. Several commands
+already return admission separately from completion; exploit and simplify that
+machinery. Keep direct commands direct unless a specific existing-path change is
+needed. No replacement command system, parallel admission/result protocol,
+generic scheduler or durable command history is in scope.
+
+Before edits, map each affected mutating wrapper, including direct mutations,
+to its current identity, result owner, completion delivery and recovery path.
+Remove page-side elapsed-time abandonment and mutation replay triggered by those
+deadlines. Delays
+may trigger qualified feedback and bounded observation checks; preserve genuinely
+bounded observation, startup, shutdown and worker/resource-containment deadlines.
+Retain bounded original-result/effect receipts and duplicate protection. Separate
+delivery acknowledgment/cleanup from effect truth: an observation timeout or
+native post failure must not erase the authoritative outcome, cancel admitted
+work or authorize another effect. Reuse task/session reconstruction and existing
+result recovery before adding a mechanism. Document retained-result lifetime and
+safe retirement without unbounded pending entries or indefinite receipt storage.
+
+**Acceptance criteria.** A result delayed beyond former page deadlines remains
+recoverable/adoptable while its identity and ownership are valid, with no timed
+mutation replay. Duplicate gestures/late returns produce at most one effect.
+Failure after an effect recovers that original result when available; failed or
+exhausted bounded observation explicitly reports "outcome unavailable", never
+false failure/success or unqualified "working…" indefinitely. Observation retry
+does not restart the mutation. Unavailability is a communication fact, not a
+terminal operation verdict; later valid observation may resolve it. Pending Close
+retains truthful settlement/availability feedback and actual worker custody.
+CLI behavior, admission rollback, bounded resources and current process-lifetime
+recovery limitations remain; no guaranteed recovery after process loss is added.
+
+**Regression watchlist.** Result eviction on page timeout, conflating failed
+delivery with failed effect, retained result lost during acknowledgment cleanup,
+observation retry becoming mutation replay, close/start races, unbounded recovery
+loops, double confirmation and stale task navigation.
+**Tests and evidence.** Characterize current async/direct wrappers and existing
+post-effect delivery-failure cases first. Test delay beyond former deadlines,
+lost admission/completion delivery after exactly one effect, duplicate/late
+returns, original-result recovery, bounded observation exhaustion, later valid
+observation after unavailable, and Close/shutdown with a worker still active.
+Use controlled clocks/delivery faults; retain startup/cleanup/worker timeout and
+capacity tests. Run command/lifecycle/transport cases, interfaces/workflows
 neighborhood, ordinary/imports and installed submit/control/close/reobserve flows.
-**Documentation and handoff.** BRIDGE/INTERFACES own the chosen transitions; retain
-exact unavailable-backend UX and lifetime bounds. If user retains current policy,
-record that disposition and AB-8's dependency without pretending AB-7 shipped.
-**Adversarial review.** Follow each admitted effect whose response never reaches
-the page; establish how the user learns its outcome without starting it again.
-**Commit gate.** Approved command contract, all failure paths and consumers pass;
-`refactor(web): observe admitted command results without timed mutation replay`.
+**Documentation and handoff.** BRIDGE/INTERFACES own revised transitions, original
+result retention/retirement, observation attempt bounds and unavailable feedback.
+Record reuse of existing admission/completion and any removed retry paths; do not
+claim that reload removal eliminates uncertain outcomes. AB-8 consumes this path.
+**Adversarial review.** Follow an effect that succeeds just before native delivery
+fails and an observation budget that expires before a late completion. Prove no
+duplicate effect, erased result, false terminal claim or unbounded wait/retention.
+If a new protocol proves necessary, explain the architectural boundary and return
+for scope adjudication rather than enlarging AB-7 implicitly.
+**Commit gate.** All retained failure/lifecycle paths and consumers pass;
+`refactor(web): simplify command completion without timed mutation replay`.
 
 #### AB-8 — Authoritative task snapshots and bounded shell refactor
 
@@ -384,8 +426,9 @@ event/attempt reduction out of `bridge.js`, `app.js` and `task_status.js`, keepi
 drafts, focus, scroll, pending feedback and visual formatting local. Prefer one
 Python rate/ETA sample history with monotonic time and explicit reset on attempt/
 Gap; the browser only formats the result. Existing panels/renderers remain.
-AB-7 must be completed or explicitly disposed as current commands retained before
-freezing the snapshot shape. No framework, preparatory shell rewrite or S5 merger.
+Complete AB-7 before freezing the snapshot shape; snapshots preserve its explicit
+outcome-unavailable and original-result recovery states. No framework, preparatory
+shell rewrite or S5 merger. D4's highlighting/focus behavior remains intact.
 
 **Acceptance criteria.** Atomic snapshot adoption rejects stale/foreign identity
 and preserves exact scalar values. Upstream Gap remains unknown until supported
@@ -453,7 +496,8 @@ actual release checks; archived evidence is overwritten.
 **Tests and evidence.** Use final-sweep commands and cross-boundary journeys below;
 reuse still-valid checkpoint evidence only where dependencies are unchanged.
 **Documentation and handoff.** Compact completed AB rows, preserve rejected/
-deferred decisions, list remaining M1-9/10 allocation and D4/DOC-2 decisions.
+deferred decisions, list remaining M1-9/10 allocation and DOC-2 decision; D2/D4
+are settled retained behavior, not unresolved choices.
 **Adversarial review.** Review complete product/test/tool/doc delta and actual
 user journey, with evidence for each regression-map row and changed detector.
 **Commit gate.** All sweep evidence accounted and working tree coherent;
@@ -479,7 +523,10 @@ applies. Do not run historical acceptance merely to recreate obsolete test count
 
 Exercise installed Setup→Plan→selection→confirmation→execute→terminal/details,
 Plan-again, pause/resume/cancel, navigation, observation retry, pending Close,
-unsupported reload and shutdown, including refused/degraded/capacity cases.
+unsupported reload and shutdown, including refused/degraded/capacity cases,
+post-effect delivery failure, bounded observation exhaustion and later recovery
+of the original result without repeated mutation. Retain D4 highlight/focus and
+checkbox separation in keyboard, range and hidden-selection journeys.
 Verify security/parser rejection, exact identities/scalars, immutable adoption,
 bounded ingress/window/detail work and release truth. Retain history write/read
 and CLI compatibility coverage from the ordinary suite. Check optional tools use
@@ -504,12 +551,14 @@ before closeout; unsupported pre-existing leads remain explicitly deferred.
   in the current study §13. No product tests or new benchmarks run for this plan.
 - Next action: activate AB-1, then its documentation-only population/verification;
   preserve current gate status until AB-2 moves producers and consumers together.
-- Commands: final sweep above; current documentation check is
-  `.\.venv\Scripts\python.exe build\post-m1-8-ablation-20260925\scripts\check_reconciliation.py`
-  against the planning baseline before commit. This one-shot checker is not a
-  permanent project gate or valid unchanged after AB implementation.
-- Decisions: D2 needs user selection before AB-7; explicit retention allows AB-8.
-  D4 feature behavior unchanged, D6 scheduled allocation later, S5/L6/tracer
+- Commands: final sweep above; the D2/D4 revision check is
+  `.\.venv\Scripts\python.exe build\post-m1-8-ablation-20260925\scripts\check_plan_revision.py`.
+  The earlier `check_reconciliation.py` checked the archive migration before
+  `0c74ee7`; it is not reusable after that commit. Neither one-shot checker is
+  a permanent project gate or valid unchanged after AB implementation.
+- Decisions: D2 settled; AB-7 simplifies existing admission/completion while
+  retaining original-outcome recovery and explicit unavailability. D4 retained
+  without feature reduction. D6 scheduled allocation later, S5/L6/tracer
   retirement deferred. Rejected L5/L7/L8/L9 stay in the study's compact table.
 - Preserve all raw JSON, existing build evidence, unrelated work, branch refs and
   stashes. No DOC-2 operations, push or PR. Commit only verified task-owned docs.

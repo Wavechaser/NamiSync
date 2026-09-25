@@ -1,42 +1,35 @@
-# Latest session — post-M1-8 reduction plan
+# Latest session — settle D2/D4 and narrow AB-7
 
-2026-09-25; planning baseline `a7f8402` on `milestone1`. User requested an
-actionable plan under plan-work and a commit of the revision, including the
-prior uncommitted study reconciliation and five archived studies.
+2026-09-25; revision baseline `0c74ee7` on `milestone1`. User requested plan
+revision and commit only. [M1_PLAN](M1_PLAN.md#post-m1-8-reduction-plan) owns
+AB-1–AB-10; [POST_M1_8_ABLATION](POST_M1_8_ABLATION.md) owns the study/dispositions.
+All implementation checkpoints remain pending; no product, test or operative
+transport/evidence-policy change is delivered here.
 
-[M1_PLAN](M1_PLAN.md#post-m1-8-reduction-plan) owns AB-1–AB-10 and its resumption
-block. [POST_M1_8_ABLATION](POST_M1_8_ABLATION.md) retains findings, D1–D7,
-rejected L5/L7/L8/L9 and earlier-study accounting. All AB rows are pending;
-this session implements no product, test, tool or operative evidence-policy change.
+D2 is settled: remove page-side elapsed-time deadlines that abandon mutating
+command results or automatically replay mutations. Keep delayed feedback, bounded
+observation recovery, command identity/duplicate-effect protection, original-result
+retention/recovery and lifecycle/resource/observation timeouts. Native delivery
+failure after an effect remains possible. Exhausted/failed observation shows
+explicit "outcome unavailable", not a fabricated operation verdict or indefinite
+unqualified "working…"; later valid observation can recover the original result.
 
-AB-1 is the documentation pass: compact completed M1_PLAN records without losing
-DOC-2 or future obligations; make the user-owned small-change default durable;
-establish PERFORMANCE for methods and historical result tables. AB-2 moves
-measurement drivers to tools and demotes the named performance families with
-their consumers; correctness, enforced bounds and separate release/safety gates
-remain. JSON stays byte-identical at current paths; raw evidence stays in place.
-Numerical JSON does not replace screenshots, package evidence or failure logs.
+AB-7 reuses the delivered CommandSpec/bridge/DocumentChannel admission/completion
+path and existing effect receipts. No whole-command-system redesign, parallel
+result protocol or unlimited retention. Its regression gates cover slow results,
+post-effect delivery loss, observation exhaustion/late recovery, duplicates and
+Close/shutdown custody. AB-8 now depends on AB-7; no pending D2 decision remains.
+D4 highlighting/focus and checkbox separation are explicitly retained without
+feature reduction. Other exclusions and deferred decisions are unchanged.
 
-The plan keeps database, selection, response, reload, command, snapshot and
-visual-test changes in coherent commits. S3 uses the existing shell, preserves
-Gap/unknown facts and bounded details, and does not require S5. D2 still needs a
-user decision before AB-7; explicit retention of current commands lets AB-8
-proceed. D4 remains unchanged. S5/L6/tracer retirement are deferred. History
-write/readback validation, mutable execution authority and Advanced Color stay.
+Verification: inspected current command policy, asynchronous transport source
+locations and BRIDGE's post-effect failure contract; reviewed the four-document
+diff for stale decisions, dependency consistency and failure truthfulness. Link,
+plan-shape and diff checks are recorded in
+`build/post-m1-8-ablation-20260925/plan-revision-checks.json`. No runtime tests or
+benchmarks are needed for this planning-only revision. Earlier study evidence
+and all raw JSON remain untouched.
 
-W2 now follows the user's instruction, replacing the earlier proposed criteria:
-default small change, retain applicable verification/review/docs/changelog, omit
-permanent detailed plans/registers unless asked. Explain and ask to formalize
-ownership/public-contract/safety/multiple-outcome crossings. Red tests may reflect
-intentional removal; green tests alone do not establish absence of regression.
-
-Verification: read-only source/helper/consumer inspection, committed JSON summary
-extraction and final adversarial plan review. Documentation/link/diff and archive
-body checks are in `build/post-m1-8-ablation-20260925/reconciliation-checks.json`.
-One-shot scripts remain in its existing `scripts/`; no new performance run or
-product test is claimed. All five archived bodies retain their original content
-except retirement banners and relocated links.
-
-Next: activate AB-1. Preserve raw evidence, JSON, unrelated refs/stashes and the
-pending DOC-2 decision. This delivery is a documentation commit only; no push,
-PR, branch rewrite or implementation activation.
+Next: activate AB-1, the documentation pass; implementation is not authorized by
+this revision. Preserve pending DOC-2, unrelated refs/stashes and raw evidence.
+No push, PR or branch rewrite requested.
