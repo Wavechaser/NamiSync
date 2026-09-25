@@ -136,6 +136,17 @@ $env:NAMISYNC_TEST_NODE = 'C:\path\to\node.exe'
 Headed acceptance requires an interactive supported Windows desktop and the
 real WebView2 host. Run the interface-owned headed gate when desktop behavior,
 packaging, or headed harnesses change.
+For checks that send native keyboard/mouse input, announce the brief input
+interval and leave the owned test window in front until it ends. Verify the
+foreground/focused window and mouse hit target belong to the test process tree
+before sending input. A user focus change makes that attempt incomplete; it is
+not evidence that a gesture is disabled. Keep the failed receipt, restore any
+temporary window/cursor state and rerun after the interference ends. This does
+not require attendance for ordinary tests or probes that do not send input.
+The transport folder-picker helper verifies the Unicode edit value and posts
+one confirmation. Its `dialog_closed` receipt describes only that observation;
+the fixture must separately verify the returned source/target paths. A delayed
+or still-open dialog is not a reason to post another confirmation.
 Readiness changes require focused coverage of the order-independent gate,
 queued document-currentness check, exact bootstrap command policy, browser
 supersession/retry behavior, and both degradable and unsafe native-surface

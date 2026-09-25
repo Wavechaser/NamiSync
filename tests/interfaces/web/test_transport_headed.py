@@ -5,6 +5,7 @@ from __future__ import annotations
 import inspect
 import json
 import shutil
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
@@ -485,6 +486,96 @@ def test_transport_gate_native_picker_automation_is_exact_and_fail_closed() -> N
 
 
 @pytest.mark.parametrize(
+    "outcome",
+    ("readback_mismatch", "open_after_post", "closed_after_post", "lost_owner"),
+)
+def test_transport_gate_folder_automation_requires_readback_and_posts_once(
+    outcome: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path = r"C:\test\selected-source-海"
+    posts: list[object] = []
+    identities: list[tuple[int, int, int]] = []
+    values = SimpleNamespace(Value="")
+    clock = SimpleNamespace(now=0.0)
+
+    def advance(seconds: float) -> None:
+        clock.now += seconds
+
+    monkeypatch.setattr(
+        headed_host_child,
+        "time",
+        SimpleNamespace(monotonic=lambda: clock.now, sleep=advance),
+    )
+
+    class Pattern:
+        Current = values
+
+        def SetValue(self, requested: str) -> None:
+            values.Value = "stale" if outcome == "readback_mismatch" else requested
+
+    pattern = Pattern()
+    edit = SimpleNamespace(GetCurrentPattern=lambda _pattern: pattern)
+    button = object()
+    root = SimpleNamespace(FindAll=lambda *_args: object())
+    automation = SimpleNamespace(
+        AutomationElement=SimpleNamespace(FromHandle=lambda _handle: root),
+        Condition=SimpleNamespace(TrueCondition=object()),
+        TreeScope=SimpleNamespace(Descendants=object()),
+        ValuePattern=SimpleNamespace(Pattern=object()),
+    )
+    monkeypatch.setitem(sys.modules, "clr", SimpleNamespace(AddReference=lambda _name: None))
+    monkeypatch.setitem(sys.modules, "System", SimpleNamespace(IntPtr=int))
+    monkeypatch.setitem(sys.modules, "System.Windows.Automation", automation)
+    monkeypatch.setattr(
+        headed_host_child,
+        "_classify_folder_dialog_controls",
+        lambda _elements: (edit, button, {}),
+    )
+
+    def require_identity(handle: int, owner: int, process: int) -> None:
+        identities.append((handle, owner, process))
+        if outcome == "lost_owner" and len(identities) == 2:
+            raise RuntimeError("folder dialog identity changed")
+
+    monkeypatch.setattr(headed_host_child, "_require_exact_dialog_identity", require_identity)
+    monkeypatch.setattr(
+        headed_host_child,
+        "_post_exact_folder_confirmation",
+        lambda *args, **kwargs: posts.append((args, kwargs)),
+    )
+    monkeypatch.setattr(
+        headed_host_child,
+        "_native_window_exists",
+        lambda _handle: outcome == "open_after_post",
+    )
+    if outcome == "lost_owner":
+        with pytest.raises(RuntimeError, match="identity changed"):
+            headed_host_child._select_folder_with_automation(
+                100, path, owner_handle=90, process_id=7,
+                deadline=2.0,
+            )
+        assert posts == []
+        return
+
+    result = headed_host_child._select_folder_with_automation(
+        100, path, owner_handle=90, process_id=7,
+        deadline=2.0,
+    )
+    if outcome == "readback_mismatch":
+        assert result == {"dialog_closed": False, "path_readback_matched": False}
+        assert posts == []
+    elif outcome == "open_after_post":
+        assert len(posts) == 1
+        assert result == {"dialog_closed": False, "confirmation_posts": 1}
+        assert clock.now >= 0.75
+    else:
+        assert result == {"dialog_closed": True, "confirmation_posts": 1}
+        assert "selected" not in result
+        assert len(posts) == 1
+
+
+@pytest.mark.parametrize(
     "button_handle",
     (None, "not-a-handle", 0, -1),
 )
@@ -958,7 +1049,7 @@ def test_transport_gate_uia_folder_subcommand_parses_its_headless_shape(
                 "deadline": deadline,
             }
         )
-        return {"selected": True, "confirmation_posts": 1}
+        return {"dialog_closed": True, "confirmation_posts": 1}
 
     monkeypatch.setattr(
         headed_host_child,
@@ -1131,9 +1222,9 @@ def test_br_g_32_native_picker_keeps_real_paths_in_server_slots(
     assert len({call["command_id"] for call in calls}) == len(calls)
     assert evidence.result["report"]["source_id"].startswith("slot-")
     assert evidence.result["report"]["target_id"].startswith("slot-")
-    assert all(item["selected"] is True for item in evidence.picker_automation)
+    assert all(item["dialog_closed"] is True for item in evidence.picker_automation)
     assert all(
-        item["confirmation_posts"] in {1, 2}
+        item["confirmation_posts"] == 1
         for item in evidence.picker_automation
     )
     assert evidence.source_after == evidence.source_before

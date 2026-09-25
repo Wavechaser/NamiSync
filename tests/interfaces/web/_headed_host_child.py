@@ -255,7 +255,7 @@ def _run_uia_select_folder(argv: list[str]) -> int:
             process_id=arguments.process_id,
             deadline=deadline,
         )
-        if last.get("selected") is True:
+        if last.get("dialog_closed") is True:
             print(json.dumps(last))
             return 0
     except Exception as error:
@@ -263,13 +263,13 @@ def _run_uia_select_folder(argv: list[str]) -> int:
             json.dumps(
                 {
                     **last,
-                    "selected": False,
+                    "dialog_closed": False,
                     "error_type": type(error).__name__,
                 }
             )
         )
         return 2
-    print(json.dumps({**last, "selected": False}))
+    print(json.dumps({**last, "dialog_closed": False}))
     return 1
 
 
@@ -308,7 +308,7 @@ def _select_folder_with_automation(
 
     edit, button, observed = exact_controls()
     if edit is None or button is None:
-        return {"selected": False, "controls": observed}
+        return {"dialog_closed": False, "controls": observed}
     value_pattern = edit.GetCurrentPattern(ValuePattern.Pattern)
     _require_exact_dialog_identity(
         handle,
@@ -316,41 +316,24 @@ def _select_folder_with_automation(
         process_id,
     )
     value_pattern.SetValue(path)
-    confirmation_posts = 0
-    while confirmation_posts < 2:
-        _post_exact_folder_confirmation(
-            handle,
-            button,
-            owner_handle=owner_handle,
-            process_id=process_id,
-        )
-        confirmation_posts += 1
-        close_observation_until = min(deadline, time.monotonic() + 0.75)
-        while time.monotonic() < close_observation_until:
-            if not _native_window_exists(handle):
-                return {
-                    "selected": True,
-                    "confirmation_posts": confirmation_posts,
-                }
-            time.sleep(0.025)
-        if confirmation_posts == 1:
-            _unused_edit, button, observed = exact_controls()
-            if button is None:
-                return {
-                    "selected": False,
-                    "confirmation_posts": confirmation_posts,
-                    "controls": observed,
-                }
+    if str(value_pattern.Current.Value) != path:
+        return {"dialog_closed": False, "path_readback_matched": False}
+    _post_exact_folder_confirmation(
+        handle,
+        button,
+        owner_handle=owner_handle,
+        process_id=process_id,
+    )
     while time.monotonic() < deadline:
         if not _native_window_exists(handle):
             return {
-                "selected": True,
-                "confirmation_posts": confirmation_posts,
+                "dialog_closed": True,
+                "confirmation_posts": 1,
             }
         time.sleep(0.025)
     return {
-        "selected": False,
-        "confirmation_posts": confirmation_posts,
+        "dialog_closed": False,
+        "confirmation_posts": 1,
     }
 
 

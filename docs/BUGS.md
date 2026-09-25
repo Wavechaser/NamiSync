@@ -71,6 +71,17 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Workspace and measurement integrity
 
+- MINOR - FIXED (2026-09-25). Dialog completion conflated with selection.
+  The native transport test helper reported a selected folder when the dialog
+  disappeared and could post a second confirmation after a fixed wait without
+  verifying the typed path. One installed run returned an old source directory;
+  the fixture's actual-path assertions caught it, but its exact cause was not
+  reproduced. The helper now verifies Unicode edit readback, posts once and
+  reports only dialog closure. Actual source/target validation remains in the
+  transport fixture. Wrong readback and lost ownership prevent confirmation;
+  a still-open dialog fails within the existing bound without another click.
+  No production picker change or diagnosis of the original timing is claimed.
+
 - MINOR - FIXED (2026-09-23). Duplicated badge expectation drift. The gallery
   correctly emitted a yellow fill capacity badge, but its child validator and
   a separate parent assertion expected text, rejecting valid installed evidence.

@@ -103,7 +103,7 @@ cleanup commit. New findings do not silently add rows.
 | AB-2 | Optional, usable performance drivers live in tools with required correctness/release checks preserved | AB-1 | 5,302 ordinary, 33 installed, 12 import passes; selected drivers, preserved evidence and independent review | Complete in `8ba38ced` |
 | AB-3 | Unused database mapping API removed without changing current correspondence | AB-1 | 1,331 department tests, 12 import contracts, caller closure and independent review | Complete; reviewed `c5f1de8` integrated in `dd23c270` |
 | AB-4 | Desktop selection capture avoids redundant work with one revision-bound handoff | AB-2 | 2,605 neighborhood; 5,305 ordinary; 4 installed; 12 imports; independent review | Complete in `9cfd2a0` |
-| AB-5 | Bridge response adoption consolidates repeated traversal without weakening boundaries | AB-2 | 5,306 ordinary; 6 installed; 12 imports; response/custody/decoder checks and independent review | Complete in this checkpoint commit |
+| AB-5 | Bridge response adoption consolidates repeated traversal without weakening boundaries | AB-2 | 5,306 ordinary; 6 installed; 12 imports; response/custody/decoder checks and independent review | Complete in `1cb75fb` |
 | AB-6 | Unsupported reload has one contained restart behavior instead of reinjection recovery | AB-2 | Host/transport/lifecycle races and installed gestures | Pending |
 | AB-7 | Existing admission/completion preserves original outcomes without page-timeout result abandonment or replay | AB-6; D2 settled | Delayed/post-effect failed delivery, bounded observation recovery/exhaustion, duplicate protection and close | Pending |
 | AB-8 | Existing shell renders bounded authoritative Python task snapshots | AB-4/5/6/7 | Producer→snapshot→page, ordinary/imports and installed task journeys | Pending |
@@ -480,6 +480,23 @@ every adoption point; verify the optimization did not merely skip validation.
 #### AB-6 — One unsupported-reload path
 
 **Objective.** Retire reinjection recovery while preserving document containment.
+**Delivered harness prerequisites (2026-09-25).** At the user's request,
+H1/H2 were handled before AB-6 product work. H1 verifies Unicode edit readback
+before one native confirmation and reports only dialog closure; the existing
+transport fixture still checks the actual source/target paths. The old loop
+fails the new one-post control. The original wrong-directory cause remains
+unconfirmed; this is a test-harness repair, not a product-picker fix.
+H2 attempt 06 delivered all five inputs to the owned foreground/focused window
+and exited cleanly: F5/Ctrl+R/Alt+Left did not navigate, mouse Back traversed
+same-document fragments, and right click produced a DOM event without a sampled
+owned native menu. Only attempt 05 has confirmed user focus interference;
+earlier causes remain unknown. Verified 33 focused controls, 1,771 interface
+tests, six selected transport cases and all 33 headed cases, with independent
+review. TESTS owns the method; ignored
+`build/post-m1-8-ablation-20260925/harness-verification.md` maps raw passes,
+failed diagnostics and reviews. No product files changed. This closes idle
+gesture characterization, not forced second-load containment or AB-6.
+Recovery `56802606` remains preserved and must not be integrated as-is.
 **Scope and approach.** Host/bootstrap generation users, bridge/drain adoption,
 app state and relevant probes. Verify F5, Ctrl+R, Alt+Left, mouse Back and context
 menu in the installed build first. Keep startup, navigation/origin guards,

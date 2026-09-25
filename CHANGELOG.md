@@ -1027,6 +1027,22 @@ repeated machinery while preserving operational safety and boundary contracts.
 Safety, settlement, authority, and measurement work made high-risk release
 claims explicit, independently reviewable, and regression-backed.
 
+#### Repair native test interaction assumptions before ablation (2026-09-25)
+
+- Verify the folder dialog's typed Unicode path before one confirmation;
+  remove blind timed re-confirmation and distinguish dialog closure from the
+  fixture's actual selected-path verdict. Keep native ownership and bounded
+  cleanup. The original wrong-directory run remains retained and its exact
+  cause is unconfirmed; no product picker change is claimed.
+- Complete the installed gesture baseline during a brief uninterrupted input
+  interval. F5, Ctrl+R and Alt+Left did not navigate; mouse Back traversed
+  same-document fragment history. Right click delivered a context-menu event
+  without an observed native popup, and the host closed cleanly. Retain earlier
+  incomplete attempts; only attempt 05 has confirmed user focus interference.
+- Verify 33 focused controls, 1,771 interface tests and all 33 installed headed
+  cases, including the six transport cases, with independent review. AB-6
+  product implementation remains pending; reload containment is not implemented.
+
 #### Consolidate detached bridge response adoption (2026-09-25)
 
 - Validate registered views while projecting detached ordinary bridge responses;

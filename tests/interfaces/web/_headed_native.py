@@ -441,7 +441,7 @@ def select_folder_in_native_dialog(
     python: Path,
     deadline: ScenarioDeadline,
 ) -> dict[str, object]:
-    """Select one physical-local folder in the child-owned common dialog."""
+    """Drive one owned dialog; callers verify the returned folder path."""
 
     selected_path = require_absolute_local_test_root(path)
     dialog = _wait_for_owned_common_dialog(
@@ -480,9 +480,9 @@ def select_folder_in_native_dialog(
             "folder-dialog automation produced no valid result; "
             f"stdout={completed.stdout!r}, stderr={completed.stderr!r}"
         ) from error
-    if completed.returncode != 0 or result.get("selected") is not True:
+    if completed.returncode != 0 or result.get("dialog_closed") is not True:
         raise AssertionError(
-            "folder-dialog automation did not select the requested folder; "
+            "folder-dialog automation did not close after confirmation; "
             f"result={result!r}, stderr={completed.stderr!r}"
         )
     while _is_window(dialog):

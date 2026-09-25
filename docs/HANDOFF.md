@@ -1,35 +1,39 @@
-# Latest session — AB-5 bridge response adoption
+# Latest session — native test interaction prerequisites
 
-2026-09-25; `milestone1` at integrated base `9cfd2a0`. AB-1 is `29d9b8f`,
-AB-2 is `8ba38ced`, reviewed AB-3 `c5f1de8` was integrated in `dd23c270`,
-and AB-4 is `9cfd2a0`. The AB-1–AB-10 batch remains active. The AB-3 worktree
-and branch remain for final accounting.
+2026-09-25; `milestone1`, delivery base `1cb75fb` (AB-5). AB-1–5 are integrated;
+M1_PLAN retains their commit identities. The user requested sorting the picker
+and gesture issues before continuing AB-6. No product files changed in this
+session; AB-6 reload containment and AB-7–10 remain pending.
 
-AB-5 keeps hostile response capture and exact byte admission before touching
-detached values. Ordinary response projection and `to_primitive_view` now
-perform registered semantic validation during that owned projection walk,
-without re-invoking nested registered validators beneath a validated view.
-The typed continuation and drain-prefix validation paths remain intact; drain
-validation still completes before queue consumption. Browser native detachment,
-whole-batch decoding and identity checks remain separate adoption boundaries.
-The private projector requires an explicit validation mode at each entry, and
-no extra primitive drain graph is retained. One shared-alias/caller-detachment
-witness was added. This removes a repeated generic walk without claiming a
-line-count, timing or memory reduction.
+The folder-picker helper now verifies exact Unicode edit readback, posts one
+confirmation and reports `dialog_closed`, leaving the actual selected-path
+verdict to the transport fixture. Wrong readback or ownership refuses the post;
+a still-open dialog does not trigger another click. The final focused controls
+pass, and executing the old helper against the open-dialog control produces
+two posts and the expected failure. This repairs the automation assumptions;
+the original intermittent wrong-directory cause remains unconfirmed.
 
-The 67-case focused baseline passed before and after; 228 selected response,
-serializer, codec and drain cases and 14 added refusal/decoder/continuation
-cases passed. Ordinary passed 5,306 with four unchanged symlink-privilege skips;
-six installed transport cases, 12 import contracts and independent review passed.
-The first installed run selected an old source directory and failed five tests
-through the shared fixture; an unchanged retry passed all six. Preserve both
-receipts and `ab5-picker-failure.md`; the native picker navigation cause remains
-unconfirmed, with no product or harness repair claimed. AB-5 is delivered in
-this checkpoint commit. Next is AB-6's installed gesture characterization and
-contained second-load behavior; `ab6-design.md` is read-only preparation.
-Commands and raw outcomes are in
-ignored `build/post-m1-8-ablation-20260925/ab5-verification.md`; the read-only
-design and AB-4 refresh are in `ab5-design.md`. M1_PLAN owns the finite scope
-and gate. Preserve history write/readback, workflow authority, raw evidence,
-unrelated work and stashes. Do not start dependent AB-8 implementation before
-AB-5 and its other prerequisites complete.
+Gesture attempt 06 delivered all five native inputs to an owned foreground/
+focused window and closed cleanly. F5, Ctrl+R and Alt+Left did not navigate;
+mouse Back moved through fragment history without replacing the document.
+Right click produced a DOM context-menu event with no sampled owned native
+popup; other menu-rendering paths are not excluded by that observation.
+The user saw attempt 05 and then clicked another window during its hold;
+the causes of attempts 01–04 remain unknown. Native input checks now have
+documented brief uninterrupted foreground-input intervals.
+
+Verification: 33 final focused tests, six installed transport cases, 1,771
+interface department tests and the complete 33-case headed gate passed.
+Fresh independent H1/H2 source/evidence reviews and documentation link/diff
+checks passed. Do not infer AB-6 completion from these
+prerequisites. All evidence, including failed diagnostics and the original
+picker failure, remains under ignored `build/post-m1-8-ablation-20260925/`;
+`harness-verification.md` maps receipts and evidence reuse.
+
+For eventual AB-6 work, read `ab6-design.md` and refresh its affected helpers.
+Pinned pywebview reinjects after canceled navigation/popup while retaining the
+same document; a second `before_load` alone cannot identify replacement.
+Preserve original mutation outcomes, worker custody and clean close; D2 and D4
+remain settled. The saved `56802606` recovery contains only superseded planning/
+handoff state, not product changes; do not merge or cherry-pick it. Keep that
+branch, the AB-3 worktree/branch and all raw evidence for AB-10 accounting.
