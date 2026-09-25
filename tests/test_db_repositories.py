@@ -864,8 +864,18 @@ def test_mapping_repository_round_trips_paired_noop_correspondence(tmp_path: Pat
     try:
         setup.run.record_noop(noop.op_id, source, target)
         with LedgerRepository(setup.recorder.path) as repository:
-            snapshot = repository.get_mapping_snapshot(setup.mapping_id)
+            found = repository.find_current_mapping(
+                VolumeId("source-serial", "NTFS"),
+                "source",
+                VolumeId("target-serial", "NTFS"),
+                "target",
+                target_path_keys=("A.TXT",),
+                source_identities=(source.file_identity,),
+                target_identities=(target.file_identity,),
+            )
 
+        assert found is not None
+        snapshot = found.snapshot
         assert snapshot.source_volume_id.serial == "source-serial"
         assert snapshot.target_volume_id.serial == "target-serial"
         assert len(snapshot.pairs) == 1
@@ -899,9 +909,19 @@ def test_ledger_round_trips_full_width_file_indexes_as_canonical_text(
     try:
         setup.run.record_noop(noop.op_id, source, target)
         with LedgerRepository(setup.recorder.path) as repository:
-            pair = repository.get_mapping_snapshot(setup.mapping_id).pairs[0]
+            found = repository.find_current_mapping(
+                VolumeId("source-serial", "NTFS"),
+                "source",
+                VolumeId("target-serial", "NTFS"),
+                "target",
+                target_path_keys=("A.TXT",),
+                source_identities=(source.file_identity,),
+                target_identities=(target.file_identity,),
+            )
             inventory = repository.get_inventory(setup.target_location_id)
 
+        assert found is not None
+        pair = found.snapshot.pairs[0]
         assert pair.source_identity.file_index == source_index
         assert pair.target_identity.file_index == target_index
         assert inventory[0].observed.file_identity.file_index == target_index

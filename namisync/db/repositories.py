@@ -1019,107 +1019,6 @@ class LedgerRepository:
         _append_inventory_snapshots(snapshots, cursor)
         return tuple(snapshots)
 
-    def get_mapping_snapshot(self, mapping_id: int) -> MappingSnapshot:
-        mapping = self._connection.execute(
-            """SELECT mapping.source_location_id, mapping.target_location_id,
-                      source_volume.serial AS source_serial,
-                      source_volume.fs_type AS source_fs_type,
-                      target_volume.serial AS target_serial,
-                      target_volume.fs_type AS target_fs_type
-                 FROM mappings AS mapping
-                 JOIN locations AS source_location
-                   ON source_location.id = mapping.source_location_id
-                 JOIN volumes AS source_volume
-                   ON source_volume.id = source_location.volume_id
-                 JOIN locations AS target_location
-                   ON target_location.id = mapping.target_location_id
-                 JOIN volumes AS target_volume
-                   ON target_volume.id = target_location.volume_id
-                WHERE mapping.id = ? AND mapping.deleted_at IS NULL""",
-            (mapping_id,),
-        ).fetchone()
-        if mapping is None:
-            raise KeyError(f"unknown active mapping: {mapping_id}")
-        pair_rows = self._connection.execute(
-            """SELECT source.rel_path_key AS source_rel_path_key,
-                      target.rel_path AS target_rel_path,
-                      target.rel_path_key AS target_rel_path_key,
-                      pair.source_identity_volume_serial,
-                      pair.source_identity_file_index,
-                      pair.target_identity_volume_serial,
-                      pair.target_identity_file_index
-                 FROM mapping_correspondence AS pair
-                 JOIN inventory AS source ON source.id = pair.source_inventory_id
-                 JOIN inventory AS target ON target.id = pair.target_inventory_id
-                WHERE pair.mapping_id = ?
-                ORDER BY source.rel_path_key, target.rel_path_key""",
-            (mapping_id,),
-        ).fetchall()
-        pairs = tuple(_mapping_pair(row) for row in pair_rows)
-        return MappingSnapshot(
-            source_volume_id=VolumeId(
-                mapping["source_serial"], mapping["source_fs_type"]
-            ),
-            target_volume_id=VolumeId(
-                mapping["target_serial"], mapping["target_fs_type"]
-            ),
-            pairs=pairs,
-            ambiguous_source_keys=frozenset(),
-            disqualified_source_identities=self._disqualified_identities(
-                int(mapping["source_location_id"])
-            ),
-            disqualified_target_identities=self._disqualified_identities(
-                int(mapping["target_location_id"])
-            ),
-        )
-
-    def find_mapping(
-        self,
-        source_volume: VolumeId,
-        source_relative_root: str,
-        target_volume: VolumeId,
-        target_relative_root: str,
-    ) -> MappingLookup | None:
-        """Return the active mapping matching two physical volume roots."""
-
-        source_key = normalize_relative_path(source_relative_root, allow_root=True)
-        target_key = normalize_relative_path(target_relative_root, allow_root=True)
-        row = self._connection.execute(
-            """SELECT mapping.id, mapping.source_location_id,
-                      mapping.target_location_id
-                 FROM mappings AS mapping
-                 JOIN locations AS source_location
-                   ON source_location.id = mapping.source_location_id
-                 JOIN volumes AS source_volume ON source_volume.id = source_location.volume_id
-                 JOIN locations AS target_location
-                   ON target_location.id = mapping.target_location_id
-                 JOIN volumes AS target_volume ON target_volume.id = target_location.volume_id
-                WHERE mapping.deleted_at IS NULL
-                  AND source_volume.serial = ? AND source_volume.fs_type = ?
-                  AND source_location.volume_relative_path_key = ?
-                  AND target_volume.serial = ? AND target_volume.fs_type = ?
-                  AND target_location.volume_relative_path_key = ?
-                ORDER BY mapping.id
-                LIMIT 1""",
-            (
-                source_volume.serial,
-                source_volume.fs_type,
-                source_key,
-                target_volume.serial,
-                target_volume.fs_type,
-                target_key,
-            ),
-        ).fetchone()
-        if row is None:
-            return None
-        mapping_id = int(row["id"])
-        return MappingLookup(
-            mapping_id=mapping_id,
-            source_location_id=int(row["source_location_id"]),
-            target_location_id=int(row["target_location_id"]),
-            snapshot=self.get_mapping_snapshot(mapping_id),
-        )
-
     def find_current_mapping(
         self,
         source_volume: VolumeId,
@@ -1255,20 +1154,6 @@ class LedgerRepository:
             )
         finally:
             self._connection.rollback()
-
-    def _disqualified_identities(self, location_id: int) -> frozenset[FileIdentity]:
-        rows = self._connection.execute(
-            """SELECT file_identity_volume_serial, file_identity_file_index
-                 FROM inventory
-                WHERE location_id = ? AND file_identity_volume_serial IS NOT NULL
-                GROUP BY file_identity_volume_serial, file_identity_file_index
-               HAVING count(*) > 1 OR max(observed_nlink) > 1""",
-            (location_id,),
-        ).fetchall()
-        return frozenset(
-            FileIdentity(row[0], file_index_128_from_text(row[1]))
-            for row in rows
-        )
 
     def mapping_ids_for_location(self, location_id: int) -> tuple[int, ...]:
         return tuple(

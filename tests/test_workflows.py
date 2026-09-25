@@ -402,9 +402,6 @@ def test_runtime_derives_correspondence_bounds_only_from_current_file_scans(
         def __exit__(self, *args) -> None:
             return None
 
-        def find_mapping(self, *args, **kwargs):
-            raise AssertionError("runtime used the unbounded mapping reader")
-
         def find_current_mapping(self, *args, **kwargs):
             observed.append((args, kwargs))
             return SimpleNamespace(snapshot=expected)

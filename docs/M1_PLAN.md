@@ -100,8 +100,8 @@ cleanup commit. New findings do not silently add rows.
 | ID | Accepted outcome | Depends on | Primary verification | Status |
 | --- | --- | --- | --- | --- |
 | AB-1 | Documentation/workflow ownership is clear; delivered records compact; PERFORMANCE established | Active batch | 320 links; independently extracted figures; A6 receipt/tree verification; diff and independent review with corrections | Complete in `29d9b8f` |
-| AB-2 | Optional, usable performance drivers live in tools with required correctness/release checks preserved | AB-1 | 5,302 ordinary, 33 installed, 12 import passes; selected drivers, preserved evidence and independent review | Complete in this checkpoint commit |
-| AB-3 | Unused database mapping API removed without changing current correspondence | AB-1 | Database/planner/workflow neighborhood and caller closure | Reviewed as `c5f1de8` in isolated worktree; awaiting integration after AB-2 |
+| AB-2 | Optional, usable performance drivers live in tools with required correctness/release checks preserved | AB-1 | 5,302 ordinary, 33 installed, 12 import passes; selected drivers, preserved evidence and independent review | Complete in `8ba38ced` |
+| AB-3 | Unused database mapping API removed without changing current correspondence | AB-1 | 1,331 department tests, 12 import contracts, caller closure and independent review | Complete; reviewed `c5f1de8` integrated in this checkpoint commit |
 | AB-4 | Desktop selection capture avoids redundant work with one revision-bound handoff | AB-2 | Selection/service/task-port consumers, counted work and installed Plan | Pending |
 | AB-5 | Bridge response adoption consolidates repeated traversal without weakening boundaries | AB-2 | Response/custody/decoder consumers, ordinary and installed transport | Pending |
 | AB-6 | Unsupported reload has one contained restart behavior instead of reinjection recovery | AB-2 | Host/transport/lifecycle races and installed gestures | Pending |
@@ -303,6 +303,32 @@ functional tests still work without historical acceptance machinery.
 #### AB-3 — Remove unused mapping lookup
 
 **Objective.** Remove L1 independently of UI work.
+**Active boundary.** Base `29d9b8f` in isolated `codex/ab3-mapping`. Finite
+population: `namisync/db/repositories.py`; direct consumers in
+`tests/test_db_repositories.py` and `tests/test_workflows.py`; owning
+`DATABASE.md`, this register, CHANGELOG and HANDOFF. PLANNER is a reviewed
+unchanged consumer: its current-link, identity multiplicity and unique-pair
+rules remain. Source, test and tools caller searches found no production/tool
+call to the retired API; two repository tests use `get_mapping_snapshot`, and
+one workflow fake rejects `find_mapping`. `MappingLookup`, `_mapping_pair`,
+file-identity decoding and `find_current_mapping` remain live. MOVE-1's
+current-scan correspondence and historical-alias disposition remain binding.
+One atomic database refactor commit includes tests and matching docs, after
+fresh independent review; no AB-2, schema/history, planner, workflow-runtime,
+or speculative cleanup. AGENTS safety, recurrence and recovery stops apply.
+Verification: characterize the two repository tests and native MOVE-1 cases;
+then database/planner/workflows departments, imports, exact deleted-name
+caller closure, documentation links/diff and adversarial review. Coordinate
+broad suite execution with the AB orchestrator. Ignored `build/ab3-mapping/`
+holds flat, descriptively named commands/logs/review evidence; remove only
+task-created disposable files after integration accounting.
+Local verification at the uncommitted candidate: seven focused MOVE-1/pair
+round-trip cases passed before and after the edit; database/planner/workflows
+departments passed 1,331 tests with 4,124 deselected; 12 import contracts,
+deleted-name caller closure and diff check passed. The first focused attempt
+failed in pytest setup on sandbox temp access and remains recorded; external
+temp resolved it without altering tests. Fresh adversarial review passed after
+correcting the review criterion to name the live query and planner owners.
 **Scope and approach.** `db/repositories.py::find_mapping`,
 `get_mapping_snapshot`, `_disqualified_identities` and proven exclusive test/doc
 consumers. Search all callers before deletion; keep live `find_current_mapping`,
@@ -316,8 +342,9 @@ planner and workflows departments; existing native move regression and imports.
 Search source/tests/tools for removed names; classify obsolete API tests.
 **Documentation and handoff.** DATABASE/PLANNER only where descriptions change,
 CHANGELOG and compact AB status; no new substantive bug claimed.
-**Adversarial review.** Verify the deleted path is actually unused and the current
-mapping query and general conservative inspection retain their distinct roles.
+**Adversarial review.** Verify the deleted path is unused, the current scan-scoped
+query remains bounded, and planner safeguards still refuse ambiguous pairs and
+current hardlinks/identity aliases.
 **Commit gate.** Focused/neighborhood/import/doc checks pass;
 `refactor(database): remove unused historical mapping lookup`.
 
@@ -597,7 +624,7 @@ before closeout; unsupported pre-existing leads remain explicitly deferred.
 
 ### Resumption block
 
-- Current checkpoint: AB-1/AB-2 complete; the full AB batch is active;
+- Current checkpoint: AB-1/AB-2/AB-3 complete; the full AB batch is active;
   remaining rows await their named dependencies, not repeated activation.
 - Existing evidence: `build/post-m1-8-ablation-20260925/` contains the study,
   AB-1 checks and AB-2 migration map, selected reports, raw failed child logs,
@@ -607,8 +634,8 @@ before closeout; unsupported pre-existing leads remain explicitly deferred.
 - AB-1 verification: `ab1-checks.json` and `ab1-review.md` in that evidence root
   record documentation-only scope, 320 links, source figures, matching A6 trees
   and independent review/correction. No product tests are an AB-1 gate.
-- Next action: integrate reviewed AB-3 commit `c5f1de8`, then refresh AB-4's
-  prepared design against the integrated tree. The frozen AB-2 tool/consumer source
+- Next action: refresh AB-4's prepared design against the integrated tree,
+  then activate its bounded selection handoff. The frozen AB-2 tool/consumer source
   passed 95 focused tests, 5,302 ordinary tests (four skipped, 33 deselected),
   33 installed interface tests, 12 import checks, 233 active/incoming links,
   independent review and selected installed receipt/UI

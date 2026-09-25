@@ -1027,6 +1027,17 @@ repeated machinery while preserving operational safety and boundary contracts.
 Safety, settlement, authority, and measurement work made high-risk release
 claims explicit, independently reviewable, and regression-backed.
 
+#### Remove unused historical mapping lookup (2026-09-25)
+
+- Remove the uncalled `find_mapping`, `get_mapping_snapshot` and retained-alias
+  disqualification reader. Keep current scan-scoped correspondence, unique-pair
+  filtering and planner hardlink decisions unchanged.
+- Route the two durable pair/index round-trip tests through the live mapping
+  reader and remove an obsolete workflow fake. The existing native MOVE-1
+  cases, database/planner/workflow department checks and import contracts pass.
+- Correct DATABASE's stale claim that a general historical mapping snapshot
+  reader remains available. No schema, history or ledger write path changes.
+
 #### Move optional performance cases into tools (2026-09-25)
 
 - Add selected Plan component, installed execution receipt/UI, bridge-event and

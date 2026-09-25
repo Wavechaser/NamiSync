@@ -532,8 +532,8 @@ all `QUERY_SUBJECT_BATCH_SIZE` target-key batches share one SQLite snapshot;
 the bounded result is restored to canonical
 source-key/target-key order before
 planning. Irrelevant historical location rows are therefore never materialized
-by planning. The general mapping snapshot reader remains available for explicit
-mapping inspection and retains its conservative historical disqualifiers.
+by planning. No separate historical snapshot reader is exposed; retained
+inventory aliases do not disqualify current scan identities.
 
 Inventory reads distinguish current observation from retained attested baseline
 and derive unverified/verified/modified/mismatched state from the baseline,
