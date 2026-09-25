@@ -12,7 +12,7 @@ import json
 from pathlib import Path
 from threading import Condition, Event, Thread, current_thread
 from time import monotonic, sleep
-from types import SimpleNamespace
+from types import MappingProxyType, SimpleNamespace
 from weakref import ref
 
 import pytest
@@ -56,6 +56,7 @@ from namisync.interfaces.web.drain import (
     TaskRegistry,
 )
 from namisync.interfaces.task_port import (
+    _PlanSelectionSummary,
     TaskCloseRequestView,
     TaskIntentConflictError,
     TaskCloseView,
@@ -89,6 +90,23 @@ from namisync.workflows.views import (
 REQUEST = "1" * 32
 SESSION = "2" * 32
 DRAIN = "3" * 32
+
+
+def _plan_selection_summary(
+    *, revision: int = 0, required_bytes: str = "0"
+) -> _PlanSelectionSummary:
+    return _PlanSelectionSummary(
+        revision=revision,
+        state="reviewing",
+        requires_destructive_confirmation=False,
+        irreversible_update_count=0,
+        destructive_operation_count=0,
+        irreversible_operation_count=0,
+        destructive_operation_counts=MappingProxyType(
+            {"update": 0, "move_update": 0, "trash": 0, "delete": 0}
+        ),
+        required_bytes=required_bytes,
+    )
 
 
 def _raise_private_failure(
@@ -406,24 +424,7 @@ class _Service:
             {},
             frozenset(),
         )
-        preview = SimpleNamespace(
-            revision=0,
-            state="reviewing",
-            selected_operation_ids=(),
-            requires_destructive_confirmation=False,
-            irreversible_update_count=0,
-            destructive_operation_count=0,
-            irreversible_operation_count=0,
-            destructive_operation_counts={
-                "update": 0,
-                "move_update": 0,
-                "trash": 0,
-                "delete": 0,
-            },
-            required_bytes="0",
-            operations=(),
-        )
-        return projection, preview, "source", "target"
+        return projection, _plan_selection_summary(), "source", "target"
 
     def get_plan_selection_membership(self, request_id, expected_revision):
         assert request_id
@@ -516,23 +517,7 @@ class _ExecutionOverlayService(_Service):
             {self.operation_id: operation.node_id},
             frozenset({self.operation_id}),
         )
-        preview = SimpleNamespace(
-            revision=0,
-            state="reviewing",
-            selected_operation_ids=(self.operation_id,),
-            requires_destructive_confirmation=False,
-            irreversible_update_count=0,
-            destructive_operation_count=0,
-            irreversible_operation_count=0,
-            destructive_operation_counts={
-                "update": 0, "move_update": 0, "trash": 0, "delete": 0,
-            },
-            required_bytes="4",
-            operations=(SimpleNamespace(
-                operation_id=self.operation_id, reason=None,
-            ),),
-        )
-        return projection, preview, "source", "target"
+        return projection, _plan_selection_summary(required_bytes="4"), "source", "target"
 
     def get_plan_selection_membership(self, request_id, expected_revision):
         return frozenset({self.operation_id})
@@ -3598,7 +3583,12 @@ def test_plan_scope_mutation_guards_both_revisions_and_keeps_hidden_selection() 
                 {node.operation_id: node.node_id for node in leaves},
                 frozenset(self.selected),
             )
-            return projection, self._preview(), "source", "target"
+            return (
+                projection,
+                _plan_selection_summary(revision=self.selection_revision),
+                "source",
+                "target",
+            )
 
         def _preview(self):
             return SimpleNamespace(

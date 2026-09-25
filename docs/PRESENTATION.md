@@ -101,6 +101,13 @@ null. The header checkbox is the sole whole-view bulk control.
 
 Selection changes batch a short user gesture and settle as one revisioned server mutation. Scoped Plan gestures carry expected view and selection revisions, resolve the full query and guard both revisions under the task owner before applying one workflow mutation. A stale gesture has no effect. The UI may show pending intent but must not optimistically invent a final selection. Selection preview derives directly from the retained selection/domain facts; it does not rebuild an unrelated whole review to answer a checkbox change.
 
+Opening a Plan view receives the immutable selected membership in its projection
+and a matching revision/state/aggregate summary from one service capture. The
+task owner rechecks its generation before publishing the view. Public preview
+continues to include operation-level detail for CLI/API consumers. Direct leaf
+gestures need no folder-wide selectable-membership derivation; folder gestures
+still expand the full tree through workflow safety selection.
+
 An operation-bearing directory's eligibility rollup includes descendants. The
 selection refresh validates its own operation using the direct contribution
 (rollup minus immediate-child rollups), never the subtree total. Descendant

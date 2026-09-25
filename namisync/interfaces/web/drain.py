@@ -906,25 +906,25 @@ class TaskRegistry:
         with task.condition:
             generation = task.generation
             session_id = task.session_id
-        projection, preview, source_path, target_path = (
+        projection, selection, source_path, target_path = (
             self._lifecycle.get_plan_projection(request_id)
         )
         view = PlanReviewState(
             task_id=task_id,
             request_id=request_id,
             projection=projection,
-            selection_revision=preview.revision,
-            selection_state=preview.state,
+            selection_revision=selection.revision,
+            selection_state=selection.state,
             source_path=source_path,
             target_path=target_path,
             requires_destructive_confirmation=(
-                preview.requires_destructive_confirmation
+                selection.requires_destructive_confirmation
             ),
-            irreversible_update_count=preview.irreversible_update_count,
-            destructive_operation_count=preview.destructive_operation_count,
-            irreversible_operation_count=preview.irreversible_operation_count,
-            destructive_operation_counts=preview.destructive_operation_counts,
-            required_bytes=preview.required_bytes,
+            irreversible_update_count=selection.irreversible_update_count,
+            destructive_operation_count=selection.destructive_operation_count,
+            irreversible_operation_count=selection.irreversible_operation_count,
+            destructive_operation_counts=selection.destructive_operation_counts,
+            required_bytes=selection.required_bytes,
         )
         with self._condition:
             if self._closing or self._tasks.get(task_id) is not task:

@@ -140,12 +140,18 @@ workflow-derived decision is reused for commitment only while bound to that same
 immutable plan and deselection snapshot; direct workflow calls still derive their
 own decision. This does not bypass the service's revision or acknowledgement
 checks. The service retains one decision per current selection state and reuses
-it for previews, projection construction and commitment. A selection mutation
-derives the next decision before publishing its deselection and revision;
-artifact replacement replaces the state. Projection membership shares the
-decision's frozenset, including after selection edits through a revision-checked
-internal read. Plan bulk and folder gestures additionally guard the active
-view revision, resolve matching operation membership entirely under the task
+it for previews, projection construction and commitment. Desktop Plan view-open
+captures a small internal revision/state/aggregate summary with that decision;
+the projection carries its immutable selected membership. It does not build a
+per-operation public preview solely to open the view. Artifact identity and
+selection revision/state are checked again after projection construction before
+the task owner publishes the view. The public CLI/API preview remains complete.
+A selection mutation derives the next decision before publishing its deselection
+and revision; artifact replacement replaces the state. Projection membership
+shares the decision's frozenset. Subsequent selection edits use a separate
+revision-checked internal membership read. Plan bulk and folder gestures
+additionally guard the active view revision, resolve matching operation
+membership entirely under the task
 owner, and pass one batch to the existing workflow mutation. The browser sends
 no operation-id list; navigation alone never changes selection.
 

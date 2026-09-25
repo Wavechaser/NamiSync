@@ -101,8 +101,8 @@ cleanup commit. New findings do not silently add rows.
 | --- | --- | --- | --- | --- |
 | AB-1 | Documentation/workflow ownership is clear; delivered records compact; PERFORMANCE established | Active batch | 320 links; independently extracted figures; A6 receipt/tree verification; diff and independent review with corrections | Complete in `29d9b8f` |
 | AB-2 | Optional, usable performance drivers live in tools with required correctness/release checks preserved | AB-1 | 5,302 ordinary, 33 installed, 12 import passes; selected drivers, preserved evidence and independent review | Complete in `8ba38ced` |
-| AB-3 | Unused database mapping API removed without changing current correspondence | AB-1 | 1,331 department tests, 12 import contracts, caller closure and independent review | Complete; reviewed `c5f1de8` integrated in this checkpoint commit |
-| AB-4 | Desktop selection capture avoids redundant work with one revision-bound handoff | AB-2 | Selection/service/task-port consumers, counted work and installed Plan | Pending |
+| AB-3 | Unused database mapping API removed without changing current correspondence | AB-1 | 1,331 department tests, 12 import contracts, caller closure and independent review | Complete; reviewed `c5f1de8` integrated in `dd23c270` |
+| AB-4 | Desktop selection capture avoids redundant work with one revision-bound handoff | AB-2 | 2,605 neighborhood; 5,305 ordinary; 4 installed; 12 imports; independent review | Verified on `dd23c270`; commit pending |
 | AB-5 | Bridge response adoption consolidates repeated traversal without weakening boundaries | AB-2 | Response/custody/decoder consumers, ordinary and installed transport | Pending |
 | AB-6 | Unsupported reload has one contained restart behavior instead of reinjection recovery | AB-2 | Host/transport/lifecycle races and installed gestures | Pending |
 | AB-7 | Existing admission/completion preserves original outcomes without page-timeout result abandonment or replay | AB-6; D2 settled | Delayed/post-effect failed delivery, bounded observation recovery/exhaustion, duplicate protection and close | Pending |
@@ -352,6 +352,39 @@ current hardlinks/identity aliases.
 
 **Objective.** Merge L2/L3 as one change to desktop selection capture, avoiding
 full public preview construction and unnecessary folder-wide work.
+**Active boundary.** Integrated base `dd23c270` includes AB-2 `8ba38ced` and
+reviewed AB-3 `c5f1de8`. Finite production population:
+`namisync/interfaces/service.py`, `task_port.py`, and `web/drain.py`.
+Direct test consumers: `tests/test_bridge_service.py`,
+`tests/interfaces/web/test_drain.py`'s three lifecycle fakes,
+`tests/test_task_lifecycle.py`'s port catalog, and the existing Plan review
+and 120k scoped/highlighted selection cases. The migrated AB-2 performance
+drivers in `tools/performance/plan.py` and `execution_receipt.py` call the
+registry's public open path but do not consume the private handoff. Subject
+owners are INTERFACES, BRIDGE, PRESENTATION, this register, CHANGELOG and
+HANDOFF. `PlanProjection` already carries the workflow decision's immutable
+selected membership, so the handoff adds only revision/state and aggregate
+facts without a duplicate selected-ID collection. Preserve current artifact
+identity, selection-state/revision/phase and drain task-generation barriers;
+public CLI/API full preview, workflow safety/closure, destructive confirmation,
+stale refusal, D4 highlight/checkbox separation and both membership reads for
+mutations remain. No cache, new authority, projection topology change or
+bypass flag. One atomic interfaces refactor commit includes direct tests/docs
+after focused, interfaces/workflows/ordinary/imports and installed Plan gates,
+with fresh adversarial review. AGENTS safety, recurrence and recovery stops
+apply; no new stop class is needed.
+**Characterization and candidate.** Eight named service/drain/Plan witnesses
+passed at the integrated baseline. The local candidate then passed eleven
+focused cases, including full-preview avoidance, immutable summary counts,
+same-decision membership, lazy leaf resolution, folder safety, and rejection
+of artifact replacement or a real selection mutation during projection build.
+The public preview and mutation preview still construct operation-level views.
+The interfaces/workflows neighborhood passed 2,605 tests; the ordinary suite
+passed 5,305 with four supported-host privilege skips and 33 headed deselections.
+Four selected installed Plan/execute cases and all 12 import contracts passed.
+The fresh independent review found no blocking product or documentation issue;
+the exact AB-4 commit remains pending. Evidence and the bounded design note live
+in ignored `build/post-m1-8-ablation-20260925/`.
 **Scope and approach.** Service resolver/preview, `task_port.py`, drain
 `open_plan_view` and direct consumers. Derive toggleable membership lazily for
 folder resolution. Add the smallest internal detached handoff of artifact/plan

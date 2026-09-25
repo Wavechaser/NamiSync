@@ -1027,6 +1027,22 @@ repeated machinery while preserving operational safety and boundary contracts.
 Safety, settlement, authority, and measurement work made high-risk release
 claims explicit, independently reviewable, and regression-backed.
 
+#### Capture desktop Plan selection without full previews (2026-09-25)
+
+- Open the desktop Plan view with a small immutable revision/aggregate summary
+  paired with the projection's existing workflow-owned selected membership.
+  Preserve artifact, selection and task-generation checks; public CLI/API and
+  mutation previews retain their complete operation details.
+- Derive toggleable folder membership only when resolving a folder identifier.
+  Direct operation IDs avoid that extra derivation, while folder subtree safety,
+  workflow closure and execution admission remain authoritative.
+- Eight focused seam checks passed on integrated `dd23c270`; eleven focused
+  candidate checks cover public preview, selected membership/counts, lazy leaf
+  resolution, folder safety and stale artifact/revision refusal. The
+  interfaces/workflows neighborhood passed 2,605 tests; ordinary passed 5,305
+  with four privilege skips; four installed Plan/execute cases and 12 import
+  contracts passed. Fresh independent review found no blocking issue.
+
 #### Remove unused historical mapping lookup (2026-09-25)
 
 - Remove the uncalled `find_mapping`, `get_mapping_snapshot` and retained-alias

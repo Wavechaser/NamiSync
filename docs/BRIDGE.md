@@ -408,6 +408,8 @@ gesture intersects that set with the node's subtree. No query change itself
 mutates selection, and an empty scope is a no-effect response. Workflow
 dependency closure and safety exclusions retain authority over the resulting
 complete selection.
+Plan view-open consumes the service's revision-bound internal projection and
+aggregate summary; it does not transport a per-operation public preview.
 
 The browser publishes local pending feedback before awaiting view, selection,
 Execute, or control receipts. That feedback grants no authority. View and

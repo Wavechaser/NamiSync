@@ -649,7 +649,9 @@ def test_selection_decision_is_revision_bound_reused_and_released(
     assert REQUEST_ID not in service._plan_selections
 
 
-def test_plan_projection_reuses_complete_retained_decision_at_each_revision() -> None:
+def test_plan_projection_reuses_complete_retained_decision_at_each_revision(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     selected = operation(
         OperationKind.UPDATE,
         source_path="selected.txt",
@@ -689,9 +691,14 @@ def test_plan_projection_reuses_complete_retained_decision_at_each_revision() ->
     )
     service = _service(_PlanRuntime(artifact))
 
-    initial_projection, initial_preview, _, _ = service.get_plan_projection(
-        REQUEST_ID
-    )
+    with monkeypatch.context() as patcher:
+        patcher.setattr(
+            service, "_selection_preview_locked",
+            lambda *args: pytest.fail("desktop projection built a full preview"),
+        )
+        initial_projection, initial_summary, _, _ = service.get_plan_projection(
+            REQUEST_ID
+        )
     state = service._plan_selections[REQUEST_ID]
     initial_decision = state.selection_decision
     assert initial_decision is not None
@@ -719,22 +726,39 @@ def test_plan_projection_reuses_complete_retained_decision_at_each_revision() ->
     ) == (1, 0, 0, 0)
     assert initial_decision.irreversible_update_count == 1
     assert initial_decision.required_bytes == "30"
+    assert initial_summary.revision == 0
+    assert initial_summary.state == "reviewing"
+    assert initial_summary.requires_destructive_confirmation
+    assert initial_summary.irreversible_update_count == 1
+    assert initial_summary.destructive_operation_count == 1
+    assert initial_summary.irreversible_operation_count == 1
+    assert dict(initial_summary.destructive_operation_counts) == {
+        "update": 1, "move_update": 0, "trash": 0, "delete": 0,
+    }
+    assert initial_summary.required_bytes == "30"
+    assert not hasattr(initial_summary, "operations")
+    with pytest.raises(TypeError):
+        initial_summary.destructive_operation_counts["update"] = 0
     another_preview = service.preview_selection(REQUEST_ID)
-    assert initial_preview is not another_preview
-    assert initial_preview.operations is not another_preview.operations
+    assert len(another_preview.operations) == 4
 
     changed = service.mutate_selection(
         REQUEST_ID,
-        initial_preview.revision,
+        initial_summary.revision,
         deselect=(str(user_excluded.op_id),),
     ).preview
     changed_decision = state.selection_decision
     assert changed_decision is not None and changed_decision is not initial_decision
-    changed_projection, projected_preview, _, _ = service.get_plan_projection(
-        REQUEST_ID
-    )
+    with monkeypatch.context() as patcher:
+        patcher.setattr(
+            service, "_selection_preview_locked",
+            lambda *args: pytest.fail("desktop projection built a full preview"),
+        )
+        changed_projection, projected_summary, _, _ = service.get_plan_projection(
+            REQUEST_ID
+        )
 
-    assert projected_preview.revision == changed.revision
+    assert projected_summary.revision == changed.revision
     assert changed_projection.selected_operation_ids is changed_decision.selection
     assert changed_decision.selection == frozenset({selected.op_id})
     assert tuple(
@@ -757,8 +781,49 @@ def test_plan_projection_reuses_complete_retained_decision_at_each_revision() ->
     assert changed_decision.irreversible_operation_count == 1
     assert changed_decision.requires_destructive_confirmation
     assert changed_decision.required_bytes == "13"
-    assert projected_preview is not changed
-    assert projected_preview.operations is not changed.operations
+    assert projected_summary.required_bytes == "13"
+    assert projected_summary.destructive_operation_count == 1
+    assert projected_summary.irreversible_operation_count == 1
+    assert projected_summary.requires_destructive_confirmation
+    assert len(changed.operations) == 4
+
+
+def test_plan_projection_refuses_artifact_replacement_during_build(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    copied = operation(OperationKind.COPY, source=file_stat())
+    runtime = _PlanRuntime(_projection_artifact(plan((copied,))))
+    service = _service(runtime)
+    build = service_module.build_plan_projection
+
+    def replace_artifact(*args, **kwargs):
+        projection = build(*args, **kwargs)
+        runtime.artifact = _projection_artifact(plan((copied,)))
+        return projection
+
+    monkeypatch.setattr(service_module, "build_plan_projection", replace_artifact)
+    with pytest.raises(ValueError, match="plan changed before review projection"):
+        service.get_plan_projection(REQUEST_ID)
+
+
+def test_plan_projection_refuses_selection_change_during_build(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    copied = operation(OperationKind.COPY, source=file_stat())
+    service = _service(_PlanRuntime(_projection_artifact(plan((copied,)))))
+    build = service_module.build_plan_projection
+
+    def change_selection(*args, **kwargs):
+        projection = build(*args, **kwargs)
+        changed = service.mutate_selection(
+            REQUEST_ID, 0, deselect=(str(copied.op_id),)
+        )
+        assert changed.disposition == "applied"
+        return projection
+
+    monkeypatch.setattr(service_module, "build_plan_projection", change_selection)
+    with pytest.raises(ValueError, match="selection changed before review projection"):
+        service.get_plan_projection(REQUEST_ID)
 
 
 def test_service_close_releases_retained_selection_decision() -> None:
@@ -2011,6 +2076,41 @@ def test_br_g_24_folder_mutation_uses_full_subtree_not_collapsed_rows() -> None:
         str(second.op_id),
     }
     assert tree.node_for_id(folder_id).subtree_member_count == 3
+
+
+def test_leaf_resolution_skips_folder_wide_selection_derivation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    folder = operation(
+        OperationKind.MKDIR,
+        source_path="Folder",
+        target_path="Folder",
+        reason=OperationReason.REQUIRED_DIRECTORY,
+    )
+    leaf = operation(
+        OperationKind.COPY,
+        source_path=r"Folder\one.bin",
+        target_path=r"Folder\one.bin",
+        source=file_stat(identity_index=1),
+    )
+    plan_value = plan((folder, leaf))
+    service = _service(_PlanRuntime(_artifact(plan_value)))
+    with monkeypatch.context() as patcher:
+        patcher.setattr(
+            service_module,
+            "derive_execution_selection",
+            lambda *args, **kwargs: pytest.fail("leaf resolution derived folder membership"),
+        )
+        assert service._resolve_plan_selection_ids(
+            REQUEST_ID, plan_value, (str(leaf.op_id),)
+        ) == (str(leaf.op_id),)
+
+    folder_id = service._plan_tree(REQUEST_ID, plan_value).node_id_for_path_key(
+        "FOLDER"
+    )
+    assert set(
+        service._resolve_plan_selection_ids(REQUEST_ID, plan_value, (folder_id,))
+    ) == {str(folder.op_id), str(leaf.op_id)}
 
 
 def test_br_g_24_folder_mutation_skips_safety_disabled_descendants() -> None:

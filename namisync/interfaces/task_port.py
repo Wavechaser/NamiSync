@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -15,6 +15,7 @@ from namisync.workflows import (
     RetainedExecutionItemWindow,
     RetainedExecutionSummary,
     RetainedIntegrityItemWindow,
+    PlanProjection,
 )
 from namisync.workflows.inventory import LocationCandidate
 from namisync.workflows.views import (
@@ -38,6 +39,18 @@ TaskDeliveryUpdate = SessionEventView | SessionRecordView
 TaskDeliverySink = Callable[[TaskDeliveryUpdate], None]
 TaskDeliveryFactory = Callable[[str], TaskDeliverySink]
 TaskShellDeliveryFactory = Callable[[str], None]
+
+
+@dataclass(frozen=True, slots=True)
+class _PlanSelectionSummary:
+    revision: int
+    state: str
+    requires_destructive_confirmation: bool
+    irreversible_update_count: int
+    destructive_operation_count: int
+    irreversible_operation_count: int
+    destructive_operation_counts: Mapping[str, int]
+    required_bytes: str
 
 
 class TaskUnavailableError(LookupError):
@@ -399,7 +412,9 @@ class TaskLifecyclePort(Protocol):
 
     def read_plan_setup(self, request_id: str) -> TaskSetupSnapshotView: ...
 
-    def get_plan_projection(self, request_id: str) -> object: ...
+    def get_plan_projection(
+        self, request_id: str
+    ) -> tuple[PlanProjection, _PlanSelectionSummary, str, str]: ...
 
     def get_plan_selection_membership(
         self,

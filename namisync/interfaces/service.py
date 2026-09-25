@@ -102,6 +102,7 @@ from namisync.interfaces.task_lifecycle import (
     TaskLifecycle,
 )
 from namisync.interfaces.task_port import (
+    _PlanSelectionSummary,
     TaskCloseView,
     TaskDeliveryFactory,
     TaskDeliverySink,
@@ -1183,17 +1184,31 @@ class NamiSyncService:
     def get_plan_projection(
         self,
         request_id: str,
-    ) -> tuple[PlanProjection, SelectionPreviewView, str, str]:
+    ) -> tuple[PlanProjection, _PlanSelectionSummary, str, str]:
         """Return one immutable projection bound to the current plan artifact."""
 
         state, artifact = self._selection_state(request_id)
         with self._lock:
             user_deselected = state.user_deselected
             decision = self._selection_decision_locked(state, artifact)
-            preview = self._selection_preview_locked(
-                request_id,
-                state,
-                artifact,
+            summary = _PlanSelectionSummary(
+                revision=state.revision,
+                state=state.phase,
+                requires_destructive_confirmation=(
+                    decision.requires_destructive_confirmation
+                ),
+                irreversible_update_count=decision.irreversible_update_count,
+                destructive_operation_count=decision.destructive_operation_count,
+                irreversible_operation_count=decision.irreversible_operation_count,
+                destructive_operation_counts=MappingProxyType(
+                    {
+                        "update": decision.destructive_operation_counts.update,
+                        "move_update": decision.destructive_operation_counts.move_update,
+                        "trash": decision.destructive_operation_counts.trash,
+                        "delete": decision.destructive_operation_counts.delete,
+                    }
+                ),
+                required_bytes=decision.required_bytes,
             )
         projection = build_plan_projection(
             request_id,
@@ -1207,13 +1222,13 @@ class NamiSyncService:
             if (
                 self._plan_selections.get(request_id) is not state
                 or state.user_deselected != user_deselected
-                or state.revision != preview.revision
-                or state.phase != preview.state
+                or state.revision != summary.revision
+                or state.phase != summary.state
             ):
                 raise ValueError("selection changed before review projection")
         return (
             projection,
-            preview,
+            summary,
             artifact.request.source_path,
             artifact.request.target_path,
         )
@@ -2497,16 +2512,18 @@ class NamiSyncService:
         identifiers: tuple[str, ...],
     ) -> tuple[str, ...]:
         known = {str(operation.op_id) for operation in plan.operations}
-        toggleable = {
-            str(operation_id)
-            for operation_id in derive_execution_selection(plan).selection
-        }
+        toggleable: set[str] | None = None
         tree: NodeTree | None = None
         resolved: set[str] = set()
         for identifier in identifiers:
             if identifier in known:
                 resolved.add(identifier)
                 continue
+            if toggleable is None:
+                toggleable = {
+                    str(operation_id)
+                    for operation_id in derive_execution_selection(plan).selection
+                }
             if tree is None:
                 tree = self._plan_tree(request_id, plan)
             try:
