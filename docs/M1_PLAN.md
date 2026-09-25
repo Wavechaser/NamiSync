@@ -102,8 +102,8 @@ cleanup commit. New findings do not silently add rows.
 | AB-1 | Documentation/workflow ownership is clear; delivered records compact; PERFORMANCE established | Active batch | 320 links; independently extracted figures; A6 receipt/tree verification; diff and independent review with corrections | Complete in `29d9b8f` |
 | AB-2 | Optional, usable performance drivers live in tools with required correctness/release checks preserved | AB-1 | 5,302 ordinary, 33 installed, 12 import passes; selected drivers, preserved evidence and independent review | Complete in `8ba38ced` |
 | AB-3 | Unused database mapping API removed without changing current correspondence | AB-1 | 1,331 department tests, 12 import contracts, caller closure and independent review | Complete; reviewed `c5f1de8` integrated in `dd23c270` |
-| AB-4 | Desktop selection capture avoids redundant work with one revision-bound handoff | AB-2 | 2,605 neighborhood; 5,305 ordinary; 4 installed; 12 imports; independent review | Verified on `dd23c270`; commit pending |
-| AB-5 | Bridge response adoption consolidates repeated traversal without weakening boundaries | AB-2 | Response/custody/decoder consumers, ordinary and installed transport | Pending |
+| AB-4 | Desktop selection capture avoids redundant work with one revision-bound handoff | AB-2 | 2,605 neighborhood; 5,305 ordinary; 4 installed; 12 imports; independent review | Complete in `9cfd2a0` |
+| AB-5 | Bridge response adoption consolidates repeated traversal without weakening boundaries | AB-2 | 5,306 ordinary; 6 installed; 12 imports; response/custody/decoder checks and independent review | Complete in this checkpoint commit |
 | AB-6 | Unsupported reload has one contained restart behavior instead of reinjection recovery | AB-2 | Host/transport/lifecycle races and installed gestures | Pending |
 | AB-7 | Existing admission/completion preserves original outcomes without page-timeout result abandonment or replay | AB-6; D2 settled | Delayed/post-effect failed delivery, bounded observation recovery/exhaustion, duplicate protection and close | Pending |
 | AB-8 | Existing shell renders bounded authoritative Python task snapshots | AB-4/5/6/7 | Producer→snapshot→page, ordinary/imports and installed task journeys | Pending |
@@ -383,7 +383,7 @@ The interfaces/workflows neighborhood passed 2,605 tests; the ordinary suite
 passed 5,305 with four supported-host privilege skips and 33 headed deselections.
 Four selected installed Plan/execute cases and all 12 import contracts passed.
 The fresh independent review found no blocking product or documentation issue;
-the exact AB-4 commit remains pending. Evidence and the bounded design note live
+the exact AB-4 commit is `9cfd2a0`. Evidence and the bounded design note live
 in ignored `build/post-m1-8-ablation-20260925/`.
 **Scope and approach.** Service resolver/preview, `task_port.py`, drain
 `open_plan_view` and direct consumers. Derive toggleable membership lazily for
@@ -412,6 +412,47 @@ execution commitment and refusal; ensure allocation savings are real in source.
 #### AB-5 — Consolidate response adoption
 
 **Objective.** Implement only qualified S4/L4 duplication at one ownership seam.
+**Active boundary.** Integrated base `9cfd2a0` contains AB-3 integration
+`dd23c270` and completed AB-4. The finite production edit is
+`namisync/interfaces/web/bridge.py`; direct consumers to recheck are
+`web/commands.py`'s typed continuation storage and drain codec binding,
+`web/drain.py`'s typed prefix custody, `assets/bridge.js`'s detached native
+response and whole-batch decoder, and the unchanged typed validators in
+`interfaces/task_port.py` and `workflows/views.py`. The direct test population
+is `tests/interfaces/web/test_transport.py`, `test_commands.py`, `test_drain.py`,
+`test_browser_event_v5_consumers.py`, `test_frontend_static.py`,
+`test_transport_headed.py`, transport-custody cases, `tests/test_task_lifecycle.py`
+and `tests/interfaces/web/test_host.py` where they bind the drain codec. Subject
+owners are BRIDGE, this register, CHANGELOG and HANDOFF; ARCHITECTURE changes
+only if its locator changes. Capture and exact byte admission of hostile
+values, owned typed validation, direct typed continuation storage, drain
+validation before queue consumption, and browser detachment/identity adoption
+remain separate boundaries. Consolidate only owned validation/projection over
+the same detached value; registered validators retain their current traversal
+coverage without duplicate nested calls. Preserve ingress, history write/readback,
+workflow authority, exact longest prefix, scalar/cycle/type bounds and custody
+release. No eager second primitive drain graph or generic trusted-value protocol.
+Focused behavior before editing, interfaces/database/workflows neighborhood,
+ordinary/imports, installed transport, documentation/diff checks and fresh
+adversarial review gate one coherent bridge commit. AGENTS safety, recurrence
+and recovery stops apply; no new stop class is needed. The ignored
+`build/post-m1-8-ablation-20260925/ab5-design.md` records the read-only
+population study and seams to refresh against this integrated base.
+**Candidate and focused evidence.** Hostile capture and byte admission still
+precede ownership validation. Ordinary response and test-fixture primitive
+adoption now validate registered views during the detached projection walk;
+the typed continuation and pre-consumption drain validators remain separate.
+Registered validators retain their previous nested coverage. This reduces a
+generic traversal, not source lines, and claims no timing or memory gain. One
+shared-alias/caller-detachment witness was added. The 67-case focused baseline
+passed before and after the edit; 228 response/serializer/codec/drain selected
+cases and 14 refusal/decoder/continuation cases passed. Ordinary passed 5,306
+with four unchanged privilege skips; six installed transport cases, 12 import
+contracts and independent review passed. The first installed run selected an
+old directory in its shared native-picker fixture; its five dependent failures
+and ready receipt are retained beside the unchanged six-pass retry. No picker
+repair or exact cause is claimed. Ignored
+`build/post-m1-8-ablation-20260925/ab5-verification.md` holds commands and outcomes.
 **Scope and approach.** `web/bridge.py` capture, validation, primitive projection
 and drain-prefix helpers plus actual decoder consumers. Document value ownership
 before/after each walk; combine only passes over the same detached value. Keep

@@ -1027,6 +1027,21 @@ repeated machinery while preserving operational safety and boundary contracts.
 Safety, settlement, authority, and measurement work made high-risk release
 claims explicit, independently reviewable, and regression-backed.
 
+#### Consolidate detached bridge response adoption (2026-09-25)
+
+- Validate registered views while projecting detached ordinary bridge responses;
+  keep hostile capture and canonical-byte admission first. Typed continuation
+  storage and drain prefix validation still precede their separate ownership
+  transfers; the browser retains native detachment and its response decoder.
+- Preserve registered validators' nested coverage, scalar/type/cycle refusal,
+  complete response limits and failure cleanup. Add a shared-alias mutation
+  witness. This removes a generic owned-tree traversal without a line-count or
+  measured speed claim; focused response/codec/drain and decoder checks pass.
+- Verification: 5,306 ordinary passes/four unchanged privilege skips, six
+  installed transport cases, 12 import contracts and independent review.
+  Preserve the first shared picker-selection failure and unchanged passing
+  retry; no picker repair or exact cause is claimed.
+
 #### Capture desktop Plan selection without full previews (2026-09-25)
 
 - Open the desktop Plan view with a small immutable revision/aggregate summary

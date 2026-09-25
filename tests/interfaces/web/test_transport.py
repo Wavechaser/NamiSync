@@ -1332,6 +1332,24 @@ def test_response_view_captures_hostile_occurrences_once_before_validation() -> 
     assert calls == 1
 
 
+def test_response_projection_accepts_shared_value_without_aliasing_caller() -> None:
+    shared = {"label": "before"}
+    dispatcher = _bridge_dispatcher(
+        document=_Document(),
+        commands={
+            "probe": _spec(lambda _payload: {"first": shared, "second": shared})
+        },
+    )
+
+    response = dispatcher.dispatch(_request())
+    shared["label"] = "after"
+
+    assert response["result"] == {
+        "first": {"label": "before"},
+        "second": {"label": "before"},
+    }
+
+
 @pytest.mark.parametrize(
     "text",
     [

@@ -951,10 +951,11 @@ class BridgeDispatcher:
             retire_exception_graph(error)
             return self._failure(request_id, name, "internal_error")
         try:
-            if type(result) is _AdmittedTaskDrainResponse:
+            admitted_drain = type(result) is _AdmittedTaskDrainResponse
+            if admitted_drain:
                 captured_result = _consume_task_drain_response(result)
             else:
-                captured_result = snapshot_bridge_response_result(
+                captured_result = _capture_bridge_response_result(
                     result,
                     request_id,
                     maximum_json_bytes,
@@ -967,7 +968,11 @@ class BridgeDispatcher:
             return self._failure(request_id, name, "internal_error")
         del result
         try:
-            result = _project_response_value(captured_result, set())
+            result = _project_response_value(
+                captured_result,
+                set(),
+                validate=not admitted_drain,
+            )
         except BaseException as error:
             retire_exception_graph(error)
             return self._failure(request_id, name, "internal_error")
@@ -1380,8 +1385,7 @@ def to_primitive_view(value: object) -> object:
         PUBLIC_VIEW_DATACLASSES,
         None,
     )
-    _validate_owned_response_tree(snapshot, set())
-    return _project_response_value(snapshot, set())
+    return _project_response_value(snapshot, set(), validate=True)
 
 
 def snapshot_bridge_response_result(
@@ -1390,6 +1394,20 @@ def snapshot_bridge_response_result(
     maximum_json_bytes: int = MAX_BRIDGE_RESPONSE_JSON_BYTES,
 ) -> object:
     """Return one detached, validated response result admitted by exact bytes."""
+
+    snapshot = _capture_bridge_response_result(
+        value, request_id, maximum_json_bytes,
+    )
+    _validate_owned_response_tree(snapshot, set())
+    return snapshot
+
+
+def _capture_bridge_response_result(
+    value: object,
+    request_id: str,
+    maximum_json_bytes: int,
+) -> object:
+    """Detach and byte-admit a result before validating owned semantics."""
 
     if type(request_id) is not str or _OPAQUE_ID.fullmatch(request_id) is None:
         raise BridgeProtocolError("successful response request id is invalid")
@@ -1409,7 +1427,6 @@ def snapshot_bridge_response_result(
         PUBLIC_VIEW_DATACLASSES,
         budget,
     )
-    _validate_owned_response_tree(snapshot, set())
     return snapshot
 
 
@@ -1664,8 +1681,15 @@ def _validate_owned_response_tree(value: object, active: set[int]) -> None:
 def _project_response_value(
     value: object,
     active: set[int],
+    *,
+    validate: bool,
 ) -> object:
-    """Normalize a detached graph already admitted and revalidated above."""
+    """Project owned data, validating views at this adoption when requested."""
+
+    if validate and type(value) in _VIEW_VALIDATORS:
+        _validate_owned_response_tree(value, active)
+        # The registered validator owns semantic validation below this view.
+        validate = False
 
     if value is None or type(value) in {bool, int, float, str}:
         return value
@@ -1680,6 +1704,7 @@ def _project_response_value(
                 projected[field.name] = _project_response_value(
                     getattr(value, field.name),
                     active,
+                    validate=validate,
                 )
             return projected
         finally:
@@ -1688,7 +1713,9 @@ def _project_response_value(
         active.add(identity)
         try:
             for key, item in value.items():
-                value[key] = _project_response_value(item, active)
+                value[key] = _project_response_value(
+                    item, active, validate=validate,
+                )
             return value
         finally:
             active.remove(identity)
@@ -1696,7 +1723,9 @@ def _project_response_value(
         active.add(identity)
         try:
             for index, item in enumerate(value):
-                value[index] = _project_response_value(item, active)
+                value[index] = _project_response_value(
+                    item, active, validate=validate,
+                )
             return value
         finally:
             active.remove(identity)
@@ -1704,7 +1733,7 @@ def _project_response_value(
         active.add(identity)
         try:
             return [
-                _project_response_value(item, active)
+                _project_response_value(item, active, validate=validate)
                 for item in value
             ]
         finally:

@@ -169,6 +169,14 @@ An excess returns `response_too_large` without undoing an admitted action. At mo
 64 exchanges are admitted; saturation is `bridge_busy`. Close waits at most 35
 seconds for quiescence. These active bounds are independent of retired BR-G-45.
 
+`web/bridge.py` captures each hostile response occurrence and charges its exact
+canonical bytes before using the detached value. Ordinary responses validate
+owned views while projecting JSON primitives. Continuation storage keeps its
+separately validated typed snapshot; task drains validate the complete admitted
+typed prefix before queue consumption and project only after that handoff.
+The browser detaches native data before acknowledging custody, then checks
+response and task identity at its own adoption boundary.
+
 After handler reservation, trust recheck, envelope decode and allowlist lookup,
 composition's `admit(name)` checks BOOTSTRAP/OPEN context before payload validation.
 Refusal, failure or malformed admission is `bridge_unavailable`. The bridge forwards
