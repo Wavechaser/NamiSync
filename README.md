@@ -225,18 +225,17 @@ never hides the other result axes in rendered output.
   [Workflows](docs/WORKFLOWS.md) — retained location evidence and orchestration.
 - [Tests](docs/TESTS.md) — verification levels, department routing, markers,
   and diagnostic commands.
-- [Test ablation study](docs/TEST_ABLATION.md) — measured detection losses,
-  rebased recommendations and subsequent refinement dispositions.
-- [M1-7 ablation study](docs/M1_7_ABLATION_STUDY.md) — retained reduction proposals;
-  revisiting remains separate work requiring explicit user resumption.
 - [Post-M1-8 ablation study](docs/POST_M1_8_ABLATION.md) — repository-wide
-  mechanism, test and workflow reduction proposals; decisions pending.
-- [Test refinement register](docs/TEST_REFINEMENT.md) — bounded implementation
-  outcomes and verification of retained test guarantees.
-- [Production reduction register](docs/PRODUCTION_REDUCTION.md) — bounded
-  simplifications, retained guarantees, and verification.
-- [Narrow reduction follow-up](docs/REDUCTION_FOLLOWUP.md) — closed simplification
-  scope, assertion dispositions, and completed verification.
+  reduction dispositions, accepted snapshot direction, narrowed proposals and
+  earlier-study accounting; the [actionable plan](docs/M1_PLAN.md#post-m1-8-reduction-plan)
+  starts with documentation, then optional performance tools and bounded
+  reductions. Implementation checkpoints are not activated.
+- Archived reduction history: [test ablation](docs/obsolete/TEST_ABLATION.md),
+  [test refinement](docs/obsolete/TEST_REFINEMENT.md),
+  [production reduction](docs/obsolete/PRODUCTION_REDUCTION.md),
+  [narrow follow-up](docs/obsolete/REDUCTION_FOLLOWUP.md), and
+  [M1-7 study](docs/obsolete/M1_7_ABLATION_STUDY.md). Their old execution registers
+  are inactive; current dispositions are in the post-M1-8 study.
 - [Detailed changelog](CHANGELOG.md) — dated task history grouped by milestone
   or version and phase.
 - [Development tools](docs/TOOLS.md) — measurement tooling, the

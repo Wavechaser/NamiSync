@@ -1,5 +1,10 @@
 # Test Ablation Study
 
+> Retired 2026-09-25. Historical study/register only; its old execution
+> and resumption instructions are inactive. Current dispositions and
+> retained guarantee owners are recorded in
+> [POST_M1_8_ABLATION §13](../POST_M1_8_ABLATION.md#13-earlier-studies-absorption-and-archival-accounting).
+
 Baseline: `cab2259`. This is a diagnostic study of maintenance constraints and
 marginal failure detection, not authorization to permanently delete tests or
 change product/acceptance policy. Experimental variants stay in ignored copies.

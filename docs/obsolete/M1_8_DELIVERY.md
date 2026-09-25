@@ -23,8 +23,8 @@ This is the sole active M1 delivery register. Subject contracts remain in
 [ARCHITECTURE](../ARCHITECTURE.md), [DEFENSE](../DEFENSE.md), [BRIDGE](../BRIDGE.md),
 [PRESENTATION](../PRESENTATION.md), [INTERFACES](../INTERFACES.md),
 [DESKTOP_UI](../DESKTOP_UI.md), [FEATURES](../FEATURES.md) and [TESTS](../TESTS.md).
-Completed maintenance is recorded by [PRODUCTION_REDUCTION](../PRODUCTION_REDUCTION.md)
-and [REDUCTION_FOLLOWUP](../REDUCTION_FOLLOWUP.md); no retired owner-graph,
+Completed maintenance is recorded by [PRODUCTION_REDUCTION](PRODUCTION_REDUCTION.md)
+and [REDUCTION_FOLLOWUP](REDUCTION_FOLLOWUP.md); no retired owner-graph,
 reservation or command-count recipe is revived. Superseded working
 chronology is [archived](../obsolete/M1_8_U_RECOVERY.md), never active authority.
 
@@ -1156,7 +1156,7 @@ Plan profile, not whole-app memory or current-source acceptance for later edits.
 
 Post-delivery ablation R7-1–R7-4 landed through `95f31e1`; R7-5–R7-8/R7-G remain
 suspended, not completed. RI-1–RI-4 discovery is complete; larger test/evidence
-retirement remains a proposal in [M1_7_ABLATION_STUDY](../M1_7_ABLATION_STUDY.md).
+retirement remains a proposal in [M1_7_ABLATION_STUDY](M1_7_ABLATION_STUDY.md).
 Revisiting it is deferred until after M1-8 closes and requires user resumption;
 it is not a closure dependency and cannot expand R2. Later delivered Plan GUI refinements
 through `2cc0083` are recorded in the compact GUI results table above.

@@ -2,14 +2,24 @@
 
 ## Disposition (2026-09-25)
 
-Completed read-only investigation, requested by the user after M1-7 and M1-8
-were delivered at high cost. Baseline: clean `milestone1` at `549f3b4`.
+Original investigation baseline: clean `milestone1` at `549f3b4`. Reconciled
+against `a7f8402` and the user's subsequent dispositions. The central diagnosis
+is supported; the original deletion sequence and blanket redundancy claims are
+not. This document retains the investigation and dispositions; the actionable
+plan and sole checkpoint register are in
+[M1_PLAN](M1_PLAN.md#post-m1-8-reduction-plan).
 
-This document records findings and proposals only. It authorizes no product,
-test, evidence-policy or documentation-ownership change. Each proposal needs an
-explicit user decision and, where [AGENTS](../AGENTS.md) requires it, a closed
-register in [M1_PLAN](M1_PLAN.md) before implementation. It does not resume the
-deferred [M1-7 study](M1_7_ABLATION_STUDY.md); overlaps are noted in §7.
+S3's server-snapshot direction is accepted. L5/L7/L8/L9 are rejected. D1–D7
+are distinguished as settled directions, preferences or unresolved choices in
+§11; recommendations do not silently become user decisions. PA-1–PA-3 in
+[M1_PLAN](M1_PLAN.md) authorize this documentation reconciliation and study
+retirement only. Product, tests, operative evidence policy and AGENTS are
+unchanged by this planning revision. AB-1–AB-10 are planned, not activated;
+the user requested revision and a documentation commit, not implementation.
+The user's latest W2 instruction replaces the earlier proposed eligibility test;
+§8 records the small-change default and user-owned classification.
+The old M1-7 execution register is retired,
+not resumed or declared fully delivered; §13 accounts for its unfinished work.
 
 ## Question and method
 
@@ -35,6 +45,13 @@ invariants? Logical simplification is the goal; line counts are a consequence.
 - Limits: no timing or headed runs, no new product-correctness claim, no
   mutation framework. Line counts are physical lines at `549f3b4` and are
   diagnostics, not promised savings.
+- Reconciliation inspected lifecycle, service/port/observer, dispatcher admission
+  and event delivery, web drain/review/bridge and shell consumers, history
+  readback, review admissions, executor diagnostic consumers, and the five
+  earlier studies. The retained experiment logs/scripts were checked, not
+  rerun. Source findings below do not establish concurrency equivalence or
+  measured refactor savings. The bug census records categories, not causal
+  attribution of engineering cost or proof that half the effort was avoidable.
 
 ## 1. Findings
 
@@ -44,12 +61,14 @@ entry in [BUGS](BUGS.md). The avoidable cost comes from three sources:
 
 1. **Orchestration sized for situations the shipped app does not have.** One
    desktop task spans about 28 named types in six owners. The transport recovers
-   from page reloads users cannot trigger, and from deadlines the page imposes
+   from page reloads not exposed by the inspected production configuration, and from deadlines the page imposes
    on its own local calls. Interface and dispatcher/history entries are 47% of
    all recorded bugs, and their titles describe the machinery (custody,
    generations, receipts, races) rather than file synchronization.
-2. **Re-validation of first-party output at each boundary.** ARCHITECTURE
-   invariant 17 ("validate once at adoption") is stated but not practiced. MOVE-1
+2. **Repeated internal work needs boundary-specific examination.** ARCHITECTURE
+   invariant 17 ("validate once at adoption") already distinguishes immutable
+   values from mutable overlays, freshness and capacity. Some repetition is
+   avoidable, but storage and ownership-transfer validation earns its place. MOVE-1
    (`549f3b4`) is the precedent: a duplicate check with different evidence
    disagreed with the authoritative one and caused the defect.
 3. **Mechanisms recorded as contracts.** Documents state mechanisms and even
@@ -58,9 +77,9 @@ entry in [BUGS](BUGS.md). The avoidable cost comes from three sources:
    passes therefore had to rewrite the documents that prescribed each mechanism
    before removing it, and removed little.
 
-The ordinary tests are healthier than expected: three behavior-preserving
-refactors broke no behavioral test (§6). Brittleness is concentrated in
-visual/source-literal tests and in the measurement machinery.
+Three small behavior-preserving refactors broke no behavioral test (§6), while
+one broke two visual/source-literal tests. This supports specific coupling
+findings, not a general proof that the ordinary suite tolerates all refactors.
 
 ## 2. Cost census
 
@@ -77,27 +96,31 @@ visual/source-literal tests and in the measurement machinery.
 
 | User-visible behavior | What it needs | What exists in addition |
 | --- | --- | --- |
-| Start a plan or inventory from Setup | Fresh location admission, a task record, session submission, visible state | Three replay layers: JS automatic replay and manual retry, a 48-entry adapter start-response cache, and `TaskLifecycle` receipts with a 64-way command guard. Two-phase asynchronous admission/completion with separate acknowledgments. Shell, start, admission and association claims. Two independent admission-cleanup implementations (dispatcher and lifecycle) |
+| Start a plan or inventory from Setup | Fresh location admission, a task record, session submission, visible state | JS replay/manual retry, a 48-entry adapter response cache, and application effect receipts with a 64-way command guard. Admission/completion delivery has separate acknowledgments. Dispatcher and application rollback own different resources and already connect through an attachment callback; they are not duplicate cleanup implementations (§4 S5). |
 | Review a 120,000-row plan | Workflow projection and window, dependency-closed selection, revision guard | `NodeTree` rebuilt on every folder gesture because layering keeps the service from the adapter's projection. Full dependency derivation four times per gesture, two unused. A full O(operations) preview built and discarded on each view open. A second round-trip re-reading membership already returned (*analyst*) |
 | Execute with pause/resume/cancel | Commitment digest, preflight, executor guards, progress, control flags | Execution-authority snapshot/revalidate/audit calls at 38 sites in `workflows/sync.py`. Progress attempt semantics enforced in Python and again by a JS reducer. Three envelope encoders/validators |
 | Close a task | Cancel when busy, release resources, remove the card | Four-phase settlement claims, a 48-entry close-response cache, and a six-step teardown chain whose steps must each tolerate repetition |
-| Survive page reload | Nothing: production launches pywebview with `debug=False` (`interfaces/web/bridge.py:602-611`), and pinned pywebview 6.2.1 sets `AreBrowserAcceleratorKeysEnabled` and `AreDefaultContextMenusEnabled` from that flag (`webview/platforms/edgechromium.py:287-288`). Product code never navigates or reloads | Three independent document generations advanced by one `before_load` event (`interfaces/web/host.py:877-934`), native-return containment, reinjection cursor recovery and "Retry updates". Only tests reload the page (46 occurrences in 11 files) |
+| Survive page reload | No intended explicit user action: production uses `debug=False`; the pinned runtime disables browser accelerator keys/context menus from that flag. Unexpected document replacement still needs containment. Installed gesture verification remains outstanding. | Three generation owners react to `before_load` (`web/host.py`), with native-return and reinjection recovery. Test reload scenarios are real consumers. Ordinary observation recovery is distinct: M1-8 Retry updates must not be removed merely because reload recovery retires. |
 
 ## 4. Structural proposals
 
-Ordered by recommended sequence in §12, not by size.
+These are bounded design recommendations. §12 gives the proposed timing.
 
 **S1 — Declare reload unsupported and collapse generation machinery.**
-First verify on an installed build that F5, Ctrl+R, Alt+Left, mouse Back and the
-context menu cannot reload. Then keep one startup handshake and fail closed on
-any second document load with a "restart NamiSync" message. Removes the three
-generation owners, native-return containment, drain/browser reinjection recovery
-and most reload scenarios in headed harnesses. Loses in-place recovery from a
-renderer crash, which the host does not implement today. Risk: low once the
-manual check passes.
+User direction: reload is not intended as an explicit user action. Verify F5,
+Ctrl+R, Alt+Left, mouse Back and context-menu behavior in an installed build.
+Recommend retiring in-place reinjection/reload recovery while keeping startup
+readiness, navigation/origin checks, shutdown fences, and rejection of callbacks
+from a retired document. A second document load must revoke command authority
+and present a restart path without prematurely releasing a running worker's
+resources. It does not cancel an already admitted filesystem operation.
+Consolidate generation owners only after mapping these remaining uses; do not
+promise deletion of all native-return containment. Ordinary lost-observation
+recovery remains separate. Risk: medium at the host boundary, not proven low
+by disabling F5 alone. No renderer-crash recovery claim is added.
 
 **S2 — Remove self-inflicted command uncertainty.** The page applies 5 s and
-30 s deadlines to in-process calls (`assets/bridge.js:55-108`). A deadline turns
+30 s deadlines to local cross-runtime calls (`assets/bridge.js:55-108`). A deadline turns
 a call into "uncertain", which drives automatic replay (`createTask`,
 `submitStart`, `startExecution`), the delayed `closeTask` retry loop, the
 manual-retry UI and attempt machines in `app.js` (*analyst*), the server replay
@@ -105,72 +128,133 @@ caches and the asynchronous completion channel. The M1-async design was framed
 around reload survival and a 30 s browser deadline over a 25 s server close
 wait. Alternative: commands return right after admission, long waits (close
 settlement) become task state reported through the existing drain, and the page
-shows a working state instead of timing out. Keep one `command_id` check at the
-task owner against double submission. Loses automatic retry of a genuinely hung
-handler; show "still working" instead. Risk: medium; after S1.
+shows pending state instead of automatically resubmitting. Keep an authoritative
+command identity/result at the task owner against double submission. Slow-call
+feedback is not cancellation; observation must distinguish an active task from
+an unavailable backend and provide a recovery path. Do not leave an indefinite
+"still working" message as the only failure behavior. Shutdown, resource bounds
+and bootstrap deadlines are not ordinary mutation retry policy and remain
+outside this reduction. D2 remains a recommendation requiring a decision.
+Risk: medium; settle its command-result observation contract before S3's wire
+shape so the two changes do not create successive replacement protocols.
 
-**S3 — Render server snapshots instead of reducing events in the browser.** The
-Python drain already replaces pending Progress in place, and the server already
-builds execution overlays; the page reduces the same stream again with Gap,
-attempt and high-water rules (about 750 lines, *analyst*). Deliver a per-task
-snapshot (state, latest progress, counts, revision) plus bounded outcomes, and
-keep Python as the single reducer. The frontend analyst classified the reducer
-as essential against a lossy transport; this study disagrees because that
-lossiness is a server design choice, not a platform property. Loses an
-independent second protocol implementation. Risk: medium-high (protocol change;
-`drain_manager_probe.mjs` and related tests retire with it).
+**S3 — Render server snapshots instead of reducing events in the browser.**
+Accepted direction; recommended before M1-9 adds an inventory consumer to the
+same shell. Refactor the existing task-update seam, not the whole shell.
 
-**S4 — Validate at ingress and trust first-party output.** Keep strict bounds on
-page-to-Python requests and on reads of externally corruptible storage, and keep
-the history receipt/prefix hash chain for torn writes. Stop re-validating values
-the same process just produced:
+Current path: `dispatcher/event_bus.py` may report Gap; `session_observer.py`
+feeds `web/drain.py::_TaskState`; the drain coalesces Progress and retains
+execution outcomes; `assets/bridge.js` reduces event sequencing/progress;
+`app.js::acceptTaskUpdate` again interprets task/control/terminal state; and
+`task_status.js::advanceProgressPresentation` maintains percentages and rate
+samples. Coalescing and retained outcomes are not already a complete server
+snapshot reducer. Gap can originate upstream of the web drain: changing the
+browser payload alone does not recover missing facts.
 
-- `core/events.py:630-634` reruns the full `event_v5` validator on history
-  readback of bytes written and validated by the same process;
-- the history schema carries 71 `CHECK` clauses and 10 triggers restating
-  groupings that Python enforces before insert;
-- `assets/bridge.js` spends 75 functions and 1,175 of 3,501 lines on response
-  validation (the frontend analyst's region estimate of about 1,750 includes
-  neighboring helpers);
-- `interfaces/web/bridge.py` walks each response tree three times (*analyst*);
-- `workflows/sync.py` calls execution-authority snapshot/revalidate/audit at 38
-  sites.
+Target: one Python owner of task presentation facts, publishing immutable,
+task/session-bound revisioned snapshots with terminal/recording axes, progress
+and explicit unavailable/incomplete facts. Keep item windows/details bounded;
+never ship the complete retained outcome map on each update. Adopt snapshots
+atomically, reject stale or foreign identity, and preserve unknown counts after
+Gap until authoritative reconciliation exists. An observation retry reads
+current state; it does not restart execution. Browser-side drafts, focus,
+scroll, pending interaction feedback and purely visual formatting remain local.
+Choose one owner for throughput/ETA sampling during design; do not move it to
+Python and also keep an authoritative second history in the page.
 
-Keep the collaborator-callback audit that BUGS records catching a real incident.
-Move second-implementation oracles into tests, where own-code defects belong.
-Risk: low to medium per item; the lowest-risk structural proposal.
+Use existing rail/panels/review renderers and replace their update input. A
+bounded shell refactor is valuable now because `app.js` mixes transport-event
+interpretation with controls, follow, window invalidation and close. A general
+frontend rewrite, framework adoption, or preparatory file-splitting pass is not
+justified. S3 need not wait for S5's application-owner merger. The exact Python
+owner/port belongs in the activated design under INTERFACES/BRIDGE, respecting
+workflow ownership of sync policy and dispatcher's domain blindness.
 
-**S5 — One owner per task.** `interfaces/task_lifecycle.py:32-166` defines 16
-dataclasses implementing begin/complete/abandon protocols for plan mutation,
-plan retirement and admission rollback, plus a four-phase settlement: a
-hand-built transaction manager for one user's tasks. Merge lifecycle claims,
-drain task state and the retained-review registry into one per-task record under
-one lock. Keep dispatcher custody (the cross-process volume mutex is real,
-because CLI and GUI may mutate concurrently; worker generations serve
-pause/resume overlap) and the observer's thread lifetime separate. Unify the two
-admission-cleanup implementations. Consider one workflow-owned plan-review
-object shared by service and adapter. Risk: highest; after S1 and S2, which
-remove many of the claims' reasons to exist.
+Verification must cover real producer-to-snapshot-to-page composition: deferred
+directory progress, retries/attempt changes, large integers, Gap/terminal
+reconciliation, zero/unrun outcomes, control feedback, navigation, observation
+retry and pending Close. Retire only obsolete event-reducer scenarios in the
+drain probe, not its whole transport/cleanup coverage. Preserve CLI/history event
+contracts. Risk: medium-high; benefit is one fewer semantic interpreter, not
+a promised line count or measured speedup.
+
+**S4 — Validate at ingress, at storage and at ownership boundaries.**
+Worth doing now only as a narrow consolidation of repeated traversal at the
+bridge response boundary (L4), and removal of obsolete browser event semantics
+with S3. Do not start a repository-wide validator-removal pass.
+
+| Examined candidate | Requalification and action |
+| --- | --- |
+| History write/readback, `core/events.py::envelope_from_dict`, `db/history.py::_history_event` | Retain. Persisted JSON is a new adoption boundary, not the original immutable in-memory value. Keep write admission before queue/flush mutation, read decoding/shape checks, column/hash/receipt consistency, append-only protection and current SQL constraints/triggers. The original removal premise was wrong. |
+| `web/bridge.py::to_primitive_view`, response snapshot/admission/projection helpers | Confirmed separate graph walks. Consolidate capture, semantic validation and projection where they operate on the same detached value. Keep bounded construction, approved types, canonical scalar/JSON encoding, cycle refusal, longest admitted drain prefix and custody lifetime. A one-pass implementation is a candidate, not a requirement if it complicates safe prefix capture. |
+| Browser response validation (`assets/bridge.js`) | S3 can retire event-transition/attempt logic that Python will own. Keep protocol/version, task/session/request/revision identity, scalar decoding and renderable shape checks at browser adoption. Reduce repeated certification after adoption; do not broadly trust every first-party response or remove safe text/layout sinks. |
+| `workflows/sync.py` authority checks | Excluded. `ExecutionSetAuthority` snapshots mutable status/recording/publication overlays; transfer and callback audits protect changes across collaborators. The call count does not demonstrate redundant checks. No continuation, settlement, post-copy or callback-audit removal. |
+| Plan/preflight validation (L6) | Not qualified for implementation. Constructor shape/capacity, canonical serialization and producer semantic membership may protect different boundaries. Constructing `Verdict(not refusals, ...)` and checking that invariant are not two competing policy owners. Require a specific same-value/same-boundary duplication before proposing removal. |
+
+For each consolidated bridge path, identify the original validator, detached
+value and receiving owner. Preserve malformed-input refusal and byte-limit
+boundaries with existing response/transport tests and direct consumer checks.
+Do not create a generic trusted-value framework or bypass flag. Source inspection
+supports bounded L4 work, not equivalence of a new codec. Current history and
+workflow safety tests remain mandatory and unchanged in purpose.
+
+**S5 — Reduce duplicated application coordination, not all task ownership.**
+The original ten-line proposal understates an architectural change. Defer the
+full merger; it is not a prerequisite for S3 and is not worth implementing now.
+
+| Current owner / source | Actual responsibility | Consequence for consolidation |
+| --- | --- | --- |
+| `TaskLifecycle` in `interfaces/task_lifecycle.py` | Effect receipts, shell/task/session/plan associations, claims excluding observation/mutation/retirement, logical settlement. Own condition plus striped command locks; no calls into physical cleanup. | Much of the state protects real concurrent start/close/follow-up behavior, including headless sessions. Reload removal alone does not remove it. The 64 command locks are stripes, not 64 independent transaction protocols or a handler-admission limit. |
+| `NamiSyncService` in `interfaces/service.py` | Selection reviewing/committing/committed state, admission attachment, observer/workflow/dispatcher coordination and retained-review capture before cleanup. | `_settle_session` orders capture, observer release, dispatcher close, detail/plan retirement and logical completion. Keep effects outside lifecycle locks and distinguish session release from task closure. |
+| `SessionObserver` | Stream, subscription, callback and thread lifetime. | Callback drain/join cannot safely become work performed while holding a universal task lock. |
+| `TaskRegistry` / `_TaskState` in `web/drain.py`, `PlanReviewState` | Adapter task listing, delivery queue/cursor/generation, execution presentation facts, view registry; each task condition and review RLock protect different local facts. | S3 can reduce delivery/event state; a view reference could later live with its task. That does not require merging application effect authority into the adapter. |
+| `Dispatcher._AdmissionCleanup` / `submit` | Unpublished session store entry, event hub/stream and the application's supplied rollback callback. | Complementary to service rollback, not a second implementation of it. Keep dispatcher domain-blind and its cleanup retry/custody ownership. |
+| Workflow runtime / retained execution review | Domain artifacts, selection decisions and retained result evidence. | A unified interface record must not absorb domain policy or become a second ledger/result authority. |
+
+The real duplication candidates are repeated task/session identity joins,
+adapter start-result caching versus application receipt observation, and the
+separate task/view lookups. S1/S2/S3 can remove some reasons for those joins.
+Afterward consider a single application task association with adapter-local
+presentation state keyed by its identity; this is a possible smaller target,
+not an approved new object model. Keep headless CLI sessions, task follow-ups
+and terminal-review retention explicit. Sharing a workflow-owned review object
+is a separate projection/selection proposal (L3/§13), not an automatic S5 benefit.
+
+Why not one lock: current cleanup runs outside the lifecycle condition, while
+observers can invoke sinks and drain producers can wait for queue capacity.
+Moving those effects under a combined lock risks circular waits and blocks
+unrelated operations. One user still has multiple native/worker/observer threads.
+No deadlock is claimed to exist today; this is a refactor hazard established by
+the current call graph and wait points.
+
+Existing `test_task_lifecycle.py` cases cover concurrent rollback, settlement
+versus reobserve, exact-subject retry, close wakeup and plan-retirement versus
+mutation. A later S5 design must preserve these outcomes plus CLI admission,
+failed publication, task follow-up rollback and retained review after session
+release. It must show which claims disappear and why, not merely move all fields
+into a larger class. Keep the documented submit-to-start-publication recovery
+limitation honest; this study does not fix or broaden that recovery contract.
 
 ## 5. Local reductions
 
-Each item is independently committable and preserves behavior.
+Only L1–L4 remain recommended candidates; implementation is not activated.
+Locality does not by itself establish behavior preservation.
 
 | ID | Change | Where | Evidence |
 | --- | --- | --- | --- |
 | L1 | Delete the unused mapping lookup (`find_mapping`, `get_mapping_snapshot`, `_disqualified_identities`, about 110 lines); it still embeds the stale-alias pattern MOVE-1 removed from planning | `db/repositories.py:1022-1120`, `:1259` | Verified: no production caller |
-| L2 | Derive `toggleable` only when a folder id needs resolution (the M1-7 study's R7-7, marked "deliver now", never landed) | `interfaces/service.py:2499-2503` | Experiment B1: no failure |
-| L3 | Summary-only selection preview on view open; drop the redundant membership round-trip | `service.py`, `web/drain.py` | *Analyst* |
-| L4 | Encode each bridge response in one pass | `web/bridge.py` | *Analyst* |
-| L5 | Merge `PlanReviewProducerAdmission` and `PlanReviewAdmission`; keep all four axes | `core/review.py` | *Analyst*: identical `_limit_signal` bodies |
-| L6 | One owner each for the `required_volumes` check (three sites) and `Verdict.ok` (two) | `core/planning.py`, `modules/planner.py`, `modules/preflight.py` | *Analyst* |
-| L7 | Remove default-off copy diagnostics from the copy path | `modules/executor/pipeline.py` | *Analyst*: never reaches users |
-| L8 | Merge three byte-continuation classes; express about 50 internal state-enum members as a few orthogonal facts (users see 22 reasons and six outcomes) | `modules/executor/runtime.py:242-458` | *Analyst*; needs one settlement-baseline refresh |
-| L9 | Replace the native Advanced Color detection (about 150 lines and appearance v3) with CSS `dynamic-range`/`color-gamut` queries | `web/appearance.py` | Needs a spike showing WebView2 tracks the Windows toggle |
+| L2 | Derive `toggleable` only when a folder id needs resolution | `interfaces/service.py::_resolve_plan_selection_ids` | Experiment B1 and source inspection. Absorbs the unfinished R7-7; its old "deliver now" wording had already been suspended. |
+| L3 | Internal revision-bound selection summary/membership transfer instead of full public preview on view open and split membership reads | `service.py`, `task_port.py`, `web/drain.py` | Confirmed full operation-view tuple construction in `_selection_preview_locked`; `open_plan_view` consumes summary fields. Preserve public CLI/API preview, authoritative workflow mutation and atomic revision/membership capture. Absorbs old A7; not a new desktop selection algorithm. |
+| L4 | Consolidate bridge response traversal at the same ownership boundary | `web/bridge.py` | Confirmed separate capture/validate/project walks; bounded S4 owns the conditions. One pass is not mandatory. |
+| L5 | Merge producer and retained admission objects | `core/review.py` | **Rejected by user.** Independent counter-free populations and cumulative retained charges are different semantics. |
+| L6 | Consolidate plan-volume and verdict checks | `core/planning.py`, `core/preflight.py`, planner/preflight | **Unqualified/deferred.** The cited construction, shape and semantic checks do not establish redundant policy; see S4. |
+| L7 | Remove default-off copy diagnostics | executor pipeline | **Rejected by user.** Tools CLI, `tools/executor_rig.py` and `tools/seams.py` are actual consumers. Optional developer diagnostics are useful capabilities, not dead product code. |
+| L8 | Merge continuation classes and settlement enums | executor runtime | **Rejected by user.** Different recovery facts and legal states; no demonstrated simplification or safety equivalence. |
+| L9 | Replace native Advanced Color detection with CSS | web appearance | **Rejected by user.** Keep the mitigation. DESKTOP_UI records that CSS misses SDR WCG; no replacement spike is scheduled. |
 
-Lower-value options: the `StoredSessionRecord`/`SessionRecord` split exists for
-M2; `workflows/_database_pair_native.py` (317 lines) serves only first-run
-failure cleanup.
+The `StoredSessionRecord`/`SessionRecord` split and first-run database-pair
+failure cleanup are not current reduction candidates. Limited reachability is
+not evidence that failure cleanup is unnecessary.
 
 ## 6. Tests
 
@@ -197,25 +281,35 @@ procedural, not test-level.
 
 ### Recommendations
 
-- **T1 — Remove visual and source-literal pins.** The most-churned test files
+- **T1 — Remove unjustified visual and source-literal pins.** The most-churned test files
   since 2026-09-01 are this family (*analyst*): `test_frontend_static.py` in 26
   commits, in step with `app.css`'s 26; `test_component_gallery_headed.py` 24;
   `task_shell_probe.mjs` 23; `test_design_tokens.py` 18. Remove exact CSS
   declaration asserts, the 16 source occurrence counts in
   `test_frontend_static.py`, and the 58-literal gallery exact-matrix test. Keep
   security bans (no `innerHTML`, `evaluate_js` or `localStorage`) and a few
-  computed-style checks for accessibility invariants such as focus visibility
-  and forced colors.
-- **T2 — Retire tests with their mechanisms.** S1–S5 shrink
+  computed-style checks for accessibility invariants such as focus visibility,
+  reduced motion and forced colors. Identify the surviving behavioral detector
+  before dropping an assertion that also protects semantics or accessibility;
+  a source-literal failure alone does not make its whole test disposable.
+- **T2 — Retire tests with their mechanisms.** Activated structural changes may shrink
   `test_task_lifecycle.py`, `test_drain.py`, the transport-custody tests, the
   drain and task-shell JavaScript probes and the reload scenarios of headed
   children. An intentionally retired mechanism needs no one-to-one replacement
-  detector.
+  detector. Retain observation/close, malformed-boundary and truthful-result
+  tests when only reload or event-reduction machinery is retired; S5 is deferred.
 - **T3 — Stop procedure-driven test reduction.** The previous refinement closed
-  at a diagnostic net +27 lines ([TEST_REFINEMENT](TEST_REFINEMENT.md)).
+  at a diagnostic net +27 lines ([TEST_REFINEMENT](obsolete/TEST_REFINEMENT.md)).
   Approximate corpus shares (*analyst*): 15% headed harness (about 20% of the
   tests in those files need a desktop), 9% scale evidence, 8.5% tests of tools
   and evidence protocols.
+
+For reduction work, red tests can reflect an intentionally removed mechanism,
+not a regression; green tests cannot establish the absence of a regression.
+Classify each failure against retained behavior and boundaries before changing
+the detector. Record why a deleted assertion is obsolete or where its retained
+guarantee is observed. Do not preserve a retired mechanism just to keep its test
+green, or erase a guarantee just to make the suite pass.
 
 Keep the executor settlement tests and 30-scenario in-code oracle, the
 `FailureDetail` construction AST guard, integrity-selection duplicate/unknown-id
@@ -230,19 +324,59 @@ rejection, and the security bans.
 - An estimated 20–30% certifies the evidence itself: readiness passes, partial
   collection indexes, legacy-family replay and per-family authority/identity
   records.
-- Root cause is policy. [DEFENSE §7](DEFENSE.md#7-quantitative-evidence-and-measurement-authority)
-  applies Tier 2/3 procedure to UI latency and states that an unclassified
-  retained-representation change invalidates acceptance evidence, so a
-  plan-review dataclass edit re-arms a 78–175-child measurement.
+- Policy contributes materially. [DEFENSE §7](DEFENSE.md#7-quantitative-evidence-and-measurement-authority)
+  already distinguishes diagnostics and enforced bounds; escalation rules and
+  PRESENTATION's specific acceptance procedures create the expensive coupling.
+  Relevant dependency changes can re-arm evidence work; not every dataclass
+  edit automatically requires every measurement family. The 35 + 13 cases
+  include more than latency, so classification must precede demotion.
 
-**E1 — Proposal.** Keep counted-work witnesses (such as the 120,000-row scoped
-and highlighted selection costs) as ordinary regression tests. Move wall-clock
-timing into one manual script with plain JSON output, run before release.
-Retire readiness, partial indexes, legacy replay, the optional Plan-again tracer
-and per-family authority binding. This extends the M1-7 study's Option A in
-place of its Option B redesign. Decide whether all 35 + 13 budgets are needed
-(Option C). The settlement baseline has not changed since 2026-08-22 and is low
-priority.
+**E1 — Narrowed recommendation: optional performance benching, required
+correctness and containment.** The user favors retaining useful measurement
+machinery without an ordinary development pass/fail bar. Implement this policy
+explicitly in DEFENSE/PERFORMANCE and the owning tools only after activation;
+this study does not itself weaken the current gates.
+
+Plan the migration of measurement drivers, useful fixtures and instrument code
+from `tests/` to `tools/`, retaining tests of their correctness under `tests/`.
+AB-1 establishes `docs/PERFORMANCE.md` as the methods/results owner and extracts
+historical key observations into a table; PRESENTATION retains contracts and
+decisions. AB-2 migrates drivers and changes their gating role atomically with
+their consumers. Existing raw JSON stays at its current paths. JSON samples and
+authority companions preserve numerical results; screenshots, installed wheels,
+native logs and failure context are not necessarily embedded. Preserve existing
+raw directories; consider a durable external archive for irreplaceable material
+before cleanup, not wholesale promotion of ignored build output into Git.
+
+| Class | Proposed treatment |
+| --- | --- |
+| Filesystem safety, truthful outcomes, complete request/population admission and bounded windows | Required functional/enforced checks. Never substitute favorable timing or sampled memory for a production bound. |
+| Known scaling failures | Keep compact counted-work/behavioral regressions at meaningful sizes, permitting equivalent algorithms. No exact private lookup sequence or whole object-graph certificate merely to protect a soft performance target. |
+| Plan/execution UI latency and empirical representation memory | Optional benchmark cases with advisory comparison to historical observations/targets. Missing, slow or noisy results do not block ordinary commits or imply product failure. Wrong fixture/endpoint or failed action makes the measurement invalid, not a fast pass. |
+| Release resource/leak checks (SH-G-15), security transport custody and executor settlement authority | Outside automatic demotion. They protect different release/correctness claims; any later change needs an explicit consequence decision. Benchmark timeout/job limits remain tool containment, not performance acceptance. |
+
+Retain representative large fixtures, real installed endpoints where relevant,
+simple case selection, sample distributions, revision/dirty-state and runtime/
+profile provenance. Use one simple entry point over useful existing drivers;
+do not build a general platform or require one physically monolithic script.
+Keep optional before/after comparisons. A pre-release run is useful, not a new
+mandatory ritual replacing the old gate. Exact speed targets remain undecided.
+
+For the demoted performance families, retire separate readiness certification,
+accepted-partial-index protocols, per-family acceptance authority and active
+legacy-family replay. Keep ordinary driver/setup correctness, partial raw logs
+labelled incomplete, and immutable historical artifacts with pinned interpreter
+provenance. Do not preserve a fresh-source hash as an automatic requalification
+trigger; record it as provenance. Do not erase historical failures or reinterpret
+historical passes as current guarantees. Current artifact readers/tests stay
+until their consumers are retired together in the implementation checkpoint.
+
+Do not remove every diagnostic under E1: keep copy metrics (L7 rejected).
+Plan-again source-rewriting instrumentation has four actual consumers and a
+distinct diagnostic value; retain it for now, then assess whether S3's simpler
+update path makes it dispensable. Tracer retirement is not bundled into benchmark
+demotion. Preserve independent fixture/correctness expectations; a producer's
+self-consistent hashes cannot establish that it measured the intended action.
 
 ## 8. Development workflow and documentation
 
@@ -253,17 +387,66 @@ recovery branches, evidence retention and multi-document updates per commit.
 Each mechanism therefore has three to five normative restatements to
 renegotiate before it can change.
 
-- **W1 — Separate contract from description.** FEATURES states user-observable
-  behavior; DEFENSE states safety invariants; ARCHITECTURE states cross-layer
-  invariants; module documents describe current mechanisms without binding
-  them. A behavior-preserving mechanism change then needs no document approval.
-- **W2 — Scale process to the change.** A small fix is a commit plus one
-  CHANGELOG line. Registers only for multi-commit work; HANDOFF only when pausing
-  mid-task; one retained log per gate.
-- **W3 — Archive completed studies.** Move TEST_ABLATION, TEST_REFINEMENT,
-  PRODUCTION_REDUCTION, REDUCTION_FOLLOWUP and M1_7_ABLATION_STUDY (about 3.1k
-  lines) to `obsolete/`; they still constrain future work.
-- **W4 — Reduce AGENTS** to layering, safety invariants and commit conventions.
+These dispositions feed AB-1/AB-2. This planning commit does not edit AGENTS or
+activate a new test authority; the user's direct W2 instruction applies to this
+session and is to be made durable in AB-1.
+
+**W1 — Distinguish requirements from current implementation.** Keep FEATURES
+about user behavior, DEFENSE about consequence/boundaries, and ARCHITECTURE
+about ownership and cross-layer contracts. Module docs may still contain real
+normative requirements: a publication order or lock/effect boundary can enforce
+safety. Label such requirements by the guarantee they protect; describe other
+mechanisms as current implementation, not permanent API promises. Do not make
+every module document non-normative. Source owns exact fields/constants unless
+an independently meaningful contract needs them. Keep one owner per rule and
+link consumers to it. Behavior-preserving implementation changes need accurate
+owning documentation, not renegotiation of descriptive prose in several places.
+
+**W2 — Default to small changes; the user owns classification.** Accepted user
+instruction: default to the small-change workflow unless the user asks otherwise.
+Do not replace their judgment with agent-defined eligibility criteria, size
+thresholds or an automatic register requirement for every audit-derived fix.
+
+Checks, appropriate tests, adversarial review, accurate owning documentation and
+a concise CHANGELOG summary remain mandatory under their existing applicability
+rules. Documentation-only changes still use documentation checks. Keep useful
+HANDOFF context and substantive BUGS entries under their existing conventions.
+Detailed delivery plans, permanent registers and finite-population worksheets
+may be omitted unless requested. An internal working plan is not a requirement
+to leave another permanent document. This requested multi-checkpoint plan is an
+explicit exception, not a template to impose on later small changes.
+
+If delivery crosses architectural ownership, public contracts, safety guarantees,
+or multiple independently deliverable outcomes, explain the concrete boundary
+and ask the user to escalate/formalize before proceeding across it. The user
+decides; file count, broad tests or time spent alone do not trigger escalation.
+Existing explicit authorization persists and safety stops remain in force.
+
+M1_PLAN keeps active outcomes, dependencies and unresolved decisions. Condense
+completed MOVE-1, GUI-W1/WR1, M1-4–8 and GUI history into compact records linked
+to CHANGELOG, Git/evidence and current subject owners. Preserve DOC-2's pending
+branch decision and any still-binding guarantee. Retain meaningful failed and
+successful evidence without duplicating chronology or test counts in each doc;
+do not add a universal evidence manifest or require one log per gate.
+
+**W3 — Retire registers, preserve decisions.** The five older studies are now
+archived under `obsolete/`; §13 accounts for completed, absorbed and deferred
+items and names the current guarantee owners. Historical completion populations,
+stop/resume instructions and frozen test recipes are not future execution
+authority. Historical evidence remains intact; archiving documents does not
+retire validators or measurements. Old task-specific exclusions are not perpetual
+mechanism freezes, but substantive safety/product decisions need a current
+owner and explicit supersession before they can change.
+
+**W4 — Prune duplicated procedure in AGENTS, not its useful constraints.**
+Recommend retaining structure/naming, Windows execution, layering, safety and
+data preservation, scope authorization, meaningful verification, commit rules
+and recovery for actual interruption. Route detailed component/evidence rules
+to their owners and apply W2's user-owned small-change default. Keep explicit stops
+for supported data loss, unauthorized/duplicate effects and false success.
+Do not use this pass to remove recurrence stops, weaken preservation or introduce
+a replacement process framework. Draft the actual AGENTS diff when W1/W2/E1
+are activated; "reduce it to three topics" is rejected as too broad.
 
 ## 9. Retain
 
@@ -289,27 +472,76 @@ These look reducible but protect real behavior:
 | --- | --- |
 | Features to keep (simplify their mechanisms) | Plan review with search, filters, sort, selection and highlight ranges; commit-bound execution; pause/resume/cancel; live and retained execution review; Plan again; serial batch pair creation; recent locations; CLI integrity baseline/verify/rebaseline; history CLI; concurrent tasks on disjoint volumes |
 | Implemented, not yet integrated (expected) | `tree.js`, `integrity.js`, gallery-only chip/badge/banner CSS, inventory acknowledge/restore (no CLI or desktop surface), desktop inventory projection contracts |
-| Speculative (M2 or later) | `SessionStore` record split, destination-policy seam for ingest, recorder `flush()` batching seam, copy-pipeline metrics |
+| Future seams, not deletion authority | `SessionStore` record split, destination-policy seam for ingest, recorder `flush()` batching seam |
+| Developer diagnostic capability to retain | Copy-pipeline metrics, consumed by tools; Plan-again tracer pending a separate post-S3 usefulness assessment |
 | Dead | The mapping lookup in `db/repositories.py` (L1) |
-| Reachable only by tests | Page reload and reinjection recovery (S1) |
+| No intended explicit production user action | Page reload/reinjection recovery (S1); unexpected document replacement still needs containment |
 
-## 11. Decisions required
+## 11. D1–D7 dispositions
 
-| ID | Question |
+| ID | User disposition and current recommendation |
 | --- | --- |
-| D1 | Is page reload a supported user action? If not, S1 proceeds and most of S2 follows. |
-| D2 | May local commands drop page-side deadlines (S2)? |
-| D3 | Which of the 35 plan-review and 13 execution-UI budgets matter? |
-| D4 | Is a highlight set separate from checkbox selection worth its machinery? |
-| D5 | Keep the native Advanced Color shadow mitigation, or use CSS only (L9)? |
-| D6 | Wire or shelve inventory acknowledge/restore? |
-| D7 | Change DEFENSE §7 and document ownership (§7–8)? Without it, S1–S5 cost about what M1-7 and M1-8 cost. |
+| D1 | Reload probably will not be exposed. Adopt that design direction; S1 recommends retiring recovery after installed verification while keeping stale-document containment. It does not automatically approve all of S2. |
+| D2 | User remains unsure. Recommend no timer-triggered mutation resubmission, with prompt admission, authoritative command result and recoverable observation. Exact timeout/failure behavior awaits activation/design. |
+| D3 | No chosen speed targets. User favors optional useful performance benching. E1 demotes the performance families without inventing new targets; enforced bounds and separate release/correctness gates remain distinct. Exact case selection is not yet decided. |
+| D4 | User remains unsure. Recommend keeping row highlight/focus separate from execution checkboxes: navigation and range inspection should not silently change execution intent. Simplify mechanics first; feature removal needs its own decision. |
+| D5 | Keep the native Advanced Color mitigation. L9 rejected; no CSS replacement work. |
+| D6 | Keep the expected inventory acknowledgement/restore capability. M1-10 explicitly owns baseline/verify/rebaseline and post-copy verification; its rebaseline acknowledgement is different from hiding/restoring missing rows. Service methods and FEATURES already support the latter intent. Allocate its desktop delivery explicitly when M1-9/10 activates; do not shelve it as dead code or claim M1-10 already names it. |
+| D7 | User considers §7 excessive. Plan optional performance tooling and a central PERFORMANCE methods/results owner, retaining correctness, enforced bounds and distinct safety/release gates. W2 is now explicitly the user's small-change default with user-owned classification. Durable policy edits are AB-1/AB-2; this planning revision does not demote executable gates. |
 
-## 12. Suggested order
+Separate settled decisions: S3's direction is accepted; L5/L7/L8/L9 are rejected.
+S4 is now restricted to boundary-preserving consolidation. Full S5 is deferred
+on the investigation's recommendation; no full task-owner merger is scheduled.
 
-1. W1–W3 and E1: no product risk; they make the remaining work cheaper.
-2. L1–L9 and T1.
-3. S4, then S1, S2 and S3, then S5.
+## 12. Planned delivery
+
+[M1_PLAN](M1_PLAN.md#post-m1-8-reduction-plan) owns AB-1–AB-10, dependencies,
+regression mapping, acceptance, commit gates and resumption. Documentation is
+first; benchmark migration follows its ownership rules. Independent database,
+selection, response-boundary and test reductions get coherent commits. S1/S2
+and S3 remain separate boundaries; D2 must be settled or explicitly retained
+before S3, without inventing a replacement command protocol by assumption.
+S5 stays deferred. L5/L7/L8/L9 remain in the compact rejected table in §5.
+
+## 13. Earlier studies: absorption and archival accounting
+
+All five source documents were inspected for status, exclusions, losses and
+remaining decisions before moving. Their original bodies are preserved except
+for relocation of links and a retirement banner. This section is the current
+disposition map; archived instructions cannot restart their old checkpoints.
+
+| Archived study | Open work and still-relevant decisions |
+| --- | --- |
+| [TEST_ABLATION](obsolete/TEST_ABLATION.md) | TA-1–TA-3 and rebase closed; diagnostic recommendations are not outstanding implementation. Whole-cohort deletion lost duplicate-selection and visual/accessibility detectors. Keep boundary/selection/lifetime/native guarantees under CORE, TESTS, DESKTOP_UI, INTERFACES and DEFENSE. Later PR-8 superseded its exact-frozenset/private-index prescriptions; do not resurrect them. |
+| [TEST_REFINEMENT](obsolete/TEST_REFINEMENT.md) | ST-H/ST-0–ST-6 complete. Preserve FailureDetail lifetime/AST scope guards (CORE), database snapshot/bounded-query behavior (DATABASE), duplicate/unknown-id selection refusal and detached facts (VERIFIER/ARCHITECTURE), accessibility and real native input/privacy/media checks (DESKTOP_UI/INTERFACES/BRIDGE). Same-level detection applies to retained guarantees, not intentionally retired mechanisms. MOVE-1 superseded historical-alias query assertions; PR-8 superseded exact selection-container prescriptions. Frozen protected-input lists and mutation scripts are historical receipts, not an eternal file freeze. |
+| [PRODUCTION_REDUCTION](obsolete/PRODUCTION_REDUCTION.md) | PR-0–PR-9 complete. HISTORY/DATABASE own write/read validation, append-only receipt integrity and coordinated old/mixed-pair refusal without automatic deletion/migration. ARCHITECTURE/WORKFLOWS own required finishing and independent terminal axes. DATABASE owns bounded batching/snapshot/atomic-write guarantees; exact query-count pins were retired. Execution/integrity continuation protection and unintegrated presentation features remain. Its exclusions authorize no generic lifecycle/settlement/serializer engine; S3 is a new accepted direction, not a claim that this old pass allowed it. |
+| [REDUCTION_FOLLOWUP](obsolete/REDUCTION_FOLLOWUP.md) | NR-0–NR-9 complete, no pending delivery. ARCHITECTURE's adoption rule preserves constructor/ingress validation, supported callback changes, capacity/freshness and mutable ownership transfers. HISTORY retains write admission before pending mutation and read normalization/hash/column checks. EXECUTOR retains exact mutation/publication/recording ordering and settlement oracle. Recording-tail, pause/cancel and mutation-verdict compression remain unscheduled; this review does not revive them. |
+| [M1_7_ABLATION_STUDY](obsolete/M1_7_ABLATION_STUDY.md) | R7-1–R7-4 delivered; RI-1–RI-4 investigation complete. R7-5–R7-8/R7-G were suspended, not completed. Retire that denominator and resume block; selected ideas are accounted below. Historical P9 evidence and current acceptance owners remain unchanged by archival. |
+
+### M1-7 items absorbed or explicitly left out
+
+| Old item | Current disposition |
+| --- | --- |
+| Option A readiness/partial-index/legacy retirement | Absorb into E1 for demoted performance families, with failure logs and historical bytes/provenance retained. No new journal or partial-publication protocol. |
+| Option B replacement protected acceptance system | Do not build it for demoted optional benchmarks. It was recommended under unchanged hard SLOs, which is not the current proposed direction. Preserve its useful distinction between observations and independently authored correctness expectations. |
+| Option C numeric contract rationalization | Absorb into D3/E1: no new hard targets now; retain useful measurements while dropping their proposed automatic gating role. Release-resource decisions remain separate. |
+| R7-5 publication helper; R7-8 tracer-oracle rewrite | Supersede the old checkpoints, not their outcomes as "passed". Do not polish partial-index machinery proposed for retirement. The tracer remains for now; any touched instrumentation must still prove actual insertion/restoration independently rather than mirror its replacement algorithm. |
+| R7-6 / A4 shared replay helper | Retire the old standalone checkpoint; await S2's still-pending command-policy decision before choosing a replacement. Avoid consolidating a retry algorithm immediately before potentially retiring it. Retained duplicate-command/intent protection remains required. |
+| R7-7 / A12 lazy resolver | Absorb into L2. Broader cross-call safety derivation/cache reuse is deferred; no bypass flag or trusted context framework. |
+| A5 shared selection admission | Defer with S5. Task and general/CLI wrappers have different replay, revision and verification semantics; external work remains outside locks. No callback-heavy admission framework. |
+| A6 scenario-local receipts, disconnected checkbox and driver spelling | M1-8 R1 already adopted functional consolidation. Current follow-ups belong to T1/T2 only after rechecking surviving scenarios; do not rerun the old list or build a universal fake DOM. Retain actual stale-response, captured-intent and native input/focus witnesses. |
+| A7 internal selection snapshot | Absorb into L3 with public preview compatibility, exact artifact/revision and workflow-owned selection. No workflow graph serialized to the page. |
+| A8 stable topology plus selection overlay | Defer: source identifies repeated row/map allocation but no measured material hotspot or demonstrated simpler model. Existing compact order/visibility reuse stays. S3 does not require a projection redesign. |
+| A10 legacy interpretation | Absorb into E1 archival treatment when its active readers retire. This document move alone does not delete any historical validator or evidence artifact. |
+| A11 optional Plan-again trace retirement | Defer until S3 usefulness review; four consumers make it an actual capability. Copy diagnostics explicitly remain. |
+| F1 Execute response/task identity lead | Retain as an unproven boundary concern for S3/S4 response adoption: ensure returned task/session identity matches the requested operation. No supported misrouting was reproduced; no new defect or fix is claimed. |
+| R7-G old integrated closeout | Retired with the suspended implementation plan, not marked passed. Each newly activated outcome gets current affected verification under the then-operative policy; historical R7 partial evidence cannot certify a future refactor. |
+
+The archive does not create a second current guarantee catalog: the named subject
+documents govern. When a proposal above changes a retained mechanism or evidence
+obligation, update that owner during activation. No other open delivery row was
+found in the four completed studies; their deferred alternatives remain ideas,
+not latent authorization or mandatory future work.
 
 ## Evidence
 
@@ -319,3 +551,13 @@ These look reducible but protect real behavior:
 `sizes.ps1`, `churn.ps1`, `doctax2.ps1` (merges excluded), `bugs.ps1`,
 `docpin.ps1`, `refs.ps1`, `prepA.ps1`, `prepB.ps1` and `run3.ps1`. The disposable
 clone and its worktrees were deleted after the runs.
+
+Reconciliation checks at `a7f8402`: `reconciliation-checks.json` records the
+changed-document link/anchor scan, diff check, unchanged product/test/tool and
+AGENTS/DEFENSE paths, and comparison proving that all five archived bodies are
+preserved except banners and relocated links. Final adversarial self-review
+checked that proposals were not promoted to user decisions (especially D2/D4),
+that S3 preserves unknown/Gap and bounded-result behavior, that S4 retains
+storage and mutable-ownership checks, and that S5 does not collapse complementary
+cleanup owners. It also found and removed stale R7-resumption wording from
+M1_PLAN. No independent agent review, fresh test run or measured benefit is claimed.

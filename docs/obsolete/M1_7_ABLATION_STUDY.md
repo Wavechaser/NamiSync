@@ -1,12 +1,17 @@
 # M1-7 ablation implementation plan
 
+> Retired 2026-09-25. Historical study/register only; its old execution
+> and resumption instructions are inactive. Current dispositions and
+> retained guarantee owners are recorded in
+> [POST_M1_8_ABLATION §13](../POST_M1_8_ABLATION.md#13-earlier-studies-absorption-and-archival-accounting).
+
 ## Current disposition — deferred (2026-09-23)
 
 Retain this completed study for possible work after M1-8 closes. Do not revisit
 or implement its benchmark capability retirements during M1-8; R2 preserves
 historical dependencies and its fixed acceptance. Resumption requires the user.
 Current functional-test items adopted into R1 are owned by
-[M1_PLAN](obsolete/M1_8_DELIVERY.md#m1-8-r1--functional-witness-consolidation-and-ablation).
+[M1_PLAN](M1_8_DELIVERY.md#m1-8-r1--functional-witness-consolidation-and-ablation).
 
 ## Completed reassessment — test and evidence machinery (2026-09-17)
 
@@ -243,7 +248,7 @@ its product/test baseline is `5986c57`. Study corpus: inclusive `ae3daf6..5986c5
 (diff base `40ca76f`). The user authorized consolidation on 2026-09-17,
 including localized checkpoint measurements and one full run at closeout.
 **Deliver now** below is the authorized implementation scope.
-[M1_PLAN](M1_PLAN.md) is the parent delivery
+[M1_PLAN](../M1_PLAN.md) is the parent delivery
 authority; this document supplies its bounded maintenance subregister.
 
 ## Scope and decisions

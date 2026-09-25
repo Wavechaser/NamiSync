@@ -670,17 +670,12 @@ its own identity-reuse checks. Inspecting valid partial evidence never grants
 terminal acceptance. Baseline/candidate public-entry corruption comparisons
 protect these boundaries when consolidating their implementation.
 
-For the user-authorized R7 consolidation batch, affected checkpoint checks are
-Tier 1 drift guards; run the full 35-case gate once at R7-G on the integrated
-candidate. Freeze each checkpoint's dependency-based case selection before
-editing. Selected noisy cases retain full fixture populations, five fresh
-children, existing warm counts, independent receipt/correctness checking and
-unchanged P95/maximum budgets. Test/parent/validator-only changes use affected
-live-fixture, corruption and publication controls when no timed child changes.
-Record the exclusion rationale rather than treating tests-only as an exemption.
-Local evidence must bind source/instrument/validator/runtime and installed bytes;
-it never satisfies the full terminal validator or renews P9 acceptance. Failed
-local guards block the checkpoint. Do not pool slices or reuse their children in
-the final full run. The [ablation register](M1_7_ABLATION_STUDY.md) owns checkpoint
-commands and lineage; full acceptance remains pending until both terminal and
-committed-source validation pass at closeout. Historical evidence is immutable.
+The former R7 consolidation batch delivered R7-1–R7-4 before suspension; its
+R7-G full acceptance was not completed. Its checkpoint-specific Tier 1/Q-local
+and final-run procedure is historical in the
+[retired register](obsolete/M1_7_ABLATION_STUDY.md). It is not a standing
+instruction to resume or requalify that abandoned batch. Historical evidence
+remains immutable. The current performance contracts and acceptance policy
+above are unchanged; [POST_M1_8_ABLATION E1](POST_M1_8_ABLATION.md#7-measurement-and-evidence)
+proposes optional benchmark treatment but does not enact it. Newly activated
+work uses its named verification under the then-operative policy.

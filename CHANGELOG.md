@@ -1029,6 +1029,27 @@ claims explicit, independently reviewable, and regression-backed.
 
 #### Study post-M1-8 mechanism, test and workflow reduction (2026-09-25)
 
+- Expand the study into AB-1–AB-10 in M1_PLAN: documentation and compacted
+  delivery records first, then optional measurement tools, bounded reductions,
+  server snapshots and integrated verification. Plan PERFORMANCE as the central
+  methods/results owner, preserve raw JSON paths and account for evidence that
+  JSON cannot replace. All implementation checkpoints remain pending.
+- Replace the proposed small-fix criteria with the user's small-change default:
+  retain checks/tests/review/documentation/changelog; ask to formalize crossings
+  of ownership, public contracts, safety guarantees or independently deliverable
+  outcomes. For reductions, judge regressions by retained guarantees rather
+  than red/green test color alone.
+- Reconcile user dispositions against `a7f8402`: accept S3's server-snapshot
+  direction and recommend a bounded shell update before inventory; narrow S4
+  to ingress/storage/ownership-boundary consolidation, retain history checks,
+  and defer S5's broad merger after tracing cleanup, locks and headless consumers.
+  Reject L5/L7/L8/L9; narrow optional performance benching and documentation
+  proposals. No operative policy
+  or product/test behavior changes.
+- Archive the five earlier reduction studies after accounting for delivered,
+  superseded and deferred items and retained guarantee owners. Absorb useful
+  M1-7 ideas without resuming or declaring its unfinished R7 checkpoints passed;
+  update index/incoming links and retire its stale execution directions.
 - Record a read-only, repository-wide ablation study at `549f3b4` in
   POST_M1_8_ABLATION: behavior-to-mechanism map, structural proposals S1–S5,
   local reductions L1–L9, test, evidence and workflow recommendations, a retain

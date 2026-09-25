@@ -12,7 +12,7 @@ This is the sole active M1 delivery register. It records remaining accepted outc
 
 [BRIDGE.md](../BRIDGE.md) owns external command, transport, retry/recovery, and bridge-gate contracts. [PRESENTATION.md](../PRESENTATION.md) owns trees, views, search, selection, sorting, and scale evidence. [INTERFACES.md](../INTERFACES.md) owns implemented task lifecycle and desktop host/package rules. [FEATURES.md](../FEATURES.md), [ARCHITECTURE.md](../ARCHITECTURE.md), and [DEFENSE.md](../DEFENSE.md) remain the owners of product behavior, cross-layer meaning, and safety/evidence policy.
 
-[PRODUCTION_REDUCTION.md](../PRODUCTION_REDUCTION.md) is the closed maintenance
+[PRODUCTION_REDUCTION.md](PRODUCTION_REDUCTION.md) is the closed maintenance
 subregister for the completed production-ablation pass under M1-12. Its PR-0
 through PR-9 rows remove redundant implementation and test prescriptions; they
 do not add, defer, or reinterpret an M1 product outcome.
@@ -26,7 +26,7 @@ remain outside this batch. The user delegated stopping/scope adjudication to
 the arbiter task `01a0ba9c-b187-70f1-bf21-4f91e742eeaf`; consult it on reached
 boundaries and record its decision before dependent work resumes.
 
-[REDUCTION_FOLLOWUP.md](../REDUCTION_FOLLOWUP.md) owns the accepted narrow
+[REDUCTION_FOLLOWUP.md](REDUCTION_FOLLOWUP.md) owns the accepted narrow
 immutable-value, scan-validation, history encoding/projection, and executor
 simplification follow-up under M1-12. Its NR-0–NR-9 register and migrated RF-E/RF-X
 dispositions preserve existing product outcomes; implementation and integrated
@@ -1174,7 +1174,7 @@ criteria, M1-8 work, push or PR. Work proceeds from diff/structure inventories
 to selected behavioral seams and direct consumers, not exhaustive line review.
 The original report, committed in `dbeb7a5`, distinguishes observed redundancy,
 bounded experimental support and design proposals. Its successor
-[implementation plan](../M1_7_ABLATION_STUDY.md) retains that evidence and candidate
+[implementation plan](M1_7_ABLATION_STUDY.md) retains that evidence and candidate
 register; neither discovery nor plan preparation authorizes implementation.
 
 | ID | Accepted study outcome | Named verification | Status |
@@ -1215,7 +1215,7 @@ implementation or evidence-policy changes. Existing SLOs and P9 meaning stay.
 
 The user first requested a reviewed subtractive plan, then authorized execution
 on 2026-09-17 after baseline and working-set preparation.
-[M1_7_ABLATION_STUDY.md](../M1_7_ABLATION_STUDY.md#checkpoint-register) is this
+[M1_7_ABLATION_STUDY.md](M1_7_ABLATION_STUDY.md#checkpoint-register) is this
 register's detailed maintenance subregister: R7-1–R7-8 and R7-G are the finite
 accepted completion denominator before this reassessment.
 Its candidate register preserves A1–A12 and explicitly separates selected

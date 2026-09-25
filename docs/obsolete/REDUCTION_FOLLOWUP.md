@@ -1,5 +1,10 @@
 # Narrow Reduction Follow-up
 
+> Retired 2026-09-25. Historical study/register only; its old execution
+> and resumption instructions are inactive. Current dispositions and
+> retained guarantee owners are recorded in
+> [POST_M1_8_ABLATION §13](../POST_M1_8_ABLATION.md#13-earlier-studies-absorption-and-archival-accounting).
+
 ## Main objectives
 
 - Preserve reviewed sync, inventory, progress, history, and settlement behavior
@@ -17,7 +22,7 @@ Status: complete 2026-09-08. All NR-0–NR-9 gates are closed;
 execution evidence is recorded below. The user authorized GPT-5.6 agent
 implementation, fresh adversarial reviewers, independent atomic commits, and
 isolated parallel work where dependencies permit. This is the maintenance subregister linked by
-[M1_PLAN.md](M1_PLAN.md), not another M1 product roadmap. The closed PR-0–PR-9
+[M1_PLAN.md](../M1_PLAN.md), not another M1 product roadmap. The closed PR-0–PR-9
 register in [PRODUCTION_REDUCTION.md](PRODUCTION_REDUCTION.md) remains unchanged.
 
 ### Closed simplification populations
@@ -60,8 +65,8 @@ cleanup. No new production injection knob is needed for this plan.
 
 ### Governing policy, baseline, and uncertainty
 
-[AGENTS.md](../AGENTS.md) governs containment, commits, and recovery.
-[DEFENSE.md §2.1](DEFENSE.md#21-supported-environment-and-trusted-computing-base)
+[AGENTS.md](../../AGENTS.md) governs containment, commits, and recovery.
+[DEFENSE.md §2.1](../DEFENSE.md#21-supported-environment-and-trusted-computing-base)
 governs validation/custody; §7 governs measurement. Capacity, freshness, and
 exception lifetime are independent of trusting an immutable value. This plan
 does not change those policies, hard walls, or residual dispositions.

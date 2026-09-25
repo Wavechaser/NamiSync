@@ -1,5 +1,10 @@
 # Production Reduction Register
 
+> Retired 2026-09-25. Historical study/register only; its old execution
+> and resumption instructions are inactive. Current dispositions and
+> retained guarantee owners are recorded in
+> [POST_M1_8_ABLATION §13](../POST_M1_8_ABLATION.md#13-earlier-studies-absorption-and-archival-accounting).
+
 This is the closed maintenance subregister for the production-ablation pass
 under M1-12. It removes redundant implementation and representation
 prescriptions; it does not add, defer, or reinterpret an M1 product outcome.
@@ -125,13 +130,13 @@ Qualify current-source collection and execution before product/test changes.
 Capture exact nodes and parametrizations for every population above; record
 baseline failures and skips by node. Hash protected oracle/baseline and SH-G-8
 bridge authority without promoting task snapshots to acceptance authority.
-The qualified [baseline summary](../build/production-reduction/40fd8a5/baseline-summary.md)
+The qualified [baseline summary](../../build/production-reduction/40fd8a5/baseline-summary.md)
 records 4,682 collected tests: the initial run had 4,676 passes, four individually
 recorded WinError 1314 capability skips, and two environment-only failures from
 a stale ignored project-venv base pointer; the exact two-node rerun passed after
 the recorded pointer repair. Import-linter passed all 12 contracts. The
-[assertion dispositions](../build/production-reduction/40fd8a5/comparison/assertion-dispositions.md)
-and [protected authorities](../build/production-reduction/40fd8a5/protected/authority-inputs.json)
+[assertion dispositions](../../build/production-reduction/40fd8a5/comparison/assertion-dispositions.md)
+and [protected authorities](../../build/production-reduction/40fd8a5/protected/authority-inputs.json)
 freeze the planned edits and 11 no-change authority paths. Acceptance also
 requires clean review of those results, imports from this checkout, no
 unexplained failure, and no guarantee without a successor witness. Commit the
