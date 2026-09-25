@@ -397,55 +397,13 @@ terminal history row.
 ## Policy Tuning And Scale Gate
 
 The four `HistoryWindowPolicy` fields are the only tuning point. Do not change
-them from anecdotal timing. Use a fixture with 50 runs and 1,000,000 items,
-including one 100,000-item run, and record:
-
-- Windows build, CPU, storage, Python and SQLite versions;
-- cold versus warm cache state;
-- transaction count and window count;
-- p50, p95, and maximum window-commit latency;
-- peak pending event count and serialized bytes;
-- 50-run summary latency and 256-row item/event page latency.
+them from anecdotal timing. [PERFORMANCE](PERFORMANCE.md#history-methods-and-observations) owns the
+fixture, profile, collection statistics and historical observations.
 
 The release gates are at most three seconds for the 50-run summary; 500 ms p95
 and one second maximum for either 256-row page; and no normal window commit at
 or above the five-second audit-offer cutoff during a 100,000-event recording.
 That recording must remain `audit=OK` and never exceed either pending bound.
-
-The 2026-08-05 baseline ran
-`.\.venv\Scripts\python.exe tests\history_benchmark.py` on Windows 11
-10.0.26200, Intel64 Family 6 Model 189 with 8 logical CPUs, Python 3.14.6, and
-SQLite 3.50.4. The 650,465,280-byte fixture contained exactly 50 runs and
-1,000,000 items, with one 100,000-item run. The full-range recording took
-87.969 seconds over 3,919 transactions; commit latency was 7.969 ms p50,
-25.237 ms p95, and 104.301 ms maximum. Peak retained state
-was 256 events and 79,360 serialized bytes. A fresh-reader 50-run summary took
-0.984 seconds and the immediate repeat took 0.652 seconds. Fresh-reader
-item/event pages took 9.556/8.012 ms; full-range warm item pages were 10.686 ms
-p50, 17.746 ms p95, and 37.898 ms maximum, while event pages were 9.800 ms p50,
-13.995 ms p95, and 22.100 ms maximum. “Fresh reader”
-means a new SQLite connection after fixture creation, not a forced cold OS
-filesystem cache. All locked gates passed.
-
-The 2026-08-06 rerun after sparse event-bound and official-watermark validation
-used the same environment, fixture, and policy. Recording took 48.826 seconds
-over 3,919 transactions; commit latency was 3.676 ms p50, 14.382 ms p95, and
-204.203 ms maximum, with the same 256-event/79,360-byte retained peak. Summary
-readback took 0.409 seconds on a fresh reader and 0.516 seconds immediately
-afterward. Fresh-reader item/event pages took 3.650/5.092 ms; warm item pages
-were 3.927 ms p50, 7.486 ms p95, and 8.861 ms maximum, while event pages were
-3.614 ms p50, 6.163 ms p95, and 6.752 ms maximum. All locked gates passed; no
-window-policy default changed.
-
-The final 2026-08-08 history-v5 receipt rerun used the same million-item
-fixture and 256-event/1-MiB policy after receipt/projection hardening. Recording
-took 136.700 seconds over 3,919 transactions; commit latency was 20.899 ms p50,
-44.491 ms p95, and 121.026 ms maximum, with retained state peaking at 256
-events/79,360 bytes. Fresh and immediate-repeat 50-run summaries took
-1.670/1.605 seconds. Warm item pages were 12.386 ms p50, 15.156 ms p95, and
-16.256 ms maximum; event pages were 12.375 ms p50, 14.087 ms p95, and 14.818 ms
-maximum. Audit remained OK for the ordinary fixture and every locked gate
-passed; no window-policy default changed.
 
 Increasing a threshold trades crash exposure, memory, and write latency for
 fewer transactions. Decreasing one does the reverse. The one-second maximum
@@ -477,9 +435,10 @@ CI assertion for that O(1) property.
 
 ## Focused history scale acceptance
 
-Under the [shared reference profile](BRIDGE.md#focused-measurement-profile), the
+Under the [reference profile](PERFORMANCE.md#reference-profile-and-collection), the
 remaining history criteria are a 50-run summary over 1,000,000 retained items,
 including a 100,000-item run, in at most 3 seconds; and a 256-row detail window in
 500 ms p95 / 1 second maximum. These scoped Tier-2 targets remain separate from
-query-boundedness proofs and do not activate the deferred history page. Preserve
-raw samples and rerun after query, index, decode or pagination changes.
+query-boundedness proofs and do not activate the deferred history page.
+[PERFORMANCE](PERFORMANCE.md#other-measurement-families) owns raw sample and
+rerun-method recording for these criteria.

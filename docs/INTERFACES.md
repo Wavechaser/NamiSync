@@ -814,7 +814,7 @@ cannot expose stale Ready as close feedback.
 
 The frontend is plain local ES modules: no Node, npm, framework, bundler, transpiler, source map, inline script, or inline event handler. The CSP meta element is first in `head`; every import names a local file. Production package resources provide the page. A Python-construction-only absolute local index override exists for headed tests and is unavailable from GUI arguments, the bridge, or page data.
 
-Only `assets/bridge.js` may reference `window.pywebview`; the host exposes only the function-table dispatch entry. Presentation assets and local icon provenance follow the fixed-registry rules in `AGENTS.md`. `PRESENTATION.md` owns tree/window behavior and focused scale; `DESKTOP_UI.md` owns visual acceptance; `BRIDGE.md` owns wire protocol and transport rules.
+Only `assets/bridge.js` may reference `window.pywebview`; the host exposes only the function-table dispatch entry. Presentation assets and local icon provenance follow the fixed-registry rules in `AGENTS.md`. `PRESENTATION.md` owns tree/window behavior and focused scale criteria; `PERFORMANCE.md` owns measurement methods and results; `DESKTOP_UI.md` owns visual acceptance; `BRIDGE.md` owns wire protocol and transport rules.
 
 ### SH-G release criteria
 

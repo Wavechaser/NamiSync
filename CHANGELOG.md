@@ -1027,6 +1027,22 @@ repeated machinery while preserving operational safety and boundary contracts.
 Safety, settlement, authority, and measurement work made high-risk release
 claims explicit, independently reviewable, and regression-backed.
 
+#### Centralize measurement records and simplify delivery history (2026-09-25)
+
+- Activate the accepted AB-1–AB-10 batch. AB-1 makes the user-owned small-change
+  default durable while retaining safety, recurrence, recovery, checks, review
+  and concise task documentation.
+- Give PERFORMANCE the methods, fixture/profile, provenance and historical
+  result record; keep component criteria and DEFENSE evidence authority in their
+  existing owners. Preserve all executable measurement gates for AB-2's atomic
+  driver and consumer migration.
+- Condense completed M1, GUI, MOVE-1 and study records into owner/evidence
+  pointers, confirm A6 from the integration receipt, and retain DOC-2 and all
+  pending product/release outcomes.
+- Verify 320 links, extracted historical figures, matching A6 Git trees and
+  documentation-only scope; pass independent review after correcting history
+  and method references. No executable gate or raw evidence changed.
+
 #### Study post-M1-8 mechanism, test and workflow reduction (2026-09-25)
 
 - Settle D2: remove page-side elapsed-time abandonment/replay of mutations while

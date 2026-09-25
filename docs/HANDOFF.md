@@ -1,35 +1,36 @@
-# Latest session — settle D2/D4 and narrow AB-7
+# Latest session — AB-1 documentation ownership
 
-2026-09-25; revision baseline `0c74ee7` on `milestone1`. User requested plan
-revision and commit only. [M1_PLAN](M1_PLAN.md#post-m1-8-reduction-plan) owns
-AB-1–AB-10; [POST_M1_8_ABLATION](POST_M1_8_ABLATION.md) owns the study/dispositions.
-All implementation checkpoints remain pending; no product, test or operative
-transport/evidence-policy change is delivered here.
+2026-09-25; execution baseline `6a55239` on `milestone1`. The user activated
+the full [AB-1–AB-10 batch](M1_PLAN.md#post-m1-8-reduction-plan). AB-1 is complete;
+AB-2–AB-10 retain their dependencies and
+need no repeated activation. No product, test, tool or evidence JSON was edited
+for AB-1.
 
-D2 is settled: remove page-side elapsed-time deadlines that abandon mutating
-command results or automatically replay mutations. Keep delayed feedback, bounded
-observation recovery, command identity/duplicate-effect protection, original-result
-retention/recovery and lifecycle/resource/observation timeouts. Native delivery
-failure after an effect remains possible. Exhausted/failed observation shows
-explicit "outcome unavailable", not a fabricated operation verdict or indefinite
-unqualified "working…"; later valid observation can recover the original result.
+[PERFORMANCE](PERFORMANCE.md) now owns methods, reference profiles, fixture and
+sample rules, raw provenance and source-linked historical observations. The
+component docs retain criteria, and [DEFENSE](DEFENSE.md#7-quantitative-evidence-and-measurement-authority)
+retains evidence authority. AB-1 does not demote any executable gate. AB-2 will
+move performance drivers with their consumers and make its named families
+optional while preserving correctness, custody, settlement and SH-G-15.
 
-AB-7 reuses the delivered CommandSpec/bridge/DocumentChannel admission/completion
-path and existing effect receipts. No whole-command-system redesign, parallel
-result protocol or unlimited retention. Its regression gates cover slow results,
-post-effect delivery loss, observation exhaustion/late recovery, duplicates and
-Close/shutdown custody. AB-8 now depends on AB-7; no pending D2 decision remains.
-D4 highlighting/focus and checkbox separation are explicitly retained without
-feature reduction. Other exclusions and deferred decisions are unchanged.
+[M1_PLAN](M1_PLAN.md) condenses completed M1/GUI/MOVE/study records and retains
+DOC-2 and M1-9/10/12/Release pending. M1-8 A6 is closed from
+`build/m1-8-archive-20260924/integration.json`: merge
+`6c00ec731dd176d201e2a2c3a2a53b47652c544e`, tree
+`f7691c518a31a160f888db299faa9342bd9a4349`, postmerge PASS.
+The five earlier studies were already moved; no archive migration was repeated.
 
-Verification: inspected current command policy, asynchronous transport source
-locations and BRIDGE's post-effect failure contract; reviewed the four-document
-diff for stale decisions, dependency consistency and failure truthfulness. Link,
-plan-shape and diff checks are recorded in
-`build/post-m1-8-ablation-20260925/plan-revision-checks.json`. No runtime tests or
-benchmarks are needed for this planning-only revision. Earlier study evidence
-and all raw JSON remain untouched.
+AB-1 verification: `ab1-checks.json` and `ab1-review.md` in
+`build/post-m1-8-ablation-20260925/` record 320 links, independent figures/A6
+trees, unchanged executable/evidence population and passing independent review
+after provenance/routing corrections. Documentation-only checks suffice here.
 
-Next: activate AB-1, the documentation pass; implementation is not authorized by
-this revision. Preserve pending DOC-2, unrelated refs/stashes and raw evidence.
-No push, PR or branch rewrite requested.
+Next: refresh `ab2-design.md` against the AB-1 commit and implement AB-2.
+Its early characterization has five bridge source/schedule passes, three Plan
+fixture/order/folder passes and one receipt-observer pass. The latter first hit
+sandbox temp-directory denial, then passed unchanged with normal temp access;
+both logs remain in the evidence root. These are not a full runtime gate.
+Preserve raw JSON/log paths,
+unrelated refs and stashes. DOC-2 branch rewriting, push and PR remain outside
+this batch. D2/D4 and rejected/deferred dispositions remain in the current
+register and study.

@@ -571,11 +571,14 @@ preserve these outcomes without inheriting retired representation recipes.
 
 ## Evidence and ongoing checks
 
-`BR-G-42` owns focused scale evidence for bridge behavior; `DEFENSE.md` §7 classifies claims and `TESTS.md` owns collection/routing. The frozen historical v1 event-and-transport-custody claim is closed only for the representation, corpus, runner, and authority artifacts below:
-
-- calibration-a: 1,376,690 bytes / 4,890 objects ordinary and 1,534,946 bytes / 5,499 objects exact maximum without Gap;
-- ceiling: 1,966,080 bytes (1.875 MiB), frozen separately;
-- independent holdout-b: 1,351,794 ordinary and 1,513,014 exact-maximum bytes, with three fresh runs below the ceiling and no Gap, ordered delivery, 128/64/64 queue shape, cleanup, and terminal predicates.
+`BR-G-42` owns focused scale acceptance for bridge behavior;
+[PERFORMANCE](PERFORMANCE.md) owns measurement methods, profiles and recorded
+observations. `DEFENSE.md` §7 classifies claims and `TESTS.md` owns test routing.
+The frozen historical v1 event-and-transport-custody claim is closed only for
+its named representation, corpus, runner and committed authority artifacts.
+The [recorded calibration and holdout](PERFORMANCE.md#bridge-transport-custody)
+remain below the separately frozen ceiling with no Gap, ordered delivery,
+128/64/64 queue shape, cleanup and terminal predicates.
 
 The authoritative committed artifacts are `tests/interfaces/web/sh_g_8_transport_calibration.json`, `sh_g_8_transport_ceiling.json`, and `sh_g_8_transport_holdout.json`. Calibration was produced from tested commit `56c50b43dc19090ad33af031891503bfec80599b`. The ordinary current-source one-child guard authenticates the frozen contract and compares both live custody shapes with its ceiling; it is Tier-1 drift evidence, not a recalibration. Terminal result graphs, whole-Job deltas, and whole-runtime resource acceptance are outside this closed custody claim.
 
@@ -587,19 +590,11 @@ Historical decision, gate, and delivery narrative is retained in `obsolete/M1_BR
 
 ## Focused measurement profile
 
-The retained BR-G-42 reference profile is Windows 11 Pro build 26200, i7-13700K
-(16 cores/24 logical processors), 63.7 GiB RAM, WD_BLACK SN850X 4 TB NVMe for
-repository/fixtures/SQLite, CPython 3.13.14 and SQLite 3.50.4, AC power and no
-unrelated sustained workload. P95 criteria use at least 30 warm samples; cold
-maxima use at least five fresh-process or cold-projection samples. Record raw
-samples, source/runtime/profile, fixture seed, statistic, run count, p95 and
-maximum. These are a reference acceptance profile, not exact-version launch
-admission. DEFENSE section 7 governs changed-profile and evidence decisions.
-
-The event fixture is four active tasks for 60 seconds at 100 aggregate Progress
-and 10 aggregate reliable events per second. Reliable/terminal delivery retains
-100 ms p95 / 250 ms maximum with no Gap; replaceable progress retains 1 s p95 /
-2 s maximum with coalesced monotonicity. Current-source timing acceptance is open.
+[PERFORMANCE](PERFORMANCE.md#reference-profile-and-collection) owns the retained
+reference profile, sample aggregation and event fixture. Reliable/terminal
+delivery retains 100 ms p95 / 250 ms maximum with no Gap; replaceable progress
+retains 1 s p95 / 2 s maximum with coalesced monotonicity. Current-source timing
+acceptance is open.
 The current v5 custody fixture and frozen v1 acceptance are distinct: per task,
 150 reliable outcomes own items_done, while byte coordinates 1..1,500 drive
 cadence with valid item/attempt identities and matching outcomes. Ordinary final
@@ -612,5 +607,5 @@ A new or changed transport representation retains the protected contract,
 artifact/validator identity, realistic corpus, source/runtime/dependency admission,
 ordered 128/64/64 queues, no-Gap, cleanup and terminal witnesses. The committed
 runners and artifact validators under tests remain unchanged by this migration.
-PRESENTATION owns its projection/gesture budgets under this shared profile;
-HISTORY owns its query budgets. None is aggregate task-graph certification.
+PRESENTATION owns its projection/gesture budgets and HISTORY owns its query
+budgets under the recorded profile. None is aggregate task-graph certification.

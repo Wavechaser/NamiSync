@@ -225,11 +225,14 @@ never hides the other result axes in rendered output.
   [Workflows](docs/WORKFLOWS.md) — retained location evidence and orchestration.
 - [Tests](docs/TESTS.md) — verification levels, department routing, markers,
   and diagnostic commands.
+- [Performance](docs/PERFORMANCE.md) — measurement methods, profiles, source-linked
+  historical results and raw-evidence limitations; [Threat Model](docs/DEFENSE.md)
+  owns evidence authority.
 - [Post-M1-8 ablation study](docs/POST_M1_8_ABLATION.md) — repository-wide
   reduction dispositions, accepted snapshot direction, narrowed proposals and
   earlier-study accounting; the [actionable plan](docs/M1_PLAN.md#post-m1-8-reduction-plan)
   starts with documentation, then optional performance tools and bounded
-  reductions. Implementation checkpoints are not activated.
+  reductions. The requested AB batch is active; its register tracks each gate.
 - Archived reduction history: [test ablation](docs/obsolete/TEST_ABLATION.md),
   [test refinement](docs/obsolete/TEST_REFINEMENT.md),
   [production reduction](docs/obsolete/PRODUCTION_REDUCTION.md),

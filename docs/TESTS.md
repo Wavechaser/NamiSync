@@ -224,8 +224,12 @@ While implementing an accepted target, run focused tests, every affected
 producer and consumer department, and the ordinary suite when a public contract
 crosses departments. Exact primary ownership remains only in
 `tests/_departments.py`. Surface work also runs the real installed WebView2
-witnesses with default addopts cleared. Quantitative evidence follows
-`DEFENSE.md`; a benchmark is not acceptance merely because it ran.
+witnesses with default addopts cleared. Quantitative evidence authority follows
+`DEFENSE.md`; `PERFORMANCE.md` owns measurement methods, fixture/profile,
+aggregation and recorded results. A benchmark is not acceptance merely because
+it ran. AB-1 changes documentation ownership only: current mandatory
+measurements and validators remain operative until AB-2 migrates a driver and
+all its direct consumers together.
 
 ## Departments
 

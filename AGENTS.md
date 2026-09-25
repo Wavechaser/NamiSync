@@ -58,13 +58,17 @@ Use the relevant routes below, not a mandatory full-document reading sequence:
   including §7 for evidence authority. Diagnostics, targets and drift guards are not
   acceptance merely because they were measured. Classify consequence and enforceability
   before choosing the lowest sufficient tier; keep observations separate from
-  contracts/validators. Record fixtures, profiles, scaling, aggregation/retention,
-  artifacts and rerun triggers in the owning component doc, not TESTS.md.
+  contracts/validators. Component docs own their criteria; PERFORMANCE owns
+  fixtures, profiles, scaling, aggregation/retention, artifacts and rerun triggers.
 - Adapter/host/lifecycle work: [INTERFACES.md](docs/INTERFACES.md); command/event
   transport and ingress: [BRIDGE.md](docs/BRIDGE.md); tree/search/sort/selection
   and scale: [PRESENTATION.md](docs/PRESENTATION.md).
 - UI and icons: [DESKTOP_UI.md](docs/DESKTOP_UI.md); icon assets or catalog servicing
   should use the tooling and maintenance guidelines documented in [TOOLS.md](docs/TOOLS.md).
+- Measurement methods, fixtures, profiles, samples and results:
+  [PERFORMANCE.md](docs/PERFORMANCE.md). [DEFENSE.md](docs/DEFENSE.md) owns
+  consequence and evidence authority; component documents own behavior and
+  acceptance decisions.
 - Product scope: [FEATURES.md](docs/FEATURES.md); checkpoints:
   [M1_PLAN.md](docs/M1_PLAN.md), the sole active M1 delivery register. Accepted
   future outcomes remain binding, but unrealized representation, reservation,
@@ -119,20 +123,27 @@ These boundaries apply with or without a skill. Execution skills define the
 investigation, interaction, delegation and recovery procedure; they cannot
 expand authority or relax repository gates.
 
+Default to a small change unless the user asks for a formal plan. Apply the
+relevant checks, tests, documentation, adversarial review and concise changelog
+entry without requiring a permanent worksheet or register for each fix. The user
+owns classification; agents do not impose a size threshold or eligibility rubric.
+When work crosses architectural ownership, public contracts, safety guarantees
+or multiple independently deliverable outcomes, explain the concrete boundary
+and ask the user to formalize it. Existing authorization persists. The safety,
+recurrence and recovery rules below always apply.
+
 ### Scope And Completion
 
-- Before audit-driven implementation, hardening/stabilization, cross-component
-  work or multiple independently committable outcomes, record a closed register
-  in the owning delivery doc: stable ids, accepted outcomes, status, named
-  verification, non-goals and task-specific stops. Quantified criteria require
-  a finite domain, procedure and terminal observation; discovery may instead
-  close over a named corpus/method without authorizing fixes.
-- Before implementing a pending row, declare its finite production/test/doc
-  population, owners/seams, acceptance gate, atomic commit boundary, relevant
-  archived dispositions and a regression study. Scope is the accepted outcome
-  and mechanism/verification boundary, not file/line count. Record newly found
-  direct consumers before editing; routine in-bound choices need no new approval.
-  Explicit exclusions remain binding.
+- For a user-requested formal batch or an existing accepted register, record
+  stable outcomes, dependencies, named verification, non-goals and task-specific
+  stops in its owning delivery document. Before implementing a pending row,
+  identify its owners and direct consumers, preserved guarantees, finite
+  production/test/doc population, acceptance gate and commit boundary. Check
+  relevant archived dispositions and likely regressions. Keep this proportional
+  to the outcome; routine in-bound choices need no new approval. Explicit
+  exclusions remain binding. Quantified criteria need a finite domain,
+  procedure and terminal observation; discovery may instead close over a named
+  corpus/method without authorizing fixes.
 - Continue through implementation, correction of introduced regressions, required
   tests/docs and final adversarial review of every checkpoint. Completion means
   every accepted row passes its named gate without regressing the declared
@@ -242,6 +253,10 @@ into every consumer document.
   not the audit or gate that found it.
 - [M1_PLAN.md](docs/M1_PLAN.md) is the sole active M1 delivery register. Archive
   superseded plan ancestry rather than maintaining parallel current authorities.
+- [PERFORMANCE.md](docs/PERFORMANCE.md) owns measurement methods, fixture/profile
+  and scaling descriptions, aggregation, provenance and results. Component
+  documents own their behavior and acceptance decisions; DEFENSE owns evidence
+  authority and consequence.
 - [HANDOFF.md](docs/HANDOFF.md) covers only the latest session: changes, verification
   and immediate operational context. Replace it rather than accumulating a
   project reference or transcript; retain necessary resumption/evidence pointers.

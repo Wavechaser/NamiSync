@@ -1021,24 +1021,26 @@ Quantitative acceptance separates observation from judgment. An instrument
 records exact observations and refuses unknown shapes; an independent contract
 names the fixture, reference profile, statistic, scaling axes, retention or
 aggregation policy, authority tier, and rerun trigger. A validator applies the
-predeclared bound.
+  predeclared bound.
 
 The tier definitions and required evidence are normative policy in
-`DEFENSE.md` §7. Architecture adds one constraint: incompatible scaling axes
+`DEFENSE.md` §7; [PERFORMANCE](PERFORMANCE.md) owns methods and recorded results.
+Architecture adds one constraint: incompatible scaling axes
 are never merged because one tool can measure them. Transport custody, retained
 terminal results, projection caches, and scoped runtime resource acceptance have
-distinct owners and acceptance claims. Exact datasets, byte counts, run
-results, validator identities, and open/closed gate status belong to the owning
-module or delivery document.
+distinct owners and acceptance claims. Exact datasets, byte counts and run
+results belong to PERFORMANCE; validator identities and open/closed gate status
+belong to the owning component or delivery document.
 
-Current claim and evidence ownership is:
+Current claim and gate ownership is:
 
 | Claim | Owner |
 | --- | --- |
 | Executor settlement semantics | `TOOLS.md` |
 | Desktop bridge behavior and transport custody | `BRIDGE.md` |
 | Desktop cold-start resource and leak/growth acceptance | `INTERFACES.md` |
-| Component-specific performance | Owning module document |
+| Component-specific performance criteria | Owning component document |
+| Measurement methods, profiles, aggregation and results | `PERFORMANCE.md` |
 
 ---
 
@@ -1101,7 +1103,7 @@ existing identity, evidence, custody, and settlement contracts.
 - Module documents own implemented component policy, algorithms, local tests,
   current state, and limits that do not redefine a cross-cutting defense or
   bridge contract.
-- `M1_PLAN.md` owns remaining delivery. `BRIDGE.md` owns protocol/transport, `PRESENTATION.md` owns views and focused scale, and `INTERFACES.md` owns host/lifecycle and release criteria.
+- `M1_PLAN.md` owns remaining delivery. `BRIDGE.md` owns protocol/transport, `PRESENTATION.md` owns views and focused scale criteria, and `INTERFACES.md` owns host/lifecycle and release criteria. `PERFORMANCE.md` owns measurement methods, profiles and results.
 - `CHANGELOG.md` owns dated task outcomes.
 - `HANDOFF.md` owns only immediate operational context.
 

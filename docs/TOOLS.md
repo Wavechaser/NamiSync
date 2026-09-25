@@ -205,9 +205,10 @@ compositor-health evidence. Use the commands in `TESTS.md` for acceptance.
 ## Measurement authority
 
 `DEFENSE.md` §7 is the sole normative definition of the repository's
-measurement tiers and escalation rules. Development tools declare which tier
-they serve, keep observation separate from verdict, and refuse input shapes
-they cannot account for. Compatible Tier 2 measurements may share one vertical-
+measurement tiers and escalation rules. [PERFORMANCE](PERFORMANCE.md) owns
+measurement methods and results. Development tools declare which tier they
+serve, keep observation separate from verdict, and refuse input shapes they
+cannot account for. Compatible Tier 2 measurements may share one vertical-
 slice harness; structural count tests or serializer round trips do not promote
 a timing or memory target.
 
@@ -243,7 +244,7 @@ support may be extracted for an actual empirical consumer, but only for
 canonical artifact/schema/digest checks, process isolation, source/runtime
 receipts, verdict exclusion, and frozen-contract validation. Corpus generation,
 root selection, measurement statistic, scaling axes, aggregate policy, and the
-component validator remain component-owned.
+component validator follow the declared measurement method in PERFORMANCE.
 
 ## Measurement harness boundary
 
@@ -474,246 +475,19 @@ aliases and generic reparse points are refused before resolution. Existing
 output files with multiple hard links are refused because a distinct path is
 not a distinct artifact in that case.
 
-## Executor measurements
+## Performance drivers
 
-```powershell
-.\.venv\Scripts\python.exe -m tools executor E:\Corpus E:\RigWork --repeat 5
-.\.venv\Scripts\python.exe -m tools executor E:\Corpus E:\RigWork --prepare-each --repeat 5
-.\.venv\Scripts\python.exe -m tools executor E:\Corpus E:\RigWork --template E:\PreState --verify-readback
-```
+`python -m tools executor`, `python -m tools verifier`, `python -m tools
+generate` and `python -m tools clean` remain development-only entry points.
+The executor/verifier harness uses the isolated seams above and the workspace
+safety policy in this document. [PERFORMANCE](PERFORMANCE.md#executor-and-verifier-methods)
+owns their measurement commands, fixtures, statistics, sidecars, cache
+interpretation, reports and rerun policy. Driver structure is under
+`tools/`; tests stay under `tests/`; generated output belongs in ignored
+`build/` or an explicitly owned external workspace.
 
-Without `--template`, the default repeated benchmark prepares one static plan
-in memory. The target must be empty and the selected plan may contain only
-MKDIR and absent-target COPY operations. The harness first performs an exact
-owned-target reset, then scans, plans, and selects once. Every sample receives a
-fresh `ExecutionSet`, run ID, event tape, recorder, backend, and filesystem
-adapter. Unless `--no-preflight` is explicit, the first fresh set is preflighted
-immediately before execution; later samples reset the target and execute a new
-set without replanning or re-preflighting. Execution time still covers the
-complete public executor call, including copy publication, metadata, recording,
-and final directory finishing. Output-manifest validation/publication and reset
-receipts happen outside `execute_seconds`.
-
-Every repeated sample must publish the same operation-keyed digest and size
-evidence. After the last sample the harness rescans the source and requires the
-complete source snapshot to match preparation; any membership, identity, stat,
-or digest drift invalidates the batch. The plan is never serialized. Use
-`--prepare-each` to rescan, replan, and preflight every empty-target sample.
-Template workloads always prepare each sample because rematerialization changes
-target identities; update, delete, NOOP, and other target-dependent plans are
-therefore never fed through the static-plan path. Template setup time is
-reported separately from scan, plan, preflight, and execution time. Supplying
-`--prepare-each` with `--template` is refused because it would be a misleading
-no-op.
-
-The executor's published digest comparison detects same-stat content changes
-between samples. Content changed after preparation but before the first sample,
-with all scanned stat fields deliberately restored and then held stable, is not
-distinguishable without another full plan-time content read; use a quiescent
-source corpus.
-
-Pipeline diagnostics are enabled by default in the tools while remaining off by
-default in production. The harness samples each copy because
-`NativeCopyBackend.last_metrics` retains only the most recent one. Reports
-include reader blocking, writer starvation, payload high-water, reserved bytes,
-chosen chunk sizes, and copy-backend wall time. `--no-metrics` disables both the
-executor diagnostics and the per-copy timing wrapper. With diagnostics enabled,
-each accepted sample prints copy count and bytes, summed backend wall time,
-executor time outside the copy backends, summed reader-blocked and
-writer-starved time, maximum payload high-water, reserved bytes, and the
-distinct chunk sizes used. Detailed metrics therefore remain useful without a
-JSON report.
-
-Every selected operation must settle with a complete successful terminal
-result whose typed items agree with the reviewed operation paths and outcomes,
-non-degraded recording/audit, and complete invariant-valid published evidence.
-A NOOP's normal `SKIPPED` outcome is accepted. Plans with safety exclusions and
-any other failed, deferred, incomplete, degraded, or drifted sample invalidate
-the whole batch.
-
-All accepted raw samples are retained in order without report-time rounding.
-For repeated runs the console prints N, minimum, median, and maximum execution
-time plus the median of the per-sample throughput values. No percentile,
-outlier deletion, or implicit warm-up discard is applied.
-
-`--verify-readback` prints its own result even without `--json`. Zero candidates
-is valid for an all-NOOP/non-copy plan; otherwise every published candidate and
-byte must verify with non-degraded recording.
-
-### Benchmark reports
-
-Console output is the artifact-free default. `--json PATH` opt-in publishes one
-versioned JSON document for the complete valid invocation, not one JSONL row per
-sample. The envelope separately owns configuration, one-time batch preparation,
-post-batch validation, ordered raw samples, and the N/minimum/median/maximum
-summary; static-plan samples do not duplicate scan, plan, or preflight time. It
-also records the plan and policy fingerprints. The document is written to a
-private same-directory temporary, flushed, and atomically renamed only after
-every sample and drift check succeeds. Executor reports are published only
-after exact workspace cleanup succeeds, except that explicit `--keep` retains
-the validated manifest-owned workspace and records that choice before report
-publication. A failed later sample or required cleanup leaves no final or
-partial report.
-
-The destination is create-exclusive. An existing ordinary single-link file is
-preserved unless `--replace-report` is explicit, and its identity is revalidated
-immediately before atomic replacement. The exact published path is printed.
-There is no implicit append, rotation, time-based deletion, or report cleanup;
-the operator chooses the path and retention period.
-
-A quantitative claim must retain the report together with the source fixture
-(including generator specification and seed when applicable), source/target
-roots, empty-target/static-plan profile, operation mix, correspondence,
-deletion/preflight/diagnostic flags, runtime/dependency versions, OS, concurrent
-load, and storage/device topology. Relevant scaling axes are file count, size
-distribution and total bytes, directory shape, operation mix, source/target
-device topology, and repeat count; chunk or memory settings are axes only when
-varied. The report records rig configuration and raw samples, but it cannot
-discover every environmental receipt automatically.
-
-## Verifier measurements
-
-```powershell
-.\.venv\Scripts\python.exe -m tools verifier E:\Corpus --mode baseline
-.\.venv\Scripts\python.exe -m tools verifier E:\Corpus --baselines primed --repeat 5
-.\.venv\Scripts\python.exe -m tools verifier E:\Corpus --seed-baselines --sidecar E:\RigEvidence\corpus.baseline.jsonl
-.\.venv\Scripts\python.exe -m tools verifier E:\Corpus --baselines sidecar --sidecar E:\RigEvidence\corpus.baseline.jsonl
-```
-
-For `--mode verify`, the evidence-source matrix is:
-
-| `--baselines` | Setup | Required result | Batch fixture anchor |
-| --- | --- | --- | --- |
-| `primed` (default) | one in-process baseline pass | `VERIFIED` | priming evidence |
-| `sidecar` | prior `--seed-baselines` pass | `VERIFIED` | validated sidecar evidence |
-| `synthetic` | deliberately wrong digest | `MISMATCHED` | setup scan |
-| `none` | no prior evidence | `BASELINED` | first accepted sample |
-
-Baseline mode always runs bare despite the parser's default baseline-source
-value. Baseline and rebaseline modes require homogeneous `BASELINED` results;
-when rebaseline is given an evidence source, that source still anchors its
-fixture even though the new attestations are the measured output.
-Synthetic mismatch is an intentional successful measurement because comparison
-happens only after the full read-and-hash loop. Every other mixed, shortened,
-modified, erroneous, or degraded result invalidates the sample. Incomplete
-scans, unsupported entries, and canonical-path collisions are refused before
-measurement. Outcome IDs and final item/byte totals must exactly cover the
-selection. Priming requires exactly one applied attestation per scanned file.
-Every measured scan must have the same canonical keys and stat subjects as its
-setup evidence, or as the first sample when no setup evidence exists. Primed
-and synthetic in-process anchors require exact `FileStat` equality; a sidecar
-uses its declared portable or bound core matching predicate. This
-closes the gap between a priming/sidecar scan and the timed pass instead of
-allowing a shorter corpus to remain all-`VERIFIED`. For baseline, rebaseline,
-and no-baseline verification, every repeated sample must also produce identical
-operation-keyed content evidence, detecting same-stat content drift after the
-first sample when the real hasher is active. `--null-hasher` deliberately makes
-that content evidence constant for hash-cost isolation, so its source must stay
-quiescent; stat and membership drift still refuse. Any detected fixture drift
-invalidates the whole batch and suppresses its report.
-
-Reader instrumentation remains enabled by default. Each accepted sample prints
-open time, read time, and verifier time outside those calls; `--no-tap` removes
-that split. Repeated verifier batches print N, minimum, median, and maximum run
-time plus median sample throughput. Baseline preparation is labeled and timed
-separately as setup, not silently counted as a sample. Reports retain that setup
-receipt, and sidecar-backed reports include the explicit path, validation
-counts, and stored identity mode.
-
-### Sidecars
-
-Baseline persistence is separate retained input evidence, not benchmark output.
-Both `--seed-baselines` and `--baselines sidecar` require an explicit `--sidecar
-PATH`; the CLI never infers `<corpus>.baseline.jsonl`. A seed write uses a
-same-directory temporary and create-exclusive atomic publication. Existing
-sidecars are preserved unless `--replace-sidecar` is explicit. Replacement
-captures the ordinary single-link destination identity before the potentially
-long priming pass and revalidates that same occupant immediately before atomic
-publication; a file swapped in during priming is preserved and refused.
-Workspace `clean` never guesses or removes a sidecar.
-
-Seeding is a distinct evidence-creation action. It runs exactly one untapped
-baseline pass and rejects incompatible repeat, mode, baseline-source, tap, and
-report settings instead of silently ignoring them. `--identity` and
-`--replace-sidecar` apply only to seeding.
-
-Loads require an explicit format and identity mode, exact row schemas without
-duplicate JSON members, XXH3-128 evidence, complete key coverage, and a fresh
-stat match through the same pure core predicate used by verifier classification.
-The active `namisync-rig-baseline-2` format stores a bound Windows file index as
-canonical `FileIndex128` decimal text, never a JSON number. Version-1 sidecars
-are refused at the format boundary and must be reseeded explicitly.
-
-`portable` identity compares kind, size, and mtime and survives relocation.
-`bound` additionally requires volume serial and file index for every row; it
-never silently falls back to portable matching. Relocation must preserve
-`mtime_ns`.
-
-### Isolating hash cost
-
-`--null-hasher` consumes every chunk but returns a constant digest. With primed
-baselines, both passes use that same hasher and still reach `VERIFIED`:
-
-```powershell
-.\.venv\Scripts\python.exe -m tools verifier E:\Corpus --baselines primed
-.\.venv\Scripts\python.exe -m tools verifier E:\Corpus --baselines primed --null-hasher
-```
-
-Verifier sidecar plus `--null-hasher` is refused because a real sidecar and a
-constant digest would create a misleading mismatch. `--no-tap` removes the
-per-chunk reader timing when clean wall-clock measurements matter more than the
-open/read split. The timing decorator forwards the authority-bound reader seam,
-so enabling the tap cannot downgrade a reviewed native read to the unbound
-custom-reader route. Its authority-bound subtype is used only when the wrapped
-reader supports that protocol; the base tap preserves an unbound custom
-reader's ordinary `open(root, path)` capability.
-
-## Cache honesty
-
-The verifier uses Windows unbuffered reads, so its numbers are cache-honest by
-construction. Executor reads use the buffer cache; repeated reads of the same
-source are warm and are not comparable to first-touch throughput. A static-plan
-batch is specifically a buffered repeated-source/warm-profile observation; the
-preparation reuse does not make it a cold or first-touch benchmark.
-
-## Corpus generation and cleanup
-
-```powershell
-.\.venv\Scripts\python.exe -m tools generate E:\Corpus "2000@4KiB,200@1MiB,4@256MiB" --seed 7
-.\.venv\Scripts\python.exe -m tools clean E:\Corpus --dry-run
-.\.venv\Scripts\python.exe -m tools clean E:\Corpus
-.\.venv\Scripts\python.exe -m tools clean E:\LegacyRigWork --force-all
-```
-
-Generation accepts a new or empty directory, or a directory carrying a valid
-bound marker plus an exact output manifest. Each successful run publishes the
-generated file and directory set into that manifest. Regeneration removes only
-the validated recorded set, so the same seed and specification produce the same
-complete tree; an unlisted descendant refuses replacement and is preserved.
-
-Ordinary `clean` requires an existing valid marker and either an empty root or
-an exact output manifest. It never creates or adopts a workspace merely because
-the command was given a path. Reports and verifier sidecars are operator-owned
-artifacts outside the root and are never guessed or removed by workspace
-cleanup.
-
-`--repeat` must be positive. Accepted iterations print their raw summary and a
-repeated batch prints its aggregate. `--json PATH` writes the one atomic batch
-report described above. Unsafe configuration or an invalid sample returns exit
-code 2 with an actionable error and publishes no report.
-
-## Measurement integration boundary
-
-No logger or product-CLI integration is appropriate for the measurement
-package. `INTERFACES.md` defines logging as a GUI-host facility under
-`interfaces/web`, consuming GUI paths and capturing pywebview. Importing it into
-the Python harness would invert the measurement boundary and could perturb
-results through rotation or concurrent log writers. The standalone `gui.ps1`
-does not import that package into the harness; it starts the existing headed
-composition externally and uses that host's isolated development log.
-
-Keep `python -m tools` separate from `nami-sync`: the latter is a shipped product
-surface with lazy GUI imports and reviewed domain workflows, while the
-measurement commands use fake persistence seams and destructive owned
-workspaces. If distributing those commands is later required, prefer a separate
-development entry point after an explicit packaging and workspace-safety review.
+AB-2 will introduce `tools/performance/` for family-named optional drivers.
+Place assets beside their driver and add small shared fixture/runner helpers
+only when actually shared. Existing executor/verifier commands need no
+gratuitous relocation. Keep their current gate classification until AB-2
+migrates each driver with its tests and consumers.

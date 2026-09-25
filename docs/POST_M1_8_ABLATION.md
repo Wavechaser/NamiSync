@@ -14,10 +14,11 @@ are distinguished as settled directions, preferences or unresolved choices in
 §11; D2 now removes elapsed-time mutation abandonment/replay while preserving
 original-outcome recovery, and D4 is retained without feature reduction.
 Recommendations do not silently become user decisions. PA-1–PA-3 in
-[M1_PLAN](M1_PLAN.md) authorize this documentation reconciliation and study
-retirement only. Product, tests, operative evidence policy and AGENTS are
-unchanged by this planning revision. AB-1–AB-10 are planned, not activated;
-the user requested revision and a documentation commit, not implementation.
+[M1_PLAN](M1_PLAN.md) authorized the earlier documentation reconciliation and
+study retirement only. The user subsequently activated the complete AB batch;
+the current register owns status and dependency gates. AB-1 establishes
+documentation ownership without demoting an executable measurement gate;
+AB-2 owns that atomic transition.
 The user's latest W2 instruction replaces the earlier proposed eligibility test;
 §8 records the small-change default and user-owned classification.
 The old M1-7 execution register is retired,
@@ -252,7 +253,8 @@ limitation honest; this study does not fix or broaden that recovery contract.
 
 ## 5. Local reductions
 
-Only L1–L4 remain recommended candidates; implementation is not activated.
+Only L1–L4 remain accepted local candidates in the activated AB batch; their
+dependent checkpoint rows still govern when each implementation may begin.
 Locality does not by itself establish behavior preservation.
 
 | ID | Change | Where | Evidence |
@@ -348,9 +350,10 @@ rejection, and the security bans.
 
 **E1 — Narrowed recommendation: optional performance benching, required
 correctness and containment.** The user favors retaining useful measurement
-machinery without an ordinary development pass/fail bar. Implement this policy
-explicitly in DEFENSE/PERFORMANCE and the owning tools only after activation;
-this study does not itself weaken the current gates.
+machinery without an ordinary development pass/fail bar. AB-1 moves methods and
+historical results into [PERFORMANCE](PERFORMANCE.md); AB-2 changes executable
+acceptance and moves drivers with their consumers. This study does not itself
+weaken the current gates.
 
 Plan the migration of measurement drivers, useful fixtures and instrument code
 from `tests/` to `tools/`, retaining tests of their correctness under `tests/`.
@@ -402,9 +405,8 @@ recovery branches, evidence retention and multi-document updates per commit.
 Each mechanism therefore has three to five normative restatements to
 renegotiate before it can change.
 
-These dispositions feed AB-1/AB-2. This planning commit does not edit AGENTS or
-activate a new test authority; the user's direct W2 instruction applies to this
-session and is to be made durable in AB-1.
+These dispositions feed AB-1/AB-2. AB-1 makes W2 durable in AGENTS without
+changing test authority; AB-2 owns the later driver and gate transition.
 
 **W1 — Distinguish requirements from current implementation.** Keep FEATURES
 about user behavior, DEFENSE about consequence/boundaries, and ARCHITECTURE

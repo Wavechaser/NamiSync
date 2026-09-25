@@ -755,8 +755,8 @@ may close a gate.
   therefore predeclares its statistic and comparison, uses repeated
   fresh-process observations, and reports process count, dispersion, and
   uncertainty beside the figure they qualify; one observation is diagnostic
-  only and cannot close a gate. The owning component authority records those
-  choices and the exact fixture.
+  only and cannot close a gate. The owning component records the criterion;
+  `PERFORMANCE.md` records the method and exact fixture.
 - Evidence tiers describe how a quantitative claim is used. **Tier 0** is a
   reasoned target and never closes a gate. **Tier 1** is a current-source live
   drift guard against an already accepted contract or claim and is not
@@ -800,8 +800,8 @@ may close a gate.
   oracle additionally declares repeated identical normalized runs because
   stability is part of that gate's claim.
 - Every measured quantity names its roots, scaling axes, aggregation/retention
-  policy, tier, artifacts, and rerun/version trigger in the owning component
-  authority. Before accepting a new or changed retained-memory representation,
+  policy, tier, artifacts, and rerun/version trigger in `PERFORMANCE.md`, linked
+  to its owning component criterion. Before accepting a new or changed retained-memory representation,
   its corpus must classify every retained dataclass field and reachable mapping
   family/key as populated at its declared envelope or intentionally absent/non-
   retained. An unclassified representation change invalidates that acceptance
@@ -822,6 +822,9 @@ may close a gate.
 - Module documents own operation-specific mechanisms, limits, and extension
   policy. `BRIDGE.md` owns exact desktop envelopes, commands, limits, and
   acceptance gates beneath the trusted-base decision in §4.
+- `PERFORMANCE.md` owns measurement methods, fixture/profile and scaling
+  descriptions, aggregation, provenance and results. It does not classify
+  consequence or change an acceptance gate by reporting an observation.
 - `CHANGELOG.md` records dated adoption or revision of this policy;
   `HANDOFF.md` carries only immediate operational context.
 
