@@ -103,10 +103,18 @@ class _BrowserGateControl:
     scenario: Mapping[str, object]
     lock: threading.Lock = field(default_factory=threading.Lock)
     uncertain_command_id: str | None = None
+    uncertain_request_id: str | None = None
     arm_uncertain_start: bool = False
-    uncertain_start_replay_entered: threading.Event = field(
+    uncertain_observe_completed: threading.Event = field(
         default_factory=threading.Event
     )
+    uncertain_start_effect_done: threading.Event = field(default_factory=threading.Event)
+    completion_post_failed: bool = False
+    completion_post_failure_settled: threading.Event = field(
+        default_factory=threading.Event
+    )
+    observation_requests: list[dict[str, object]] = field(default_factory=list)
+    observation_count: int = 0
     main_recovery_entered: threading.Event = field(default_factory=threading.Event)
     controlled_start_count: int = 0
     sinks: dict[str, object] = field(default_factory=dict)
@@ -172,17 +180,18 @@ class _BrowserGateControl:
         with self.lock:
             return self.task_roles.get(task_id)
 
-    def classify_uncertain_start(self, command_id: object) -> str | None:
-        if type(command_id) is not str:
-            return None
+    def classify_uncertain_start(
+        self, request_id: object, command_id: object
+    ) -> bool:
+        if type(request_id) is not str or type(command_id) is not str:
+            return False
         with self.lock:
             if self.arm_uncertain_start and self.uncertain_command_id is None:
                 self.uncertain_command_id = command_id
+                self.uncertain_request_id = request_id
                 self.arm_uncertain_start = False
-                return "first"
-            if command_id == self.uncertain_command_id:
-                return "replay"
-        return None
+                return True
+        return False
 
     def emit_gap(self) -> None:
         with self.lock:
@@ -588,7 +597,7 @@ def _valid_browser_report(value: object) -> bool:
         "automatic_close_calls",
         "busy_refusals",
         "cleanup",
-        "deadline_faults",
+        "timer_faults",
         "interactive_refusal",
         "malformed_refusal",
         "nested_dom",
@@ -598,7 +607,7 @@ def _valid_browser_report(value: object) -> bool:
     }:
         return False
     cleanup = value["cleanup"]
-    deadline_faults = value["deadline_faults"]
+    timer_faults = value["timer_faults"]
     nested_dom = value["nested_dom"]
     return (
         type(value["accepted_types"]) is list
@@ -615,15 +624,15 @@ def _valid_browser_report(value: object) -> bool:
         and all(type(item) is dict for item in value["nested_items"])
         and type(value["nested_record"]) is dict
         and value["replacement_registration"] is True
-        and type(deadline_faults) is dict
-        and set(deadline_faults) == {"start_plan", "main_drain"}
+        and type(timer_faults) is dict
+        and set(timer_faults) == {"start_plan", "main_drain"}
         and all(
             type(fault) is dict
             and set(fault) == {"armed", "fired"}
             and type(fault["armed"]) is int
             and type(fault["fired"]) is int
             and 0 <= fault["fired"] <= fault["armed"] <= 1
-            for fault in deadline_faults.values()
+            for fault in timer_faults.values()
         )
         and type(cleanup) is dict
         and set(cleanup) == {"active_timers", "ready_listeners"}
@@ -660,6 +669,7 @@ def _serve_second_origin(root: Path) -> tuple[ThreadingHTTPServer, str]:
 def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
     from namisync.interfaces.service import NamiSyncService
     from namisync.interfaces.web import bridge, host
+    from namisync.interfaces.web.document_channel import DocumentChannel
     from namisync.interfaces.web.host import DesktopInstanceIdentity
     from namisync.interfaces.web.paths import AppPaths
 
@@ -669,6 +679,10 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
     original_expose_bridge = host._expose_bridge_api
     original_task_registry = host._task_registry
     original_dispatch = bridge.BridgeDispatcher._dispatch_native
+    original_post_to_current_document = DocumentChannel._post_to_current_document
+    original_retire_command_completion = (
+        bridge.BridgeDispatcher._retire_command_completion
+    )
     original_execute = bridge.BridgeDispatcher._execute_prepared_command
     original_start_task_setup_plan = NamiSyncService.start_task_setup_plan
     original_reobserve_task = NamiSyncService.reobserve_task
@@ -741,7 +755,59 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
                 result.get("task_id"),
                 result.get("session_id"),
             )
+            with browser_gate.lock:
+                targeted = request_id == browser_gate.uncertain_request_id
+            if targeted:
+                browser_gate.uncertain_start_effect_done.set()
         return response
+
+    def observed_post_to_current_document(
+        channel: object,
+        encoded: str,
+        still_current,
+        document_epoch: object,
+    ) -> object:
+        try:
+            message = json.loads(encoded)
+        except (TypeError, ValueError):
+            message = None
+        if browser_gate is not None and type(message) is dict:
+            with browser_gate.lock:
+                targeted = (
+                    not browser_gate.completion_post_failed
+                    and message.get("kind") == "namisync.command-completion.v1"
+                    and message.get("phase") == "completion"
+                    and message.get("request_id") == browser_gate.uncertain_request_id
+                    and browser_gate.uncertain_start_effect_done.is_set()
+                )
+                if targeted:
+                    browser_gate.completion_post_failed = True
+            if targeted:
+                recorder.append(
+                    "injected_transport_faults",
+                    {
+                        "kind": "completion_post_failed",
+                        "request_id": message["request_id"],
+                    },
+                )
+                return RuntimeError("injected post-effect completion delivery failure")
+        return original_post_to_current_document(
+            channel, encoded, still_current, document_epoch
+        )
+
+    def observed_retire_command_completion(
+        dispatcher: object, custody: object
+    ) -> None:
+        original_retire_command_completion(dispatcher, custody)
+        if browser_gate is not None:
+            with browser_gate.lock:
+                targeted = (
+                    browser_gate.completion_post_failed
+                    and custody.completion_request_id
+                    == browser_gate.uncertain_request_id
+                )
+            if targeted:
+                browser_gate.completion_post_failure_settled.set()
 
     def observed_dispatch(dispatcher: object, command_json: str) -> object:
         request = None
@@ -753,18 +819,49 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
             if type(candidate) is dict:
                 request = candidate
 
-        start_kind = None
+        first_uncertain_start = False
         if (
             browser_gate is not None
             and request is not None
             and request.get("command") == "start_plan"
             and type(request.get("payload")) is dict
         ):
-            start_kind = browser_gate.classify_uncertain_start(
+            first_uncertain_start = browser_gate.classify_uncertain_start(
+                request.get("request_id"),
                 request["payload"].get("command_id")
             )
-            if start_kind == "replay":
-                browser_gate.uncertain_start_replay_entered.set()
+
+        observation = (
+            bridge._NATIVE_COMMAND_OBSERVE.fullmatch(command_json)
+            if type(command_json) is str
+            else None
+        )
+        if observation is not None and browser_gate is not None:
+            observed_request_id, observed_command = observation.groups()
+            with browser_gate.lock:
+                targeted = (
+                    observed_request_id == browser_gate.uncertain_request_id
+                    and observed_command == "start_plan"
+                )
+            if targeted and not browser_gate.completion_post_failure_settled.wait(5):
+                raise RuntimeError("start_plan completion post fault did not settle")
+            response = original_dispatch(dispatcher, command_json)
+            with browser_gate.lock:
+                browser_gate.observation_count += 1
+                if len(browser_gate.observation_requests) < 4:
+                    browser_gate.observation_requests.append(
+                        {
+                            "request_id": observed_request_id,
+                            "command": observed_command,
+                            "post_failure_before_observe": (
+                                browser_gate.completion_post_failure_settled.is_set()
+                            ),
+                            "response": response,
+                        }
+                    )
+            if targeted:
+                browser_gate.uncertain_observe_completed.set()
+            return response
 
         task_id = None
         if (
@@ -833,10 +930,10 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
             and type(response.get("response")) is dict
         ):
             command_response = response["response"]
-        if start_kind == "first":
+        if first_uncertain_start:
             assert browser_gate is not None
-            if not browser_gate.uncertain_start_replay_entered.wait(5):
-                raise RuntimeError("start_plan uncertain replay did not enter")
+            if not browser_gate.uncertain_observe_completed.wait(5):
+                raise RuntimeError("start_plan observation did not enter")
         if (
             browser_gate is not None
             and request is not None
@@ -1192,6 +1289,20 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
         )
         stack.enter_context(
             patch.object(
+                DocumentChannel,
+                "_post_to_current_document",
+                observed_post_to_current_document,
+            )
+        )
+        stack.enter_context(
+            patch.object(
+                bridge.BridgeDispatcher,
+                "_retire_command_completion",
+                observed_retire_command_completion,
+            )
+        )
+        stack.enter_context(
+            patch.object(
                 bridge.BridgeDispatcher,
                 "_execute_prepared_command",
                 observed_execute,
@@ -1262,6 +1373,14 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
                     "registry_close_calls": list(browser_gate.registry_close_calls),
                     "interactive_failures": browser_gate.interactive_failures,
                     "malformed_attempts": browser_gate.malformed_attempts,
+                    "uncertain_request_id": browser_gate.uncertain_request_id,
+                    "uncertain_command_id": browser_gate.uncertain_command_id,
+                    "completion_post_failed": browser_gate.completion_post_failed,
+                    "uncertain_start_effect_done": (
+                        browser_gate.uncertain_start_effect_done.is_set()
+                    ),
+                    "observation_count": browser_gate.observation_count,
+                    "observation_requests": list(browser_gate.observation_requests),
                 },
             )
     recorder.set("exit_code", exit_code)

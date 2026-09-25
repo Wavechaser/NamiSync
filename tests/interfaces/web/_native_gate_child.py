@@ -1404,8 +1404,8 @@ def _run_reload_containment(arguments: argparse.Namespace, recorder: _Recorder) 
             access=CommandAccess.MUTATING,
             command_id=FieldRequirement.FORBIDDEN,
             revision=FieldRequirement.FORBIDDEN,
-            timeout=CommandTimeout.MUTATION_30_SECONDS,
-            retry=CommandRetry.SAME_PAYLOAD_BOUNDED,
+            timeout=CommandTimeout.MUTATION_OBSERVED,
+            retry=CommandRetry.NONE,
             work=CommandWork.ASYNC_SMALL,
         )}
 

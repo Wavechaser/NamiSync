@@ -447,6 +447,15 @@ domain-effect receipt authority and owns exact session associations; Dispatcher
 custody is not a receipt lifetime. Every admitted direct or task-bound session
 receives an application association before publication.
 
+Desktop transport separately retains an admitted request's original response in
+its existing bounded custody. Read-only result observation cannot call the
+mutation handler or replace application effect receipts. Delayed feedback and
+exhausted observation report availability, not operation success/failure. The
+original remains recoverable until validated capture/ACK or document/host
+ownership ends; actual worker settlement remains independent. BRIDGE owns the
+wire shape, bounds, acknowledgment ordering and observation budgets. CLI and
+direct service behavior retain their existing contracts.
+
 Direct start receipts retire after successful direct `close_session`. A task
 start receipt survives terminal-session release and retires only at task close.
 Selection-mutation receipts survive artifact replacement and retire with the

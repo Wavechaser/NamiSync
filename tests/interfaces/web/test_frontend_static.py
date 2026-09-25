@@ -1205,7 +1205,7 @@ def test_br_g_32_sink_scan_catches_counterexample_mutations(
     assert _active_sink_hits(mutation)
 
 
-def test_br_g_32_browser_wrapper_owns_exact_ids_response_checks_and_retry() -> None:
+def test_br_g_32_browser_wrapper_owns_exact_ids_response_checks_and_observation() -> None:
     source = (
         PROJECT_ROOT
         / "namisync"
@@ -1221,16 +1221,23 @@ def test_br_g_32_browser_wrapper_owns_exact_ids_response_checks_and_retry() -> N
     assert "cryptography.getRandomValues(bytes);" in source
     assert "new Uint8Array(16)" in source
     assert 'byte.toString(16).padStart(2, "0")' in source
-    assert source.count('"pick_folder"') == 2
-    assert source.count('"start_plan"') == 2
-    assert source.count('"start_inventory"') == 2
-    assert source.count('"plan_again"') == 4
-    assert source.count('"read_setup"') == 3
-    assert source.count('"probe_recent_pairs"') == 2
-    assert source.count('"prepare_setup"') == 3
-    assert source.count('"admit_location"') == 2
-    assert "function submitStart(payload, command, timeoutMs)" in source
-    assert "new StartPlanUncertainError(submit)" in source
+    for command in (
+        "pick_folder", "start_plan", "start_inventory", "plan_again",
+        "read_setup", "probe_recent_pairs", "prepare_setup", "admit_location",
+    ):
+        assert f'"{command}"' in source
+    assert "function submitStart(payload, command, timeoutMs, onDelayed = null)" in source
+    assert "throw taskUncertainty(error, StartPlanUncertainError);" in source
+    assert "new OutcomeUnavailableError(() => retryObservedResult(state))" in source
+    assert "new OutcomeUnavailableError(null, false)" in source
+    assert "if (state.result === null) await recoverObservedResult(state);" in source
+    outcome_check = source.split("async function retryObservedResult(", 1)[1].split(
+        "function acceptObservedObservation(", 1
+    )[0]
+    assert "recoverObservedResult(state)" in outcome_check
+    assert "dispatchAttempt(" not in outcome_check
+    assert "submitStart(" not in outcome_check
+    assert "createObservedAttempt(" not in outcome_check
     assert "let commandHostGeneration = null;" in source
     assert "if (bridgeReadyObserved) return;" in source
     assert 'typeof sourceId !== "string"' in source
@@ -1294,8 +1301,8 @@ def test_task_recovery_and_release_budgets_are_explicit() -> None:
     assert "COMMAND_POLICY_CONTRACT.close_task.timeout" in source
     assert "COMMAND_POLICY_CONTRACT.release_terminal_session.timeout" in source
     assert "const DRAIN_RECOVERY_DELAYS_MS = Object.freeze([" in source
-    assert "const SESSION_RELEASE_RECOVERY_DELAYS_MS = Object.freeze([100, 250, 500]);" in source
-    assert "const TASK_CLOSE_RECOVERY_DELAYS_MS = Object.freeze([100, 250, 500]);" in source
+    assert "const OBSERVATION_DELAYS_MS = Object.freeze([100, 250]);" in source
+    assert "const OBSERVATION_TIMEOUT_MS = 1000;" in source
     assert '"release_terminal_session"' in source
     assert '"close_task"' in source
     assert "beginTaskRelease(task);" in source
@@ -1387,6 +1394,7 @@ def test_sh_g_7_packaged_shell_has_accessible_process_live_blank_tasks(
     app = assets["app.js"]
     rail = assets["rail.js"]
     panels = assets["panels.js"]
+    review = assets["plan_review.js"]
     shell = "\n".join((app, rail, panels))
 
     assert '<main id="app">' in index
@@ -1421,14 +1429,19 @@ def test_sh_g_7_packaged_shell_has_accessible_process_live_blank_tasks(
     assert 'create.append(createIcon(document, "add-square-multiple", "lg"));' in rail
     assert 'create.ariaLabel = "New task";' in rail
     assert 'close.append(createIcon(document, "dismiss", "sm"));' in rail
-    assert 'entry.close.ariaLabel = batchCloseReason ?? `${task.closeFailed ? "Retry close for" : "Close"} ${task.label}`;' in rail
+    assert 'entry.close.ariaLabel = closeReason ?? `${closeUnavailable ? "Retry close outcome for"' in rail
+    assert ': task.closeFailed ? "Retry close for" : "Close"} ${task.label}`;' in rail
     assert 'entry.retry.ariaLabel = `${task.recoveryRunning ? "Retrying updates for" : "Retry updates for"} ${task.label}`;' in rail
-    assert 'entry.close.disabled = task.closePending || batchCloseReason !== null;' in rail
+    assert 'entry.close.disabled = closeReason !== null;' in rail
+    assert "task.closeBlockReason = taskCloseBlockReason(task);" in app
+    assert "task === undefined || taskCloseBlockReason(task) !== null" in app
+    assert "task.canCancelAfterFixedReviewOutcome" in review
+    assert "[review.message, independentCancel?.message]" in review
     assert "entry.close.title = entry.close.ariaLabel;" in rail
     assert 'document.createElement("h2")' not in panels
-    assert "createTask()" in app
+    assert "createTask(() =>" in app
     assert "listTasks()" in app
-    assert "closeTask(task.taskId, task.sessionId)" in app
+    assert "closeTask(task.taskId, task.sessionId, () =>" in app
     assert "result.disposition === \"closed\"" in app
     assert "task.closePending = true;" in app
     assert "tasks.get(task.taskId) !== task" in app

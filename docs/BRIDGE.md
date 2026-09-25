@@ -116,7 +116,7 @@ views are frozen copies, so presentation code cannot mutate retained authority.
 
 Origin and readiness authorization occur before command dispatch. Document replacement cannot roll back an admitted action. A genuine replacement permanently retires this window's command authority; canceled navigation and same-document history leave it intact. Initial readiness, effect receipts, worker custody and normal close retain their owners. [INTERFACES.md](INTERFACES.md#logging-and-host-startup) owns the unsupported-reload presentation and restart contract. The allowlist, exact payload validation, native picker confinement, hostile-text sinks, and logging privacy are bridge security requirements; external text remains text, never markup, a URL, code, or path authority.
 
-A mutating user gesture with a receipt mints one `command_id` and reuses the identical intent after uncertain delivery. Lookup precedes live revision checks and outside work. The same id with changed intent is `command_conflict`; a new id alone may reach mutable authority. Replay means no repeated effect, not necessarily identical response bytes: return the current allowed projection. Reads, native picker interaction, drain recovery, and exact terminal release have their own finite retry rules and do not borrow mutating receipt semantics.
+A mutating user gesture with an effect receipt mints one `command_id`. Duplicate intent lookup precedes live revision checks and outside work. The same id with changed intent is `command_conflict`; a new id alone may reach mutable authority. Application receipt replay means no repeated effect, not necessarily identical response bytes: it can return the current allowed projection. Desktop communication recovery instead observes the original transport request and its captured response; it does not submit another mutation. Reads and drain recovery retain their own finite retry rules.
 
 A command against a revisioned selection, lifecycle, view, projection, or result carries only the applicable expected revision. For new work, the guard and scope freeze occur under their one owner so checked intent and admitted scope cannot diverge. A conflict is a typed no-effect response; the browser rehydrates rather than guessing stale intent. Do not repeat an accepted filesystem, recorder, or lifecycle effect because a response was lost.
 
@@ -174,8 +174,9 @@ canonical bytes before using the detached value. Ordinary responses validate
 owned views while projecting JSON primitives. Continuation storage keeps its
 separately validated typed snapshot; task drains validate the complete admitted
 typed prefix before queue consumption and project only after that handoff.
-The browser detaches native data before acknowledging custody, then checks
-response and task identity at its own adoption boundary.
+The browser detaches native data at its adoption boundary. Observed mutations
+also validate the response and command identity before acknowledging result
+custody, so cleanup cannot discard an unusable original result.
 
 After handler reservation, trust recheck, envelope decode and allowlist lookup,
 composition's `admit(name)` checks BOOTSTRAP/OPEN context before payload validation.
@@ -207,8 +208,8 @@ validates the request and admitted context before starting one command worker.
 Ordinary `BridgeDispatcher.dispatch()` and `CommandSpec.invoke()` remain
 synchronous. Custom rows default to direct delivery, as do bootstrap, picker,
 list, drain and cosmetic commands. A picker display path is not subject to the
-smaller completion-message wall. Exported browser wrappers keep their result,
-deadline and recovery semantics.
+smaller completion-message wall. Mutation wrappers retain their original request
+while observing delayed or unavailable results; read-only probe deadlines remain.
 
 The direct native transport remains
 `{transport_version:1,response_token:HexId|null,response:BridgeResponse}`.
@@ -217,11 +218,12 @@ An accepted asynchronous return is
 Its current-document completion is
 `{kind:"namisync.command-completion.v1",phase:"completion",generation:SafeInt,request_id:HexId,completion_token:HexId,response:BridgeResponse}`.
 Both objects have exact keys. `BridgeResponse` is the unchanged version-1
-success/error envelope above. Completion cleanup uses the exact canonical
+success/error envelope above. After validation and capture, completion cleanup uses the exact canonical
 `ack:completion:<generation>:<request_id>:<completion_token>` string. It bypasses
 normal command admission, origin/readiness and saturation, but can only settle
-matching existing completion custody. It invokes no command. Native-return
-receipt acknowledgment remains a separate phase.
+matching existing completion/result custody, including a retained result whose
+post failed. It invokes no command. Native-return receipt acknowledgment remains
+a separate phase; an asynchronous admission ACK does not retire the later result.
 
 Direct and asynchronous calls share the 64-exchange bound. An asynchronous
 exchange adds at most one worker and one completion; it creates no pending work
@@ -231,18 +233,88 @@ exit, native-return acknowledgment/retirement, and completion acknowledgment/
 retirement. Producing a result, timing out, or failing to post is not worker
 death. These count bounds make no whole-runtime memory or thread claim.
 
-The browser registers at most 64 pending attempts before dispatch, retaining at
-most one early completion per entry. Exact admission/completion identity and
-both required cleanup acknowledgments precede live result resolution. Async
-cleanup attempts have a one-second deadline and at most two attempts. The host
-generation learned from validated admission remains completion identity; a
-replacement document cannot reopen command admission. An
-unsolicited completion cannot create an entry. Timeout frees the pending entry
-without a tombstone/history table; a valid same-generation late completion is
-cleanup-only and cannot adopt or resolve a result. Replacement retires old
-browser delivery without canceling admitted work. Unconfirmed cleanup or delivery remains transport uncertainty,
-using existing effect receipts and same-document task/session observation rather than a
-new effect owner or generic cancellation mechanism.
+The browser bounds retained original attempts to 64, with at most one early
+completion per asynchronous entry. Validate exact response and command identity
+before capture/adoption and cleanup. Cleanup uses at most two attempts with
+one-second observation deadlines; its failure cannot turn a captured valid
+response into a failed operation. The host generation learned from validated
+admission or trusted observation remains completion identity. An unsolicited
+completion cannot create an entry or retire another request's result. Late
+responses remain adoptable while their original identity/ownership is retained.
+Replacement retires browser delivery without canceling admitted work.
+
+The asynchronous read-only recent-pairs probe keeps its five-second caller
+deadline. A pre-dispatch timeout retires its entry and cannot submit later.
+After dispatch, caller timeout leaves the same bounded async entry responsible
+only for exact late native/completion cleanup. Early completion still waits in
+its existing single-message slot for admission identity. Unknown completion
+messages earn no ACK; a lost first admission or failed cleanup can retain that
+bounded custody until genuine document retirement. No read resubmission or
+second cleanup registry is introduced.
+
+### Original-result observation
+
+The same native dispatch entry point accepts the canonical control string
+`observe:<original_request_id>:<original_command>` (at most 105 characters).
+It requires the current trusted document, an allowlisted OPEN command and an
+accepting host. It never invokes the original handler, grants another effect,
+waits for a worker or allocates another effect exchange. It can read existing
+custody even when all 64 exchanges are occupied. Malformed/untrusted/closed
+requests return fixed false, treated as failed communication.
+
+An authenticated observation has the exact keys
+`{transport_version:1,state:"pending"|"ready"|"unavailable",generation:SafeInt,request_id:HexId,response_token:HexId|null,completion_token:HexId|null,response:BridgeResponse|null}`.
+Ready carries the original response and native token; asynchronous results also
+carry their original completion token. Pending carries no final response.
+Unavailable carries null tokens/response and makes no effect claim: original
+admission may still arrive, or ownership may have ended. A first admission loss
+can leave the browser without a generation/token; current trusted observation
+supplies them. Already known generation/token and original request id must match.
+
+Original results use the existing custody registry and exchange capacity. Direct
+results retain the 8 MiB response wall and asynchronous completions their 65,536
+byte wall, with fixed bounded observation metadata outside that original response.
+Bind original request identity before effect and refuse duplicate live identities.
+Native post failure retires that delivery attempt, not the captured original.
+Validated browser capture earns the existing direct native ACK or asynchronous
+completion ACK. Until that acknowledgment, genuine document retirement, host close
+or process loss, result custody stays charged; there is no timer eviction or
+append-only history. Unacknowledged custody can refuse new work at capacity.
+Retiring a response never substitutes for actual worker exit.
+
+Non-picker observed commands have a bounded startup wait before dispatch;
+startup failure cannot leave a continuation that submits the action later.
+Once dispatched, a five-second
+mutation delay triggers feedback and bounded observation, not
+cancellation or resubmission. One automatic round makes at most three observations,
+each with a one-second deadline and 100/250 ms inter-attempt waits. Exhaustion
+shows outcome unavailable without asserting effect failure or success. Explicit
+Retry observes the same original request and can adopt an already-arrived late
+response. Interactive picker wait, startup, drain, shutdown and resource deadlines
+retain their separate contracts. Successful pending Close is a real lifecycle
+receipt; later settlement actions remain distinct from retrying its observation.
+Automatic Close continuation requires both that exact pending receipt and terminal
+observation, regardless of arrival order. Consume the terminal transition once;
+an unresolved first response or another pending receipt cannot create a Close
+submission loop. Further known-pending settlement remains an explicit action.
+
+A captured final `internal_error` or `response_too_large` can follow an effect,
+but its fixed response cannot improve through observation. Acknowledge and retire
+that completed transport entry while retaining the affected UI intent fence.
+Show that the outcome cannot be confirmed and direct the user to close/reopen
+NamiSync and review current state; do not offer a nonworking observation Retry.
+The availability of a Retry closure is not itself the ownership fence.
+After such a captured noncheckable review/control response, a separate explicit
+Cancel may target the same active execution unless the unknown action was itself
+Cancel. The existing control attempt owns that Cancel and any original-result
+observation; it cannot erase the review's retained warning or permit a second
+unknown Cancel. In-flight and checkable-unknown review commands remain fenced.
+Task Close exposes the same blocking reason used by its handler.
+
+The interactive picker has no delay timer: a return that never settles does not
+automatically enter observation. A rejected return can use original-result
+recovery; a permanently lost return still requires closing/reopening the host.
+Bounded native retention alone does not guarantee recovery from every loss.
 
 DocumentChannel owns a separate command FIFO under the same exchange bound and
 one native post owner. Required readiness is selected first; an in-flight native
@@ -307,28 +379,28 @@ BOOTSTRAP rows, commands require OPEN.
 | `read_setup` | `{task_id:null\|TaskId}` | `{task_id:null\|TaskId,snapshot:SetupSnapshot,recents:null\|RecentLocations}` | 5 s; one identical-payload retry |
 | `probe_recent_pairs` | `{}` | `{pairs:[{mapping_id:LocationId,source_id:LocationId,target_id:LocationId,source_state:LocationState,target_state:LocationState}]}` | async-small; 5 s; no automatic retry |
 | `prepare_setup` | `{options:SetupOptions}` | canonical `SetupOptions` | 5 s; one identical-payload retry |
-| `admit_location` | `{purpose:"source"\|"target"\|"inventory",candidate:LocationCandidate}` or `{purpose:"source"\|"target"\|"inventory",continuation_id:SlotId,mount_index:SafeInt}` | `LocationChoice` | 5 s; no automatic retry |
-| `create_task` | `{command_id:HexId}` | `{task_id:TaskId}` | 30 s; one same-command replay after uncertainty/internal_error; manual Retry retains id |
+| `admit_location` | `{purpose:"source"\|"target"\|"inventory",candidate:LocationCandidate}` or `{purpose:"source"\|"target"\|"inventory",continuation_id:SlotId,mount_index:SafeInt}` | `LocationChoice` | observed original result; 5 s feedback; no mutation replay |
+| `create_task` | `{command_id:HexId}` | `{task_id:TaskId}` | observed original result; 5 s feedback; no mutation replay |
 | `list_tasks` | `{}` | `{tasks:[{task_id:TaskId,task_kind:null\|"sync-plan"\|"inventory",request_id:null\|HexId,session_id:null\|HexId,session_state:null\|"active"\|"completed"\|"failed"\|"canceled"\|"refused",session_released:boolean}]}` | 5 s; one identical-payload retry |
-| `start_plan` | `{task_id:TaskId,command_id:HexId,source_id:SlotId,target_id:SlotId,options:SetupOptions}` | `{task_id:TaskId,request_id:HexId,session_id:HexId}` | 30 s; one same-command replay after uncertainty/internal_error; manual Retry retains id |
-| `start_inventory` | `{task_id:TaskId,command_id:HexId,root_id:SlotId}` | `{task_id:TaskId,request_id:HexId,session_id:HexId}` | 30 s; same-command recovery |
-| `plan_again` | `{task_id:TaskId,command_id:HexId,source_mount:null\|string,target_mount:null\|string}` | `{task_id:TaskId,request_id:HexId,session_id:HexId}` | 30 s; same-command recovery |
+| `start_plan` | `{task_id:TaskId,command_id:HexId,source_id:SlotId,target_id:SlotId,options:SetupOptions}` | `{task_id:TaskId,request_id:HexId,session_id:HexId}` | observed original result; 5 s feedback; no mutation replay |
+| `start_inventory` | `{task_id:TaskId,command_id:HexId,root_id:SlotId}` | `{task_id:TaskId,request_id:HexId,session_id:HexId}` | observed original result; 5 s feedback; no mutation replay |
+| `plan_again` | `{task_id:TaskId,command_id:HexId,source_mount:null\|string,target_mount:null\|string}` | `{task_id:TaskId,request_id:HexId,session_id:HexId}` | observed original result; 5 s feedback; no mutation replay |
 | `open_plan_view` | `{task_id:TaskId}` | `PlanViewSummary` | 5 s; one identical-payload retry |
-| `update_plan_view` | `{task_id:TaskId,expected_revision:SafeInt,search_query:string,filters:[PlanFilter],sort_column:"path"\|"filename"\|"size"\|"mtime",sort_direction:"ascending"\|"descending",collapse_node_id:null\|NodeId,collapsed:null\|boolean}` | `PlanViewSummary` | 5 s; no automatic retry |
+| `update_plan_view` | `{task_id:TaskId,expected_revision:SafeInt,search_query:string,filters:[PlanFilter],sort_column:"path"\|"filename"\|"size"\|"mtime",sort_direction:"ascending"\|"descending",collapse_node_id:null\|NodeId,collapsed:null\|boolean}` | `PlanViewSummary` | observed original result; 5 s feedback; no mutation replay |
 | `get_plan_window` | `{task_id:TaskId,expected_revision:SafeInt,offset:SafeInt,limit:1..256}` | `{disposition:"current"\|"conflict",view_revision:SafeInt,offset:SafeInt,total:SafeInt,execution:ExecutionSummary,rows:[PlanWindowRow]}` | 5 s; one identical-payload retry |
 | `get_execution_detail` | `{task_id:TaskId,operation_id:HexId,expected_execution_revision:SafeInt}` | `{disposition:"current"\|"conflict"\|"not-retained",execution_revision:SafeInt,operation_id:HexId,operation:null\|OperationItemView,automatic_verification:null\|IntegrityOutcomeView,evidence:null\|ExecutionEvidence}` | 5 s; one identical-payload retry |
 | `get_plan_anchor` | `{task_id:TaskId,expected_revision:SafeInt,node_id:NodeId}` or `{task_id:TaskId,session_id:HexId,expected_revision:SafeInt,operation_id:HexId}` | `{disposition:"current"\|"conflict",view_revision:SafeInt,node_id:null\|NodeId,index:null\|SafeInt}` | 5 s; one identical-payload retry |
-| `mutate_plan_selection` | `{task_id:TaskId,command_id:HexId,expected_view_revision:SafeInt,expected_selection_revision:SafeInt,node_id:NodeId,selected:boolean}` | `PlanViewSummary` | 5 s; one same-command replay after uncertainty |
-| `mutate_plan_scope` | `{task_id:TaskId,command_id:HexId,expected_view_revision:SafeInt,expected_selection_revision:SafeInt,selected:boolean}` | `PlanViewSummary` | 5 s; one same-command replay after uncertainty |
-| `mutate_plan_highlight` | `{task_id:TaskId,expected_view_revision:SafeInt,expected_highlight_revision:SafeInt,gesture:"clear"|"replace"|"toggle"|"extend"|"add-range"|"move_up"|"move_down",node_id:null\|NodeId}` | `PlanViewSummary` | 5 s; no automatic retry |
-| `mutate_plan_highlighted_selection` | `{task_id:TaskId,command_id:HexId,expected_view_revision:SafeInt,expected_highlight_revision:SafeInt,expected_selection_revision:SafeInt,selected:boolean}` | `PlanViewSummary` | 5 s; one same-command replay after uncertainty |
-| `start_execution` | `{task_id:TaskId,request_id:HexId,command_id:HexId,expected_revision:SafeInt,destructive_acknowledged:boolean}` | task/session start or `{disposition:"in-flight"\|"frozen"\|"conflict"\|"confirmation-required",revision:SafeInt,state:"reviewing"\|"committing"\|"committed",session:null\|{request_id:HexId,session_id:HexId}}` | async-small; 30 s; one same-command replay, then visible exact-command retry after uncertainty |
-| `control_execution` | `{task_id:TaskId,session_id:HexId,action:"pause"\|"resume"\|"cancel"}` | `{code:string,session_id:HexId,before:null\|string,after:null\|string,detail:string,accepted:boolean}` | 5 s; no automatic retry |
+| `mutate_plan_selection` | `{task_id:TaskId,command_id:HexId,expected_view_revision:SafeInt,expected_selection_revision:SafeInt,node_id:NodeId,selected:boolean}` | `PlanViewSummary` | observed original result; 5 s feedback; no mutation replay |
+| `mutate_plan_scope` | `{task_id:TaskId,command_id:HexId,expected_view_revision:SafeInt,expected_selection_revision:SafeInt,selected:boolean}` | `PlanViewSummary` | observed original result; 5 s feedback; no mutation replay |
+| `mutate_plan_highlight` | `{task_id:TaskId,expected_view_revision:SafeInt,expected_highlight_revision:SafeInt,gesture:"clear"|"replace"|"toggle"|"extend"|"add-range"|"move_up"|"move_down",node_id:null\|NodeId}` | `PlanViewSummary` | observed original result; 5 s feedback; no mutation replay |
+| `mutate_plan_highlighted_selection` | `{task_id:TaskId,command_id:HexId,expected_view_revision:SafeInt,expected_highlight_revision:SafeInt,expected_selection_revision:SafeInt,selected:boolean}` | `PlanViewSummary` | observed original result; 5 s feedback; no mutation replay |
+| `start_execution` | `{task_id:TaskId,request_id:HexId,command_id:HexId,expected_revision:SafeInt,destructive_acknowledged:boolean}` | task/session start or `{disposition:"in-flight"\|"frozen"\|"conflict"\|"confirmation-required",revision:SafeInt,state:"reviewing"\|"committing"\|"committed",session:null\|{request_id:HexId,session_id:HexId}}` | observed original result; 5 s feedback; no mutation replay |
+| `control_execution` | `{task_id:TaskId,session_id:HexId,action:"pause"\|"resume"\|"cancel"}` | `{code:string,session_id:HexId,before:null\|string,after:null\|string,detail:string,accepted:boolean}` | observed original result; 5 s feedback; no mutation replay |
 | `next_events` | `{task_id:TaskId,session_id:HexId,drain_id:HexId,replay_from:null\|positive-integer}` | `{task_id:TaskId,session_id:HexId,drain_id:HexId,updates:array}` | 30 s client / 25 s server; recovery mints a new drain id |
-| `release_terminal_session` | `{task_id:TaskId,session_id:HexId}` | `{task_id:TaskId,session_id:HexId}` | 30 s; identical-payload recovery at 100/250/500 ms, then visible manual retry |
-| `close_task` | `{task_id:TaskId,session_id:null\|HexId}` | `{task_id:TaskId,session_id:null\|HexId,disposition:"pending"\|"closed"}` | 30 s; identical-payload recovery at 100/250/500 ms, then visible manual retry |
+| `release_terminal_session` | `{task_id:TaskId,session_id:HexId}` | `{task_id:TaskId,session_id:HexId}` | observed original result; 5 s feedback; no mutation replay |
+| `close_task` | `{task_id:TaskId,session_id:null\|HexId}` | `{task_id:TaskId,session_id:null\|HexId,disposition:"pending"\|"closed"}` | observed original result; 5 s feedback; no mutation replay |
 | `read_cosmetic_section` | `{section:"appearance",value_version:1,applied_presentation_revision:SafeInt\|null}` | `{section:"appearance",value_version:1,revision:SafeInt,dirty:boolean,value:{theme:Theme}}` | 5 s; one identical-payload retry |
-| `replace_cosmetic_section` | `{section:"appearance",value_version:1,expected_revision:SafeInt,value:{theme:Theme}}` | same cosmetic snapshot plus `disposition:"applied"\|"noop"\|"conflict"` | 5 s; no mutation retry, read after uncertainty |
+| `replace_cosmetic_section` | `{section:"appearance",value_version:1,expected_revision:SafeInt,value:{theme:Theme}}` | same cosmetic snapshot plus `disposition:"applied"\|"noop"\|"conflict"` | observed original result; 5 s feedback; no mutation replay |
 
 Non-null replay sequences crossing the browser remain JavaScript-safe. Command id
 and revision fields are forbidden unless named. Starts submit complete canonical
@@ -455,7 +527,7 @@ the current document; an active session is reported as `active`, while a
 delivered terminal record keeps its actual terminal state before and after
 session release. Blank close uses the exact null-session owner path. A live
 session close first requests task-bound cancellation and returns `pending`; the
-card remains until terminal delivery permits a replayed `closed` disposition.
+card remains until terminal delivery permits a later exact close to return `closed`.
 Terminal-session release and task close remain distinct operations. The browser
 rejects stale document, navigation, and list generations before adopting task
 state.
@@ -471,19 +543,19 @@ Terminal presentation and session-release retries retain their own owners.
 
 Once exact terminal Close begins, the browser fences that task/session pair from
 new drains and replacement work until the close receipt is known. An uncertain
-result retains the same fence and only the identical Close may recover it;
+result retains the same fence and only observation of that original Close may recover it;
 `task_unavailable` cannot be treated as proof of completion or used to mint a
 new intent. A `pending` receipt clears the terminal-retirement fence and resumes
 ordinary draining because cancellation has not yet retired the task. A `closed`
 receipt removes the task. Backend retirement independently rejects Plan view,
 selection, Execute and Plan-again admission after terminal retirement begins.
 
-The browser retains the existing exact create/start submission after uncertain
-delivery. New task, Setup and its batch coordinator expose the same command's retry closure.
-A retry continues that command
-identity; it cannot substitute newly edited roots/options or silently create a
+The browser retains the existing exact create/start request after uncertain
+delivery. New task, Setup and its batch coordinator expose its observation-only
+retry closure. Retry queries that original request without another submission;
+it cannot substitute newly edited roots/options or silently create a
 replacement batch task. Definitive refusals and uncertain outcomes remain
-distinct. This adds no transport queue, retry loop or durable receipt.
+distinct. No effect queue or durable receipt is added.
 
 ### Slot lifetime
 
@@ -567,7 +639,7 @@ aggregate task-list limits.
 
 ## Current cosmetic channel
 
-Appearance is the sole current mutable cosmetic section. It is exact, bounded, and non-semantic: accepted appearance changes do not alter settings policy, service/registry/planner state, plan fingerprints, tasks, or sessions. The browser reconciles a conflict or uncertain replacement through the declared read command instead of retrying an unknown mutation. Native material, high-contrast precedence, accent, and reduced-motion behavior remain system-owned presentation rules in `DESKTOP_UI.md`; the bridge only carries the typed section snapshot. Reads/replacements reject another section, another value version, unknown members, a non-JavaScript-safe revision, or a theme outside the three declared values before persistence or UI mutation.
+Appearance is the sole current mutable cosmetic section. It is exact, bounded, and non-semantic: accepted appearance changes do not alter settings policy, service/registry/planner state, plan fingerprints, tasks, or sessions. The browser recovers an uncertain replacement by observing its original result; canonical section reads still reconcile current appearance after a known result or conflict. Neither path repeats an unknown mutation. Native material, high-contrast precedence, accent, and reduced-motion behavior remain system-owned presentation rules in `DESKTOP_UI.md`; the bridge only carries the typed section snapshot. Reads/replacements reject another section, another value version, unknown members, a non-JavaScript-safe revision, or a theme outside the three declared values before persistence or UI mutation.
 Concurrent handlers synchronize effect admission, drains and retirement without holding adapter locks across workflow I/O. INTERFACES owns implemented lifecycle. Prospective generation pins, replacement leases and publication seals are not prescribed here.
 
 ## Remaining future outcomes

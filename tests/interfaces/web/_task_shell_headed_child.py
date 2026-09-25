@@ -372,12 +372,19 @@ _INITIAL_SCRIPT = _COMMON_JS + r"""
   await control("checkpoint", "basic_close");
 
   await control("arm_close_failure");
+  const beforeCloseRefusal = await control("status");
   clickClose("Task 47");
   await until(() => rowByTitle("Task 47")?.querySelector(".nami-task-rail__close")?.getAttribute("aria-label") === "Retry close for Task 47", "failed close recovery");
+  const afterCloseRefusal = await control("status");
   const failureDetail = detailFor("Task 47");
-  const retainedAfterFailure = rows().length === 47 && failureDetail === "Close could not be confirmed. Select Retry close for this task.";
+  const retainedAfterFailure = rows().length === 47 && failureDetail === "Close was refused. Retry close.";
+  const refusedCloseBeforeEffect = afterCloseRefusal.close_failures === beforeCloseRefusal.close_failures + 1
+    && afterCloseRefusal.close_original_calls === beforeCloseRefusal.close_original_calls;
   clickClose("Task 47");
   await until(() => rows().length === 46 && rowByTitle("Task 47") === undefined, "close retry");
+  const afterCloseRetry = await control("status");
+  const singleCloseAfterRetry = afterCloseRetry.close_failures === afterCloseRefusal.close_failures
+    && afterCloseRetry.close_original_calls === beforeCloseRefusal.close_original_calls + 1;
   await control("checkpoint", "retry");
 
   await control("arm_create_delay");
@@ -392,7 +399,7 @@ _INITIAL_SCRIPT = _COMMON_JS + r"""
   await until(() => rows().length === 46, "delayed create cleanup");
   await control("checkpoint", "navigation_cleanup");
 
-  await control("record", { initial: { newest, setupVisible, refusedCount, retainedAfterFailure, failureDetail, navigationStayed, olderAppearance, newerAppearance, olderSelectionCleared, idleGeometry, pointerFocusHidden, keyboardFocusVisible, independentRail, settingsSurface, settingsDraftRetained } });
+  await control("record", { initial: { newest, setupVisible, refusedCount, retainedAfterFailure, refusedCloseBeforeEffect, singleCloseAfterRetry, failureDetail, navigationStayed, olderAppearance, newerAppearance, olderSelectionCleared, idleGeometry, pointerFocusHidden, keyboardFocusVisible, independentRail, settingsSurface, settingsDraftRetained } });
   await control("checkpoint", "navigation_recorded");
   clickNew();
   await until(() => rows().length === 47 && statusFor("Task 50") === "New task", "busy Setup task");
@@ -416,7 +423,10 @@ _BUSY_SCRIPT = _COMMON_JS + r"""
   await control("arm_busy_drain_failure");
   clickClose("Task 50");
   await until(() => detailFor("Task 50") === "Canceling and closing…", "pending cancellation");
-  const pending = await control("status");
+  const pending = await untilAsync(async () => {
+    const status = await control("status");
+    return status.busy_present === true && status.busy_state === "canceling" ? status : null;
+  }, "admitted pending cancellation");
   const retainedPending = rows().length === 47 && rowByTitle("Task 50") !== undefined;
   const retry = await until(() => {
     const button = rowByTitle("Task 50")?.querySelector(".nami-task-rail__retry");
@@ -568,7 +578,10 @@ window.addEventListener("error", (event) => {
   await until(() => tableCells[4].ariaSort === "none" && review.dataset.pending === "", "canonical Plan header reset");
   const noticeFilter = review.querySelector('.nami-plan-review__filter-list [data-operation="notice"]');
   noticeFilter.click();
-  await until(() => viewport.textContent.includes("insufficient_space"), "review refusal notice");
+  await until(() => viewport.textContent.includes("insufficient_space")
+    && review.dataset.pending === ""
+    && review.querySelector('[data-action="plan-again"]')?.disabled === false,
+  "settled review refusal notice");
   await control("checkpoint", "plan_notice");
   const initialRows = viewport.textContent;
   const execute = review.querySelector('[data-action="execute"]');
@@ -598,6 +611,14 @@ window.addEventListener("error", (event) => {
     await control("begin_plan_again_trace", "task-52-53");
     globalThis.__namiPlanAgainTrace.begin("task-52-53");
   }
+  const planAgainBefore = {
+    row_count: rows().length,
+    selected_title: selectedTitle(),
+    work_title: workTitle(),
+    review_present: review.isConnected,
+    review_pending: review.dataset.pending,
+    plan_again_disabled: review.querySelector('[data-action="plan-again"]')?.disabled ?? null,
+  };
   let firstPlanAgainError = null;
   try {
     review.querySelector('[data-action="plan-again"]').click();
@@ -605,13 +626,31 @@ window.addEventListener("error", (event) => {
   } catch (error) {
     firstPlanAgainError = error;
   }
+  try {
+    await control("record", { plan_again_diagnostic: {
+      phase: "task-52-53",
+      before: planAgainBefore,
+      after: {
+        row_count: rows().length,
+        fresh_row_present: rowByTitle("Task 53") !== undefined,
+        selected_title: selectedTitle(),
+        work_title: workTitle(),
+        review_present: review.isConnected,
+        review_pending: review.dataset.pending,
+        plan_again_disabled: review.querySelector('[data-action="plan-again"]')?.disabled ?? null,
+      },
+      host: await control("status"),
+    } });
+  } catch (error) {
+    if (planAgainTraceEnabled && firstPlanAgainError === null) firstPlanAgainError = error;
+  }
   if (planAgainTraceEnabled) {
     try {
       const trace = globalThis.__namiPlanAgainTrace.snapshot();
+      await control("record_plan_again_trace", trace);
       if (!globalThis.__namiPlanAgainTrace.end("task-52-53")) {
         throw new Error("first Plan-again trace phase did not end");
       }
-      await control("record_plan_again_trace", trace);
     } catch (error) {
       if (firstPlanAgainError === null) firstPlanAgainError = error;
     }
@@ -836,10 +875,10 @@ window.addEventListener("error", (event) => {
   if (planAgainTraceEnabled) {
     try {
       const trace = globalThis.__namiPlanAgainTrace.snapshot();
+      await control("record_plan_again_trace", trace);
       if (!globalThis.__namiPlanAgainTrace.end("task-53-54")) {
         throw new Error("second Plan-again trace phase did not end");
       }
-      await control("record_plan_again_trace", trace);
     } catch (error) {
       if (secondPlanAgainError === null) secondPlanAgainError = error;
     }
@@ -1004,6 +1043,9 @@ class _Recorder:
                 name: value for name, value in self._data.items()
                 if name in {"plan_again_browser_trace", "plan_again_host_trace"}
             }
+            plan_again_diagnostic = self._data["report"].get("plan_again_diagnostic")
+            if plan_again_diagnostic is not None:
+                diagnostics["plan_again_diagnostic"] = plan_again_diagnostic
             self._publisher.publish_failure({"failure": failure, **diagnostics})
             self._initial = "failure"
 
@@ -1048,6 +1090,7 @@ class _Control:
         self.delay_create = False
         self.fail_close_remaining = 0
         self.close_failures = 0
+        self.close_original_calls = 0
         self.busy_gate = threading.Event()
         self.busy_entered = threading.Event()
         self.busy_task_id: str | None = None
@@ -1131,7 +1174,10 @@ class _Control:
             if self.fail_close_remaining > 0:
                 self.fail_close_remaining -= 1
                 self.close_failures += 1
-                raise RuntimeError("injected cleanup failure")
+                from namisync.interfaces.web.commands import CommandAdmissionError
+
+                raise CommandAdmissionError("injected pre-effect close refusal")
+            self.close_original_calls += 1
             return original_close_shell(task_id)
 
         def release_task_session(_service: object, *args: object, **kwargs: object) -> object:
@@ -1184,6 +1230,7 @@ class _Control:
             "task_count": len(tasks),
             "create_waiting": self.create_waiting.is_set(),
             "close_failures": self.close_failures,
+            "close_original_calls": self.close_original_calls,
             "busy_entered": self.busy_entered.is_set(),
             "busy_state": busy_state,
             "busy_present": any(task.task_id == self.busy_task_id for task in tasks),
@@ -1299,7 +1346,7 @@ class _Control:
             self.stage = value
             return {"accepted": True}
         if action == "arm_close_failure":
-            self.fail_close_remaining = 4
+            self.fail_close_remaining = 1
             return {"accepted": True}
         if action == "arm_create_delay":
             self.create_gate.clear()

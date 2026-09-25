@@ -1,5 +1,6 @@
 import {
   BridgeTransportError,
+  OutcomeUnavailableError,
   readCosmeticSection,
   replaceCosmeticSection,
 } from "./bridge.js";
@@ -225,6 +226,7 @@ export function installThemeSelector(
   {
     read = readCosmeticSection,
     replace = replaceCosmeticSection,
+    onOutcomeStatus = () => {},
   } = {},
 ) {
   if (
@@ -248,6 +250,8 @@ export function installThemeSelector(
   let replacementSettlement = Promise.resolve();
   let replacementPending = false;
   let unresolvedRevision = null;
+  let outcomeRetry = null;
+  let outcomeUnknown = false;
 
   select.disabled = true;
 
@@ -312,10 +316,21 @@ export function installThemeSelector(
         let result;
         const expectedRevision = state.authoritative.revision;
         try {
-          result = await replace(expectedRevision, theme);
+          result = await replace(expectedRevision, theme, () => {
+            if (isCurrent(state)) {
+              onOutcomeStatus("Theme response delayed. Checking its original outcome…", false);
+            }
+          });
         } catch (error) {
           state.desiredTheme = null;
-          if (error instanceof BridgeTransportError) {
+          if (error instanceof OutcomeUnavailableError) {
+            outcomeRetry = error.retry;
+            outcomeUnknown = !error.checkable;
+            recoverable = false;
+            onOutcomeStatus(outcomeUnknown
+              ? "Theme outcome cannot be confirmed. Close and reopen NamiSync to review current state."
+              : "Theme outcome unavailable. Retry outcome to check the original change.", !outcomeUnknown);
+          } else if (error instanceof BridgeTransportError) {
             unresolvedRevision = Math.max(
               unresolvedRevision ?? expectedRevision,
               expectedRevision,
@@ -331,6 +346,7 @@ export function installThemeSelector(
           break;
         }
         observeRevision(result.revision);
+        onOutcomeStatus(null, false);
         if (!accept(state, result)) {
           recoverable = false;
           state.desiredTheme = null;
@@ -356,6 +372,7 @@ export function installThemeSelector(
     renderAuthoritative(state);
     if (
       !isCurrent(state)
+      || outcomeUnknown
       || state.authoritative === null
       || !isTheme(requestedTheme)
     ) {
@@ -407,6 +424,14 @@ export function installThemeSelector(
       replacing: false,
     };
     current = state;
+    if (outcomeRetry !== null) {
+      onOutcomeStatus("Theme outcome unavailable. Retry outcome to check the original change.", true);
+      return false;
+    }
+    if (outcomeUnknown) {
+      onOutcomeStatus("Theme outcome cannot be confirmed. Close and reopen NamiSync to review current state.", false);
+      return false;
+    }
     try {
       if (replacementPending) {
         await replacementSettlement;
@@ -445,6 +470,34 @@ export function installThemeSelector(
     },
     invalidate,
     open,
+    async retryOutcome() {
+      if (closed || outcomeRetry === null) return false;
+      const retry = outcomeRetry;
+      onOutcomeStatus("Checking the original theme outcome…", false);
+      try {
+        const result = await retry();
+        outcomeRetry = null;
+        outcomeUnknown = false;
+        onOutcomeStatus(null, false);
+        if (current !== null && accept(current, result)) {
+          select.disabled = false;
+          return true;
+        }
+        return open();
+      } catch (error) {
+        if (error instanceof OutcomeUnavailableError) {
+          outcomeRetry = error.retry;
+          outcomeUnknown = !error.checkable;
+          onOutcomeStatus(outcomeUnknown
+            ? "Theme outcome cannot be confirmed. Close and reopen NamiSync to review current state."
+            : "Theme outcome unavailable. Retry outcome to check the original change.", !outcomeUnknown);
+          return false;
+        }
+        outcomeRetry = null;
+        onOutcomeStatus("Theme change was refused. Open Settings to read the current theme.", false);
+        return open();
+      }
+    },
     async refresh(appliedPresentationRevision = null) {
       if (closed || current === null) {
         return false;

@@ -539,6 +539,17 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
         "probe_recent_pairs",
         "start_execution",
     }
+    assert {
+        name for name, spec in commands.items()
+        if spec.timeout is CommandTimeout.MUTATION_OBSERVED
+    } == {
+        "admit_location", "create_task", "start_plan", "start_inventory",
+        "plan_again", "update_plan_view", "mutate_plan_selection",
+        "mutate_plan_scope", "mutate_plan_highlight",
+        "mutate_plan_highlighted_selection", "start_execution",
+        "control_execution", "release_terminal_session", "close_task",
+        "replace_cosmetic_section",
+    }
     assert all(
         spec.work is CommandWork.DIRECT
         for name, spec in commands.items()
@@ -611,8 +622,8 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
         CommandAccess.MUTATING,
         FieldRequirement.REQUIRED,
         FieldRequirement.FORBIDDEN,
-        CommandTimeout.MUTATION_30_SECONDS,
-        CommandRetry.SAME_COMMAND_ONCE,
+        CommandTimeout.MUTATION_OBSERVED,
+        CommandRetry.NONE,
     )
     assert (
         commands["list_tasks"].access,
@@ -637,8 +648,8 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
         CommandAccess.MUTATING,
         FieldRequirement.REQUIRED,
         FieldRequirement.FORBIDDEN,
-        CommandTimeout.MUTATION_30_SECONDS,
-        CommandRetry.SAME_COMMAND_ONCE,
+        CommandTimeout.MUTATION_OBSERVED,
+        CommandRetry.NONE,
     )
     for command_name in ("start_inventory", "plan_again"):
         command = commands[command_name]
@@ -652,8 +663,8 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
             CommandAccess.MUTATING,
             FieldRequirement.REQUIRED,
             FieldRequirement.FORBIDDEN,
-            CommandTimeout.MUTATION_30_SECONDS,
-            CommandRetry.SAME_COMMAND_ONCE,
+            CommandTimeout.MUTATION_OBSERVED,
+            CommandRetry.NONE,
         )
     assert (
         commands["next_events"].access,
@@ -678,8 +689,8 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
         CommandAccess.MUTATING,
         FieldRequirement.FORBIDDEN,
         FieldRequirement.FORBIDDEN,
-        CommandTimeout.MUTATION_30_SECONDS,
-        CommandRetry.SAME_PAYLOAD_BOUNDED,
+        CommandTimeout.MUTATION_OBSERVED,
+        CommandRetry.NONE,
     )
     assert (
         commands["close_task"].access,
@@ -691,8 +702,8 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
         CommandAccess.MUTATING,
         FieldRequirement.FORBIDDEN,
         FieldRequirement.FORBIDDEN,
-        CommandTimeout.MUTATION_30_SECONDS,
-        CommandRetry.SAME_PAYLOAD_BOUNDED,
+        CommandTimeout.MUTATION_OBSERVED,
+        CommandRetry.NONE,
     )
     assert (
         commands["read_cosmetic_section"].access,
@@ -717,14 +728,14 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
         CommandAccess.MUTATING,
         FieldRequirement.FORBIDDEN,
         FieldRequirement.REQUIRED,
-        CommandTimeout.LOCAL_5_SECONDS,
+        CommandTimeout.MUTATION_OBSERVED,
         CommandRetry.NONE,
     )
 
     with pytest.raises(TypeError):
         commands["future_command"] = commands["pick_folder"]  # type: ignore[index]
     with pytest.raises(FrozenInstanceError):
-        commands["pick_folder"].retry = CommandRetry.SAME_COMMAND_ONCE  # type: ignore[misc]
+        commands["pick_folder"].retry = CommandRetry.NONE  # type: ignore[misc]
 
 
 def test_operation_anchor_request_is_exact_read_only_and_session_bound() -> None:

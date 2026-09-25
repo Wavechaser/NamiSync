@@ -27,6 +27,7 @@ TRACE_VALUES = {
     "eligibility": frozenset({
         "close", "form-not-ready", "origin-batch", "task-batch",
         "global-batch", "idle", "retry-idle", "other-attempt",
+        "start-unknown",
     }),
     "attempt-route": frozenset({"blocked", "retry", "fresh"}),
     "attempt-created": frozenset({"none", "fresh", "stale"}),
@@ -87,10 +88,10 @@ const namiPlanAgainTrace = (stage, value) =>
 const BRIDGE_SCHEMA_VERSION = 1;
 '''
 
-_BRIDGE_PLAN_AGAIN = r'''export function planAgain(taskId, sourceMount = null, targetMount = null) {
+_BRIDGE_PLAN_AGAIN = r'''export function planAgain(taskId, sourceMount = null, targetMount = null, onDelayed = null) {
   namiPlanAgainTrace("bridge-call", "entered");
 '''
-_BRIDGE_PLAN_AGAIN_ORIGINAL = r'''export function planAgain(taskId, sourceMount = null, targetMount = null) {
+_BRIDGE_PLAN_AGAIN_ORIGINAL = r'''export function planAgain(taskId, sourceMount = null, targetMount = null, onDelayed = null) {
 '''
 
 _BRIDGE_VALIDATE = r'''  const validateResult = (value) => (
@@ -114,61 +115,55 @@ _BRIDGE_VALIDATE_TRACE = r'''  const validateResult = (value) => {
 '''
 
 _BRIDGE_ATTEMPT = r'''  const requestId = mintId();
-  const attempt = {
+  if (COMMAND_POLICY_CONTRACT[command]?.timeout === "mutation-observed"
 '''
 _BRIDGE_ATTEMPT_TRACE = r'''  const requestId = mintId();
   if (command === "plan_again") namiPlanAgainTrace("bridge-attempt", "created");
-  const attempt = {
+  if (COMMAND_POLICY_CONTRACT[command]?.timeout === "mutation-observed"
 '''
 
-_BRIDGE_CAPACITY = r'''    if (asyncCommandAttempts.size >= ASYNC_COMMAND_MAX_ATTEMPTS) {
-      throw new BridgeCommandError("bridge_busy", ERROR_MESSAGES.bridge_busy);
-    }
+_BRIDGE_CAPACITY = r'''  if (observedCommandAttempts.size >= OBSERVED_COMMAND_MAX_ATTEMPTS
+      || (asyncSmall && asyncCommandAttempts.size >= ASYNC_COMMAND_MAX_ATTEMPTS)) {
+    throw new BridgeCommandError("bridge_busy", ERROR_MESSAGES.bridge_busy);
+  }
 '''
-_BRIDGE_CAPACITY_TRACE = r'''    if (asyncCommandAttempts.size >= ASYNC_COMMAND_MAX_ATTEMPTS) {
-      if (command === "plan_again") namiPlanAgainTrace("async-capacity", "full");
-      throw new BridgeCommandError("bridge_busy", ERROR_MESSAGES.bridge_busy);
-    }
-    if (command === "plan_again") namiPlanAgainTrace("async-capacity", "available");
+_BRIDGE_CAPACITY_TRACE = r'''  if (observedCommandAttempts.size >= OBSERVED_COMMAND_MAX_ATTEMPTS
+      || (asyncSmall && asyncCommandAttempts.size >= ASYNC_COMMAND_MAX_ATTEMPTS)) {
+    if (command === "plan_again") namiPlanAgainTrace("async-capacity", "full");
+    throw new BridgeCommandError("bridge_busy", ERROR_MESSAGES.bridge_busy);
+  }
+  if (command === "plan_again") namiPlanAgainTrace("async-capacity", "available");
 '''
 
-_BRIDGE_ENTRY = r'''    asyncCommandAttempts.set(requestId, attempt.asyncEntry);
-  }
+_BRIDGE_ENTRY = r'''  observedCommandAttempts.set(requestId, state);
+  if (asyncSmall) asyncCommandAttempts.set(requestId, state);
 '''
-_BRIDGE_ENTRY_TRACE = r'''    if (command === "plan_again") attempt.asyncEntry.planAgainTrace = true;
-    asyncCommandAttempts.set(requestId, attempt.asyncEntry);
-    if (command === "plan_again") namiPlanAgainTrace("async-entry", "registered");
-  }
-'''
-
-_BRIDGE_READY = r'''  if (entry === null || asyncCommandAttempts.get(requestId) !== entry) {
-    throw new BridgeTransportError();
-  }
-  await waitUntilReady();
-  if (attempt.cancelled) {
-'''
-_BRIDGE_READY_TRACE = r'''  if (entry === null || asyncCommandAttempts.get(requestId) !== entry) {
-    throw new BridgeTransportError();
-  }
-  if (entry.planAgainTrace) namiPlanAgainTrace("bridge-readiness", "waiting");
-  await waitUntilReady();
-  if (entry.planAgainTrace) namiPlanAgainTrace("bridge-readiness", "ready");
-  if (attempt.cancelled) {
+_BRIDGE_ENTRY_TRACE = r'''  observedCommandAttempts.set(requestId, state);
+  if (asyncSmall) asyncCommandAttempts.set(requestId, state);
+  if (command === "plan_again") namiPlanAgainTrace("async-entry", "registered");
 '''
 
-_BRIDGE_NATIVE = r'''    const native = await Promise.race([transport, cancelled]);
-    if (native.kind === "direct") {
+_BRIDGE_READY = r'''  if (state.command === "pick_folder") await waitUntilReady();
+  else await withDeadline(waitUntilReady(), SHELL_READY_TIMEOUT_MS, () => {});
 '''
-_BRIDGE_NATIVE_TRACE = r'''    const native = await Promise.race([transport, cancelled]);
-    if (entry.planAgainTrace) namiPlanAgainTrace("native-response", native.kind);
-    if (native.kind === "direct") {
+_BRIDGE_READY_TRACE = r'''  if (state.command === "plan_again") namiPlanAgainTrace("bridge-readiness", "waiting");
+  if (state.command === "pick_folder") await waitUntilReady();
+  else await withDeadline(waitUntilReady(), SHELL_READY_TIMEOUT_MS, () => {});
+  if (state.command === "plan_again") namiPlanAgainTrace("bridge-readiness", "ready");
+'''
+
+_BRIDGE_NATIVE = r'''  const native = await api.dispatch(request);
+'''
+_BRIDGE_NATIVE_TRACE = r'''  const native = await api.dispatch(request);
+  if (state.command === "plan_again") namiPlanAgainTrace("native-response",
+    Object.prototype.hasOwnProperty.call(native, "response") ? "direct" : "admitted");
 '''
 
 _BRIDGE_COMPLETION = r'''  const entry = asyncCommandAttempts.get(message.request_id);
   if (entry === undefined) {
 '''
 _BRIDGE_COMPLETION_TRACE = r'''  const entry = asyncCommandAttempts.get(message.request_id);
-  if (entry?.planAgainTrace === true) namiPlanAgainTrace("command-completion", "matched");
+  if (entry?.command === "plan_again") namiPlanAgainTrace("command-completion", "matched");
   if (entry === undefined) {
 '''
 
@@ -203,7 +198,8 @@ _APP_CALLBACK_TRACE = r'''async function planAgainFromReview(review) {
 _APP_ELIGIBILITY = r'''function canStartPlanAgain(task) {
   const form = task?.form;
   if (
-    task === null || currentTask() !== task || task.closePending ||
+    task === null || currentTask() !== task || task.closePending || task.closeRetry !== null
+    || task.closeOutcomeUnknown || task.startOutcomeUnknown ||
     form?.canPlanAgain !== true ||
     originHasPendingBatch(task.taskId) || batchTaskBlockReason(task.taskId) !== null ||
     (pageBatch !== null && pageBatch.running !== null)
@@ -219,8 +215,12 @@ _APP_ELIGIBILITY_TRACE = r'''function canStartPlanAgain(task) {
   if (task === null || currentTask() !== task) {
     return false;
   }
-  if (task.closePending) {
+  if (task.closePending || task.closeRetry !== null || task.closeOutcomeUnknown) {
     globalThis.__namiPlanAgainTrace?.record("eligibility", "close");
+    return false;
+  }
+  if (task.startOutcomeUnknown) {
+    globalThis.__namiPlanAgainTrace?.record("eligibility", "start-unknown");
     return false;
   }
   if (form?.canPlanAgain !== true) {

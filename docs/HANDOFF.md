@@ -1,41 +1,45 @@
-# Latest session — AB-6 delivered
+# Latest session — AB-7 delivered; pause for recap
 
-2026-09-25; `milestone1`, AB-6 checkpoint based on `f55a7dd`.
-AB-1–6 and H1/H2 are integrated. AB-7 implementation has not started; its
-existing admission/completion scope and settled D2 remain in M1_PLAN. The user
-requires Claude Opus 5.5/high review through `claude-code-reviewer` before AB-7
-closure, with independent fixtures allowed in a disposable copy and cleanup
-verified. This extra review requirement covers AB-6/7 only.
+2026-09-25–26, milestone1. AB-7 is the atomic commit titled
+`refactor(web): simplify command completion without timed mutation replay`.
+The user requested a pause after this checkpoint. Do not start AB-8 without
+further instruction; its accepted plan is not implementation authorization.
 
-AB-6 permanently retires command/appearance authority on real replacement,
-retires response delivery on each later document, and removes browser reload
-reconstruction. Canceled navigation/fragment history remain usable. Admitted
-work keeps actual custody; normal X remains available even when early
-replacement never reaches loaded. Fixed guidance directs close/reopen/fresh
-folder review and planning. Initial readiness, D4 and observation retry remain;
-mutation deadlines/replay are untouched for AB-7.
+AB-7 removes elapsed-time mutation abandonment/replay, observes original results
+through existing native custody, and retains identity, duplicate protection,
+bounded observation and lifecycle/resource deadlines. Delayed/unavailable
+feedback and unresolved-intent fences remain explicit. Fixed-unknown review
+results keep their warning/fence while the reviewed independent Cancel uses its
+existing owner. Close affordances agree with their handler. D4 is unchanged.
+M1_PLAN contains the compact delivery/limitations record; BRIDGE owns contracts.
 
-Final verification: 5,317 ordinary passes and four unavailable Windows
-symlink-privilege skips; all 34 headed cases passed in one final run; 12 import
-contracts kept. Native security/replacement, Unicode picker, Setup, task shell,
-execution and normal-close cases pass. Independent source/evidence review and
-the requested Claude review accepted the corrected candidate. Claude independently
-tested both early-X orderings and real held-worker custody. Original files were
-verified unchanged during review, and the isolated copy/private updated CLI and
-runtime fixtures were removed. Raw review/fixture source remains as evidence.
-The WinGet-managed CLI was not upgraded; its feed remained at 2.1.268, so the
-authorized review used official signed/hash-verified 2.1.282 only in the copy.
+Verification: complete run 5,353 passed, three installed failures, four skips;
+all ordinary cases passed. Final installed coverage is 34 passing cases across
+qualified runs: 32 unaffected cases from the 33-pass/one-failure installed run,
+and both task-shell cases after test sampling/eligibility corrections. The
+same-file seven nonheaded checks also passed. Twelve import contracts passed.
+Do not describe this as a single clean complete-suite run. Raw receipts and
+installed identities live under ignored build/post-m1-8-ablation-20260925/;
+ab7-verification.md indexes passes, failed runs and dependency reuse.
 
-Ignored `build/post-m1-8-ablation-20260925/ab6-verification.md` maps final and
-failed receipts, installed identity, review findings and cleanup. The Claude
-report there records session continuity, separate token fields and cumulative
-Opus cost USD 6.1839226 (plus the separately recorded failed pre-review call).
-The earlier close-refusal popup was test-owned: a stalled driver held a worker.
-Its cleanup now releases fixture holds; no user action is needed on that popup.
+Two observations remain unexplained: a real Setup start exception normalized to
+an internal error, and earlier Plan-again timeouts. Setup correctly kept outcome
+unknown and stopped later batch starts; later installed runs passed. The helper's
+text-only eligibility wait was corrected, but no failing pre-click snapshot
+established the original timeout cause. Preserve failed receipts and diagnostics;
+do not claim these causes fixed. Picker never-return and process-loss recovery
+limitations remain as documented in BRIDGE and M1_PLAN.
 
-No foreground test is running. For the rest of this session, announce every
-foreground batch before launch and say when it ends so the user can leave the
-desktop available. Preserve old AB-6 recovery `56802606`, the AB-3 recovery
-worktree/ref and raw receipts for AB-10; never integrate a recovery WIP as-is.
-M1_PLAN owns the next checkpoint boundary; do not infer an expanded protocol or
-additional ablation scope from the review notes.
+Independent review and both Claude Opus5.5/high rounds completed. Claude session
+3f69c6a3-f4d1-4c86-b563-d9d762ed67e2; cumulative list cost $7.0873702.
+Validated findings were addressed after the recorded recurrence reviews. The
+follow-up found no remaining blocker in its reviewed correction. Raw JSON,
+independent fixtures and integrity/cleanup receipts are retained; disposable
+review copy/private CLI were removed. No further paid review is needed.
+
+No foreground test is running. Announce any future foreground batch before it
+starts and when it ends. Use unique test basetemp OUTSIDE the source repository.
+The root agent will remove the empty AB-7 recovery worktree/ref only after this
+verified commit (base 2b4a2214, no copied draft or WIP), then write ab7-cleanup.json
+as the final accounting receipt. Keep AB-6 recovery 56802606
+and AB-3 worktree/ref for AB-10; they are not part of AB-7 cleanup.

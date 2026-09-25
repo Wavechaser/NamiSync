@@ -12,6 +12,10 @@ class TestWindow extends TestEventTarget {
     super();
     this.handlers = [];
     this.requests = [];
+    this.observations = [];
+    this.responsesByRequest = new Map();
+    this.nextResponseToken = 1;
+    this.loseNextResponse = false;
     this.pywebview = {
       api: {
         dispatch: (requestJson) => this.dispatch(requestJson),
@@ -27,15 +31,41 @@ class TestWindow extends TestEventTarget {
     if (requestJson.startsWith("ack:")) {
       return Promise.resolve(true);
     }
+    if (requestJson.startsWith("observe:")) {
+      const match = /^observe:([0-9a-f]{32}):([a-z][a-z0-9]*(?:_[a-z0-9]+)*)$/.exec(requestJson);
+      assert.ok(match, "observation keeps bounded original identity");
+      this.observations.push(requestJson);
+      const retained = this.responsesByRequest.get(match[1]);
+      return Promise.resolve({
+        transport_version: 1,
+        state: retained === undefined ? "unavailable" : "ready",
+        generation: 1,
+        request_id: match[1],
+        response_token: retained?.response_token ?? null,
+        completion_token: null,
+        response: retained?.response ?? null,
+      });
+    }
     const request = JSON.parse(requestJson);
     this.requests.push(request);
     const handler = this.handlers.shift();
     assert.equal(typeof handler, "function", "every cosmetic request is expected");
-    return Promise.resolve(handler(request)).then((response) => ({
-      transport_version: 1,
-      response_token: null,
-      response,
-    }));
+    return Promise.resolve(handler(request)).then((response) => {
+      const native = {
+        transport_version: 1,
+        response_token: request.command === "replace_cosmetic_section"
+          ? (this.nextResponseToken++).toString(16).padStart(32, "0") : null,
+        response,
+      };
+      if (request.command === "replace_cosmetic_section") {
+        this.responsesByRequest.set(request.request_id, native);
+      }
+      if (this.loseNextResponse) {
+        this.loseNextResponse = false;
+        throw new Error("uncertain replacement delivery");
+      }
+      return native;
+    });
   }
 }
 
@@ -43,10 +73,15 @@ class TestWindow extends TestEventTarget {
 const timers = new Map();
 let nextTimer = 1;
 globalThis.setTimeout = (callback, milliseconds) => {
-  assert.equal(milliseconds, 5000, "cosmetic commands use the local deadline");
+  assert.ok([100, 250, 1000, 5000].includes(milliseconds));
   const token = nextTimer;
   nextTimer += 1;
   timers.set(token, callback);
+  if (milliseconds === 100 || milliseconds === 250) {
+    queueMicrotask(() => {
+      if (timers.delete(token)) callback();
+    });
+  }
   return token;
 };
 globalThis.clearTimeout = (token) => timers.delete(token);
@@ -273,7 +308,7 @@ for (const invalidResult of invalidReplaceResults) {
   testWindow.enqueue((request) => success(request, invalidResult));
   const before = testWindow.requests.length;
   await assert.rejects(bridge.replaceCosmeticSection(0, "system"), {
-    name: "BridgeTransportError",
+    name: "OutcomeUnavailableError",
   });
   assert.equal(
     testWindow.requests.length,
@@ -283,19 +318,33 @@ for (const invalidResult of invalidReplaceResults) {
   assert.equal(timers.size, 0);
 }
 
-testWindow.enqueue(() => Promise.reject(new Error("uncertain replacement")));
+testWindow.enqueue((request) => success(request, replaceResult()));
+testWindow.loseNextResponse = true;
 const uncertainReplaceStart = testWindow.requests.length;
-await assert.rejects(bridge.replaceCosmeticSection(0, "light"), {
-  name: "BridgeTransportError",
-});
+const uncertainObserveStart = testWindow.observations.length;
+assert.deepEqual(await bridge.replaceCosmeticSection(0, "light"), replaceResult());
 assert.equal(testWindow.requests.length, uncertainReplaceStart + 1);
+assert.deepEqual(testWindow.observations.slice(uncertainObserveStart), [
+  `observe:${testWindow.requests[uncertainReplaceStart].request_id}:replace_cosmetic_section`,
+]);
 
 testWindow.enqueue(() => new Promise(() => {}));
 const timedReplaceStart = testWindow.requests.length;
+const timedObservationStart = testWindow.observations.length;
 const timedReplace = bridge.replaceCosmeticSection(0, "light");
 await flushUntil(() => testWindow.requests.length === timedReplaceStart + 1);
 expireOnlyDeadline();
-await assert.rejects(timedReplace, { name: "BridgeTransportError" });
+let unavailable;
+try {
+  await timedReplace;
+  assert.fail("exhausted replacement observation must report unavailable");
+} catch (error) {
+  unavailable = error;
+}
+assert.equal(unavailable.name, "OutcomeUnavailableError");
+assert.equal(typeof unavailable.retry, "function");
 assert.equal(testWindow.requests.length, timedReplaceStart + 1);
+assert.deepEqual(testWindow.observations.slice(timedObservationStart),
+  Array(3).fill(`observe:${testWindow.requests[timedReplaceStart].request_id}:replace_cosmetic_section`));
 assert.equal(timers.size, 0);
 assert.equal(testWindow.handlers.length, 0);

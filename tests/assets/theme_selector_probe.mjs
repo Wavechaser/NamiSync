@@ -48,14 +48,18 @@ function moduleUrl(source) {
 
 const bridgeStub = moduleUrl(`
   export class BridgeTransportError extends Error {}
+  export class OutcomeUnavailableError extends BridgeTransportError {
+    constructor(retry, checkable = true) { super(); this.retry = retry; this.checkable = checkable; }
+  }
   globalThis.themeHarness.BridgeTransportError = BridgeTransportError;
+  globalThis.themeHarness.OutcomeUnavailableError = OutcomeUnavailableError;
   export const readCosmeticSection = () => { throw new Error("unexpected default read"); };
   export const replaceCosmeticSection = () => { throw new Error("unexpected default replace"); };
 `);
 let source = await readFile(process.argv[2], "utf8");
 source = source.replace(
   /import \{[\s\S]*?\} from "\.\/bridge\.js";/,
-  `import { BridgeTransportError, readCosmeticSection, replaceCosmeticSection } from "${bridgeStub}";`,
+  `import { BridgeTransportError, OutcomeUnavailableError, readCosmeticSection, replaceCosmeticSection } from "${bridgeStub}";`,
 );
 source = source.replace(
   'import { renderText } from "./render.js";',
@@ -338,6 +342,35 @@ async function flushTurns() {
   assert.equal(reads, 2);
   assert.equal(select.value, "light");
   assert.equal(select.disabled, true);
+}
+
+// A captured final failure keeps the theme intent fenced without an ineffective Retry.
+{
+  const select = new SelectFake();
+  const statuses = [];
+  let replacements = 0;
+  let reads = 0;
+  const controller = installThemeSelector(select, {
+    read: async () => { reads += 1; return section("light", 3); },
+    replace: async () => {
+      replacements += 1;
+      throw new globalThis.themeHarness.OutcomeUnavailableError(null, false);
+    },
+    onOutcomeStatus: (message, canRetry) => statuses.push([message, canRetry]),
+  });
+  await controller.open();
+  select.choose("dark");
+  await flushTurns();
+  assert.equal(select.disabled, true);
+  assert.equal(select.value, "light");
+  assert.match(statuses.at(-1)[0], /Close and reopen NamiSync/);
+  assert.equal(statuses.at(-1)[1], false);
+  assert.equal(await controller.retryOutcome(), false);
+  assert.equal(await controller.open(), false, "Settings reopen cannot silently read past the intent fence");
+  select.choose("system");
+  await flushTurns();
+  assert.equal(replacements, 1);
+  assert.equal(reads, 1);
 }
 
 // A new bridge generation waits for an admitted old replacement to settle

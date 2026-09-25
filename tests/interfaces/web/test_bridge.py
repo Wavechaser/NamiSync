@@ -64,8 +64,33 @@ def _async_test_spec(handler) -> CommandSpec:
         access=CommandAccess.MUTATING,
         command_id=FieldRequirement.FORBIDDEN,
         revision=FieldRequirement.FORBIDDEN,
-        timeout=CommandTimeout.MUTATION_30_SECONDS,
-        retry=CommandRetry.SAME_PAYLOAD_BOUNDED,
+        timeout=CommandTimeout.MUTATION_OBSERVED,
+        retry=CommandRetry.NONE,
+        work=CommandWork.ASYNC_SMALL,
+    )
+
+
+def _observed_direct_spec(handler) -> CommandSpec:
+    return CommandSpec(
+        validate_payload=lambda payload: payload,
+        handler=handler,
+        access=CommandAccess.MUTATING,
+        command_id=FieldRequirement.FORBIDDEN,
+        revision=FieldRequirement.FORBIDDEN,
+        timeout=CommandTimeout.MUTATION_OBSERVED,
+        retry=CommandRetry.NONE,
+    )
+
+
+def _unobserved_async_spec(handler) -> CommandSpec:
+    return CommandSpec(
+        validate_payload=lambda payload: payload,
+        handler=handler,
+        access=CommandAccess.READ_ONLY,
+        command_id=FieldRequirement.FORBIDDEN,
+        revision=FieldRequirement.FORBIDDEN,
+        timeout=CommandTimeout.LOCAL_5_SECONDS,
+        retry=CommandRetry.NONE,
         work=CommandWork.ASYNC_SMALL,
     )
 
@@ -76,6 +101,19 @@ def _async_dispatcher(handler) -> BridgeDispatcher:
         commands={"async_test": _async_test_spec(handler)},
         admit=_admit_open,
     )
+
+
+def _observe(bridge: BridgeDispatcher, request_id: str, command: str) -> object:
+    responses: list[object] = []
+    owner = Thread(
+        target=lambda: responses.append(
+            bridge._dispatch_native(f"observe:{request_id}:{command}")
+        )
+    )
+    owner.start()
+    owner.join(1.0)
+    assert not owner.is_alive()
+    return responses[0]
 
 
 def _bind_completion_channel(
@@ -1729,6 +1767,74 @@ def test_br_g_32_direct_dispatch_does_not_reserve_native_worker_lifetime() -> No
     assert bridge._admitted == 0
 
 
+def test_observe_direct_original_at_saturation_without_repeating_effect(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(bridge_module, "_MAX_ADMITTED_HANDLERS", 1)
+    calls: list[object] = []
+    bridge = BridgeDispatcher(
+        document=_trusted_document(),
+        commands={
+            "change": _observed_direct_spec(
+                lambda payload: calls.append(payload) or {"changed": True}
+            ),
+        },
+        admit=_admit_open,
+    )
+    command = json.dumps({
+        "schema_version": BRIDGE_SCHEMA_VERSION,
+        "request_id": _REQUEST_ID,
+        "command": "change",
+        "payload": {},
+    })
+    native: list[dict[str, object]] = []
+    owner = Thread(target=lambda: native.append(bridge._dispatch_native(command)))
+    owner.start()
+    owner.join(1.0)
+    assert not owner.is_alive()
+    assert calls == [{}]
+    assert bridge.dispatch(command)["error"]["code"] == "bridge_busy"
+
+    observed = _observe(bridge, _REQUEST_ID, "change")
+    assert observed == {
+        "transport_version": 1,
+        "state": "ready",
+        "generation": 0,
+        "request_id": _REQUEST_ID,
+        "response_token": native[0]["response_token"],
+        "completion_token": None,
+        "response": native[0]["response"],
+    }
+    assert observed["response"]["result"] == {"changed": True}
+    assert bridge._dispatch_native(f"ack:{observed['response_token']}") is True
+    bridge.wait_for_handlers(1.0)
+    assert _observe(bridge, _REQUEST_ID, "change")["state"] == (
+        "unavailable"
+    )
+    assert calls == [{}]
+
+
+def test_observe_refuses_wrong_command_and_untrusted_document() -> None:
+    bridge = BridgeDispatcher(
+        document=_trusted_document(),
+        commands={"change": _observed_direct_spec(lambda _payload: {})},
+        admit=_admit_open,
+    )
+    assert _observe(bridge, _REQUEST_ID, "change") == {
+        "transport_version": 1,
+        "state": "unavailable",
+        "generation": 0,
+        "request_id": _REQUEST_ID,
+        "response_token": None,
+        "completion_token": None,
+        "response": None,
+    }
+    assert _observe(bridge, _REQUEST_ID, "other") is False
+    assert _observe(bridge, _REQUEST_ID.upper(), "change") is False
+    bridge._document._record("https://off-origin.invalid/")
+    assert _observe(bridge, _REQUEST_ID, "change") is False
+
+
 def test_async_small_preserves_direct_dispatch_and_delivers_exact_completion() -> None:
     calls: list[object] = []
     bridge = _async_dispatcher(
@@ -1792,6 +1898,132 @@ def test_async_small_preserves_direct_dispatch_and_delivers_exact_completion() -
     assert bridge._dispatch_native(completion_ack) is False
     assert len(encoded) == 1
     assert calls == [{"value": "input"}, {"value": "input"}]
+
+
+def test_unobserved_async_read_keeps_its_original_completion_ack() -> None:
+    bridge = BridgeDispatcher(
+        document=_trusted_document(),
+        commands={
+            "read_probe": _unobserved_async_spec(
+                lambda _payload: {"pairs": []}
+            ),
+        },
+        admit=_admit_open,
+    )
+    _channel, _encoded, posted = _bind_completion_channel(bridge)
+    command = json.dumps({
+        "schema_version": BRIDGE_SCHEMA_VERSION,
+        "request_id": _REQUEST_ID,
+        "command": "read_probe",
+        "payload": {},
+    })
+    admission: list[dict[str, object]] = []
+    owner = Thread(target=lambda: admission.append(bridge._dispatch_native(command)))
+    owner.start()
+    owner.join(1.0)
+    assert not owner.is_alive()
+    assert posted.wait(1.0)
+    assert _observe(bridge, _REQUEST_ID, "read_probe")["state"] == (
+        "unavailable"
+    )
+    native_token = admission[0]["response_token"]
+    completion = admission[0]["completion"]
+    assert bridge._dispatch_native(f"ack:{native_token}") is True
+    assert bridge._dispatch_native(
+        f"ack:completion:0:{_REQUEST_ID}:{completion['completion_token']}"
+    ) is True
+    bridge.wait_for_handlers(1.0)
+
+
+def test_observe_lost_first_async_admission_waits_for_original_worker() -> None:
+    entered = Event()
+    release = Event()
+    calls: list[object] = []
+
+    def handler(payload: object) -> object:
+        calls.append(payload)
+        entered.set()
+        assert release.wait(1.0)
+        return {"original": True}
+
+    bridge = _async_dispatcher(handler)
+    _channel, _encoded, posted = _bind_completion_channel(bridge)
+    command = json.dumps({
+        "schema_version": BRIDGE_SCHEMA_VERSION,
+        "request_id": _REQUEST_ID,
+        "command": "async_test",
+        "payload": {},
+    })
+    admission: list[dict[str, object]] = []
+    owner = Thread(target=lambda: admission.append(bridge._dispatch_native(command)))
+    owner.start()
+    assert entered.wait(1.0)
+    pending = _observe(bridge, _REQUEST_ID, "async_test")
+    assert pending["state"] == "pending"
+    assert pending["response"] is None
+    assert isinstance(pending["response_token"], str)
+    assert isinstance(pending["completion_token"], str)
+    # The page may observe before it receives the first admission return.
+    assert admission == [] or admission[0]["completion"]["completion_token"] == (
+        pending["completion_token"]
+    )
+    release.set()
+    owner.join(1.0)
+    assert not owner.is_alive()
+    assert posted.wait(1.0)
+    ready = _observe(bridge, _REQUEST_ID, "async_test")
+    assert ready["state"] == "ready"
+    assert ready["response"]["result"] == {"original": True}
+    assert ready["completion_token"] == pending["completion_token"]
+    assert bridge._dispatch_native(f"ack:{ready['response_token']}") is True
+    assert bridge._dispatch_native(
+        f"ack:completion:0:{_REQUEST_ID}:{ready['completion_token']}"
+    ) is True
+    bridge.wait_for_handlers(1.0)
+    assert calls == [{}]
+
+
+def test_duplicate_original_request_id_is_refused_before_second_effect() -> None:
+    entered = Event()
+    release = Event()
+    calls: list[object] = []
+
+    def handler(payload: object) -> object:
+        calls.append(payload)
+        entered.set()
+        assert release.wait(1.0)
+        return {}
+
+    bridge = _async_dispatcher(handler)
+    _channel, _encoded, posted = _bind_completion_channel(bridge)
+    command = json.dumps({
+        "schema_version": BRIDGE_SCHEMA_VERSION,
+        "request_id": _REQUEST_ID,
+        "command": "async_test",
+        "payload": {},
+    })
+    first: list[dict[str, object]] = []
+    second: list[dict[str, object]] = []
+    owner = Thread(target=lambda: first.append(bridge._dispatch_native(command)))
+    duplicate = Thread(target=lambda: second.append(bridge._dispatch_native(command)))
+    owner.start()
+    assert entered.wait(1.0)
+    duplicate.start()
+    duplicate.join(1.0)
+    assert not duplicate.is_alive()
+    assert second[0]["response"]["error"]["code"] == "command_conflict"
+    assert isinstance(second[0]["response_token"], str)
+    assert bridge._dispatch_native(f"ack:{second[0]['response_token']}") is True
+    release.set()
+    owner.join(1.0)
+    assert not owner.is_alive()
+    assert posted.wait(1.0)
+    assert calls == [{}]
+    assert bridge._dispatch_native(f"ack:{first[0]['response_token']}") is True
+    assert bridge._dispatch_native(
+        f"ack:completion:0:{_REQUEST_ID}:{first[0]['completion']['completion_token']}"
+    ) is True
+    bridge.wait_for_handlers(1.0)
 
 
 def test_async_small_reuses_shared_capacity_only_after_both_workers_and_receipts(
@@ -2317,8 +2549,10 @@ def test_async_small_post_failure_is_delivery_uncertainty_without_repeated_effec
     bridge = _async_dispatcher(lambda payload: calls.append(payload) or {})
     channel, _encoded, _posted = _bind_completion_channel(bridge)
     core = channel._native_window.browser.webview.CoreWebView2
+    post_attempted = Event()
 
     def refuse(_value: str) -> None:
+        post_attempted.set()
         raise RuntimeError("injected document post failure")
 
     core.PostWebMessageAsJson = refuse
@@ -2336,13 +2570,31 @@ def test_async_small_post_failure_is_delivery_uncertainty_without_repeated_effec
     response_token = responses[0]["response_token"]
     assert isinstance(response_token, str)
     assert bridge._dispatch_native(f"ack:{response_token}") is True
-    bridge.wait_for_handlers(1.0)
-
+    assert post_attempted.wait(1.0)
     assert calls == [{}]
     completion = responses[0]["completion"]
+    observed = _observe(bridge, _REQUEST_ID, "async_test")
+    assert observed == {
+        "transport_version": 1,
+        "state": "ready",
+        "generation": 0,
+        "request_id": _REQUEST_ID,
+        "response_token": response_token,
+        "completion_token": completion["completion_token"],
+        "response": {
+            "schema_version": BRIDGE_SCHEMA_VERSION,
+            "request_id": _REQUEST_ID,
+            "ok": True,
+            "result": {},
+        },
+    }
     assert bridge._dispatch_native(
         f"ack:completion:0:{_REQUEST_ID}:{completion['completion_token']}"
-    ) is False
+    ) is True
+    bridge.wait_for_handlers(1.0)
+    assert _observe(bridge, _REQUEST_ID, "async_test")["state"] == (
+        "unavailable"
+    )
 
 
 def test_async_small_close_timeout_is_retryable_until_command_worker_exits() -> None:

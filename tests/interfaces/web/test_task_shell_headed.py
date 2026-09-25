@@ -190,7 +190,9 @@ def test_m1_4_installed_task_shell_navigation_closure_and_recovery(
         "setupVisible": True,
         "refusedCount": 48,
         "retainedAfterFailure": True,
-        "failureDetail": "Close could not be confirmed. Select Retry close for this task.",
+        "refusedCloseBeforeEffect": True,
+        "singleCloseAfterRetry": True,
+        "failureDetail": "Close was refused. Retry close.",
         "navigationStayed": True,
         "olderSelectionCleared": True,
         "idleGeometry": {

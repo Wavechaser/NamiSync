@@ -104,8 +104,8 @@ cleanup commit. New findings do not silently add rows.
 | AB-3 | Unused database mapping API removed without changing current correspondence | AB-1 | 1,331 department tests, 12 import contracts, caller closure and independent review | Complete; reviewed `c5f1de8` integrated in `dd23c270` |
 | AB-4 | Desktop selection capture avoids redundant work with one revision-bound handoff | AB-2 | 2,605 neighborhood; 5,305 ordinary; 4 installed; 12 imports; independent review | Complete in `9cfd2a0` |
 | AB-5 | Bridge response adoption consolidates repeated traversal without weakening boundaries | AB-2 | 5,306 ordinary; 6 installed; 12 imports; response/custody/decoder checks and independent review | Complete in `1cb75fb` |
-| AB-6 | Unsupported reload has one contained restart behavior instead of reinjection recovery | AB-2 | 5,317 ordinary; 34 installed; 12 imports; gestures, custody/close races and two independent reviews | Complete in this checkpoint commit |
-| AB-7 | Existing admission/completion preserves original outcomes without page-timeout result abandonment or replay | AB-6; D2 settled | Delayed/post-effect failed delivery, bounded observation recovery/exhaustion, duplicate protection and close | Pending |
+| AB-6 | Unsupported reload has one contained restart behavior instead of reinjection recovery | AB-2 | 5,317 ordinary; 34 installed; 12 imports; gestures, custody/close races and two independent reviews | Complete in `2b4a2214` |
+| AB-7 | Existing admission/completion preserves original outcomes without page-timeout result abandonment or replay | AB-6; D2 settled | Delayed/post-effect failed delivery, bounded observation recovery/exhaustion, duplicate protection and close | Complete; original outcomes retained; installed34/34 and independent/Claude review |
 | AB-8 | Existing shell renders bounded authoritative Python task snapshots | AB-4/5/6/7 | Producer→snapshot→page, ordinary/imports and installed task journeys | Pending |
 | AB-9 | Remaining visual/source pins protect behavior rather than incidental spelling | AB-8 | Static/security, computed style, ordinary and installed gallery | Pending |
 | AB-10 | Integrated reductions preserve the complete retained workflow and have coherent docs/evidence | All above | Overall final sweep below | Pending |
@@ -520,71 +520,50 @@ in TESTS. Keep recovery `56802606` and AB-3 recovery worktree/ref for AB-10
 accounting; never integrate recovery commits as-is. The extra Claude review
 requirement applies to AB-6 and AB-7 only, not later checkpoints.
 
-#### AB-7 — Simplify existing command completion and recovery
+#### AB-7 — Original command completion and recovery (delivered 2026-09-26)
 
-**Objective.** Apply settled D2: elapsed time alone neither abandons a mutating
-command's result nor automatically replays its mutation. Preserve recovery of
-the original outcome when local communication genuinely fails.
-**Scope and approach.** Start with the delivered M1-async path:
-`commands.py::CommandSpec`, asynchronous admission/completion in `bridge.py`,
-`document_channel.py::DocumentChannel`, browser correlation in `bridge.js`,
-app attempt handling and existing task/session effect receipts. Several commands
-already return admission separately from completion; exploit and simplify that
-machinery. Keep direct commands direct unless a specific existing-path change is
-needed. No replacement command system, parallel admission/result protocol,
-generic scheduler or durable command history is in scope.
+Applied D2 using existing native custody and asynchronous admission/completion.
+Elapsed page time no longer abandons mutation results or replays mutations.
+The twelve mutating wrappers, view/highlight operations and location admission
+retain original identity; the interactive picker retains its separate wait.
+Observation reads the original retained response without invoking its handler.
+Three bounded observation attempts per round recover delayed/lost delivery;
+exhaustion shows outcome unavailable and offers observation Retry where useful.
+Captured fixed unknown effects retain intent fences without ineffective Retry.
+Startup, read, lifecycle and resource-containment deadlines remain. Timed-out
+async reads retain only bounded late-completion cleanup. D4 remains unchanged.
 
-Before edits, map each affected mutating wrapper, including direct mutations,
-to its current identity, result owner, completion delivery and recovery path.
-Remove page-side elapsed-time abandonment and mutation replay triggered by those
-deadlines. Delays
-may trigger qualified feedback and bounded observation checks; preserve genuinely
-bounded observation, startup, shutdown and worker/resource-containment deadlines.
-Retain bounded original-result/effect receipts and duplicate protection. Separate
-delivery acknowledgment/cleanup from effect truth: an observation timeout or
-native post failure must not erase the authoritative outcome, cancel admitted
-work or authorize another effect. Reuse task/session reconstruction and existing
-result recovery before adding a mechanism. Document retained-result lifetime and
-safe retirement without unbounded pending entries or indefinite receipt storage.
+Close, starts/replacements, folder gestures and batch entry respect unresolved
+intent. Pending Close preserves worker custody and has one receipt/terminal-
+qualified continuation. Fixed-unknown review results keep their original fence;
+a separate explicit Cancel may use the existing control owner for the same
+active session, excluding unknown original Cancel and checkable/in-flight review
+operations. Rail and handler share the Close reason. No new command-result
+protocol, domain receipt owner, reload recovery or durable result store was added.
 
-**Acceptance criteria.** A result delayed beyond former page deadlines remains
-recoverable/adoptable while its identity and ownership are valid, with no timed
-mutation replay. Duplicate gestures/late returns produce at most one effect.
-Failure after an effect recovers that original result when available; failed or
-exhausted bounded observation explicitly reports "outcome unavailable", never
-false failure/success or unqualified "working…" indefinitely. Observation retry
-does not restart the mutation. Unavailability is a communication fact, not a
-terminal operation verdict; later valid observation may resolve it. Pending Close
-retains truthful settlement/availability feedback and actual worker custody.
-CLI behavior, admission rollback, bounded resources and current process-lifetime
-recovery limitations remain; no guaranteed recovery after process loss is added.
+Verification: the complete run passed 5,353 cases with three installed failures
+and four skips; all ordinary cases passed. The affected traced run passed 21.
+Normal-asset installed acceptance covers all 34 cases across dependency-qualified
+runs: 32 unaffected cases and both task-shell cases after native-state sampling
+and eligible-click fixture corrections. Twelve import contracts passed. Independent source/evidence
+review and Claude Opus5.5/high initial plus same-session follow-up passed after
+validated corrections. The disposable review copy/private CLI were removed.
 
-**Regression watchlist.** Result eviction on page timeout, conflating failed
-delivery with failed effect, retained result lost during acknowledgment cleanup,
-observation retry becoming mutation replay, close/start races, unbounded recovery
-loops, double confirmation and stale task navigation.
-**Tests and evidence.** Characterize current async/direct wrappers and existing
-post-effect delivery-failure cases first. Test delay beyond former deadlines,
-lost admission/completion delivery after exactly one effect, duplicate/late
-returns, original-result recovery, bounded observation exhaustion, later valid
-observation after unavailable, and Close/shutdown with a worker still active.
-Use controlled clocks/delivery faults; retain startup/cleanup/worker timeout and
-capacity tests. Run command/lifecycle/transport cases, interfaces/workflows
-neighborhood, ordinary/imports and installed submit/control/close/reobserve flows.
-**Documentation and handoff.** BRIDGE/INTERFACES own revised transitions, original
-result retention/retirement, observation attempt bounds and unavailable feedback.
-Record reuse of existing admission/completion and any removed retry paths; do not
-claim that reload removal eliminates uncertain outcomes. AB-8 consumes this path.
-**Adversarial review.** Follow an effect that succeeds just before native delivery
-fails and an observation budget that expires before a late completion. Prove no
-duplicate effect, erased result, false terminal claim or unbounded wait/retention.
-If a new protocol proves necessary, explain the architectural boundary and return
-for scope adjudication rather than enlarging AB-7 implicitly.
-Before AB-7 closure, use the user-requested `claude-code-reviewer` with
-`claude-opus-5-5` at `high`, permitting independent fixtures only in a disposable
-copy and verifying cleanup. This extra review requirement covers AB-6/7 only.
-**Commit gate.** All retained failure/lifecycle paths and consumers pass;
-`refactor(web): simplify command completion without timed mutation replay`.
+Limits: the earlier real Setup start exception did not recur; its cause remains
+unclassified, not claimed fixed. Setup correctly preserved unknown effect and
+stopped later batch starts. Source review identified that the task-shell fixture's
+text-only wait did not ensure click eligibility; its corrected wait preserves
+one real click. Diagnostic snapshots
+did not capture the original Plan-again timeout's exact cause.
+Keep the failed receipts and bounded test diagnostics for recurrence. A picker
+whose native return never settles has no automatic observation timer; process
+loss still has no guaranteed result recovery. These are not new replay authority.
+
+Evidence: ignored `build/post-m1-8-ablation-20260925/ab7-verification.md`, raw
+complete/diagnostic/installed receipts, `ab7-independent-review.md` and
+`ab7-claude-review.md`; the evidence index retains both reviewed correction decisions.
+Atomic commit: `refactor(web): simplify command completion without timed mutation replay`.
+Pause for user recap; AB-8 implementation remains unauthorized.
 
 #### AB-8 — Authoritative task snapshots and bounded shell refactor
 

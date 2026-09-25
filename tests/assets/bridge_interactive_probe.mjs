@@ -10,6 +10,8 @@ class TestWindow extends TestEventTarget {
     this.acknowledgments = [];
     this.acknowledgedTokens = new Set();
     this.nativeResponses = new Map();
+    this.requestResponses = new Map();
+    this.observations = [];
     this.nextResponseToken = 1;
     this.loseNextAcknowledgment = false;
     this.queuedResults = new Map();
@@ -44,15 +46,25 @@ class TestWindow extends TestEventTarget {
       }
       return Promise.resolve(!duplicate);
     }
+    if (requestJson.startsWith("observe:")) {
+      const match = /^observe:([0-9a-f]{32}):([a-z][a-z0-9]*(?:_[a-z0-9]+)*)$/.exec(requestJson);
+      assert.ok(match, "observation keeps bounded original identity");
+      this.observations.push(requestJson);
+      const retained = this.requestResponses.get(match[1]);
+      return Promise.resolve({
+        transport_version: 1,
+        state: retained === undefined ? "unavailable" : "ready",
+        generation: 1,
+        request_id: match[1],
+        response_token: retained?.response_token ?? null,
+        completion_token: null,
+        response: retained?.response ?? null,
+      });
+    }
     const request = JSON.parse(requestJson);
     this.requests.push(request);
     if (request.command === "reject_once") {
       return Promise.reject(new Error("synthetic transport refusal"));
-    }
-    const remainingFailures = this.commandFailures.get(request.command) ?? 0;
-    if (remainingFailures > 0) {
-      this.commandFailures.set(request.command, remainingFailures - 1);
-      return Promise.reject(new Error("synthetic command transport refusal"));
     }
     const queued = this.queuedResults.get(request.command);
     const result = queued !== undefined && queued.length > 0
@@ -93,16 +105,30 @@ class TestWindow extends TestEventTarget {
       response,
     };
     this.nativeResponses.set(`ack:${responseToken}`, nativeResponse);
+    this.requestResponses.set(request.request_id, nativeResponse);
+    const remainingFailures = this.commandFailures.get(request.command) ?? 0;
+    if (remainingFailures > 0) {
+      this.commandFailures.set(request.command, remainingFailures - 1);
+      return Promise.reject(new Error("synthetic command transport refusal"));
+    }
     return Promise.resolve(nativeResponse);
   }
 }
 
 let timerCalls = 0;
-globalThis.setTimeout = () => {
+const activeTimers = new Map();
+globalThis.setTimeout = (callback, milliseconds) => {
   timerCalls += 1;
+  const token = timerCalls;
+  activeTimers.set(token, callback);
+  if (milliseconds === 100 || milliseconds === 250) {
+    queueMicrotask(() => {
+      if (activeTimers.delete(token)) callback();
+    });
+  }
   return timerCalls;
 };
-globalThis.clearTimeout = () => {};
+globalThis.clearTimeout = (token) => activeTimers.delete(token);
 
 const testWindow = new TestWindow();
 globalThis.window = testWindow;
@@ -183,7 +209,8 @@ assert.deepEqual(testWindow.requests.at(-1).payload, {
   continuation_id: continuationId,
   mount_index: 1,
 });
-assert.equal(timerCalls, timersBeforeDirectAdmission + 1, "direct continuation admission owns one deadline");
+assert.equal(timerCalls, timersBeforeDirectAdmission + 3,
+  "continuation admission owns startup, feedback, and exact cleanup bounds");
 assert.throws(
   () => bridge.admitLocation("source", { continuation_id: continuationId, mount_index: -1 }),
   /candidate or continuation choice/,
@@ -206,6 +233,7 @@ assert.equal(
 );
 
 const beforeRefusal = testWindow.requests.length;
+const timersBeforeRefusal = timerCalls;
 await assert.rejects(
   bridge.dispatchInteractive("reject_once", {}, () => true),
   { name: "BridgeTransportError" },
@@ -215,7 +243,7 @@ assert.equal(
   beforeRefusal + 1,
   "interactive transport never automatically retries",
 );
-assert.equal(timerCalls, 1, "interactive transport owns no client deadline");
+assert.equal(timerCalls, timersBeforeRefusal, "interactive transport owns no client deadline");
 
 const setupOptions = {
   filters: [],
@@ -290,12 +318,14 @@ for (const [command, start, mismatch] of [
   ],
   ["plan_again", () => bridge.planAgain(taskId), sameTaskStart],
 ]) {
-  testWindow.queueResults(command, mismatch, mismatch);
+  const before = testWindow.requests.length;
+  testWindow.queueResults(command, mismatch);
   await assert.rejects(
     start(),
     { name: "StartPlanUncertainError" },
     `${command} rejects a response with the wrong task identity`,
   );
+  assert.equal(testWindow.requests.length, before + 1, "wrong identity never replays a mutation");
 }
 
 const typedAmbiguous = {
@@ -380,15 +410,18 @@ const oversizedLocationChoice = {
   candidates: planAgainCandidates.slice(0, 28),
 };
 testWindow.queueResults("admit_location", oversizedLocationChoice);
+const beforeOversizedAdmission = testWindow.requests.length;
 await assert.rejects(
   bridge.admitLocation("source", {
     kind: "literal_path",
     path: "C:\\Typed",
     selected_mount: null,
   }),
-  { name: "BridgeTransportError" },
+  { name: "OutcomeUnavailableError" },
   "location admission remains limited to 27 mount candidates",
 );
+assert.equal(testWindow.requests.length, beforeOversizedAdmission + 1,
+  "invalid admission result cannot resubmit the mutation");
 
 const invalidRecents = {
   task_id: null,
@@ -443,33 +476,20 @@ await assert.rejects(
   "task kind and request identity must be coupled",
 );
 
-testWindow.failCommand("create_task", 2);
+testWindow.failCommand("create_task", 1);
 testWindow.queueResults("create_task", { task_id: taskId });
-let createUncertain;
-try {
-  await bridge.createTask();
-  assert.fail("uncertain task creation must expose its retained retry");
-} catch (error) {
-  createUncertain = error;
-}
-assert.equal(createUncertain.name, "TaskCreateUncertainError");
-assert.ok(createUncertain instanceof bridge.BridgeTransportError);
-assert.equal(typeof createUncertain.retry, "function");
-const createAttempts = testWindow.requests.filter(
+const beforeCreateRequests = testWindow.requests.length;
+const beforeCreateObservations = testWindow.observations.length;
+assert.deepEqual(await bridge.createTask(), { task_id: taskId });
+const createAttempts = testWindow.requests.slice(beforeCreateRequests).filter(
   (request) => request.command === "create_task",
 );
-assert.equal(createAttempts.length, 2, "createTask performs one automatic replay");
-assert.deepEqual(createAttempts[0].payload, createAttempts[1].payload);
-const created = await createUncertain.retry();
-assert.deepEqual(created, { task_id: taskId });
-const recoveredCreateAttempts = testWindow.requests.filter(
-  (request) => request.command === "create_task",
-);
-assert.equal(recoveredCreateAttempts.length, 3);
+assert.equal(createAttempts.length, 1, "lost admission cannot replay task creation");
+assert.match(createAttempts[0].payload.command_id, /^[0-9a-f]{32}$/);
 assert.deepEqual(
-  recoveredCreateAttempts.map((request) => request.payload.command_id),
-  Array(3).fill(createAttempts[0].payload.command_id),
-  "manual task-create recovery reuses the exact command intent",
+  testWindow.observations.slice(beforeCreateObservations),
+  [`observe:${createAttempts[0].request_id}:create_task`],
+  "task creation recovers its original request through observation",
 );
 
 const recentPairProbe = { pairs: [{

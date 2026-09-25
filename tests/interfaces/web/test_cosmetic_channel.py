@@ -249,7 +249,7 @@ def test_br_g_46_browser_cosmetic_rows_are_exact_and_locally_bounded() -> None:
         "phase": "open",
     }
     assert policy["replace_cosmetic_section"] == {
-        "timeout": "local-5-seconds",
+        "timeout": "mutation-observed",
         "retry": "none",
         "phase": "open",
     }
@@ -259,7 +259,7 @@ def test_br_g_46_browser_cosmetic_rows_are_exact_and_locally_bounded() -> None:
         "appliedPresentationRevision = null)" in source
     )
     assert (
-        "export function replaceCosmeticSection(expectedRevision, theme)"
+        "export function replaceCosmeticSection(expectedRevision, theme, onDelayed = null)"
         in source
     )
 

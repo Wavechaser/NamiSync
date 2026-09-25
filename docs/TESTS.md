@@ -76,12 +76,19 @@ Verify populations at build/install boundaries and revalidate recorded artifacts
 on reuse; identity-record serialization does not require a second population scan.
 
 Required ordinary JavaScript tests are unmarked and non-skippable. They execute
-the packaged public event consumers, start-plan deadline/replay and interactive
+the packaged public event consumers, original-command result observation and interactive
 bridge wrappers, and the production drain-manager live-event
 transport/replay and Progress reducer. Node.js must be available through
 `NAMISYNC_TEST_NODE` or `PATH`; the explicit environment setting takes
 precedence. A missing or unusable executable fails these gates rather than
 silently reducing the ordinary suite to source-text inspection.
+
+Mutation transport cases use controlled delay, admission/completion loss and
+cleanup failure. Verify one original submission/effect, bounded read-only result
+observation, explicit unavailable state, later original-result adoption and
+true worker settlement. A removed replay expectation is not a regression by
+itself; retained identity, state, effect and ownership guarantees decide it.
+Keep read/drain/startup/lifecycle/resource deadline cases separate.
 
 Frontend static Node probes use `run_node_probe`: a prelaunch Windows Job caps
 their process tree at 512 MiB, keeps the caller's timeout and bounds file-backed

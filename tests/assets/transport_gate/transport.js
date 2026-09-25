@@ -17,26 +17,38 @@ window.removeEventListener = (name, handler, options) => {
 const nativeSetTimeout = globalThis.setTimeout.bind(globalThis);
 const nativeClearTimeout = globalThis.clearTimeout.bind(globalThis);
 const activeTimers = new Set();
-const deadlineFaults = {
+const timerFaults = {
   start_plan: { armed: 0, fired: 0 },
   main_drain: { armed: 0, fired: 0 },
 };
-let deadlineFaultPhase = null;
+let timerFaultPhase = null;
+let startPlanStartupTimer = null;
+let startPlanStartupFired = 0;
 globalThis.setTimeout = (callback, milliseconds, ...args) => {
-  const fault = milliseconds === 30000 ? deadlineFaults[deadlineFaultPhase] : null;
+  const startup = timerFaultPhase === "start_plan_startup" && milliseconds === 5000;
+  const fault = timerFaultPhase === "start_plan_feedback" && milliseconds === 5000
+    ? timerFaults.start_plan
+    : timerFaultPhase === "main_drain" && milliseconds === 30000
+      ? timerFaults.main_drain : null;
   const targeted = fault !== undefined && fault !== null && fault.armed === 0 ? fault : null;
   if (targeted !== null) targeted.armed += 1;
   let token;
   token = nativeSetTimeout(() => {
     activeTimers.delete(token);
+    if (startup) {
+      startPlanStartupTimer = null;
+      startPlanStartupFired += 1;
+    }
     if (targeted !== null) targeted.fired += 1;
     callback(...args);
   }, targeted === null ? milliseconds : 500);
+  if (startup) startPlanStartupTimer = token;
   activeTimers.add(token);
   return token;
 };
 globalThis.clearTimeout = (token) => {
   activeTimers.delete(token);
+  if (token === startPlanStartupTimer) startPlanStartupTimer = null;
   return nativeClearTimeout(token);
 };
 
@@ -228,14 +240,20 @@ async function proveBrowserGate(sourceId, targetId) {
   browserStage = "start-plan-uncertainty";
   const mainTask = await createTask();
   let mainStart;
-  deadlineFaultPhase = "start_plan";
+  let feedbackCallbacks = 0;
+  timerFaultPhase = "start_plan_startup";
   try {
-    mainStart = startPlan(mainTask.task_id, sourceId, targetId, BASE_OPTIONS);
-    await waitFor(() => deadlineFaults.start_plan.armed === 1, "start_plan deadline was not armed");
+    mainStart = startPlan(mainTask.task_id, sourceId, targetId, BASE_OPTIONS,
+      () => { feedbackCallbacks += 1; });
+    timerFaultPhase = "start_plan_feedback";
+    await waitFor(() => timerFaults.start_plan.armed === 1, "start_plan feedback was not armed");
   } finally {
-    deadlineFaultPhase = null;
+    timerFaultPhase = null;
   }
   const mainPlan = await mainStart;
+  requireGate(feedbackCallbacks === 1, "start_plan feedback did not fire exactly once");
+  requireGate(startPlanStartupTimer === null && startPlanStartupFired === 0,
+    "start_plan startup deadline did not clear before feedback");
 
   const mainAccepted = [];
   const mainRefusals = [];
@@ -243,7 +261,7 @@ async function proveBrowserGate(sourceId, targetId) {
   const nestedItems = [];
   let nestedRecord;
   let stopMain;
-  deadlineFaultPhase = "main_drain";
+  timerFaultPhase = "main_drain";
   try {
     stopMain = startTaskDrain(
       mainPlan.task_id,
@@ -266,9 +284,9 @@ async function proveBrowserGate(sourceId, targetId) {
       },
       (error) => mainRefusals.push(error),
     );
-    await waitFor(() => deadlineFaults.main_drain.armed === 1, "main drain deadline was not armed");
+    await waitFor(() => timerFaults.main_drain.armed === 1, "main drain deadline was not armed");
   } finally {
-    deadlineFaultPhase = null;
+    timerFaultPhase = null;
   }
   browserStage = "stale-drain-timeout";
   await waitFor(
@@ -381,7 +399,7 @@ async function proveBrowserGate(sourceId, targetId) {
     callback_release_order: callbackReleaseOrder,
     automatic_close_calls: automaticCloseCalls,
     busy_refusals: busyRefusals,
-    deadline_faults: deadlineFaults,
+    timer_faults: timerFaults,
     cleanup: {
       active_timers: activeTimers.size,
       ready_listeners: readyListeners.size,

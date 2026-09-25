@@ -481,6 +481,9 @@ export function createPlanReviewPanel(callbacks) {
   status.className = "nami-shell__guidance nami-plan-review__status";
   status.setAttribute("role", "status");
   status.ariaLive = "polite";
+  const retryOutcome = button("Retry outcome", "nami-button nami-button--secondary");
+  retryOutcome.dataset.action = "retry-outcome";
+  retryOutcome.hidden = true;
   const controls = document.createElement("div");
   controls.className = "nami-plan-review__control-group";
   controls.append(pause, resume, cancel);
@@ -488,7 +491,7 @@ export function createPlanReviewPanel(callbacks) {
   primary.className = "nami-plan-review__control-group";
   primary.append(planAgain, execute);
   statusActions.append(statusTitle, controls, primary);
-  statusMeta.append(facts, status, detailsToggle);
+  statusMeta.append(facts, status, retryOutcome, detailsToggle);
   tableCard.append(toolbar, list, floatingControls);
   const content = document.createElement("div");
   content.className = "nami-plan-review__content";
@@ -790,6 +793,9 @@ export function createPlanReviewPanel(callbacks) {
   pause.addEventListener("click", () => current !== null && callbacks.onControl(current, "pause"));
   resume.addEventListener("click", () => current !== null && callbacks.onControl(current, "resume"));
   cancel.addEventListener("click", () => current !== null && callbacks.onControl(current, "cancel"));
+  retryOutcome.addEventListener("click", () => {
+    if (current !== null) callbacks.onRetryOutcome?.(current);
+  });
   detailsToggle.addEventListener("click", () => {
     detailsExpanded = !detailsExpanded;
     detailsToggle.ariaExpanded = String(detailsExpanded);
@@ -1277,9 +1283,10 @@ export function createPlanReviewPanel(callbacks) {
     const activeExecution = task.executionStarted && task.sessionState === "active";
     const controlUnavailable = task.drainUnavailable
       || task.reviewSessionId !== task.sessionId;
-    const retryExecution = task.executionAttempt?.state === "uncertain";
+    const retryExecution = task.executionAttempt?.state === "uncertain"
+      && typeof task.executionAttempt.retry === "function";
     execute.hidden = review.summary.selection_state !== "reviewing";
-    updateText(execute, retryExecution ? "Retry execute" : "Execute");
+    updateText(execute, retryExecution ? "Retry outcome" : "Execute");
     execute.disabled = review.pending !== null
       || (task.executionAttempt !== null && !retryExecution)
       || (!retryExecution && !canExecuteSelection);
@@ -1291,11 +1298,19 @@ export function createPlanReviewPanel(callbacks) {
       || task.executionControlState !== "running";
     resume.disabled = review.pending !== null || controlUnavailable
       || task.executionControlState !== "paused";
-    cancel.disabled = review.pending !== null || controlUnavailable
+    cancel.disabled = (review.pending !== null && !task.canCancelAfterFixedReviewOutcome)
+      || controlUnavailable
       || task.executionControlState === "canceling";
-    updateText(status, review.message ?? "");
-    status.title = review.message ?? "";
-    status.hidden = !review.message;
+    const independentCancel = task.executionControlAttempt?.independent
+      && task.executionControlAttempt.sessionId === task.sessionId
+      ? task.executionControlAttempt : null;
+    const actionMessage = [review.message, independentCancel?.message].filter(Boolean).join(" ");
+    updateText(status, actionMessage);
+    status.title = actionMessage;
+    status.hidden = actionMessage.length === 0;
+    retryOutcome.hidden = typeof review.outcomeRetry !== "function"
+      && typeof independentCancel?.retry !== "function";
+    retryOutcome.disabled = review.outcomeRunning === true || independentCancel?.pending === true;
     renderRows(review, task);
     if (focusedPlanRequestId !== review.summary.request_id) focusedPlanRow = null;
     focusedPlanRequestId = review.summary.request_id;

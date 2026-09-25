@@ -6,6 +6,7 @@ import argparse
 import base64
 import json
 import sys
+import traceback
 from pathlib import Path
 from threading import Lock
 from typing import Any
@@ -1752,6 +1753,39 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
         if plan_again_trace is not None and not registry_traced:
             trace_registry_plan_again(kwargs["registry"], plan_again_trace)
             registry_traced = True
+        service = kwargs["registry"]._lifecycle
+        original_start_setup_plan = service.start_task_setup_plan
+
+        def trace_start_setup_plan(*args: object, **start_kwargs: object) -> object:
+            try:
+                return original_start_setup_plan(*args, **start_kwargs)
+            except BaseException as error:
+                try:
+                    task_id = args[0] if args else None
+                    lifecycle = service._lifecycle
+                    with lifecycle._condition:
+                        task = lifecycle._tasks.get(task_id)
+                        task_state = None if task is None else {
+                            "session_id": task.session_id,
+                            "admission_identity": task.admission_identity,
+                            "start_failed": task.start_failed,
+                        }
+                    frames = traceback.extract_tb(error.__traceback__)[-8:]
+                    cause = error.__cause__
+                    recorder.observe("start_setup_plan_original", {
+                        "task_id": task_id,
+                        "command_id": start_kwargs.get("command_id"),
+                        "type": type(error).__name__,
+                        "message": str(error)[:240],
+                        "cause": None if cause is None else (type(cause).__name__, str(cause)[:240]),
+                        "frames": [(Path(frame.filename).name, frame.lineno, frame.name) for frame in frames],
+                        "lifecycle": task_state,
+                    })
+                except BaseException:
+                    pass
+                raise
+
+        stack.enter_context(patch.object(service, "start_task_setup_plan", trace_start_setup_plan))
         registry = _AmbiguousRegistry(
             kwargs["registry"],
             ambiguous.resolve(),

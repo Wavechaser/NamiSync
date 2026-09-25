@@ -73,6 +73,9 @@ _MAX_ADMITTED_HANDLERS = 64
 _HANDLER_WAIT_TIMEOUT_SECONDS = 35.0
 _OPAQUE_ID = re.compile(r"[0-9a-f]{32}")
 _NATIVE_RESPONSE_ACK = re.compile(r"ack:([0-9a-f]{32})")
+_NATIVE_COMMAND_OBSERVE = re.compile(
+    r"observe:([0-9a-f]{32}):([a-z][a-z0-9]*(?:_[a-z0-9]+)*)"
+)
 _COMMAND_COMPLETION_ACK = re.compile(
     r"ack:completion:(0|[1-9][0-9]{0,15}):([0-9a-f]{32}):([0-9a-f]{32})"
 )
@@ -180,7 +183,12 @@ class _JsonByteBudget:
 @dataclass(slots=True)
 class _NativeResponseCustody:
     owner: Thread
+    document_generation: int
     browser_released: bool = False
+    request_id: str | None = None
+    command_name: str | None = None
+    response: dict[str, object] | None = None
+    result_released: bool = True
     command_owner: Thread | None = None
     completion_generation: int | None = None
     completion_request_id: str | None = None
@@ -759,6 +767,17 @@ class BridgeDispatcher:
                         acknowledgment.group(2),
                         acknowledgment.group(3),
                     )
+                if command_json.startswith("observe:"):
+                    if len(command_json) > 105:
+                        return False
+                    observation = _NATIVE_COMMAND_OBSERVE.fullmatch(command_json)
+                    if observation is None:
+                        return False
+                    return self._observe_native_command(
+                        native_generation,
+                        observation.group(1),
+                        observation.group(2),
+                    )
 
             if native_generation is None:
                 return self._native_response(
@@ -778,7 +797,7 @@ class BridgeDispatcher:
                     None,
                     self._failure(None, None, "internal_error"),
                 )
-            custody = _NativeResponseCustody(owner)
+            custody = _NativeResponseCustody(owner, native_generation)
             response = self._dispatch(
                 command_json,
                 native_custody=custody,
@@ -786,6 +805,11 @@ class BridgeDispatcher:
                 native_generation=native_generation,
             )
             with self._handler_condition:
+                if (
+                    type(response) is dict
+                    and not custody.result_released
+                ):
+                    custody.response = response
                 admitted_token = (
                     response_token
                     if self._native_responses.get(response_token) is custody
@@ -908,11 +932,25 @@ class BridgeDispatcher:
                 CommandAdmissionError,
                 CommandConflictError,
                 CommandPayloadError,
+                CommandTimeout,
                 CommandWork,
                 PickerUnavailableError,
                 PlanningRefusedError,
             )
 
+            if (
+                native_custody is not None
+                and (
+                    spec.timeout is CommandTimeout.MUTATION_OBSERVED
+                    or name == "pick_folder"
+                )
+            ):
+                if not self._bind_observed_command(
+                    native_custody,
+                    request_id,
+                    name,
+                ):
+                    return self._failure(request_id, name, "command_conflict")
             try:
                 prepared = spec.prepare_for_bridge(
                     payload,
@@ -1140,6 +1178,8 @@ class BridgeDispatcher:
             response = self._failure(request_id, name, "internal_error")
             message = self._command_completion_message(custody, response)
         with self._handler_condition:
+            if not custody.result_released:
+                custody.response = response
             channel = self._document_channel
         if channel is None:
             self._retire_command_completion(custody)
@@ -1304,6 +1344,95 @@ class BridgeDispatcher:
                 self._admitted -= 1
             self._handler_condition.notify_all()
 
+    def _bind_observed_command(
+        self,
+        custody: _NativeResponseCustody,
+        request_id: str,
+        name: str,
+    ) -> bool:
+        """Bind a transport attempt before its handler can perform an effect."""
+
+        with self._handler_condition:
+            if (
+                custody.document_generation != self._document_generation
+                or any(
+                    current is not custody
+                    and current.document_generation == custody.document_generation
+                    and current.request_id == request_id
+                    for current in self._native_responses.values()
+                )
+            ):
+                return False
+            custody.request_id = request_id
+            custody.command_name = name
+            custody.result_released = False
+            return True
+
+    def _observe_native_command(
+        self,
+        native_generation: int | None,
+        request_id: str,
+        name: str,
+    ) -> object:
+        """Read an original result without reserving or invoking new work."""
+
+        from .readiness import CommandPhase, ReadinessContext
+
+        spec = self._commands.get(name)
+        if (
+            native_generation is None
+            or len(name) > 64
+            or spec is None
+            or spec.phase is not CommandPhase.OPEN
+        ):
+            return False
+        try:
+            self._document.require_trusted()
+            admission = self._admit_command(name)
+        except BaseException as error:
+            retire_exception_graph(error)
+            return False
+        if (
+            type(admission) is not AdmissionGranted
+            or type(admission.context) is not ReadinessContext
+            or admission.context.phase is not CommandPhase.OPEN
+        ):
+            return False
+        with self._handler_condition:
+            if (
+                not self._accepting
+                or native_generation != self._document_generation
+            ):
+                return False
+            matches = tuple(
+                (token, custody)
+                for token, custody in self._native_responses.items()
+                if (
+                    custody.document_generation == native_generation
+                    and custody.request_id == request_id
+                    and custody.command_name == name
+                    and not custody.result_released
+                )
+            )
+            if len(matches) > 1:
+                return False
+            token, custody = matches[0] if matches else (None, None)
+            response = None if custody is None else custody.response
+            return {
+                "transport_version": _NATIVE_TRANSPORT_VERSION,
+                "state": (
+                    "unavailable" if custody is None else
+                    "ready" if response is not None else "pending"
+                ),
+                "generation": native_generation,
+                "request_id": request_id,
+                "response_token": token,
+                "completion_token": (
+                    None if custody is None else custody.completion_token
+                ),
+                "response": response,
+            }
+
     def _reap_native_returns_locked(self) -> None:
         finished = tuple(
             token
@@ -1312,6 +1441,7 @@ class BridgeDispatcher:
                 custody.browser_released
                 and not custody.owner.is_alive()
                 and custody.completion_released
+                and custody.result_released
                 and (
                     custody.command_owner is None
                     or not custody.command_owner.is_alive()
@@ -1330,6 +1460,9 @@ class BridgeDispatcher:
             if custody is None:
                 return False
             custody.browser_released = True
+            if custody.completion_token is None and custody.response is not None:
+                custody.result_released = True
+                custody.response = None
             self._reap_native_returns_locked()
             self._handler_condition.notify_all()
             return True
@@ -1347,28 +1480,48 @@ class BridgeDispatcher:
                 custody
                 for custody in self._native_responses.values()
                 if (
-                    not custody.completion_released
+                    not custody.result_released
+                    and custody.response is not None
                     and custody.completion_generation == generation
                     and custody.completion_request_id == request_id
                     and custody.completion_token == completion_token
                 )
             )
+            unobserved = tuple(
+                custody
+                for custody in self._native_responses.values()
+                if (
+                    custody.request_id is None
+                    and not custody.completion_released
+                    and custody.completion_generation == generation
+                    and custody.completion_request_id == request_id
+                    and custody.completion_token == completion_token
+                )
+            )
+            if len(matches) + len(unobserved) != 1:
+                return False
             channel = self._document_channel
-        if len(matches) != 1 or channel is None:
-            return False
+            if matches:
+                custody = matches[0]
+                custody.result_released = True
+                custody.response = None
+                custody.completion_released = True
+                self._reap_native_returns_locked()
+                self._handler_condition.notify_all()
         from .document_channel import DocumentPostKind
 
-        return bool(
-            channel.acknowledge(
-                DocumentPostKind.COMMAND,
-                (
-                    generation,
-                    request_id,
-                    completion_token,
-                    _COMMAND_COMPLETION_PHASE,
-                ),
-            )
+        if channel is None:
+            return bool(matches)
+        acknowledged = channel.acknowledge(
+            DocumentPostKind.COMMAND,
+            (
+                generation,
+                request_id,
+                completion_token,
+                _COMMAND_COMPLETION_PHASE,
+            ),
         )
+        return bool(matches) or bool(acknowledged)
 
     def _retire_document_responses(self) -> None:
         """Retire browser custody invalidated by a document generation change."""
@@ -1378,6 +1531,8 @@ class BridgeDispatcher:
             for custody in self._native_responses.values():
                 custody.browser_released = True
                 custody.completion_released = True
+                custody.result_released = True
+                custody.response = None
             self._reap_native_returns_locked()
             self._handler_condition.notify_all()
 
@@ -1389,6 +1544,8 @@ class BridgeDispatcher:
             for custody in self._native_responses.values():
                 custody.browser_released = True
                 custody.completion_released = True
+                custody.result_released = True
+                custody.response = None
             channel = self._document_channel
             self._reap_native_returns_locked()
             self._handler_condition.notify_all()

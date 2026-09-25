@@ -771,14 +771,11 @@ by the ratified cosmetic channel. It stays disabled until its initial section
 read succeeds; exhausted initial transport failure leaves only that control
 disabled and does not alter operational readiness. It serializes replacements,
 reconciles only server-accepted state, and never mutates theme CSS
-optimistically. After exhausted uncertain
-replacement delivery it performs a guarded read; an unchanged revision remains
-ambiguous and therefore disabled. A new page generation waits any prior
-replacement settlement when the JavaScript realm remains live. After a full
-document replacement, a later validated native appearance publication triggers
-another authoritative section read on the healthy publication path; it
-converges a late prior-document mutation without claiming a zero-stale interval
-when the old realm no longer exists. Save failure remains a sanitized log event
+optimistically. A delayed replacement keeps its original request and shows
+qualified feedback. Outcome unavailability leaves the selector fenced and offers
+observation-only Retry; later recovery adopts the original result before canonical
+section reconciliation. A new selection cannot replace unresolved intent.
+Document replacement follows the host's close/reopen contract. Save failure remains a sanitized log event
 in the active cosmetic contract;
 it does not block bridge readiness or replace the shell's operational status.
 The stored override drives both the native window material and the page
@@ -983,8 +980,8 @@ part of that boundary because native delegate subscription, WinForms thread
 affinity, and `CoreWebView2` access pass through it. Required ordinary Node
 probes are unmarked and non-skippable; probes marked `supplemental_node` may
 skip. Both resolve Node.js from `NAMISYNC_TEST_NODE` before `PATH`. Required
-bridge probes cover start-plan deadline/replay and bounded single-attempt
-interactive wrappers. The required drain-manager Progress validator/replay gate
+bridge probes cover original start-plan outcome observation without mutation
+replay and single-attempt interactive wrappers. The required drain-manager Progress validator/replay gate
 proves atomic rejection before cursor or reliable-sibling delivery. Installed
 real-WebView2 witnesses cover native custody and renderer behavior;
 [TESTS.md](TESTS.md) owns the ordinary gate requirements.
@@ -1208,7 +1205,7 @@ cannot be removed. Closing the origin discards its queued rows, but its close
 control remains unavailable during preparation or while submitting/uncertain
 rows need reconciliation. An adopted task also cannot close or submit a fresh
 form while its batch start needs reconciliation; guidance names the origin.
-The close control explains that reason. Exact uncertain-request retry remains
+The close control explains that reason. Original-outcome observation Retry remains
 available on the origin, and navigation never transfers the rows to a new task.
 After a start, per-task readback shows the backend-frozen locations and options.
 Plan again reads fresh availability for the reviewed identities, requests an
@@ -1424,7 +1421,7 @@ scroll within a short viewport. Initial focus is Cancel; Tab
 stays within the dialog, Escape cancels, and closing restores the invoking
 control's focus when it remains available. Confirm is single-shot and begins
 admission immediately. Cancel before submission leaves the review editable;
-uncertain submission instead retains the exact retry and disables selection and
+uncertain submission instead retains observation-only Retry and disables selection and
 Close until admission truth is recovered. Shared reduced-motion and
 forced-color rules apply.
 
@@ -1564,7 +1561,7 @@ or while task Close is pending. Keep last-known execution truth: lost updates
 are not proof that work stopped. Retry restores observation of the same session;
 it does not restart work. Controls remain unavailable until recovery delivery
 is validated. Terminal display/release failures reuse their distinct retries.
-An uncertain Close keeps its exact retry and fence ahead of observation recovery;
+An uncertain Close keeps its original-result Retry and fence ahead of observation recovery;
 a pending Close can finish after recovered terminal delivery.
 
 Closing a live task renders
@@ -1575,6 +1572,27 @@ does not retry the domain operation. There is no force-close
 path. Close and publication-fault observations invalidate rail, panel, and
 affected tree request generations before clearing cached data, so detached old
 responses are inert before payload read.
+
+Mutation response delay is availability feedback, not an operation deadline.
+After five seconds, qualify the wait for the original result; finite failed
+observation shows **Outcome unavailable** and an observation-only Retry action.
+Keep the original intent and relevant task/session/revision fences until its
+outcome is resolved. A captured final response that cannot establish the effect
+keeps the intent fence with close/reopen and fresh-review guidance, without a
+Retry button that cannot recover anything. An unresolved Close blocks new starts
+and replacement tasks; an unresolved folder choice blocks picker, mount, edit,
+clear and recent-choice replacement.
+Retry cannot submit another create, start, control, selection,
+view/highlight, cosmetic replacement or Close. A late valid original result can
+be adopted without repeating confirmation or changing current navigation.
+Successful pending Close and live session observation retain their separate
+settlement paths. D4 highlight/focus remains independent of execution selection.
+After a captured noncheckable review response, a user may still Cancel the same
+active execution if the unknown action was not Cancel. Its separate control
+attempt retains its own outcome and observation Retry while the original review
+warning remains. This exception does not reopen in-flight/checkable review work,
+repeat an unknown Cancel or unblock task Close. Disabled Close gives the same
+action-guiding reason enforced by its handler.
 
 Task closure never purges trash. User-invoked session cleanup and terminal
 execution/verification retry actions, including **Verify remaining**, are

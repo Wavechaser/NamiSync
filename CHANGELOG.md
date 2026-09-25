@@ -1027,6 +1027,19 @@ repeated machinery while preserving operational safety and boundary contracts.
 Safety, settlement, authority, and measurement work made high-risk release
 claims explicit, independently reviewable, and regression-backed.
 
+#### Preserve original command outcomes without timed replay (2026-09-25 – 2026-09-26)
+
+- Remove page-side mutation abandonment/replay deadlines; recover the original
+  result through existing native custody and bounded observation, with explicit
+  delayed/unavailable feedback and retained identity/duplicate protection.
+- Keep unresolved Close, start, review and folder intents fenced. Preserve
+  fixed-unknown review warnings while allowing the reviewed independent Cancel;
+  align Close affordances and retain bounded late read-completion cleanup.
+- Preserve lifecycle/resource deadlines and process-loss limitations. Verify
+  ordinary, installed and import gates plus independent and Opus5.5/high reviews;
+  retain two unexplained intermittent installed observations in the delivery
+  record without claiming their causes fixed.
+
 #### Replace desktop reload recovery with contained restart (2026-09-25)
 
 - Permanently retire page command and appearance authority on genuine document

@@ -114,10 +114,12 @@ export function createTaskRail({ onCreate, onSelect, onClose, onRetryUpdates, on
       }
       entry.select.ariaCurrent = !settingsVisible && task.taskId === selectedTaskId ? "page" : "false";
       const digest = taskStatusDigest(task);
-      renderText(entry.title, digest.title);
+      const closeUnavailable = task.closeRetry !== null;
+      renderText(entry.title, closeUnavailable ? "Outcome unavailable" : digest.title);
+      const closeReason = typeof task.closeBlockReason === "string" ? task.closeBlockReason : null;
       const closeStatus = task.closePending
-        ? task.sessionId === null ? "Closing…" : "Canceling and closing…"
-        : digest.detail;
+        ? task.closeMessage ?? (task.sessionId === null ? "Closing…" : "Canceling and closing…")
+        : closeReason ?? digest.detail;
       renderText(entry.status, closeStatus);
       renderFilesystemText(entry.source, digest.sourcePath);
       renderFilesystemText(entry.target, digest.targetPath);
@@ -126,20 +128,20 @@ export function createTaskRail({ onCreate, onSelect, onClose, onRetryUpdates, on
       entry.select.dataset ??= {};
       entry.select.dataset.taskLabel = task.label;
       entry.select.ariaLabel = `${task.label}: ${digest.title}`;
-      entry.select.dataset.status = digest.state;
+      entry.select.dataset.status = closeUnavailable ? "unavailable" : digest.state;
       if (typeof entry.progress.classList.toggle === "function") {
         entry.progress.classList.toggle("nami-progress--indeterminate", digest.progress.indeterminate);
       }
       if (digest.progress.indeterminate) entry.progress.removeAttribute?.("aria-valuenow");
       else entry.progress.ariaValueNow = String(digest.progress.value);
       entry.progress.style?.setProperty("--nami-progress-value", `${digest.progress.value}%`);
-      const batchCloseReason = typeof task.batchCloseReason === "string" ? task.batchCloseReason : null;
       entry.retry.hidden = typeof task.recoveryRetry !== "function" || task.closeRetry !== null;
       entry.retry.disabled = task.recoveryRunning;
       renderText(entry.retry, task.recoveryRunning ? "Retrying updates…" : "Retry updates");
       entry.retry.ariaLabel = `${task.recoveryRunning ? "Retrying updates for" : "Retry updates for"} ${task.label}`;
-      entry.close.disabled = task.closePending || batchCloseReason !== null;
-      entry.close.ariaLabel = batchCloseReason ?? `${task.closeFailed ? "Retry close for" : "Close"} ${task.label}`;
+      entry.close.disabled = closeReason !== null;
+      entry.close.ariaLabel = closeReason ?? `${closeUnavailable ? "Retry close outcome for"
+        : task.closeFailed ? "Retry close for" : "Close"} ${task.label}`;
       entry.close.title = entry.close.ariaLabel;
       list.append(entry.row);
     }

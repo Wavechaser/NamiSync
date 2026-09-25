@@ -16,6 +16,10 @@ const TASK_PATTERN = /^task-[0-9a-f]{32}$/;
 const COMMAND_PATTERN = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/;
 const COMMAND_MAX_LENGTH = 64;
 const ASYNC_COMMAND_MAX_ATTEMPTS = 64;
+const OBSERVED_COMMAND_MAX_ATTEMPTS = 64;
+const MUTATION_FEEDBACK_MS = 5000;
+const OBSERVATION_TIMEOUT_MS = 1000;
+const OBSERVATION_DELAYS_MS = Object.freeze([100, 250]);
 const ASYNC_CLEANUP_ACK_TIMEOUT_MS = 1000;
 const COMMAND_COMPLETION_KIND = "namisync.command-completion.v1";
 const COMMAND_COMPLETION_PHASE = "completion";
@@ -23,31 +27,31 @@ const COMMAND_POLICY_JSON = `{
   "shell_ready": {"timeout": "startup-5-seconds", "retry": "none", "phase": "bootstrap"},
   "readiness_echo": {"timeout": "startup-5-seconds", "retry": "same-payload-once", "phase": "bootstrap"},
   "pick_folder": {"timeout": "interactive", "retry": "none", "phase": "open"},
-  "create_task": {"timeout": "mutation-30-seconds", "retry": "same-command-once", "phase": "open"},
+  "create_task": {"timeout": "mutation-observed", "retry": "none", "phase": "open"},
   "list_tasks": {"timeout": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
   "read_setup": {"timeout": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
   "probe_recent_pairs": {"timeout": "local-5-seconds", "retry": "none", "phase": "open"},
   "prepare_setup": {"timeout": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
-  "admit_location": {"timeout": "local-5-seconds", "retry": "none", "phase": "open"},
+  "admit_location": {"timeout": "mutation-observed", "retry": "none", "phase": "open"},
   "read_cosmetic_section": {"timeout": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
-  "replace_cosmetic_section": {"timeout": "local-5-seconds", "retry": "none", "phase": "open"},
-  "start_plan": {"timeout": "mutation-30-seconds", "retry": "same-command-once", "phase": "open"},
-  "start_inventory": {"timeout": "mutation-30-seconds", "retry": "same-command-once", "phase": "open"},
-  "plan_again": {"timeout": "mutation-30-seconds", "retry": "same-command-once", "phase": "open"},
+  "replace_cosmetic_section": {"timeout": "mutation-observed", "retry": "none", "phase": "open"},
+  "start_plan": {"timeout": "mutation-observed", "retry": "none", "phase": "open"},
+  "start_inventory": {"timeout": "mutation-observed", "retry": "none", "phase": "open"},
+  "plan_again": {"timeout": "mutation-observed", "retry": "none", "phase": "open"},
   "open_plan_view": {"timeout": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
-  "update_plan_view": {"timeout": "local-5-seconds", "retry": "none", "phase": "open"},
+  "update_plan_view": {"timeout": "mutation-observed", "retry": "none", "phase": "open"},
   "get_plan_window": {"timeout": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
   "get_execution_detail": {"timeout": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
   "get_plan_anchor": {"timeout": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
-  "mutate_plan_selection": {"timeout": "local-5-seconds", "retry": "same-command-once", "phase": "open"},
-  "mutate_plan_scope": {"timeout": "local-5-seconds", "retry": "same-command-once", "phase": "open"},
-  "mutate_plan_highlight": {"timeout": "local-5-seconds", "retry": "none", "phase": "open"},
-  "mutate_plan_highlighted_selection": {"timeout": "local-5-seconds", "retry": "same-command-once", "phase": "open"},
-  "start_execution": {"timeout": "mutation-30-seconds", "retry": "same-command-once", "phase": "open"},
-  "control_execution": {"timeout": "local-5-seconds", "retry": "none", "phase": "open"},
+  "mutate_plan_selection": {"timeout": "mutation-observed", "retry": "none", "phase": "open"},
+  "mutate_plan_scope": {"timeout": "mutation-observed", "retry": "none", "phase": "open"},
+  "mutate_plan_highlight": {"timeout": "mutation-observed", "retry": "none", "phase": "open"},
+  "mutate_plan_highlighted_selection": {"timeout": "mutation-observed", "retry": "none", "phase": "open"},
+  "start_execution": {"timeout": "mutation-observed", "retry": "none", "phase": "open"},
+  "control_execution": {"timeout": "mutation-observed", "retry": "none", "phase": "open"},
   "next_events": {"timeout": "drain-30-seconds", "retry": "none", "phase": "open"},
-  "release_terminal_session": {"timeout": "mutation-30-seconds", "retry": "same-payload-bounded", "phase": "open"},
-  "close_task": {"timeout": "mutation-30-seconds", "retry": "same-payload-bounded", "phase": "open"}
+  "release_terminal_session": {"timeout": "mutation-observed", "retry": "none", "phase": "open"},
+  "close_task": {"timeout": "mutation-observed", "retry": "none", "phase": "open"}
 }`;
 export const COMMAND_POLICY_CONTRACT = freezeCommandPolicies(
   JSON.parse(COMMAND_POLICY_JSON),
@@ -56,7 +60,7 @@ const TIMEOUT_MS_BY_POLICY = Object.freeze({
   "startup-5-seconds": 5000,
   "local-5-seconds": 5000,
   "interactive": null,
-  "mutation-30-seconds": 30000,
+  "mutation-observed": null,
   "drain-30-seconds": 30000,
 });
 const SHELL_READY_TIMEOUT_MS =
@@ -104,8 +108,6 @@ const DRAIN_RECOVERY_DELAYS_MS = Object.freeze([
   1000,
   2000,
 ]);
-const SESSION_RELEASE_RECOVERY_DELAYS_MS = Object.freeze([100, 250, 500]);
-const TASK_CLOSE_RECOVERY_DELAYS_MS = Object.freeze([100, 250, 500]);
 const TERMINAL_STATES = Object.freeze([
   "completed",
   "failed",
@@ -237,6 +239,7 @@ let bridgeReadyObserved = false;
 const taskDrains = new Map();
 const taskCloseFences = new Map();
 const asyncCommandAttempts = new Map();
+const observedCommandAttempts = new Map();
 
 const documentMessages = globalThis.chrome?.webview;
 if (typeof documentMessages?.addEventListener === "function") {
@@ -268,10 +271,11 @@ export class BridgeTransportError extends Error {
 }
 
 export class StartPlanUncertainError extends BridgeTransportError {
-  constructor(retry) {
+  constructor(retry, checkable = true) {
     super("The plan-start response could not be confirmed.");
     this.name = "StartPlanUncertainError";
     this.retry = retry;
+    this.checkable = checkable;
   }
 }
 
@@ -284,18 +288,24 @@ export class TerminalPresentationError extends BridgeTransportError {
 }
 
 export class TerminalSessionReleaseError extends BridgeTransportError {
-  constructor(retry) {
-    super("The completed task session could not be released. Retry the release.");
+  constructor(retry, unavailable = false, checkable = true) {
+    super(unavailable
+      ? checkable
+        ? "The completed task release outcome is unavailable. Retry outcome to check the original release."
+        : "The completed task release outcome cannot be confirmed. Close and reopen NamiSync to review its current state."
+      : "The completed task session could not be released. Retry the release.");
     this.name = "TerminalSessionReleaseError";
     this.retry = retry;
+    this.checkable = checkable;
   }
 }
 
 export class TaskCloseUncertainError extends BridgeTransportError {
-  constructor(retry) {
+  constructor(retry, checkable = true) {
     super("The task-close response could not be confirmed.");
     this.name = "TaskCloseUncertainError";
     this.retry = retry;
+    this.checkable = checkable;
   }
 }
 
@@ -365,10 +375,11 @@ export async function pickFolder(purpose) {
 }
 
 export class TaskCreateUncertainError extends BridgeTransportError {
-  constructor(retry) {
+  constructor(retry, checkable = true) {
     super("The task-creation response could not be confirmed.");
     this.name = "TaskCreateUncertainError";
     this.retry = retry;
+    this.checkable = checkable;
   }
 }
 
@@ -386,7 +397,7 @@ export function dispatchInteractive(command, payload, validateResult) {
   return dispatchAttempt(command, payload, validateResult, null);
 }
 
-export function startPlan(taskId, sourceId, targetId, options) {
+export function startPlan(taskId, sourceId, targetId, options, onDelayed = null) {
   if (
     typeof taskId !== "string" || !TASK_PATTERN.test(taskId) ||
     typeof sourceId !== "string" || !SLOT_PATTERN.test(sourceId) ||
@@ -401,10 +412,10 @@ export function startPlan(taskId, sourceId, targetId, options) {
     source_id: sourceId,
     target_id: targetId,
     options: freezeJson(options),
-  }), "start_plan", START_PLAN_TIMEOUT_MS);
+  }), "start_plan", START_PLAN_TIMEOUT_MS, onDelayed);
 }
 
-export function startInventory(taskId, rootId) {
+export function startInventory(taskId, rootId, onDelayed = null) {
   if (
     typeof taskId !== "string" || !TASK_PATTERN.test(taskId) ||
     typeof rootId !== "string" || !SLOT_PATTERN.test(rootId)
@@ -415,10 +426,10 @@ export function startInventory(taskId, rootId) {
     task_id: taskId,
     command_id: mintId(),
     root_id: rootId,
-  }), "start_inventory", INVENTORY_START_TIMEOUT_MS);
+  }), "start_inventory", INVENTORY_START_TIMEOUT_MS, onDelayed);
 }
 
-export function planAgain(taskId, sourceMount = null, targetMount = null) {
+export function planAgain(taskId, sourceMount = null, targetMount = null, onDelayed = null) {
   if (
     typeof taskId !== "string" || !TASK_PATTERN.test(taskId) ||
     !isOptionalPath(sourceMount) || !isOptionalPath(targetMount)
@@ -430,41 +441,27 @@ export function planAgain(taskId, sourceMount = null, targetMount = null) {
     command_id: mintId(),
     source_mount: sourceMount,
     target_mount: targetMount,
-  }), "plan_again", PLAN_AGAIN_TIMEOUT_MS);
+  }), "plan_again", PLAN_AGAIN_TIMEOUT_MS, onDelayed);
 }
 
-export async function createTask() {
+export async function createTask(onDelayed = null) {
   const payload = Object.freeze({ command_id: mintId() });
-  let automaticReplayUsed = false;
-  const submit = async () => {
-    try {
-      return await dispatchAttempt(
-        "create_task",
-        payload,
-        validateTaskShellResult,
-        CREATE_TASK_TIMEOUT_MS,
-        true,
-      );
-    } catch (error) {
-      if (!isUncertainStartPlanFailure(error)) throw error;
-      if (!automaticReplayUsed) {
-        automaticReplayUsed = true;
-        try {
-          return await dispatchAttempt(
-            "create_task",
-            payload,
-            validateTaskShellResult,
-            CREATE_TASK_TIMEOUT_MS,
-            true,
-          );
-        } catch (replayError) {
-          if (!isUncertainStartPlanFailure(replayError)) throw replayError;
-        }
-      }
-      throw new TaskCreateUncertainError(submit);
-    }
-  };
-  return submit();
+  try {
+    return await dispatchAttempt(
+      "create_task", payload, validateTaskShellResult,
+      CREATE_TASK_TIMEOUT_MS, true, onDelayed,
+    );
+  } catch (error) {
+    throw taskUncertainty(error, TaskCreateUncertainError);
+  }
+}
+
+function taskUncertainty(error, ErrorType) {
+  if (!(error instanceof OutcomeUnavailableError)) return error;
+  if (!error.checkable) return new ErrorType(null, false);
+  return new ErrorType(() => error.retry().catch((failure) => {
+    throw taskUncertainty(failure, ErrorType);
+  }));
 }
 
 export async function listTasks() {
@@ -555,9 +552,7 @@ export function startTaskDrain(
     terminalPresentationInProgress: false,
     sessionReleased: initialState?.sessionReleased ?? false,
     releaseControl: null,
-    releaseTimer: null,
     releaseEpoch: 0,
-    releaseFailures: 0,
     suspended: false,
     recoveryPending: false,
     stopped: false,
@@ -610,7 +605,7 @@ export async function readCosmeticSection(appliedPresentationRevision = null) {
   return readCosmeticSectionAttempt(payload);
 }
 
-export function replaceCosmeticSection(expectedRevision, theme) {
+export function replaceCosmeticSection(expectedRevision, theme, onDelayed = null) {
   if (!isNonnegativeInteger(expectedRevision)) {
     throw new TypeError("expectedRevision must be a nonnegative safe integer");
   }
@@ -626,7 +621,7 @@ export function replaceCosmeticSection(expectedRevision, theme) {
       value: Object.freeze({ theme }),
     }),
     validateCosmeticReplacementResult,
-    COSMETIC_REPLACE_TIMEOUT_MS,
+    COSMETIC_REPLACE_TIMEOUT_MS, false, onDelayed,
   );
 }
 
@@ -655,7 +650,7 @@ export function echoReadiness(challenge) {
   );
 }
 
-export async function closeTask(taskId, sessionId = null) {
+export async function closeTask(taskId, sessionId = null, onDelayed = null) {
   const task = taskDrains.get(taskId);
   const retainedFence = taskCloseFences.get(taskId);
   if (
@@ -669,74 +664,41 @@ export async function closeTask(taskId, sessionId = null) {
   }
   taskCloseFences.set(taskId, sessionId);
 
-  const submit = async () => {
-    for (
-      let attempt = 0;
-      attempt <= TASK_CLOSE_RECOVERY_DELAYS_MS.length;
-      attempt += 1
-    ) {
-      try {
-        const result = await dispatchAttempt(
-          "close_task",
-          Object.freeze({ task_id: taskId, session_id: sessionId }),
-          (value) => validateTaskCloseResult(value, taskId, sessionId),
-          TASK_CLOSE_TIMEOUT_MS,
-          true,
-        );
-        if (result.disposition === "closed" && task !== undefined) {
-          stopTask(task);
-        }
-        if (taskCloseFences.get(taskId) === sessionId) {
-          taskCloseFences.delete(taskId);
-        }
-        return result;
-      } catch (error) {
-        if (
-          !(error instanceof BridgeTransportError) &&
-          !isUncertainTaskCommandFailure(error)
-        ) {
-          if (taskCloseFences.get(taskId) === sessionId) {
-            taskCloseFences.delete(taskId);
-          }
-          throw error;
-        }
-        if (attempt >= TASK_CLOSE_RECOVERY_DELAYS_MS.length) {
-          throw new TaskCloseUncertainError(submit);
-        }
-        await delay(TASK_CLOSE_RECOVERY_DELAYS_MS[attempt]);
+  const settle = async (resultPromise) => {
+    try {
+      const result = await resultPromise;
+      if (result.disposition === "closed" && task !== undefined) stopTask(task);
+      if (taskCloseFences.get(taskId) === sessionId) taskCloseFences.delete(taskId);
+      return result;
+    } catch (error) {
+      if (error instanceof OutcomeUnavailableError) {
+        throw error.checkable
+          ? new TaskCloseUncertainError(() => settle(error.retry()))
+          : new TaskCloseUncertainError(null, false);
       }
+      if (taskCloseFences.get(taskId) === sessionId) taskCloseFences.delete(taskId);
+      throw error;
     }
-    throw new TaskCloseUncertainError(submit);
   };
-
-  return submit();
+  return settle(dispatchAttempt(
+    "close_task", Object.freeze({ task_id: taskId, session_id: sessionId }),
+    (value) => validateTaskCloseResult(value, taskId, sessionId),
+    TASK_CLOSE_TIMEOUT_MS, true, onDelayed,
+  ));
 }
 
-function submitStart(payload, command, timeoutMs) {
-  let automaticReplayUsed = false;
+function submitStart(payload, command, timeoutMs, onDelayed = null) {
   const validateResult = (value) => (
     validateStartPlanResult(value)
     && (command === "plan_again"
       ? value.task_id !== payload.task_id
       : value.task_id === payload.task_id)
   );
-  const submit = async () => {
-    try {
-      return await dispatchAttempt(command, payload, validateResult, timeoutMs, true);
-    } catch (error) {
-      if (!isUncertainStartPlanFailure(error)) throw error;
-      if (!automaticReplayUsed) {
-        automaticReplayUsed = true;
-        try {
-          return await dispatchAttempt(command, payload, validateResult, timeoutMs, true);
-        } catch (replayError) {
-          if (!isUncertainStartPlanFailure(replayError)) throw replayError;
-        }
-      }
-      throw new StartPlanUncertainError(submit);
-    }
-  };
-  return submit();
+  return dispatchAttempt(
+    command, payload, validateResult, timeoutMs, true, onDelayed,
+  ).catch((error) => {
+    throw taskUncertainty(error, StartPlanUncertainError);
+  });
 }
 
 export async function openPlanView(taskId) {
@@ -753,7 +715,7 @@ export async function openPlanView(taskId) {
   return submit();
 }
 
-export function updatePlanView(taskId, expectedRevision, view) {
+export function updatePlanView(taskId, expectedRevision, view, onDelayed = null) {
   requireTaskId(taskId, "updatePlanView");
   if (!isNonnegativeInteger(expectedRevision) || !isPlanViewGesture(view)) {
     throw new TypeError("updatePlanView requires an exact revision and gesture");
@@ -771,7 +733,7 @@ export function updatePlanView(taskId, expectedRevision, view) {
       collapsed: view.collapsed,
     }),
     validatePlanViewSummary,
-    PLAN_VIEW_TIMEOUT_MS,
+    PLAN_VIEW_TIMEOUT_MS, false, onDelayed,
   );
 }
 
@@ -841,6 +803,17 @@ export async function getPlanAnchor(taskId, expectedRevision, nodeId) {
   return submit();
 }
 
+export class OutcomeUnavailableError extends BridgeTransportError {
+  constructor(retry, checkable = true) {
+    super(checkable
+      ? "The original action outcome is unavailable. Retry outcome to check it again."
+      : "The original action outcome cannot be confirmed. Close and reopen NamiSync to review its current state.");
+    this.name = "OutcomeUnavailableError";
+    this.retry = retry;
+    this.checkable = checkable;
+  }
+}
+
 export async function getPlanOperationAnchor(
   taskId, sessionId, expectedRevision, operationId,
 ) {
@@ -871,6 +844,7 @@ export async function getPlanOperationAnchor(
 
 export function mutatePlanSelection(
   taskId, expectedViewRevision, expectedSelectionRevision, nodeId, selected,
+  onDelayed = null,
 ) {
   requireTaskId(taskId, "mutatePlanSelection");
   if (!isNonnegativeInteger(expectedViewRevision)
@@ -888,12 +862,13 @@ export function mutatePlanSelection(
   });
   return dispatchAttempt(
     "mutate_plan_selection", payload, validatePlanViewSummary,
-    PLAN_VIEW_TIMEOUT_MS,
+    PLAN_VIEW_TIMEOUT_MS, false, onDelayed,
   );
 }
 
 export function mutatePlanScope(
   taskId, expectedViewRevision, expectedSelectionRevision, selected,
+  onDelayed = null,
 ) {
   requireTaskId(taskId, "mutatePlanScope");
   if (!isNonnegativeInteger(expectedViewRevision)
@@ -910,12 +885,13 @@ export function mutatePlanScope(
   });
   return dispatchAttempt(
     "mutate_plan_scope", payload, validatePlanViewSummary,
-    PLAN_VIEW_TIMEOUT_MS,
+    PLAN_VIEW_TIMEOUT_MS, false, onDelayed,
   );
 }
 
 export function mutatePlanHighlight(
   taskId, expectedViewRevision, expectedHighlightRevision, gesture, nodeId = null,
+  onDelayed = null,
 ) {
   requireTaskId(taskId, "mutatePlanHighlight");
   const endpoints = new Set(["replace", "toggle", "extend", "add-range"]);
@@ -938,13 +914,13 @@ export function mutatePlanHighlight(
       node_id: nodeId,
     }),
     validatePlanViewSummary,
-    PLAN_VIEW_TIMEOUT_MS,
+    PLAN_VIEW_TIMEOUT_MS, false, onDelayed,
   );
 }
 
 export function mutatePlanHighlightedSelection(
   taskId, expectedViewRevision, expectedHighlightRevision,
-  expectedSelectionRevision, selected,
+  expectedSelectionRevision, selected, onDelayed = null,
 ) {
   requireTaskId(taskId, "mutatePlanHighlightedSelection");
   if (!isNonnegativeInteger(expectedViewRevision)
@@ -965,11 +941,11 @@ export function mutatePlanHighlightedSelection(
   });
   return dispatchAttempt(
     "mutate_plan_highlighted_selection", payload, validatePlanViewSummary,
-    PLAN_VIEW_TIMEOUT_MS,
+    PLAN_VIEW_TIMEOUT_MS, false, onDelayed,
   );
 }
 
-export function startExecution(taskId, requestId, expectedRevision, destructiveAcknowledged = false) {
+export function startExecution(taskId, requestId, expectedRevision, destructiveAcknowledged = false, onDelayed = null) {
   requireTaskId(taskId, "startExecution");
   if (typeof requestId !== "string" || !ID_PATTERN.test(requestId)
       || !isNonnegativeInteger(expectedRevision)
@@ -983,33 +959,15 @@ export function startExecution(taskId, requestId, expectedRevision, destructiveA
     expected_revision: expectedRevision,
     destructive_acknowledged: destructiveAcknowledged,
   });
-  let automaticReplayUsed = false;
-  const submit = async () => {
-    try {
-      return await dispatchAttempt(
-        "start_execution", payload, validateExecutionAdmission,
-        EXECUTION_START_TIMEOUT_MS, true,
-      );
-    } catch (error) {
-      if (!isUncertainStartPlanFailure(error)) throw error;
-      if (!automaticReplayUsed) {
-        automaticReplayUsed = true;
-        try {
-          return await dispatchAttempt(
-            "start_execution", payload, validateExecutionAdmission,
-            EXECUTION_START_TIMEOUT_MS, true,
-          );
-        } catch (replayError) {
-          if (!isUncertainStartPlanFailure(replayError)) throw replayError;
-        }
-      }
-      throw new StartPlanUncertainError(submit);
-    }
-  };
-  return submit();
+  return dispatchAttempt(
+    "start_execution", payload, validateExecutionAdmission,
+    EXECUTION_START_TIMEOUT_MS, true, onDelayed,
+  ).catch((error) => {
+    throw taskUncertainty(error, StartPlanUncertainError);
+  });
 }
 
-export function controlExecution(taskId, sessionId, action) {
+export function controlExecution(taskId, sessionId, action, onDelayed = null) {
   requireTaskId(taskId, "controlExecution");
   const task = taskDrains.get(taskId);
   if (typeof sessionId !== "string" || !ID_PATTERN.test(sessionId)
@@ -1022,11 +980,11 @@ export function controlExecution(taskId, sessionId, action) {
     "control_execution",
     Object.freeze({ task_id: taskId, session_id: sessionId, action }),
     (value) => validateControlReceipt(value, sessionId),
-    PLAN_VIEW_TIMEOUT_MS,
+    PLAN_VIEW_TIMEOUT_MS, false, onDelayed,
   );
 }
 
-export function admitLocation(purpose, value) {
+export function admitLocation(purpose, value, onDelayed = null) {
   if (!isLocationPurpose(purpose)) {
     throw new TypeError("admitLocation requires a valid purpose");
   }
@@ -1046,7 +1004,7 @@ export function admitLocation(purpose, value) {
     "admit_location",
     payload,
     (result) => validateLocationChoice(result) && result.purpose === purpose,
-    LOCATION_ADMIT_TIMEOUT_MS,
+    LOCATION_ADMIT_TIMEOUT_MS, false, onDelayed,
   );
 }
 
@@ -1108,6 +1066,7 @@ async function dispatchAttempt(
   validateResult,
   timeoutMs,
   asyncSmall = false,
+  onDelayed = null,
 ) {
   return dispatchAttemptWithReadiness(
     command,
@@ -1116,6 +1075,7 @@ async function dispatchAttempt(
     timeoutMs,
     whenBridgeReady,
     asyncSmall,
+    onDelayed,
   );
 }
 
@@ -1135,6 +1095,7 @@ async function dispatchAttemptWithReadiness(
   timeoutMs,
   waitUntilReady,
   asyncSmall = false,
+  onDelayed = null,
 ) {
   return createDispatchAttempt(
     command,
@@ -1143,7 +1104,265 @@ async function dispatchAttemptWithReadiness(
     timeoutMs,
     waitUntilReady,
     asyncSmall,
+    onDelayed,
   ).promise;
+}
+
+function createObservedAttempt(
+  command, payload, validateResult, requestId, waitUntilReady,
+  asyncSmall, onDelayed,
+) {
+  if (observedCommandAttempts.size >= OBSERVED_COMMAND_MAX_ATTEMPTS
+      || (asyncSmall && asyncCommandAttempts.size >= ASYNC_COMMAND_MAX_ATTEMPTS)) {
+    throw new BridgeCommandError("bridge_busy", ERROR_MESSAGES.bridge_busy);
+  }
+  const state = {
+    command, requestId, validateResult, asyncSmall,
+    generation: null, responseToken: null, completionToken: null,
+    nativeAckStarted: false,
+    earlyCompletion: null, result: null, initialSettled: false,
+    observationRunning: null, delayedTimer: null, ready: false,
+    onDelayed,
+    resolve: null, reject: null,
+  };
+  const promise = new Promise((resolve, reject) => {
+    state.resolve = resolve;
+    state.reject = reject;
+  });
+  observedCommandAttempts.set(requestId, state);
+  if (asyncSmall) asyncCommandAttempts.set(requestId, state);
+  const request = JSON.stringify({
+    schema_version: BRIDGE_SCHEMA_VERSION, request_id: requestId,
+    command, payload,
+  });
+  void dispatchObservedReadyAttempt(request, state, waitUntilReady).catch((error) => {
+    if (!state.ready) {
+      state.initialSettled = true;
+      retireObservedAttempt(state);
+      state.reject(error instanceof BridgeTransportError ? error : new BridgeTransportError());
+    } else {
+      void recoverObservedResult(state);
+    }
+  });
+  return {
+    promise,
+    cancel: () => { /* An admitted action remains owned until its result settles. */ },
+  };
+}
+
+async function dispatchObservedReadyAttempt(request, state, waitUntilReady) {
+  if (state.command === "pick_folder") await waitUntilReady();
+  else await withDeadline(waitUntilReady(), SHELL_READY_TIMEOUT_MS, () => {});
+  const api = bridgeApi();
+  if (typeof api?.dispatch !== "function") throw new BridgeTransportError();
+  state.ready = true;
+  if (state.command !== "pick_folder") {
+    state.delayedTimer = setTimeout(() => {
+      if (state.result !== null) return;
+      try { state.onDelayed?.(); } catch (_error) { /* Presentation cannot change custody. */ }
+      void recoverObservedResult(state);
+    }, MUTATION_FEEDBACK_MS);
+  }
+  const native = await api.dispatch(request);
+  if (!isExactObject(native, ["transport_version", "response_token", "response"])
+      && !isExactObject(native, ["transport_version", "response_token", "completion"])) {
+    throw new BridgeTransportError();
+  }
+  if (native.transport_version !== NATIVE_TRANSPORT_VERSION
+      || (native.response_token !== null
+        && (typeof native.response_token !== "string"
+          || !ID_PATTERN.test(native.response_token)))) {
+    throw new BridgeTransportError();
+  }
+  const token = native.response_token;
+  if (token !== null && state.responseToken !== null
+      && state.responseToken !== token) throw new BridgeTransportError();
+  if (token !== null) state.responseToken = token;
+  if (Object.prototype.hasOwnProperty.call(native, "response")) {
+    const response = cloneJsonValue(native.response);
+    acceptObservedResponse(state, response);
+    return;
+  }
+  const completion = cloneJsonValue(native.completion);
+  if (!state.asyncSmall || !isExactObject(completion, [
+    "phase", "generation", "request_id", "completion_token",
+  ]) || completion.phase !== COMMAND_COMPLETION_PHASE
+      || !Number.isSafeInteger(completion.generation) || completion.generation < 0
+      || completion.request_id !== state.requestId
+      || typeof completion.completion_token !== "string"
+      || !ID_PATTERN.test(completion.completion_token)
+      || (state.generation !== null && state.generation !== completion.generation)
+      || (commandHostGeneration !== null
+        && commandHostGeneration !== completion.generation)
+      || (state.completionToken !== null
+        && state.completionToken !== completion.completion_token)) {
+    throw new BridgeTransportError();
+  }
+  state.generation = completion.generation;
+  state.completionToken = completion.completion_token;
+  commandHostGeneration = completion.generation;
+  acknowledgeObservedNative(state);
+  if (state.earlyCompletion !== null) {
+    const early = state.earlyCompletion;
+    state.earlyCompletion = null;
+    acceptObservedCompletion(state, early);
+  }
+}
+
+function acceptObservedCompletion(state, message) {
+  if (state.result !== null || state.generation !== message.generation
+      || state.completionToken !== message.completion_token) return;
+  acceptObservedResponse(state, message.response);
+}
+
+function acknowledgeObservedNative(state) {
+  if (state.nativeAckStarted || state.responseToken === null) return;
+  state.nativeAckStarted = true;
+  void acknowledgeNativeResponse(bridgeApi(), state.responseToken).catch(() => {});
+}
+
+function acceptObservedResponse(state, response) {
+  if (state.result !== null) return;
+  let value;
+  let error = null;
+  try {
+    value = validateResponse(response, state.requestId, state.validateResult);
+  } catch (failure) {
+    if (!(failure instanceof BridgeCommandError)) throw failure;
+    error = failure;
+  }
+  state.result = { value, error };
+  clearTimeout(state.delayedTimer);
+  acknowledgeObservedNative(state);
+  if (state.completionToken !== null) {
+    const message = {
+      generation: state.generation, request_id: state.requestId,
+      completion_token: state.completionToken,
+    };
+    void acknowledgeCommandCompletion(message).catch(() => {});
+  }
+  const fixedUnknown = ["internal_error", "response_too_large"].includes(error?.code);
+  if (fixedUnknown) retireObservedAttempt(state);
+  if (!state.initialSettled) {
+    state.initialSettled = true;
+    if (fixedUnknown) {
+      state.reject(new OutcomeUnavailableError(null, false));
+    } else {
+      retireObservedAttempt(state);
+      if (error === null) state.resolve(value);
+      else state.reject(error);
+    }
+  }
+}
+
+function retireObservedAttempt(state) {
+  if (observedCommandAttempts.get(state.requestId) === state) {
+    observedCommandAttempts.delete(state.requestId);
+  }
+  if (asyncCommandAttempts.get(state.requestId) === state) {
+    asyncCommandAttempts.delete(state.requestId);
+  }
+  clearTimeout(state.delayedTimer);
+}
+
+async function recoverObservedResult(state) {
+  if (state.result !== null) return state.result;
+  if (state.observationRunning !== null) return state.observationRunning;
+  const run = (async () => {
+    for (let index = 0; index < 3; index += 1) {
+      if (state.result !== null) break;
+      if (index > 0) await delay(OBSERVATION_DELAYS_MS[index - 1]);
+      try {
+        const api = bridgeApi();
+        if (typeof api?.dispatch !== "function") throw new BridgeTransportError();
+        const observed = await withDeadline(
+          Promise.resolve(api.dispatch(`observe:${state.requestId}:${state.command}`)),
+          OBSERVATION_TIMEOUT_MS, () => {},
+        );
+        acceptObservedObservation(state, observed);
+      } catch (_error) {
+        // A failed observation is a communication fact, never an effect verdict.
+      }
+    }
+    if (state.result === null && !state.initialSettled) {
+      state.initialSettled = true;
+      clearTimeout(state.delayedTimer);
+      state.reject(new OutcomeUnavailableError(() => retryObservedResult(state)));
+    }
+    return state.result;
+  })();
+  state.observationRunning = run;
+  try {
+    return await run;
+  } finally {
+    if (state.observationRunning === run) state.observationRunning = null;
+  }
+}
+
+async function retryObservedResult(state) {
+  if (state.result === null) await recoverObservedResult(state);
+  if (state.result === null) {
+    throw new OutcomeUnavailableError(() => retryObservedResult(state));
+  }
+  if (["internal_error", "response_too_large"].includes(state.result.error?.code)) {
+    retireObservedAttempt(state);
+    throw new OutcomeUnavailableError(null, false);
+  }
+  retireObservedAttempt(state);
+  if (state.result.error !== null) throw state.result.error;
+  return state.result.value;
+}
+
+function acceptObservedObservation(state, observed) {
+  if (!isExactObject(observed, [
+    "transport_version", "state", "generation", "request_id",
+    "response_token", "completion_token", "response",
+  ]) || observed.transport_version !== NATIVE_TRANSPORT_VERSION
+      || !["pending", "ready", "unavailable"].includes(observed.state)
+      || !Number.isSafeInteger(observed.generation) || observed.generation < 0
+      || observed.request_id !== state.requestId
+      || (state.generation !== null && state.generation !== observed.generation)
+      || (commandHostGeneration !== null
+        && commandHostGeneration !== observed.generation)
+      || (observed.response_token !== null
+        && (typeof observed.response_token !== "string"
+          || !ID_PATTERN.test(observed.response_token)))
+      || (observed.completion_token !== null
+        && (typeof observed.completion_token !== "string"
+          || !ID_PATTERN.test(observed.completion_token)))
+      || (state.responseToken !== null && observed.response_token !== null
+        && state.responseToken !== observed.response_token)
+      || (state.completionToken !== null && observed.completion_token !== null
+        && state.completionToken !== observed.completion_token)
+      || (!state.asyncSmall && observed.completion_token !== null)) {
+    throw new BridgeTransportError();
+  }
+  if (observed.state === "unavailable") {
+    if (observed.response_token !== null || observed.completion_token !== null
+        || observed.response !== null) throw new BridgeTransportError();
+    return;
+  }
+  if (observed.state === "pending" && observed.response !== null) {
+    throw new BridgeTransportError();
+  }
+  if (observed.state === "ready"
+      && (observed.response_token === null || observed.response === null)) {
+    throw new BridgeTransportError();
+  }
+  state.generation = observed.generation;
+  commandHostGeneration = observed.generation;
+  if (observed.response_token !== null) state.responseToken = observed.response_token;
+  if (observed.completion_token !== null) {
+    state.completionToken = observed.completion_token;
+    if (state.earlyCompletion !== null) {
+      const early = state.earlyCompletion;
+      state.earlyCompletion = null;
+      acceptObservedCompletion(state, early);
+    }
+  }
+  if (observed.state === "ready" && state.result === null) {
+    acceptObservedResponse(state, cloneJsonValue(observed.response));
+  }
 }
 
 function createDispatchAttempt(
@@ -1153,8 +1372,16 @@ function createDispatchAttempt(
   timeoutMs,
   waitUntilReady = whenBridgeReady,
   asyncSmall = false,
+  onDelayed = null,
 ) {
   const requestId = mintId();
+  if (COMMAND_POLICY_CONTRACT[command]?.timeout === "mutation-observed"
+      || command === "pick_folder") {
+    return createObservedAttempt(
+      command, payload, validateResult, requestId, waitUntilReady,
+      asyncSmall, onDelayed,
+    );
+  }
   const attempt = {
     cancelled: false,
     rejectCancellation: null,
@@ -1182,6 +1409,8 @@ function createDispatchAttempt(
       completionToken: null,
       earlyCompletion: null,
       settling: false,
+      dispatched: false,
+      cleanupOnly: false,
       completion,
       resolveCompletion,
       rejectCompletion,
@@ -1281,13 +1510,17 @@ async function dispatchSmallReadyAttempt(
       throw new BridgeTransportError();
     }
     // The pending entry is fixed before native admission.
+    entry.dispatched = true;
     const transport = Promise.resolve(api.dispatch(request)).then(
       (nativeResponse) => detachSmallNativeResponse(
         api,
         nativeResponse,
         entry,
       ),
-    );
+    ).then((native) => {
+      if (entry.cleanupOnly && native.kind === "direct") retireAsyncCommandAttempt(entry);
+      return native;
+    });
     const native = await Promise.race([transport, cancelled]);
     if (native.kind === "direct") {
       retireAsyncCommandAttempt(entry);
@@ -1299,6 +1532,9 @@ async function dispatchSmallReadyAttempt(
     ]);
     return validateResponse(response, requestId, validateResult);
   } catch (error) {
+    if (entry.dispatched && asyncCommandAttempts.get(requestId) === entry) {
+      entry.cleanupOnly = true;
+    }
     if (error instanceof BridgeCommandError) {
       throw error;
     }
@@ -1308,7 +1544,7 @@ async function dispatchSmallReadyAttempt(
     throw new BridgeTransportError();
   } finally {
     attempt.rejectCancellation = null;
-    retireAsyncCommandAttempt(entry);
+    if (!entry.cleanupOnly || !entry.dispatched) retireAsyncCommandAttempt(entry);
   }
 }
 
@@ -1395,11 +1631,18 @@ function receiveCommandCompletion(event) {
   }
   const entry = asyncCommandAttempts.get(message.request_id);
   if (entry === undefined) {
-    if (
-      commandHostGeneration !== null &&
-      message.generation === commandHostGeneration
-    ) {
-      void acknowledgeCommandCompletion(message).catch(() => {});
+    return;
+  }
+  if (observedCommandAttempts.get(message.request_id) === entry) {
+    if (entry.generation !== null && entry.generation !== message.generation) return;
+    if (entry.completionToken !== null
+        && entry.completionToken !== message.completion_token) return;
+    let captured;
+    try { captured = cloneJsonValue(message); } catch { return; }
+    if (entry.completionToken === null) {
+      if (entry.earlyCompletion === null) entry.earlyCompletion = captured;
+    } else {
+      try { acceptObservedCompletion(entry, captured); } catch { /* Keep original custody. */ }
     }
     return;
   }
@@ -1442,6 +1685,10 @@ async function settleCommandCompletion(entry, message) {
   try {
     await acknowledgeCommandCompletion(message);
   } catch (_error) {
+    if (entry.cleanupOnly) {
+      entry.settling = false;
+      return;
+    }
     if (asyncCommandAttempts.get(entry.requestId) === entry) {
       asyncCommandAttempts.delete(entry.requestId);
       entry.rejectCompletion(new BridgeTransportError());
@@ -1589,7 +1836,10 @@ async function acknowledgeNativeResponse(api, responseToken) {
       throw new BridgeTransportError();
     }
     try {
-      const acknowledged = await api.dispatch(`ack:${responseToken}`);
+      const acknowledged = await withDeadline(
+        Promise.resolve(api.dispatch(`ack:${responseToken}`)),
+        ASYNC_CLEANUP_ACK_TIMEOUT_MS, () => {},
+      );
       if (
         acknowledged === true ||
         (firstDeliveryUncertain && acknowledged === false)
@@ -1611,7 +1861,8 @@ function cancelAttempt(attempt) {
   }
   attempt.cancelled = true;
   if (attempt.asyncEntry !== null) {
-    retireAsyncCommandAttempt(attempt.asyncEntry);
+    if (attempt.asyncEntry.dispatched) attempt.asyncEntry.cleanupOnly = true;
+    else retireAsyncCommandAttempt(attempt.asyncEntry);
   }
   attempt.rejectCancellation?.(new BridgeTransportError());
 }
@@ -2182,20 +2433,15 @@ function stopTask(task) {
   task.releaseEpoch += 1;
   task.releaseControl?.cancel();
   task.releaseControl = null;
-  if (task.releaseTimer !== null) {
-    clearTimeout(task.releaseTimer);
-  }
-  task.releaseTimer = null;
   if (taskDrains.get(task.taskId) === task) {
     taskDrains.delete(task.taskId);
   }
 }
 
 function beginTaskRelease(task) {
-  if (task.releaseControl !== null || task.releaseTimer !== null) {
+  if (task.releaseControl !== null) {
     return;
   }
-  task.releaseFailures = 0;
   runTaskRelease(task);
 }
 
@@ -2264,32 +2510,23 @@ function refuseTaskRelease(task, epoch, error) {
     return;
   }
   task.releaseControl = null;
-  const uncertain =
-    error instanceof BridgeTransportError ||
-    isUncertainTaskCommandFailure(error);
-  if (!uncertain) {
-    reportTaskRefusal(
-      task,
-      new TerminalSessionReleaseError(() => beginTaskRelease(task)),
-    );
-    return;
-  }
-  const failureIndex = task.releaseFailures;
-  if (failureIndex >= SESSION_RELEASE_RECOVERY_DELAYS_MS.length) {
-    reportTaskRefusal(
-      task,
-      new TerminalSessionReleaseError(() => beginTaskRelease(task)),
-    );
-    return;
-  }
-  task.releaseFailures += 1;
-  const expectedEpoch = task.releaseEpoch;
-  task.releaseTimer = setTimeout(() => {
-    task.releaseTimer = null;
-    if (isCurrentTaskRelease(task, expectedEpoch)) {
-      runTaskRelease(task);
+  if (error instanceof OutcomeUnavailableError) {
+    if (!error.checkable) {
+      reportTaskRefusal(task, new TerminalSessionReleaseError(null, true, false));
+      return;
     }
-  }, SESSION_RELEASE_RECOVERY_DELAYS_MS[failureIndex]);
+    const retry = () => {
+      if (!isCurrentTaskRelease(task, epoch)) return false;
+      void error.retry().then(
+        () => settleTaskRelease(task, epoch),
+        (failure) => refuseTaskRelease(task, epoch, failure),
+      );
+      return true;
+    };
+    reportTaskRefusal(task, new TerminalSessionReleaseError(retry, true));
+    return;
+  }
+  reportTaskRefusal(task, new TerminalSessionReleaseError(() => beginTaskRelease(task)));
 }
 
 function isUncertainTaskCommandFailure(error) {
@@ -3402,13 +3639,6 @@ function isValidUnicode(value) {
     }
   }
   return true;
-}
-
-function isUncertainStartPlanFailure(error) {
-  return (
-    error instanceof BridgeTransportError ||
-    (error instanceof BridgeCommandError && error.code === "internal_error")
-  );
 }
 
 function mintId() {

@@ -279,6 +279,10 @@ body {
   display: none;
 }
 
+#theme-retry-outcome[hidden] {
+  display: none;
+}
+
 .nami-settings__card {
   display: grid;
   gap: var(--space-4);

@@ -115,6 +115,7 @@ const reviewRenders = [];
 const confirmationRequests = [];
 const executeInvoker = new HTMLElement("button");
 let StartPlanUncertainErrorType = null;
+let OutcomeUnavailableErrorType = null;
 let nextHighlightSummary = null;
 let deferAnchor = false;
 let deferHighlight = false;
@@ -158,18 +159,39 @@ globalThis.taskHarness = {
     calls.push(["execution-detail", ...args]);
     return deferred(executionDetails);
   },
-  updatePlanView(...args) { calls.push(["update-plan", ...args]); return deferred(planViewUpdates); },
+  updatePlanView(...args) {
+    assert.equal(typeof args.at(-1), "function", "view mutation exposes delay feedback");
+    calls.push(["update-plan", ...args.slice(0, -1)]);
+    return deferred(planViewUpdates);
+  },
   mutatePlanHighlight(...args) {
-    calls.push(["highlight-plan", ...args]);
+    assert.equal(typeof args.at(-1), "function", "highlight mutation exposes delay feedback");
+    calls.push(["highlight-plan", ...args.slice(0, -1)]);
     if (deferHighlight) return deferred(planHighlights);
     const result = nextHighlightSummary ?? planSummary();
     nextHighlightSummary = null;
     return Promise.resolve(result);
   },
-  mutatePlanSelection(...args) { calls.push(["select-plan", ...args]); return deferred(planSelections); },
-  startExecution(...args) { calls.push(["execute-plan", ...args]); return deferred(planExecutions); },
-  controlExecution(...args) { calls.push(["control-execution", ...args]); return deferred(executionControls); },
-  planAgain(...args) { calls.push(["plan-again", ...args]); return deferred(planAgainStarts); },
+  mutatePlanSelection(...args) {
+    assert.equal(typeof args.at(-1), "function", "selection mutation exposes delay feedback");
+    calls.push(["select-plan", ...args.slice(0, -1)]);
+    return deferred(planSelections);
+  },
+  startExecution(...args) {
+    assert.equal(typeof args.at(-1), "function", "execution admission exposes delay feedback");
+    calls.push(["execute-plan", ...args.slice(0, -1)]);
+    return deferred(planExecutions);
+  },
+  controlExecution(...args) {
+    assert.equal(typeof args.at(-1), "function", "execution control exposes delay feedback");
+    calls.push(["control-execution", ...args.slice(0, -1)]);
+    return deferred(executionControls);
+  },
+  planAgain(...args) {
+    assert.equal(typeof args.at(-1), "function", "plan-again exposes delay feedback");
+    calls.push(["plan-again", ...args.slice(0, -1)]);
+    return deferred(planAgainStarts);
+  },
   readSetup(taskId = null) {
     const plan = taskId === TASK_G;
     const options = {
@@ -322,14 +344,17 @@ const executionConfirmationUrl = moduleUrl(`
 `);
 const bridgeUrl = moduleUrl(`
   export class BridgeTransportError extends Error {}
+  export class OutcomeUnavailableError extends BridgeTransportError {
+    constructor(retry, checkable = true) { super(); this.retry = retry; this.checkable = checkable; }
+  }
   export class StartPlanUncertainError extends BridgeTransportError {
-    constructor(retry) { super(); this.retry = retry; }
+    constructor(retry, checkable = true) { super(); this.retry = retry; this.checkable = checkable; }
   }
   export class TaskCreateUncertainError extends BridgeTransportError {
-    constructor(retry) { super(); this.retry = retry; }
+    constructor(retry, checkable = true) { super(); this.retry = retry; this.checkable = checkable; }
   }
   export class TaskCloseUncertainError extends BridgeTransportError {
-    constructor(retry) { super(); this.retry = retry; }
+    constructor(retry, checkable = true) { super(); this.retry = retry; this.checkable = checkable; }
   }
   export class TerminalPresentationError extends BridgeTransportError {}
   export class TerminalSessionReleaseError extends BridgeTransportError {}
@@ -360,6 +385,7 @@ const bridgeUrl = moduleUrl(`
   export const mutatePlanHighlight = (...args) => globalThis.taskHarness.mutatePlanHighlight(...args);
 `);
 StartPlanUncertainErrorType = (await import(bridgeUrl)).StartPlanUncertainError;
+OutcomeUnavailableErrorType = (await import(bridgeUrl)).OutcomeUnavailableError;
 const readinessUrl = moduleUrl(`
   export const installReadinessReceiver = () => ({
     revision: () => 0,
@@ -376,7 +402,7 @@ const themeUrl = moduleUrl(`
 let appSource = await readFile(process.argv[2], "utf8");
 appSource = appSource.replace(
   /import \{[\s\S]*?\} from "\.\/bridge\.js";/,
-  `import { acknowledgeShellReady, admitLocation, BridgeTransportError, closeTask, controlExecution, createTask, echoReadiness, getExecutionDetail, getPlanAnchor, getPlanOperationAnchor, getPlanWindow, listTasks, markBridgeOperational, mutatePlanHighlight, mutatePlanSelection, openPlanView, pickFolder, planAgain, prepareSetup, readSetup, StartPlanUncertainError, startExecution, startInventory, startPlan, startTaskDrain, TaskCloseUncertainError, TaskCreateUncertainError, TerminalPresentationError, TerminalSessionReleaseError, updatePlanView, whenBridgeApiReady } from "${bridgeUrl}";`,
+  `import { acknowledgeShellReady, admitLocation, BridgeTransportError, closeTask, controlExecution, createTask, echoReadiness, getExecutionDetail, getPlanAnchor, getPlanOperationAnchor, getPlanWindow, listTasks, markBridgeOperational, mutatePlanHighlight, mutatePlanSelection, openPlanView, OutcomeUnavailableError, pickFolder, planAgain, prepareSetup, readSetup, StartPlanUncertainError, startExecution, startInventory, startPlan, startTaskDrain, TaskCloseUncertainError, TaskCreateUncertainError, TerminalPresentationError, TerminalSessionReleaseError, updatePlanView, whenBridgeApiReady } from "${bridgeUrl}";`,
 );
 appSource = appSource
   .replace("./readiness.js", readinessUrl)
@@ -389,6 +415,7 @@ appSource = appSource
   .replace("./render.js", renderUrl);
 appSource += "\nglobalThis.taskHarness.forceReview = loadPlanReview;\n"
   + "globalThis.taskHarness.adoptTask = adoptTask;\n"
+  + "globalThis.taskHarness.closeRetainedTask = closeRetainedTask;\n"
   + "globalThis.taskHarness.refreshTasks = refreshTasks;\n";
 
 function walk(root) {
@@ -960,12 +987,13 @@ assert.equal(firstReview.pending, "execute", "execute feedback precedes admissio
 taskButton("Task 6").click();
 const executionSession = "8".repeat(32);
 const planDrain = drains.get(TASK_G);
-const retry = () => globalThis.taskHarness.startExecution(
-  TASK_G,
-  frozenRequestId,
-  frozenSelectionRevision,
-  true,
-);
+const observedExecutionCalls = [];
+const observedExecution = deferred(observedExecutionCalls);
+let executionOutcomeChecks = 0;
+const retry = () => {
+  executionOutcomeChecks += 1;
+  return observedExecution;
+};
 planExecutions[1].reject(new StartPlanUncertainErrorType(retry));
 await until(() => firstReview.pending === null);
 assert.equal(reviewRenders.at(-1).executionAttempt.state, "uncertain");
@@ -999,20 +1027,17 @@ const replacementReview = {
 };
 reviewRenders.at(-1).review = replacementReview;
 globalThis.planReviewHarness.callbacks.onExecute(replacementReview, executeInvoker);
-await until(() => planExecutions.length === 3);
-assert.deepEqual(
-  calls.at(-1),
-  ["execute-plan", TASK_G, frozenRequestId, frozenSelectionRevision, true],
-  "uncertain retry retains the exact confirmed intent after review replacement",
-);
+await until(() => executionOutcomeChecks === 1);
+assert.equal(planExecutions.length, 2,
+  "checking the original confirmed intent after review replacement does not resubmit execution");
 const admissionOpenBase = planOpens.length;
-planExecutions[2].resolve({ task_id: TASK_G, session_id: executionSession });
+observedExecutionCalls[0].resolve({ task_id: TASK_G, session_id: executionSession });
 await until(() => calls.some(
   (call) => call[0] === "drain" && call[1] === TASK_G && call[2] === executionSession,
 ));
 const executionDrain = drains.get(TASK_G);
 assert.notEqual(executionDrain, planDrain, "execution replaces the released plan drain");
-assert.equal(planExecutions.length, 3, "navigation cannot duplicate execution admission");
+assert.equal(planExecutions.length, 2, "navigation cannot duplicate execution admission");
 await until(() => planOpens.length === admissionOpenBase + 1);
 const admissionReload = planOpens.at(-1);
 
@@ -1478,8 +1503,8 @@ liveReview = liveTask.review;
 assert.equal(liveReview.pending, "resume");
 executionControls[erroredControlIndex].reject(new Error("simulated lost control reply"));
 await until(() => liveReview.pending === null);
-assert.equal(liveReview.message, "Resume uncertain. Follow live status.",
-  "uncertain control feedback survives review replacement");
+assert.equal(liveReview.message, "Resume refused. Follow live status.",
+  "a task error remains a refusal after review replacement");
 executionControls.splice(erroredControlIndex, 1);
 
 globalThis.planReviewHarness.callbacks.onControl(liveReview, "resume");
@@ -1516,7 +1541,7 @@ executionDrain.acceptUpdate(stateUpdate("running"));
 executionControls[3].reject(new Error("simulated uncertain control receipt"));
 await until(() => liveReview.pending === null);
 assert.equal(reviewRenders.at(-1).executionControlState, "running");
-assert.equal(liveReview.message, "Pause uncertain. Follow live status.");
+assert.equal(liveReview.message, "Pause refused. Follow live status.");
 
 globalThis.planReviewHarness.callbacks.onControl(liveReview, "pause");
 executionDrain.acceptUpdate(stateUpdate("pausing"));
@@ -1769,7 +1794,7 @@ await until(() => typeof stoppedTask.closeRetry === "function");
 assert.equal(walk(app).find((element) =>
   element.ariaLabel === `Retry updates for ${stoppedTask.label}`).hidden, true,
   "uncertain Close fences observation retry");
-walk(app).find((element) => element.ariaLabel === `Retry close for ${stoppedTask.label}`).click();
+walk(app).find((element) => element.ariaLabel === `Retry close outcome for ${stoppedTask.label}`).click();
 await until(() => closes.length === uncertainCloseIndex + 2);
 assert.deepEqual(calls.at(-1), ["close-retry", stoppedTaskId, stoppedSessionId]);
 closes.at(-1).resolve({ task_id: stoppedTaskId, session_id: stoppedSessionId, disposition: "closed" });
@@ -1816,7 +1841,7 @@ await until(() => closes.length === failedCloseIndex + 1);
 closes.at(-1).reject(new Error("temporary close failure"));
 await until(() => earlyStoppedTask.closeFailed);
 const independentCloseError = earlyStoppedTask.error;
-assert.equal(independentCloseError, "Close did not finish. Retry.");
+assert.equal(independentCloseError, "Close was refused. Retry close.");
 walk(app).find((element) =>
   element.ariaLabel === `Retry updates for ${earlyStoppedTask.label}`).click();
 earlyStoppedDrain.acceptRecovered(earlyStoppedTaskId, earlyStoppedSessionId);
@@ -1901,5 +1926,232 @@ await turns();
 assert.equal(newSessionReview.message, newSessionMessage,
   "a prior session's control reply cannot overwrite replacement review feedback");
 assert.equal(replacedSessionTask.executionControlState, "running");
+
+const unknownReviewTaskId = `task-${"3".repeat(32)}`;
+const unknownReviewSessionId = "3".repeat(32);
+const unknownOpenBase = planOpens.length;
+const unknownWindowBase = planWindows.length;
+const unknownReviewTask = globalThis.taskHarness.adoptTask({
+  task_id: unknownReviewTaskId, session_id: unknownReviewSessionId,
+  session_state: "active", session_released: false,
+  task_kind: "sync-plan", request_id: "a".repeat(32),
+});
+await until(() => planOpens.length === unknownOpenBase + 1);
+const unknownSummary = planSummary({ task_id: unknownReviewTaskId });
+planOpens.at(-1).resolve(unknownSummary);
+await until(() => planWindows.length === unknownWindowBase + 1);
+planWindows.at(-1).resolve(planWindow(unknownSummary));
+await until(() => unknownReviewTask.review !== null);
+taskButton(unknownReviewTask.label).click();
+const unknownReview = unknownReviewTask.review;
+const unknownSelectionBase = planSelections.length;
+globalThis.planReviewHarness.callbacks.onSelect(unknownReview, unknownReview.window.rows[0], true);
+await until(() => planSelections.length === unknownSelectionBase + 1);
+const pendingReviewClose = walk(app).find((element) =>
+  element.ariaLabel === "Wait for the current review action before closing this task.");
+assert.equal(pendingReviewClose?.disabled, true,
+  "in-flight review and Close use the same visible block reason");
+const pendingReviewCloseBase = closes.length;
+globalThis.taskHarness.closeRetainedTask(unknownReviewTaskId);
+await turns();
+assert.equal(closes.length, pendingReviewCloseBase,
+  "in-flight review cannot silently submit Close");
+planSelections.at(-1).reject(new OutcomeUnavailableErrorType(null, false));
+await until(() => unknownReview.outcomeUnknown === true);
+assert.equal(unknownReview.pending, "outcome");
+assert.equal(unknownReview.outcomeRetry, null);
+assert.match(unknownReview.message, /Close and reopen NamiSync/);
+assert.equal(unknownReviewTask.reviewOutcomeUnknown, true);
+const unknownSelectionCount = planSelections.length;
+globalThis.planReviewHarness.callbacks.onSelect(unknownReview, unknownReview.window.rows[0], false);
+globalThis.planReviewHarness.callbacks.onHighlight(unknownReview, "replace", unknownReview.window.rows[0].node_id);
+await turns();
+assert.equal(planSelections.length, unknownSelectionCount,
+  "fixed-unknown review intent blocks a second selection effect");
+const unknownClose = walk(app).find((element) =>
+  element.ariaLabel === "Original outcome cannot be confirmed. Close and reopen NamiSync to review current state.");
+assert.equal(unknownClose?.disabled, true, "fixed-unknown review keeps Close fenced");
+const unknownReloadBase = planOpens.length;
+const unknownReloadWindowBase = planWindows.length;
+void globalThis.taskHarness.forceReview(unknownReviewTask, true);
+await until(() => planOpens.length === unknownReloadBase + 1);
+planOpens.at(-1).resolve(unknownSummary);
+await until(() => planWindows.length === unknownReloadWindowBase + 1);
+planWindows.at(-1).resolve(planWindow(unknownSummary));
+await until(() => unknownReviewTask.review !== unknownReview);
+assert.equal(unknownReviewTask.review.pending, "outcome",
+  "a read-only review replacement retains the fixed-unknown intent fence");
+assert.equal(unknownReviewTask.review.outcomeRetry, null);
+
+async function openActiveUnknownOutcomeTask(hex) {
+  const taskId = `task-${hex.repeat(32)}`;
+  const sessionId = hex.repeat(32);
+  const openBase = planOpens.length;
+  const windowBase = planWindows.length;
+  const task = globalThis.taskHarness.adoptTask({
+    task_id: taskId, session_id: sessionId, session_state: "active",
+    session_released: false, task_kind: "sync-plan", request_id: "a".repeat(32),
+  });
+  task.executionStarted = true;
+  await until(() => planOpens.length === openBase + 1);
+  const summary = planSummary({
+    task_id: taskId, selection_state: "committed",
+    execution: { ...planSummary().execution, session_id: sessionId },
+  });
+  planOpens.at(-1).resolve(summary);
+  await until(() => planWindows.length === windowBase + 1);
+  planWindows.at(-1).resolve(planWindow(summary));
+  await until(() => task.review !== null);
+  taskButton(task.label).click();
+  return task;
+}
+
+const unknownHighlightTask = await openActiveUnknownOutcomeTask("0");
+const highlightReview = unknownHighlightTask.review;
+const highlightBase = planHighlights.length;
+deferHighlight = true;
+globalThis.planReviewHarness.callbacks.onHighlight(
+  highlightReview, "replace", highlightReview.window.rows[0].node_id,
+);
+await until(() => planHighlights.length === highlightBase + 1);
+planHighlights.at(-1).reject(new OutcomeUnavailableErrorType(null, false));
+await until(() => highlightReview.outcomeUnknown);
+deferHighlight = false;
+assert.equal(highlightReview.pending, "outcome");
+assert.equal(highlightReview.outcomeAction, null);
+assert.equal(unknownHighlightTask.canCancelAfterFixedReviewOutcome, true);
+assert.match(highlightReview.message, /Close and reopen NamiSync/);
+const highlightClose = walk(app).find((element) =>
+  element.ariaLabel === "Original outcome cannot be confirmed. Close and reopen NamiSync to review current state.");
+assert.equal(highlightClose?.disabled, true, "unknown highlight keeps Close fenced");
+const highlightCancelBase = executionControls.length;
+globalThis.planReviewHarness.callbacks.onControl(highlightReview, "cancel");
+await until(() => executionControls.length === highlightCancelBase + 1);
+assert.deepEqual(calls.at(-1), ["control-execution", unknownHighlightTask.taskId,
+  unknownHighlightTask.sessionId, "cancel"]);
+assert.equal(highlightReview.pending, "outcome", "independent Cancel does not replace the original fence");
+assert.match(highlightReview.message, /Close and reopen NamiSync/);
+assert.equal(unknownHighlightTask.executionControlAttempt.independent, true);
+globalThis.planReviewHarness.callbacks.onControl(highlightReview, "cancel");
+assert.equal(executionControls.length, highlightCancelBase + 1,
+  "in-flight independent Cancel cannot be resubmitted");
+const cancelObservations = [];
+let cancelObservationCalls = 0;
+const observeCancel = () => {
+  cancelObservationCalls += 1;
+  return deferred(cancelObservations);
+};
+executionControls.at(-1).reject(new OutcomeUnavailableErrorType(observeCancel));
+await until(() => typeof unknownHighlightTask.executionControlAttempt.retry === "function");
+assert.equal(unknownHighlightTask.canCancelAfterFixedReviewOutcome, false);
+assert.equal(highlightReview.outcomeRetry, null,
+  "independent Cancel observation does not overwrite the original unknown action");
+assert.match(unknownHighlightTask.executionControlAttempt.message, /Retry outcome/);
+const highlightReloadBase = planOpens.length;
+const highlightReloadWindowBase = planWindows.length;
+void globalThis.taskHarness.forceReview(unknownHighlightTask, true);
+await until(() => planOpens.length === highlightReloadBase + 1);
+planOpens.at(-1).resolve(highlightReview.summary);
+await until(() => planWindows.length === highlightReloadWindowBase + 1);
+planWindows.at(-1).resolve(planWindow(highlightReview.summary));
+await until(() => unknownHighlightTask.review !== highlightReview);
+const reloadedHighlightReview = unknownHighlightTask.review;
+assert.equal(reloadedHighlightReview.pending, "outcome");
+assert.equal(reloadedHighlightReview.outcomeAction, null);
+assert.match(reloadedHighlightReview.message, /Close and reopen NamiSync/);
+assert.equal(typeof unknownHighlightTask.executionControlAttempt.retry, "function");
+globalThis.planReviewHarness.callbacks.onRetryOutcome(reloadedHighlightReview);
+await until(() => cancelObservations.length === 1);
+assert.equal(cancelObservationCalls, 1);
+assert.equal(executionControls.length, highlightCancelBase + 1,
+  "Cancel Retry observes the exact request without fresh submission");
+cancelObservations[0].reject(new OutcomeUnavailableErrorType(null, false));
+await until(() => unknownHighlightTask.executionControlAttempt.unknown);
+assert.equal(unknownHighlightTask.executionControlAttempt.retry, null);
+assert.equal(unknownHighlightTask.canCancelAfterFixedReviewOutcome, false);
+assert.match(reloadedHighlightReview.message, /Close and reopen NamiSync/);
+globalThis.planReviewHarness.callbacks.onControl(reloadedHighlightReview, "cancel");
+await turns();
+assert.equal(executionControls.length, highlightCancelBase + 1,
+  "fixed unknown Cancel cannot be submitted again");
+
+const unknownPauseTask = await openActiveUnknownOutcomeTask("1");
+const pauseReview = unknownPauseTask.review;
+const pauseBase = executionControls.length;
+globalThis.planReviewHarness.callbacks.onControl(pauseReview, "pause");
+await until(() => executionControls.length === pauseBase + 1);
+executionControls.at(-1).reject(new OutcomeUnavailableErrorType(null, false));
+await until(() => pauseReview.outcomeUnknown);
+assert.equal(pauseReview.outcomeAction, "pause");
+assert.equal(unknownPauseTask.canCancelAfterFixedReviewOutcome, true);
+globalThis.planReviewHarness.callbacks.onControl(pauseReview, "cancel");
+await until(() => executionControls.length === pauseBase + 2);
+assert.equal(pauseReview.pending, "outcome");
+executionControls.at(-1).resolve({
+  code: "accepted", session_id: unknownPauseTask.sessionId,
+  before: "running", after: "canceling", detail: "Cancel requested.", accepted: true,
+});
+await until(() => unknownPauseTask.executionControlAttempt.pending === false);
+assert.equal(unknownPauseTask.executionControlAttempt.accepted, true);
+assert.equal(unknownPauseTask.canCancelAfterFixedReviewOutcome, false);
+assert.match(pauseReview.message, /Close and reopen NamiSync/);
+
+const unknownCancelTask = await openActiveUnknownOutcomeTask("4");
+const cancelReview = unknownCancelTask.review;
+const originalCancelBase = executionControls.length;
+globalThis.planReviewHarness.callbacks.onControl(cancelReview, "cancel");
+await until(() => executionControls.length === originalCancelBase + 1);
+executionControls.at(-1).reject(new OutcomeUnavailableErrorType(null, false));
+await until(() => cancelReview.outcomeUnknown);
+assert.equal(cancelReview.outcomeAction, "cancel");
+assert.equal(unknownCancelTask.canCancelAfterFixedReviewOutcome, false);
+globalThis.planReviewHarness.callbacks.onControl(cancelReview, "cancel");
+await turns();
+assert.equal(executionControls.length, originalCancelBase + 1,
+  "unknown original Cancel cannot be treated as an independent Cancel");
+
+const closeRaceTaskId = `task-${"2".repeat(32)}`;
+const closeRaceSessionId = "2".repeat(32);
+const closeRaceTask = globalThis.taskHarness.adoptTask({
+  task_id: closeRaceTaskId, session_id: closeRaceSessionId,
+  session_state: "active", session_released: false,
+  task_kind: "inventory", request_id: "a".repeat(32),
+});
+await until(() => drains.has(closeRaceTaskId));
+const closeRaceBase = closes.length;
+void globalThis.taskHarness.closeRetainedTask(closeRaceTaskId);
+await until(() => closes.length === closeRaceBase + 1);
+drains.get(closeRaceTaskId).acceptUpdate({ update_type: "record", record: { state: "canceled" } });
+await turns();
+assert.equal(closes.length, closeRaceBase + 1,
+  "terminal state before the first Close receipt does not submit a second Close");
+closes[closeRaceBase].resolve({
+  task_id: closeRaceTaskId, session_id: closeRaceSessionId, disposition: "pending",
+});
+await until(() => closes.length === closeRaceBase + 2);
+assert.equal(closeRaceTask.closePending, true,
+  "the known pending receipt and terminal state admit one Close continuation");
+closes[closeRaceBase + 1].resolve({
+  task_id: closeRaceTaskId, session_id: closeRaceSessionId, disposition: "pending",
+});
+await turns();
+drains.get(closeRaceTaskId).acceptUpdate({ update_type: "record", record: { state: "canceled" } });
+await turns();
+assert.equal(closes.length, closeRaceBase + 2,
+  "a pending continuation cannot create an automatic Close loop");
+assert.equal(closeRaceTask.closePending, true,
+  "continued pending Close remains visible for explicit resolution");
+assert.equal(closeRaceTask.closeManualReady, true);
+assert.match(closeRaceTask.closeMessage, /Select Retry close/);
+void globalThis.taskHarness.closeRetainedTask(closeRaceTaskId);
+await until(() => closes.length === closeRaceBase + 3);
+closes[closeRaceBase + 2].resolve({
+  task_id: closeRaceTaskId, session_id: closeRaceSessionId, disposition: "closed",
+});
+await turns();
+void globalThis.taskHarness.closeRetainedTask(closeRaceTaskId);
+await turns();
+assert.equal(closes.length, closeRaceBase + 3,
+  "a settled task cannot receive another Close effect");
 
 process.stdout.write("ok");

@@ -621,7 +621,7 @@ def _run_required_bridge_probe(probe_name: str) -> None:
 
 
 
-def test_required_node_start_plan_identity_and_timeout_contract() -> None:
+def test_required_node_start_plan_identity_and_observation_contract() -> None:
     _run_required_bridge_probe("bridge_timeout_probe.mjs")
 
 

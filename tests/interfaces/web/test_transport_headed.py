@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import inspect
 import json
+import re
 import shutil
 import sys
 from dataclasses import dataclass
@@ -370,8 +371,11 @@ def test_transport_gate_assets_keep_test_implementation_outside_package() -> Non
     assert 'import("./bootstrap_test_bridge.js")' in scripts
     transport = (_TEST_ASSETS / "transport.js").read_text(encoding="utf-8")
     assert 'window.dispatchEvent(new Event("pywebviewready"));' not in transport
-    assert 'deadlineFaultPhase = "start_plan";' in transport
-    assert 'deadlineFaultPhase = "main_drain";' in transport
+    assert 'timerFaultPhase = "start_plan_startup";' in transport
+    assert 'timerFaultPhase = "start_plan_feedback";' in transport
+    assert 'timerFaultPhase = "main_drain";' in transport
+    assert 'timerFaultPhase === "start_plan_feedback" && milliseconds === 5000' in transport
+    assert 'timerFaultPhase === "main_drain" && milliseconds === 30000' in transport
     assert 'targeted === null ? milliseconds : 500' in transport
     assert "pickFolder(" in scripts
     assert "startPlan(" in scripts
@@ -1342,7 +1346,7 @@ def test_br_g_33_real_webview2_recovers_only_from_explicit_transport_evidence(
     assert browser["callback_release_order"] == ["record", "release"]
     assert browser["automatic_close_calls"] == 0
     assert browser["replacement_registration"] is True
-    assert browser["deadline_faults"] == {
+    assert browser["timer_faults"] == {
         "start_plan": {"armed": 1, "fired": 1},
         "main_drain": {"armed": 1, "fired": 1},
     }
@@ -1442,18 +1446,57 @@ def test_br_g_33_real_webview2_recovers_only_from_explicit_transport_evidence(
     by_command: dict[str, list[dict[str, object]]] = {}
     for request in start_requests:
         by_command.setdefault(request["payload"]["command_id"], []).append(request)
-    replays = [attempts for attempts in by_command.values() if len(attempts) == 2]
-    assert len(replays) == 1
-    first, second = replays[0]
-    assert first["request_id"] != second["request_id"]
-    assert first["payload"] == second["payload"]
-    assert set(first["payload"]) == {
+    assert len(start_requests) == 5
+    assert len(by_command) == 5
+    assert all(len(attempts) == 1 for attempts in by_command.values())
+    original = by_command[server["uncertain_command_id"]][0]
+    assert original["request_id"] == server["uncertain_request_id"]
+    assert set(original["payload"]) == {
         "task_id",
         "command_id",
         "source_id",
         "target_id",
         "options",
     }
+    assert sum(
+        call["command_id"] == server["uncertain_command_id"]
+        for call in result["service_start_plan_calls"]
+    ) == 1
+    assert server["uncertain_start_effect_done"] is True
+    assert server["completion_post_failed"] is True
+    post_failures = [
+        fault for fault in result["injected_transport_faults"]
+        if fault.get("kind") == "completion_post_failed"
+    ]
+    assert post_failures == [{
+        "kind": "completion_post_failed",
+        "request_id": original["request_id"],
+    }]
+    observations = server["observation_requests"]
+    assert server["observation_count"] == len(observations)
+    assert 1 <= len(observations) <= 3
+    assert all(
+        item["request_id"] == original["request_id"]
+        and item["command"] == "start_plan"
+        and item["post_failure_before_observe"] is True
+        for item in observations
+    )
+    ready = [item["response"] for item in observations
+             if item["response"]["state"] == "ready"]
+    assert ready
+    assert all(set(item["response"]) == {
+        "transport_version", "state", "generation", "request_id",
+        "response_token", "completion_token", "response",
+    } for item in observations)
+    recovered = ready[0]
+    assert recovered["transport_version"] == 1
+    assert recovered["request_id"] == original["request_id"]
+    assert type(recovered["generation"]) is int
+    assert re.fullmatch(r"[0-9a-f]{32}", recovered["response_token"])
+    assert re.fullmatch(r"[0-9a-f]{32}", recovered["completion_token"])
+    assert recovered["response"]["request_id"] == original["request_id"]
+    assert recovered["response"]["ok"] is True
+    assert recovered["response"]["result"]["task_id"] == original["payload"]["task_id"]
 
 
 @pytest.mark.headed

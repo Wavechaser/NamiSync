@@ -81,8 +81,12 @@ globalThis.window = testWindow;
 const requests = [];
 const releaseRequests = [];
 const closeRequests = [];
+const observedLifecycle = [];
+const retainedLifecycleResponses = new Map();
 let releaseFailuresRemaining = 0;
 let closeFailuresRemaining = 0;
+let releaseObservationUnavailable = false;
+let closeObservationUnavailable = false;
 const releaseRefusalCodes = [];
 let inspectReleaseDispatch = null;
 testWindow.pywebview = {
@@ -90,6 +94,25 @@ testWindow.pywebview = {
     dispatch(requestJson) {
       if (requestJson.startsWith("ack:")) {
         return Promise.resolve(true);
+      }
+      if (requestJson.startsWith("observe:")) {
+        const [, requestId, command] = requestJson.split(":");
+        observedLifecycle.push({ requestId, command });
+        const retained = retainedLifecycleResponses.get(requestId);
+        const unavailable = command === "release_terminal_session"
+          ? releaseObservationUnavailable : closeObservationUnavailable;
+        return Promise.resolve({
+          transport_version: 1,
+          state: retained !== undefined && retained.command === command && !unavailable
+            ? "ready" : "unavailable",
+          generation: 0,
+          request_id: requestId,
+          response_token: retained !== undefined && retained.command === command && !unavailable
+            ? requestId : null,
+          completion_token: null,
+          response: retained !== undefined && retained.command === command && !unavailable
+            ? retained.response : null,
+        });
       }
       const pending = deferred();
       const request = JSON.parse(requestJson);
@@ -112,6 +135,19 @@ testWindow.pywebview = {
             (isRelease && releaseFailuresRemaining > 0) ||
             (!isRelease && closeFailuresRemaining > 0)
           ) {
+            retainedLifecycleResponses.set(request.request_id, {
+              command: request.command,
+              response: {
+                schema_version: 1,
+                request_id: request.request_id,
+                ok: true,
+                result: {
+                  task_id: request.payload.task_id,
+                  session_id: request.payload.session_id,
+                  ...(isRelease ? {} : { disposition: "closed" }),
+                },
+              },
+            });
             if (isRelease) {
               releaseFailuresRemaining -= 1;
             } else {
@@ -149,7 +185,8 @@ testWindow.pywebview = {
       }
       return pending.promise.then((response) => ({
         transport_version: 1,
-        response_token: null,
+        response_token: request.command === "release_terminal_session"
+          || request.command === "close_task" ? request.request_id : null,
         response,
       }));
     },
@@ -1596,15 +1633,14 @@ const stopTerminalReplacement = bridge.startTaskDrain(
 await nextRequest(requests.length);
 stopTerminalReplacement();
 
-// A terminal record is presented before session release begins. A lost release
-// response retries the same task/session authority; confirmed release retains
-// the browser entry, and only explicit close removes it.
+// A terminal record is presented before session release begins. Lost lifecycle
+// returns are recovered by observing their original results without resubmission.
 const acceptedRelease = [];
 const releaseRefusals = [];
 const confirmedReleases = [];
 const releaseCountBefore = releaseRequests.length;
 const closeCountBeforeRelease = closeRequests.length;
-const releaseDelayIndex = scheduledDelays.length;
+const releaseObserveBefore = observedLifecycle.length;
 releaseFailuresRemaining = 1;
 inspectReleaseDispatch = (request) => {
   assert.equal(acceptedRelease.at(-1)?.update_type, "record");
@@ -1624,21 +1660,20 @@ const release0 = await nextRequest(releaseDrainIndex);
 success(release0, [terminalRecord(session("a"))]);
 await turns(30);
 inspectReleaseDispatch = null;
-assert.equal(releaseRequests.length, releaseCountBefore + 2);
+assert.equal(releaseRequests.length, releaseCountBefore + 1);
 assert.deepEqual(
   releaseRequests.slice(releaseCountBefore).map((item) => item.request.payload),
-  [
-    { task_id: task("1"), session_id: session("a") },
-    { task_id: task("1"), session_id: session("a") },
-  ],
+  [{ task_id: task("1"), session_id: session("a") }],
 );
-assert.deepEqual(scheduledDelays.slice(releaseDelayIndex), [100]);
+const releaseChecks = observedLifecycle.slice(releaseObserveBefore);
+assert.ok(releaseChecks.length >= 1 && releaseChecks.length <= 3);
+assert.ok(releaseChecks.every((item) => item.command === "release_terminal_session"));
 assert.equal(releaseRefusals.length, 0);
 assert.deepEqual(confirmedReleases, [
   { taskId: task("1"), sessionId: session("a") },
 ]);
 assert.equal(closeRequests.length, closeCountBeforeRelease);
-const closeDelayIndex = scheduledDelays.length;
+const closeObserveBefore = observedLifecycle.length;
 closeFailuresRemaining = 1;
 const closedReleaseTask = await bridge.closeTask(task("1"), session("a"));
 assert.deepEqual(closedReleaseTask, {
@@ -1646,14 +1681,13 @@ assert.deepEqual(closedReleaseTask, {
   session_id: session("a"),
   disposition: "closed",
 });
-assert.equal(closeRequests.length, closeCountBeforeRelease + 2);
-assert.deepEqual(scheduledDelays.slice(closeDelayIndex), [100]);
+assert.equal(closeRequests.length, closeCountBeforeRelease + 1);
+const closeChecks = observedLifecycle.slice(closeObserveBefore);
+assert.ok(closeChecks.length >= 1 && closeChecks.length <= 3);
+assert.ok(closeChecks.every((item) => item.command === "close_task"));
 assert.deepEqual(
   closeRequests.slice(closeCountBeforeRelease).map((item) => item.request.payload),
-  [
-    { task_id: task("1"), session_id: session("a") },
-    { task_id: task("1"), session_id: session("a") },
-  ],
+  [{ task_id: task("1"), session_id: session("a") }],
 );
 assert.equal(confirmedReleases.length, 1, "close cannot repeat release publication");
 const stopReleaseReplacement = bridge.startTaskDrain(
@@ -1676,8 +1710,8 @@ assert.throws(
   TypeError,
 );
 
-// Native admission saturation is uncertain for both drain consumption and
-// terminal cleanup. Both paths back off and preserve their exact authority.
+// Native admission saturation backs off the read-only drain. Terminal cleanup
+// reports its definitive busy refusal for an explicit retry.
 const saturationRefusals = [];
 const saturationDelayIndex = scheduledDelays.length;
 const saturationRequestIndex = requests.length;
@@ -1699,15 +1733,22 @@ const saturation1 = await nextRequest(saturationRequestIndex + 1);
 assert.equal(saturation1.request.payload.replay_from, 1);
 success(saturation1, [terminalRecord(session("6"))]);
 await turns(30);
-assert.deepEqual(scheduledDelays.slice(saturationDelayIndex), [50, 100]);
+assert.ok(scheduledDelays.slice(saturationDelayIndex).includes(50));
+assert.equal(releaseRequests.length, releaseCountBeforeSaturation + 1);
+assert.equal(saturationRefusals.length, 1);
+assert.equal(typeof saturationRefusals[0].retry, "function");
+saturationRefusals[0].retry();
+await turns(20);
 assert.equal(releaseRequests.length, releaseCountBeforeSaturation + 2);
-assert.equal(saturationRefusals.length, 0);
 stopSaturation();
 
-// Exhausted release uncertainty retains the task and exposes an exact retry.
+// Unavailable observation retains the original release and exposes only an
+// original-result check. The later check cannot submit another release.
 const exhaustedReleaseRefusals = [];
 const exhaustedReleaseStart = releaseRequests.length;
-releaseFailuresRemaining = 4;
+const exhaustedReleaseObserveStart = observedLifecycle.length;
+releaseFailuresRemaining = 1;
+releaseObservationUnavailable = true;
 const exhaustedReleaseDrainStart = requests.length;
 const stopExhaustedRelease = bridge.startTaskDrain(
   task("4"),
@@ -1721,20 +1762,25 @@ await waitUntil(
   () => exhaustedReleaseRefusals.length === 1,
   "exhausted release did not expose its public retry",
 );
-assert.equal(releaseRequests.length, exhaustedReleaseStart + 4);
+assert.equal(releaseRequests.length, exhaustedReleaseStart + 1);
+assert.equal(observedLifecycle.length - exhaustedReleaseObserveStart, 3);
 assert.equal(exhaustedReleaseRefusals.length, 1);
 assert.equal(
   exhaustedReleaseRefusals[0].name,
   "TerminalSessionReleaseError",
 );
 assert.equal(typeof exhaustedReleaseRefusals[0].retry, "function");
-releaseFailuresRemaining = 0;
+releaseObservationUnavailable = false;
 exhaustedReleaseRefusals[0].retry();
 await turns(20);
-assert.equal(releaseRequests.length, exhaustedReleaseStart + 5);
+assert.equal(releaseRequests.length, exhaustedReleaseStart + 1);
+assert.ok(observedLifecycle.length - exhaustedReleaseObserveStart >= 4);
+assert.ok(observedLifecycle.length - exhaustedReleaseObserveStart <= 6);
 stopExhaustedRelease();
 const exhaustedCloseStart = closeRequests.length;
-closeFailuresRemaining = 4;
+const exhaustedCloseObserveStart = observedLifecycle.length;
+closeFailuresRemaining = 1;
+closeObservationUnavailable = true;
 let uncertainClose;
 try {
   await bridge.closeTask(task("4"), session("d"));
@@ -1744,14 +1790,17 @@ try {
 }
 assert.equal(uncertainClose.name, "TaskCloseUncertainError");
 assert.equal(typeof uncertainClose.retry, "function");
-assert.equal(closeRequests.length, exhaustedCloseStart + 4);
+assert.equal(closeRequests.length, exhaustedCloseStart + 1);
+assert.equal(observedLifecycle.length - exhaustedCloseObserveStart, 3);
 assert.throws(
   () => bridge.startTaskDrain(task("4"), session("d"), assert.fail, assert.fail),
   TypeError,
 );
-closeFailuresRemaining = 0;
+closeObservationUnavailable = false;
 await uncertainClose.retry();
-assert.equal(closeRequests.length, exhaustedCloseStart + 5);
+assert.equal(closeRequests.length, exhaustedCloseStart + 1);
+assert.ok(observedLifecycle.length - exhaustedCloseObserveStart >= 4);
+assert.ok(observedLifecycle.length - exhaustedCloseObserveStart <= 6);
 const stopClosedReplacement = bridge.startTaskDrain(
   task("4"),
   session("d"),

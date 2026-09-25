@@ -113,6 +113,7 @@ const events = [];
 const panel = createSetupPanel({
   onEdit: (...value) => events.push(["edit", ...value]),
   onValidate: (...value) => events.push(["validate", ...value]),
+  onRetryLocationOutcome: () => events.push(["retry-location-outcome"]),
   onPick: (...value) => events.push(["pick", ...value]),
   onRecent: (...value) => events.push(["recent", ...value]),
   onRecentPair: (...value) => events.push(["recent-pair", ...value]),
@@ -294,6 +295,15 @@ assert.equal(startPlan.disabled, false, "nonempty unadmitted rows stay startable
 model.source.location = { state: "missing", choice_id: null, detail: "Reconnect this folder.", candidates: [] };
 panel.render(model);
 assert.equal(startPlan.disabled, false, "a missing row stays startable for a fresh retry");
+model.source.outcomeUnknown = true;
+panel.render(model);
+assert.equal(firstSource.disabled, true, "a fixed-unknown location keeps its input fenced");
+assert.equal(startPlan.disabled, true);
+assert.equal(addPair.disabled, true);
+assert.equal(allByClass(panel.element, "nami-button--secondary").some(
+  (button) => button.textContent === "Retry folder outcome" && !button.hidden), false,
+"a fixed response exposes no ineffective folder Retry");
+model.source.outcomeUnknown = false;
 const queuedBatchRow = {
   source: { text: "C:\\batch-source" }, target: { text: "D:\\batch-target" },
   state: "queued", options: structuredClone(options), message: "Ready to create.",
@@ -344,8 +354,8 @@ assert.equal(byClass(panel.element, "nami-setup__clear-batch").disabled, true,
   "unknown rows cannot be cleared as terminal results");
 model.batch = [{ ...queuedBatchRow, state: "uncertain", message: "Retry this request." }];
 panel.render(model);
-assert.equal(startBatch.textContent, "Retry batch");
-assert.equal(startBatch.disabled, false, "an uncertain row exposes the same-command retry");
+assert.equal(startBatch.textContent, "Retry outcomes");
+assert.equal(startBatch.disabled, false, "an uncertain row exposes original-outcome checks");
 model.mode = "inventory";
 panel.render(model);
 assert.equal(startBatch.hidden, false);
