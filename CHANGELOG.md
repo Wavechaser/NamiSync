@@ -1027,6 +1027,28 @@ repeated machinery while preserving operational safety and boundary contracts.
 Safety, settlement, authority, and measurement work made high-risk release
 claims explicit, independently reviewable, and regression-backed.
 
+#### Trace unexplained ablation incidents (2026-09-27)
+
+- Reproduce the optional bridge diagnostic's stale sample-type rejection,
+  reporting saturation and subsequent incomplete Close/Retry-prompt timeout in
+  three installed traces; note its stale terminal `items` summaries. Preserve
+  browser errors before host exit, plus shutdown results and stacks; record the
+  verified helper defect without claiming either historical bridge incident
+  necessarily had the same cause.
+- Reproduce a generic Setup start failure headlessly as a spurious pre-effect
+  database-pair refusal: admission preflight treats the process's own WAL/SHM
+  activity as incompatible drift. Record it OPEN pending contract adjudication;
+  the original AB-7 exception remains unretained.
+- Rerun installed Setup and both task-shell variants unchanged and with bounded
+  copied-helper tracing: six passes. Plan-again and stack/wrap causes remain
+  unknown; a renderer overwrite during the layout witness's frame yield is a
+  source-supported hypothesis. Check bounded Windows error history without
+  treating absent events as proof of environmental health.
+- Retain exact source/evidence hashes, failure receipts and a direct sample
+  validator control under `build/incident-trace-20260927/`, and replay/race
+  scripts under `build/trace-20260927/`. Product and collected tests are
+  unchanged; no diagnostic migration, repair or product checkpoint activated.
+
 #### Integrate post-M1-8 reductions (2026-09-26)
 
 - Reconcile all nine regression-map rows, retained release authorities,

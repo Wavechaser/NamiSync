@@ -1,40 +1,62 @@
-# Latest session — AB-10 closed; documentation and side work consolidated
+# Latest session — unexplained ablation incident investigation
 
-2026-09-26, `milestone1`. AB-10 integration is committed as `cb57c41a`.
-The separate follow-up compacts delivered late M1-8/AB records and archives
-`POST_M1_8_ABLATION.md` under `docs/obsolete/`. M1_PLAN retains active decisions,
-rejected/deferred leads, exact M1-8 A6 identity and pending M1-9/10/12/Release.
-The archive preserves the investigation, with links and historical authority
-qualifications corrected. Subject documents remain contract owners.
+2026-09-27, `milestone1`, inspected revision `25514f12`. User authorized a
+best-effort investigation of five AB-2/7/8/10 incidents; two sessions traced
+them in parallel. No product, collected test or acceptance-contract changes.
+Detailed evidence: `build/incident-trace-20260927/findings.md` (bridge chain,
+installed reruns, Windows events, exact input hashes) and
+`build/trace-20260927/` (third bridge trace, headless Setup replay and
+database-pair race scripts with results).
 
-AB-10 changed no product semantics. Its sole code correction fixes the optional
-execution-UI driver's stale receipt comparison; installed Execute measurement
-now completes. Fresh verification: 1,814 interfaces passes, 12 import contracts;
-5,391 current cases reconciled against dependency-valid AB-8/9 evidence, yielding
-5,387 passes and four Windows privilege skips. Plan, receipt and history-smoke
-measurements complete. The bridge-event diagnostic remains incomplete (browser
-failure marker, then host-exit deadline), with no product-cause or timing claim.
-Earlier AB-7 and AB-8 unexplained observations remain leads. Failed receipts and
-historical JSON are preserved. No product tests were rerun solely for the later
-documentation move; archive-content, links/diff and independent reviews cover it.
+Current bridge diagnostic failure is reproduced: decimal-string Progress
+positions fail the helper's integer sample validator; rejected chained reports
+retain pending counters until reporting saturation escapes the page callback
+near 17 s, as in AB-10. The parent then closes while four synthetic workers
+still run their fixed 60-second, uncancelable loop. Service Close reports
+incomplete/unreleased; the normal host Retry/Cancel prompt waits until the
+110-second parent deadline. The helper formerly retained the browser error only
+in memory until host exit. Its terminal summaries also read the retired result
+`items` array, so a position-only migration would fail at the first Terminal.
+BUGS records an OPEN diagnostic defect. Historical AB-2/AB-10 evidence is
+compatible, not causal proof of those exact runs. Migration is unimplemented.
 
-Cleanup removed only the four accounted refs `codex/ab3-mapping`,
-`codex/wip-20260925-1936-ab6-gesture`, `codex/gui-j-recovery-20260918` and
-`recovery/gui-m2-folder-totals-20260919`, plus the clean AB-3 worktree. Their
-complete history is preserved in `build/ab10-20260926/side-recoveries.bundle`;
-78 worktree evidence files were copied and hash-checked before removal.
-`preservation.json`, `cleanup.json`, branch audit and independent review record
-exact identities and accounting. Preserve this ignored evidence directory.
-All five stashes, main, milestone0, milestone1-anthony and remotes are unchanged.
-DOC-2 remains pending: no history rewrite, push or PR was performed.
+AB-7 Setup: a headless replay of its call sequence with UI-like concurrent
+reads reproduced the generic `task start failed` in 1 of 300 serial starts.
+The retired cause was `DatabasePairRefusedError(ledger-contract)` from
+`prepare_plan`, before any session effect. Pair preflight hashes main/WAL/SHM
+and refuses any drift, including the same process's reads and recording:
+deterministic beside a raw reader, about 1 in 900 checks beside
+`remembered_locations` or `list_history`. BUGS records it MODERATE/OPEN.
+Repair changes the DATABASE/DEFENSE drift-refusal contract and needs user
+adjudication. The original AB-7 exception was not retained, so that incident
+is a probable, not proven, instance. Unverified: the unleased CLI's refusal
+text directs users to delete both databases.
 
-No next product checkpoint is activated. D6's missing-row acknowledgement/
-restore needs explicit allocation at M1-9/10 activation; S5/L6/full-event and
-tracer work remain deferred. Release custody, resource/leak, security and
-executor settlement requirements were not closed or demoted by AB-10.
+AB-8 stack/wrap: the narrow witness writes renderer-owned status text and
+`hidden` state, then yields one animation frame. Every review render resets
+`status.hidden` from its action message, and a hidden node measures top 0,
+exactly the failing clause. Source-supported hypothesis only. AB-7 Plan again:
+pending review work disables the button and a disabled click is a silent
+no-op, but the original click had no trace; cause unknown. Neither is in BUGS.
 
-Desktop is free; foreground processes exited. Announce each future foreground
-batch and its completion. Use normal desktop access, an external unique native
-basetemp, `PIP_NO_CACHE_DIR=1` and process-only
-`PSExecutionPolicyPreference=RemoteSigned`. In-source temp was correctly refused
-by custody checks during this session; both that failure and corrected pass remain.
+Setup and both task-shell variants passed unchanged (3, 78.12s) and with
+copied-helper diagnostics that capture pre-normalization start errors and
+narrow-layout geometry (3, 79.99s); no one-off failure recurred. Bounded Windows
+Application/System error history supplied no matching explanation; absence is
+not environmental health proof.
+
+Preserve `build/incident-trace-20260927/` (both bridge raw-incomplete
+directories, 22 hash-checked copied native receipts/logs) and
+`build/trace-20260927/`. Native fixtures are the external TEMP roots
+`NamiSync-incident-20260927-01` and `-02`. All task-owned native processes
+exited; the unowned Claude bridge trace the first session observed was
+`build/trace-20260927/bridge-event-01`. Announce future native input batches
+and serialize desktop use with other active work.
+
+No next product checkpoint is active. M1_PLAN still owns pending M1-9/10/12,
+Release and DOC-2 decisions; the drift-refusal repair is unallocated. Prior
+integration/cleanup is unchanged: AB-10 `cb57c41a`, documentation consolidation
+`25514f12`, archived study in `docs/obsolete/POST_M1_8_ABLATION.md`, recovery
+bundle/accounting and 78 preserved AB-3 files in `build/ab10-20260926/`.
+Documentation is committed on `milestone1`; no branch cleanup, push or PR.
+All unrelated work and stashes remain untouched.

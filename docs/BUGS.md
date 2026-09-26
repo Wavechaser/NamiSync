@@ -71,6 +71,21 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Workspace and measurement integrity
 
+- MINOR - OPEN (2026-09-27). Stale observation contract. The optional
+  bridge-event diagnostic rejects current decimal-string Progress positions
+  against its integer-only sample validator, and its terminal summaries still
+  read the retired result `items` array. Cause: its sample consumer was not
+  migrated with the event wire format; rejected chained reports retain
+  pending counters until the page callback throws reporting saturation.
+  Early Close then meets the helper's uncancelable 60-second workload, returns
+  incomplete, and waits at the normal host Retry/Cancel prompt until the
+  parent's deadline. The empty marker loses the in-memory browser error when
+  final publication never occurs. Three instrumented installed reproductions
+  (saturation near 17 s, as in AB-10) and a wire-value rejection/numeric
+  control confirm the current chain; the exact AB-2/AB-10 historical causes
+  remain unproven. Evidence: `build/incident-trace-20260927/findings.md` and
+  `build/trace-20260927/`. No product fix claimed.
+
 - MINOR - FIXED (2026-09-26). Stale observation contract. Seven optional
   execution-UI feedback cases produced the current pending-or-accepted frame
   receipt, then rejected it against historical busy/pending-frame fields.
@@ -1738,6 +1753,20 @@ defect, and move implementation-level test choreography out of the log.
   history and the conservative general inspection reader remain intact.
 
 ### Database artifact ownership and rollback
+
+- MODERATE - OPEN (2026-09-27). Owned-activity drift refusal. Plan, inventory,
+  execution and integrity admission can refuse a healthy pair as
+  `ledger-contract` or `history-contract` while the same process uses it.
+  Cause: the file preflight hashes main, WAL and SHM and treats any change as
+  incompatibility, but runtime readers, running sessions and recorders change
+  WAL/SHM legitimately. The desktop adapter normalizes the pre-effect
+  `prepare_plan` refusal to `internal_error`, leaving a Setup row unknown.
+  A headless Setup replay with UI-like reads failed 1 of 300 starts this way;
+  pair validation refused 1/883 and 1/894 checks beside `remembered_locations`
+  and `list_history`, and every check beside a raw reader. It is compatible
+  with, not proof of, AB-7's unretained Setup exception. Unverified residual:
+  the unleased CLI prints the delete-both-databases direction on such a
+  refusal. Evidence: `build/trace-20260927/`.
 
 - SEVERE - FIXED (2026-08-13). TOCTOU rollback-unlink race. Failed
   fresh-pair initialization compared a reserved artifact's identity and then
