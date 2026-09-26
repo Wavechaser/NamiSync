@@ -1967,7 +1967,6 @@ await until(() => unknownReview.outcomeUnknown === true);
 assert.equal(unknownReview.pending, "outcome");
 assert.equal(unknownReview.outcomeCheck, null);
 assert.match(unknownReview.message, /Close and reopen NamiSync/);
-assert.equal(unknownReviewTask.reviewOutcomeUnknown, true);
 const unknownSelectionCount = planSelections.length;
 globalThis.planReviewHarness.callbacks.onSelect(unknownReview, unknownReview.window.rows[0], false);
 globalThis.planReviewHarness.callbacks.onHighlight(unknownReview, "replace", unknownReview.window.rows[0].node_id);
@@ -1975,8 +1974,9 @@ await turns();
 assert.equal(planSelections.length, unknownSelectionCount,
   "fixed-unknown review intent blocks a second selection effect");
 const unknownClose = walk(app).find((element) =>
-  element.ariaLabel === "Original outcome cannot be confirmed. Close and reopen NamiSync to review current state.");
-assert.equal(unknownClose?.disabled, true, "fixed-unknown review keeps Close fenced");
+  element.ariaLabel === `Close ${unknownReviewTask.label}`);
+assert.equal(unknownClose?.disabled, false,
+  "exact task/session Close remains available after a fixed review error");
 const unknownReloadBase = planOpens.length;
 const unknownReloadWindowBase = planWindows.length;
 void globalThis.taskHarness.forceReview(unknownReviewTask, true);
@@ -1988,6 +1988,14 @@ await until(() => unknownReviewTask.review !== unknownReview);
 assert.equal(unknownReviewTask.review.pending, "outcome",
   "a read-only review replacement retains the fixed-unknown intent fence");
 assert.equal(unknownReviewTask.review.outcomeCheck, null);
+const unknownCloseBase = closes.length;
+unknownClose.click();
+await until(() => closes.length === unknownCloseBase + 1);
+assert.deepEqual(calls.at(-1), ["close", unknownReviewTaskId, unknownReviewSessionId],
+  "fixed review failure closes only its exact task/session");
+closes.at(-1).resolve({ task_id: unknownReviewTaskId,
+  session_id: unknownReviewSessionId, disposition: "closed" });
+await until(() => taskButton(unknownReviewTask.label) === undefined);
 
 async function openActiveUnknownOutcomeTask(hex) {
   const taskId = `task-${hex.repeat(32)}`;
@@ -2059,6 +2067,9 @@ executionControls.at(-1).delay({ state: "unavailable", check: () => {
 } });
 await until(() => typeof unknownPauseTask.executionControlAttempt.check === "function");
 assert.equal(pauseReview.outcomeCheck, null, "independent Cancel cannot replace the original warning");
+assert.equal(walk(app).find((element) => element.ariaLabel ===
+  "Check the original Cancel outcome before closing this task.")?.disabled, true,
+  "pending independent Cancel still fences task Close");
 globalThis.planReviewHarness.callbacks.onControl(pauseReview, "cancel");
 assert.equal(executionControls.length, pauseBase + 2, "pending Cancel cannot be resubmitted");
 const cancelReloadBase = planOpens.length;

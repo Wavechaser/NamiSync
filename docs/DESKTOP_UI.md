@@ -1602,8 +1602,12 @@ After a captured noncheckable review response, a user may still Cancel the same
 active execution if the unknown action was not Cancel. Its separate control
 attempt retains its own outcome and observation Check while the original review
 warning remains. This exception does not reopen in-flight protected review work,
-repeat an unknown Cancel or unblock task Close. Disabled Close gives the same
-action-guiding reason enforced by its handler.
+or repeat an unknown Cancel. After a fixed review/control error, explicit Close
+is available when the retained review identifies the exact native task/session
+pair; native cancellation and settlement own that cleanup. It does not resolve
+the earlier unknown outcome. Unknown starts, execution admission, release and
+Close remain fenced. Disabled Close gives the same action-guiding reason
+enforced by its handler.
 
 Task closure never purges trash. User-invoked session cleanup and terminal
 execution/verification retry actions, including **Verify remaining**, are

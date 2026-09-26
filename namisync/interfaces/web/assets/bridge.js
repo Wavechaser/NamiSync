@@ -15,8 +15,7 @@ const SLOT_PATTERN = /^slot-[0-9a-f]{32}$/;
 const TASK_PATTERN = /^task-[0-9a-f]{32}$/;
 const COMMAND_PATTERN = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/;
 const COMMAND_MAX_LENGTH = 64;
-const ASYNC_COMMAND_MAX_ATTEMPTS = 64;
-const OBSERVED_COMMAND_MAX_ATTEMPTS = 64;
+const COMMAND_MAX_ATTEMPTS = 64;
 const MUTATION_FEEDBACK_MS = 5000;
 const OBSERVATION_TIMEOUT_MS = 1000;
 const OBSERVATION_DELAYS_MS = Object.freeze([100, 250]);
@@ -239,8 +238,7 @@ let commandHostGeneration = null;
 let bridgeReadyObserved = false;
 const taskDrains = new Map();
 const taskCloseFences = new Map();
-const asyncCommandAttempts = new Map();
-const observedCommandAttempts = new Map();
+const commandAttempts = new Map();
 
 const documentMessages = globalThis.chrome?.webview;
 if (typeof documentMessages?.addEventListener === "function") {
@@ -1095,218 +1093,266 @@ async function dispatchAttemptWithReadiness(
   ).promise;
 }
 
-function createObservedAttempt(
-  command, payload, validateResult, requestId, waitUntilReady,
-  asyncSmall, onDelayed,
+function createDispatchAttempt(
+  command, payload, validateResult, timeoutMs,
+  waitUntilReady = whenBridgeReady, asyncSmall = false, onDelayed = null,
 ) {
-  if (observedCommandAttempts.size >= OBSERVED_COMMAND_MAX_ATTEMPTS
-      || (asyncSmall && asyncCommandAttempts.size >= ASYNC_COMMAND_MAX_ATTEMPTS)) {
+  const requestId = mintId();
+  const observed = COMMAND_POLICY_CONTRACT[command]?.timeout === "mutation-observed";
+  const feedbackOnly = COMMAND_POLICY_CONTRACT[command]?.timeout === "feedback-only";
+  if ((observed || asyncSmall) && commandAttempts.size >= COMMAND_MAX_ATTEMPTS) {
     throw new BridgeCommandError("bridge_busy", ERROR_MESSAGES.bridge_busy);
   }
-  const state = {
-    command, requestId, validateResult, asyncSmall,
-    generation: null, responseToken: null, completionToken: null,
+  const attempt = {
+    command, requestId, validateResult, observed, asyncSmall, feedbackOnly,
+    onDelayed, generation: null, responseToken: null, completionToken: null,
+    earlyCompletion: null, result: null, settling: false, cleanupOnly: false,
     nativeAckStarted: false,
-    earlyCompletion: null, result: null,
-    observationRunning: null, delayedTimer: null, ready: false,
-    onDelayed,
+    dispatched: false, cancelled: false, delayedTimer: null,
+    observationRunning: null, rejectCancellation: null,
     resolve: null, reject: null,
   };
-  const promise = new Promise((resolve, reject) => {
-    state.resolve = resolve;
-    state.reject = reject;
-  });
-  observedCommandAttempts.set(requestId, state);
-  if (asyncSmall) asyncCommandAttempts.set(requestId, state);
+  const outcome = observed || asyncSmall ? new Promise((resolve, reject) => {
+    attempt.resolve = resolve;
+    attempt.reject = reject;
+  }) : null;
+  attempt.outcome = outcome;
+  // An ordinary direct request has no late completion or observation to own.
+  if (observed || asyncSmall) commandAttempts.set(requestId, attempt);
   const request = JSON.stringify({
     schema_version: BRIDGE_SCHEMA_VERSION, request_id: requestId,
     command, payload,
   });
-  void dispatchObservedReadyAttempt(request, state, waitUntilReady).catch((error) => {
-    if (!state.ready) {
-      retireObservedAttempt(state);
-      state.reject(error instanceof BridgeTransportError ? error : new BridgeTransportError());
-    } else {
-      void recoverObservedResult(state);
-    }
-  });
-  return {
-    promise,
-    cancel: () => { /* An admitted action remains owned until its result settles. */ },
-  };
+  const dispatch = runAttempt(attempt, request, waitUntilReady);
+  if (observed) {
+    void dispatch.catch((error) => {
+      if (!attempt.dispatched) {
+        retireAttempt(attempt);
+        attempt.reject(error instanceof BridgeTransportError ? error : new BridgeTransportError());
+      } else {
+        void recoverObservedResult(attempt);
+      }
+    });
+    return { promise: outcome, cancel: () => {} };
+  }
+  // The completion promise is consumed only after a successful async admission.
+  void outcome?.catch(() => {});
+  const promise = withDeadline(dispatch, timeoutMs, () => cancelAttempt(attempt));
+  return { promise, cancel: () => cancelAttempt(attempt) };
 }
 
-async function dispatchObservedReadyAttempt(request, state, waitUntilReady) {
-  await withDeadline(waitUntilReady(), SHELL_READY_TIMEOUT_MS, () => {});
-  const api = bridgeApi();
-  if (typeof api?.dispatch !== "function") throw new BridgeTransportError();
-  state.ready = true;
-  state.delayedTimer = setTimeout(() => {
-    if (state.result !== null) return;
-    notifyObservedDelay(state, "pending");
-    void recoverObservedResult(state);
-  }, MUTATION_FEEDBACK_MS);
-  const native = await api.dispatch(request);
-  if (!isExactObject(native, ["transport_version", "response_token", "response"])
-      && !isExactObject(native, ["transport_version", "response_token", "completion"])) {
+async function runAttempt(attempt, request, waitUntilReady) {
+  try {
+    if (attempt.observed || attempt.feedbackOnly) {
+      await withDeadline(waitUntilReady(), SHELL_READY_TIMEOUT_MS, () => {});
+    } else {
+      await waitUntilReady();
+    }
+    if (attempt.cancelled) throw new BridgeTransportError();
+    const api = bridgeApi();
+    if (typeof api?.dispatch !== "function") throw new BridgeTransportError();
+    const cancelled = new Promise((_resolve, reject) => {
+      attempt.rejectCancellation = reject;
+    });
+    if (attempt.observed || attempt.feedbackOnly) {
+      attempt.delayedTimer = setTimeout(() => {
+        if (attempt.result !== null) return;
+        notifyAttemptDelay(attempt, "pending");
+        if (attempt.observed) void recoverObservedResult(attempt);
+      }, MUTATION_FEEDBACK_MS);
+    }
+    // No await occurs between the last cancellation check and native admission.
+    attempt.dispatched = true;
+    const transport = Promise.resolve(api.dispatch(request)).then(
+      (native) => acceptNativeResponse(attempt, api, native),
+    );
+    const kind = attempt.observed
+      ? await transport : await Promise.race([transport, cancelled]);
+    if (kind === "admitted") {
+      return attempt.observed ? undefined
+        : await Promise.race([attempt.outcome, cancelled]);
+    }
+    return attempt.observed ? undefined : resultFor(attempt);
+  } catch (error) {
+    if (!attempt.observed) {
+      if (attempt.dispatched && attempt.asyncSmall) attempt.cleanupOnly = true;
+      else retireAttempt(attempt);
+    }
+    if (error instanceof BridgeCommandError || error instanceof BridgeTransportError) throw error;
     throw new BridgeTransportError();
+  } finally {
+    attempt.rejectCancellation = null;
+    if (!attempt.observed) clearTimeout(attempt.delayedTimer);
   }
-  if (native.transport_version !== NATIVE_TRANSPORT_VERSION
+}
+
+function resultFor(attempt) {
+  if (attempt.result.error !== null) throw attempt.result.error;
+  return attempt.result.value;
+}
+
+async function acceptNativeResponse(attempt, api, native) {
+  const direct = isExactObject(native, ["transport_version", "response_token", "response"]);
+  const admitted = isExactObject(native, ["transport_version", "response_token", "completion"]);
+  if ((!direct && !admitted) || native.transport_version !== NATIVE_TRANSPORT_VERSION
+      || (admitted && native.response_token === null)
       || (native.response_token !== null
         && (typeof native.response_token !== "string"
-          || !ID_PATTERN.test(native.response_token)))) {
+          || !ID_PATTERN.test(native.response_token)))
+      || (attempt.responseToken !== null && native.response_token !== null
+        && attempt.responseToken !== native.response_token)) {
     throw new BridgeTransportError();
   }
-  const token = native.response_token;
-  if (token !== null && state.responseToken !== null
-      && state.responseToken !== token) throw new BridgeTransportError();
-  if (token !== null) state.responseToken = token;
-  if (Object.prototype.hasOwnProperty.call(native, "response")) {
+  if (native.response_token !== null) attempt.responseToken = native.response_token;
+  if (direct) {
     const response = cloneJsonValue(native.response);
-    acceptObservedResponse(state, response);
-    return;
+    if (attempt.asyncSmall && !attempt.observed) {
+      await acknowledgeNativeAdmission(attempt, api);
+    }
+    settleAttemptResponse(attempt, response);
+    if (!attempt.asyncSmall || attempt.observed) {
+      await acknowledgeNativeAdmission(attempt, api);
+    }
+    return "direct";
   }
   const completion = cloneJsonValue(native.completion);
-  if (!state.asyncSmall || !isExactObject(completion, [
+  if (!attempt.asyncSmall || !isExactObject(completion, [
     "phase", "generation", "request_id", "completion_token",
   ]) || completion.phase !== COMMAND_COMPLETION_PHASE
       || !Number.isSafeInteger(completion.generation) || completion.generation < 0
-      || completion.request_id !== state.requestId
+      || completion.request_id !== attempt.requestId
       || typeof completion.completion_token !== "string"
       || !ID_PATTERN.test(completion.completion_token)
-      || (state.generation !== null && state.generation !== completion.generation)
-      || (commandHostGeneration !== null
-        && commandHostGeneration !== completion.generation)
-      || (state.completionToken !== null
-        && state.completionToken !== completion.completion_token)) {
+      || (attempt.generation !== null && attempt.generation !== completion.generation)
+      || (commandHostGeneration !== null && commandHostGeneration !== completion.generation)
+      || (attempt.completionToken !== null
+        && attempt.completionToken !== completion.completion_token)) {
     throw new BridgeTransportError();
   }
-  state.generation = completion.generation;
-  state.completionToken = completion.completion_token;
+  attempt.generation = completion.generation;
+  attempt.completionToken = completion.completion_token;
   commandHostGeneration = completion.generation;
-  acknowledgeObservedNative(state);
-  if (state.earlyCompletion !== null) {
-    const early = state.earlyCompletion;
-    state.earlyCompletion = null;
-    acceptObservedCompletion(state, early);
+  await acknowledgeNativeAdmission(attempt, api);
+  if (attempt.earlyCompletion !== null) {
+    const early = attempt.earlyCompletion;
+    attempt.earlyCompletion = null;
+    void acceptCompletion(attempt, early);
   }
+  return "admitted";
 }
 
-function acceptObservedCompletion(state, message) {
-  if (state.result !== null || state.generation !== message.generation
-      || state.completionToken !== message.completion_token) return;
-  acceptObservedResponse(state, message.response);
+async function acknowledgeNativeAdmission(attempt, api) {
+  if (attempt.responseToken === null || attempt.nativeAckStarted) return;
+  attempt.nativeAckStarted = true;
+  const ack = acknowledgeCleanup(api, `ack:${attempt.responseToken}`);
+  if (attempt.asyncSmall && !attempt.observed) await ack;
+  else void ack.catch(() => {});
 }
 
-function acknowledgeObservedNative(state) {
-  if (state.nativeAckStarted || state.responseToken === null) return;
-  state.nativeAckStarted = true;
-  void acknowledgeNativeResponse(bridgeApi(), state.responseToken).catch(() => {});
-}
-
-function acceptObservedResponse(state, response) {
-  if (state.result !== null) return;
+function settleAttemptResponse(attempt, response) {
+  if (attempt.result !== null) return;
   let value;
   let error = null;
   try {
-    value = validateResponse(response, state.requestId, state.validateResult);
+    value = validateResponse(response, attempt.requestId, attempt.validateResult);
   } catch (failure) {
-    if (!(failure instanceof BridgeCommandError)) throw failure;
     error = failure;
   }
-  state.result = { value, error };
-  clearTimeout(state.delayedTimer);
-  acknowledgeObservedNative(state);
-  if (state.completionToken !== null) {
-    const message = {
-      generation: state.generation, request_id: state.requestId,
-      completion_token: state.completionToken,
-    };
-    void acknowledgeCommandCompletion(message).catch(() => {});
+  if (attempt.observed && error !== null && !(error instanceof BridgeCommandError)) {
+    throw error;
   }
-  const fixedUnknown = ["internal_error", "response_too_large"].includes(error?.code);
-  retireObservedAttempt(state);
-  if (fixedUnknown) state.reject(new OutcomeUnavailableError());
-  else if (error === null) state.resolve(value);
-  else state.reject(error);
+  if (attempt.observed && ["internal_error", "response_too_large"].includes(error?.code)) {
+    error = new OutcomeUnavailableError();
+  }
+  attempt.result = { value, error };
+  clearTimeout(attempt.delayedTimer);
+  if (attempt.observed) {
+    void acknowledgeNativeAdmission(attempt, bridgeApi()).catch(() => {});
+  }
+  if (attempt.completionToken !== null && attempt.observed) {
+    void acknowledgeCommandCompletion({
+      generation: attempt.generation, request_id: attempt.requestId,
+      completion_token: attempt.completionToken,
+    }).catch(() => {});
+  }
+  if (attempt.observed || attempt.asyncSmall) {
+    retireAttempt(attempt);
+    if (error === null) attempt.resolve(value);
+    else attempt.reject(error);
+  }
 }
 
-function notifyObservedDelay(state, status) {
+function notifyAttemptDelay(attempt, status) {
   try {
-    state.onDelayed?.({
+    attempt.onDelayed?.({
       state: status,
-      check: () => recoverObservedResult(state),
+      check: attempt.observed ? () => recoverObservedResult(attempt) : null,
     });
   } catch (_error) { /* Presentation cannot change custody. */ }
 }
 
-function retireObservedAttempt(state) {
-  if (observedCommandAttempts.get(state.requestId) === state) {
-    observedCommandAttempts.delete(state.requestId);
+function retireAttempt(attempt) {
+  if (commandAttempts.get(attempt.requestId) === attempt) {
+    commandAttempts.delete(attempt.requestId);
   }
-  if (asyncCommandAttempts.get(state.requestId) === state) {
-    asyncCommandAttempts.delete(state.requestId);
-  }
-  clearTimeout(state.delayedTimer);
+  clearTimeout(attempt.delayedTimer);
 }
 
-async function recoverObservedResult(state) {
-  if (state.result !== null) return state.result;
-  if (state.observationRunning !== null) return state.observationRunning;
+async function recoverObservedResult(attempt) {
+  if (attempt.result !== null) return attempt.result;
+  if (attempt.observationRunning !== null) return attempt.observationRunning;
   const run = (async () => {
     let latestStatus = "unavailable";
     for (let index = 0; index < 3; index += 1) {
-      if (state.result !== null) break;
+      if (attempt.result !== null) break;
       if (index > 0) await delay(OBSERVATION_DELAYS_MS[index - 1]);
       try {
         const api = bridgeApi();
         if (typeof api?.dispatch !== "function") throw new BridgeTransportError();
         const observed = await withDeadline(
-          Promise.resolve(api.dispatch(`observe:${state.requestId}:${state.command}`)),
+          Promise.resolve(api.dispatch(`observe:${attempt.requestId}:${attempt.command}`)),
           OBSERVATION_TIMEOUT_MS, () => {},
         );
-        latestStatus = acceptObservedObservation(state, observed);
+        latestStatus = acceptObservedObservation(attempt, observed);
       } catch (_error) {
-        // A failed observation is a communication fact, never an effect verdict.
         latestStatus = "unavailable";
       }
     }
-    if (state.result === null) {
-      clearTimeout(state.delayedTimer);
-      notifyObservedDelay(state, latestStatus);
+    if (attempt.result === null) {
+      clearTimeout(attempt.delayedTimer);
+      notifyAttemptDelay(attempt, latestStatus);
     }
-    return state.result;
+    return attempt.result;
   })();
-  state.observationRunning = run;
+  attempt.observationRunning = run;
   try {
     return await run;
   } finally {
-    if (state.observationRunning === run) state.observationRunning = null;
+    if (attempt.observationRunning === run) attempt.observationRunning = null;
   }
 }
 
-function acceptObservedObservation(state, observed) {
+function acceptObservedObservation(attempt, observed) {
   if (!isExactObject(observed, [
     "transport_version", "state", "generation", "request_id",
     "response_token", "completion_token", "response",
   ]) || observed.transport_version !== NATIVE_TRANSPORT_VERSION
       || !["pending", "ready", "unavailable"].includes(observed.state)
       || !Number.isSafeInteger(observed.generation) || observed.generation < 0
-      || observed.request_id !== state.requestId
-      || (state.generation !== null && state.generation !== observed.generation)
-      || (commandHostGeneration !== null
-        && commandHostGeneration !== observed.generation)
+      || observed.request_id !== attempt.requestId
+      || (attempt.generation !== null && attempt.generation !== observed.generation)
+      || (commandHostGeneration !== null && commandHostGeneration !== observed.generation)
       || (observed.response_token !== null
         && (typeof observed.response_token !== "string"
           || !ID_PATTERN.test(observed.response_token)))
       || (observed.completion_token !== null
         && (typeof observed.completion_token !== "string"
           || !ID_PATTERN.test(observed.completion_token)))
-      || (state.responseToken !== null && observed.response_token !== null
-        && state.responseToken !== observed.response_token)
-      || (state.completionToken !== null && observed.completion_token !== null
-        && state.completionToken !== observed.completion_token)
-      || (!state.asyncSmall && observed.completion_token !== null)) {
+      || (attempt.responseToken !== null && observed.response_token !== null
+        && attempt.responseToken !== observed.response_token)
+      || (attempt.completionToken !== null && observed.completion_token !== null
+        && attempt.completionToken !== observed.completion_token)
+      || (!attempt.asyncSmall && observed.completion_token !== null)) {
     throw new BridgeTransportError();
   }
   if (observed.state === "unavailable") {
@@ -1321,426 +1367,100 @@ function acceptObservedObservation(state, observed) {
       && (observed.response_token === null || observed.response === null)) {
     throw new BridgeTransportError();
   }
-  state.generation = observed.generation;
+  attempt.generation = observed.generation;
   commandHostGeneration = observed.generation;
-  if (observed.response_token !== null) state.responseToken = observed.response_token;
+  if (observed.response_token !== null) attempt.responseToken = observed.response_token;
   if (observed.completion_token !== null) {
-    state.completionToken = observed.completion_token;
-    if (state.earlyCompletion !== null) {
-      const early = state.earlyCompletion;
-      state.earlyCompletion = null;
-      acceptObservedCompletion(state, early);
+    attempt.completionToken = observed.completion_token;
+    if (attempt.earlyCompletion !== null) {
+      const early = attempt.earlyCompletion;
+      attempt.earlyCompletion = null;
+      void acceptCompletion(attempt, early);
     }
   }
-  if (observed.state === "ready" && state.result === null) {
-    acceptObservedResponse(state, cloneJsonValue(observed.response));
+  if (observed.state === "ready" && attempt.result === null) {
+    settleAttemptResponse(attempt, cloneJsonValue(observed.response));
   }
   return observed.state;
 }
 
-function createDispatchAttempt(
-  command,
-  payload,
-  validateResult,
-  timeoutMs,
-  waitUntilReady = whenBridgeReady,
-  asyncSmall = false,
-  onDelayed = null,
-) {
-  const requestId = mintId();
-  if (COMMAND_POLICY_CONTRACT[command]?.timeout === "mutation-observed") {
-    return createObservedAttempt(
-      command, payload, validateResult, requestId, waitUntilReady,
-      asyncSmall, onDelayed,
-    );
-  }
-  const attempt = {
-    cancelled: false,
-    rejectCancellation: null,
-    asyncEntry: null,
-    feedbackOnly: COMMAND_POLICY_CONTRACT[command]?.timeout === "feedback-only",
-    onDelayed,
-    delayedTimer: null,
-  };
-  const request = JSON.stringify({
-    schema_version: BRIDGE_SCHEMA_VERSION,
-    request_id: requestId,
-    command,
-    payload,
-  });
-  if (asyncSmall) {
-    if (asyncCommandAttempts.size >= ASYNC_COMMAND_MAX_ATTEMPTS) {
-      throw new BridgeCommandError("bridge_busy", ERROR_MESSAGES.bridge_busy);
-    }
-    let resolveCompletion;
-    let rejectCompletion;
-    const completion = new Promise((resolve, reject) => {
-      resolveCompletion = resolve;
-      rejectCompletion = reject;
-    });
-    attempt.asyncEntry = {
-      requestId,
-      hostGeneration: null,
-      completionToken: null,
-      earlyCompletion: null,
-      settling: false,
-      dispatched: false,
-      cleanupOnly: false,
-      completion,
-      resolveCompletion,
-      rejectCompletion,
-    };
-    asyncCommandAttempts.set(requestId, attempt.asyncEntry);
-  }
-  const dispatchPromise = asyncSmall
-    ? dispatchSmallReadyAttempt(
-      request,
-      requestId,
-      validateResult,
-      attempt,
-      waitUntilReady,
-    )
-    : dispatchReadyAttempt(
-      request,
-      requestId,
-      validateResult,
-      attempt,
-      waitUntilReady,
-    );
-  return {
-    promise: withDeadline(
-      dispatchPromise,
-      timeoutMs,
-      () => cancelAttempt(attempt),
-    ),
-    cancel: () => cancelAttempt(attempt),
-  };
-}
-
-async function dispatchReadyAttempt(
-  request,
-  requestId,
-  validateResult,
-  attempt,
-  waitUntilReady,
-) {
-  if (attempt.feedbackOnly) {
-    await withDeadline(waitUntilReady(), SHELL_READY_TIMEOUT_MS, () => {});
-  } else {
-    await waitUntilReady();
-  }
-  if (attempt.cancelled) {
-    throw new BridgeTransportError();
-  }
-  const cancelled = new Promise((resolve, reject) => {
-    void resolve;
-    attempt.rejectCancellation = reject;
-  });
-  let value;
-  try {
-    const api = bridgeApi();
-    if (
-      attempt.cancelled ||
-      typeof api?.dispatch !== "function"
-    ) {
-      throw new BridgeTransportError();
-    }
-    if (attempt.feedbackOnly) {
-      attempt.delayedTimer = setTimeout(() => {
-        try {
-          attempt.onDelayed?.({ state: "pending", check: null });
-        } catch (_error) { /* Presentation cannot change custody. */ }
-      }, MUTATION_FEEDBACK_MS);
-    }
-    // No await occurs between this final cancellation check and dispatch.
-    const transport = Promise.resolve(api.dispatch(request)).then(
-      (nativeResponse) => detachNativeResponse(
-        api, nativeResponse, requestId, validateResult,
-      ),
-    );
-    value = await Promise.race([transport, cancelled]);
-  } catch (error) {
-    if (error instanceof BridgeTransportError || error instanceof BridgeCommandError) {
-      throw error;
-    }
-    throw new BridgeTransportError();
-  } finally {
-    attempt.rejectCancellation = null;
-    clearTimeout(attempt.delayedTimer);
-  }
-  return value;
-}
-
-async function dispatchSmallReadyAttempt(
-  request,
-  requestId,
-  validateResult,
-  attempt,
-  waitUntilReady,
-) {
-  const entry = attempt.asyncEntry;
-  if (entry === null || asyncCommandAttempts.get(requestId) !== entry) {
-    throw new BridgeTransportError();
-  }
-  await waitUntilReady();
-  if (attempt.cancelled) {
-    throw new BridgeTransportError();
-  }
-  const cancelled = new Promise((resolve, reject) => {
-    void resolve;
-    attempt.rejectCancellation = reject;
-  });
-  try {
-    const api = bridgeApi();
-    if (
-      attempt.cancelled ||
-      typeof api?.dispatch !== "function"
-    ) {
-      throw new BridgeTransportError();
-    }
-    // The pending entry is fixed before native admission.
-    entry.dispatched = true;
-    const transport = Promise.resolve(api.dispatch(request)).then(
-      (nativeResponse) => detachSmallNativeResponse(
-        api,
-        nativeResponse,
-        entry,
-      ),
-    ).then((native) => {
-      if (entry.cleanupOnly && native.kind === "direct") retireAsyncCommandAttempt(entry);
-      return native;
-    });
-    const native = await Promise.race([transport, cancelled]);
-    if (native.kind === "direct") {
-      retireAsyncCommandAttempt(entry);
-      return validateResponse(native.response, requestId, validateResult);
-    }
-    const response = await Promise.race([
-      entry.completion,
-      cancelled,
-    ]);
-    return validateResponse(response, requestId, validateResult);
-  } catch (error) {
-    if (entry.dispatched && asyncCommandAttempts.get(requestId) === entry) {
-      entry.cleanupOnly = true;
-    }
-    if (error instanceof BridgeCommandError) {
-      throw error;
-    }
-    if (error instanceof BridgeTransportError) {
-      throw error;
-    }
-    throw new BridgeTransportError();
-  } finally {
-    attempt.rejectCancellation = null;
-    if (!entry.cleanupOnly || !entry.dispatched) retireAsyncCommandAttempt(entry);
-  }
-}
-
-async function detachSmallNativeResponse(
-  api,
-  nativeResponse,
-  entry,
-) {
-  const direct = isExactObject(nativeResponse, [
-    "transport_version",
-    "response_token",
-    "response",
-  ]);
-  const admitted = isExactObject(nativeResponse, [
-    "transport_version",
-    "response_token",
-    "completion",
-  ]);
-  if (
-    (!direct && !admitted) ||
-    nativeResponse.transport_version !== NATIVE_TRANSPORT_VERSION ||
-    (admitted && nativeResponse.response_token === null) ||
-    (
-      nativeResponse.response_token !== null &&
-      (
-        typeof nativeResponse.response_token !== "string" ||
-        !ID_PATTERN.test(nativeResponse.response_token)
-      )
-    )
-  ) {
-    throw new BridgeTransportError();
-  }
-  const responseToken = nativeResponse.response_token;
-  let value;
-  try {
-    value = direct
-      ? { kind: "direct", response: cloneJsonValue(nativeResponse.response) }
-      : { kind: "admitted", completion: cloneJsonValue(nativeResponse.completion) };
-    if (admitted) {
-      const completion = value.completion;
-      if (
-        !isExactObject(completion, [
-          "phase",
-          "generation",
-          "request_id",
-          "completion_token",
-        ]) ||
-        completion.phase !== COMMAND_COMPLETION_PHASE ||
-        !Number.isSafeInteger(completion.generation) ||
-        completion.generation < 0 ||
-        completion.request_id !== entry.requestId ||
-        typeof completion.completion_token !== "string" ||
-        !ID_PATTERN.test(completion.completion_token) ||
-        (
-          commandHostGeneration !== null &&
-          commandHostGeneration !== completion.generation
-        )
-      ) {
-        throw new BridgeTransportError();
-      }
-      commandHostGeneration = completion.generation;
-      entry.hostGeneration = completion.generation;
-      entry.completionToken = completion.completion_token;
-    }
-  } finally {
-    nativeResponse = null;
-    if (responseToken !== null) {
-      await acknowledgeAsyncCleanup(api, `ack:${responseToken}`);
-    }
-  }
-  if (direct) {
-    return value;
-  }
-  if (entry.earlyCompletion !== null) {
-    void settleCommandCompletion(entry, entry.earlyCompletion);
-  }
-  return { kind: "admitted" };
-}
-
 function receiveCommandCompletion(event) {
   const message = event?.data;
-  if (!isCommandCompletionMessage(message)) {
-    return;
-  }
-  const entry = asyncCommandAttempts.get(message.request_id);
-  if (entry === undefined) {
-    return;
-  }
-  if (observedCommandAttempts.get(message.request_id) === entry) {
-    if (entry.generation !== null && entry.generation !== message.generation) return;
-    if (entry.completionToken !== null
-        && entry.completionToken !== message.completion_token) return;
-    let captured;
-    try { captured = cloneJsonValue(message); } catch { return; }
-    if (entry.completionToken === null) {
-      if (entry.earlyCompletion === null) entry.earlyCompletion = captured;
-    } else {
-      try { acceptObservedCompletion(entry, captured); } catch { /* Keep original custody. */ }
-    }
-    return;
-  }
-  if (
-    (
-      entry.completionToken !== null &&
-      (
-        entry.hostGeneration !== message.generation ||
-        entry.completionToken !== message.completion_token
-      )
-    )
-  ) {
-    return;
-  }
+  if (!isCommandCompletionMessage(message)) return;
+  const attempt = commandAttempts.get(message.request_id);
+  if (attempt === undefined || !attempt.asyncSmall || attempt.result !== null
+      || (attempt.generation !== null && attempt.generation !== message.generation)
+      || (attempt.completionToken !== null
+        && attempt.completionToken !== message.completion_token)) return;
   let captured;
-  try {
-    captured = cloneJsonValue(message);
-  } catch {
+  try { captured = cloneJsonValue(message); } catch { return; }
+  if (attempt.completionToken === null) {
+    if (attempt.earlyCompletion === null) attempt.earlyCompletion = captured;
     return;
   }
-  if (entry.completionToken === null) {
-    if (entry.earlyCompletion === null) {
-      entry.earlyCompletion = captured;
-    }
-    return;
-  }
-  void settleCommandCompletion(entry, captured);
+  void acceptCompletion(attempt, captured);
 }
 
-async function settleCommandCompletion(entry, message) {
-  if (
-    entry.settling ||
-    entry.hostGeneration !== message.generation ||
-    entry.requestId !== message.request_id ||
-    entry.completionToken !== message.completion_token
-  ) {
+async function acceptCompletion(attempt, message) {
+  if (attempt.settling || attempt.result !== null
+      || attempt.generation !== message.generation
+      || attempt.requestId !== message.request_id
+      || attempt.completionToken !== message.completion_token) return;
+  attempt.settling = true;
+  if (attempt.observed) {
+    try {
+      settleAttemptResponse(attempt, message.response);
+    } catch (_error) {
+      attempt.settling = false;
+    }
     return;
   }
-  entry.settling = true;
   try {
     await acknowledgeCommandCompletion(message);
   } catch (_error) {
-    if (entry.cleanupOnly) {
-      entry.settling = false;
-      return;
-    }
-    if (asyncCommandAttempts.get(entry.requestId) === entry) {
-      asyncCommandAttempts.delete(entry.requestId);
-      entry.rejectCompletion(new BridgeTransportError());
+    attempt.settling = false;
+    if (!attempt.cleanupOnly) {
+      retireAttempt(attempt);
+      attempt.reject(new BridgeTransportError());
     }
     return;
   }
-  if (asyncCommandAttempts.get(entry.requestId) !== entry) {
-    return;
+  if (commandAttempts.get(attempt.requestId) !== attempt) return;
+  if (attempt.cleanupOnly) {
+    retireAttempt(attempt);
+  } else {
+    settleAttemptResponse(attempt, message.response);
   }
-  asyncCommandAttempts.delete(entry.requestId);
-  entry.resolveCompletion(message.response);
 }
 
 async function acknowledgeCommandCompletion(message) {
   const api = bridgeApi();
-  if (
-    commandHostGeneration === null ||
-    message.generation !== commandHostGeneration ||
-    typeof api?.dispatch !== "function"
-  ) {
-    throw new BridgeTransportError();
-  }
-  const acknowledgment = [
-    "ack",
-    COMMAND_COMPLETION_PHASE,
-    String(message.generation),
-    message.request_id,
-    message.completion_token,
-  ].join(":");
-  return acknowledgeAsyncCleanup(api, acknowledgment);
+  if (commandHostGeneration === null
+      || message.generation !== commandHostGeneration
+      || typeof api?.dispatch !== "function") throw new BridgeTransportError();
+  return acknowledgeCleanup(api, [
+    "ack", COMMAND_COMPLETION_PHASE, String(message.generation),
+    message.request_id, message.completion_token,
+  ].join(":"));
 }
 
-async function acknowledgeAsyncCleanup(api, acknowledgment) {
+async function acknowledgeCleanup(api, acknowledgment) {
   let firstDeliveryUncertain = false;
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    if (typeof api?.dispatch !== "function") {
-      throw new BridgeTransportError();
-    }
+  for (let index = 0; index < 2; index += 1) {
+    if (typeof api?.dispatch !== "function") throw new BridgeTransportError();
     try {
       const acknowledged = await withDeadline(
         Promise.resolve(api.dispatch(acknowledgment)),
-        ASYNC_CLEANUP_ACK_TIMEOUT_MS,
-        () => {},
+        ASYNC_CLEANUP_ACK_TIMEOUT_MS, () => {},
       );
-      if (
-        acknowledged === true ||
-        (firstDeliveryUncertain && acknowledged === false)
-      ) {
+      if (acknowledged === true || (firstDeliveryUncertain && acknowledged === false)) {
         return;
       }
     } catch (_error) {
-      if (attempt === 0) {
-        firstDeliveryUncertain = true;
-      }
+      if (index === 0) firstDeliveryUncertain = true;
     }
   }
   throw new BridgeTransportError();
-}
-
-function retireAsyncCommandAttempt(entry) {
-  if (asyncCommandAttempts.get(entry.requestId) === entry) {
-    asyncCommandAttempts.delete(entry.requestId);
-  }
 }
 
 function isCommandCompletionMessage(value) {
@@ -1787,81 +1507,13 @@ function isCompletionResponse(value, requestId) {
   return ERROR_MESSAGES[value.error.code] === value.error.message;
 }
 
-function detachNativeResponse(api, nativeResponse, requestId, validateResult) {
-  if (
-    !isExactObject(nativeResponse, [
-      "transport_version",
-      "response_token",
-      "response",
-    ]) ||
-    nativeResponse.transport_version !== NATIVE_TRANSPORT_VERSION ||
-    (
-      nativeResponse.response_token !== null &&
-      (
-        typeof nativeResponse.response_token !== "string" ||
-        !ID_PATTERN.test(nativeResponse.response_token)
-      )
-    )
-  ) {
-    throw new BridgeTransportError();
-  }
-  const responseToken = nativeResponse.response_token;
-  let value;
-  let error = null;
-  try {
-    value = validateResponse(
-      cloneJsonValue(nativeResponse.response), requestId, validateResult,
-    );
-  } catch (failure) {
-    error = failure;
-  } finally {
-    nativeResponse = null;
-    if (responseToken !== null) {
-      void acknowledgeNativeResponse(api, responseToken).catch(() => {});
-    }
-  }
-  if (error !== null) throw error;
-  return value;
-}
-
-async function acknowledgeNativeResponse(api, responseToken) {
-  let firstDeliveryUncertain = false;
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    if (typeof api?.dispatch !== "function") {
-      throw new BridgeTransportError();
-    }
-    try {
-      const acknowledged = await withDeadline(
-        Promise.resolve(api.dispatch(`ack:${responseToken}`)),
-        ASYNC_CLEANUP_ACK_TIMEOUT_MS, () => {},
-      );
-      if (
-        acknowledged === true ||
-        (firstDeliveryUncertain && acknowledged === false)
-      ) {
-        return;
-      }
-    } catch (_error) {
-      if (attempt === 0) {
-        firstDeliveryUncertain = true;
-      }
-    }
-  }
-  throw new BridgeTransportError();
-}
-
 function cancelAttempt(attempt) {
-  if (attempt.cancelled) {
-    return;
-  }
+  if (attempt.cancelled) return;
   attempt.cancelled = true;
-  if (attempt.asyncEntry !== null) {
-    if (attempt.asyncEntry.dispatched) attempt.asyncEntry.cleanupOnly = true;
-    else retireAsyncCommandAttempt(attempt.asyncEntry);
-  }
+  if (attempt.dispatched && attempt.asyncSmall) attempt.cleanupOnly = true;
+  else retireAttempt(attempt);
   attempt.rejectCancellation?.(new BridgeTransportError());
 }
-
 async function withDeadline(value, timeoutMs, onDeadline) {
   if (timeoutMs === null) {
     return value;

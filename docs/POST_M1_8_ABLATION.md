@@ -701,6 +701,38 @@ generic resend, new receipt owner, protocol redesign or D4 reduction is accepted
 Keep actual selection→Execute, start/Close and receipt-retirement dependencies;
 remove unrelated presentation/folder fences. AB-8 remains paused.
 
+### AB-7S reassessment and reduction
+
+AB-7R changed recovery tiers but left most implementation overlap intact.
+Against its own base it removed only 55 net production lines and added 157 test
+lines; that was insufficient as a source-complexity reduction. AB-7 itself added
+936 net production and 1,256 test lines. The follow-up inspected those diffs,
+current command/completion owners, every issuing page surface and their probes.
+
+The retained transport records are not redundant domain receipts, but the browser
+had separate observed and ordinary asynchronous attempt/completion paths. AB-7S
+consolidates those paths into one request registry and settlement owner with
+optional observation. It also removes the task-level copy of review uncertainty
+and the review-level copy of execution-control Check. Fixed review/control errors
+permit explicit cleanup through an exact retained task/session pair; unknown
+starts, execution admission, release and Close retain their fences. Selection
+recovery is not demoted through `open_plan_view`: its cached projection cannot
+prove authoritative state after a partial failure.
+
+Tests lose source helper/branch pins, repeated policy tuples and headed wire-shape
+checks already owned by native boundary tests. The timeout fake no longer claims
+effect safety from its own deduplicating Map; request counts prove browser
+submission behavior and the installed native post-effect loss witness proves the
+real effect/recovery seam. The optional tracer records actual eligibility rather
+than copying product policy. Distinct queued-row removal, control, selection,
+release and Close behaviors remain, even where their scenarios are lengthy.
+
+[M1_PLAN AB-7S](M1_PLAN.md#ab-7s--consolidate-recovery-and-its-behavioral-tests)
+owns implementation and acceptance. `ab7s-bridge.md`, `ab7s-ui.md` and
+`ab7s-tests.md` in the existing evidence directory map deletions to guarantees.
+This is a bounded consolidation, not evidence that all remaining tests are
+minimal or that the unexplained historical AB-7 observations have been fixed.
+
 ## Evidence
 
 `build/post-m1-8-ablation-20260925/` (ignored) retains `run-base.log`,

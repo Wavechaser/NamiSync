@@ -168,18 +168,7 @@ assert.equal(requests.length, 2);
 const uncertainRequest = requests[1];
 assert.equal(uncertainRequest.command, "start_plan");
 assert.deepEqual(observations, [`observe:${uncertainRequest.request_id}:start_plan`]);
-assert.deepEqual(Object.keys(uncertainRequest.payload).sort(), [
-  "command_id",
-  "options",
-  "source_id",
-  "target_id",
-  "task_id",
-]);
-assert.equal(uncertainRequest.payload.source_id, sourceId);
-assert.equal(uncertainRequest.payload.target_id, targetId);
 assert.equal(uncertainRequest.payload.options.deletion_policy, "additive");
-assert.match(uncertainRequest.payload.command_id, /^[0-9a-f]{32}$/);
-assert.equal("revision" in uncertainRequest.payload, false);
 assert.equal(timers.size, 0, "recovered action clears its feedback timer");
 
 // Feedback can observe a result while the original native Promise is pending.
@@ -239,7 +228,6 @@ const asyncRequests = [];
 const asyncObservations = [];
 const retainedExchanges = new Map();
 const cleanup = [];
-const effects = new Map();
 const issued = new Set();
 const acknowledged = new Set();
 let hostGeneration = 37;
@@ -273,23 +261,18 @@ function success(request) {
   if (request.command === "probe_recent_pairs") {
     return { schema_version: 1, request_id: request.request_id, ok: true, result: { pairs: [] } };
   }
-  const key = request.payload.command_id ??
-    `${request.command}:${request.payload.task_id}:${request.payload.session_id}`;
-  if (!effects.has(key)) {
-    const identity = (++wireId).toString(16).padStart(32, "0");
-    let result;
-    if (request.command === "create_task") result = { task_id: `task-${identity}` };
-    else if (request.command === "start_plan") {
-      result = { task_id: request.payload.task_id, request_id: identity, session_id: identity };
-    } else if (request.command === "close_task") {
-      result = { ...request.payload, disposition: "closed" };
-    } else {
-      assert.equal(request.command, "release_terminal_session");
-      result = { ...request.payload };
-    }
-    effects.set(key, result);
+  const identity = (++wireId).toString(16).padStart(32, "0");
+  let result;
+  if (request.command === "create_task") result = { task_id: `task-${identity}` };
+  else if (request.command === "start_plan") {
+    result = { task_id: request.payload.task_id, request_id: identity, session_id: identity };
+  } else if (request.command === "close_task") {
+    result = { ...request.payload, disposition: "closed" };
+  } else {
+    assert.equal(request.command, "release_terminal_session");
+    result = { ...request.payload };
   }
-  return { schema_version: 1, request_id: request.request_id, ok: true, result: effects.get(key) };
+  return { schema_version: 1, request_id: request.request_id, ok: true, result };
 }
 
 page.pywebview = { api: { dispatch(raw) {
@@ -370,7 +353,6 @@ assert.deepEqual(await asyncBridge.dispatchInteractive("custom_echo", { literal:
 // Lost completion delivery recovers each original result without replaying effects.
 for (const command of ["create_task", "start_plan", "close_task", "release_terminal_session"]) {
   const firstRequest = asyncRequests.length;
-  const firstEffect = effects.size;
   const firstObservation = asyncObservations.length;
   let lost;
   delivery = (exchange) => { lost = exchange; return exchange.admission; };
@@ -392,7 +374,6 @@ for (const command of ["create_task", "start_plan", "close_task", "release_termi
     `${command} keeps one original mutation request`);
   assert.deepEqual(asyncObservations.slice(firstObservation),
     [`observe:${original.request_id}:${command}`]);
-  assert.equal(effects.size, firstEffect + 1, `${command} keeps one effect identity`);
   const beforeLate = asyncRequests.length;
   const completionAck = `ack:completion:${hostGeneration}:${lost.request.request_id}:${lost.message.completion_token}`;
   assert.equal(cleanup.filter((item) => item === completionAck).length, 1,
@@ -433,7 +414,6 @@ for (const malformed of [
 ]) {
   const requestCount = asyncRequests.length;
   const observationCount = asyncObservations.length;
-  const effectCount = effects.size;
   delivery = (exchange) => malformed(exchange.admission);
   const work = asyncBridge.createTask();
   await flush();
@@ -444,7 +424,6 @@ for (const malformed of [
   assert.equal(asyncRequests.length, requestCount + 1, "invalid admission cannot replay the mutation");
   assert.deepEqual(asyncObservations.slice(observationCount),
     [`observe:${asyncRequests[requestCount].request_id}:create_task`]);
-  assert.equal(effects.size, effectCount + 1, "invalid delivery retains one original effect");
   assert.equal(asyncTimers.size, 0);
 }
 
@@ -473,23 +452,6 @@ for (const phase of ["native", "completion"]) {
   assert.equal(asyncRequests.length, requestCount + 1,
     "lost cleanup response cannot rerun the validated command");
   cleanupPolicy = null;
-
-  let refused = 0;
-  cleanupPolicy = (ack) => {
-    if ((phase === "completion") === ack.startsWith("ack:completion:") && refused < 2) {
-      refused += 1;
-      return false;
-    }
-    acknowledged.add(ack);
-    return true;
-  };
-  await asyncBridge.createTask();
-  await flush();
-  assert.equal(refused, 2);
-  assert.equal(asyncRequests.length, requestCount + 2,
-    "unconfirmed cleanup cannot replay the second mutation");
-  assert.equal(asyncTimers.size, 0);
-  cleanupPolicy = null;
 }
 
 for (const phase of ["native", "completion"]) {
@@ -503,14 +465,12 @@ for (const phase of ["native", "completion"]) {
     acknowledged.add(ack);
     return true;
   };
-  const firstEffect = effects.size;
   const bounded = asyncBridge.createTask();
   await flush();
   await expireAsync(1000);
   await expireAsync(1000);
   await bounded;
   assert.equal(hung, 2);
-  assert.equal(effects.size, firstEffect + 1, "cleanup timeout preserves one effect");
   assert.equal(asyncTimers.size, 0);
   cleanupPolicy = null;
 }
@@ -521,7 +481,6 @@ let lateRead;
 delivery = (exchange) => { lateRead = exchange; return exchange.admission; };
 const readRequestCount = asyncRequests.length;
 const readObservationCount = asyncObservations.length;
-const readEffectCount = effects.size;
 const readCleanupCount = cleanup.length;
 const timedRead = asyncBridge.probeRecentPairs();
 await flush();
@@ -531,8 +490,6 @@ await expireAsync(5000);
 await assert.rejects(timedRead, { name: "BridgeTransportError" });
 assert.equal(asyncObservations.length, readObservationCount,
   "the read timeout does not start mutation observation");
-assert.equal(effects.size, readEffectCount,
-  "the timed-out probe has no filesystem effect");
 assert.deepEqual(cleanup.slice(readCleanupCount), [`ack:${lateRead.admission.response_token}`],
   "the original read admission is ACKed despite the caller deadline");
 const beforeUnmatched = cleanup.length;

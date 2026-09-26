@@ -91,6 +91,13 @@ refresh, deliberate folder replacement and stale-response rejection without
 retaining an original outcome. Check never resubmits a mutation. A removed replay expectation is not a regression by
 itself; retained identity, state, effect and ownership guarantees decide it.
 Keep read/drain/startup/lifecycle/resource deadline cases separate.
+Test ownership follows the guarantee: runtime probes own browser behavior,
+native boundary tests own wire shapes, and the installed delivery-loss witness
+owns the real post-effect failure/recovery path. Source helper names, copied
+predicates, timer-allocation counts and duplicate envelope checks are not
+additional product guarantees. Keep accessible markup and security-boundary
+checks, plus the native/browser command-policy mirror. Optional Plan-again
+tracing records the product's eligibility decision without reproducing it.
 
 Frontend static Node probes use `run_node_probe`: a prelaunch Windows Job caps
 their process tree at 512 MiB, keeps the caller's timeout and bounds file-backed

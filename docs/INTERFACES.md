@@ -458,6 +458,10 @@ originals remain recoverable until validated capture/ACK or document/host
 ownership ends; actual worker settlement remains independent. BRIDGE owns the
 wire shape, bounds, acknowledgment ordering and observation budgets. CLI and
 direct service behavior retain their existing contracts.
+The page keeps review uncertainty on its retained review and execution-control
+observation on its issuing control attempt. An explicit Close after a fixed
+review/control error uses the existing exact task/session cleanup; it neither
+replays the uncertain action nor claims its outcome is known.
 
 Direct start receipts retire after successful direct `close_session`. A task
 start receipt survives terminal-session release and retires only at task close.

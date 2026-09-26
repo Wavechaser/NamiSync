@@ -526,10 +526,7 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
         "replace_cosmetic_section",
     )
     assert "test_report" not in commands
-    assert {
-        name for name, spec in commands.items()
-        if spec.work is CommandWork.ASYNC_SMALL
-    } == {
+    async_commands = {
         "create_task",
         "start_plan",
         "start_inventory",
@@ -539,6 +536,10 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
         "probe_recent_pairs",
         "start_execution",
     }
+    for name, spec in commands.items():
+        assert spec.work is (
+            CommandWork.ASYNC_SMALL if name in async_commands else CommandWork.DIRECT
+        ), name
     assert {
         name for name, spec in commands.items()
         if spec.timeout is CommandTimeout.MUTATION_OBSERVED
@@ -555,187 +556,39 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
         "admit_location", "update_plan_view", "mutate_plan_highlight",
         "replace_cosmetic_section",
     }
-    assert all(
-        spec.work is CommandWork.DIRECT
-        for name, spec in commands.items()
-        if name not in {
-            "create_task",
-            "start_plan",
-            "start_inventory",
-            "plan_again",
-            "release_terminal_session",
-            "close_task",
-            "probe_recent_pairs",
-            "start_execution",
-        }
+    # Each group shares one policy; the browser mirror is checked separately.
+    groups = (
+        (("shell_ready",), CommandAccess.READ_ONLY, FieldRequirement.FORBIDDEN,
+         FieldRequirement.FORBIDDEN, CommandTimeout.STARTUP_5_SECONDS, CommandRetry.NONE),
+        (("readiness_echo",), CommandAccess.READ_ONLY, FieldRequirement.FORBIDDEN,
+         FieldRequirement.FORBIDDEN, CommandTimeout.STARTUP_5_SECONDS, CommandRetry.SAME_PAYLOAD_ONCE),
+        (("pick_folder",), CommandAccess.READ_ONLY, FieldRequirement.FORBIDDEN,
+         FieldRequirement.FORBIDDEN, CommandTimeout.INTERACTIVE, CommandRetry.NONE),
+        (("create_task", "start_plan", "start_inventory", "plan_again"),
+         CommandAccess.MUTATING, FieldRequirement.REQUIRED, FieldRequirement.FORBIDDEN,
+         CommandTimeout.MUTATION_OBSERVED, CommandRetry.NONE),
+        (("list_tasks", "read_cosmetic_section"), CommandAccess.READ_ONLY,
+         FieldRequirement.FORBIDDEN, FieldRequirement.FORBIDDEN,
+         CommandTimeout.LOCAL_5_SECONDS, CommandRetry.SAME_PAYLOAD_ONCE),
+        (("next_events",), CommandAccess.READ_ONLY, FieldRequirement.FORBIDDEN,
+         FieldRequirement.FORBIDDEN, CommandTimeout.DRAIN_30_SECONDS, CommandRetry.NONE),
+        (("release_terminal_session", "close_task"), CommandAccess.MUTATING,
+         FieldRequirement.FORBIDDEN, FieldRequirement.FORBIDDEN,
+         CommandTimeout.MUTATION_OBSERVED, CommandRetry.NONE),
+        (("replace_cosmetic_section",), CommandAccess.MUTATING, FieldRequirement.FORBIDDEN,
+         FieldRequirement.REQUIRED, CommandTimeout.FEEDBACK_ONLY, CommandRetry.NONE),
     )
-    assert (
-        commands["shell_ready"].access,
-        commands["shell_ready"].command_id,
-        commands["shell_ready"].revision,
-        commands["shell_ready"].timeout,
-        commands["shell_ready"].retry,
-        commands["shell_ready"].phase,
-    ) == (
-        CommandAccess.READ_ONLY,
-        FieldRequirement.FORBIDDEN,
-        FieldRequirement.FORBIDDEN,
-        CommandTimeout.STARTUP_5_SECONDS,
-        CommandRetry.NONE,
-        CommandPhase.BOOTSTRAP,
-    )
-    assert all(
-        spec.phase is CommandPhase.OPEN
-        for name, spec in commands.items()
-        if name not in {"shell_ready", "readiness_echo"}
-    )
-    assert (
-        commands["readiness_echo"].access,
-        commands["readiness_echo"].command_id,
-        commands["readiness_echo"].revision,
-        commands["readiness_echo"].timeout,
-        commands["readiness_echo"].retry,
-        commands["readiness_echo"].phase,
-    ) == (
-        CommandAccess.READ_ONLY,
-        FieldRequirement.FORBIDDEN,
-        FieldRequirement.FORBIDDEN,
-        CommandTimeout.STARTUP_5_SECONDS,
-        CommandRetry.SAME_PAYLOAD_ONCE,
-        CommandPhase.BOOTSTRAP,
-    )
-    assert (
-        commands["pick_folder"].access,
-        commands["pick_folder"].command_id,
-        commands["pick_folder"].revision,
-        commands["pick_folder"].timeout,
-        commands["pick_folder"].retry,
-    ) == (
-        CommandAccess.READ_ONLY,
-        FieldRequirement.FORBIDDEN,
-        FieldRequirement.FORBIDDEN,
-        CommandTimeout.INTERACTIVE,
-        CommandRetry.NONE,
-    )
-    assert (
-        commands["create_task"].access,
-        commands["create_task"].command_id,
-        commands["create_task"].revision,
-        commands["create_task"].timeout,
-        commands["create_task"].retry,
-    ) == (
-        CommandAccess.MUTATING,
-        FieldRequirement.REQUIRED,
-        FieldRequirement.FORBIDDEN,
-        CommandTimeout.MUTATION_OBSERVED,
-        CommandRetry.NONE,
-    )
-    assert (
-        commands["list_tasks"].access,
-        commands["list_tasks"].command_id,
-        commands["list_tasks"].revision,
-        commands["list_tasks"].timeout,
-        commands["list_tasks"].retry,
-    ) == (
-        CommandAccess.READ_ONLY,
-        FieldRequirement.FORBIDDEN,
-        FieldRequirement.FORBIDDEN,
-        CommandTimeout.LOCAL_5_SECONDS,
-        CommandRetry.SAME_PAYLOAD_ONCE,
-    )
-    assert (
-        commands["start_plan"].access,
-        commands["start_plan"].command_id,
-        commands["start_plan"].revision,
-        commands["start_plan"].timeout,
-        commands["start_plan"].retry,
-    ) == (
-        CommandAccess.MUTATING,
-        FieldRequirement.REQUIRED,
-        FieldRequirement.FORBIDDEN,
-        CommandTimeout.MUTATION_OBSERVED,
-        CommandRetry.NONE,
-    )
-    for command_name in ("start_inventory", "plan_again"):
-        command = commands[command_name]
-        assert (
-            command.access,
-            command.command_id,
-            command.revision,
-            command.timeout,
-            command.retry,
-        ) == (
-            CommandAccess.MUTATING,
-            FieldRequirement.REQUIRED,
-            FieldRequirement.FORBIDDEN,
-            CommandTimeout.MUTATION_OBSERVED,
-            CommandRetry.NONE,
-        )
-    assert (
-        commands["next_events"].access,
-        commands["next_events"].command_id,
-        commands["next_events"].revision,
-        commands["next_events"].timeout,
-        commands["next_events"].retry,
-    ) == (
-        CommandAccess.READ_ONLY,
-        FieldRequirement.FORBIDDEN,
-        FieldRequirement.FORBIDDEN,
-        CommandTimeout.DRAIN_30_SECONDS,
-        CommandRetry.NONE,
-    )
-    assert (
-        commands["release_terminal_session"].access,
-        commands["release_terminal_session"].command_id,
-        commands["release_terminal_session"].revision,
-        commands["release_terminal_session"].timeout,
-        commands["release_terminal_session"].retry,
-    ) == (
-        CommandAccess.MUTATING,
-        FieldRequirement.FORBIDDEN,
-        FieldRequirement.FORBIDDEN,
-        CommandTimeout.MUTATION_OBSERVED,
-        CommandRetry.NONE,
-    )
-    assert (
-        commands["close_task"].access,
-        commands["close_task"].command_id,
-        commands["close_task"].revision,
-        commands["close_task"].timeout,
-        commands["close_task"].retry,
-    ) == (
-        CommandAccess.MUTATING,
-        FieldRequirement.FORBIDDEN,
-        FieldRequirement.FORBIDDEN,
-        CommandTimeout.MUTATION_OBSERVED,
-        CommandRetry.NONE,
-    )
-    assert (
-        commands["read_cosmetic_section"].access,
-        commands["read_cosmetic_section"].command_id,
-        commands["read_cosmetic_section"].revision,
-        commands["read_cosmetic_section"].timeout,
-        commands["read_cosmetic_section"].retry,
-    ) == (
-        CommandAccess.READ_ONLY,
-        FieldRequirement.FORBIDDEN,
-        FieldRequirement.FORBIDDEN,
-        CommandTimeout.LOCAL_5_SECONDS,
-        CommandRetry.SAME_PAYLOAD_ONCE,
-    )
-    assert (
-        commands["replace_cosmetic_section"].access,
-        commands["replace_cosmetic_section"].command_id,
-        commands["replace_cosmetic_section"].revision,
-        commands["replace_cosmetic_section"].timeout,
-        commands["replace_cosmetic_section"].retry,
-    ) == (
-        CommandAccess.MUTATING,
-        FieldRequirement.FORBIDDEN,
-        FieldRequirement.REQUIRED,
-        CommandTimeout.FEEDBACK_ONLY,
-        CommandRetry.NONE,
-    )
+    for names, access, command_id, revision, timeout, retry in groups:
+        for name in names:
+            spec = commands[name]
+            assert (spec.access, spec.command_id, spec.revision, spec.timeout, spec.retry) == (
+                access, command_id, revision, timeout, retry,
+            ), name
+    for name, spec in commands.items():
+        assert spec.phase is (
+            CommandPhase.BOOTSTRAP if name in {"shell_ready", "readiness_echo"}
+            else CommandPhase.OPEN
+        ), name
 
     with pytest.raises(TypeError):
         commands["future_command"] = commands["pick_folder"]  # type: ignore[index]

@@ -319,7 +319,17 @@ Cancel may target the same active execution unless the unknown action was itself
 Cancel. The existing control attempt owns that Cancel and any original-result
 observation; it cannot erase the review's retained warning or permit a second
 unknown Cancel. In-flight protected review commands remain fenced.
-Task Close exposes the same blocking reason used by its handler.
+Explicit Close may clean up after a fixed review/control error when the retained
+review still identifies the exact native task/session pair. That cleanup uses
+the existing native cancellation and settlement owner; it does not establish
+the earlier action's outcome. Unknown starts, execution admission, release and
+Close keep their own fences. Task Close exposes the same blocking reason used
+by its handler.
+
+The browser uses one attempt/completion path for direct and asynchronous
+commands. Original-result observation is optional state on that attempt, not a
+second delivery registry or result adopter. Ordinary read deadlines retain only
+bounded late-completion cleanup; they do not adopt a result after caller timeout.
 
 ### Current-state command recovery
 
@@ -664,7 +674,7 @@ aggregate task-list limits.
 
 ## Current cosmetic channel
 
-Appearance is the sole current mutable cosmetic section. It is exact, bounded, and non-semantic: accepted appearance changes do not alter settings policy, service/registry/planner state, plan fingerprints, tasks, or sessions. The browser recovers an uncertain replacement by observing its original result; canonical section reads still reconcile current appearance after a known result or conflict. Neither path repeats an unknown mutation. Native material, high-contrast precedence, accent, and reduced-motion behavior remain system-owned presentation rules in `DESKTOP_UI.md`; the bridge only carries the typed section snapshot. Reads/replacements reject another section, another value version, unknown members, a non-JavaScript-safe revision, or a theme outside the three declared values before persistence or UI mutation.
+Appearance is the sole current mutable cosmetic section. It is exact, bounded, and non-semantic: accepted appearance changes do not alter settings policy, service/registry/planner state, plan fingerprints, tasks, or sessions. The browser reconciles uncertain replacement, known result or conflict through canonical current-section reads; it does not retain or observe the original replacement result. A fresh explicit change uses the displayed revision and never automatically repeats an unknown mutation. Native material, high-contrast precedence, accent, and reduced-motion behavior remain system-owned presentation rules in `DESKTOP_UI.md`; the bridge only carries the typed section snapshot. Reads/replacements reject another section, another value version, unknown members, a non-JavaScript-safe revision, or a theme outside the three declared values before persistence or UI mutation.
 Concurrent handlers synchronize effect admission, drains and retirement without holding adapter locks across workflow I/O. INTERFACES owns implemented lifecycle. Prospective generation pins, replacement leases and publication seals are not prescribed here.
 
 ## Remaining future outcomes

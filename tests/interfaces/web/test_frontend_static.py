@@ -1205,56 +1205,6 @@ def test_br_g_32_sink_scan_catches_counterexample_mutations(
     assert _active_sink_hits(mutation)
 
 
-def test_br_g_32_browser_wrapper_owns_exact_ids_response_checks_and_observation() -> None:
-    source = (
-        PROJECT_ROOT
-        / "namisync"
-        / "interfaces"
-        / "web"
-        / "assets"
-        / "bridge.js"
-    ).read_text(encoding="utf-8")
-
-    assert "COMMAND_POLICY_CONTRACT.start_plan.timeout" in source
-    assert "command_id: mintId()" in source
-    assert "crypto.randomUUID" not in source
-    assert "cryptography.getRandomValues(bytes);" in source
-    assert "new Uint8Array(16)" in source
-    assert 'byte.toString(16).padStart(2, "0")' in source
-    for command in (
-        "pick_folder", "start_plan", "start_inventory", "plan_again",
-        "read_setup", "probe_recent_pairs", "prepare_setup", "admit_location",
-    ):
-        assert f'"{command}"' in source
-    assert "function submitStart(payload, command, timeoutMs, onDelayed = null)" in source
-    assert "if (error instanceof OutcomeUnavailableError) throw new StartPlanUncertainError();" in source
-    assert "state.reject(new OutcomeUnavailableError());" in source
-    assert "retryObservedResult" not in source
-    assert "initialSettled" not in source
-    outcome_check = source.split("async function recoverObservedResult(", 1)[1].split(
-        "function acceptObservedObservation(", 1
-    )[0]
-    assert 'api.dispatch(`observe:${state.requestId}:${state.command}`)' in outcome_check
-    assert 'notifyObservedDelay(state, latestStatus);' in outcome_check
-    assert "state.reject(" not in outcome_check
-    assert "dispatchAttempt(" not in outcome_check
-    assert "submitStart(" not in outcome_check
-    assert "createObservedAttempt(" not in outcome_check
-    assert "let commandHostGeneration = null;" in source
-    assert "if (bridgeReadyObserved) return;" in source
-    assert 'typeof sourceId !== "string"' in source
-    assert 'typeof targetId !== "string"' in source
-    assert "function validateLocationChoice(value)" in source
-    assert "function validateSetupReadResult(value)" in source
-    assert 'typeof value.request_id === "string"' in source
-    assert 'typeof value.session_id === "string"' in source
-    assert "Object.getPrototypeOf(value) !== Object.prototype" in source
-    assert "bridgeGeneration" not in source
-    assert "entry.hostGeneration !== message.generation" in source
-    assert "return dispatchAttempt(" in source
-    assert "response.request_id !== requestId" in source
-
-
 def test_browser_command_policy_is_an_exact_mirror_of_the_native_table() -> None:
     source = (
         PROJECT_ROOT
@@ -1288,50 +1238,6 @@ def test_browser_command_policy_is_an_exact_mirror_of_the_native_table() -> None
     }
 
     assert browser_policy == native_policy
-
-
-def test_task_recovery_and_release_budgets_are_explicit() -> None:
-    source = (
-        PROJECT_ROOT
-        / "namisync"
-        / "interfaces"
-        / "web"
-        / "assets"
-        / "bridge.js"
-    ).read_text(encoding="utf-8")
-
-    assert "COMMAND_POLICY_CONTRACT.close_task.timeout" in source
-    assert "COMMAND_POLICY_CONTRACT.release_terminal_session.timeout" in source
-    assert "const DRAIN_RECOVERY_DELAYS_MS = Object.freeze([" in source
-    assert "const OBSERVATION_DELAYS_MS = Object.freeze([100, 250]);" in source
-    assert "const OBSERVATION_TIMEOUT_MS = 1000;" in source
-    assert '"release_terminal_session"' in source
-    assert '"close_task"' in source
-    assert "beginTaskRelease(task);" in source
-
-
-def test_br_g_32_response_id_accepts_null_only_for_structured_failures() -> None:
-    source = (
-        PROJECT_ROOT
-        / "namisync"
-        / "interfaces"
-        / "web"
-        / "assets"
-        / "bridge.js"
-    ).read_text(encoding="utf-8")
-    validator = source.split("function validateResponse(", 1)[1].split(
-        "function validatePickFolderResult(", 1
-    )[0]
-
-    success = validator.split("if (response.ok) {", 1)[1].split(
-        "return response.result;", 1
-    )[0]
-    failure = validator.split("return response.result;", 1)[1]
-    assert "response.request_id !== requestId" in success
-    assert "response.request_id !== requestId && response.request_id !== null" in failure
-    assert "response.request_id === null" not in success
-
-
 
 
 def test_ready_transition_cannot_overwrite_a_native_close_status(
@@ -1396,7 +1302,6 @@ def test_sh_g_7_packaged_shell_has_accessible_process_live_blank_tasks(
     app = assets["app.js"]
     rail = assets["rail.js"]
     panels = assets["panels.js"]
-    review = assets["plan_review.js"]
     shell = "\n".join((app, rail, panels))
 
     assert '<main id="app">' in index
@@ -1431,25 +1336,8 @@ def test_sh_g_7_packaged_shell_has_accessible_process_live_blank_tasks(
     assert 'create.append(createIcon(document, "add-square-multiple", "lg"));' in rail
     assert 'create.ariaLabel = "New task";' in rail
     assert 'close.append(createIcon(document, "dismiss", "sm"));' in rail
-    assert 'entry.close.ariaLabel = checkClose ? `Check Close outcome for ${task.label}` : closeReason ?? `${closeUnavailable ? "Retry close outcome for"' in rail
-    assert ': task.closeFailed ? "Retry close for" : "Close"} ${task.label}`;' in rail
-    assert 'entry.retry.ariaLabel = `${checkRelease ? "Check release outcome for"' in rail
-    assert ': task.recoveryRunning ? "Retrying updates for" : "Retry updates for"} ${task.label}`;' in rail
-    assert 'entry.close.disabled = closeReason !== null && (!checkClose || task.closeChecking);' in rail
-    assert "task.closeBlockReason = taskCloseBlockReason(task);" in app
-    assert "task === undefined || taskCloseBlockReason(task) !== null" in app
-    assert "task.canCancelAfterFixedReviewOutcome" in review
-    assert "[review.message, independentCancel?.message]" in review
     assert "entry.close.title = entry.close.ariaLabel;" in rail
     assert 'document.createElement("h2")' not in panels
-    assert "createTask((feedback) =>" in app
-    assert "listTasks()" in app
-    assert "closeTask(task.taskId, task.sessionId, (feedback) =>" in app
-    assert "result.disposition === \"closed\"" in app
-    assert "task.closePending = true;" in app
-    assert "tasks.get(task.taskId) !== task" in app
-    assert "mutationBaseline !== taskMutationRevision" in app
-    assert "navigationRevision === selectionBaseline" in app
     assert '"./plan_review.js"' in panels
     assert '"./integrity.js"' not in app + panels
     assert "createPlanReviewPanel" in panels
@@ -1461,13 +1349,6 @@ def test_sh_g_7_packaged_shell_has_accessible_process_live_blank_tasks(
     assert "window.innerHeight - popupBounds.height" in theme
     assert 'trigger.ariaExpanded = "true"' in theme
     assert 'root.dispatchEvent(new Event("change", { bubbles: true }))' in theme
-    assert "select.disabled = true;" in theme
-    assert "snapshot.revision < state.authoritative.revision" in theme
-    assert "Theme change is still pending. Refresh to read the current theme." in theme
-    assert "Theme response unavailable. Refresh to read the current theme." in theme
-    assert "await open();" in theme
-    assert "replace(state.authoritative.revision, theme," in theme
-    assert "result.disposition === \"conflict\"" in theme
     assert "#host-status" not in theme
 
     assert "window.pywebview" not in shell

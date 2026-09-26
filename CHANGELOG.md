@@ -1041,6 +1041,15 @@ claims explicit, independently reviewable, and regression-backed.
 - Remove 55 net production lines; the main reduction is in recovery ownership,
   not source volume. Keep dependency guards where current state cannot prove
   the original effect settled.
+- Follow with AB-7S: consolidate browser attempts and completion into one owner,
+  remove duplicated review/control recovery state, and permit exact-session
+  cleanup after fixed review errors while preserving start/Close fences.
+- Retire recovery source-spelling pins, repeated wire/policy assertions and a
+  fake effect model; keep real native post-effect recovery and distinct user
+  journeys. Optional tracing records eligibility without copying its policy.
+- AB-7S removes 357 net product and 330 test lines. Verify the ordinary suite,
+  final interfaces refresh, all 34 installed headed cases, 12 import contracts
+  and fresh independent review; keep AB-8 paused.
 
 #### Review AB-7 original-outcome recovery (2026-09-26)
 

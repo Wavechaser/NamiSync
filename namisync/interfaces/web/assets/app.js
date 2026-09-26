@@ -227,7 +227,7 @@ function canCancelAfterFixedReviewOutcome(task, review) {
   const attempt = task.executionControlAttempt;
   return review !== null && review.pending === "outcome"
     && review.outcomeUnknown && review.outcomeCheck === null
-    && task.reviewOutcomeUnknown && review.outcomeAction !== "cancel"
+    && review.outcomeAction !== "cancel"
     && task.executionStarted && task.sessionState === "active"
     && task.sessionId !== null && task.reviewSessionId === task.sessionId
     && !task.drainUnavailable && !task.closePending && task.closeCheck === null
@@ -242,14 +242,23 @@ function taskCloseBlockReason(task) {
   if (task.closePending && !task.closeManualReady) {
     return task.closeMessage ?? "Wait for this Close request to finish.";
   }
-  if (task.closeOutcomeUnknown || task.startOutcomeUnknown || task.reviewOutcomeUnknown
+  if (task.closeOutcomeUnknown || task.startOutcomeUnknown
       || task.releaseOutcomeUnknown
       || task.executionAttempt?.state === "uncertain") return UNKNOWN_OUTCOME_GUIDANCE;
   if (task.executionAttempt !== null) return "Resolve the in-flight execution request before closing.";
+  if (task.executionControlAttempt?.independent) {
+    if (task.executionControlAttempt.unknown) return UNKNOWN_OUTCOME_GUIDANCE;
+    if (task.executionControlAttempt.pending) return typeof task.executionControlAttempt.check === "function"
+      ? "Check the original Cancel outcome before closing this task."
+      : "Wait for the current Cancel request before closing this task.";
+  }
   if (task.closeCheck === null && !task.closeManualReady
       && task.review !== null && task.review.pending !== null
-      && task.review.pending !== "view") {
+      && task.review.pending !== "view"
+      && !(task.review.outcomeUnknown && task.sessionId !== null
+        && task.reviewSessionId === task.sessionId)) {
     return task.review.outcomeCheck !== null
+      || typeof task.executionControlAttempt?.check === "function"
       ? "Check the original review outcome before closing this task."
       : "Wait for the current review action before closing this task.";
   }
@@ -258,7 +267,7 @@ function taskCloseBlockReason(task) {
 
 function renderTasks() {
   for (const task of tasks.values()) {
-    if (task.reviewOutcomeUnknown && task.review !== null) {
+    if (task.review?.outcomeUnknown) {
       task.review.message = UNKNOWN_OUTCOME_GUIDANCE;
     }
     if (task.form !== null) {
@@ -464,7 +473,6 @@ function adoptTask(summary) {
       closeManualReady: false,
       closeOutcomeUnknown: false,
       startOutcomeUnknown: false,
-      reviewOutcomeUnknown: false,
       releaseOutcomeUnknown: false,
       releaseCheck: null,
       releaseChecking: false,
@@ -599,7 +607,7 @@ function acceptTaskUpdate(task, sessionId, update, progressState = null) {
         task.executionControlAttempt = null;
       }
     }
-    if (task.executionStarted && task.review !== null && !task.reviewOutcomeUnknown) {
+    if (task.executionStarted && task.review !== null && !task.review.outcomeUnknown) {
       task.review.message = executionControlMessage(task.executionControlState);
     }
     renderTasks();
@@ -691,19 +699,12 @@ function retryTaskUpdates(taskId) {
   const task = tasks.get(taskId);
   if (task !== undefined && typeof task.releaseCheck === "function"
       && !task.releaseChecking) {
-    task.releaseChecking = true;
-    setTaskRecoveryError(task, "Checking the original release outcome…");
-    renderTasks();
-    void task.releaseCheck().catch(() => {
-      if (tasks.get(taskId) === task && task.releaseCheck !== null) {
+    void checkOriginalOutcome(task,
+      () => setTaskRecoveryError(task, "Checking the original release outcome…"),
+      () => tasks.get(taskId) === task,
+      () => { if (task.releaseCheck !== null) {
         setTaskRecoveryError(task, "Release check unavailable. Select Check outcome again.");
-      }
-    }).finally(() => {
-      if (tasks.get(taskId) === task) {
-        task.releaseChecking = false;
-        renderTasks();
-      }
-    });
+      } }, "releaseCheck", "releaseChecking");
     return;
   }
   if (
@@ -755,18 +756,29 @@ async function refreshTasks() {
   if (selectedTaskId !== null) void loadTaskSetup(tasks.get(selectedTaskId));
 }
 
+async function checkOriginalOutcome(owner, onChecking, stillOwned, onFailure = null,
+  checkKey = "check", checkingKey = "checking") {
+  if (owner[checkingKey] || typeof owner[checkKey] !== "function") return false;
+  owner[checkingKey] = true;
+  onChecking();
+  renderTasks();
+  try {
+    await owner[checkKey]();
+  } catch (_error) {
+    if (stillOwned()) onFailure?.();
+  } finally {
+    if (stillOwned()) owner[checkingKey] = false;
+    renderTasks();
+  }
+  return true;
+}
+
 async function createBlankTask() {
   if (createAttempt?.running) {
-    if (typeof createAttempt.check === "function" && !createAttempt.checking) {
-      const attempt = createAttempt;
-      attempt.checking = true;
+    const attempt = createAttempt;
+    await checkOriginalOutcome(attempt, () => {
       renderHostStatus("Checking the original task request…");
-      renderTasks();
-      try { await attempt.check(); } finally {
-        if (createAttempt === attempt) attempt.checking = false;
-        renderTasks();
-      }
-    }
+    }, () => createAttempt === attempt);
     return;
   }
   if (createAttempt?.unknown) return;
@@ -835,14 +847,9 @@ function continuePendingClose(task) {
 async function closeRetainedTask(taskId) {
   const task = tasks.get(taskId);
   if (task?.closePending && typeof task.closeCheck === "function") {
-    if (task.closeChecking) return;
-    task.closeChecking = true;
-    task.closeMessage = "Checking the original Close request…";
-    renderTasks();
-    try { await task.closeCheck(); } finally {
-      if (tasks.get(taskId) === task) task.closeChecking = false;
-      renderTasks();
-    }
+    await checkOriginalOutcome(task,
+      () => { task.closeMessage = "Checking the original Close request…"; },
+      () => tasks.get(taskId) === task, null, "closeCheck", "closeChecking");
     return;
   }
   if (task === undefined || taskCloseBlockReason(task) !== null) return;
@@ -1426,7 +1433,8 @@ async function loadPlanReview(task, force = false) {
       ? task.executionControlAttempt : null;
     const retainedOutcomeCheck = task.reviewSessionId === sessionId
       ? task.review?.outcomeCheck ?? null : null;
-    const retainedOutcomeUnknown = task.reviewOutcomeUnknown;
+    const retainedOutcomeUnknown = task.reviewSessionId === sessionId
+      && task.review?.outcomeUnknown === true;
     const retainedOutcomeAction = task.reviewSessionId === sessionId
       ? task.review?.outcomeAction ?? null : null;
     const retainedFollow = task.reviewSessionId === sessionId ? task.review?.follow ?? null : null;
@@ -1603,11 +1611,9 @@ async function changePlanView(review, patch, queued = false) {
 
 function retainReviewOutcome(review, error, actionName = review.outcomeAction ?? null) {
   if (!(error instanceof OutcomeUnavailableError)) return false;
-  const task = retainedReviewTask(review);
   review.outcomeCheck = null;
   review.outcomeUnknown = true;
   review.outcomeAction = actionName;
-  if (task !== null) task.reviewOutcomeUnknown = true;
   review.outcomeRunning = false;
   review.pending = "outcome";
   review.message = UNKNOWN_OUTCOME_GUIDANCE;
@@ -1623,6 +1629,18 @@ async function retryReviewOutcome(review) {
     await retryIndependentCancelOutcome(task, cancelAttempt);
     return;
   }
+  if (task !== null && cancelAttempt !== null && !cancelAttempt.independent
+      && cancelAttempt.sessionId === task.sessionId
+      && typeof cancelAttempt.check === "function") {
+    await checkOriginalOutcome(cancelAttempt, () => {
+      cancelAttempt.message = `Checking the original ${cancelAttempt.actionName} outcome…`;
+      if (task.review !== null) task.review.message = cancelAttempt.message;
+    }, () => task.executionControlAttempt === cancelAttempt, () => {
+      cancelAttempt.message = "Check unavailable. Select Check outcome again.";
+      if (task.review !== null) task.review.message = cancelAttempt.message;
+    });
+    return;
+  }
   if (task === null || review.outcomeRunning) return;
   if (review.refreshAvailable) {
     review.refreshAvailable = false;
@@ -1636,17 +1654,11 @@ async function retryReviewOutcome(review) {
     return;
   }
   if (typeof review.outcomeCheck !== "function") return;
-  review.outcomeRunning = true;
-  review.message = "Checking the original action request…";
-  renderTasks();
-  try {
-    await review.outcomeCheck();
-  } catch (_error) {
-    if (retainedReviewTask(review) === task) review.message = "Check unavailable. Select Check outcome again.";
-  } finally {
-    review.outcomeRunning = false;
-    renderTasks();
-  }
+  await checkOriginalOutcome(review,
+    () => { review.message = "Checking the original action request…"; },
+    () => retainedReviewTask(review) === task,
+    () => { review.message = "Check unavailable. Select Check outcome again."; },
+    "outcomeCheck", "outcomeRunning");
 }
 
 async function loadPlanWindow(review, offset) {
@@ -1875,13 +1887,8 @@ async function executeReviewedPlan(review, returnFocus) {
   const task = currentReviewTask(review);
   if (task !== null && task.executionAttempt?.state === "submitting") {
     const attempt = task.executionAttempt;
-    if (typeof attempt.check === "function" && !attempt.checking) {
-      attempt.checking = true;
-      try { await attempt.check(); } finally {
-        if (task.executionAttempt === attempt) attempt.checking = false;
-        renderTasks();
-      }
-    }
+    await checkOriginalOutcome(attempt, () => {},
+      () => task.executionAttempt === attempt);
     return;
   }
   if (
@@ -2058,26 +2065,17 @@ function recordExecutionControlResult(task, attempt, result) {
 }
 
 async function retryIndependentCancelOutcome(task, attempt) {
-  if (task.executionControlAttempt !== attempt || attempt.checking
-      || typeof attempt.check !== "function" || attempt.unknown
+  if (task.executionControlAttempt !== attempt || attempt.unknown
       || task.sessionId !== attempt.sessionId || task.sessionState !== "active") return;
-  attempt.checking = true;
-  attempt.message = "Checking the original Cancel outcome…";
-  renderTasks();
   const stillOwned = () => tasks.get(task.taskId) === task
     && task.sessionId === attempt.sessionId && task.executionControlAttempt === attempt;
-  try {
-    await attempt.check();
-  } catch (_error) {
-    if (stillOwned() && task.sessionState === "active") {
-      attempt.message = "Check unavailable. Select Check outcome again.";
-    }
-  } finally {
-    if (stillOwned()) {
-      attempt.checking = false;
-      renderTasks();
-    }
-  }
+  await checkOriginalOutcome(attempt,
+    () => { attempt.message = "Checking the original Cancel outcome…"; },
+    stillOwned, () => {
+      if (task.sessionState === "active") {
+        attempt.message = "Check unavailable. Select Check outcome again.";
+      }
+    });
 }
 
 async function controlReviewedExecution(review, actionName) {
@@ -2128,7 +2126,6 @@ async function controlReviewedExecution(review, actionName) {
         attempt.message = feedback.state === "unavailable"
           ? `${actionName[0].toUpperCase()}${actionName.slice(1)} outcome unavailable. Select Check outcome to observe the original request.`
           : `${actionName[0].toUpperCase()}${actionName.slice(1)} response delayed. Waiting for the original outcome…`;
-        if (!independentCancel) task.review.outcomeCheck = feedback.check;
         if (!independentCancel) task.review.message = attempt.message;
         renderTasks();
       }
@@ -2163,7 +2160,6 @@ async function controlReviewedExecution(review, actionName) {
       } else {
         attempt.pending = false;
         attempt.check = null;
-        if (task.review !== null && !task.review.outcomeUnknown) task.review.outcomeCheck = null;
         if (task.review?.pending === actionName) task.review.pending = null;
       }
       renderTasks();
@@ -2528,14 +2524,9 @@ async function retryFormAttempt(task, form, kind) {
     attempt === null || attempt.kind !== kind || !attempt.running ||
     attempt.checking || typeof attempt.check !== "function"
   ) return false;
-  attempt.checking = true;
-  form.actionMessage = "Checking the original start outcome…";
-  renderTasks();
-  try { await attempt.check(); } finally {
-    if (currentFormAttempt(task, form, attempt)) attempt.checking = false;
-    renderTasks();
-  }
-  return true;
+  return checkOriginalOutcome(attempt,
+    () => { form.actionMessage = "Checking the original start outcome…"; },
+    () => currentFormAttempt(task, form, attempt));
 }
 
 async function choicesForStart(task, form, attempt, revision, optionsInput) {

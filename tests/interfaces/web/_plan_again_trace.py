@@ -24,11 +24,7 @@ TRACE_VALUES = {
     "button-projection": frozenset({"pending", "enabled", "ineligible"}),
     "callback-identity": frozenset({"current", "retained-not-current", "replaced"}),
     "callback-pending": frozenset({"clear", "pending"}),
-    "eligibility": frozenset({
-        "close", "form-not-ready", "origin-batch", "task-batch",
-        "global-batch", "idle", "retry-idle", "other-attempt",
-        "start-unknown",
-    }),
+    "eligibility": frozenset({"enabled", "ineligible"}),
     "attempt-route": frozenset({"blocked", "retry", "fresh"}),
     "attempt-created": frozenset({"none", "fresh", "stale"}),
     "dispatch": frozenset({"submitted"}),
@@ -115,56 +111,48 @@ _BRIDGE_VALIDATE_TRACE = r'''  const validateResult = (value) => {
 '''
 
 _BRIDGE_ATTEMPT = r'''  const requestId = mintId();
-  if (COMMAND_POLICY_CONTRACT[command]?.timeout === "mutation-observed") {
+  const observed = COMMAND_POLICY_CONTRACT[command]?.timeout === "mutation-observed";
 '''
 _BRIDGE_ATTEMPT_TRACE = r'''  const requestId = mintId();
   if (command === "plan_again") namiPlanAgainTrace("bridge-attempt", "created");
-  if (COMMAND_POLICY_CONTRACT[command]?.timeout === "mutation-observed") {
+  const observed = COMMAND_POLICY_CONTRACT[command]?.timeout === "mutation-observed";
 '''
 
-_BRIDGE_CAPACITY = r'''  if (observedCommandAttempts.size >= OBSERVED_COMMAND_MAX_ATTEMPTS
-      || (asyncSmall && asyncCommandAttempts.size >= ASYNC_COMMAND_MAX_ATTEMPTS)) {
+_BRIDGE_CAPACITY = r'''  if ((observed || asyncSmall) && commandAttempts.size >= COMMAND_MAX_ATTEMPTS) {
     throw new BridgeCommandError("bridge_busy", ERROR_MESSAGES.bridge_busy);
   }
 '''
-_BRIDGE_CAPACITY_TRACE = r'''  if (observedCommandAttempts.size >= OBSERVED_COMMAND_MAX_ATTEMPTS
-      || (asyncSmall && asyncCommandAttempts.size >= ASYNC_COMMAND_MAX_ATTEMPTS)) {
+_BRIDGE_CAPACITY_TRACE = r'''  if ((observed || asyncSmall) && commandAttempts.size >= COMMAND_MAX_ATTEMPTS) {
     if (command === "plan_again") namiPlanAgainTrace("async-capacity", "full");
     throw new BridgeCommandError("bridge_busy", ERROR_MESSAGES.bridge_busy);
   }
   if (command === "plan_again") namiPlanAgainTrace("async-capacity", "available");
 '''
 
-_BRIDGE_ENTRY = r'''  observedCommandAttempts.set(requestId, state);
-  if (asyncSmall) asyncCommandAttempts.set(requestId, state);
+_BRIDGE_ENTRY = r'''  if (observed || asyncSmall) commandAttempts.set(requestId, attempt);
 '''
-_BRIDGE_ENTRY_TRACE = r'''  observedCommandAttempts.set(requestId, state);
-  if (asyncSmall) asyncCommandAttempts.set(requestId, state);
+_BRIDGE_ENTRY_TRACE = r'''  if (observed || asyncSmall) commandAttempts.set(requestId, attempt);
   if (command === "plan_again") namiPlanAgainTrace("async-entry", "registered");
 '''
 
-_BRIDGE_READY = r'''async function dispatchObservedReadyAttempt(request, state, waitUntilReady) {
-  await withDeadline(waitUntilReady(), SHELL_READY_TIMEOUT_MS, () => {});
+_BRIDGE_READY = r'''      await withDeadline(waitUntilReady(), SHELL_READY_TIMEOUT_MS, () => {});
 '''
-_BRIDGE_READY_TRACE = r'''async function dispatchObservedReadyAttempt(request, state, waitUntilReady) {
-  if (state.command === "plan_again") namiPlanAgainTrace("bridge-readiness", "waiting");
-  await withDeadline(waitUntilReady(), SHELL_READY_TIMEOUT_MS, () => {});
-  if (state.command === "plan_again") namiPlanAgainTrace("bridge-readiness", "ready");
+_BRIDGE_READY_TRACE = r'''      if (attempt.command === "plan_again") namiPlanAgainTrace("bridge-readiness", "waiting");
+      await withDeadline(waitUntilReady(), SHELL_READY_TIMEOUT_MS, () => {});
+      if (attempt.command === "plan_again") namiPlanAgainTrace("bridge-readiness", "ready");
 '''
 
-_BRIDGE_NATIVE = r'''  const native = await api.dispatch(request);
+_BRIDGE_NATIVE = r'''async function acceptNativeResponse(attempt, api, native) {
 '''
-_BRIDGE_NATIVE_TRACE = r'''  const native = await api.dispatch(request);
-  if (state.command === "plan_again") namiPlanAgainTrace("native-response",
+_BRIDGE_NATIVE_TRACE = r'''async function acceptNativeResponse(attempt, api, native) {
+  if (attempt.command === "plan_again") namiPlanAgainTrace("native-response",
     Object.prototype.hasOwnProperty.call(native, "response") ? "direct" : "admitted");
 '''
 
-_BRIDGE_COMPLETION = r'''  const entry = asyncCommandAttempts.get(message.request_id);
-  if (entry === undefined) {
+_BRIDGE_COMPLETION = r'''  const attempt = commandAttempts.get(message.request_id);
 '''
-_BRIDGE_COMPLETION_TRACE = r'''  const entry = asyncCommandAttempts.get(message.request_id);
-  if (entry?.command === "plan_again") namiPlanAgainTrace("command-completion", "matched");
-  if (entry === undefined) {
+_BRIDGE_COMPLETION_TRACE = r'''  const attempt = commandAttempts.get(message.request_id);
+  if (attempt?.command === "plan_again") namiPlanAgainTrace("command-completion", "matched");
 '''
 
 _PLAN_CLICK = r'''  planAgain.addEventListener("click", () => {
@@ -194,59 +182,14 @@ _APP_CALLBACK_TRACE = r'''async function planAgainFromReview(review) {
 '''
 
 _APP_ELIGIBILITY = r'''function canStartPlanAgain(task) {
-  const form = task?.form;
-  if (
-    task === null || currentTask() !== task || task.closePending || task.closeCheck !== null
-    || task.closeOutcomeUnknown || task.startOutcomeUnknown ||
-    form?.canPlanAgain !== true ||
-    originHasPendingBatch(task.taskId) || batchTaskBlockReason(task.taskId) !== null ||
-    (pageBatch !== null && pageBatch.running !== null)
-  ) return false;
-  return form.attempt === null || (
-    form.attempt.kind === "plan-again" && form.attempt.running &&
-    typeof form.attempt.check === "function" && !form.attempt.checking
-  );
-}
 '''
 _APP_ELIGIBILITY_TRACE = r'''function canStartPlanAgain(task) {
-  const form = task?.form;
-  if (task === null || currentTask() !== task) {
-    return false;
-  }
-  if (task.closePending || task.closeCheck !== null || task.closeOutcomeUnknown) {
-    globalThis.__namiPlanAgainTrace?.record("eligibility", "close");
-    return false;
-  }
-  if (task.startOutcomeUnknown) {
-    globalThis.__namiPlanAgainTrace?.record("eligibility", "start-unknown");
-    return false;
-  }
-  if (form?.canPlanAgain !== true) {
-    globalThis.__namiPlanAgainTrace?.record("eligibility", "form-not-ready");
-    return false;
-  }
-  if (originHasPendingBatch(task.taskId)) {
-    globalThis.__namiPlanAgainTrace?.record("eligibility", "origin-batch");
-    return false;
-  }
-  if (batchTaskBlockReason(task.taskId) !== null) {
-    globalThis.__namiPlanAgainTrace?.record("eligibility", "task-batch");
-    return false;
-  }
-  if (pageBatch !== null && pageBatch.running !== null) {
-    globalThis.__namiPlanAgainTrace?.record("eligibility", "global-batch");
-    return false;
-  }
-  const attempt = form.attempt;
-  if (attempt === null) {
-    globalThis.__namiPlanAgainTrace?.record("eligibility", "idle");
-    return true;
-  }
-  const retryIdle = attempt.kind === "plan-again" && attempt.running &&
-    typeof attempt.check === "function" && !attempt.checking;
-  globalThis.__namiPlanAgainTrace?.record("eligibility", retryIdle ? "retry-idle" : "other-attempt");
-  return retryIdle;
+  const eligible = canStartPlanAgainUntraced(task);
+  globalThis.__namiPlanAgainTrace?.record("eligibility", eligible ? "enabled" : "ineligible");
+  return eligible;
 }
+
+function canStartPlanAgainUntraced(task) {
 '''
 
 _APP_START = r'''  if (!canStartPlanAgain(task)) return false;

@@ -107,7 +107,8 @@ cleanup commit. New findings do not silently add rows.
 | AB-6 | Unsupported reload has one contained restart behavior instead of reinjection recovery | AB-2 | 5,317 ordinary; 34 installed; 12 imports; gestures, custody/close races and two independent reviews | Complete in `2b4a2214` |
 | AB-7 | Existing admission/completion preserves original outcomes without page-timeout result abandonment or replay | AB-6; D2 settled | Delayed/post-effect failed delivery, bounded observation recovery/exhaustion, duplicate protection and close | Complete; original outcomes retained; installed34/34 and independent/Claude review |
 | AB-7R | Reduce AB-7 recovery to command-specific authority and actual UI dependencies | AB-7; §14 validation and user authorization | Delayed/late results, qualified receipt recovery, current-state reconciliation, ordering/retirement, ordinary/imports and affected installed journeys | Delivered; separate AB-7R reduction commit |
-| AB-8 | Existing shell renders bounded authoritative Python task snapshots | AB-4/5/6/7R | Producer→snapshot→page, ordinary/imports and installed task journeys | Pending; not authorized |
+| AB-7S | Consolidate recovery implementation and reduce tests to distinct product guarantees | AB-7R; user authorization 2026-09-26 | One attempt/settlement path, local outcome ownership, retained behavior matrix, ordinary/imports and installed journeys; independent review | Complete; separate reviewed product/test reduction |
+| AB-8 | Existing shell renders bounded authoritative Python task snapshots | AB-4/5/6/7S | Producer→snapshot→page, ordinary/imports and installed task journeys | Pending; not authorized |
 | AB-9 | Remaining visual/source pins protect behavior rather than incidental spelling | AB-8 | Static/security, computed style, ordinary and installed gallery | Pending |
 | AB-10 | Integrated reductions preserve the complete retained workflow and have coherent docs/evidence | All above | Overall final sweep below | Pending |
 
@@ -606,6 +607,36 @@ Evidence: `build/post-m1-8-ablation-20260925/ab7r-verification.md`,
 `ab7r-frozen-inputs.json`, `ab7r-review.md` and named XML/log receipts.
 Earlier unexplained AB-7 Setup/Plan-again observations are not claimed fixed.
 
+#### AB-7S — Consolidate recovery and its behavioral tests
+
+**Complete, 2026-09-26**, on `milestone1` from `d4351acd`, as one separate
+checkpoint before AB-8. Browser commands share one request registry and
+direct/async result settlement path, with optional original-result observation.
+Review uncertainty lives on the retained review; control Check lives on its
+issuing attempt. Fixed review/control errors allow explicit exact-session Close
+through existing native cleanup. Unknown start/execution/release/Close fences,
+selection→Execute, D4, late result adoption and custody bounds remain.
+
+Production is net **357 lines smaller**, tests **330 smaller**. Retired helper
+spelling/branch pins, repeated policy/envelope assertions, fake effect counting
+and the tracer's copied eligibility policy. Keep browser admission rejection,
+real native post-effect recovery and distinct queued-row/control/Close journeys.
+Independent review caught a Check-disabled projection still reading its former
+owner; its renderer witness failed before correction and passed afterward.
+
+Verification: ordinary 5,321 passed/4 skipped; final interfaces refresh 1,782
+passed after the renderer/test correction, retaining unchanged domain/tool
+evidence by dependency. All 34 installed headed cases and 12 import contracts
+passed, plus fresh independent review and documentation checks. Evidence:
+`build/post-m1-8-ablation-20260925/ab7s-verification.md`, final input hashes,
+review, deletion maps and XML/log receipts. The expanded pre-close register is
+retained with that evidence.
+
+Native domain/receipt owners and wire protocol are unchanged. No blanket resend,
+new store, selection demotion through cached reads, or AB-8 implementation.
+Earlier unexplained AB-7 observations remain unexplained. AB-8 stays paused;
+retain pre-existing AB-3/AB-6 worktree/recovery records for AB-10 accounting.
+
 #### AB-8 — Authoritative task snapshots and bounded shell refactor
 
 **Objective.** Implement S3 before inventory extends the same shell, removing the
@@ -620,7 +651,7 @@ event/attempt reduction out of `bridge.js`, `app.js` and `task_status.js`, keepi
 drafts, focus, scroll, pending feedback and visual formatting local. Prefer one
 Python rate/ETA sample history with monotonic time and explicit reset on attempt/
 Gap; the browser only formats the result. Existing panels/renderers remain.
-Complete AB-7R before freezing the snapshot shape; snapshots preserve its qualified
+Complete AB-7S before freezing the snapshot shape; snapshots preserve its qualified
 pending/unavailable feedback and retained original-result recovery. No framework, preparatory
 shell rewrite or S5 merger. D4's highlighting/focus behavior remains intact.
 

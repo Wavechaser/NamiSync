@@ -1305,18 +1305,18 @@ export function createPlanReviewPanel(callbacks) {
     cancel.disabled = (review.pending !== null && !task.canCancelAfterFixedReviewOutcome)
       || controlUnavailable
       || task.executionControlState === "canceling";
-    const independentCancel = task.executionControlAttempt?.independent
-      && task.executionControlAttempt.sessionId === task.sessionId
+    const controlAttempt = task.executionControlAttempt?.sessionId === task.sessionId
       ? task.executionControlAttempt : null;
+    const independentCancel = controlAttempt?.independent ? controlAttempt : null;
     const actionMessage = [review.message, independentCancel?.message].filter(Boolean).join(" ");
     updateText(status, actionMessage);
     status.title = actionMessage;
     status.hidden = actionMessage.length === 0;
     const checkOutcome = typeof review.outcomeCheck === "function"
-      || typeof independentCancel?.check === "function";
+      || typeof controlAttempt?.check === "function";
     retryOutcome.hidden = !checkOutcome && !review.refreshAvailable;
     updateText(retryOutcome, checkOutcome ? "Check outcome" : "Refresh review");
-    retryOutcome.disabled = review.outcomeRunning === true || independentCancel?.checking === true;
+    retryOutcome.disabled = review.outcomeRunning === true || controlAttempt?.checking === true;
     renderRows(review, task);
     if (focusedPlanRequestId !== review.summary.request_id) focusedPlanRow = null;
     focusedPlanRequestId = review.summary.request_id;

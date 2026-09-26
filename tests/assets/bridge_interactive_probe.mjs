@@ -16,6 +16,7 @@ class TestWindow extends TestEventTarget {
     this.loseNextAcknowledgment = false;
     this.queuedResults = new Map();
     this.commandFailures = new Map();
+    this.releaseInteractive = null;
     this.pywebview = {
       api: {
         dispatch: (requestJson) => this.dispatch(requestJson),
@@ -95,7 +96,9 @@ class TestWindow extends TestEventTarget {
         }
       : {
           schema_version: 1,
-          request_id: request.request_id,
+          request_id: request.command === "null_success" ? null
+            : request.command === "wrong_success" ? "f".repeat(32)
+              : request.request_id,
           ok: true,
           result,
         };
@@ -106,6 +109,11 @@ class TestWindow extends TestEventTarget {
     };
     this.nativeResponses.set(`ack:${responseToken}`, nativeResponse);
     this.requestResponses.set(request.request_id, nativeResponse);
+    if (request.command === "held_interactive") {
+      return new Promise((resolve) => {
+        this.releaseInteractive = () => resolve(nativeResponse);
+      });
+    }
     const remainingFailures = this.commandFailures.get(request.command) ?? 0;
     if (remainingFailures > 0) {
       this.commandFailures.set(request.command, remainingFailures - 1);
@@ -198,7 +206,6 @@ assert.equal(
 );
 
 const continuationId = `slot-${"3".repeat(32)}`;
-const timersBeforeDirectAdmission = timerCalls;
 const continued = await bridge.admitLocation("source", {
   continuation_id: continuationId,
   mount_index: 1,
@@ -209,8 +216,6 @@ assert.deepEqual(testWindow.requests.at(-1).payload, {
   continuation_id: continuationId,
   mount_index: 1,
 });
-assert.equal(timerCalls, timersBeforeDirectAdmission + 3,
-  "continuation admission owns startup and feedback bounds plus fixture cleanup");
 assert.throws(
   () => bridge.admitLocation("source", { continuation_id: continuationId, mount_index: -1 }),
   /candidate or continuation choice/,
@@ -232,8 +237,17 @@ assert.equal(
   "a recognized refusal acknowledges its exact detached response",
 );
 
+for (const command of ["null_success", "wrong_success"]) {
+  const beforeAck = testWindow.acknowledgments.length;
+  await assert.rejects(
+    bridge.dispatchInteractive(command, {}, () => true),
+    { name: "BridgeTransportError" },
+  );
+  assert.equal(testWindow.acknowledgments.length, beforeAck + 1,
+    "a successful response needs the exact request identity and releases its native token");
+}
+
 const beforeRefusal = testWindow.requests.length;
-const timersBeforeRefusal = timerCalls;
 await assert.rejects(
   bridge.dispatchInteractive("reject_once", {}, () => true),
   { name: "BridgeTransportError" },
@@ -243,7 +257,19 @@ assert.equal(
   beforeRefusal + 1,
   "interactive transport never automatically retries",
 );
-assert.equal(timerCalls, timersBeforeRefusal, "interactive transport owns no client deadline");
+
+let heldSettled = false;
+const held = bridge.dispatchInteractive("held_interactive", {}, () => true)
+  .then(() => { heldSettled = true; });
+for (let turn = 0; turn < 8; turn += 1) await Promise.resolve();
+for (const [token, callback] of [...activeTimers]) {
+  activeTimers.delete(token);
+  callback();
+}
+for (let turn = 0; turn < 8; turn += 1) await Promise.resolve();
+assert.equal(heldSettled, false, "interactive work has no client deadline");
+testWindow.releaseInteractive();
+await held;
 
 const setupOptions = {
   filters: [],
