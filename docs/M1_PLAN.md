@@ -26,7 +26,8 @@ before dependent implementation. The
 dispositions. This section is the sole AB register. The original AB-1–AB-10 batch
 authorization was later paused after AB-7. AB-7R/7S and recovery follow-ups are
 delivered; AB-8 and its follow-up are delivered on 2026-09-26. The user has
-resumed and completed AB-9; AB-10 still awaits authorization.
+resumed and completed AB-9; AB-10 closeout is recorded below, followed by a separate
+documentation-consolidation and accounted side-branch cleanup commit.
 Revision based on `0c74ee7` settled D2/D4; later delivered
 checkpoints update the current transport contract in BRIDGE.
 
@@ -110,9 +111,9 @@ cleanup commit. New findings do not silently add rows.
 | AB-7 | Existing admission/completion preserves original outcomes without page-timeout result abandonment or replay | AB-6; D2 settled | Delayed/post-effect failed delivery, bounded observation recovery/exhaustion, duplicate protection and close | Complete; original outcomes retained; installed34/34 and independent/Claude review |
 | AB-7R | Reduce AB-7 recovery to command-specific authority and actual UI dependencies | AB-7; §14 validation and user authorization | Delayed/late results, qualified receipt recovery, current-state reconciliation, ordering/retirement, ordinary/imports and affected installed journeys | Delivered; separate AB-7R reduction commit |
 | AB-7S | Consolidate recovery implementation and reduce tests to distinct product guarantees | AB-7R; user authorization 2026-09-26 | One attempt/settlement path, local outcome ownership, retained behavior matrix, ordinary/imports and installed journeys; independent review | Complete; separate reviewed product/test reduction |
-| AB-8 | Existing shell renders bounded authoritative Python task snapshots | AB-4/5/6/7S | Producer→snapshot→page, ordinary/imports and installed task journeys | Delivered 2026-09-26; paused for user recap |
+| AB-8 | Existing shell renders bounded authoritative Python task snapshots | AB-4/5/6/7S | Producer→snapshot→page, ordinary/imports and installed task journeys | Delivered in `7445f70a`; follow-up `4ff11a8` |
 | AB-9 | Remaining visual/source pins protect behavior rather than incidental spelling | AB-8 | Static/security, computed style, ordinary and installed gallery | Delivered 2026-09-26 on base `4ff11a8` |
-| AB-10 | Integrated reductions preserve the complete retained workflow and have coherent docs/evidence | All above | Overall final sweep below | Pending |
+| AB-10 | Integrated reductions preserve the complete retained workflow and have coherent docs/evidence | All above | Overall final sweep below | Verified on base `7af07724`; closeout evidence below |
 
 ### Detailed checkpoints
 
@@ -567,13 +568,12 @@ Evidence: ignored `build/post-m1-8-ablation-20260925/ab7-verification.md`, raw
 complete/diagnostic/installed receipts, `ab7-independent-review.md` and
 `ab7-claude-review.md`; the evidence index retains both reviewed correction decisions.
 Atomic commit: `refactor(web): simplify command completion without timed mutation replay`.
-Pause for user recap; AB-8 implementation remains unauthorized.
 
 #### AB-7R — Reduce command recovery and uncertainty state
 
 Delivered 2026-09-26 on `milestone1`, base `895710fb`, as one separate
 reviewed reduction checkpoint. Outcomes and verification are recorded below;
-frozen inputs and failed receipts remain in ignored AB-7R evidence. AB-8 remains paused.
+frozen inputs and failed receipts remain in ignored AB-7R evidence.
 
 - **R1/R2:** Five commands no longer retain/observe original responses: picker,
   location admission, view, highlight and cosmetic replacement. Revisioned
@@ -636,8 +636,8 @@ retained with that evidence.
 
 Native domain/receipt owners and wire protocol are unchanged. No blanket resend,
 new store, selection demotion through cached reads, or AB-8 implementation.
-Earlier unexplained AB-7 observations remain unexplained. AB-8 stays paused;
-retain pre-existing AB-3/AB-6 worktree/recovery records for AB-10 accounting.
+Earlier unexplained AB-7 observations remain unexplained; retain the AB-3/AB-6
+worktree/recovery records until the authorized post-AB-10 accounting completes.
 
 #### AB-8 — Authoritative task snapshots and bounded shell refactor
 
@@ -729,7 +729,7 @@ interfaces department; **4 installed-gallery passes** in existing modes/sizes;
 actual CSS fallback passed 66 checks; an actual missing forced-color focus ring
 failed the installed detector. Both variants restored exact product bytes.
 Evidence: `build/ab9-20260926/verification.md`. Other native journeys retain the
-unchanged AB-8 follow-up evidence. AB-10 remains unauthorized.
+unchanged AB-8 follow-up evidence. AB-10 closure is recorded below.
 
 The optional summary-ahead-of-record observation receives no product change:
 snapshot presentation may briefly lag list state, while list state can disable
@@ -762,6 +762,35 @@ obligations with no remaining detector and inspect actual rendered evidence.
 
 #### AB-10 — Integrated closeout
 
+**Activated 2026-09-26, base `7af07724`.** Inspect the cumulative AB diff from
+`6a55239`, every regression-map row, retained gate/policy consumers and their
+current evidence dependencies. Scope is verification and relevant active docs
+(M1_PLAN, HANDOFF, CHANGELOG, README, TESTS, TOOLS, PERFORMANCE and subject owners
+where inspection finds stale behavior). Reuse AB-9 ordinary/gallery and AB-8
+remaining installed evidence only after comparing producer, fixture, driver and
+checker inputs; run missing or invalidated gates. Check historical JSON bytes,
+optional tool listing/selected real endpoints and truthful failed invocation,
+current incoming links and a fresh independent integration review. No deferred
+S5/full-event protocol work, M1-9/10 implementation or new quantitative claim.
+Repository mandatory/recurrence stops remain binding. Commit AB-10 first.
+
+The endpoint sweep found one introduced measurement-driver defect: seven
+adapted execution-UI feedback cases emit the current feedback receipt but both
+child and parent compare it with the frozen historical busy/pending-frame shape.
+Correct only `tools/performance/execution_ui.py` and its direct checker
+`tests/interfaces/web/test_m1_8_execution_ui_scale.py`; keep historical JSON
+unchanged. Verify accepted/pending feedback and malformed receipts in ordinary
+tests, then rerun the installed nondestructive Execute endpoint. No product
+protocol or acceptance-budget change is part of this correction.
+
+The user then authorizes a separate documentation/cleanup outcome: account for
+all side branches/worktrees, including both older GUI recoveries, preserve exact
+unmerged objects/dirty work and useful decisions, then prune superseded refs.
+Consolidate delivered late-M1-8/AB rows and retire the study only after useful
+residuals have active owners. Preserve long-lived integration branches, stashes
+and unresolved DOC-2 work; no history rewrite, push or PR is authorized. This
+second commit requires independent content/accounting and link/diff review.
+
 **Objective.** Verify interactions across the completed reductions.
 Full event-body removal is a separate deferred protocol decision: inventory its
 remaining diagnostic/replay consumers if useful, but do not implement it under
@@ -784,6 +813,24 @@ are settled retained behavior, not unresolved choices.
 user journey, with evidence for each regression-map row and changed detector.
 **Commit gate.** All sweep evidence accounted and working tree coherent;
 `docs: close post-M1-8 reduction verification` (only if closeout changes docs).
+
+**Delivery.** The cumulative source audit reconciled all nine regression-map
+rows. Unchanged-dependency AB-9 ordinary/gallery and AB-8 remaining native
+evidence cover the integrated product; fresh interface checks cover the sole
+driver correction (1,814 passes), with twelve fresh import contracts and
+independent review. Corpus reconciliation accounts for 5,387 passes and four
+Windows privilege skips; this combines dependency-valid runs, not a new full run.
+Current Plan, history smoke, receipt and corrected UI measurements complete.
+The bridge-event diagnostic remains incomplete: a browser failure marker and
+host-exit deadline are preserved, with no product-cause or performance claim.
+Its existing diagnostic-only disposition is unchanged; event-v5 fixture
+migration remains unassigned. Historical JSON bytes remain exact.
+`build/ab10-20260926/verification.md`, `reuse-and-raw-evidence.json`, endpoint
+reports and review/link receipts hold the detailed accounting. No product
+semantics or retained release gate changed. D6 allocation, S5/L6/full-event
+work, unexplained earlier native observations and DOC-2 remain open/deferred.
+Delivered-record consolidation and preserved side-ref pruning follow in the
+separately authorized commit.
 
 ### Overall final sweep
 
@@ -826,42 +873,17 @@ before closeout; unsupported pre-existing leads remain explicitly deferred.
 
 ### Resumption block
 
-- Current checkpoint: AB-1/AB-2/AB-3 complete; the full AB batch is active;
-  remaining rows await their named dependencies, not repeated activation.
-- Existing evidence: `build/post-m1-8-ablation-20260925/` contains the study,
-  AB-1 checks and AB-2 migration map, selected reports, raw failed child logs,
-  focused results, `ab2-ordinary.log/xml`, `ab2-raw-json-verification.json`
-  and history/bridge lane receipts. Five archived studies are accounted in the
-  current study §13.
-- AB-1 verification: `ab1-checks.json` and `ab1-review.md` in that evidence root
-  record documentation-only scope, 320 links, source figures, matching A6 trees
-  and independent review/correction. No product tests are an AB-1 gate.
-- Next action: refresh AB-4's prepared design against the integrated tree,
-  then activate its bounded selection handoff. The frozen AB-2 tool/consumer source
-  passed 95 focused tests, 5,302 ordinary tests (four skipped, 33 deselected),
-  33 installed interface tests, 12 import checks, 233 active/incoming links,
-  independent review and selected installed receipt/UI
-  cases. A later test-only stronger exact COPY-ID assertion passed its focused
-  rerun; unaffected ordinary evidence remains valid by dependency. Historical
-  bytes were checked in `ab2-raw-json-verification.json`. A product or test
-  correction invalidates its dependent gate evidence.
-- Current AB-1 documentation check:
-  `.\.venv\Scripts\python.exe build\post-m1-8-ablation-20260925\scripts\ab1_checks.py`.
-  It checks source-linked figures, integration identity, changed/incoming links,
-  diff hygiene and the documentation-only path population. It is task-scoped,
-  not a permanent product gate or a substitute for adversarial review.
-- Decisions: D2 settled; AB-7 simplifies existing admission/completion while
-  retaining original-outcome recovery and explicit unavailability. D4 retained
-  without feature reduction. D6 scheduled allocation later, S5/L6/tracer
-  retirement deferred. Rejected L5/L7/L8/L9 stay in the study's compact table.
-- Preserve all raw JSON, existing build evidence, unrelated work, branch refs and
-  stashes. No DOC-2 operations, push or PR. Commit only verified task-owned
-  tools, tests and matching docs.
-- Stop for AGENTS mandatory safety conditions, changed accepted outcome/ownership/
-  safety boundary, or recurrence thresholds. Investigate finite affected consumers
-  before proposing escalation; do not silently grow this register. A red test of
-  a retired mechanism alone is not a safety stop, and a green suite is not a
-  waiver of a supported lost guarantee.
+- AB-1–AB-10 delivery evidence,
+  dependency comparison and nine-row integration audit live in
+  `build/ab10-20260926/`. Earlier failed and passing evidence remains at the
+  individual checkpoint paths above.
+- Complete and commit AB-10 before the separately authorized delivered-register
+  compaction, study retirement and accounted side-branch/worktree pruning.
+  Preserve exact unmerged work before pruning; retain stashes, long-lived
+  integration branches and unresolved DOC-2 work. No push or PR.
+- D2/D4 remain settled; D6 needs explicit M1-9/10 allocation. S5/L6, full
+  event-body removal and tracer retirement remain deferred. Rejected
+  L5/L7/L8/L9 stay rejected. Existing repository stop rules still apply.
 
 ## Completed preparation and MOVE-1
 

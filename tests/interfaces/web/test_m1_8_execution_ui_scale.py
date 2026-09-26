@@ -10,9 +10,84 @@ import subprocess
 import pytest
 
 from tools.performance import execution_ui as adapter
+from tools.performance import _child as performance_child
 from _frontend_test_support import _node_executable
 
 REPOSITORY_ROOT = Path(__file__).parents[3]
+
+
+@pytest.mark.parametrize("metric_id", tuple(adapter._FEEDBACK_MARKERS))
+@pytest.mark.parametrize("outcome", ("pending", "accepted"))
+def test_ui_adapted_feedback_keeps_exact_action_facts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, metric_id: str, outcome: str,
+) -> None:
+    contract = json.loads(adapter.CONTRACT_PATH.read_bytes())
+    metric = next(row for row in contract["metrics"] if row["id"] == metric_id)
+    correctness = deepcopy(metric["correctness"])
+    assert correctness.pop(adapter._FEEDBACK_MARKERS[metric_id]) is True
+    correctness.update(feedback_frame=True, frame_outcome=outcome)
+    sample_count = 1 if metric["sample_kind"] == "cold" else 6
+
+    def page(_metric: dict, _root: Path, count: int) -> tuple[list, dict, dict]:
+        return ([{"correctness": deepcopy(correctness), "elapsed_ns": 1}
+                 for _ in range(sample_count)], {}, {"published_plan_count": count})
+
+    monkeypatch.setattr(adapter.legacy, "_run_headed_page", page)
+    monkeypatch.setattr(adapter.legacy, "_require_installed_runtime", lambda _root: None)
+    receipt = adapter.run_headed_child(
+        metric_id, "a" * 32, contract_path=adapter.CONTRACT_PATH,
+        benchmark_root=tmp_path, installed_root=tmp_path,
+    )
+    assert receipt["samples"][0]["correctness"] == correctness
+
+    for invalid in (
+        {**correctness, "feedback_frame": False},
+        {**correctness, "frame_outcome": "missing"},
+        {**correctness, "action": "wrong"},
+        {**correctness, "extra": True},
+    ):
+        assert not adapter._correctness_matches(metric, invalid)
+
+
+@pytest.mark.parametrize("corruption", (None, "marker", "outcome", "action"))
+def test_ui_parent_checks_adapted_feedback(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, corruption: str | None,
+) -> None:
+    metric_id = "ui_start_execution_nondestructive_click_feedback"
+    contract = json.loads(adapter.CONTRACT_PATH.read_bytes())
+    metric = next(row for row in contract["metrics"] if row["id"] == metric_id)
+    correctness = deepcopy(metric["correctness"])
+    assert correctness.pop("busy_frame") is True
+    correctness.update(feedback_frame=True, frame_outcome="pending")
+    if corruption == "marker":
+        correctness["feedback_frame"] = False
+    elif corruption == "outcome":
+        correctness["frame_outcome"] = "missing"
+    elif corruption == "action":
+        correctness["action"] = "wrong"
+    installed_root = tmp_path / "installed"
+
+    def child(_module: str, args: list[str], **_kwargs: object) -> dict:
+        token = args[args.index("--launch-token") + 1]
+        return {
+            "metric_id": metric_id,
+            "launch_token": token,
+            "samples": [{"correctness": correctness, "elapsed_ns": 1}],
+            "headed_fixture": {"published_plan_count": 2},
+            "installed_runtime": {
+                "root": str(installed_root.resolve()),
+                "namisync_file": str((installed_root / "namisync" / "__init__.py").resolve()),
+                "namisync_version": "test",
+            },
+        }
+
+    monkeypatch.setattr(performance_child, "run_child", child)
+    if corruption is None:
+        receipt = adapter.run_case(metric_id, output=tmp_path / "report.json", installed_root=installed_root)
+        assert receipt["samples"][0]["correctness"] == correctness
+    else:
+        with pytest.raises(RuntimeError, match="incomplete or false observation"):
+            adapter.run_case(metric_id, output=tmp_path / "report.json", installed_root=installed_root)
 
 
 @pytest.mark.parametrize("corruption", (None, "refused", "wrong_action"))

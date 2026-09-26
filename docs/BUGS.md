@@ -71,6 +71,16 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Workspace and measurement integrity
 
+- MINOR - FIXED (2026-09-26). Stale observation contract. Seven optional
+  execution-UI feedback cases produced the current pending-or-accepted frame
+  receipt, then rejected it against historical busy/pending-frame fields.
+  A successful installed nondestructive Execute observation therefore returned
+  an incomplete measurement. Cause: the JavaScript probe was adapted without
+  updating the child and parent receipt comparisons. Both now validate the
+  current feedback shape while preserving exact action/fixture fields and the
+  frozen historical JSON. Focused receipt checks and the installed endpoint
+  verify the correction; no product command or timing budget changed.
+
 - MINOR - FIXED (2026-09-25). Dialog completion conflated with selection.
   The native transport test helper reported a selected folder when the dialog
   disappeared and could post a second confirmation after a fixed wait without

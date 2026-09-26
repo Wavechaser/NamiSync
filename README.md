@@ -231,8 +231,8 @@ never hides the other result axes in rendered output.
 - [Post-M1-8 ablation study](docs/POST_M1_8_ABLATION.md) — repository-wide
   reduction dispositions, accepted snapshot direction, narrowed proposals and
   earlier-study accounting; the [actionable plan](docs/M1_PLAN.md#post-m1-8-reduction-plan)
-  starts with documentation, then optional performance tools and bounded
-  reductions. The requested AB batch is active; its register tracks each gate.
+  records the delivered documentation, optional performance tools and bounded
+  reductions, with AB-10's integrated evidence and remaining decisions.
 - Archived reduction history: [test ablation](docs/obsolete/TEST_ABLATION.md),
   [test refinement](docs/obsolete/TEST_REFINEMENT.md),
   [production reduction](docs/obsolete/PRODUCTION_REDUCTION.md),

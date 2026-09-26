@@ -115,6 +115,10 @@ cold cases have one sample and warm cases six. Its guarded JavaScript probe is
 identity and first-frame feedback, verifies eventual settlement, and rejects
 refusal, unrelated state and missing dispatch. These observations use the
 installed host and do not exercise filesystem execution as a timing endpoint.
+For the seven adapted command-feedback cases, the current receipt accepts
+either a pending frame or an already accepted successor frame, with all other
+action/fixture fields still exact. The child and parent validate that current
+receipt; the frozen historical busy/pending-frame JSON remains unchanged.
 
 For a fresh installed observation, build and install a wheel into a separate
 tool-owned directory and pass that installation as `--installed-root`. The

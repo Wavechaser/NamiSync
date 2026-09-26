@@ -365,6 +365,36 @@ CASES = (
     "ui_control_cancel_receipt",
 )
 
+_FEEDBACK_MARKERS = {
+    "ui_update_plan_view_click_feedback": "pending_frame",
+    "ui_mutate_plan_selection_click_feedback": "pending_frame",
+    "ui_confirm_execution_click_feedback": "busy_frame",
+    "ui_start_execution_nondestructive_click_feedback": "busy_frame",
+    "ui_control_pause_click_feedback": "pending_frame",
+    "ui_control_resume_click_feedback": "pending_frame",
+    "ui_control_cancel_click_feedback": "pending_frame",
+}
+
+
+def _correctness_matches(metric: dict[str, object], correctness: object) -> bool:
+    expected = metric["correctness"]
+    marker = _FEEDBACK_MARKERS.get(str(metric["id"]))
+    if marker is None:
+        return correctness == expected
+    if (
+        type(correctness) is not dict or type(expected) is not dict
+        or correctness.get("feedback_frame") is not True
+        or correctness.get("frame_outcome") not in {"pending", "accepted"}
+        or expected.get(marker) is not True
+    ):
+        return False
+    actual_fields = correctness.copy()
+    actual_fields.pop("feedback_frame")
+    actual_fields.pop("frame_outcome")
+    expected_fields = expected.copy()
+    expected_fields.pop(marker)
+    return actual_fields == expected_fields
+
 
 def run_headed_child(
     metric_id: str, launch_token: str, *, contract_path: Path,
@@ -390,7 +420,7 @@ def run_headed_child(
     expected_count = 1 if metric["sample_kind"] == "cold" else 6
     if (
         type(samples) is not list or len(samples) != expected_count
-        or any(sample["correctness"] != metric["correctness"] for sample in samples)
+        or any(not _correctness_matches(metric, sample["correctness"]) for sample in samples)
         or type(headed_fixture) is not dict
         or headed_fixture.get("published_plan_count") != published_plan_count
     ):
@@ -437,7 +467,7 @@ def run_case(
     if (
         receipt.get("metric_id") != case or receipt.get("launch_token") != token
         or type(samples) is not list or len(samples) != expected_count
-        or any(type(sample) is not dict or sample.get("correctness") != metric["correctness"]
+        or any(type(sample) is not dict or not _correctness_matches(metric, sample.get("correctness"))
                or type(sample.get("elapsed_ns")) is not int or sample["elapsed_ns"] < 0
                for sample in samples)
         or type(fixture) is not dict

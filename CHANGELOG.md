@@ -1027,6 +1027,21 @@ repeated machinery while preserving operational safety and boundary contracts.
 Safety, settlement, authority, and measurement work made high-risk release
 claims explicit, independently reviewable, and regression-backed.
 
+#### Integrate post-M1-8 reductions (2026-09-26)
+
+- Reconcile all nine regression-map rows, retained release authorities,
+  unchanged historical JSON and current documentation. Reuse ordinary/native
+  passes only after checking their product, fixture, driver and checker inputs.
+- Repair the optional execution-UI tool's stale comparison against historical
+  frame fields; current pending-or-accepted receipts keep exact action facts.
+  Focused and interface checks plus an installed Execute measurement verify it.
+- Current Plan, receipt and history-smoke measurements complete. The installed
+  bridge-event diagnostic remains explicitly incomplete; it establishes no
+  current timing/custody acceptance or product-cause finding. Preserve failures.
+- Remove stale checkpoint resumption notes without closing deferred product,
+  protocol, release or DOC-2 work. Full delivered-register consolidation and
+  accounted branch cleanup follow separately.
+
 #### Retain behavioral visual checks (2026-09-26)
 
 - Remove duplicate CSS recipes, implementation occurrence counts and gallery
