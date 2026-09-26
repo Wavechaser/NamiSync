@@ -1040,9 +1040,10 @@ claims explicit, independently reviewable, and regression-backed.
   activity as incompatible drift. Record it OPEN pending contract adjudication;
   the original AB-7 exception remains unretained.
 - Rerun installed Setup and both task-shell variants unchanged and with bounded
-  copied-helper tracing: six passes. Plan-again and stack/wrap causes remain
-  unknown; a renderer overwrite during the layout witness's frame yield is a
-  source-supported hypothesis. Check bounded Windows error history without
+  copied-helper tracing: six passes. Reclassify both AB-7 `Plan-again`
+  failures as post-Plan-again checks: an unfocused-page focus-ring wait (recorded
+  OPEN) and a probable second stack/wrap failure, where a renderer overwrite
+  during the witness's frame yield remains a source-supported hypothesis. Check bounded Windows error history without
   treating absent events as proof of environmental health.
 - Retain exact source/evidence hashes, failure receipts and a direct sample
   validator control under `build/incident-trace-20260927/`, and replay/race

@@ -71,6 +71,19 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Workspace and measurement integrity
 
+- MINOR - OPEN (2026-09-27). Unguarded focus precondition. The installed
+  task-shell helper waits for a `:focus-visible` outline after programmatic
+  `focus()` (`keyboard focus re-entry ring`) without first requiring document
+  focus. Chromium matches neither `:focus` nor `:focus-visible` in an unfocused
+  page, so any foreground change by another desktop process makes the wait
+  time out. Cause: page-script focus assertions assume OS focus that the
+  harness neither verifies nor classifies as incomplete. AB-7's final-run
+  "Plan-again" failure was this wait (0-based line 490, checkpoint `plan_again`,
+  `document_has_focus: false`), after Plan again had succeeded; a built-in
+  browser control reproduced the no-match behavior. Other task-shell and Setup
+  focus-ring checks share the exposure; the execution-review helper already
+  awaits `document.hasFocus()`. Evidence: `build/trace-20260927/scripts/plan-again/`.
+
 - MINOR - OPEN (2026-09-27). Stale observation contract. The optional
   bridge-event diagnostic rejects current decimal-string Progress positions
   against its integer-only sample validator, and its terminal summaries still

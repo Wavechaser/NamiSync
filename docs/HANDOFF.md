@@ -60,3 +60,22 @@ integration/cleanup is unchanged: AB-10 `cb57c41a`, documentation consolidation
 bundle/accounting and 78 preserved AB-3 files in `build/ab10-20260926/`.
 Documentation is committed on `milestone1`; no branch cleanup, push or PR.
 All unrelated work and stashes remain untouched.
+
+## Addendum — AB-7 Plan-again reclassification
+
+Neither AB-7 "Plan-again" failure was a Plan-again failure. Both receipts are
+named from the last checkpoint, `plan_again`, which the helper sets only after
+Task 53 was created, selected and rendered; a fresh-task timeout would report
+`plan_notice`. The final-run plan script equals `2b4a2214`'s, and CDP line
+numbers are 0-based (validated by the `until` throw at 9 and AB-8's stack/wrap
+throw at 425). Final run (default): line 490 is the `keyboard focus re-entry
+ring` wait with `document_has_focus: false`; Chromium does not match `:focus` or
+`:focus-visible` in an unfocused page, confirmed in a built-in browser control.
+Concurrent orchestrator scripts at 01:22–01:24:25 are a plausible, unproven
+focus source. BUGS records the unguarded focus precondition MINOR/OPEN.
+Acceptance run (larger): a direct throw at line 411 with focus present; the
+unpreserved intermediate diagnostic block, in its 15-line traced shape, places
+it on the narrow stack/wrap throw (default-row or metadata checks if its size
+differed). Stack/wrap has therefore probably failed twice, both in the larger
+variant. AB-7's settle-before-click wait hardened a step that was not failing.
+Line-mapping scripts: `build/trace-20260927/scripts/plan-again/`.
