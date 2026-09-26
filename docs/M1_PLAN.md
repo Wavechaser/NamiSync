@@ -25,7 +25,8 @@ before dependent implementation. The
 [study](POST_M1_8_ABLATION.md) owns findings, source evidence and compact rejected
 dispositions. This section is the sole AB register. The original AB-1–AB-10 batch
 authorization was later paused after AB-7. AB-7R/7S and recovery follow-ups are
-delivered; AB-8 is delivered on 2026-09-26, with the requested recap pause now active.
+delivered; AB-8 and its follow-up are delivered on 2026-09-26. The user has
+resumed and completed AB-9; AB-10 still awaits authorization.
 Revision based on `0c74ee7` settled D2/D4; later delivered
 checkpoints update the current transport contract in BRIDGE.
 
@@ -110,7 +111,7 @@ cleanup commit. New findings do not silently add rows.
 | AB-7R | Reduce AB-7 recovery to command-specific authority and actual UI dependencies | AB-7; §14 validation and user authorization | Delayed/late results, qualified receipt recovery, current-state reconciliation, ordering/retirement, ordinary/imports and affected installed journeys | Delivered; separate AB-7R reduction commit |
 | AB-7S | Consolidate recovery implementation and reduce tests to distinct product guarantees | AB-7R; user authorization 2026-09-26 | One attempt/settlement path, local outcome ownership, retained behavior matrix, ordinary/imports and installed journeys; independent review | Complete; separate reviewed product/test reduction |
 | AB-8 | Existing shell renders bounded authoritative Python task snapshots | AB-4/5/6/7S | Producer→snapshot→page, ordinary/imports and installed task journeys | Delivered 2026-09-26; paused for user recap |
-| AB-9 | Remaining visual/source pins protect behavior rather than incidental spelling | AB-8 | Static/security, computed style, ordinary and installed gallery | Pending |
+| AB-9 | Remaining visual/source pins protect behavior rather than incidental spelling | AB-8 | Static/security, computed style, ordinary and installed gallery | Delivered 2026-09-26 on base `4ff11a8` |
 | AB-10 | Integrated reductions preserve the complete retained workflow and have coherent docs/evidence | All above | Overall final sweep below | Pending |
 
 ### Detailed checkpoints
@@ -708,9 +709,33 @@ deferred protocol work. Complete suite: **5,369 passed, 4 Windows symlink-privil
 skips**; **12 import contracts kept**; fresh independent review found no blocker.
 Focused witnesses, historical-source reproductions and installed receipts are in
 `build/ab8-followup-20260926/`. No domain/history or command protocol changes.
-**Pause for user recap before further checkpoint implementation.**
+The requested recap pause ended with the user's AB-9 authorization.
 
 #### AB-9 — Retain behavioral visual tests
+
+**Delivered 2026-09-26, base `4ff11a8`.** Three test files lose 192 net lines of
+duplicate gallery catalogs, source mechanics and CSS recipes. Production and
+gallery fixture assets are unchanged. Numeric CSS-variable width fallback now
+passes the color-ownership scanner; literal color fallback still fails. Keep
+unpaired tree geometry/bidi, dynamic style-name restrictions, actual production
+renderer use, forced-color scrollbar scope and mixed token/accessibility checks.
+Broad mixed-token and selection-parity deletions were rejected by automatic
+approval review and not applied; this is not blanket source-pin retirement.
+`build/ab9-20260926/detector-map.md` maps removals to surviving detectors.
+
+Acceptance: **5,335 ordinary passes, 4 Windows privilege skips**, including the
+interfaces department; **4 installed-gallery passes** in existing modes/sizes;
+**12 import contracts kept**; independent review and docs checks. A harmless
+actual CSS fallback passed 66 checks; an actual missing forced-color focus ring
+failed the installed detector. Both variants restored exact product bytes.
+Evidence: `build/ab9-20260926/verification.md`. Other native journeys retain the
+unchanged AB-8 follow-up evidence. AB-10 remains unauthorized.
+
+The optional summary-ahead-of-record observation receives no product change:
+snapshot presentation may briefly lag list state, while list state can disable
+terminal-inappropriate controls. Drain record adoption reconciles presentation;
+terminal delivery custody and failed-drain recovery remain separate. Adding a
+second terminal precedence rule would reverse AB-8's ownership consolidation.
 
 **Objective.** Complete T1 on the surviving shell, independent of runtime changes.
 **Scope and approach.** `test_frontend_static.py`, `test_design_tokens.py`,

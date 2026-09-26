@@ -1027,6 +1027,21 @@ repeated machinery while preserving operational safety and boundary contracts.
 Safety, settlement, authority, and measurement work made high-risk release
 claims explicit, independently reviewable, and regression-backed.
 
+#### Retain behavioral visual checks (2026-09-26)
+
+- Remove duplicate CSS recipes, implementation occurrence counts and gallery
+  script echoes where existing page or installed-gallery checks observe the
+  protected behavior. Preserve security, token provenance, native geometry,
+  selection, focus, reduced-motion and forced-color checks.
+- Accept a numeric CSS-variable fallback in the color-ownership scanner while
+  continuing to reject literal color fallbacks. Production assets are unchanged.
+- Leave the brief task-list/snapshot state lag unchanged: terminal presentation
+  still belongs to the snapshot and reconciles when its record arrives.
+- Remove 192 net test lines. Verification: 5,335 ordinary passes, 4 Windows
+  privilege skips, 4 installed-gallery passes and 12 import contracts; independent
+  review. Equivalent CSS passes, while a missing forced-color focus ring fails
+  the retained rendered detector. Mixed token/accessibility checks remain.
+
 #### Render authoritative task snapshots (2026-09-26)
 
 - Follow-up: select terminal presentation once, retire copied page results and

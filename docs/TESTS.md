@@ -219,6 +219,15 @@ parent-created input.
 For the gallery's execution layout matrix, the page observes, the child checks
 bounded transport and drives native input/capture, and the parent owns the
 independent layout verdict. Harmless layout recipes are not acceptance criteria.
+Visual checks prefer the installed gallery's computed styles and observed
+interaction over duplicate CSS declarations, source occurrence counts or a
+second catalog parsed from the gallery script. Retain static checks for safe
+sinks, imports/packaging, explicit token provenance and contracts without an
+equivalent behavioral detector. A lexical color-ownership scan may accept a
+numeric dimension fallback without treating its comma as a color-list separator;
+literal color fallbacks still fail. Validate retirements against the surviving
+detector and a concrete harmless or adverse control where practical, rather than
+replacing every removed source assertion with a new test.
 The short execution journey uses coherent settled receipts and stable visible
 identity across capture, rather than a fixed detail-read count or permanent
 revision. Its real-copy endpoint remains distinct from the legacy journey's

@@ -2029,23 +2029,11 @@ def test_component_gallery_report_parser_is_exact_and_nested(
         _control_boundary_contrast(boundary)
 
 
-def test_component_gallery_script_declares_exact_required_matrix() -> None:
+def test_component_gallery_script_uses_production_components_without_domain_authority() -> None:
     script = _SCENARIO.read_text(encoding="utf-8")
 
-    assert _declared_keys(script, "LIFECYCLE_CASES") == set(_LIFECYCLE_CASES)
-    assert _declared_keys(script, "INTENT_CASES") == set(_INTENT_CASES)
-    assert _declared_keys(script, "PLAN_ROW_CASES") == _PLAN_ROW_CASE_KEYS
-    assert _declared_keys(script, "INTEGRITY_ROW_CASES") == _INTEGRITY_ROW_CASE_KEYS
-    assert _declared_keys(script, "LIFECYCLE_PROGRESS_CASES") == {
-        "running",
-        "resumed",
-        "paused",
-        "canceled",
-    }
-    assert _declared_keys(script, "CONTROL_CASES") == _CONTROL_KEYS
     assert _SELECTED_TASK_CARD_KEYS.isdisjoint(_BOUNDARY_CONTROL_KEYS)
     assert "task_card" not in _BOUNDARY_CONTROL_KEYS
-    assert _declared_keys(script, "CONTROL_STATES") == _CONTROL_STATES
     assert 'import("/bridge.js")' in script
     assert 'import("/render.js")' in script
     assert 'import("/icons.js")' in script
@@ -2054,56 +2042,17 @@ def test_component_gallery_script_declares_exact_required_matrix() -> None:
     assert 'import("/rail.js")' in script
     assert 'import("/plan_review.js")' in script
     assert "const galleryRail = createTaskRail({" in script
-    assert 'galleryRail.render([' in script
+    assert "galleryRail.render([" in script
     assert "app.append(galleryRail.element);" in script
-    assert "PLAN_ROW_CASES,\n    renderPlanRow," in script
-    assert "INTEGRITY_ROW_CASES,\n    renderIntegrityRow," in script
+    assert re.search(r"\bPLAN_ROW_CASES\s*,\s*renderPlanRow\s*,", script)
+    assert re.search(r"\bINTEGRITY_ROW_CASES\s*,\s*renderIntegrityRow\s*,", script)
     assert "renderer(row, rowView);" in script
-    assert "checkedCheckbox.checked = true;" in script
-    assert 'checked_mask: getComputedStyle(checkedCheckbox, "::after").maskImage' in script
-    assert 'checked_size: `${getComputedStyle(checkedCheckbox, "::after").width}' in script
-    assert "intentTone" not in script
-    assert 'presenceStatus: "reappeared"' in script
-    assert 'planSection.style.gridArea = "work";' in script
-    assert 'list.style.setProperty("inline-size", "36rem");' in script
-    assert 'list.style.removeProperty("inline-size");' in script
-    assert 'resizer.addEventListener("pointerdown"' in script
-    assert 'window.addEventListener("pointermove", move);' in script
-    assert 'resizer.addEventListener("keydown"' in script
-    assert "if (index < headers.length - 1)" in script
-    assert '"--nami-file-column-name: minmax(12rem, 1fr)"' in script
-    assert "grid.style.cssText = [" in script
-    assert "resizeState.widths = headerCells.map(" in script
-    assert "nextWidths[notesIndex] = startWidths[notesIndex] - delta;" in script
-    assert script.count("ensureFrozen();") == 2
-    assert 'data-column="notes"' in script
-    assert "640" not in script
-    assert 'control.closest("[hidden]") !== null' in script
-    assert "bounds.width > 0 && bounds.height > 0" in script
-    assert "const visibleCollapsedRejected = !controlFits(collapsedControl);" in script
-    assert 'masterCheckbox.addEventListener("change"' in script
-    assert 'surface.dataset.galleryHdrIsolate = isolate;' in script
-    assert 'surface.style.boxShadow = "var(--elevation-8)";' in script
-    assert '["Translucent surface without shadow", "shadowless"]' in script
-    assert '["Opaque surface with shadow", "opaque"]' in script
-    assert 'document.createElement("select")' not in script
-    assert "replaceWith(" not in script
-    assert 'ordinaryThemeOption.cloneNode(true)' in script
-    assert 'pressedThemeOptionSource.cloneNode(true)' in script
-    assert 'hoveredThemeOption.id = "gallery-theme-option-hover";' in script
-    assert 'pressedThemeOption.id = "gallery-theme-option-pressed";' in script
-    assert "optionStatePopup.remove();" in script
     assert "localStorage" not in script
     assert "sessionStorage" not in script
     assert not any(
         name in script
         for name in ("SyncPlan", "start_plan", "workflow", "dispatcher")
     )
-    assert "const PSEUDO_STATE_SETTLE_MS = 350;" in script
-    assert "setTimeout(resolve, PSEUDO_STATE_SETTLE_MS)" in script
-    assert 'dialog.dataset.closing = "true";' in script
-    assert "dialog.showModal();" in script
-    assert "dialog.close();" in script
     assert "window.pywebview" not in script
     assert "innerHTML" not in script
 
@@ -4402,16 +4351,6 @@ def _assert_icon_registry_evidence(
         )
         assert match is not None
         assert match.group(1).endswith(f"/{filename}")
-
-
-def _declared_keys(script: str, name: str) -> set[str]:
-    match = re.search(
-        rf"const {re.escape(name)} = Object\.freeze\(\[(.*?)\]\);",
-        script,
-        re.DOTALL,
-    )
-    assert match is not None, f"{name} declaration is missing"
-    return set(re.findall(r'key:\s*"([a-z0-9_]+)"', match.group(1)))
 
 
 def _contrast(first: str, second: str) -> float:
