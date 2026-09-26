@@ -1293,7 +1293,9 @@ export function createPlanReviewPanel(callbacks) {
       || (!checkExecution && !canExecuteSelection);
     const checkPlanAgain = review.pending === "plan-again"
       && typeof task.form?.attempt?.check === "function" && !task.form.attempt.checking;
-    updateText(planAgain, checkPlanAgain ? "Check outcome" : "Plan again");
+    const planAgainLabel = checkPlanAgain ? "Check outcome" : "Plan again";
+    planAgain.ariaLabel = planAgainLabel;
+    planAgain.title = planAgainLabel;
     planAgain.disabled = (review.pending !== null && !checkPlanAgain) || task.canPlanAgain !== true;
     controls.hidden = !activeExecution;
     pause.hidden = task.executionControlState === "paused";

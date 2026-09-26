@@ -201,6 +201,9 @@ const callbacks = Object.fromEntries([
   "onHighlight", "onHighlightedSelect", "onExecutionDetail", "onFollowOverride", "onNavigateCurrent",
 ].map((name) => [name, (...args) => calls.push([name, ...args])]));
 const panel = createPlanReviewPanel(callbacks);
+const planAgainButton = findAction(panel.element, "plan-again");
+const planAgainIcon = planAgainButton.children[0];
+assert.ok(planAgainIcon?.classList.contains("nami-icon--arrow-reset"));
 for (const action of ["execute", "plan-again", "pause", "resume", "cancel"]) {
   assert.equal(findAction(panel.element, action).disabled, true,
     `fresh panel must not advertise ${action} before a review loads`);
@@ -401,8 +404,28 @@ assert.equal(planDiagnostics.hidden, true);
 review.summary = summary;
 panel.render(task);
 assert.equal(planDiagnostics.hidden, true, "highlight updates do not reopen a collapsed card");
-assert.equal(findAction(panel.element, "plan-again").ariaLabel, "Plan again");
-assert.equal(findAction(panel.element, "plan-again").title, "Plan again");
+assertSameNode(findAction(panel.element, "plan-again"), planAgainButton);
+assertSameNode(planAgainButton.children[0], planAgainIcon, "normal Plan again keeps its icon");
+assert.equal(planAgainButton.children.length, 1);
+assert.equal(planAgainButton.textContent, "");
+assert.equal(planAgainButton.ariaLabel, "Plan again");
+assert.equal(planAgainButton.title, "Plan again");
+review.pending = "plan-again";
+task.form = { attempt: { check() {}, checking: false } };
+panel.render(task);
+assertSameNode(planAgainButton.children[0], planAgainIcon, "Check outcome keeps the same icon");
+assert.equal(planAgainButton.children.length, 1);
+assert.equal(planAgainButton.textContent, "");
+assert.equal(planAgainButton.ariaLabel, "Check outcome");
+assert.equal(planAgainButton.title, "Check outcome");
+review.pending = null;
+task.form = null;
+panel.render(task);
+assertSameNode(planAgainButton.children[0], planAgainIcon, "settled Plan again keeps the same icon");
+assert.equal(planAgainButton.children.length, 1);
+assert.equal(planAgainButton.textContent, "");
+assert.equal(planAgainButton.ariaLabel, "Plan again");
+assert.equal(planAgainButton.title, "Plan again");
 review.message = null;
 panel.render(task);
 assert.equal(footerMessage.hidden, true, "idle footer text takes no room");

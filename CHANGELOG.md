@@ -1050,6 +1050,9 @@ claims explicit, independently reviewable, and regression-backed.
 - AB-7S removes 357 net product and 330 test lines. Verify the ordinary suite,
   final interfaces refresh, all 34 installed headed cases, 12 import contracts
   and fresh independent review; keep AB-8 paused.
+- Restore the icon-only Plan again control after its recovery-label update
+  replaced the icon. Keep its accessible name and tooltip aligned with the
+  normal or Check action; verify the renderer transition before and after.
 
 #### Review AB-7 original-outcome recovery (2026-09-26)
 

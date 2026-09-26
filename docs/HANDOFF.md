@@ -1,27 +1,32 @@
-# Latest session — AB-7S product and test consolidation
+# Latest session — Command recovery follow-up fixes
 
-2026-09-26, `milestone1`, base `d4351acd`. AB-7S is delivered as a separate
-reviewed checkpoint. [M1_PLAN AB-7S](M1_PLAN.md#ab-7s--consolidate-recovery-and-its-behavioral-tests)
-owns its compact record. **AB-8 remains paused and unauthorized.**
+2026-09-26, `milestone1`, current base `514d71d`. The user authorized the
+validated AB-7R/S findings to be fixed in separate commits, without a formal
+checkpoint. No new AB row or detailed permanent delivery register. AB-8 stays
+paused. Authorized outcomes: preserve Plan again's icon/accessibility; separate
+validated response adoption from cleanup ACK success and clarify policy naming;
+give page command owners one recovery handle with truthful unavailable,
+unreadable-response and lost-direct-delivery feedback.
 
-One browser request/settlement owner replaces parallel observed and ordinary
-async paths. Remove copied review uncertainty/control Check; permit explicit
-exact-session cleanup after fixed review errors. Keep eleven observed commands,
-five current-state recovery commands, no mutation replay, D4 and actual
-start/Close/selection dependencies. Native domain, receipt and wire owners are
-unchanged. Net reduction: 357 product lines and 330 test lines. Tests lose
-incidental spelling/protocol duplication and fake effect counting, not native
-effect witnesses or distinct user journeys. The optional tracer records actual
-eligibility instead of copying it.
+Finite population: bridge/page issuing surfaces and existing runtime probes,
+native policy spelling/direct consumers, optional Plan-again tracer, matching
+component docs and changelog. Native effect/receipt owners and wire remain
+unchanged. Preserve no mutation abandonment/replay, exact task/session and
+selection→Execute fences, read/lifecycle/resource bounds. Batch stages and form
+preparation remain page-owned. Root serializes shared writers/tests; each commit
+gets focused evidence and fresh review, followed by integrated ordinary/interfaces,
+imports and installed headed verification. Existing AGENTS stop rules apply.
 
-Verification: 5,321 ordinary passed/4 skipped before a reviewed renderer
-correction; final full interfaces refresh 1,782 passed, with unchanged domain/tool
-passes retained by dependency. All 34 installed headed cases, 12 import contracts,
-fresh independent review and documentation checks passed. Check-disabled
-regression has targeted red/green evidence. Three browser malformed-admission
-cases and the queued-row reopening scenario were retained after retirement audit.
-Evidence: `build/post-m1-8-ablation-20260925/ab7s-verification.md`,
-`ab7s-final-evidence.json`, `ab7s-frozen-inputs.json`, `ab7s-review.md` and maps.
+Validation: `ab7s-followup-claims.log` in the existing ignored evidence directory;
+new receipts use `followup-` names. Plan again icon/accessibility correction has
+targeted red/green evidence and fresh review in `followup-icon*.md`. Combined
+installed verification passed all 34 headed cases; 12 import contracts and
+documentation link/diff checks pass. The initial interfaces run passed 1,781
+cases and exposed a missed policy rename in a performance helper; its 29-case
+module now passes, and the full department refresh passed all 1,782 cases. ACK/policy has
+fresh review without blockers; shared-handle work remains in design.
+Predecessor evidence stays under
+`build/post-m1-8-ablation-20260925/ab7s-*`; M1_PLAN owns the delivered AB-7S record.
 
 Use unique external test basetemps and announce each foreground batch before
 launch and when finished. Earlier AB-7 Setup `internal_error` and Plan-again

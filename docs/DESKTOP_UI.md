@@ -1320,7 +1320,9 @@ as defined in PRESENTATION. Their main actions toggle groups rather than opening
 menus; ungrouped categories remain toggles. The Sync/Integrity outer corner radius
 includes its inset so it is concentric with the inner buttons. Status-card actions
 align right alongside the large status title, with an arrow-reset Plan again
-button before Execute. The icon retains its accessible name and tooltip.
+button before Execute. It stays icon-only when used to Check the original
+Plan-again outcome; its accessible name and tooltip follow that current action
+without replacing the icon.
 Concise actionable warnings, errors and in-flight feedback share the second row
 with the status digest; idle and successful messages take no space. Feedback
 shares the digest's caption size and secondary foreground. At ordinary
