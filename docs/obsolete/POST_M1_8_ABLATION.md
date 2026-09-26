@@ -1,5 +1,12 @@
 # Post-M1-8 Ablation Study
 
+> Retired 2026-09-26 after AB-10 (`cb57c41a`). Historical investigation and
+> superseded proposals only; do not use this as an execution register or current
+> contract. [M1_PLAN](../M1_PLAN.md#post-m1-8-reduction-plan) carries the compact
+> delivered outcomes, retained decisions and deferred work; subject documents
+> own current behavior. The original source analysis and rejected alternatives
+> remain here for provenance, including the qualifications in §13–14.
+
 ## Disposition (2026-09-25)
 
 Original investigation baseline: clean `milestone1` at `549f3b4`. Reconciled
@@ -7,14 +14,14 @@ against `a7f8402` and the user's subsequent dispositions. The central diagnosis
 is supported; the original deletion sequence and blanket redundancy claims are
 not. This document retains the investigation and dispositions; the actionable
 plan and sole checkpoint register are in
-[M1_PLAN](M1_PLAN.md#post-m1-8-reduction-plan).
+[M1_PLAN](../M1_PLAN.md#post-m1-8-reduction-plan).
 
 S3's server-snapshot direction is accepted. L5/L7/L8/L9 are rejected. D1–D7
 are distinguished as settled directions, preferences or unresolved choices in
 §11; D2 now removes elapsed-time mutation abandonment/replay while preserving
 original-outcome recovery, and D4 is retained without feature reduction.
 Recommendations do not silently become user decisions. PA-1–PA-3 in
-[M1_PLAN](M1_PLAN.md) authorized the earlier documentation reconciliation and
+[M1_PLAN](../M1_PLAN.md) authorized the earlier documentation reconciliation and
 study retirement only. The user subsequently activated the complete AB batch;
 the current register owns status and dependency gates. AB-1 establishes
 documentation ownership without demoting an executable measurement gate;
@@ -65,7 +72,7 @@ invariants? Logical simplification is the goal; line counts are a consequence.
 
 The filesystem engine (scan, plan, preflight, execute, verify and ledger) mostly
 earns its complexity: nearly every executor guard examined maps to a SEVERE
-entry in [BUGS](BUGS.md). The avoidable cost comes from three sources:
+entry in [BUGS](../BUGS.md). The avoidable cost comes from three sources:
 
 1. **Orchestration partly driven by avoidable recovery scenarios.** One
    desktop task spans about 28 named types in six owners. The transport recovers
@@ -321,7 +328,7 @@ procedural, not test-level.
   detector. Retain observation/close, malformed-boundary and truthful-result
   tests when only reload or event-reduction machinery is retired; S5 is deferred.
 - **T3 — Stop procedure-driven test reduction.** The previous refinement closed
-  at a diagnostic net +27 lines ([TEST_REFINEMENT](obsolete/TEST_REFINEMENT.md)).
+  at a diagnostic net +27 lines ([TEST_REFINEMENT](TEST_REFINEMENT.md)).
   Approximate corpus shares (*analyst*): 15% headed harness (about 20% of the
   tests in those files need a desktop), 9% scale evidence, 8.5% tests of tools
   and evidence protocols.
@@ -346,7 +353,7 @@ rejection, and the security bans.
 - An estimated 20–30% certifies the evidence itself: readiness passes, partial
   collection indexes, legacy-family replay and per-family authority/identity
   records.
-- Policy contributes materially. [DEFENSE §7](DEFENSE.md#7-quantitative-evidence-and-measurement-authority)
+- Policy contributes materially. [DEFENSE §7](../DEFENSE.md#7-quantitative-evidence-and-measurement-authority)
   already distinguishes diagnostics and enforced bounds; escalation rules and
   PRESENTATION's specific acceptance procedures create the expensive coupling.
   Relevant dependency changes can re-arm evidence work; not every dataclass
@@ -356,7 +363,7 @@ rejection, and the security bans.
 **E1 — Narrowed recommendation: optional performance benching, required
 correctness and containment.** The user favors retaining useful measurement
 machinery without an ordinary development pass/fail bar. AB-1 moves methods and
-historical results into [PERFORMANCE](PERFORMANCE.md); AB-2 changes executable
+historical results into [PERFORMANCE](../PERFORMANCE.md); AB-2 changes executable
 acceptance and moves drivers with their consumers. This study does not itself
 weaken the current gates.
 
@@ -517,30 +524,33 @@ on the investigation's recommendation; no full task-owner merger is scheduled.
 
 ## 12. Planned delivery
 
-[M1_PLAN](M1_PLAN.md#post-m1-8-reduction-plan) owns AB-1–AB-10, dependencies,
-regression mapping, acceptance, commit gates and resumption. Documentation is
+[M1_PLAN](../M1_PLAN.md#post-m1-8-reduction-plan) now records completed AB outcomes
+and remaining decisions; its version at `cb57c41a` preserves the detailed
+dependencies, regression mapping and acceptance gates. The original sequence was:
+documentation is
 first; benchmark migration follows its ownership rules. Independent database,
 selection, response-boundary and test reductions get coherent commits. S1/S2
 and S3 remain separate boundaries; settled D2 makes AB-7 a bounded simplification
 of existing admission/completion, completed before S3. Genuine delivery uncertainty
 and original-outcome recovery remain. D4 stays intact.
 S5 stays deferred. L5/L7/L8/L9 remain in the compact rejected table in §5.
-§14 reviews delivered AB-7 and proposes a follow-up; it is not yet a decision.
+§14 retains the AB-7 proposal and its later qualification, not a new decision.
 
 ## 13. Earlier studies: absorption and archival accounting
 
 All five source documents were inspected for status, exclusions, losses and
 remaining decisions before moving. Their original bodies are preserved except
-for relocation of links and a retirement banner. This section is the current
-disposition map; archived instructions cannot restart their old checkpoints.
+for relocation of links and a retirement banner. This section preserves the
+historical disposition map; the compact M1 register and subject owners now carry
+active decisions. Archived instructions cannot restart their old checkpoints.
 
 | Archived study | Open work and still-relevant decisions |
 | --- | --- |
-| [TEST_ABLATION](obsolete/TEST_ABLATION.md) | TA-1–TA-3 and rebase closed; diagnostic recommendations are not outstanding implementation. Whole-cohort deletion lost duplicate-selection and visual/accessibility detectors. Keep boundary/selection/lifetime/native guarantees under CORE, TESTS, DESKTOP_UI, INTERFACES and DEFENSE. Later PR-8 superseded its exact-frozenset/private-index prescriptions; do not resurrect them. |
-| [TEST_REFINEMENT](obsolete/TEST_REFINEMENT.md) | ST-H/ST-0–ST-6 complete. Preserve FailureDetail lifetime/AST scope guards (CORE), database snapshot/bounded-query behavior (DATABASE), duplicate/unknown-id selection refusal and detached facts (VERIFIER/ARCHITECTURE), accessibility and real native input/privacy/media checks (DESKTOP_UI/INTERFACES/BRIDGE). Same-level detection applies to retained guarantees, not intentionally retired mechanisms. MOVE-1 superseded historical-alias query assertions; PR-8 superseded exact selection-container prescriptions. Frozen protected-input lists and mutation scripts are historical receipts, not an eternal file freeze. |
-| [PRODUCTION_REDUCTION](obsolete/PRODUCTION_REDUCTION.md) | PR-0–PR-9 complete. HISTORY/DATABASE own write/read validation, append-only receipt integrity and coordinated old/mixed-pair refusal without automatic deletion/migration. ARCHITECTURE/WORKFLOWS own required finishing and independent terminal axes. DATABASE owns bounded batching/snapshot/atomic-write guarantees; exact query-count pins were retired. Execution/integrity continuation protection and unintegrated presentation features remain. Its exclusions authorize no generic lifecycle/settlement/serializer engine; S3 is a new accepted direction, not a claim that this old pass allowed it. |
-| [REDUCTION_FOLLOWUP](obsolete/REDUCTION_FOLLOWUP.md) | NR-0–NR-9 complete, no pending delivery. ARCHITECTURE's adoption rule preserves constructor/ingress validation, supported callback changes, capacity/freshness and mutable ownership transfers. HISTORY retains write admission before pending mutation and read normalization/hash/column checks. EXECUTOR retains exact mutation/publication/recording ordering and settlement oracle. Recording-tail, pause/cancel and mutation-verdict compression remain unscheduled; this review does not revive them. |
-| [M1_7_ABLATION_STUDY](obsolete/M1_7_ABLATION_STUDY.md) | R7-1–R7-4 delivered; RI-1–RI-4 investigation complete. R7-5–R7-8/R7-G were suspended, not completed. Retire that denominator and resume block; selected ideas are accounted below. Historical P9 evidence and current acceptance owners remain unchanged by archival. |
+| [TEST_ABLATION](TEST_ABLATION.md) | TA-1–TA-3 and rebase closed; diagnostic recommendations are not outstanding implementation. Whole-cohort deletion lost duplicate-selection and visual/accessibility detectors. Keep boundary/selection/lifetime/native guarantees under CORE, TESTS, DESKTOP_UI, INTERFACES and DEFENSE. Later PR-8 superseded its exact-frozenset/private-index prescriptions; do not resurrect them. |
+| [TEST_REFINEMENT](TEST_REFINEMENT.md) | ST-H/ST-0–ST-6 complete. Preserve FailureDetail lifetime/AST scope guards (CORE), database snapshot/bounded-query behavior (DATABASE), duplicate/unknown-id selection refusal and detached facts (VERIFIER/ARCHITECTURE), accessibility and real native input/privacy/media checks (DESKTOP_UI/INTERFACES/BRIDGE). Same-level detection applies to retained guarantees, not intentionally retired mechanisms. MOVE-1 superseded historical-alias query assertions; PR-8 superseded exact selection-container prescriptions. Frozen protected-input lists and mutation scripts are historical receipts, not an eternal file freeze. |
+| [PRODUCTION_REDUCTION](PRODUCTION_REDUCTION.md) | PR-0–PR-9 complete. HISTORY/DATABASE own write/read validation, append-only receipt integrity and coordinated old/mixed-pair refusal without automatic deletion/migration. ARCHITECTURE/WORKFLOWS own required finishing and independent terminal axes. DATABASE owns bounded batching/snapshot/atomic-write guarantees; exact query-count pins were retired. Execution/integrity continuation protection and unintegrated presentation features remain. Its exclusions authorize no generic lifecycle/settlement/serializer engine; S3 is a new accepted direction, not a claim that this old pass allowed it. |
+| [REDUCTION_FOLLOWUP](REDUCTION_FOLLOWUP.md) | NR-0–NR-9 complete, no pending delivery. ARCHITECTURE's adoption rule preserves constructor/ingress validation, supported callback changes, capacity/freshness and mutable ownership transfers. HISTORY retains write admission before pending mutation and read normalization/hash/column checks. EXECUTOR retains exact mutation/publication/recording ordering and settlement oracle. Recording-tail, pause/cancel and mutation-verdict compression remain unscheduled; this review does not revive them. |
+| [M1_7_ABLATION_STUDY](M1_7_ABLATION_STUDY.md) | R7-1–R7-4 delivered; RI-1–RI-4 investigation complete. R7-5–R7-8/R7-G were suspended, not completed. Retire that denominator and resume block; selected ideas are accounted below. Historical P9 evidence and current acceptance owners remain unchanged by archival. |
 
 ### M1-7 items absorbed or explicitly left out
 
@@ -689,8 +699,9 @@ directory. This validates specific seams, not a universal resend protocol.
 | F6 | The retained evidence has injected delivery loss, not an observed natural loss. The real Setup error and unexplained Plan-again timeouts remain unresolved observations. This does not establish that local delivery cannot fail or authorize unrelated fixes. |
 
 The user authorized the qualified reduction as **AB-7R**, a separate checkpoint
-before AB-8. [M1_PLAN](M1_PLAN.md#ab-7r--reduce-command-recovery-and-uncertainty-state)
-owns its finite register and verification. Five commands (`pick_folder`,
+before AB-8. [M1_PLAN](../M1_PLAN.md#post-m1-8-reduction-plan)
+records its delivered outcome; its pre-compaction version and evidence retain
+the finite register and verification. Five commands (`pick_folder`,
 `admit_location`, `update_plan_view`, `mutate_plan_highlight`,
 `replace_cosmetic_section`) stop retaining/observing original responses. Their
 current-state refresh or fresh choice does not claim the earlier effect settled.
@@ -699,7 +710,7 @@ protection. Bounded Check updates feedback while the original promise remains th
 sole adopter; remove the separate reject/retry/adopt branch. No automatic replay,
 generic resend, new receipt owner, protocol redesign or D4 reduction is accepted.
 Keep actual selection→Execute, start/Close and receipt-retirement dependencies;
-remove unrelated presentation/folder fences. AB-8 remains paused.
+remove unrelated presentation/folder fences. AB-8 was paused at this point.
 
 ### AB-7S reassessment and reduction
 
@@ -727,8 +738,8 @@ real effect/recovery seam. The optional tracer records actual eligibility rather
 than copying product policy. Distinct queued-row removal, control, selection,
 release and Close behaviors remain, even where their scenarios are lengthy.
 
-[M1_PLAN AB-7S](M1_PLAN.md#ab-7s--consolidate-recovery-and-its-behavioral-tests)
-owns implementation and acceptance. `ab7s-bridge.md`, `ab7s-ui.md` and
+[M1_PLAN AB-7S](../M1_PLAN.md#post-m1-8-reduction-plan)
+records the delivered outcome and current owners. `ab7s-bridge.md`, `ab7s-ui.md` and
 `ab7s-tests.md` in the existing evidence directory map deletions to guarantees.
 This is a bounded consolidation, not evidence that all remaining tests are
 minimal or that the unexplained historical AB-7 observations have been fixed.

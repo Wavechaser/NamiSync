@@ -228,17 +228,16 @@ never hides the other result axes in rendered output.
 - [Performance](docs/PERFORMANCE.md) — measurement methods, profiles, source-linked
   historical results and raw-evidence limitations; [Threat Model](docs/DEFENSE.md)
   owns evidence authority.
-- [Post-M1-8 ablation study](docs/POST_M1_8_ABLATION.md) — repository-wide
-  reduction dispositions, accepted snapshot direction, narrowed proposals and
-  earlier-study accounting; the [actionable plan](docs/M1_PLAN.md#post-m1-8-reduction-plan)
-  records the delivered documentation, optional performance tools and bounded
-  reductions, with AB-10's integrated evidence and remaining decisions.
+- [Completed post-M1-8 reductions](docs/M1_PLAN.md#post-m1-8-reduction-plan) —
+  compact delivery register, retained decisions and deferred work. The
+  [archived study](docs/obsolete/POST_M1_8_ABLATION.md) preserves the investigation,
+  rejected alternatives and earlier-study accounting; it is not execution guidance.
 - Archived reduction history: [test ablation](docs/obsolete/TEST_ABLATION.md),
   [test refinement](docs/obsolete/TEST_REFINEMENT.md),
   [production reduction](docs/obsolete/PRODUCTION_REDUCTION.md),
   [narrow follow-up](docs/obsolete/REDUCTION_FOLLOWUP.md), and
   [M1-7 study](docs/obsolete/M1_7_ABLATION_STUDY.md). Their old execution registers
-  are inactive; current dispositions are in the post-M1-8 study.
+  are inactive; current dispositions are in the M1 delivery register.
 - [Detailed changelog](CHANGELOG.md) — dated task history grouped by milestone
   or version and phase.
 - [Development tools](docs/TOOLS.md) — measurement tooling, the

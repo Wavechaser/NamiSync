@@ -1039,8 +1039,13 @@ claims explicit, independently reviewable, and regression-backed.
   bridge-event diagnostic remains explicitly incomplete; it establishes no
   current timing/custody acceptance or product-cause finding. Preserve failures.
 - Remove stale checkpoint resumption notes without closing deferred product,
-  protocol, release or DOC-2 work. Full delivered-register consolidation and
-  accounted branch cleanup follow separately.
+  protocol, release or DOC-2 work. In a separate documentation commit, consolidate
+  delivered late M1-8/AB records and archive the study after carrying useful
+  decisions forward; preserve pending outcomes and exact integration evidence.
+- Bundle and verify four superseded recovery refs, including GUI-J and GUI-M2,
+  and preserve all 78 AB-3 worktree evidence files before pruning those refs and
+  the worktree. Keep all five stashes, long-lived branches and the pending DOC-2
+  branch. No remote or history rewrite; accounting is in `build/ab10-20260926/`.
 
 #### Retain behavioral visual checks (2026-09-26)
 
