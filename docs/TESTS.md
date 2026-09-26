@@ -249,15 +249,33 @@ ownership-marked, exact ready/final diagnostic set after revalidation; abnormal,
 changed, or unknown output is retained for operator inspection.
 
 A green headed result proves only its declared NamiSync/page contract; it is not
-evidence that the surrounding Windows compositor remained healthy. A headed
-acceptance run completed green while the same Windows session contained a DWM
-restart, which the child/page evidence protocol could not see; `BUGS.md` owns
-the exact incident record and does not attribute causality to NamiSync. A shared
-current-session DWM sentinel is accepted but unrealized. When active, it will
-bracket headed runs, detect a compositor restart independently of child/page
-success, and report event-log or GPU/TDR evidence without conflating temporal
-overlap with cause. Until then, compositor health is an explicit evidence
-limitation rather than an inferred pass.
+evidence that the surrounding Windows compositor remained healthy. External
+focus changes and DWM failures are environmental limitations, not NamiSync bug
+classifications merely because they affect a test. The 2026-09-27 disposition
+retires the unrealized DWM sentinel proposal; no automatic environment monitor
+or new focus-recovery mechanism is required. Existing ownership checks before
+sending native input remain necessary to avoid interacting with another window.
+
+AB-7's final-run default-shell receipt illustrates the focus limitation:
+`plan_again` was the last completed checkpoint, after Task 53 was created,
+selected and rendered. CDP's zero-based lines 9/490 identify the later
+`keyboard focus re-entry ring` wait; the driver recorded
+`document_has_focus: false`. An unfocused page may not display the expected
+focus ring after programmatic focus. The actor causing focus loss is unknown;
+do not diagnose a failed Plan-again action from that checkpoint label. Mapping
+scripts and original receipts remain in `build/trace-20260927/scripts/plan-again/`
+and `build/post-m1-8-ablation-20260925/ab7-final-evidence/`.
+
+The helper's wait for the preceding notice-filter request to settle and Plan
+again to become enabled remains useful sequencing before its single click. It
+is not a correction for that historical focus loss. Removing it would allow
+already-visible notice text to satisfy the wait while the new filter action is
+still pending. No product button/icon change follows from this test prerequisite.
+For historical compositor context, the August 17 18:29:25 run coincided with
+Application Error 63156, Dwminit 63157 and WER report
+`854b76c5-b80c-4127-acc8-404d18814e0d`; temporal overlap did not establish
+NamiSync causality. Those observations neither require environment detection
+nor make a passing page test a compositor-health claim.
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest -q --dept interfaces -o "addopts=" -m headed

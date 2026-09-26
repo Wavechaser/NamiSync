@@ -1027,6 +1027,19 @@ repeated machinery while preserving operational safety and boundary contracts.
 Safety, settlement, authority, and measurement work made high-risk release
 claims explicit, independently reviewable, and regression-backed.
 
+#### Close AB-7 focus-loss classification (2026-09-27)
+
+- Classify the post-Plan-again focus-ring failure as an external test
+  interruption with no immediate action; remove its BUGS entry and retain the
+  checkpoint/line/focus explanation in TESTS. No actor is inferred.
+- Retire the unrealized DWM sentinel obligation and its bug classification,
+  preserving historical evidence and the limit of page-test claims. Existing
+  native-input ownership checks remain; no new environment detector is added.
+- Retain the helper's settled-filter/enabled-button wait for its independent
+  single-click sequencing value, not as a repair for the historical incident.
+  Product, helper, icon and test assertions are unchanged. Source/evidence,
+  documentation consistency/link checks and independent review cover closeout.
+
 #### Trace unexplained ablation incidents (2026-09-27)
 
 - Reproduce the optional bridge diagnostic's stale sample-type rejection,

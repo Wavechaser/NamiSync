@@ -71,19 +71,6 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Workspace and measurement integrity
 
-- MINOR - OPEN (2026-09-27). Unguarded focus precondition. The installed
-  task-shell helper waits for a `:focus-visible` outline after programmatic
-  `focus()` (`keyboard focus re-entry ring`) without first requiring document
-  focus. Chromium matches neither `:focus` nor `:focus-visible` in an unfocused
-  page, so any foreground change by another desktop process makes the wait
-  time out. Cause: page-script focus assertions assume OS focus that the
-  harness neither verifies nor classifies as incomplete. AB-7's final-run
-  "Plan-again" failure was this wait (0-based line 490, checkpoint `plan_again`,
-  `document_has_focus: false`), after Plan again had succeeded; a built-in
-  browser control reproduced the no-match behavior. Other task-shell and Setup
-  focus-ring checks share the exposure; the execution-review helper already
-  awaits `document.hasFocus()`. Evidence: `build/trace-20260927/scripts/plan-again/`.
-
 - MINOR - OPEN (2026-09-27). Stale observation contract. The optional
   bridge-event diagnostic rejects current decimal-string Progress positions
   against its integer-only sample validator, and its terminal summaries still
@@ -1324,19 +1311,6 @@ defect, and move implementation-level test choreography out of the log.
   remaining resource retirement. Fixed by fault-isolating removal, always
   aborting partial attachment, closing the cosmetic subscription exactly once,
   and invalidating the controller so a retained handler is inert.
-- MODERATE - OPEN (2026-08-17). Headed compositor-restart evidence blindness. A
-  headed run can report green while Windows DWM restarts during the same
-  invocation because the harness observes its child/page result but has no shared
-  compositor event sentinel. The affected 18:29:25 run coincided with the
-  Application Error record 63156 and WER report
-  `854b76c5-b80c-4127-acc8-404d18814e0d`; Dwminit record 63157 reports restart
-  1, while WER subcode `0x23` names an unexpected heap exception. No
-  contemporaneous GPU/TDR event was found in the inspected logs. Earlier
-  2025-07-23 and 2026-07-26 DWM restarts had different
-  `MILERR_DISPLAYSTATEINVALID` signatures, and the later comparison run had no
-  DWM event. This proves an evidence blind spot, not NamiSync causality. A shared
-  headed-run compositor sentinel remains required before a green result
-  can make any compositor-health claim.
 - MINOR - FIXED (2026-08-17). Headed-evidence replacement contention. Headed
   children repeatedly replaced one live JSON snapshot while parents polled and
   opened it, so Windows delete sharing could reject an otherwise correct final
