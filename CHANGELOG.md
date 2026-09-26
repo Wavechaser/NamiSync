@@ -1057,6 +1057,11 @@ claims explicit, independently reviewable, and regression-backed.
   bounded cleanup and read deadlines. Rename command metadata to `response_policy`
   across native/browser policy and helper consumers; no wire change. Verify
   1,782 interface cases, all 34 installed cases and independent review.
+- Replace copied page recovery flags and Check callbacks with one bridge-owned
+  handle per original command. Preserve workflow stages and exact owner fences;
+  stop observation feedback after settlement. Qualify lost direct delivery,
+  offer close/reopen guidance for unavailable communication, and expose matching
+  unreadable results without losing recovery or permitting mutation replay.
 
 #### Review AB-7 original-outcome recovery (2026-09-26)
 

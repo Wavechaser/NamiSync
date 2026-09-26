@@ -219,6 +219,9 @@ function batchStatus(row) {
   if (row.state === "refused") return "Failed";
   if (row.state === "stopped") return "Stopped";
   if (row.state === "unknown") return "Outcome unknown";
+  if (row.recovery?.checking) return "Checking outcome";
+  if (row.recovery?.state === "protocol-fault") return "Result invalid";
+  if (row.recovery?.state === "unavailable") return "Outcome unavailable";
   if (row.stage === "creating") return "Creating task";
   if (row.stage === "starting") return "Creating plan";
   return "Checking folders";
@@ -604,8 +607,8 @@ export function createSetupPanel(callbacks) {
       renderText(deletionSetting, `Deletion: ${displayedOptions?.deletion_policy === "additive" ? "Additive" : "Trash"}`);
       settings.append(verifySetting, deletionSetting);
       renderText(message, batchStatus(value));
-      message.title = value.message;
-      statusCell.ariaDescription = value.message;
+      message.title = value.recovery?.message ?? value.message;
+      statusCell.ariaDescription = value.recovery?.message ?? value.message;
       const removable = value.state === "queued" || (value.state === "submitting"
         && value.stage?.startsWith("admitting-"));
       remove.disabled = !removable;
@@ -621,7 +624,7 @@ export function createSetupPanel(callbacks) {
     fillPairPlaceholders(batchBody, rows.length, 4);
     batch.hidden = rows.length === 0;
     const hasRetryable = rows.some((row) => row.state === "queued"
-      || (row.state === "submitting" && typeof row.check === "function" && !row.checking));
+      || (row.state === "submitting" && row.recovery?.canCheck && !row.recovery.checking));
     clearBatch.disabled = !rows.some((row) => ["created", "refused", "stopped"].includes(row.state));
     startBatch.disabled ||= !hasRetryable;
   }
@@ -698,7 +701,8 @@ export function createSetupPanel(callbacks) {
       button.tabIndex = value === selectedMode ? 0 : -1;
       button.disabled = !controlsEditable;
     });
-    renderText(actionStatus, model.actionMessage ?? model.batchMessage ?? "");
+    renderText(actionStatus, model.attempt?.recovery?.message
+      ?? model.startRecovery?.message ?? model.actionMessage ?? model.batchMessage ?? "");
     actionStatus.hidden = actionStatus.textContent.length === 0;
     renderLocation(source, model.source, recents.sources, controlsEditable, selectedMode === "inventory" ? "Root" : "Source");
     renderLocation(target, model.target, recents.targets, controlsEditable, "Target");
@@ -722,8 +726,8 @@ export function createSetupPanel(callbacks) {
     additive.input.disabled = !controlsEditable || !hasOptions;
     optionInputs.forEach((input) => { input.disabled = !controlsEditable; });
     ads.input.disabled = true;
-    const retryKind = typeof model.attempt?.check === "function" && model.attempt.running
-      && !model.attempt.checking
+    const retryKind = model.attempt?.recovery?.canCheck && model.attempt.running
+      && !model.attempt.recovery.checking
       ? model.attempt.kind
       : null;
     const sourceNeedsMount = model.source.location?.state === "ambiguous";
@@ -745,7 +749,7 @@ export function createSetupPanel(callbacks) {
       || (!model.source.text && !model.target.text)
       || (model.batchCount ?? model.batch.length) >= MAX_BATCH_PAIRS;
     const checkableBatch = model.batch.find((row) => row.state === "submitting"
-      && typeof row.check === "function" && !row.checking);
+      && row.recovery?.canCheck && !row.recovery.checking);
     renderText(startBatch, checkableBatch ? "Check outcome" : "Create batch");
     startBatch.disabled = !editable || selectedMode !== "sync-plan" || model.closePending
       || (model.batchRunning && checkableBatch === undefined) || locked

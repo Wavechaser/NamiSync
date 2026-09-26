@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { fakeRecoveryHandle } from "./fake_recovery_handle.mjs";
 
 const TASK_A = `task-${"a".repeat(32)}`;
 const TASK_B = `task-${"b".repeat(32)}`;
@@ -52,9 +53,12 @@ function deferred() {
 // The check resolves the original delivery, never a second adoption promise.
 function delayedOriginal(onDelayed, complete) {
   const original = deferred();
-  onDelayed({ state: "unavailable", check: async () => {
+  const recovery = fakeRecoveryHandle(async () => {
     original.resolve(await complete());
-  } });
+  }, "submitting");
+  onDelayed(recovery);
+  recovery.state = "unavailable";
+  onDelayed(recovery);
   return original.promise;
 }
 
@@ -398,7 +402,8 @@ async function loadScenario({
     () => globalThis.document.querySelector("#host-status").textContent.includes("Select Check outcome"),
     "new-task uncertainty guidance",
   );
-  assert.equal(typeof harness.createStates.at(-1).check, "function", "New task retains one read-only Check");
+  assert.equal(harness.createStates.at(-1).recovery.canCheck, true, "New task retains one read-only Check");
+  assert.equal(harness.createStates.at(-1).running, true);
   assert.match(
     globalThis.document.querySelector("#host-status").textContent,
     /Select Check outcome to observe the original request/,
@@ -406,6 +411,8 @@ async function loadScenario({
   );
   harness.railCallbacks.onCreate();
   harness.railCallbacks.onCreate();
+  await turns();
+  assert.equal(createRetries, 1, "one Check is shared by repeated gestures");
   await until(() => createRetries === 1, "same new-task retry closure");
   await until(() => harness.task?.taskId === TASK_B, "original create owner adopts the result");
   assert.equal(harness.calls.filter((call) => call[0] === "create").length, 1);
@@ -415,12 +422,13 @@ async function loadScenario({
   const harness = await loadScenario();
   harness.createTask = (onDelayed) => {
     harness.calls.push(["create"]);
+    onDelayed(fakeRecoveryHandle(null, "fixed-unknown"));
     return Promise.reject(new harness.TaskCreateUncertainError());
   };
   harness.railCallbacks.onCreate();
   await until(() => globalThis.document.querySelector("#host-status").textContent.includes(
     "Close and reopen NamiSync"), "fixed-unknown create guidance");
-  assert.equal(harness.createStates.at(-1).unknown, true,
+  assert.equal(harness.createStates.at(-1).recovery.state, "fixed-unknown",
     "a fixed unknown create keeps New task fenced without an observation retry");
   harness.railCallbacks.onCreate();
   await turns();
@@ -477,11 +485,12 @@ async function loadScenario({
   callbacks.onAddPair();
   harness.closeTask = (...values) => {
     harness.calls.push(["close", ...values.slice(0, 2)]);
+    values.at(-1)(fakeRecoveryHandle(null, "fixed-unknown"));
     return Promise.reject(new harness.TaskCloseUncertainError());
   };
   harness.railCallbacks.onClose(TASK_A);
   await until(() => harness.model.closePending && harness.railTasks.find(
-    (task) => task.taskId === TASK_A)?.error?.includes("Close and reopen NamiSync"),
+    (task) => task.taskId === TASK_A)?.closeRecovery?.message?.includes("Close and reopen NamiSync"),
   "fixed-unknown Close keeps its form fence");
   callbacks.onStartPlan();
   callbacks.onStartInventory();
@@ -579,7 +588,7 @@ async function loadScenario({
   };
   const pendingPlan = deferred();
   harness.startPlan = (...values) => {
-    values.at(-1)({ state: "pending", check: async () => assert.fail("late delivery needs no Check") });
+    values.at(-1)(fakeRecoveryHandle(async () => assert.fail("late delivery needs no Check"), "pending"));
     return pendingPlan.promise;
   };
   callbacks.onStartPlan();
@@ -597,7 +606,7 @@ async function loadScenario({
     });
   };
   callbacks.onStartPlan();
-  await until(() => typeof firstModel.attempt?.check === "function", "plan uncertainty retained");
+  await until(() => firstModel.attempt?.recovery?.canCheck === true, "plan uncertainty retained");
   callbacks.onStartPlan();
   await until(() => planRetries === 1 && firstModel.attempt === null, "same plan retry closure");
   assert.equal(harness.calls.filter((call) => call[0] === "start-plan").length, 1);
@@ -622,7 +631,7 @@ async function loadScenario({
     });
   };
   callbacks.onStartInventory();
-  await until(() => typeof harness.model.attempt?.check === "function", "inventory uncertainty retained");
+  await until(() => harness.model.attempt?.recovery?.canCheck === true, "inventory uncertainty retained");
   callbacks.onStartInventory();
   await until(() => inventoryRetries === 1 && firstModel.attempt === null, "same inventory retry closure");
   assert.equal(harness.calls.filter((call) => call[0] === "start-inventory").length, 1);
@@ -732,11 +741,12 @@ async function loadScenario({
   callbacks.onEdit("target", "D:\\target");
   harness.startPlan = (...values) => {
     harness.calls.push(["start-plan", ...values.slice(0, 4)]);
+    values.at(-1)(fakeRecoveryHandle(null, "fixed-unknown"));
     return Promise.reject(new harness.StartPlanUncertainError());
   };
   callbacks.onStartPlan();
-  await until(() => harness.model.attempt?.unknown === true, "fixed-unknown plan retained");
-  assert.match(harness.model.actionMessage, /Close and reopen NamiSync/);
+  await until(() => harness.model.attempt?.recovery?.state === "fixed-unknown", "fixed-unknown plan retained");
+  assert.match(harness.model.attempt.recovery.message, /Close and reopen NamiSync/);
   const form = harness.model;
   callbacks.onStartPlan();
   callbacks.onStartInventory();
@@ -807,7 +817,7 @@ async function loadScenario({
     });
   };
   harness.callbacks.onPlanAgain();
-  await until(() => typeof harness.model.attempt?.check === "function", "Plan-again uncertainty retained");
+  await until(() => harness.model.attempt?.recovery?.canCheck === true, "Plan-again uncertainty retained");
   harness.callbacks.onPlanAgain();
   await until(() => retries === 1, "same Plan-again retry closure");
   assert.equal(harness.calls.filter((call) => call[0] === "plan-again").length, 1);
@@ -874,7 +884,7 @@ for (const sessionState of ["active", "failed"]) {
   assert.equal(harness.model.batch.length, 1, "running batch rejects add and reentrant Start");
   prepare.resolve(structuredClone(DEFAULT_OPTIONS));
   await until(() => harness.model.batch[0].stage === "creating"
-    && typeof harness.model.batch[0].check === "function", "create uncertainty retained");
+    && harness.model.batch[0].recovery?.canCheck === true, "create uncertainty retained");
   assert.equal(harness.model.batch[0].stage, "creating");
   assert.ok(harness.railTasks.find((task) => task.taskId === TASK_A).closeBlockReason);
   harness.railCallbacks.onClose(TASK_A);
@@ -1056,7 +1066,7 @@ for (const sessionState of ["active", "failed"]) {
   assert.equal(harness.model.batch.length, 3, "the queued row being prepared remains removable");
   harness.model.options.filters[0] = "draft-while-preparing/**";
   firstPrepare.resolve({ ...structuredClone(harness.calls.find((call) => call[0] === "prepare")[1]), filters: ["remove-while-preparing/**", "canonical/**"] });
-  await until(() => typeof harness.model.batch.at(-1).check === "function", "pair-owned batch waits for original outcome");
+  await until(() => harness.model.batch.at(-1).recovery?.canCheck === true, "pair-owned batch waits for original outcome");
 
   assert.deepEqual(harness.calls.filter((call) => call[0] === "prepare").map((call) => call[1].filters),
     [["remove-while-preparing/**"], ["reject/**"], ["first/**"], ["second/**"]],

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { assertSameNode } from "./fake_dom_assertions.mjs";
+import { fakeRecoveryHandle } from "./fake_recovery_handle.mjs";
 
 const ROW_HEIGHT = 24;
 
@@ -411,7 +412,7 @@ assert.equal(planAgainButton.textContent, "");
 assert.equal(planAgainButton.ariaLabel, "Plan again");
 assert.equal(planAgainButton.title, "Plan again");
 review.pending = "plan-again";
-task.form = { attempt: { check() {}, checking: false } };
+task.form = { attempt: { recovery: fakeRecoveryHandle(() => {}) } };
 panel.render(task);
 assertSameNode(planAgainButton.children[0], planAgainIcon, "Check outcome keeps the same icon");
 assert.equal(planAgainButton.children.length, 1);
@@ -751,16 +752,17 @@ assert.equal(panel.element.dataset.pending, "selection");
 assert.equal(findAction(panel.element, "pause").disabled, true);
 
 task.sessionId = "a".repeat(32);
-task.executionControlAttempt = { sessionId: task.sessionId, check: () => {}, checking: false };
+task.executionControlAttempt = { sessionId: task.sessionId,
+  recovery: fakeRecoveryHandle(() => {}) };
 review.pending = "pause";
 panel.render(task);
 const controlCheck = findAction(panel.element, "retry-outcome");
 assert.equal(controlCheck.hidden, false);
 assert.equal(controlCheck.disabled, false, "ordinary control Check is available while idle");
-task.executionControlAttempt.checking = true;
+task.executionControlAttempt.recovery.checking = true;
 panel.render(task);
 assert.equal(controlCheck.disabled, true, "ordinary control Check is disabled while running");
-task.executionControlAttempt.checking = false;
+task.executionControlAttempt.recovery.checking = false;
 panel.render(task);
 assert.equal(controlCheck.disabled, false, "ordinary control Check returns after observation");
 task.executionControlAttempt = null;

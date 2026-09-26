@@ -240,18 +240,20 @@ async function proveBrowserGate(sourceId, targetId) {
   browserStage = "start-plan-uncertainty";
   const mainTask = await createTask();
   let mainStart;
-  let feedbackCallbacks = 0;
+  let pendingFeedbackSeen = false;
   timerFaultPhase = "start_plan_startup";
   try {
     mainStart = startPlan(mainTask.task_id, sourceId, targetId, BASE_OPTIONS,
-      () => { feedbackCallbacks += 1; });
+      (recovery) => {
+        if (recovery.state === "pending" && recovery.canCheck) pendingFeedbackSeen = true;
+      });
     timerFaultPhase = "start_plan_feedback";
     await waitFor(() => timerFaults.start_plan.armed === 1, "start_plan feedback was not armed");
   } finally {
     timerFaultPhase = null;
   }
   const mainPlan = await mainStart;
-  requireGate(feedbackCallbacks === 1, "start_plan feedback did not fire exactly once");
+  requireGate(pendingFeedbackSeen, "start_plan pending feedback was not observed");
   requireGate(startPlanStartupTimer === null && startPlanStartupFired === 0,
     "start_plan startup deadline did not clear before feedback");
 

@@ -43,9 +43,9 @@ export function createTaskRail({ onCreate, onSelect, onClose, onRetryUpdates, on
   emptySlot.append(empty);
 
   function render(tasks, selectedTaskId, createAttempt, settingsVisible = false) {
-    const checkCreate = typeof createAttempt?.check === "function";
-    create.disabled = createAttempt?.unknown === true
-      || (createAttempt?.running === true && (!checkCreate || createAttempt.checking));
+    const checkCreate = createAttempt?.recovery?.canCheck === true;
+    create.disabled = createAttempt?.recovery?.state === "fixed-unknown"
+      || (createAttempt?.running === true && (!checkCreate || createAttempt.recovery.checking));
     create.ariaLabel = checkCreate ? "Check new task outcome" : "New task";
     create.title = create.ariaLabel;
     settings.ariaCurrent = settingsVisible ? "page" : "false";
@@ -118,11 +118,12 @@ export function createTaskRail({ onCreate, onSelect, onClose, onRetryUpdates, on
       }
       entry.select.ariaCurrent = !settingsVisible && task.taskId === selectedTaskId ? "page" : "false";
       const digest = taskStatusDigest(task);
-      const closeUnavailable = task.closeOutcomeUnknown;
+      const closeUnavailable = task.closeRecovery?.state === "fixed-unknown";
       renderText(entry.title, closeUnavailable ? "Outcome unavailable" : digest.title);
       const closeReason = typeof task.closeBlockReason === "string" ? task.closeBlockReason : null;
       const closeStatus = task.closePending
-        ? task.closeMessage ?? (task.sessionId === null ? "Closing…" : "Canceling and closing…")
+        ? task.closeRecovery?.message ?? task.closeMessage
+          ?? (task.sessionId === null ? "Closing…" : "Canceling and closing…")
         : closeReason ?? digest.detail;
       renderText(entry.status, closeStatus);
       renderFilesystemText(entry.source, digest.sourcePath);
@@ -139,16 +140,16 @@ export function createTaskRail({ onCreate, onSelect, onClose, onRetryUpdates, on
       if (digest.progress.indeterminate) entry.progress.removeAttribute?.("aria-valuenow");
       else entry.progress.ariaValueNow = String(digest.progress.value);
       entry.progress.style?.setProperty("--nami-progress-value", `${digest.progress.value}%`);
-      const checkRelease = typeof task.releaseCheck === "function";
+      const checkRelease = task.releaseRecovery?.canCheck === true;
       entry.retry.hidden = (!checkRelease && typeof task.recoveryRetry !== "function")
-        || typeof task.closeCheck === "function";
-      entry.retry.disabled = task.recoveryRunning || task.releaseChecking;
-      renderText(entry.retry, checkRelease ? task.releaseChecking ? "Checking outcome…" : "Check outcome"
+        || task.closeRecovery?.canCheck === true;
+      entry.retry.disabled = task.recoveryRunning || task.releaseRecovery?.checking === true;
+      renderText(entry.retry, checkRelease ? task.releaseRecovery.checking ? "Checking outcome…" : "Check outcome"
         : task.recoveryRunning ? "Retrying updates…" : "Retry updates");
       entry.retry.ariaLabel = `${checkRelease ? "Check release outcome for"
         : task.recoveryRunning ? "Retrying updates for" : "Retry updates for"} ${task.label}`;
-      const checkClose = task.closePending && typeof task.closeCheck === "function";
-      entry.close.disabled = closeReason !== null && (!checkClose || task.closeChecking);
+      const checkClose = task.closePending && task.closeRecovery?.canCheck === true;
+      entry.close.disabled = closeReason !== null && (!checkClose || task.closeRecovery.checking);
       entry.close.ariaLabel = checkClose ? `Check Close outcome for ${task.label}` : closeReason ?? `${closeUnavailable ? "Retry close outcome for"
         : task.closeFailed ? "Retry close for" : "Close"} ${task.label}`;
       entry.close.title = entry.close.ariaLabel;

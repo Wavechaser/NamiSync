@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { fakeRecoveryHandle } from "./fake_recovery_handle.mjs";
 
 class ClassList {
   constructor() { this.values = new Set(); }
@@ -352,11 +353,12 @@ assert.equal(startBatch.disabled, true, "unknown rows cannot start a batch");
 assert.equal(byClass(panel.element, "nami-setup__clear-batch").disabled, true,
   "unknown rows cannot be cleared as terminal results");
 model.batchRunning = true;
-model.batch = [{ ...queuedBatchRow, state: "submitting", check: () => {},
-  checking: false, message: "Original request pending." }];
+model.batch = [{ ...queuedBatchRow, state: "submitting",
+  recovery: fakeRecoveryHandle(() => {}), message: "Original request pending." }];
 panel.render(model);
 assert.equal(startBatch.textContent, "Check outcome");
 assert.equal(startBatch.disabled, false, "a submitting row exposes read-only original checks");
+assert.equal(byClass(panel.element, "nami-setup__batch-status").textContent, "Outcome unavailable");
 model.mode = "inventory";
 panel.render(model);
 assert.equal(startBatch.hidden, false);

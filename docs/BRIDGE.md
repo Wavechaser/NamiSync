@@ -302,9 +302,17 @@ mutation delay triggers feedback and bounded observation, not
 cancellation or resubmission. One automatic round makes at most three observations,
 each with a one-second deadline and 100/250 ms inter-attempt waits. A valid pending
 observation remains pending when the round ends; failed/unavailable communication
-qualifies that feedback without asserting effect failure or success. The original
-promise stays pending and is the sole result-adoption path, so a late valid result
-updates its owner automatically. Explicit **Check** runs another bounded read-only
+qualifies that feedback without asserting effect failure or success. If a direct
+delivery has already failed, a pending observation offers **Check** rather than
+claiming another response will arrive automatically. A live original delivery can
+still complete automatically. Persistent unavailable communication also offers
+normal application close/reopen and review of current state as a fallback; it
+does not promise that Check can always recover the result. A matching unreadable
+response is a distinct protocol fault with a bounded diagnostic, not merely
+unavailable communication. Keep its original outcome recoverable and its intent
+fenced; do not acknowledge an invalid observed result or infer effect failure.
+The original promise stays pending and is the sole result-adoption path. Explicit
+**Check** runs another bounded read-only
 observation round; it creates neither a new mutation nor a second adoption owner.
 Interactive picker wait, startup, drain, shutdown and resource deadlines
 retain their separate contracts. Successful pending Close is a real lifecycle
@@ -336,6 +344,12 @@ The browser uses one attempt/completion path for direct and asynchronous
 commands. Original-result observation is optional state on that attempt, not a
 second delivery registry or result adopter. Ordinary read deadlines retain only
 bounded late-completion cleanup; they do not adopt a result after caller timeout.
+Each observed attempt exposes one stable recovery handle through its existing
+callback, initially before dispatch and subsequently on state changes. Page
+owners retain that reference and read its status, Check availability, checking
+state and message; Check joins the existing bounded observation round. This
+handle owns no second result promise. Page workflow stages, task/session/revision
+guards and lifecycle settlement remain with their existing owners.
 
 ### Current-state command recovery
 

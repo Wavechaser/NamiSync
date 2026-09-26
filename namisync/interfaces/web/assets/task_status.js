@@ -287,9 +287,12 @@ export function taskStatusDigest(task) {
   );
   const planItemCount = summary?.selected_operation_count ?? 0;
   const planHasItems = (summary?.filter_counts?.all ?? 0) > 0;
+  const releaseMessage = task?.releaseRecovery?.message ?? null;
   let title = "New task";
   let state = "new";
-  if (task?.error !== null && task?.error !== undefined) [title, state] = ["Error", "error"];
+  if (releaseMessage !== null || (task?.error !== null && task?.error !== undefined)) {
+    [title, state] = ["Error", "error"];
+  }
   else if (planning) [title, state] = ["Planning", "planning"];
   else if (summary !== null && !task?.executionStarted) [title, state] = ["Plan ready", "plan"];
   else if (terminal !== null) ({ title, state } = terminal);
@@ -304,7 +307,8 @@ export function taskStatusDigest(task) {
     state = title.toLowerCase();
   }
   let detail;
-  if (typeof task?.error === "string") detail = task.error;
+  if (releaseMessage !== null) detail = releaseMessage;
+  else if (typeof task?.error === "string") detail = task.error;
   else if (planning) detail = "Planning in progress.";
   else if (summary !== null && !task?.executionStarted) detail = planItemCount === 0 && !planHasItems ? "Plan is empty."
     : `${planItemCount} items, ${formatByteCount(summary.required_bytes)} required.`;

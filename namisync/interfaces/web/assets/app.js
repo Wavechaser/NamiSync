@@ -223,42 +223,50 @@ function taskArray() {
   return Array.from(tasks.values()).reverse();
 }
 
+function fixedOutcome(recovery) {
+  return recovery?.state === "fixed-unknown";
+}
+
+function checkableOutcome(recovery) {
+  return recovery?.canCheck === true;
+}
+
 function canCancelAfterFixedReviewOutcome(task, review) {
   const attempt = task.executionControlAttempt;
   return review !== null && review.pending === "outcome"
-    && review.outcomeUnknown && review.outcomeCheck === null
+    && fixedOutcome(review.recovery)
     && review.outcomeAction !== "cancel"
     && task.executionStarted && task.sessionState === "active"
     && task.sessionId !== null && task.reviewSessionId === task.sessionId
-    && !task.drainUnavailable && !task.closePending && task.closeCheck === null
-    && !task.closeOutcomeUnknown && !task.startOutcomeUnknown
-    && !task.releaseOutcomeUnknown && task.executionAttempt === null
+    && !task.drainUnavailable && !task.closePending && !checkableOutcome(task.closeRecovery)
+    && !fixedOutcome(task.closeRecovery) && !fixedOutcome(task.startRecovery)
+    && !fixedOutcome(task.releaseRecovery) && task.executionAttempt === null
     && task.executionControlState !== "canceling"
-    && (attempt === null || (!attempt.pending && attempt.check == null
-      && !attempt.unknown && !(attempt.independent && attempt.accepted)));
+    && (attempt === null || (!attempt.pending && !checkableOutcome(attempt.recovery)
+      && !(attempt.independent && (fixedOutcome(attempt.recovery) || attempt.accepted))));
 }
 
 function taskCloseBlockReason(task) {
   if (task.closePending && !task.closeManualReady) {
-    return task.closeMessage ?? "Wait for this Close request to finish.";
+    return task.closeRecovery?.message ?? task.closeMessage ?? "Wait for this Close request to finish.";
   }
-  if (task.closeOutcomeUnknown || task.startOutcomeUnknown
-      || task.releaseOutcomeUnknown
+  if (fixedOutcome(task.closeRecovery) || fixedOutcome(task.startRecovery)
+      || fixedOutcome(task.releaseRecovery)
       || task.executionAttempt?.state === "uncertain") return UNKNOWN_OUTCOME_GUIDANCE;
   if (task.executionAttempt !== null) return "Resolve the in-flight execution request before closing.";
   if (task.executionControlAttempt?.independent) {
-    if (task.executionControlAttempt.unknown) return UNKNOWN_OUTCOME_GUIDANCE;
-    if (task.executionControlAttempt.pending) return typeof task.executionControlAttempt.check === "function"
+    if (fixedOutcome(task.executionControlAttempt.recovery)) return UNKNOWN_OUTCOME_GUIDANCE;
+    if (task.executionControlAttempt.pending) return checkableOutcome(task.executionControlAttempt.recovery)
       ? "Check the original Cancel outcome before closing this task."
       : "Wait for the current Cancel request before closing this task.";
   }
-  if (task.closeCheck === null && !task.closeManualReady
+  if (!checkableOutcome(task.closeRecovery) && !task.closeManualReady
       && task.review !== null && task.review.pending !== null
       && task.review.pending !== "view"
-      && !(task.review.outcomeUnknown && task.sessionId !== null
+      && !(fixedOutcome(task.review.recovery) && task.sessionId !== null
         && task.reviewSessionId === task.sessionId)) {
-    return task.review.outcomeCheck !== null
-      || typeof task.executionControlAttempt?.check === "function"
+    return checkableOutcome(task.review.recovery)
+      || checkableOutcome(task.executionControlAttempt?.recovery)
       ? "Check the original review outcome before closing this task."
       : "Wait for the current review action before closing this task.";
   }
@@ -267,10 +275,8 @@ function taskCloseBlockReason(task) {
 
 function renderTasks() {
   for (const task of tasks.values()) {
-    if (task.review?.outcomeUnknown) {
-      task.review.message = UNKNOWN_OUTCOME_GUIDANCE;
-    }
     if (task.form !== null) {
+      task.form.startRecovery = task.startRecovery;
       task.form.recentPairAvailability = recentPairAvailability;
       task.form.batchRunning = pageBatch !== null && pageBatch.running !== null;
       const syncBatchOwner = task.form.editable && task.form.mode === "sync-plan";
@@ -286,9 +292,8 @@ function renderTasks() {
         : batchBlockReason === null ? null
           : batchTaskStartMessage(task.taskId)
             ?? "Return to Sync to resolve its in-flight batch request before starting Inventory.";
-      task.form.closePending = task.closePending || task.closeCheck !== null
-        || task.closeOutcomeUnknown || task.startOutcomeUnknown;
-      if (task.startOutcomeUnknown) task.form.actionMessage = UNKNOWN_OUTCOME_GUIDANCE;
+      task.form.closePending = task.closePending || checkableOutcome(task.closeRecovery)
+        || fixedOutcome(task.closeRecovery) || fixedOutcome(task.startRecovery);
     }
     task.canCancelAfterFixedReviewOutcome = canCancelAfterFixedReviewOutcome(task, task.review);
     task.closeBlockReason = taskCloseBlockReason(task);
@@ -465,17 +470,13 @@ function adoptTask(summary) {
       taskKind: summary.task_kind,
       requestId: summary.request_id,
       closePending: false,
-      closeCheck: null,
-      closeChecking: false,
+      closeRecovery: null,
       closeAwaitingTerminal: false,
       closeTerminalSeen: false,
       closeAutoConsumed: false,
       closeManualReady: false,
-      closeOutcomeUnknown: false,
-      startOutcomeUnknown: false,
-      releaseOutcomeUnknown: false,
-      releaseCheck: null,
-      releaseChecking: false,
+      startRecovery: null,
+      releaseRecovery: null,
       closeFailed: false,
       closeMessage: null,
       recoveryRetry: null,
@@ -512,8 +513,7 @@ function adoptTask(summary) {
       task.recoveryRetry = null;
       task.recoverySessionId = null;
       task.recoveryRunning = false;
-      task.releaseCheck = null;
-      task.releaseChecking = false;
+      task.releaseRecovery = null;
       task.closeFailed = false;
     }
     if (task.sessionId !== summary.session_id || summary.session_state !== "active") {
@@ -600,14 +600,14 @@ function acceptTaskUpdate(task, sessionId, update, progressState = null) {
     if (task.executionControlAttempt?.sessionId === sessionId) {
       if (task.executionControlAttempt.pending) {
         task.executionControlAttempt.message = executionControlMessage(task.executionControlState);
-      } else if (task.executionControlAttempt.check == null
-          && !task.executionControlAttempt.unknown
+      } else if (!checkableOutcome(task.executionControlAttempt.recovery)
+          && !fixedOutcome(task.executionControlAttempt.recovery)
           && !(task.executionControlAttempt.independent
             && task.executionControlAttempt.accepted)) {
         task.executionControlAttempt = null;
       }
     }
-    if (task.executionStarted && task.review !== null && !task.review.outcomeUnknown) {
+    if (task.executionStarted && task.review !== null && !fixedOutcome(task.review.recovery)) {
       task.review.message = executionControlMessage(task.executionControlState);
     }
     renderTasks();
@@ -660,13 +660,13 @@ function acceptTaskRefusal(task, sessionId, error, retry = null) {
     && !(error instanceof TerminalPresentationError)
     && !(error instanceof TerminalSessionReleaseError);
   if (drainStopped) task.drainUnavailable = true;
-  if (error instanceof TerminalSessionReleaseError) task.releaseCheck = null;
+  if (error instanceof TerminalSessionReleaseError && error.checkable) {
+    task.releaseRecovery = null;
+  }
   task.recoveryRetry = retry ?? (typeof error?.retry === "function" ? error.retry : null);
   task.recoverySessionId = sessionId;
   task.recoveryRunning = false;
   if (error instanceof TerminalSessionReleaseError && !error.checkable) {
-    task.releaseOutcomeUnknown = true;
-    setTaskRecoveryError(task, UNKNOWN_OUTCOME_GUIDANCE);
     renderTasks();
     return;
   }
@@ -687,7 +687,7 @@ function acceptTaskRecovery(task, sessionId) {
   task.recoverySessionId = null;
   task.recoveryRunning = false;
   task.drainUnavailable = false;
-  if (task.releaseCheck === null) clearTaskRecoveryError(task);
+  if (!checkableOutcome(task.releaseRecovery)) clearTaskRecoveryError(task);
   if (task.review?.message === STOPPED_TASK_UPDATES_MESSAGE) {
     task.review.message = task.executionControlAttempt?.sessionId === sessionId
       ? task.executionControlAttempt.message : executionControlMessage(task.executionControlState);
@@ -697,18 +697,13 @@ function acceptTaskRecovery(task, sessionId) {
 
 function retryTaskUpdates(taskId) {
   const task = tasks.get(taskId);
-  if (task !== undefined && typeof task.releaseCheck === "function"
-      && !task.releaseChecking) {
-    void checkOriginalOutcome(task,
-      () => setTaskRecoveryError(task, "Checking the original release outcome…"),
-      () => tasks.get(taskId) === task,
-      () => { if (task.releaseCheck !== null) {
-        setTaskRecoveryError(task, "Release check unavailable. Select Check outcome again.");
-      } }, "releaseCheck", "releaseChecking");
+  if (task !== undefined && checkableOutcome(task.releaseRecovery)
+      && !task.releaseRecovery.checking) {
+    void task.releaseRecovery.check();
     return;
   }
   if (
-    task === undefined || task.recoveryRunning || task.closeCheck !== null ||
+    task === undefined || task.recoveryRunning || checkableOutcome(task.closeRecovery) ||
     task.recoverySessionId !== task.sessionId ||
     typeof task.recoveryRetry !== "function"
   ) return;
@@ -756,48 +751,24 @@ async function refreshTasks() {
   if (selectedTaskId !== null) void loadTaskSetup(tasks.get(selectedTaskId));
 }
 
-async function checkOriginalOutcome(owner, onChecking, stillOwned, onFailure = null,
-  checkKey = "check", checkingKey = "checking") {
-  if (owner[checkingKey] || typeof owner[checkKey] !== "function") return false;
-  owner[checkingKey] = true;
-  onChecking();
-  renderTasks();
-  try {
-    await owner[checkKey]();
-  } catch (_error) {
-    if (stillOwned()) onFailure?.();
-  } finally {
-    if (stillOwned()) owner[checkingKey] = false;
-    renderTasks();
-  }
-  return true;
-}
-
 async function createBlankTask() {
   if (createAttempt?.running) {
-    const attempt = createAttempt;
-    await checkOriginalOutcome(attempt, () => {
-      renderHostStatus("Checking the original task request…");
-    }, () => createAttempt === attempt);
+    if (checkableOutcome(createAttempt.recovery)) await createAttempt.recovery.check();
     return;
   }
-  if (createAttempt?.unknown) return;
+  if (fixedOutcome(createAttempt?.recovery)) return;
   const selectionBaseline = navigationRevision;
   const attempt = {
     running: true,
-    check: null,
-    checking: false,
-    unknown: false,
+    recovery: null,
   };
   createAttempt = attempt;
   renderTasks();
   try {
-    const result = await createTask((feedback) => {
+    const result = await createTask((recovery) => {
       if (createAttempt === attempt) {
-        attempt.check = feedback.check;
-        renderHostStatus(feedback.state === "unavailable"
-          ? "Task outcome unavailable. Select Check outcome to observe the original request."
-          : "Task response delayed. Waiting for the original outcome…");
+        attempt.recovery = recovery;
+        if (recovery.message !== null) renderHostStatus(recovery.message);
         renderTasks();
       }
     });
@@ -820,9 +791,7 @@ async function createBlankTask() {
     if (createAttempt !== attempt) return;
     if (error instanceof TaskCreateUncertainError) {
       attempt.running = false;
-      attempt.unknown = true;
-      attempt.check = null;
-      renderHostStatus(UNKNOWN_OUTCOME_GUIDANCE);
+      renderHostStatus(attempt.recovery?.message ?? UNKNOWN_OUTCOME_GUIDANCE);
       return;
     }
     createAttempt = null;
@@ -830,7 +799,7 @@ async function createBlankTask() {
       "A task could not be created. Close an unused task or wait, then try again.",
     );
   } finally {
-    if (createAttempt === attempt && !attempt.unknown) createAttempt = null;
+    if (createAttempt === attempt && !fixedOutcome(attempt.recovery)) createAttempt = null;
     renderTasks();
   }
 }
@@ -846,10 +815,8 @@ function continuePendingClose(task) {
 
 async function closeRetainedTask(taskId) {
   const task = tasks.get(taskId);
-  if (task?.closePending && typeof task.closeCheck === "function") {
-    await checkOriginalOutcome(task,
-      () => { task.closeMessage = "Checking the original Close request…"; },
-      () => tasks.get(taskId) === task, null, "closeCheck", "closeChecking");
+  if (task?.closePending && checkableOutcome(task.closeRecovery)) {
+    await task.closeRecovery.check();
     return;
   }
   if (task === undefined || taskCloseBlockReason(task) !== null) return;
@@ -868,7 +835,7 @@ async function closeRetainedTask(taskId) {
   task.closeAwaitingTerminal = false;
   task.closeManualReady = false;
   task.closePending = true;
-  task.closeCheck = null;
+  task.closeRecovery = null;
   task.closeFailed = false;
   task.closeMessage = null;
   task.error = null;
@@ -879,17 +846,13 @@ async function closeRetainedTask(taskId) {
   renderTasks();
   let remainsPending = false;
   try {
-    const result = await closeTask(task.taskId, task.sessionId, (feedback) => {
+    const result = await closeTask(task.taskId, task.sessionId, (recovery) => {
         if (tasks.get(taskId) === task) {
-          task.closeCheck = feedback.check;
-          task.closeMessage = feedback.state === "unavailable"
-            ? "Close outcome unavailable. Select Check outcome to observe the original request."
-            : "Close response delayed. Waiting for the original outcome…";
+          task.closeRecovery = recovery;
           renderTasks();
         }
       });
-    task.closeCheck = null;
-    task.closeOutcomeUnknown = false;
+    task.closeRecovery = null;
     task.closeFailed = false;
     task.closeMessage = null;
     if (result.disposition === "closed") {
@@ -921,13 +884,12 @@ async function closeRetainedTask(taskId) {
     }
   } catch (error) {
     if (tasks.get(taskId) === task) {
-      task.closeCheck = null;
-      task.closeOutcomeUnknown = error instanceof TaskCloseUncertainError;
+      if (!(error instanceof TaskCloseUncertainError)) task.closeRecovery = null;
       task.closeFailed = true;
       task.closeMessage = null;
-      task.error = task.closeOutcomeUnknown
-        ? UNKNOWN_OUTCOME_GUIDANCE : "Close was refused. Retry close.";
-      if (task.closeCheck === null && !task.closeOutcomeUnknown
+      task.error = error instanceof TaskCloseUncertainError
+        ? null : "Close was refused. Retry close.";
+      if (!checkableOutcome(task.closeRecovery) && !fixedOutcome(task.closeRecovery)
           && task.review?.pending === "close") task.review.pending = null;
     }
   } finally {
@@ -936,7 +898,7 @@ async function closeRetainedTask(taskId) {
       tasks.get(taskId) === task
     ) {
       task.closePending = false;
-      if (task.closeCheck === null && !task.closeOutcomeUnknown
+      if (!checkableOutcome(task.closeRecovery) && !fixedOutcome(task.closeRecovery)
           && task.review?.pending === "close") task.review.pending = null;
     }
     renderTasks();
@@ -1184,12 +1146,10 @@ function editMode(mode) {
 
 function acceptTaskRelease(task, sessionId) {
   if (tasks.get(task.taskId) !== task || task.sessionId !== sessionId) return;
-  task.releaseCheck = null;
-  task.releaseChecking = false;
+  task.releaseRecovery = null;
   task.recoveryRetry = null;
   task.recoverySessionId = null;
   task.recoveryRunning = false;
-  task.releaseOutcomeUnknown = false;
   clearTaskRecoveryError(task);
   task.sessionReleased = true;
   task.executionWindowDirty = true;
@@ -1198,13 +1158,10 @@ function acceptTaskRelease(task, sessionId) {
   if (task.taskKind === "sync-plan") void loadPlanReview(task, true);
 }
 
-function acceptTaskReleaseDelay(task, sessionId, feedback) {
+function acceptTaskReleaseDelay(task, sessionId, recovery) {
   if (tasks.get(task.taskId) !== task || task.sessionId !== sessionId) return;
-  task.releaseCheck = feedback.check;
+  task.releaseRecovery = recovery;
   task.recoverySessionId = sessionId;
-  setTaskRecoveryError(task, feedback.state === "unavailable"
-    ? "Release outcome unavailable. Select Check outcome to observe the original request."
-    : "Release response delayed. Waiting for the original outcome…");
   renderTasks();
 }
 
@@ -1431,10 +1388,8 @@ async function loadPlanReview(task, force = false) {
         : "Plan failed review. Inspect notices and create a fresh plan.";
     const controlAttempt = task.executionControlAttempt?.sessionId === sessionId
       ? task.executionControlAttempt : null;
-    const retainedOutcomeCheck = task.reviewSessionId === sessionId
-      ? task.review?.outcomeCheck ?? null : null;
-    const retainedOutcomeUnknown = task.reviewSessionId === sessionId
-      && task.review?.outcomeUnknown === true;
+    const retainedRecovery = task.reviewSessionId === sessionId
+      ? task.review?.recovery ?? null : null;
     const retainedOutcomeAction = task.reviewSessionId === sessionId
       ? task.review?.outcomeAction ?? null : null;
     const retainedFollow = task.reviewSessionId === sessionId ? task.review?.follow ?? null : null;
@@ -1443,22 +1398,16 @@ async function loadPlanReview(task, force = false) {
     task.review = {
       summary,
       window,
-      pending: task.closePending || task.closeCheck !== null || task.closeOutcomeUnknown
+      pending: task.closePending || checkableOutcome(task.closeRecovery) || fixedOutcome(task.closeRecovery)
         ? "close"
-        : retainedOutcomeCheck !== null || retainedOutcomeUnknown ? "outcome"
+        : checkableOutcome(retainedRecovery) || fixedOutcome(retainedRecovery) ? "outcome"
         : controlAttempt?.pending ? controlAttempt.actionName : null,
-      outcomeCheck: retainedOutcomeCheck,
-      outcomeUnknown: retainedOutcomeUnknown,
+      recovery: retainedRecovery,
       outcomeAction: retainedOutcomeAction,
-      outcomeRunning: false,
       refreshAvailable: false,
       queuedSearchQuery: null,
       highlightQueue: Promise.resolve(),
-      message: retainedOutcomeUnknown
-        || task.executionAttempt?.state === "uncertain" ? UNKNOWN_OUTCOME_GUIDANCE
-        : retainedOutcomeCheck !== null
-        ? "Original action still pending. Select Check outcome to observe it."
-        : task.drainUnavailable && task.sessionState === "active" && task.executionStarted
+      message: task.drainUnavailable && task.sessionState === "active" && task.executionStarted
         ? STOPPED_TASK_UPDATES_MESSAGE
         : controlAttempt?.message ?? message,
       actionRevision: 0,
@@ -1611,12 +1560,8 @@ async function changePlanView(review, patch, queued = false) {
 
 function retainReviewOutcome(review, error, actionName = review.outcomeAction ?? null) {
   if (!(error instanceof OutcomeUnavailableError)) return false;
-  review.outcomeCheck = null;
-  review.outcomeUnknown = true;
   review.outcomeAction = actionName;
-  review.outcomeRunning = false;
   review.pending = "outcome";
-  review.message = UNKNOWN_OUTCOME_GUIDANCE;
   renderTasks();
   return true;
 }
@@ -1624,24 +1569,18 @@ function retainReviewOutcome(review, error, actionName = review.outcomeAction ??
 async function retryReviewOutcome(review) {
   const task = retainedReviewTask(review);
   const cancelAttempt = task?.executionControlAttempt;
-  if (task !== null && review.outcomeUnknown && review.outcomeCheck === null
-      && cancelAttempt?.independent && typeof cancelAttempt.check === "function") {
+  if (task !== null && fixedOutcome(review.recovery)
+      && cancelAttempt?.independent && checkableOutcome(cancelAttempt.recovery)) {
     await retryIndependentCancelOutcome(task, cancelAttempt);
     return;
   }
   if (task !== null && cancelAttempt !== null && !cancelAttempt.independent
       && cancelAttempt.sessionId === task.sessionId
-      && typeof cancelAttempt.check === "function") {
-    await checkOriginalOutcome(cancelAttempt, () => {
-      cancelAttempt.message = `Checking the original ${cancelAttempt.actionName} outcome…`;
-      if (task.review !== null) task.review.message = cancelAttempt.message;
-    }, () => task.executionControlAttempt === cancelAttempt, () => {
-      cancelAttempt.message = "Check unavailable. Select Check outcome again.";
-      if (task.review !== null) task.review.message = cancelAttempt.message;
-    });
+      && checkableOutcome(cancelAttempt.recovery)) {
+    await cancelAttempt.recovery.check();
     return;
   }
-  if (task === null || review.outcomeRunning) return;
+  if (task === null || review.recovery?.checking) return;
   if (review.refreshAvailable) {
     review.refreshAvailable = false;
     review.actionRevision += 1;
@@ -1653,12 +1592,7 @@ async function retryReviewOutcome(review) {
     }
     return;
   }
-  if (typeof review.outcomeCheck !== "function") return;
-  await checkOriginalOutcome(review,
-    () => { review.message = "Checking the original action request…"; },
-    () => retainedReviewTask(review) === task,
-    () => { review.message = "Check unavailable. Select Check outcome again."; },
-    "outcomeCheck", "outcomeRunning");
+  if (checkableOutcome(review.recovery)) await review.recovery.check();
 }
 
 async function loadPlanWindow(review, offset) {
@@ -1814,12 +1748,9 @@ async function changePlanSelection(review, row, selected, highlightedScope = fal
   review.message = "Updating selection…";
   beginForegroundWindowRead(review);
   renderTasks();
-  const onDelayed = (feedback) => {
+  const onDelayed = (recovery) => {
     if (retainedReviewTask(review) === task && review.actionRevision === action) {
-      review.outcomeCheck = feedback.check;
-      review.message = feedback.state === "unavailable"
-        ? "Selection outcome unavailable. Select Check outcome to observe the original request."
-        : "Selection response delayed. Waiting for the original outcome…";
+      review.recovery = recovery;
       renderTasks();
     }
   };
@@ -1853,7 +1784,7 @@ async function changePlanSelection(review, row, selected, highlightedScope = fal
     ) return;
     review.summary = summary;
     adoptExecutionWindow(review, window);
-    review.outcomeCheck = null;
+    review.recovery = null;
     review.message = summary.disposition === "applied"
       ? null
       : summary.disposition === "conflict"
@@ -1873,9 +1804,9 @@ async function changePlanSelection(review, row, selected, highlightedScope = fal
   } finally {
     if (
       retainedReviewTask(review) === task && review.actionRevision === action
-      && review.pending === "selection" && !review.outcomeUnknown
+      && review.pending === "selection" && !fixedOutcome(review.recovery)
     ) {
-      review.outcomeCheck = null;
+      review.recovery = null;
       review.pending = null;
       renderTasks();
     }
@@ -1887,13 +1818,12 @@ async function executeReviewedPlan(review, returnFocus) {
   const task = currentReviewTask(review);
   if (task !== null && task.executionAttempt?.state === "submitting") {
     const attempt = task.executionAttempt;
-    await checkOriginalOutcome(attempt, () => {},
-      () => task.executionAttempt === attempt);
+    if (checkableOutcome(attempt.recovery)) await attempt.recovery.check();
     return;
   }
   if (
-    task === null || task.closePending || task.closeCheck !== null
-    || task.closeOutcomeUnknown || review.pending !== null
+    task === null || task.closePending || checkableOutcome(task.closeRecovery)
+    || fixedOutcome(task.closeRecovery) || review.pending !== null
     || review.summary.selection_state !== "reviewing"
     || task.executionAttempt !== null
   ) return;
@@ -1904,8 +1834,7 @@ async function executeReviewedPlan(review, returnFocus) {
     selectionRevision: review.summary.selection_revision,
     destructiveAcknowledged: review.summary.requires_destructive_confirmation,
     destructiveOperationCount: review.summary.destructive_operation_count,
-    check: null,
-    checking: false,
+    recovery: null,
     submissionStarted: false,
     state: review.summary.requires_destructive_confirmation ? "confirming" : "submitting",
   };
@@ -1955,13 +1884,10 @@ async function submitReviewedExecution(task, attempt) {
     attempt.requestId,
     attempt.selectionRevision,
     attempt.destructiveAcknowledged,
-    (feedback) => {
+    (recovery) => {
       if (tasks.get(task.taskId) === task && task.executionAttempt === attempt
           && task.review !== null) {
-        attempt.check = feedback.check;
-        task.review.message = feedback.state === "unavailable"
-          ? "Execution outcome unavailable. Select Check outcome to observe the original request."
-          : "Execution response delayed. Waiting for the original admission…";
+        attempt.recovery = recovery;
         renderTasks();
       }
     },
@@ -2023,10 +1949,9 @@ async function submitReviewedExecution(task, attempt) {
     const currentReview = task.review;
     if (error instanceof StartPlanUncertainError) {
       attempt.state = "uncertain";
-      attempt.check = null;
       if (currentReview !== null) {
         currentReview.pending = "outcome";
-        currentReview.message = UNKNOWN_OUTCOME_GUIDANCE;
+        currentReview.message = null;
       }
     } else {
       task.executionAttempt = null;
@@ -2065,17 +1990,9 @@ function recordExecutionControlResult(task, attempt, result) {
 }
 
 async function retryIndependentCancelOutcome(task, attempt) {
-  if (task.executionControlAttempt !== attempt || attempt.unknown
+  if (task.executionControlAttempt !== attempt || fixedOutcome(attempt.recovery)
       || task.sessionId !== attempt.sessionId || task.sessionState !== "active") return;
-  const stillOwned = () => tasks.get(task.taskId) === task
-    && task.sessionId === attempt.sessionId && task.executionControlAttempt === attempt;
-  await checkOriginalOutcome(attempt,
-    () => { attempt.message = "Checking the original Cancel outcome…"; },
-    stillOwned, () => {
-      if (task.sessionState === "active") {
-        attempt.message = "Check unavailable. Select Check outcome again.";
-      }
-    });
+  if (checkableOutcome(attempt.recovery)) await attempt.recovery.check();
 }
 
 async function controlReviewedExecution(review, actionName) {
@@ -2083,13 +2000,13 @@ async function controlReviewedExecution(review, actionName) {
   const independentCancel = task !== null && actionName === "cancel"
     && canCancelAfterFixedReviewOutcome(task, review);
   if (
-    task === null || task.closePending || task.closeCheck !== null
-    || task.closeOutcomeUnknown || (review.pending !== null && !independentCancel)
+    task === null || task.closePending || checkableOutcome(task.closeRecovery)
+    || fixedOutcome(task.closeRecovery) || (review.pending !== null && !independentCancel)
     || !task.executionStarted
     || task.sessionState !== "active" || task.sessionId === null
     || task.reviewSessionId !== task.sessionId
     || task.drainUnavailable || task.executionControlAttempt?.pending
-    || task.executionControlAttempt?.unknown
+    || (fixedOutcome(task.executionControlAttempt?.recovery) && !independentCancel)
   ) return;
   review.actionRevision += 1;
   const sessionId = task.sessionId;
@@ -2100,9 +2017,7 @@ async function controlReviewedExecution(review, actionName) {
     actionName,
     pending: true,
     message: `${actionName[0].toUpperCase()}${actionName.slice(1)} requested…`,
-    check: null,
-    checking: false,
-    unknown: false,
+    recovery: null,
     independent: independentCancel,
     accepted: false,
     controlRevision,
@@ -2120,13 +2035,10 @@ async function controlReviewedExecution(review, actionName) {
   const stillOwned = () => tasks.get(task.taskId) === task
     && task.sessionId === sessionId && task.executionControlAttempt === attempt;
   try {
-    const result = await controlExecution(task.taskId, sessionId, actionName, (feedback) => {
+    const result = await controlExecution(task.taskId, sessionId, actionName, (recovery) => {
       if (stillOwned() && task.review !== null) {
-        attempt.check = feedback.check;
-        attempt.message = feedback.state === "unavailable"
-          ? `${actionName[0].toUpperCase()}${actionName.slice(1)} outcome unavailable. Select Check outcome to observe the original request.`
-          : `${actionName[0].toUpperCase()}${actionName.slice(1)} response delayed. Waiting for the original outcome…`;
-        if (!independentCancel) task.review.message = attempt.message;
+        attempt.recovery = recovery;
+        if (!independentCancel) task.review.recovery = recovery;
         renderTasks();
       }
     });
@@ -2141,12 +2053,10 @@ async function controlReviewedExecution(review, actionName) {
       ))
     ) {
       if (independentCancel && error instanceof OutcomeUnavailableError) {
-        attempt.check = null;
-        attempt.unknown = true;
-        attempt.message = "Cancel outcome cannot be confirmed. Close and reopen NamiSync before trying another Cancel.";
+        attempt.message = null;
       } else if (!independentCancel && task.review !== null
           && retainReviewOutcome(task.review, error, actionName)) {
-        attempt.message = task.review.message;
+        attempt.message = null;
       } else {
         attempt.message = `${actionName[0].toUpperCase()}${actionName.slice(1)} refused. Follow live status.`;
       }
@@ -2156,10 +2066,8 @@ async function controlReviewedExecution(review, actionName) {
     if (stillOwned()) {
       if (independentCancel) {
         attempt.pending = false;
-        attempt.check = null;
       } else {
         attempt.pending = false;
-        attempt.check = null;
         if (task.review?.pending === actionName) task.review.pending = null;
       }
       renderTasks();
@@ -2170,7 +2078,7 @@ async function controlReviewedExecution(review, actionName) {
 async function planAgainFromReview(review) {
   const task = currentReviewTask(review);
   if (task !== null && review.pending === "plan-again"
-      && typeof task.form?.attempt?.check === "function") {
+      && checkableOutcome(task.form?.attempt?.recovery)) {
     await retryFormAttempt(task, task.form, "plan-again");
     return;
   }
@@ -2466,15 +2374,14 @@ async function chooseMount(rowName, mountIndex) {
 function beginFormAttempt(task, form, kind) {
   if (
     tasks.get(task.taskId) !== task || task.form !== form || form.attempt !== null ||
-    task.closeOutcomeUnknown || task.startOutcomeUnknown ||
+    fixedOutcome(task.closeRecovery) || fixedOutcome(task.startRecovery) ||
     (pageBatch !== null && pageBatch.running !== null)
   ) return null;
   const attempt = {
     kind,
     running: true,
     dispatched: false,
-    check: null,
-    checking: false,
+    recovery: null,
   };
   form.attempt = attempt;
   form.actionMessage = null;
@@ -2501,20 +2408,20 @@ async function dispatchFormAttempt(task, form, attempt, submit) {
     if (!currentFormAttempt(task, form, attempt)) return;
     if (error instanceof StartPlanUncertainError) {
       attempt.running = false;
-      attempt.unknown = true;
-      if (attempt.unknown) task.startOutcomeUnknown = true;
-      attempt.check = null;
-      form.actionMessage = UNKNOWN_OUTCOME_GUIDANCE;
       renderTasks();
       return;
     }
     form.attempt = null;
+    task.startRecovery = null;
     form.actionMessage = "That task could not be started. Review the setup and try again.";
     renderTasks();
     void loadTaskSetup(task);
     return;
   }
-  if (currentFormAttempt(task, form, attempt)) form.attempt = null;
+  if (currentFormAttempt(task, form, attempt)) {
+    form.attempt = null;
+    task.startRecovery = null;
+  }
   await refreshTasks();
 }
 
@@ -2522,11 +2429,10 @@ async function retryFormAttempt(task, form, kind) {
   const attempt = form.attempt;
   if (
     attempt === null || attempt.kind !== kind || !attempt.running ||
-    attempt.checking || typeof attempt.check !== "function"
+    !checkableOutcome(attempt.recovery) || attempt.recovery.checking
   ) return false;
-  return checkOriginalOutcome(attempt,
-    () => { form.actionMessage = "Checking the original start outcome…"; },
-    () => currentFormAttempt(task, form, attempt));
+  await attempt.recovery.check();
+  return true;
 }
 
 async function choicesForStart(task, form, attempt, revision, optionsInput) {
@@ -2559,8 +2465,8 @@ async function startCurrentPlan() {
   const task = currentTask();
   const form = task?.form;
   if (
-    task === null || task.closePending || task.closeCheck !== null || task.closeOutcomeUnknown
-    || task.startOutcomeUnknown || form === null || !form.editable || form.mode !== "sync-plan" ||
+    task === null || task.closePending || checkableOutcome(task.closeRecovery) || fixedOutcome(task.closeRecovery)
+    || fixedOutcome(task.startRecovery) || form === null || !form.editable || form.mode !== "sync-plan" ||
     (originHasPendingBatch(task.taskId) || batchTaskBlockReason(task.taskId) !== null) ||
     (pageBatch !== null && pageBatch.running !== null)
   ) return;
@@ -2583,12 +2489,10 @@ async function startCurrentPlan() {
     form.options = cloneOptions(ready.options);
     await dispatchFormAttempt(
       task, form, attempt,
-      () => startPlan(task.taskId, ready.sourceId, ready.targetId, ready.options, (feedback) => {
+      () => startPlan(task.taskId, ready.sourceId, ready.targetId, ready.options, (recovery) => {
         if (currentFormAttempt(task, form, attempt)) {
-          attempt.check = feedback.check;
-          form.actionMessage = feedback.state === "unavailable"
-            ? "Plan outcome unavailable. Select Check outcome to observe the original request."
-            : "Plan response delayed. Waiting for the original outcome…";
+          attempt.recovery = recovery;
+          task.startRecovery = recovery;
           renderTasks();
         }
       }),
@@ -2602,8 +2506,8 @@ async function startCurrentInventory() {
   const task = currentTask();
   const form = task?.form;
   if (
-    task === null || task.closePending || task.closeCheck !== null || task.closeOutcomeUnknown
-    || task.startOutcomeUnknown || form === null || !form.editable || form.mode !== "inventory" ||
+    task === null || task.closePending || checkableOutcome(task.closeRecovery) || fixedOutcome(task.closeRecovery)
+    || fixedOutcome(task.startRecovery) || form === null || !form.editable || form.mode !== "inventory" ||
     batchTaskBlockReason(task.taskId) !== null ||
     (pageBatch !== null && pageBatch.running !== null)
   ) return;
@@ -2623,12 +2527,10 @@ async function startCurrentInventory() {
       return;
     }
     await dispatchFormAttempt(task, form, attempt, () => startInventory(
-      task.taskId, root.choice_id, (feedback) => {
+      task.taskId, root.choice_id, (recovery) => {
         if (currentFormAttempt(task, form, attempt)) {
-          attempt.check = feedback.check;
-          form.actionMessage = feedback.state === "unavailable"
-            ? "Inventory outcome unavailable. Select Check outcome to observe the original request."
-            : "Inventory response delayed. Waiting for the original outcome…";
+          attempt.recovery = recovery;
+          task.startRecovery = recovery;
           renderTasks();
         }
       },
@@ -2642,8 +2544,8 @@ function addCurrentPair() {
   const task = currentTask();
   const form = currentForm();
   if (
-    task === null || task.closePending || task.closeCheck !== null || task.closeOutcomeUnknown
-    || task.startOutcomeUnknown || !formIsEditable(form) || form.mode !== "sync-plan" ||
+    task === null || task.closePending || checkableOutcome(task.closeRecovery) || fixedOutcome(task.closeRecovery)
+    || fixedOutcome(task.startRecovery) || !formIsEditable(form) || form.mode !== "sync-plan" ||
     form.source.pending || form.target.pending ||
     (pageBatch !== null && pageBatch.running !== null)
   ) return;
@@ -2658,8 +2560,7 @@ function addCurrentPair() {
     target: snapshotLocationRow(form.target),
     state: "queued",
     stage: null,
-    check: null,
-    checking: false,
+    recovery: null,
     taskId: null,
     sourceId: null,
     targetId: null,
@@ -2695,8 +2596,7 @@ function currentBatchRun(batch, owner, generation) {
 function retainBatchUnknown(row, stage) {
   row.state = "unknown";
   row.stage = stage;
-  row.check = null;
-  row.message = UNKNOWN_OUTCOME_GUIDANCE;
+  row.message = null;
 }
 
 function adoptBatchShell(shell, row) {
@@ -2746,16 +2646,13 @@ async function startBatchRow(row, context) {
       row.stage = "creating";
       row.message = "Creating task…";
       renderTasks();
-      const shell = await createTask((feedback) => {
+      const shell = await createTask((recovery) => {
         if (row.state === "submitting") {
-          row.check = feedback.check;
-          row.message = feedback.state === "unavailable"
-            ? "Task outcome unavailable. Select Check outcome to observe the original request."
-            : "Task response delayed. Waiting for the original outcome…";
+          row.recovery = recovery;
           renderTasks();
         }
       });
-      row.check = null;
+      row.recovery = null;
       task = adoptBatchShell(shell, row);
     if (!context.canSubmit()) {
       row.state = "stopped";
@@ -2766,16 +2663,13 @@ async function startBatchRow(row, context) {
     row.stage = "starting";
     row.message = "Creating plan…";
     renderTasks();
-    await startPlan(task.taskId, row.sourceId, row.targetId, row.options, (feedback) => {
+    await startPlan(task.taskId, row.sourceId, row.targetId, row.options, (recovery) => {
       if (row.state === "submitting") {
-        row.check = feedback.check;
-        row.message = feedback.state === "unavailable"
-          ? "Plan outcome unavailable. Select Check outcome to observe the original request."
-          : "Plan response delayed. Waiting for the original outcome…";
+        row.recovery = recovery;
         renderTasks();
       }
     });
-    row.check = null;
+    row.recovery = null;
     row.state = "created";
     row.message = "Plan task created.";
   } catch (error) {
@@ -2785,7 +2679,7 @@ async function startBatchRow(row, context) {
       retainBatchUnknown(row, "starting");
     } else {
       row.state = "refused";
-      row.check = null;
+      row.recovery = null;
       row.message = "That pair could not be created. Review its folders and settings, then try again.";
     }
   }
@@ -2797,19 +2691,14 @@ async function startPairBatch() {
   const batch = pageBatch;
   if (batch?.running?.originTaskId === task?.taskId) {
     const row = batch.running.row;
-    if (typeof row?.check === "function" && !row.checking) {
-      row.checking = true;
-      renderTasks();
-      try { await row.check(); } finally {
-        row.checking = false;
-        renderTasks();
-      }
+    if (checkableOutcome(row?.recovery) && !row.recovery.checking) {
+      await row.recovery.check();
     }
     return;
   }
   if (
-    task === null || task.closePending || task.closeCheck !== null || task.closeOutcomeUnknown
-    || task.startOutcomeUnknown || !formIsEditable(form) || form.mode !== "sync-plan" || form.attempt !== null
+    task === null || task.closePending || checkableOutcome(task.closeRecovery) || fixedOutcome(task.closeRecovery)
+    || fixedOutcome(task.startRecovery) || !formIsEditable(form) || form.mode !== "sync-plan" || form.attempt !== null
     || form.source.pending || form.target.pending ||
     batch === null || batch.running !== null
   ) return;
@@ -2827,8 +2716,8 @@ async function startPairBatch() {
     recents: defaultSetup?.recents ?? form.setup.recents,
     contains: (row) => batch.rows.includes(row),
     canSubmit: () => currentBatchRun(batch, owner, generation)
-      && tasks.get(task.taskId) === task && !task.closePending && task.closeCheck === null
-      && !task.closeOutcomeUnknown && !task.startOutcomeUnknown,
+      && tasks.get(task.taskId) === task && !task.closePending && !checkableOutcome(task.closeRecovery)
+      && !fixedOutcome(task.closeRecovery) && !fixedOutcome(task.startRecovery),
   };
   batch.running = owner;
   renderTasks();
@@ -2882,15 +2771,15 @@ function choosePlanAgainMount(purpose, mount) {
 function canStartPlanAgain(task) {
   const form = task?.form;
   if (
-    task === null || currentTask() !== task || task.closePending || task.closeCheck !== null
-    || task.closeOutcomeUnknown || task.startOutcomeUnknown ||
+    task === null || currentTask() !== task || task.closePending || checkableOutcome(task.closeRecovery)
+    || fixedOutcome(task.closeRecovery) || fixedOutcome(task.startRecovery) ||
     form?.canPlanAgain !== true ||
     originHasPendingBatch(task.taskId) || batchTaskBlockReason(task.taskId) !== null ||
     (pageBatch !== null && pageBatch.running !== null)
   ) return false;
   return form.attempt === null || (
     form.attempt.kind === "plan-again" && form.attempt.running &&
-    typeof form.attempt.check === "function" && !form.attempt.checking
+    checkableOutcome(form.attempt.recovery) && !form.attempt.recovery.checking
   );
 }
 
@@ -2907,12 +2796,10 @@ async function startPlanAgain(task = currentTask()) {
   if (attempt === null || !freshFormAttempt(task, form, attempt, revision)) return false;
   await dispatchFormAttempt(
     task, form, attempt,
-    () => planAgain(task.taskId, sourceMount, targetMount, (feedback) => {
+    () => planAgain(task.taskId, sourceMount, targetMount, (recovery) => {
       if (currentFormAttempt(task, form, attempt)) {
-        attempt.check = feedback.check;
-        form.actionMessage = feedback.state === "unavailable"
-          ? "Plan-again outcome unavailable. Select Check outcome to observe the original request."
-          : "Plan-again response delayed. Waiting for the original outcome…";
+        attempt.recovery = recovery;
+        task.startRecovery = recovery;
         renderTasks();
       }
     }),

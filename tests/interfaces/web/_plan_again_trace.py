@@ -242,11 +242,17 @@ _APP_DISPATCH_CATCH_TRACE = r'''  } catch (error) {
     if (error instanceof StartPlanUncertainError) {
 '''
 
-_APP_REFRESH = r'''  if (currentFormAttempt(task, form, attempt)) form.attempt = null;
+_APP_REFRESH = r'''  if (currentFormAttempt(task, form, attempt)) {
+    form.attempt = null;
+    task.startRecovery = null;
+  }
   await refreshTasks();
 }
 '''
-_APP_REFRESH_TRACE = r'''  if (currentFormAttempt(task, form, attempt)) form.attempt = null;
+_APP_REFRESH_TRACE = r'''  if (currentFormAttempt(task, form, attempt)) {
+    form.attempt = null;
+    task.startRecovery = null;
+  }
   const countBeforeRefresh = attempt.kind === "plan-again" ? tasks.size : null;
   await refreshTasks();
   if (attempt.kind === "plan-again") globalThis.__namiPlanAgainTrace?.record("task-refresh", tasks.size > countBeforeRefresh ? "added" : "unchanged");

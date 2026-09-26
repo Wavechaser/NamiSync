@@ -57,6 +57,10 @@ let nextResponseToken = 1;
 let loseNextResponse = false;
 let holdNextResponse = false;
 let resolveLateResponse = null;
+let observePending = false;
+let holdObservation = false;
+let resolveObservation = null;
+let invalidOriginalResult = false;
 const planning = bridge.startPlan(taskId, sourceId, targetId, options);
 
 await Promise.resolve();
@@ -81,15 +85,20 @@ testWindow.pywebview = {
         assert.ok(match, "only the original bounded start-plan identity is observed");
         observations.push(requestJson);
         const original = retained.get(match[1]);
-        return Promise.resolve({
+        const observed = {
           transport_version: 1,
-          state: original === undefined ? "unavailable" : "ready",
+          state: original === undefined ? "unavailable" : observePending ? "pending" : "ready",
           generation: 1,
           request_id: match[1],
           response_token: original?.response_token ?? null,
           completion_token: null,
-          response: original?.response ?? null,
-        });
+          response: original === undefined || observePending ? null : original.response,
+        };
+        if (holdObservation) {
+          holdObservation = false;
+          return new Promise((resolve) => { resolveObservation = () => resolve(observed); });
+        }
+        return Promise.resolve(observed);
       }
       const request = JSON.parse(requestJson);
       requests.push(request);
@@ -100,7 +109,7 @@ testWindow.pywebview = {
           schema_version: 1,
           request_id: request.request_id,
           ok: true,
-          result: {
+          result: invalidOriginalResult ? { secret_path: "C:\\private\\original" } : {
             task_id: taskId,
             request_id: "3".repeat(32),
             session_id: "4".repeat(32),
@@ -199,6 +208,90 @@ for (let turn = 0; turn < 8; turn += 1) {
 assert.equal(requests.length, 3, "late admission cannot resubmit the mutation");
 for (let turn = 0; turn < 12; turn += 1) await Promise.resolve();
 assert.equal(timers.size, 0, "late settlement cannot restore an old feedback timer");
+
+// A lost direct return followed by healthy pending observations must offer an
+// explicit read-only Check; the original Promise remains the only adopter.
+observePending = true;
+loseNextResponse = true;
+const pendingObservationCount = observations.length;
+const pendingUpdates = [];
+const pendingPlanning = bridge.startPlan(taskId, sourceId, targetId, options,
+  (handle) => pendingUpdates.push(handle));
+assert.equal(pendingUpdates.length, 1, "the handle arrives before admission awaits");
+const pendingHandle = pendingUpdates[0];
+assert.equal(pendingHandle.state, "submitting");
+for (let turn = 0; turn < 60 && observations.length < pendingObservationCount + 3; turn += 1) {
+  await Promise.resolve();
+}
+for (let turn = 0; turn < 30; turn += 1) await Promise.resolve();
+assert.equal(observations.length - pendingObservationCount, 3);
+assert.equal(pendingHandle.state, "pending");
+assert.equal(pendingHandle.canCheck, true);
+assert.match(pendingHandle.message, /Select Check outcome/);
+assert.doesNotMatch(pendingHandle.message, /Waiting for the original outcome/);
+assert.ok(pendingUpdates.every((handle) => handle === pendingHandle),
+  "every notification shares one handle");
+const pendingRequest = requests.at(-1);
+const pendingMutationCount = requests.length;
+observePending = false;
+await pendingHandle.check();
+assert.deepEqual(await pendingPlanning, retained.get(pendingRequest.request_id).response.result);
+assert.equal(requests.length, pendingMutationCount, "Check cannot submit another mutation");
+
+// Matching invalid result is visible as a protocol fault without an ACK or
+// terminal abandonment. A later valid original result can still be adopted.
+invalidOriginalResult = true;
+const faultUpdates = [];
+const faultPlanning = bridge.startPlan(taskId, sourceId, targetId, options,
+  (handle) => faultUpdates.push(handle));
+for (let turn = 0; turn < 80 && faultUpdates[0]?.state !== "protocol-fault"; turn += 1) {
+  await Promise.resolve();
+}
+const faultHandle = faultUpdates[0];
+const faultRequest = requests.at(-1);
+const faultExchange = retained.get(faultRequest.request_id);
+assert.equal(faultHandle.state, "protocol-fault");
+assert.equal(faultHandle.canCheck, true);
+assert.match(faultHandle.message, /invalid_result/);
+assert.doesNotMatch(faultHandle.message, /private/);
+assert.equal(acknowledgments.includes(`ack:${faultExchange.response_token}`), false);
+faultExchange.response.result = {
+  task_id: taskId, request_id: "3".repeat(32), session_id: "4".repeat(32),
+};
+invalidOriginalResult = false;
+await faultHandle.check();
+assert.deepEqual(await faultPlanning, faultExchange.response.result);
+assert.equal(acknowledgments.includes(`ack:${faultExchange.response_token}`), true);
+assert.ok(faultUpdates.every((handle) => handle === faultHandle));
+
+// A pending observation can outlive valid direct capture. Its completion must
+// not republish the settled handle into a page owner that has advanced.
+observePending = true;
+holdObservation = true;
+holdNextResponse = true;
+resolveLateResponse = null;
+const settledUpdates = [];
+const settlementPlanning = bridge.startPlan(taskId, sourceId, targetId, options,
+  (handle) => settledUpdates.push(handle));
+for (let turn = 0; turn < 12 && resolveLateResponse === null; turn += 1) await Promise.resolve();
+assert.equal(typeof resolveLateResponse, "function");
+const [settlementTimer, expireSettlement] = timers.entries().next().value;
+timers.delete(settlementTimer);
+expireSettlement();
+for (let turn = 0; turn < 20 && resolveObservation === null; turn += 1) await Promise.resolve();
+assert.equal(typeof resolveObservation, "function");
+resolveLateResponse();
+await settlementPlanning;
+assert.equal(settledUpdates[0].state, "settled");
+assert.equal(settledUpdates[0].canCheck, false);
+assert.equal(settledUpdates[0].checking, false);
+assert.equal(settledUpdates[0].message, null);
+const settledCount = settledUpdates.length;
+resolveObservation();
+for (let turn = 0; turn < 30; turn += 1) await Promise.resolve();
+assert.equal(settledUpdates.length, settledCount,
+  "observation completion cannot notify after original settlement");
+observePending = false;
 
 // Exercise the packaged asynchronous wrappers against a bounded, deterministic
 // native/document peer. Host generation is independent of the page's local

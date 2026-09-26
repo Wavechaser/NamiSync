@@ -1026,6 +1026,16 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Desktop bridge and native-owner lifecycle
 
+- MODERATE - FIXED (2026-09-26). Delivery-state conflation. A rejected direct
+  command followed by pending observation claimed to await an automatic result,
+  although only Check could recover it. Repeated unavailable observations offered
+  no alternative, and invalid matching result data appeared as communication
+  loss. Cause: feedback retained neither delivery liveness nor validation failure.
+  The original attempt now owns recovery feedback, offers Check or normal
+  close/reopen guidance, and preserves a visible protocol fault without ACK,
+  mutation replay or loss of late valid-result adoption. Fixed native errors
+  remain noncheckable; page ownership and effect fences remain in force.
+
 - MODERATE - FIXED (2026-09-26). Cleanup/result coupling. A valid asynchronous
   recent-pairs result could be reported as a transport failure when admission
   or completion cleanup ACK failed, while observed mutations adopted the same

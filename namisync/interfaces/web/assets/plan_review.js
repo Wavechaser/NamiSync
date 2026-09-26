@@ -1284,15 +1284,15 @@ export function createPlanReviewPanel(callbacks) {
     const controlUnavailable = task.drainUnavailable
       || task.reviewSessionId !== task.sessionId;
     const checkExecution = task.executionAttempt?.state === "submitting"
-      && typeof task.executionAttempt.check === "function"
-      && !task.executionAttempt.checking;
+      && task.executionAttempt.recovery?.canCheck
+      && !task.executionAttempt.recovery.checking;
     execute.hidden = review.summary.selection_state !== "reviewing";
     updateText(execute, checkExecution ? "Check outcome" : "Execute");
     execute.disabled = (review.pending !== null && !checkExecution)
       || (task.executionAttempt !== null && !checkExecution)
       || (!checkExecution && !canExecuteSelection);
     const checkPlanAgain = review.pending === "plan-again"
-      && typeof task.form?.attempt?.check === "function" && !task.form.attempt.checking;
+      && task.form?.attempt?.recovery?.canCheck && !task.form.attempt.recovery.checking;
     const planAgainLabel = checkPlanAgain ? "Check outcome" : "Plan again";
     planAgain.ariaLabel = planAgainLabel;
     planAgain.title = planAgainLabel;
@@ -1310,15 +1310,18 @@ export function createPlanReviewPanel(callbacks) {
     const controlAttempt = task.executionControlAttempt?.sessionId === task.sessionId
       ? task.executionControlAttempt : null;
     const independentCancel = controlAttempt?.independent ? controlAttempt : null;
-    const actionMessage = [review.message, independentCancel?.message].filter(Boolean).join(" ");
+    const primaryRecovery = review.pending === "execute"
+      ? task.executionAttempt?.recovery
+      : review.pending === "plan-again" ? task.form?.attempt?.recovery : review.recovery;
+    const actionMessage = [primaryRecovery?.message ?? review.message,
+      independentCancel?.recovery?.message ?? independentCancel?.message].filter(Boolean).join(" ");
     updateText(status, actionMessage);
     status.title = actionMessage;
     status.hidden = actionMessage.length === 0;
-    const checkOutcome = typeof review.outcomeCheck === "function"
-      || typeof controlAttempt?.check === "function";
+    const checkOutcome = review.recovery?.canCheck || controlAttempt?.recovery?.canCheck;
     retryOutcome.hidden = !checkOutcome && !review.refreshAvailable;
     updateText(retryOutcome, checkOutcome ? "Check outcome" : "Refresh review");
-    retryOutcome.disabled = review.outcomeRunning === true || controlAttempt?.checking === true;
+    retryOutcome.disabled = review.recovery?.checking === true || controlAttempt?.recovery?.checking === true;
     renderRows(review, task);
     if (focusedPlanRequestId !== review.summary.request_id) focusedPlanRow = null;
     focusedPlanRequestId = review.summary.request_id;

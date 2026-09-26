@@ -1582,9 +1582,14 @@ responses are inert before payload read.
 Mutation response delay is availability feedback, not an operation deadline.
 After five seconds, qualify the wait for the original result; finite failed
 observation qualifies communication as **Outcome unavailable** and offers a
-read-only Check. A healthy pending response remains pending when the bounded
-round ends. The original promise remains the sole adopter, so a late valid
-response updates its owner automatically. For the eleven protected commands in
+read-only Check, with normal application close/reopen and current-state review
+as a fallback if communication remains unavailable. A matching unreadable response
+has distinct protocol-error guidance and a bounded diagnostic; do not hide it as
+ordinary communication loss. A healthy pending response remains pending when the
+bounded round ends. If direct delivery already failed, explicitly ask the user
+to Check rather than claiming to await an automatic response. Still-live delivery
+can update its owner through the original promise, which remains the sole adopter.
+For the eleven protected commands in
 BRIDGE, keep the original intent and relevant task/session/revision fences until
 its outcome is resolved. A captured final response that cannot establish the effect
 keeps the intent fence with close/reopen and fresh-review guidance, without a

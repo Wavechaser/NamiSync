@@ -490,6 +490,9 @@ def test_fake_dom_identity_failure_keeps_bounded_diagnostics(
     (tmp_path / "fake_dom_assertions.mjs").write_bytes(
         (PROJECT_ROOT / "tests" / "assets" / "fake_dom_assertions.mjs").read_bytes()
     )
+    (tmp_path / "fake_recovery_handle.mjs").write_bytes(
+        (PROJECT_ROOT / "tests" / "assets" / "fake_recovery_handle.mjs").read_bytes()
+    )
     if probe_name == "task_shell_probe.mjs":
         graph, label = "app", "ElementFake<MAIN>"
         mismatch = (

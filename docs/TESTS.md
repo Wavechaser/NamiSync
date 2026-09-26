@@ -85,8 +85,11 @@ silently reducing the ordinary suite to source-text inspection.
 
 Mutation transport cases use controlled delay, admission/completion loss and
 cleanup failure. Verify one original submission/effect, bounded read-only result
-observation, distinct healthy-pending/unavailable feedback, automatic late-result
-adoption and true worker settlement. Current-state cases cover authoritative
+observation, truthful healthy-pending/lost-direct-delivery feedback, unavailable
+communication versus unreadable matching response, automatic late-result adoption
+where delivery remains live, and true worker settlement. Page recovery cases use
+the same stable handle across notifications and checks; workflow owner and stale
+response guards remain independently asserted. Current-state cases cover authoritative
 refresh, deliberate folder replacement and stale-response rejection without
 retaining an original outcome. Check never resubmits a mutation. A removed replay expectation is not a regression by
 itself; retained identity, state, effect and ownership guarantees decide it.
