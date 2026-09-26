@@ -24,14 +24,53 @@ export function projectActiveOperationProgress(presentation, operationId) {
 
 const CAPACITY_INTEGRITY_RESULTS = new Set(["not-run", "verified", "baselined"]);
 
-export function isCapacityOnlyExecution(execution, activeResult = execution?.result ?? null) {
-  return execution != null && activeResult != null
-    && execution?.result === activeResult
+export function isCapacityOnlyExecution(execution) {
+  const result = execution?.result ?? null;
+  return result !== null
     && execution.disk_capacity_failure_count > 0
     && execution.failed_operation_count === execution.disk_capacity_failure_count
-    && CAPACITY_INTEGRITY_RESULTS.has(activeResult.integrity)
-    && activeResult.recording === "ok"
-    && activeResult.audit === "ok";
+    && CAPACITY_INTEGRITY_RESULTS.has(result.integrity)
+    && result.recording === "ok"
+    && result.audit === "ok";
+}
+
+const EMPTY_EXECUTION = Object.freeze({
+  session_id: null, result: null, started_at: null, ended_at: null,
+  failed_operation_count: 0, disk_capacity_failure_count: 0,
+  gap: null, trash_location: null,
+});
+
+export function selectTaskExecution(task) {
+  const snapshot = task?.snapshot != null && task.snapshot.session_id === task.sessionId
+    ? task.snapshot : null;
+  const retained = task?.review?.window?.execution ?? null;
+  if (!task?.executionStarted) {
+    return { snapshot, sessionState: snapshot?.session_state ?? task?.sessionState ?? null,
+      execution: EMPTY_EXECUTION };
+  }
+  if (snapshot === null) {
+    const execution = retained !== null
+      && (task?.sessionId == null || retained.session_id === task.sessionId)
+      ? retained : EMPTY_EXECUTION;
+    return { snapshot: null, sessionState: task?.sessionState ?? null, execution };
+  }
+  const sameSession = retained?.session_id === snapshot.session_id;
+  const terminalWindow = sameSession && retained.result != null
+    && snapshot.terminal_result !== null;
+  return {
+    snapshot,
+    sessionState: snapshot.session_state,
+    execution: {
+      session_id: snapshot.session_id,
+      result: snapshot.terminal_result,
+      started_at: snapshot.started_at,
+      ended_at: snapshot.ended_at,
+      failed_operation_count: terminalWindow ? retained.failed_operation_count : 0,
+      disk_capacity_failure_count: terminalWindow ? retained.disk_capacity_failure_count : 0,
+      trash_location: terminalWindow ? retained.trash_location ?? null : null,
+      gap: sameSession ? retained.gap ?? null : null,
+    },
+  };
 }
 
 function terminalDigest(result, fallbackState, capacityOnly) {
@@ -92,9 +131,7 @@ export function terminalStatusLine(execution, sessionState = null) {
 export function taskStatusDigest(task) {
   const summary = task?.review?.summary ?? null;
   const form = task?.form ?? null;
-  const snapshot = task?.snapshot != null && task.snapshot.session_id === task.sessionId
-    ? task.snapshot : null;
-  const executionState = snapshot?.session_state ?? task?.sessionState ?? null;
+  const { snapshot, sessionState: executionState, execution } = selectTaskExecution(task);
   // Planning has no item-level progress, but the shell can still tell us that
   // it is underway. Keep the task rail animated while the start request is
   // being admitted, while a new plan view is loading, or while an active task
@@ -122,19 +159,11 @@ export function taskStatusDigest(task) {
           throughputBytesPerSecond: snapshot.presentation.throughput_bytes_per_second,
           etaSeconds: snapshot.presentation.eta_seconds,
         };
-  const retainedExecution = task?.review?.window?.execution ?? null;
-  const activeTerminalResult = task?.executionStarted
-    ? snapshot?.terminal_result ?? task?.executionResult ?? retainedExecution?.result ?? null : null;
-  const matchingRetainedResult = task?.executionStarted && snapshot !== null
-    && retainedExecution !== null
-    && retainedExecution?.session_id === snapshot.session_id
-    && retainedExecution.result !== null
-    && JSON.stringify(retainedExecution.result) === JSON.stringify(snapshot.terminal_result);
+  const activeTerminalResult = task?.executionStarted ? execution?.result ?? null : null;
   const terminal = terminalDigest(
     activeTerminalResult,
     executionState,
-    isCapacityOnlyExecution(retainedExecution,
-      matchingRetainedResult ? retainedExecution.result : activeTerminalResult),
+    isCapacityOnlyExecution(execution),
   );
   const planItemCount = summary?.selected_operation_count ?? 0;
   const planHasItems = (summary?.filter_counts?.all ?? 0) > 0;
@@ -173,6 +202,9 @@ export function taskStatusDigest(task) {
   else if (task?.executionStarted) detail = progress.total == null
     ? "Execution in progress." : `${progress.done} of ${progress.total} items.`;
   else detail = "Choose a source and target.";
+  if (snapshot?.progress_inconsistent === true) {
+    detail = `${detail} Some progress updates were inconsistent.`;
+  }
   return Object.freeze({
     title, state, detail,
     sourcePath: pathValue(summary?.source_path ?? form?.source?.text),

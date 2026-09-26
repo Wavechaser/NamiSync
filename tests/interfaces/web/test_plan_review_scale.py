@@ -778,7 +778,7 @@ def test_large_plan_task_snapshot_does_not_publish_an_outcome_map() -> None:
     assert population(asdict(state)) == first_population
     published = snapshot_task_drain_response_prefix(
         state.task_id, session_id, "d3" * 16, (),
-        TaskSnapshotStage(state, lambda: 100_001.0),
+        TaskSnapshotStage(state, None),
     )
     assert published.updates == ()
     assert published.snapshot == state.snapshot()

@@ -69,6 +69,9 @@ snapshot fields and reduces captured observations under the drain's existing
 task owner. Browser
 admission checks version, identity, revision, canonical scalars and renderable
 shape before one atomic adoption. It does not replay progress or attempt rules.
+The current internal snapshot version is 2. It publishes derived display facts
+and active item identity, not the reducer's raw Progress, phase-authority,
+attempt/counter copies or duplicate aggregate percentage.
 
 Snapshot bytes participate in the same complete response ceiling as the event
 prefix. Reduction and byte admission are staged from captured values; failure
@@ -84,7 +87,7 @@ independent revisions. Renderers use only a snapshot bound to the current sessio
 Plan Gap is not execution history loss. Revision is presentation identity, not
 effect authority or a new recovery protocol.
 
-The snapshot carries lifecycle facts, the bounded terminal result, progress and
+The snapshot carries lifecycle facts, the bounded terminal result, display and
 explicit incomplete facts; it never carries a complete per-item outcome map.
 The terminal result retains its phase and recording-issue feedback as well as
 headline axes; these are already bounded public values. A new Gap clears
@@ -99,8 +102,18 @@ counter advancement remain enforced there. Lossy handoff may change the active
 item without an observed inactive event; that does not settle the former item.
 Matching reliable outcomes clear activity, including automatic verification
 joined by operation identity. New phase, Gap and terminal reset temporal state.
-Progress estimates use one monotonic sample history and exact byte subtraction;
+Progress estimates use one monotonic sample history and exact byte subtraction.
+The sink stamps the accepted queued Progress; coalescing replaces that sample
+time without moving the independent first-availability linger deadline. Byte
+admission/retry uses the stored sample, not drain or browser-delivery time.
 DESKTOP_UI owns their visible presentation policy.
+
+Progress-comparison conflicts are presentation faults, not terminal authority:
+discard the conflicting progress/phase comparisons and estimates, retain a
+sticky visible inconsistent-progress diagnostic, and continue reliable/terminal
+delivery. Log a bounded internal diagnostic without event content. Only these
+semantic comparison faults are contained; malformed values, identity/sequence,
+response byte limits and terminal-record contradictions still fail strictly.
 
 Transport cursor/replay, callback failure and terminal delivery remain browser
 responsibilities. A terminal snapshot alone does not authorize session release:
@@ -108,6 +121,12 @@ the matching terminal record must be successfully presented through the existing
 delivery path. Retry retains the exact terminal presentation and snapshot.
 Local drafts, focus, scrolling, command recovery handles and pending feedback
 remain page-owned. None of these views grant mutable execution authority.
+For terminal presentation a matching snapshot is the sole source of session
+state, result and timestamps, including a null result while active. Retained
+window results are a fallback only without that snapshot. Window-only counts
+and trash details remain independently owned and require the matching captured
+execution session; they cannot override snapshot result axes. The page does
+not duplicate bridge revision admission or cache another terminal result copy.
 The drain callback receives the snapshot with the last applicable update, or
 `(null, snapshot)` for an empty catch-up. Raw-event diagnostics ignore that
 snapshot-only notification rather than counting it as an event sample.

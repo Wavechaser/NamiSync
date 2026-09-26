@@ -102,10 +102,10 @@ const pageSnapshot = (taskId, sessionId, facts = {}) => {
   const revision = (snapshotRevisions.get(key) ?? 0) + 1;
   snapshotRevisions.set(key, revision);
   return {
-    wire_version: 1, task_id: taskId, session_id: sessionId, revision,
+    wire_version: 2, task_id: taskId, session_id: sessionId, revision,
     session_state: "active", control_state: "running", phase: null,
-    phase_authority: "unknown", progress: null, active_item: null,
-    presentation: { aggregate_percent: null, item_percent: null,
+    progress_inconsistent: false, active_item: null,
+    presentation: { item_percent: null,
       items_done: null, items_total: null, throughput_bytes_per_second: null,
       eta_seconds: null, value: 0, determinate: false, indeterminate: true },
     gap_first_missed_seq: null, terminal_result: null, started_at: null, ended_at: null,
@@ -303,7 +303,8 @@ assert.equal(taskStatusDigest({ executionStarted: true, sessionState: "active",
   executionControlState: "paused" }).title, "Paused");
 assert.equal(taskStatusDigest({ executionStarted: true, sessionState: "active",
   sessionId: "8".repeat(32),
-  snapshot: { session_id: "8".repeat(32), session_state: "active", phase: "verify", presentation: {
+  snapshot: { wire_version: 2, session_id: "8".repeat(32),
+    session_state: "active", progress_inconsistent: false, phase: "verify", presentation: {
     value: 50, determinate: true, indeterminate: false,
     items_done: 2, items_total: 4,
     throughput_bytes_per_second: null, eta_seconds: null,
@@ -335,14 +336,18 @@ const capacityRailWindow = {
   result: capacityRailResult, failed_operation_count: 1, disk_capacity_failure_count: 1,
 };
 assert.equal(taskStatusDigest({
-  executionStarted: true, sessionState: "failed", executionResult: capacityRailResult,
+  executionStarted: true, sessionState: "failed",
   review: { window: { execution: capacityRailWindow } },
 }).title, "Needs target space");
 assert.equal(taskStatusDigest({
-  executionStarted: true, sessionState: "failed",
-  executionResult: { ...capacityRailResult, integrity: "mismatch" },
-  review: { window: { execution: capacityRailWindow } },
-}).title, "Failed", "stale retained capacity cannot recolor the rail");
+  executionStarted: true, sessionId: "8".repeat(32), sessionState: "failed",
+  snapshot: { wire_version: 2, session_id: "8".repeat(32), session_state: "failed",
+    terminal_result: { ...capacityRailResult, integrity: "mismatch" },
+    presentation: { value: 0, determinate: false, indeterminate: false,
+      items_done: null, items_total: null, throughput_bytes_per_second: null,
+      eta_seconds: null }, phase: null, progress_inconsistent: false },
+  review: { window: { execution: { ...capacityRailWindow, session_id: "8".repeat(32) } } },
+}).title, "Failed", "the snapshot's independent failure axis remains decisive");
 const railSource = (await readFile(process.argv[3], "utf8"))
   .replace("./icons.js", iconsUrl)
   .replace("./render.js", renderUrl)
@@ -1279,13 +1284,13 @@ planWindows[arbitrationWindowBase + 2].resolve(executionWindow(committedReview, 
 await until(() => planWindows.length === arbitrationWindowBase + 5);
 assert.equal(liveReview.window.execution.execution_revision, 3);
 assert.deepEqual(liveReview.executionDetail, { retained: true });
-assert.notDeepEqual(liveTask.executionResult, failedResult);
+assert.notDeepEqual(liveReview.window.execution.result, failedResult);
 planWindows[arbitrationWindowBase + 4].resolve(executionWindow(committedReview, 512, 4, completedResult));
 await until(() => !liveTask.executionWindowRefreshRunning);
 assert.equal(liveReview.window.execution.execution_revision, 4);
-assert.deepEqual(liveTask.executionResult, completedResult);
-assert.equal(liveTask.executionStartedAt, "2026-09-23T01:00:00+00:00");
-assert.equal(liveTask.executionEndedAt, "2026-09-23T01:01:05+00:00");
+assert.deepEqual(liveReview.window.execution.result, completedResult);
+assert.equal(liveReview.window.execution.started_at, "2026-09-23T01:00:00+00:00");
+assert.equal(liveReview.window.execution.ended_at, "2026-09-23T01:01:05+00:00");
 assert.equal(liveReview.executionDetail, null);
 
 executionDrain.acceptUpdate(executionDirtyUpdate);
@@ -1424,7 +1429,7 @@ planWindows.splice(failedForegroundBase);
 for (const destination of ["settings", "task"]) {
   const navigationBase = planWindows.length;
   const retainedWindow = liveReview.window;
-  const retainedResult = liveTask.executionResult;
+  const retainedResult = liveReview.window.execution.result;
   executionDrain.acceptUpdate(executionDirtyUpdate);
   await until(() => planWindows.length === navigationBase + 1);
   if (destination === "settings") settingsButton().click();
@@ -1432,7 +1437,7 @@ for (const destination of ["settings", "task"]) {
   planWindows[navigationBase].resolve(executionWindow(liveReview.summary, 0, 1, failedResult));
   await until(() => !liveTask.executionWindowRefreshRunning);
   assert.equal(liveReview.window, retainedWindow);
-  assert.equal(liveTask.executionResult, retainedResult);
+  assert.equal(liveReview.window.execution.result, retainedResult);
   assert.equal(liveTask.executionWindowDirty, true);
   await turns();
   assert.equal(planWindows.length, navigationBase + 1, "hidden dirty review does not self-poll");
@@ -1627,9 +1632,10 @@ executionDrain.acceptUpdate({ update_type: "record", record: {
 }));
 await turns();
 assert.equal(reviewRenders.at(-1).sessionState, "refused");
-assert.equal(liveTask.executionResult, refusedResult, "live terminal record precedes retained window capture");
-assert.equal(liveTask.executionStartedAt, null);
-assert.equal(liveTask.executionEndedAt, "2026-09-23T02:00:00+00:00");
+assert.equal(liveTask.snapshot.terminal_result, refusedResult,
+  "live terminal snapshot precedes retained window capture");
+assert.equal(liveTask.snapshot.started_at, null);
+assert.equal(liveTask.snapshot.ended_at, "2026-09-23T02:00:00+00:00");
 const terminalMessage = liveReview.message;
 assert.equal(terminalMessage, "Execution refused.", "terminal errors remain actionable feedback");
 executionControls[5].resolve({
@@ -1644,7 +1650,7 @@ assert.equal(
   "post-admission refusal retains committed selection and unrun review truth",
 );
 const releaseWindowBefore = liveReview.window;
-const releaseResultBefore = liveTask.executionResult;
+const releaseResultBefore = liveTask.snapshot.terminal_result;
 const retainedSummary = liveReview.summary;
 const retiredViewUpdate = planViewUpdates.length;
 globalThis.planReviewHarness.callbacks.onViewChange(liveReview, { sortColumn: "path" });
@@ -1659,7 +1665,7 @@ assert.equal(planWindows.at(-1), pendingControlWindow, "release retains the in-f
 pendingControlWindow.resolve(executionWindow(retainedSummary, 1280, 7, failedResult));
 await until(() => !liveTask.executionWindowRefreshRunning);
 assert.equal(liveReview.window, releaseWindowBefore, "reload admission invalidates old refresh before review replacement");
-assert.equal(liveTask.executionResult, releaseResultBefore);
+assert.equal(liveTask.snapshot.terminal_result, releaseResultBefore);
 assert.equal(liveTask.reviewLoading, true);
 
 // A user detail read can observe the newly retained revision during reload.
@@ -2370,7 +2376,7 @@ failedExecutionDrain.acceptUpdate({ update_type: "record", record: {
 }));
 assert.equal(failedTask.sessionState, "failed",
   "the new execution's lower revision cannot suppress its failed terminal record");
-assert.equal(failedTask.executionResult, terminalFailureResult);
+assert.equal(failedTask.snapshot.terminal_result, terminalFailureResult);
 assert.equal(taskStatusDigest(failedTask).title, "Failed");
 
 process.stdout.write("ok");

@@ -493,9 +493,6 @@ function adoptTask(summary) {
       executionControlState: "running",
       executionControlRevision: 0,
       executionControlAttempt: null,
-      executionResult: null,
-      executionStartedAt: null,
-      executionEndedAt: null,
       executionWindowDirty: false,
       executionWindowDirtyRevision: 0,
       executionWindowRefreshRunning: false,
@@ -527,9 +524,6 @@ function adoptTask(summary) {
       && task.review !== null
     ) {
       task.executionStarted = true;
-      task.executionResult = null;
-      task.executionStartedAt = null;
-      task.executionEndedAt = null;
       task.executionWindowDirty = true;
       task.executionWindowDirtyRevision += 1;
     }
@@ -578,20 +572,11 @@ function acceptTaskUpdate(task, sessionId, update, snapshot = null) {
     return;
   }
   if (snapshot !== null) {
-    // Revisions restart with each session; a delivered terminal record still needs custody.
-    if (task.snapshot !== null && snapshot.session_id === task.snapshot.session_id
-        && snapshot.revision < task.snapshot.revision && update?.update_type !== "record") return;
     task.snapshot = snapshot;
-    if (task.executionStarted && snapshot.session_state !== "active") {
-      task.executionResult = snapshot.terminal_result;
-      task.executionStartedAt = snapshot.started_at;
-      task.executionEndedAt = snapshot.ended_at;
-    }
     task.progressPresentation = {
       phase: snapshot.phase,
       activeItem: snapshot.active_item,
       itemPercent: snapshot.presentation.item_percent,
-      aggregatePercent: snapshot.presentation.aggregate_percent,
     };
     if (task.executionControlState !== snapshot.control_state) {
       task.executionControlRevision += 1;
@@ -627,11 +612,6 @@ function acceptTaskUpdate(task, sessionId, update, snapshot = null) {
     if (task.review !== null && controlAttempt !== null
         && task.review.pending === controlAttempt.actionName) task.review.pending = null;
     task.sessionState = snapshot.session_state;
-    if (task.executionStarted) {
-      task.executionResult = snapshot.terminal_result;
-      task.executionStartedAt = snapshot.started_at;
-      task.executionEndedAt = snapshot.ended_at;
-    }
     if (task.form !== null) task.form.sessionState = task.sessionState;
     if (task.executionStarted && task.review !== null) {
       task.review.message = task.sessionState === "completed" ? null : `Execution ${task.sessionState}.`;
@@ -1254,11 +1234,6 @@ async function refreshExecutionWindow(task) {
           return;
         }
         adoptExecutionWindow(review, window);
-        if (window.execution.result !== null) {
-          task.executionResult = window.execution.result;
-          task.executionStartedAt = window.execution.started_at ?? null;
-          task.executionEndedAt = window.execution.ended_at ?? null;
-        }
         renderTasks();
       } catch (_error) {
         if (!refreshStillCurrent()) {
@@ -1375,11 +1350,6 @@ async function loadPlanReview(task, force = false) {
       return;
     }
     task.executionStarted ||= summary.selection_state === "committed";
-    if (window.execution.result !== null) {
-      task.executionResult = window.execution.result;
-      task.executionStartedAt = window.execution.started_at ?? null;
-      task.executionEndedAt = window.execution.ended_at ?? null;
-    }
     const message = task.executionStarted
       ? task.sessionState === "active"
         ? executionControlMessage(task.executionControlState)
@@ -1913,9 +1883,6 @@ async function submitReviewedExecution(task, attempt) {
       task.snapshot = null;
       task.progressPresentation = null;
       task.executionStarted = true;
-      task.executionResult = null;
-      task.executionStartedAt = null;
-      task.executionEndedAt = null;
       task.executionWindowDirty = true;
       task.executionWindowDirtyRevision += 1;
       task.executionControlRevision += 1;

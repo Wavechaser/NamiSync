@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import datetime, timezone
 
 import pytest
@@ -59,18 +60,20 @@ def _state() -> TaskPresentationState:
 def test_reliable_phase_rejects_disagreement_and_gap_allows_self_described_tail() -> None:
     state = _state().advance(_event(1, PhaseChanged("execute")), 0)
     state = state.advance(_event(2, _progress(done=10)), 1)
-    assert state.snapshot()["phase_authority"] == "phase_changed"
-    with pytest.raises(ValueError, match="phase"):
-        state.advance(_event(3, _progress(done=20, phase="verify")), 2)
+    assert state.phase_authority == "phase_changed"
+    conflict = state.advance(_event(3, _progress(done=20, phase="verify")), 2)
+    assert conflict.snapshot()["progress_inconsistent"] is True
+    assert conflict.snapshot()["phase"] is None
+    assert conflict.snapshot()["presentation"]["throughput_bytes_per_second"] is None
 
     state = state.advance(_event(3, Gap(3)), 2)
     after_gap = state.snapshot()
     assert after_gap["gap_first_missed_seq"] == 3
-    assert after_gap["progress"] is None
+    assert state.progress is None
     assert after_gap["presentation"]["throughput_bytes_per_second"] is None
     state = state.advance(_event(4, _progress(done=5, phase="verify")), 3)
     assert state.snapshot()["phase"] == "verify"
-    assert state.snapshot()["phase_authority"] == "progress"
+    assert state.phase_authority == "progress"
     assert state.snapshot()["gap_first_missed_seq"] == 3
 
 
@@ -81,14 +84,16 @@ def test_attempt_advancement_high_water_and_lossy_directory_handoff() -> None:
     state = state.advance(_event(2, _progress(
         done=40, item=ITEM_A, attempt=ATTEMPT_A, item_done=40, item_total=50,
     )), 1)
-    with pytest.raises(ValueError, match="attempt regressed"):
-        state.advance(_event(3, _progress(
-            done=40, item=ITEM_A, attempt=ATTEMPT_A, item_done=30, item_total=50,
-        )), 2)
-    with pytest.raises(ValueError, match="aggregate regressed"):
-        state.advance(_event(3, _progress(
-            done=39, item=ITEM_A, attempt=ATTEMPT_A, item_done=39, item_total=50,
-        )), 2)
+    attempt_conflict = state.advance(_event(3, _progress(
+        done=40, item=ITEM_A, attempt=ATTEMPT_A, item_done=30, item_total=50,
+    )), 2)
+    assert attempt_conflict.progress_inconsistent
+    assert attempt_conflict.progress is None
+    aggregate_conflict = state.advance(_event(3, _progress(
+        done=39, item=ITEM_A, attempt=ATTEMPT_A, item_done=39, item_total=50,
+    )), 2)
+    assert aggregate_conflict.progress_inconsistent
+    assert aggregate_conflict.progress is None
 
     # Retrying the same item may reset its attempt counter, while its visible
     # item high water and the aggregate high water remain stable.
@@ -96,11 +101,11 @@ def test_attempt_advancement_high_water_and_lossy_directory_handoff() -> None:
         done=40, item=ITEM_A, attempt=ATTEMPT_B, item_done=0, item_total=50,
     )), 2)
     assert state.snapshot()["presentation"]["item_percent"] == 80.0
-    assert state.snapshot()["presentation"]["aggregate_percent"] == 40.0
-    with pytest.raises(ValueError, match="changed item"):
-        state.advance(_event(4, _progress(
-            done=40, item=ITEM_B, attempt=ATTEMPT_B, item_done=0, item_total=50,
-        )), 3)
+    assert state.snapshot()["presentation"]["value"] == 40.0
+    changed_item = state.advance(_event(4, _progress(
+        done=40, item=ITEM_B, attempt=ATTEMPT_B, item_done=0, item_total=50,
+    )), 3)
+    assert changed_item.progress_inconsistent
 
     # The inactive directory snapshot can be coalesced away. A new identity
     # with its own attempt is a display handoff, not an inferred settlement.
@@ -113,10 +118,11 @@ def test_attempt_advancement_high_water_and_lossy_directory_handoff() -> None:
         5, ItemOutcome(ITEM_B, "copy", "directory.bin", Outcome.SUCCEEDED),
     ), 4)
     assert state.snapshot()["active_item"] is None
-    with pytest.raises(ValueError, match="reactivated"):
-        state.advance(_event(6, _progress(
-            done=40, item=ITEM_B, attempt=ATTEMPT_A, item_done=0, item_total=50,
-        )), 5)
+    reactivated = state.advance(_event(6, _progress(
+        done=40, item=ITEM_B, attempt=ATTEMPT_A, item_done=0, item_total=50,
+    )), 5)
+    assert reactivated.progress_inconsistent
+    assert reactivated.active_item is None
 
 
 def test_large_byte_counters_stay_exact_decimal_strings() -> None:
@@ -126,13 +132,14 @@ def test_large_byte_counters_stay_exact_decimal_strings() -> None:
         item_done=large, item_total=large + 2,
     )), 0)
     snapshot = state.snapshot()
-    assert snapshot["progress"]["bytes_done"] == str(large)
-    assert snapshot["progress"]["bytes_total"] == str(large + 2)
-    assert snapshot["active_item"]["item_bytes_done"] == str(large)
+    assert state.progress["bytes_done"] == str(large)
+    assert state.progress["bytes_total"] == str(large + 2)
+    assert state.active_item["item_bytes_done"] == str(large)
+    assert snapshot["active_item"] == {"item_id": ITEM_A, "item_type": "operation"}
     state = state.advance(_event(2, _progress(
         done=large + 2, total=large + 2,
     )), 1)
-    assert state.snapshot()["presentation"]["aggregate_percent"] == 100.0
+    assert state.snapshot()["presentation"]["value"] == 100.0
 
 
 def test_monotonic_rate_and_eta_reset_on_pause_attempt_gap_and_terminal() -> None:
@@ -214,11 +221,11 @@ def test_replay_of_old_prefix_keeps_newer_native_revision_and_rate() -> None:
     assert replayed is state
     assert replayed.snapshot() == ahead
     replayed = replayed.advance(_event(1, Gap(1)), 102)
-    assert replayed.snapshot()["progress"]["bytes_done"] == "30"
+    assert replayed.progress["bytes_done"] == "30"
     assert replayed.snapshot()["gap_first_missed_seq"] == 1
     assert replayed.snapshot()["presentation"]["throughput_bytes_per_second"] is None
     state = replayed.advance(_event(3, _progress(done=40)), 5)
-    assert state.snapshot()["progress"]["bytes_done"] == "40"
+    assert state.progress["bytes_done"] == "40"
     assert state.snapshot()["revision"] > ahead["revision"]
 
 
@@ -262,10 +269,10 @@ def test_published_snapshot_detaches_progress_and_nested_terminal_facts() -> Non
         done=10, item=ITEM_A, attempt=ATTEMPT_A, item_done=10, item_total=100,
     )), 0)
     published = state.snapshot()
-    published["progress"]["bytes_done"] = "999"
+    published["presentation"]["items_done"] = 999
     published["active_item"]["item_id"] = "foreign"
     fresh = state.snapshot()
-    assert fresh["progress"]["bytes_done"] == "10"
+    assert fresh["presentation"]["items_done"] == 0
     assert fresh["active_item"]["item_id"] == ITEM_A
 
     state = state.advance(_record(), 1)
@@ -279,9 +286,28 @@ def test_published_snapshot_detaches_progress_and_nested_terminal_facts() -> Non
 
 def test_stage_does_not_change_retained_state_until_prefix_is_accepted() -> None:
     original = _state()
-    stage = TaskSnapshotStage(original, lambda: 1.0)
+    stage = TaskSnapshotStage(original, 1.0)
     candidate = stage.consider(_event(1, _progress(done=20)))
     assert original.snapshot()["revision"] == 0
     assert stage.snapshot()["revision"] == 0
     stage.accept(candidate)
-    assert stage.snapshot()["progress"]["bytes_done"] == "20"
+    assert stage.state.progress["bytes_done"] == "20"
+
+
+def test_progress_conflict_is_sticky_but_terminal_replay_mismatch_stays_strict() -> None:
+    state = _state().advance(_event(1, _progress(done=20)), 1)
+    state = state.advance(_event(2, _progress(done=10)), 2)
+    assert state.progress_inconsistent
+    assert state.last_reduced_sequence == 2
+    assert state.snapshot()["progress_inconsistent"] is True
+    assert state.snapshot()["presentation"]["determinate"] is False
+    state = state.advance(_record(), 3)
+    assert state.snapshot()["terminal_result"] is not None
+    assert state.snapshot()["progress_inconsistent"] is True
+
+    changed = TaskRecordUpdateView("record", replace(
+        _record().record,
+        ended_at="2026-01-01T00:00:03+00:00",
+    ))
+    with pytest.raises(ValueError, match="terminal replay changed"):
+        state.advance(changed, 4)

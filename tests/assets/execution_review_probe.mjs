@@ -30,8 +30,10 @@ const {
 
 const digestSession = "8".repeat(32);
 const activeSnapshot = {
+  wire_version: 2,
   session_id: digestSession,
   session_state: "active",
+  progress_inconsistent: false,
   phase: "execute",
   presentation: {
     value: 50, determinate: true, indeterminate: false,
@@ -227,7 +229,6 @@ const railCapacityExecution = summary(railCapacityResult, {
 });
 const capacityTask = taskStatusDigest({
   sessionState: "failed", executionStarted: true, executionControlState: "running",
-  executionResult: railCapacityResult,
   review: { window: { execution: railCapacityExecution } },
 });
 assert.deepEqual(
@@ -237,24 +238,57 @@ assert.deepEqual(
     detail: "Execution stopped: more target space is needed.",
   },
 );
+const terminalSnapshot = (terminalResult, sessionId = railCapacityExecution.session_id) => ({
+  wire_version: 2, session_id: sessionId, session_state: "failed",
+  terminal_result: terminalResult,
+  progress_inconsistent: false, phase: null, started_at: null, ended_at: null,
+  presentation: { value: 0, determinate: false, indeterminate: false,
+    items_done: null, items_total: null, throughput_bytes_per_second: null,
+    eta_seconds: null },
+});
 for (const staleResult of [
   result({ headline: "failed", filesystem: "failed", integrity: "mismatch" }),
   result({ headline: "failed", filesystem: "failed", integrity: "verified", recording: "degraded" }),
 ]) {
   const staleTask = taskStatusDigest({
-    sessionState: "failed", executionStarted: true, executionControlState: "running",
-    executionResult: staleResult,
+    sessionId: railCapacityExecution.session_id, sessionState: "failed",
+    executionStarted: true, executionControlState: "running",
+    snapshot: terminalSnapshot(staleResult),
     review: { window: { execution: railCapacityExecution } },
   });
   assert.equal(staleTask.title, "Failed", "stale capacity counts cannot recolor a newer failure");
   assert.equal(staleTask.state, "error");
 }
 const mismatchedCapacityTask = taskStatusDigest({
-  sessionState: "failed", executionStarted: true, executionControlState: "running",
-  executionResult: { ...railCapacityResult },
+  sessionId: "9".repeat(32), sessionState: "failed",
+  executionStarted: true, executionControlState: "running",
+  snapshot: terminalSnapshot({ ...railCapacityResult }, "9".repeat(32)),
   review: { window: { execution: railCapacityExecution } },
 });
-assert.equal(mismatchedCapacityTask.title, "Failed", "structurally equal stale results have no rail authority");
+assert.equal(mismatchedCapacityTask.title, "Failed", "a prior session's capacity counts have no rail authority");
+const matchingCapacityTask = taskStatusDigest({
+  sessionId: railCapacityExecution.session_id, sessionState: "active",
+  executionStarted: true, snapshot: terminalSnapshot({ ...railCapacityResult }),
+  review: { window: { execution: railCapacityExecution } },
+});
+assert.equal(matchingCapacityTask.title, "Needs target space",
+  "same-session terminal window counts preserve capacity guidance");
+const activeAgainstTerminalWindow = taskStatusDigest({
+  sessionId: railCapacityExecution.session_id, sessionState: "active",
+  executionStarted: true,
+  snapshot: { ...activeSnapshot, session_id: railCapacityExecution.session_id },
+  review: { window: { execution: railCapacityExecution } },
+});
+assert.equal(activeAgainstTerminalWindow.title, "Executing",
+  "an active snapshot does not inherit a retained terminal result");
+const inconsistentTask = taskStatusDigest({
+  sessionId: railCapacityExecution.session_id, sessionState: "active",
+  executionStarted: true,
+  snapshot: { ...terminalSnapshot(railCapacityResult), progress_inconsistent: true },
+  review: { window: { execution: railCapacityExecution } },
+});
+assert.equal(inconsistentTask.title, "Needs target space");
+assert.ok(inconsistentTask.detail.includes("Some progress updates were inconsistent."));
 
 const mixedResult = result({
   headline: "mismatch", filesystem: "failed", integrity: "mismatch",
@@ -285,7 +319,6 @@ assert.deepEqual(projectExecutionSummary(mixedWindow.execution), {
 }, "a mixed window keeps its known aggregate integrity failure red");
 const mixedRail = taskStatusDigest({
   sessionState: "failed", executionStarted: true, executionControlState: "running",
-  executionResult: mixedResult,
   review: { window: mixedWindow },
 });
 assert.deepEqual({ title: mixedRail.title, state: mixedRail.state }, {
@@ -303,8 +336,10 @@ assert.ok(mixedCapacityRow.notes.includes("Stored evidence: Unrecorded"));
 
 const terminalTask = taskStatusDigest({
   sessionState: "completed", executionStarted: true, executionControlState: "running",
-  executionResult: result({ headline: "degraded", recording: "degraded",
-    recording_degraded_items: 1 }), review: null, form: null,
+  sessionId: digestSession,
+  snapshot: { ...terminalSnapshot(result({ headline: "degraded", recording: "degraded",
+    recording_degraded_items: 1 }), digestSession), session_state: "completed" },
+  review: null, form: null,
 });
 assert.equal(terminalTask.title, "Degraded", "known terminal degradation cannot stay green");
 assert.equal(terminalTask.state, "degraded");

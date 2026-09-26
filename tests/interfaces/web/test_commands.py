@@ -374,7 +374,7 @@ class _Service:
             result.session_id,
             result.drain_id,
             result.updates,
-            TaskSnapshotStage(TaskPresentationState(result.task_id, result.session_id), lambda: 0.0),
+            TaskSnapshotStage(TaskPresentationState(result.task_id, result.session_id), 0.0),
         )
 
     def request_task_close(

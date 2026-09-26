@@ -313,7 +313,7 @@ class TaskDrainView:
             raise ValueError("task snapshot must be a detached dictionary")
         if (
             type(self.snapshot.get("wire_version")) is not int
-            or self.snapshot.get("wire_version") != 1
+            or self.snapshot.get("wire_version") != 2
             or self.snapshot.get("task_id") != self.task_id
             or self.snapshot.get("session_id") != self.session_id
             or type(self.snapshot.get("revision")) is not int

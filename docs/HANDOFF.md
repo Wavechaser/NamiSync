@@ -1,45 +1,42 @@
-# Latest session — AB-8 delivered; recap pause
+# Latest session — AB-8 follow-up delivered; recap pause
 
-2026-09-26. AB-8 is complete on `milestone1` as the coherent commit
-`refactor(web): render authoritative task snapshots`, based on `4f1537c2`.
-The user requested a recap pause after AB-8. **Do not implement AB-9/10 without
-new authorization.** M1_PLAN owns their remaining scope and the compact AB-8
-delivery record; subject documents own the resulting contracts.
+2026-09-26. The six user-reported AB-8 findings were validated and corrected on
+`milestone1`, based on `7445f70a`, as `fix(web): contain task presentation faults`.
+**Do not implement AB-9/10 without new authorization.** M1_PLAN retains AB-8's
+acceptance contract, regression watchlist and adversarial check for the final sweep.
 
-Python now owns bounded task presentation reduction. Browser semantic progress
-reduction is retired; snapshot adoption retains transport/replay and terminal
-delivery custody, command recovery, D4 and local interaction. Windows/details
-remain separate. Product code is +68 lines, tests -181, tooling +1 before docs:
-the benefit is one semantic owner, not a large source reduction. S5 stays
-deferred and the Plan-again tracer stays available.
+Matching snapshots now exclusively supply page terminal state/result/timestamps
+through one selector; retained execution results are a fallback without a matching
+snapshot. Same-session captured window counts/trash remain available for capacity
+guidance. Redundant page copies, revision filtering and unused snapshot wire fields
+are removed. Internal snapshot wire version is 2; full event bodies remain.
 
-The user-adjudicated correction fixes stale Plan presentation suppressing a new
-execution's failed terminal record, rate resets at ordinary item handoffs and
-first stream identity, and stale settled-control feedback after recovery.
-Focused red/green witnesses remain. The earlier larger-window narrow status
-stack/wrap assertion passed unchanged on rerun; its cause remains unexplained.
-Do not classify prior AB-7 Setup/Plan-again observations as resolved.
+The sink timestamps accepted/coalesced Progress independently of its linger
+deadline, preserving the sample through partial or failed delivery. Named semantic
+progress conflicts now clear uncertain presentation, retain a visible diagnostic
+and log one bounded internal error on committed degradation. Terminal delivery
+continues; malformed values, identity/byte walls and terminal contradictions remain
+strict. Historical-source witnesses confirm both defects. The user's exact rate
+table was not an installed-path measurement: production coalesces queued Progress.
 
-Final verification: complete suite **5,366 passed, 4 Windows symlink-privilege
-skips**, including installed journeys; **12 import contracts kept**; documentation
-links/diff checks. Fresh independent review and Claude Opus 5.5/high confirmed
-the corrections and found no remaining blocker. Raw evidence, review findings,
-usage and cleanup receipts are in `build/ab8-resume-20260926/`; prior failures
-remain in `build/ab8-20260926/`.
+Verification: **5,369 passed, 4 Windows symlink-privilege skips**, including installed
+journeys; **12 import contracts kept**; fresh independent review found no blocker;
+documentation links/diff checked. Focused native/page/integration passes and failed
+receipts remain in `build/ab8-followup-20260926/`. Its `validation.md` records the
+finding dispositions; 51 installed receipts/captures were preserved. The baseline
+overflow test's first-batch count was a scheduling assumption; its exact recovery,
+retained tail, missing-item and terminal assertions remain. Product net +12 lines;
+tests net +197 lines. No fresh Claude review was requested for this follow-up;
+the prior AB-8 Opus 5.5/high review remains in `build/ab8-resume-20260926/`.
 
-The first resume could not find the saved Claude transcript. The retry reused
-ID `82edad2f-d91a-4e16-9e90-b55ef9f5ed86` with the saved report supplied; its
-final narrow follow-up resumed successfully. This round's cumulative CLI cost
-was $2.1445782 (prior review $5.903408). Original and copied source hashes were
-verified unchanged during each review. Ten fixture files were preserved and
-the disposable review copy removed. Full usage categories remain in raw JSON.
+No task recovery branch or disposable checkout was created this session. Prior
+AB-8 recovery is accounted for in `build/ab8-resume-20260926/integration.json` and
+its verified `recovery.bundle`. Preserve unrelated `codex/ab3-mapping` and AB-6
+recovery `56802606` for AB-10 accounting. Earlier unexplained AB-7 observations and
+the original AB-8 stack/wrap rerun remain unexplained; this work does not close them.
 
-Recovery `f7a170a` was reconstructed, never merged/cherry-picked. Its exact state
-is retained in the verified `build/ab8-resume-20260926/recovery.bundle`; final
-integration/ref accounting is in `integration.json` there. Preserve unrelated
-`codex/ab3-mapping` and AB-6 recovery `56802606` for AB-10 accounting.
-
-For future native tests use a unique basetemp, `PIP_NO_CACHE_DIR=1`, native
-desktop access and process-only `PSExecutionPolicyPreference=RemoteSigned`.
-Announce every foreground batch and when the desktop is free. The desktop is
-free at handoff; no owned review/test process remains running.
+For native tests use a unique basetemp, `PIP_NO_CACHE_DIR=1`, native desktop access
+and process-only `PSExecutionPolicyPreference=RemoteSigned`. Announce every
+foreground batch and when the desktop is free. The desktop is free at handoff;
+the completed test process has exited. Raw test fixtures remain in the unique
+temporary directory; no user files were touched or unrelated processes stopped.

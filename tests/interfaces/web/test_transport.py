@@ -939,7 +939,7 @@ def test_br_g_33_next_events_crosses_production_dispatch_as_exact_tagged_views()
                     TaskEventUpdateView("event", event),
                     TaskRecordUpdateView("record", record),
                 ),
-                TaskSnapshotStage(TaskPresentationState(task_id, session_id), monotonic),
+                TaskSnapshotStage(TaskPresentationState(task_id, session_id), None),
             )
 
     commands = production_command_specs(

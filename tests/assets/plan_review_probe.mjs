@@ -933,23 +933,33 @@ const executionReviewState = {
   executionDetail: null,
 };
 const executionTask = { ...task, review: executionReviewState, executionStarted: true,
-  executionResult: terminalResult, sessionState: "failed" };
+  sessionState: "failed" };
 const liveTerminalReview = { ...executionReviewState, window: {
   ...executionReviewState.window, execution: { ...executionSummary, result: null,
     started_at: null, ended_at: null },
 } };
+const terminalPageSnapshot = (result, patch = {}) => ({
+  wire_version: 2, session_id: executionSummary.session_id, session_state: "failed",
+  terminal_result: result, started_at: "2026-09-23T01:00:00+00:00",
+  ended_at: "2026-09-23T01:01:05+00:00",
+  progress_inconsistent: false, phase: null, gap_first_missed_seq: null,
+  presentation: { value: 0, determinate: false, indeterminate: false,
+    items_done: null, items_total: null, throughput_bytes_per_second: null,
+    eta_seconds: null },
+  ...patch,
+});
 executionPanel.render({ ...executionTask, review: liveTerminalReview,
-  executionStartedAt: "2026-09-23T01:00:00+00:00",
-  executionEndedAt: "2026-09-23T01:01:05+00:00" });
+  sessionId: executionSummary.session_id,
+  snapshot: terminalPageSnapshot(terminalResult, { progress_inconsistent: true }) });
 assert.equal(findByClass(executionPanel.element, "nami-plan-review__status-summary").textContent,
-  `Execution needs review · Completed ${new Date("2026-09-23T01:01:05+00:00").toLocaleString()} · 1m 5s elapsed`,
-  "terminal record updates the card before retained-window capture");
-executionPanel.render({ ...executionTask, review: liveTerminalReview, executionResult: null,
-  executionStartedAt: "2026-09-23T01:00:00+00:00",
-  executionEndedAt: "2026-09-23T01:01:05+00:00" });
+  `Execution needs review · Completed ${new Date("2026-09-23T01:01:05+00:00").toLocaleString()} · 1m 5s elapsed · Some progress updates were inconsistent.`,
+  "terminal snapshot updates the card before retained-window capture");
+assert.ok(findText(executionPanel.element, "Some progress updates were inconsistent."));
+executionPanel.render({ ...executionTask, review: liveTerminalReview,
+  sessionId: executionSummary.session_id, snapshot: null });
 assert.equal(findByClass(executionPanel.element, "nami-plan-review__status-summary").textContent,
-  `Execution failed · Completed ${new Date("2026-09-23T01:01:05+00:00").toLocaleString()} · 1m 5s elapsed`,
-  "abnormal terminal record replaces live facts even when no result was retained");
+  "Execution failed",
+  "terminal state remains visible when no result was retained");
 assert.ok(findText(executionPanel.element, "No retained execution result is available."));
 executionPanel.render({ ...executionTask, review: null, error: null });
 const initialDiagnostics = findByClass(executionPanel.element, "nami-plan-review__diagnostics");
@@ -1097,7 +1107,7 @@ for (const issuesVisible of [false, true]) {
         executionDetail: null,
       };
       executionPanel.render({
-        ...executionTask, review: visibilityReview, executionResult: quietResult,
+        ...executionTask, review: visibilityReview,
       });
       assert.equal(executionIssues.hidden, !issuesVisible);
       assert.equal(executionTrash.hidden, !trashVisible);
@@ -1184,9 +1194,34 @@ const capacityReview = {
   executionDetail: null,
 };
 executionPanel.render({
-  ...executionTask, review: capacityReview, executionResult: capacityResult,
+  ...executionTask, review: capacityReview, sessionId: executionSummary.session_id,
+  snapshot: terminalPageSnapshot(capacityResult),
 });
 assert.ok(findText(executionPanel.element, "Execution stopped: more target space is needed"));
+executionPanel.render({
+  ...executionTask, review: capacityReview, sessionId: "9".repeat(32),
+  snapshot: terminalPageSnapshot(terminalResult, {
+    session_id: "9".repeat(32),
+  }),
+});
+assert.equal(findByClass(executionPanel.element, "nami-plan-review__status-title").textContent,
+  "Execution needs review",
+  "a different session's capacity counts cannot replace snapshot result");
+assert.equal(findByClass(executionPanel.element, "nami-plan-review__execution-trash").hidden, true,
+  "a different session's trash location is not current guidance");
+executionPanel.render({
+  ...executionTask, review: capacityReview, sessionId: executionSummary.session_id,
+  sessionState: "active",
+  snapshot: terminalPageSnapshot(null, { session_state: "active", started_at: null,
+    ended_at: null }),
+});
+assert.equal(findByClass(executionPanel.element, "nami-plan-review__status-title").textContent,
+  "Execution in progress",
+  "active snapshot does not inherit the retained terminal window result");
+executionPanel.render({
+  ...executionTask, review: capacityReview, sessionId: executionSummary.session_id,
+  snapshot: terminalPageSnapshot(capacityResult),
+});
 const capacityIntent = walk(executionPanel.element).find(
   (item) => item.dataset?.lifecycle === "capacity",
 );
@@ -1206,7 +1241,7 @@ const quietDetailReview = {
   },
   executionDetail: { operationId, state: "loading", response: null, message: null },
 };
-const quietDetailTask = { ...executionTask, review: quietDetailReview, executionResult: null };
+const quietDetailTask = { ...executionTask, review: quietDetailReview };
 executionPanel.render(quietDetailTask);
 if (executionDiagnostics.hidden) detailsToggle.dispatch("click");
 executionDetailCard.focus();
@@ -1234,7 +1269,7 @@ const liveReview = {
   executionDetail: null,
 };
 const liveTask = {
-  ...executionTask, review: liveReview, executionResult: null, sessionState: "active",
+  ...executionTask, review: liveReview, sessionState: "active",
   sessionId: "8".repeat(32),
   executionControlState: "running",
   progressPresentation: {

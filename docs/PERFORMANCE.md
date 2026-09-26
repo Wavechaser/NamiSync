@@ -452,7 +452,8 @@ AB-8 changes the current `next_events` response to include one compact Python
 task snapshot. A current-source observation must include snapshot construction,
 byte admission and browser adoption; timing the retired browser reducer is not
 the same endpoint. Rate/ETA estimates are product feedback based on monotonic
-samples, not throughput measurements. Existing historical JSON is unchanged;
+sink-acceptance samples, independent of drain cadence, not throughput
+measurements. Existing historical JSON is unchanged;
 it does not measure the new snapshot owner or certify its retained memory.
 The functional AB-8 checks count bounded publication and retain the existing
 large Plan window/detail witnesses without establishing a new speed target.

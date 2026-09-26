@@ -1453,7 +1453,6 @@ window.addEventListener("unhandledrejection", (event) => {
       ...planReviewTask,
       executionStarted: true,
       sessionState: populated ? "failed" : "completed",
-      executionResult: result,
       review: {
         ...planReviewTask.review,
         summary: {

@@ -4,13 +4,16 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, replace
 from math import exp, isfinite
-from collections.abc import Callable
 from copy import deepcopy
 
 from namisync.interfaces.task_port import TaskEventUpdateView, TaskRecordUpdateView, TaskUpdateView
 
 
 _RATE_HORIZON_SECONDS = 5.0
+
+
+class ProgressPresentationError(ValueError):
+    """A structurally valid Progress event conflicts with prior display facts."""
 
 
 def _percent(done: str | None, total: str | None) -> float | None:
@@ -78,6 +81,7 @@ class TaskPresentationState:
     throughput_bytes_per_second: float | None = None
     eta_seconds: float | None = None
     gap_first_missed_seq: int | None = None
+    progress_inconsistent: bool = False
     terminal_result: dict[str, object] | None = None
     started_at: str | None = None
     ended_at: str | None = None
@@ -141,7 +145,10 @@ class TaskPresentationState:
             phase = body["phase"]
             state = replace(state, phase_authority="phase_changed") if state.phase == phase else state._clear_progress(phase=phase, authority="phase_changed")
         elif kind == "Progress":
-            state = state._advance_progress(body, now)
+            try:
+                state = state._advance_progress(body, now)
+            except ProgressPresentationError:
+                state = replace(state._clear_progress(), progress_inconsistent=True)
         elif kind in {"ItemOutcome", "IntegrityOutcome"}:
             if state.phase == body["phase"] and state.active_item is not None:
                 active = state.active_item
@@ -174,10 +181,10 @@ class TaskPresentationState:
         domain = self
         if self.phase is not None and progress["phase"] != self.phase:
             if self.phase_authority == "phase_changed":
-                raise ValueError("progress disagrees with reliable phase")
+                raise ProgressPresentationError("progress disagrees with reliable phase")
             domain = self._clear_progress()
         if domain.progress is not None and not _aggregate_advances(domain.progress, progress):
-            raise ValueError("progress aggregate regressed")
+            raise ProgressPresentationError("progress aggregate regressed")
         active = _active_item(progress)
         previous = domain.active_item
         if active is not None:
@@ -186,18 +193,18 @@ class TaskPresentationState:
                 new_attempt = active["item_attempt_id"]
                 if _same_item(previous, active):
                     if old_attempt is not None and new_attempt is None:
-                        raise ValueError("progress attempt disappeared")
+                        raise ProgressPresentationError("progress attempt disappeared")
                     if old_attempt is not None and new_attempt == old_attempt and not _attempt_advances(previous, active):
-                        raise ValueError("progress attempt regressed")
+                        raise ProgressPresentationError("progress attempt regressed")
                 elif old_attempt is not None and new_attempt == old_attempt:
-                    raise ValueError("progress attempt changed item")
+                    raise ProgressPresentationError("progress attempt changed item")
             elif domain.progress is not None and domain.progress["item_id"] is not None:
                 settled = _active_item(domain.progress)
                 assert settled is not None
                 if _same_item(settled, active) or (
                     settled["item_attempt_id"] is not None and active["item_attempt_id"] == settled["item_attempt_id"]
                 ):
-                    raise ValueError("settled progress item reactivated")
+                    raise ProgressPresentationError("settled progress item reactivated")
         aggregate_percent = _percent(progress["bytes_done"], progress["bytes_total"])
         item_percent = None if active is None else _percent(active["item_bytes_done"], active["item_bytes_total"])
         same_item = previous is not None and active is not None and _same_item(previous, active)
@@ -264,18 +271,17 @@ class TaskPresentationState:
             display_percent = max(0.0, min(100.0, progress["items_done"] / progress["items_total"] * 100))
         active_session = self.session_state == "active" and self.control_state != "paused"
         return {
-            "wire_version": 1,
+            "wire_version": 2,
             "task_id": self.task_id,
             "session_id": self.session_id,
             "revision": self.revision,
             "session_state": self.session_state,
             "control_state": self.control_state,
             "phase": self.phase,
-            "phase_authority": self.phase_authority,
-            "progress": None if progress is None else dict(progress),
-            "active_item": None if active is None else dict(active),
+            "active_item": None if active is None else {
+                "item_id": active["item_id"], "item_type": active["item_type"],
+            },
             "presentation": {
-                "aggregate_percent": aggregate_percent,
                 "item_percent": item_percent,
                 "items_done": None if progress is None else progress["items_done"],
                 "items_total": None if progress is None else progress["items_total"],
@@ -286,6 +292,7 @@ class TaskPresentationState:
                 "eta_seconds": self.eta_seconds,
             },
             "gap_first_missed_seq": self.gap_first_missed_seq,
+            "progress_inconsistent": self.progress_inconsistent,
             "terminal_result": None if self.terminal_result is None else deepcopy(self.terminal_result),
             "started_at": self.started_at,
             "ended_at": self.ended_at,
@@ -297,11 +304,15 @@ class TaskSnapshotStage:
     """Reduce captured drain updates without mutating the retained task."""
 
     state: TaskPresentationState
-    clock: Callable[[], float]
+    progress_sample_at: float | None
     replay_from: int | None = None
 
     def consider(self, update: TaskUpdateView) -> TaskPresentationState:
-        now = self.clock() if type(update) is TaskEventUpdateView and update.event.body_type == "Progress" else 0.0
+        progress = type(update) is TaskEventUpdateView and update.event.body_type == "Progress"
+        if progress and self.progress_sample_at is None:
+            raise RuntimeError("queued Progress lacks its acceptance sample")
+        now = self.progress_sample_at if progress else 0.0
+        assert now is not None
         return self.state.advance(update, now)
 
     def accept(self, candidate: TaskPresentationState) -> None:

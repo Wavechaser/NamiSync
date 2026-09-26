@@ -278,18 +278,16 @@ function snapshotFor(pending, updates, overrides = {}) {
   const record = updates.findLast((update) => update.update_type === "record")?.record;
   const terminalResult = record?.result ?? null;
   return {
-    wire_version: 1,
+    wire_version: 2,
     task_id: taskId,
     session_id: sessionId,
     revision,
     session_state: record?.state ?? "active",
     control_state: "running",
     phase: null,
-    phase_authority: "unknown",
-    progress: null,
     active_item: null,
+    progress_inconsistent: false,
     presentation: {
-      aggregate_percent: null,
       item_percent: null,
       items_done: null,
       items_total: null,
@@ -702,17 +700,16 @@ const activeProgress = {
   item_bytes_done: "4", item_bytes_total: "8",
 };
 const activeItem = Object.fromEntries([
-  "item_id", "item_type", "item_attempt_id", "item_bytes_done", "item_bytes_total",
+  "item_id", "item_type",
 ].map((key) => [key, activeProgress[key]]));
 const activePresentation = {
-  aggregate_percent: 12.5, item_percent: 50,
+  item_percent: 50,
   items_done: 1, items_total: 3,
   throughput_bytes_per_second: 100, eta_seconds: 12,
   value: 12.5, determinate: true, indeterminate: false,
 };
 const activeFacts = {
-  phase: "execute", phase_authority: "progress",
-  progress: activeProgress, active_item: activeItem,
+  phase: "execute", active_item: activeItem,
   presentation: activePresentation,
 };
 const snapshot0 = await nextRequest(requests.length);
@@ -726,11 +723,11 @@ const snapshot1 = await nextRequest(requests.length);
 assert.equal(acceptedSnapshots.length, 2);
 assert.equal(acceptedSnapshots[0].snapshot, null,
   "only the final callback adopts one response snapshot");
-assert.equal(acceptedSnapshots[1].snapshot.progress.bytes_done,
+assert.equal(acceptedSnapshots[1].update.event.body.bytes_done,
   "9007199254740993", "Scalar64 stays exact text");
 assert.deepEqual(acceptedSnapshots[1].snapshot.active_item, activeItem);
 assert.ok(Object.isFrozen(acceptedSnapshots[1].snapshot));
-assert.ok(Object.isFrozen(acceptedSnapshots[1].snapshot.progress));
+assert.ok(Object.isFrozen(acceptedSnapshots[1].snapshot.active_item));
 assert.equal(refusedSnapshots.length, 0);
 
 // Empty catch-up can publish a newer revision without manufacturing an update.
@@ -742,15 +739,15 @@ const acceptedBeforeInvalidSnapshot = acceptedSnapshots.length;
 const invalidSnapshots = [
   ["foreign task", { task_id: task("f") }],
   ["foreign session", { session_id: session("f") }],
-  ["wrong wire version", { wire_version: 2 }],
+  ["retired wire version", { wire_version: 1 }],
   ["Boolean revision", { revision: true }],
   ["stale revision", { revision: 0 }],
-  ["noncanonical scalar", {
-    ...activeFacts, progress: { ...activeProgress, bytes_done: "01" },
+  ["invalid active identity", {
+    ...activeFacts, active_item: { ...activeItem, item_id: 42 },
   }],
-  ["out-of-range scalar", {
-    ...activeFacts, progress: { ...activeProgress,
-      bytes_done: "9223372036854775808" },
+  ["unsafe display count", {
+    ...activeFacts, presentation: { ...activePresentation,
+      items_done: Number.MAX_SAFE_INTEGER + 1 },
   }],
 ];
 let pendingSnapshot = snapshot2;
@@ -1006,7 +1003,7 @@ for (const snapshot of terminalCallbackSnapshots) {
   assert.ok(Object.isFrozen(snapshot));
   assert.equal(snapshot.session_state, "completed");
   assert.equal(snapshot.terminal_result.headline, "success");
-  assert.equal(snapshot.progress, null);
+  assert.equal(snapshot.active_item, null);
 }
 assert.notEqual(terminalCallbackAttempts[0], terminalCallbackAttempts[1]);
 assert.equal(terminalCallbackAttempts[0].record.state, "failed");

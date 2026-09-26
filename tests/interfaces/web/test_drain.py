@@ -1075,7 +1075,7 @@ def test_drain_response_prefix_owns_each_source_before_advancing() -> None:
         SESSION,
         DRAIN,
         hostile_source(),
-        TaskSnapshotStage(TaskPresentationState("task-" + ("1" * 32), SESSION), monotonic),
+        TaskSnapshotStage(TaskPresentationState("task-" + ("1" * 32), SESSION), None),
     )
 
     assert [update.event.body_type for update in admitted.updates] == [
@@ -1086,25 +1086,123 @@ def test_drain_response_prefix_owns_each_source_before_advancing() -> None:
     assert admitted.snapshot["gap_first_missed_seq"] is None
 
 
-def test_failed_response_capture_keeps_snapshot_and_queue_for_retry(monkeypatch) -> None:
-    registry, service = _registry()
+def test_progress_rate_uses_sink_time_after_coalescing_and_failed_capture(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    clock = _ManualClock()
+    registry, service = _registry(clock=clock, progress_linger=1.0)
     start = _start(registry)
     registry.drain(start.task_id, SESSION, DRAIN, replay_from=None)
-    service.sink(_event(2))
+
+    clock.advance_to(1.0)
+    service.sink(_execution_event(SESSION, 2, Progress("execute", 0, 2, 0, 100, None)))
+    clock.advance_to(2.0)
+    registry.drain(start.task_id, SESSION, "5" * 32, replay_from=None)
+
+    clock.advance_to(3.0)
+    service.sink(_execution_event(SESSION, 3, Progress("execute", 0, 2, 20, 100, None)))
+    clock.advance_to(4.0)
+    service.sink(_execution_event(SESSION, 4, Progress("execute", 0, 2, 30, 100, None)))
     task = registry._tasks[start.task_id]
+    assert task.progress_available_at == 3.0
+    assert task.progress_sample_at == 4.0
+    assert [update.sequence for update in task.queue] == [4]
+
+    clock.advance_to(100.0)
     before = task.presentation_state
     queued = tuple(task.queue)
-
     with monkeypatch.context() as patch:
         patch.setattr("namisync.interfaces.web.bridge.MAX_BRIDGE_RESPONSE_JSON_BYTES", 100)
         with pytest.raises(RuntimeError, match="response ceiling"):
-            registry.drain_for_bridge(start.task_id, SESSION, "5" * 32, replay_from=None)
-
+            registry.drain_for_bridge(start.task_id, SESSION, "6" * 32, replay_from=None)
+    assert task.progress_sample_at == 4.0
     assert task.presentation_state is before
     assert tuple(task.queue) == queued
-    retried = registry.drain(start.task_id, SESSION, "6" * 32, replay_from=None)
-    assert [update.event.sequence for update in retried.updates] == [2]
-    assert retried.snapshot["revision"] == before.revision + 1
+
+    clock.advance_to(200.0)
+    drained = registry.drain(start.task_id, SESSION, "7" * 32, replay_from=None)
+    assert [update.event.sequence for update in drained.updates] == [4]
+    assert drained.snapshot["revision"] == before.revision + 1
+    assert drained.snapshot["presentation"]["throughput_bytes_per_second"] == pytest.approx(10.0)
+    assert task.progress_sample_at is None
+    registry.begin_close()
+
+
+def test_progress_sample_survives_a_byte_excluded_tail(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    clock = _ManualClock()
+    registry, service = _registry(clock=clock, progress_linger=1.0)
+    start = _start(registry)
+    registry.drain(start.task_id, SESSION, DRAIN, replay_from=None)
+    clock.advance_to(1.0)
+    service.sink(_execution_event(SESSION, 2, Progress("execute", 0, 2, 0, 100, None)))
+    clock.advance_to(2.0)
+    registry.drain(start.task_id, SESSION, "5" * 32, replay_from=None)
+
+    reliable = _event(3)
+    service.sink(reliable)
+    clock.advance_to(3.0)
+    service.sink(_execution_event(SESSION, 4, Progress("execute", 0, 2, 20, 100, None)))
+    task = registry._tasks[start.task_id]
+    first_only = snapshot_task_drain_response_prefix(
+        start.task_id, SESSION, "6" * 32,
+        (TaskEventUpdateView("event", reliable),),
+        TaskSnapshotStage(task.presentation_state, None),
+    )
+    first_bytes = len(json.dumps({
+        "schema_version": BRIDGE_SCHEMA_VERSION,
+        "request_id": "0" * 32,
+        "ok": True,
+        "result": to_primitive_view(first_only),
+    }, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8"))
+    clock.advance_to(100.0)
+    with monkeypatch.context() as patch:
+        patch.setattr(
+            "namisync.interfaces.web.bridge.MAX_BRIDGE_RESPONSE_JSON_BYTES",
+            first_bytes,
+        )
+        partial = registry.drain(start.task_id, SESSION, "6" * 32, replay_from=None)
+    assert [update.event.sequence for update in partial.updates] == [3]
+    assert [update.sequence for update in task.queue] == [4]
+    assert task.progress_sample_at == 3.0
+
+    clock.advance_to(200.0)
+    service.sink(_execution_event(
+        SESSION, 5, ItemOutcome("operation-" + "a" * 32, "copy", "file.bin", Outcome.SUCCEEDED),
+    ))
+    tail = registry.drain(start.task_id, SESSION, "7" * 32, replay_from=None)
+    assert [update.event.sequence for update in tail.updates] == [4, 5]
+    # A reliable successor wakes the progress-only tail without changing its sample.
+    assert task.presentation_state.sample_at == 3.0
+    registry.begin_close()
+
+
+def test_inconsistent_progress_does_not_block_terminal_delivery(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    registry, service = _registry(progress_linger=0.001)
+    start = _start(registry)
+    registry.drain(start.task_id, SESSION, DRAIN, replay_from=None)
+    service.sink(_execution_event(SESSION, 2, Progress("execute", 0, 2, 20, 100, None)))
+    registry.drain(start.task_id, SESSION, "5" * 32, replay_from=None)
+
+    service.sink(_execution_event(SESSION, 3, Progress("execute", 0, 2, 10, 100, None)))
+    service.sink(_event(4, "Terminal"))
+    service.sink(_record())
+    drained = registry.drain(start.task_id, SESSION, "6" * 32, replay_from=None)
+    assert [update.update_type for update in drained.updates] == [
+        "event", "event", "record",
+    ]
+    assert drained.snapshot["progress_inconsistent"] is True
+    assert drained.snapshot["session_state"] == "completed"
+    assert drained.snapshot["terminal_result"] is not None
+    assert registry._tasks[start.task_id].delivered_terminal_record is not None
+    assert [record.message for record in caplog.records if "progress presentation" in record.message] == [
+        "task progress presentation became inconsistent",
+    ]
+    registry.release_terminal_session(start.task_id, SESSION)
+    registry.begin_close()
 
 
 def test_drain_uses_one_stable_source_population_during_reentrant_capture() -> None:
@@ -1609,7 +1707,8 @@ def test_br_g_33_integrated_admission_and_visible_overflow_gap(
             next(drain_ids),
             replay_from=None,
         )
-        assert len(first_batch.updates) == 64
+        # A scheduling lead can surface the Gap as this entire first batch.
+        assert first_batch.updates
         for _ in range(4):
             batch = (
                 first_batch

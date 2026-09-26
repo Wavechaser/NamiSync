@@ -640,6 +640,28 @@ retain pre-existing AB-3/AB-6 worktree/recovery records for AB-10 accounting.
 
 #### AB-8 — Authoritative task snapshots and bounded shell refactor
 
+**Retained acceptance contract.** Atomic snapshot adoption rejects stale/foreign
+identity and preserves exact scalar values. Upstream Gap remains unknown until
+supported reconciliation; terminal cannot fabricate item completeness. One
+semantic progress owner; controls, follow, window invalidation, Retry and pending
+Close still work. CLI/history events and mutable execution authority stay
+unchanged. Retirement frees presentation state without changing task/session
+effect ownership. These obligations remain inputs to AB-10's final sweep.
+
+**Regression watchlist.** Deferred directory work, repeated attempts, zero/unrun,
+canceled/degraded outcomes, capacity plus independent failure, large-byte counts,
+Gap immediately before terminal, stale snapshot after navigation or close.
+
+**Tests and evidence.** Real producer→snapshot→page expectations; retained
+transport/control/cleanup probes; interfaces/workflows/dispatcher consumers,
+ordinary/imports and installed task/Plan/execution/detail/Retry/Close journeys.
+Existing large fixtures must retain bounded publication, item windows and one
+detail. Optional endpoint benchmarks do not certify speed.
+
+**Adversarial check.** Follow a dropped upstream event, delayed old snapshot,
+terminal with missing details and Close race end-to-end. Confirm fewer semantic
+owners rather than the old reducer hidden behind a new DTO.
+
 **Delivered, 2026-09-26.** The Python desktop adapter now owns one bounded
 presentation reducer per task/session. Drain publishes a detached versioned
 snapshot with its byte-admitted prefix; staged failure cannot consume queue
@@ -675,6 +697,17 @@ product +68 lines, tests -181, tooling +1 before documentation. The Plan-again
 tracer remains useful for command admission/effect diagnosis. S5's settlement,
 observer/dispatcher cleanup and plan-retirement joins remain deferred. No
 framework, new command protocol, S5 merger or AB-9/10 implementation shipped.
+
+**Follow-up delivered, 2026-09-26 (base `7445f70a`).** Matching snapshots now own
+terminal presentation through one page selector; matching window-only counts
+and trash remain separate. Wire v2 retires unused copies and the page's duplicate
+revision guard. Queued Progress retains its sink-acceptance time through delivery;
+named semantic progress conflicts visibly degrade while terminal custody stays
+strict. The acceptance contract above is restored. Full event-body removal remains
+deferred protocol work. Complete suite: **5,369 passed, 4 Windows symlink-privilege
+skips**; **12 import contracts kept**; fresh independent review found no blocker.
+Focused witnesses, historical-source reproductions and installed receipts are in
+`build/ab8-followup-20260926/`. No domain/history or command protocol changes.
 **Pause for user recap before further checkpoint implementation.**
 
 #### AB-9 — Retain behavioral visual tests
@@ -705,6 +738,9 @@ obligations with no remaining detector and inspect actual rendered evidence.
 #### AB-10 — Integrated closeout
 
 **Objective.** Verify interactions across the completed reductions.
+Full event-body removal is a separate deferred protocol decision: inventory its
+remaining diagnostic/replay consumers if useful, but do not implement it under
+this closeout or infer an S5 merger from snapshot trimming.
 **Scope and approach.** Complete diff and preserved workflow; verification/docs
 only unless correcting an introduced in-scope regression in its coherent owner
 commit. No opportunistic implementation from deferred findings.

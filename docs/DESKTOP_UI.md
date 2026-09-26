@@ -1861,7 +1861,8 @@ automatic verification preserves the settled operation lifecycle.
   Reliable outcomes retire active decoration and supply the terminal row result.
   Verification progress remains separate from the already-settled operation
   result; it must not turn a completed copy back into an executing copy.
-- Throughput uses aggregate byte deltas divided by Python monotonic sample deltas.
+- Throughput uses aggregate byte deltas divided by Python monotonic sample deltas
+  stamped when Progress reaches the adapter sink, independent of drain cadence.
   Share one five-second smoothing horizon with phase ETA: a time-weighted EMA
   with `alpha = 1 - exp(-dt / 5s)`, seeded by the first valid two-sample rate.
   Retain only a prior sample and smoothed rate. Subtract Scalar64 bytes exactly
@@ -1882,6 +1883,9 @@ automatic verification preserves the settled operation lifecycle.
   does not create a second rate history: returning to a task adopts its current
   authoritative estimate. Ordinary sequence holes/coalescing use observed
   deltas with no recovery or compensation.
+- Inconsistent progress clears the affected estimates and comparison state,
+  with visible diagnostic feedback. Reliable control and final results continue
+  to arrive; a presentation fault cannot keep a settled task looking active.
 - Preserve ARCHITECTURE's aggregate high-water rule. Within a phase, displayed
   percentage is a high-water of the valid computed percentages, so an expanded
   verifier budget does not move the bar backward. For the same active item,

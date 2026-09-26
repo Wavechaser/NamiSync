@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import logging
 from collections import OrderedDict, deque
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
@@ -68,6 +69,7 @@ _DRAIN_WAIT_SECONDS = 25.0
 _PROGRESS_LINGER_SECONDS = 0.150
 _OPAQUE_ID = re.compile(r"[0-9a-f]{32}")
 _TASK_ID = re.compile(r"task-[0-9a-f]{32}")
+_LOG = logging.getLogger(__name__)
 
 
 class DrainBusyError(RuntimeError):
@@ -182,6 +184,7 @@ class _TaskState:
     generation: int = 0
     queue: deque[TaskDeliveryUpdate] = field(default_factory=deque)
     progress_available_at: float | None = None
+    progress_sample_at: float | None = None
     terminal_record: SessionRecordView | None = None
     terminal_pending: bool = False
     delivered_terminal_event: SessionEventView | None = None
@@ -261,12 +264,15 @@ class _TaskState:
                 )
                 if len(self.queue) >= _CAPACITY:
                     self.progress_available_at = None
+                    self.progress_sample_at = None
                     return
+                sample_at = self.clock()
                 if self.queue:
                     self.progress_available_at = None
                 elif not replacing_progress or self.progress_available_at is None:
-                    self.progress_available_at = self.clock()
+                    self.progress_available_at = sample_at
                 self.queue.append(update)
+                self.progress_sample_at = sample_at
                 self.condition.notify_all()
                 return
 
@@ -277,6 +283,7 @@ class _TaskState:
                     if not _is_progress_update(item)
                 )
                 self.progress_available_at = None
+                self.progress_sample_at = None
             while (
                 len(self.queue) >= _CAPACITY
                 and not self.closing
@@ -1589,11 +1596,13 @@ class TaskRegistry:
                     task.execution_gap_maximum,
                     task.execution_membership,
                     task.presentation_state,
+                    task.progress_sample_at,
                 )
                 task.generation += 1
                 task.session_id = None
                 task.queue.clear()
                 task.progress_available_at = None
+                task.progress_sample_at = None
                 task.terminal_record = None
                 task.terminal_pending = False
                 task.delivered_terminal_event = None
@@ -1739,6 +1748,7 @@ class TaskRegistry:
             task.execution_gap_maximum = prior[14]
             task.execution_membership = prior[15]
             task.presentation_state = prior[16]
+            task.progress_sample_at = prior[17]
             task.prior_session_id = None
             task.prior_delivery = None
             task.transition = False
@@ -2125,6 +2135,7 @@ class TaskRegistry:
         try:
             if replay_from is not None:
                 self._recover(task, session_id, replay_from)
+            report_inconsistent = False
             with task.condition:
                 while not claim.superseded and not task.closing:
                     if replay_from is not None or task.terminal_pending or any(
@@ -2169,7 +2180,7 @@ class TaskRegistry:
                     task.presentation_state
                     if task.presentation_state is not None
                     else TaskPresentationState(task_id, session_id),
-                    task.clock,
+                    task.progress_sample_at,
                     replay_from,
                 )
                 task.response_capture_caller = get_ident()
@@ -2205,6 +2216,7 @@ class TaskRegistry:
                         _is_progress_update(update) for update in task.queue
                     ):
                         task.progress_available_at = None
+                        task.progress_sample_at = None
                     for update in result.updates:
                         if (
                             type(update) is TaskEventUpdateView
@@ -2213,8 +2225,17 @@ class TaskRegistry:
                             task.delivered_terminal_event = update.event
                         elif type(update) is TaskRecordUpdateView:
                             task.delivered_terminal_record = update.record
+                    report_inconsistent = (
+                        stage.state.progress_inconsistent
+                        and not (
+                            task.presentation_state is not None
+                            and task.presentation_state.progress_inconsistent
+                        )
+                    )
                     task.presentation_state = stage.state
                     task.condition.notify_all()
+            if report_inconsistent:
+                _LOG.error("task progress presentation became inconsistent")
         finally:
             with task.condition:
                 if task.active_drain is claim:
@@ -2241,6 +2262,7 @@ class TaskRegistry:
             task.recovery_caller = get_ident()
             task.queue.clear()
             task.progress_available_at = None
+            task.progress_sample_at = None
             task.terminal_record = None
             task.terminal_pending = False
             task.condition.notify_all()
@@ -2281,6 +2303,7 @@ class TaskRegistry:
                 task.transition = False
                 task.queue.clear()
                 task.progress_available_at = None
+                task.progress_sample_at = None
                 task.terminal_record = None
                 task.terminal_pending = False
             if not stale and failure_code is None and terminal is not None:

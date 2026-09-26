@@ -138,6 +138,10 @@ Page transition cases carry a completed Plan snapshot into execution admission,
 then adopt the execution's lower independent revision and failed terminal result.
 They also retain current control feedback after observation recovery. Native
 aggregate sampling cases cover ordinary file handoff as well as same-item retry.
+Delayed-drain/coalescing cases exercise rate timestamps through the real adapter
+sink; presentation-conflict cases retain later terminal delivery and strict
+record validation. Page cases distinguish matching snapshot terminal facts from
+retained-window fallback and qualify window-only counts by execution identity.
 
 Current boundary guards divide responsibilities instead of running one event
 graph through duplicate semantic validators. Persistence-decoder tests reject

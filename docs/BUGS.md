@@ -951,13 +951,28 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Application task lifecycle
 
+- MODERATE - FIXED (2026-09-26). Delivery-clock sampling. Task rate/ETA used the
+  time a drain reduced Progress rather than when the adapter accepted it.
+  Delayed polling or a response retry therefore changed estimates for the same
+  observed work. Each queued Progress now retains its sink-acceptance sample,
+  independently of the linger deadline, through coalescing and byte admission.
+  A historical-source witness produces about 0.20 B/s for a 10 B/s interval;
+  real sink/drain tests preserve the rate through delayed and failed delivery.
+- MODERATE - FIXED (2026-09-26). Presentation-fault head-of-line blocking.
+  A structurally valid but semantically inconsistent Progress caused repeated
+  drain failures, leaving a queued terminal record undelivered. Cause: cosmetic
+  comparison failure shared the strict admission failure path. Named progress
+  conflicts now clear uncertain display facts and retain a visible diagnostic;
+  committed degradation logs an internal error while terminal delivery continues.
+  Malformed values, response bounds and contradictory terminal records still
+  fail strictly. A direct witness checks terminal receipt and session release.
 - MODERATE - FIXED (2026-09-26). Cross-session presentation retention. The AB-8
   candidate retained a completed Plan snapshot when Execute replaced its session.
   Cause: page admission changed session identity without retiring presentation,
   then compared independent revision counters. A smaller execution's failed
   terminal record could be ignored while the rail still said Completed. Fixed
   by retiring presentation on admission, matching snapshot session identity and
-  preserving terminal handling independently of the stale-revision guard.
+  leaving revision admission in the bridge and preserving terminal handling.
   Page regressions cover the real transition and prevent Plan Gap from becoming
   execution history loss. Domain result and mutation authority were unchanged.
 - MODERATE - FIXED (2026-09-26). Aggregate sampling domain fragmentation. The

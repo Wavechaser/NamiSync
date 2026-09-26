@@ -1029,6 +1029,10 @@ claims explicit, independently reviewable, and regression-backed.
 
 #### Render authoritative task snapshots (2026-09-26)
 
+- Follow-up: select terminal presentation once, retire copied page results and
+  unused snapshot wire fields, and sample rates at sink acceptance. Contain
+  inconsistent progress with visible diagnostics while reliable/terminal
+  delivery continues; restore AB-8's retained acceptance contract.
 - Move task progress, attempt state and rate/ETA reduction into the Python
   desktop adapter. Publish one compact versioned task/session snapshot with
   each admitted drain prefix; keep item windows and exact details separate.

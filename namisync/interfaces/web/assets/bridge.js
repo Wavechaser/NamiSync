@@ -2262,59 +2262,41 @@ function validEstimate(value) {
 function validateTaskSnapshot(snapshot, task, updates) {
   if (!isExactObject(snapshot, [
     "wire_version", "task_id", "session_id", "revision", "session_state",
-    "control_state", "phase", "phase_authority", "progress", "active_item",
+    "control_state", "phase", "active_item", "progress_inconsistent",
     "presentation", "gap_first_missed_seq", "terminal_result", "started_at", "ended_at",
-  ]) || snapshot.wire_version !== 1 || snapshot.task_id !== task.taskId
+  ]) || snapshot.wire_version !== 2 || snapshot.task_id !== task.taskId
     || snapshot.session_id !== task.sessionId || !isNonnegativeInteger(snapshot.revision)
     || (task.snapshotRevision !== null && snapshot.revision < task.snapshotRevision)
     || !isOneOf(snapshot.session_state, ["active", ...TERMINAL_STATES])
     || !isOneOf(snapshot.control_state, ["running", "pausing", "paused", "canceling"])
     || !(snapshot.phase === null || (typeof snapshot.phase === "string"
       && snapshot.phase.length > 0 && isValidUnicode(snapshot.phase)))
-    || !isOneOf(snapshot.phase_authority, ["unknown", "phase_changed", "progress"])
+    || typeof snapshot.progress_inconsistent !== "boolean"
     || !isNullableNonnegativeInteger(snapshot.gap_first_missed_seq)
     || snapshot.gap_first_missed_seq === 0
     || !(snapshot.started_at === null || isUtcTimestamp(snapshot.started_at))
     || !(snapshot.ended_at === null || isUtcTimestamp(snapshot.ended_at))) return false;
-  const progress = snapshot.progress;
   if (snapshot.session_state === "active" && snapshot.ended_at !== null) return false;
   if (snapshot.session_state !== "active" && (snapshot.ended_at === null
-    || snapshot.phase !== null || progress !== null || snapshot.active_item !== null)) return false;
-  if (progress !== null && (!isExactObject(progress, [
-    "phase", "items_done", "items_total", "bytes_done", "bytes_total",
-    "item_id", "item_type", "item_attempt_id", "item_bytes_done", "item_bytes_total",
-  ]) || progress.phase !== snapshot.phase
-    || !isNonnegativeInteger(progress.items_done) || !isNullableNonnegativeInteger(progress.items_total)
-    || !isScalar64(progress.bytes_done) || !(progress.bytes_total === null || isScalar64(progress.bytes_total))
-    || !(progress.item_id === null || (typeof progress.item_id === "string"
-      && progress.item_id.length > 0 && isValidUnicode(progress.item_id)))
-    || !(progress.item_type === null || isOneOf(progress.item_type, ["operation", "integrity"]))
-    || !(progress.item_attempt_id === null || (typeof progress.item_attempt_id === "string"
-      && ID_PATTERN.test(progress.item_attempt_id)))
-    || !(progress.item_bytes_done === null || isScalar64(progress.item_bytes_done))
-    || !(progress.item_bytes_total === null || isScalar64(progress.item_bytes_total)))) return false;
+    || snapshot.phase !== null || snapshot.active_item !== null)) return false;
   const active = snapshot.active_item;
-  if (active !== null && (!isExactObject(active, [
-    "item_id", "item_type", "item_attempt_id", "item_bytes_done", "item_bytes_total",
-  ]) || progress === null || active.item_id !== progress.item_id
-    || active.item_type !== progress.item_type || active.item_attempt_id !== progress.item_attempt_id
-    || active.item_bytes_done !== progress.item_bytes_done
-    || active.item_bytes_total !== progress.item_bytes_total)) return false;
+  if (active !== null && (!isExactObject(active, ["item_id", "item_type"])
+    || typeof active.item_id !== "string" || active.item_id.length === 0
+    || !isValidUnicode(active.item_id)
+    || !isOneOf(active.item_type, ["operation", "integrity"]))) return false;
   const display = snapshot.presentation;
   if (!isExactObject(display, [
-    "aggregate_percent", "item_percent", "items_done", "items_total",
+    "item_percent", "items_done", "items_total",
     "value", "determinate", "indeterminate",
     "throughput_bytes_per_second", "eta_seconds",
-  ]) || !validPercentage(display.aggregate_percent) || !validPercentage(display.item_percent)
+  ]) || !validPercentage(display.item_percent)
     || !isNullableNonnegativeInteger(display.items_done)
     || !isNullableNonnegativeInteger(display.items_total)
     || !validPercentage(display.value) || display.value === null
     || typeof display.determinate !== "boolean"
     || typeof display.indeterminate !== "boolean"
     || !validEstimate(display.throughput_bytes_per_second)
-    || !validEstimate(display.eta_seconds)
-    || display.items_done !== (progress?.items_done ?? null)
-    || display.items_total !== (progress?.items_total ?? null)) return false;
+    || !validEstimate(display.eta_seconds)) return false;
   const result = snapshot.terminal_result;
   if (result !== null && !validateOperationResultView(result)) return false;
   if (snapshot.session_state === "active" && result !== null) return false;

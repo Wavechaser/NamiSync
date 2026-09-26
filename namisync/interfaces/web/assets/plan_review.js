@@ -4,6 +4,7 @@ import { formatByteCount, renderFilesystemText, renderText } from "./render.js";
 import {
   isCapacityOnlyExecution,
   projectActiveOperationProgress,
+  selectTaskExecution,
   taskStatusDigest,
   terminalStatusLine,
 } from "./task_status.js";
@@ -106,7 +107,7 @@ export function projectExecutionSummary(execution) {
       : { title: "Execution in progress", status: "executing" };
   }
   if (result.disposition === "unrun") return { title: "Execution did not start", status: "error" };
-  const capacityOnly = isCapacityOnlyExecution(execution, result);
+  const capacityOnly = isCapacityOnlyExecution(execution);
   if (capacityOnly) return { title: "Execution stopped: more target space is needed", status: "attention" };
   const labels = {
     failed: ["Execution failed", "error"], partial: ["Execution needs review", "error"],
@@ -1187,20 +1188,13 @@ export function createPlanReviewPanel(callbacks) {
     const planFacts = `${review.summary.selected_operation_count} of ${review.summary.selectable_operation_count} selected · ${formatByteCount(review.summary.required_bytes)} required · ${planningIssues} planning issues`;
     updateText(planDiagnostics, `Plan: ${review.summary.preflight_refusal_count} refusals · ${review.summary.warning_count} warnings · ${review.summary.destructive_operation_count} destructive operations`);
     planDiagnostics.hidden = task.executionStarted;
-    const snapshot = task.snapshot != null && task.snapshot.session_id === task.sessionId
-      ? task.snapshot : null;
-    const executionState = task.executionStarted
-      ? snapshot?.session_state ?? task.sessionState : null;
+    const { snapshot, sessionState, execution } = selectTaskExecution(task);
+    const executionState = task.executionStarted ? sessionState : null;
     const canExecuteSelection = review.summary.preflight_ready
       && review.summary.selected_operation_count > 0
       && review.summary.selection_state === "reviewing";
     const digest = taskStatusDigest(task);
-    const retainedExecution = review.window.execution;
-    const displayExecution = retainedExecution.result === null
-      && (task.executionResult != null || task.executionEndedAt != null)
-      ? { ...retainedExecution, result: task.executionResult,
-        started_at: task.executionStartedAt, ended_at: task.executionEndedAt }
-      : retainedExecution;
+    const displayExecution = execution;
     const terminalState = task.executionStarted
       && ["completed", "failed", "refused", "canceled"].includes(executionState);
     const executionPresentation = renderExecution(displayExecution, terminalState,
@@ -1218,9 +1212,12 @@ export function createPlanReviewPanel(callbacks) {
           : `${Math.ceil(digest.progress.etaSeconds)}s ETA estimate`,
       ].filter(Boolean).join(" · ")
       : null;
-    updateText(facts, terminalState ? terminalStatusLine(displayExecution, executionState)
+    const statusFacts = terminalState ? terminalStatusLine(displayExecution, executionState)
       : executionPresentation.title === null ? planFacts
-        : progressFacts ?? digest.detail);
+        : progressFacts ?? digest.detail;
+    updateText(facts, snapshot?.progress_inconsistent === true
+      ? [statusFacts, "Some progress updates were inconsistent."].filter(Boolean).join(" · ")
+      : statusFacts);
     summary.dataset.status = terminalState && displayExecution.result === null
       ? digest.state : executionPresentation.status ?? digest.state;
     const progressValue = digest.progress.value;

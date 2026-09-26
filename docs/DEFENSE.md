@@ -231,6 +231,14 @@ Validation and custody follow four distinct rungs:
 | **3 — internal** | NamiSync-owned modules inside the trusted computing base | Treat as trusted but fallible; validate once at the boundary-owning module's public return or other named ownership transfer, then trust immutable base values. | Loud internal invariant failure, never a user refusal path. |
 | **4 — reflective/forged** | Reflective mutation and forged private internal exceptions or signals | Unsupported unless promoted to a named fault class under §2.2. | Programming or trusted-base defect outside the product fault model. |
 
+Loud failure need not block unrelated authoritative delivery. A desktop
+progress-comparison invariant failure is confined to presentation: record a
+bounded internal diagnostic, visibly mark inconsistent progress, and discard
+its estimates/comparisons while continuing reliable and terminal delivery.
+This is not a user refusal or repaired producer truth. Malformed values,
+identity/byte-bound failures and terminal-record contradictions remain strict;
+history and domain validation are unchanged. BRIDGE owns this narrow mechanism.
+
 Capacity and freshness are independent of this ladder. Trusted code can
 truthfully produce an excessive population, and the filesystem can change
 after valid evidence was created. Population admission therefore remains at
