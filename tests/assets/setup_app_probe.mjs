@@ -49,6 +49,15 @@ function deferred() {
   return { promise, resolve, reject };
 }
 
+// The check resolves the original delivery, never a second adoption promise.
+function delayedOriginal(onDelayed, complete) {
+  const original = deferred();
+  onDelayed({ state: "unavailable", check: async () => {
+    original.resolve(await complete());
+  } });
+  return original.promise;
+}
+
 function defaultSnapshot() {
   return {
     setup_state: "default",
@@ -93,8 +102,8 @@ async function loadScenario({
   const app = new ElementFake();
   const status = new ElementFake("Starting...");
   const theme = new ElementFake();
-  const themeRetryOutcome = new ElementFake();
-  themeRetryOutcome.addEventListener = () => {};
+  const themeRefresh = new ElementFake();
+  themeRefresh.addEventListener = () => {};
   const body = new ElementFake();
   const windowListeners = new Map();
   globalThis.document = {
@@ -102,7 +111,7 @@ async function loadScenario({
     body,
     querySelector(selector) {
       return selector === "#app" ? app : selector === "#host-status" ? status
-        : selector === "#theme-retry-outcome" ? themeRetryOutcome : theme;
+        : selector === "#theme-refresh" ? themeRefresh : theme;
     },
   };
   globalThis.window = {
@@ -179,18 +188,10 @@ async function loadScenario({
   const bridgeUrl = moduleUrl(`
     const harness = globalThis.setupAppHarness;
     export class BridgeTransportError extends Error {}
-    export class OutcomeUnavailableError extends BridgeTransportError {
-      constructor(retry, checkable = true) { super(); this.retry = retry; this.checkable = checkable; }
-    }
-    export class StartPlanUncertainError extends BridgeTransportError {
-      constructor(retry, checkable = true) { super(); this.retry = retry; this.checkable = checkable; }
-    }
-    export class TaskCreateUncertainError extends BridgeTransportError {
-      constructor(retry, checkable = true) { super(); this.retry = retry; this.checkable = checkable; }
-    }
-    export class TaskCloseUncertainError extends BridgeTransportError {
-      constructor(retry, checkable = true) { super(); this.retry = retry; this.checkable = checkable; }
-    }
+    export class OutcomeUnavailableError extends BridgeTransportError {}
+    export class StartPlanUncertainError extends BridgeTransportError {}
+    export class TaskCreateUncertainError extends BridgeTransportError {}
+    export class TaskCloseUncertainError extends BridgeTransportError {}
     harness.BridgeTransportError = BridgeTransportError;
     harness.OutcomeUnavailableError = OutcomeUnavailableError;
     harness.StartPlanUncertainError = StartPlanUncertainError;
@@ -199,7 +200,7 @@ async function loadScenario({
     export const acknowledgeShellReady = () => Promise.resolve({ acknowledged: true });
     export const admitLocation = (...args) => harness.admitLocation(...args);
     export const closeTask = (...args) => harness.closeTask(...args);
-    export const createTask = () => harness.createTask();
+    export const createTask = (...args) => harness.createTask(...args);
     export const echoReadiness = () => Promise.resolve({ acknowledged: true });
     export const listTasks = () => harness.listTasks();
     export const getExecutionDetail = () => Promise.reject(new Error("unused"));
@@ -384,42 +385,42 @@ async function loadScenario({
 {
   const harness = await loadScenario();
   let createRetries = 0;
-  harness.createTask = () => {
+  harness.createTask = (onDelayed) => {
     harness.calls.push(["create"]);
-    return Promise.reject(new harness.TaskCreateUncertainError(() => {
+    return delayedOriginal(onDelayed, () => {
       createRetries += 1;
       harness.listTasks = () => Promise.resolve({ tasks: [summary(TASK_A), summary(TASK_B)] });
       return Promise.resolve({ task_id: TASK_B });
-    }));
+    });
   };
   harness.railCallbacks.onCreate();
   await until(
-    () => globalThis.document.querySelector("#host-status").textContent.includes("Select New task"),
+    () => globalThis.document.querySelector("#host-status").textContent.includes("Select Check outcome"),
     "new-task uncertainty guidance",
   );
-  assert.equal(harness.createStates.at(-1), false, "New task is enabled only for the retained retry");
+  assert.equal(typeof harness.createStates.at(-1).check, "function", "New task retains one read-only Check");
   assert.match(
     globalThis.document.querySelector("#host-status").textContent,
-    /Select New task to check the original request/,
+    /Select Check outcome to observe the original request/,
     "the same-document retry retains its pending create guidance",
   );
   harness.railCallbacks.onCreate();
   harness.railCallbacks.onCreate();
   await until(() => createRetries === 1, "same new-task retry closure");
-  assert.ok(harness.createStates.includes(true), "New task is disabled while its request runs");
+  await until(() => harness.task?.taskId === TASK_B, "original create owner adopts the result");
   assert.equal(harness.calls.filter((call) => call[0] === "create").length, 1);
 }
 
 {
   const harness = await loadScenario();
-  harness.createTask = () => {
+  harness.createTask = (onDelayed) => {
     harness.calls.push(["create"]);
-    return Promise.reject(new harness.TaskCreateUncertainError(null, false));
+    return Promise.reject(new harness.TaskCreateUncertainError());
   };
   harness.railCallbacks.onCreate();
   await until(() => globalThis.document.querySelector("#host-status").textContent.includes(
     "Close and reopen NamiSync"), "fixed-unknown create guidance");
-  assert.equal(harness.createStates.at(-1), true,
+  assert.equal(harness.createStates.at(-1).unknown, true,
     "a fixed unknown create keeps New task fenced without an observation retry");
   harness.railCallbacks.onCreate();
   await turns();
@@ -476,7 +477,7 @@ async function loadScenario({
   callbacks.onAddPair();
   harness.closeTask = (...values) => {
     harness.calls.push(["close", ...values.slice(0, 2)]);
-    return Promise.reject(new harness.TaskCloseUncertainError(null, false));
+    return Promise.reject(new harness.TaskCloseUncertainError());
   };
   harness.railCallbacks.onClose(TASK_A);
   await until(() => harness.model.closePending && harness.railTasks.find(
@@ -577,7 +578,10 @@ async function loadScenario({
     return Promise.resolve(choice(purpose, purpose === "target" ? "2" : "1"));
   };
   const pendingPlan = deferred();
-  harness.startPlan = () => pendingPlan.promise;
+  harness.startPlan = (...values) => {
+    values.at(-1)({ state: "pending", check: async () => assert.fail("late delivery needs no Check") });
+    return pendingPlan.promise;
+  };
   callbacks.onStartPlan();
   await until(() => firstModel.attempt?.dispatched === true, "planning dispatched");
   assert.equal(harness.dispatchedPlanningRendered, true,
@@ -587,13 +591,13 @@ async function loadScenario({
   let planRetries = 0;
   harness.startPlan = (...values) => {
     harness.calls.push(["start-plan", ...values]);
-    return Promise.reject(new harness.StartPlanUncertainError(() => {
+    return delayedOriginal(values.at(-1), () => {
       planRetries += 1;
       return Promise.resolve({ task_id: TASK_A, request_id: "4".repeat(32), session_id: "5".repeat(32) });
-    }));
+    });
   };
   callbacks.onStartPlan();
-  await until(() => typeof firstModel.attempt?.retry === "function", "plan uncertainty retained");
+  await until(() => typeof firstModel.attempt?.check === "function", "plan uncertainty retained");
   callbacks.onStartPlan();
   await until(() => planRetries === 1 && firstModel.attempt === null, "same plan retry closure");
   assert.equal(harness.calls.filter((call) => call[0] === "start-plan").length, 1);
@@ -612,13 +616,13 @@ async function loadScenario({
   let inventoryRetries = 0;
   harness.startInventory = (...values) => {
     harness.calls.push(["start-inventory", ...values]);
-    return Promise.reject(new harness.StartPlanUncertainError(() => {
+    return delayedOriginal(values.at(-1), () => {
       inventoryRetries += 1;
       return Promise.resolve({ task_id: TASK_A, request_id: "6".repeat(32), session_id: "7".repeat(32) });
-    }));
+    });
   };
   callbacks.onStartInventory();
-  await until(() => typeof harness.model.attempt?.retry === "function", "inventory uncertainty retained");
+  await until(() => typeof harness.model.attempt?.check === "function", "inventory uncertainty retained");
   callbacks.onStartInventory();
   await until(() => inventoryRetries === 1 && firstModel.attempt === null, "same inventory retry closure");
   assert.equal(harness.calls.filter((call) => call[0] === "start-inventory").length, 1);
@@ -728,7 +732,7 @@ async function loadScenario({
   callbacks.onEdit("target", "D:\\target");
   harness.startPlan = (...values) => {
     harness.calls.push(["start-plan", ...values.slice(0, 4)]);
-    return Promise.reject(new harness.StartPlanUncertainError(null, false));
+    return Promise.reject(new harness.StartPlanUncertainError());
   };
   callbacks.onStartPlan();
   await until(() => harness.model.attempt?.unknown === true, "fixed-unknown plan retained");
@@ -752,39 +756,25 @@ async function loadScenario({
   const callbacks = harness.callbacks;
   callbacks.onEdit("source", "C:\\original");
   callbacks.onEdit("target", "D:\\target");
-  const original = structuredClone(harness.model.source.candidate);
-  let originalChecks = 0;
+  const original = deferred();
   harness.admitLocation = (purpose, candidate) => {
     harness.calls.push(["admit", purpose, structuredClone(candidate)]);
-    return Promise.reject(new harness.OutcomeUnavailableError(() => {
-      originalChecks += 1;
-      return Promise.resolve(choice("source", "1", "C:\\original"));
-    }));
+    if (candidate.path === "C:\\original") return original.promise;
+    return Promise.resolve(choice(purpose, purpose === "source" ? "4" : "2", candidate.path));
   };
   callbacks.onValidate("source");
-  await until(() => typeof harness.model.source.outcomeRetry === "function",
-    "unresolved location keeps the original outcome check");
-  const sourceText = harness.model.source.text;
-  const admissionCount = harness.calls.filter((call) => call[0] === "admit").length;
+  await until(() => harness.model.source.pending, "original admission pending");
+  assert.equal(harness.task.closeBlockReason, null, "folder admission alone does not fence Close");
   callbacks.onEdit("source", "C:\\replacement");
-  callbacks.onEdit("source", "");
-  callbacks.onPick("source");
-  callbacks.onMount("source", 0);
-  callbacks.onRecent("source", { display: "C:\\recent", location_id: "22" });
-  callbacks.onAddPair();
-  callbacks.onStartBatch();
+  callbacks.onValidate("source");
+  await until(() => harness.model.source.location?.choice_id === CHOICE("4"), "fresh choice admitted");
+  original.resolve(choice("source", "1", "C:\\original"));
   await turns();
-  assert.equal(harness.model.source.text, sourceText,
-    "edit, clear, picker, mount, and recent gestures cannot replace an unresolved choice");
-  assert.deepEqual(harness.model.source.candidate, original);
-  assert.equal(harness.model.batch.length, 0,
-    "Add pair cannot snapshot a location with an unresolved original intent");
-  assert.equal(harness.calls.filter((call) => call[0] === "admit").length, admissionCount);
-  assert.equal(harness.calls.some((call) => call[0] === "pick" || call[0] === "create"), false);
-  await callbacks.onRetryLocationOutcome();
-  await until(() => originalChecks === 1 && harness.model.source.outcomeRetry === null,
-    "the original location result resolves through its retained check");
-  assert.equal(harness.model.source.location.choice_id, choice("source", "1").choice_id);
+  assert.equal(harness.model.source.text, "C:\\replacement");
+  assert.equal(harness.model.source.location.choice_id, CHOICE("4"), "late old admission cannot restore old authority");
+  callbacks.onStartPlan();
+  await until(() => harness.calls.some((call) => call[0] === "start-plan"), "latest choice feeds Start");
+  assert.equal(harness.calls.find((call) => call[0] === "start-plan")[2], CHOICE("4"));
 }
 
 {
@@ -811,13 +801,13 @@ async function loadScenario({
   let retries = 0;
   harness.planAgain = (...values) => {
     harness.calls.push(["plan-again", ...values]);
-    return Promise.reject(new harness.StartPlanUncertainError(() => {
+    return delayedOriginal(values.at(-1), () => {
       retries += 1;
       return Promise.resolve({ task_id: TASK_B, request_id: "8".repeat(32), session_id: "9".repeat(32) });
-    }));
+    });
   };
   harness.callbacks.onPlanAgain();
-  await until(() => typeof harness.model.attempt?.retry === "function", "Plan-again uncertainty retained");
+  await until(() => typeof harness.model.attempt?.check === "function", "Plan-again uncertainty retained");
   harness.callbacks.onPlanAgain();
   await until(() => retries === 1, "same Plan-again retry closure");
   assert.equal(harness.calls.filter((call) => call[0] === "plan-again").length, 1);
@@ -862,36 +852,37 @@ for (const sessionState of ["active", "failed"]) {
     return prepare.promise;
   };
   let createRetries = 0;
-  harness.createTask = () => {
+  harness.createTask = (onDelayed) => {
     harness.calls.push(["create"]);
-    return Promise.reject(new harness.TaskCreateUncertainError(() => {
+    return delayedOriginal(onDelayed, () => {
       createRetries += 1;
       harness.listTasks = () => Promise.resolve({ tasks: [summary(TASK_A), summary(TASK_B)] });
       return Promise.resolve({ task_id: TASK_B });
-    }));
+    });
   };
   let startRetries = 0;
   harness.startPlan = (...values) => {
     harness.calls.push(["start-plan", ...values]);
-    return Promise.reject(new harness.StartPlanUncertainError(() => {
+    return delayedOriginal(values.at(-1), () => {
       startRetries += 1;
       return Promise.resolve({ task_id: TASK_B, request_id: "4".repeat(32), session_id: "5".repeat(32) });
-    }));
+    });
   };
   callbacks.onStartBatch();
   callbacks.onStartBatch();
   callbacks.onAddPair();
   assert.equal(harness.model.batch.length, 1, "running batch rejects add and reentrant Start");
   prepare.resolve(structuredClone(DEFAULT_OPTIONS));
-  await until(() => harness.model.batch[0].state === "uncertain", "create uncertainty retained");
+  await until(() => harness.model.batch[0].stage === "creating"
+    && typeof harness.model.batch[0].check === "function", "create uncertainty retained");
   assert.equal(harness.model.batch[0].stage, "creating");
-  assert.match(harness.railTasks.find((task) => task.taskId === TASK_A).closeBlockReason, /uncertain/);
+  assert.ok(harness.railTasks.find((task) => task.taskId === TASK_A).closeBlockReason);
   harness.railCallbacks.onClose(TASK_A);
   await turns();
   assert.equal(harness.calls.some((call) => call[0] === "close"), false, "uncertain origin cannot be closed");
   callbacks.onStartBatch();
   await until(() => harness.model.batch[0].stage === "starting" &&
-    harness.model.batch[0].state === "uncertain" && !harness.model.batchRunning &&
+    harness.model.batch[0].state === "submitting" && harness.model.batchRunning &&
     harness.railTasks.some((task) => task.taskId === TASK_B), "start uncertainty and child retained");
   assert.equal(createRetries, 1);
   assert.equal(harness.calls.filter((call) => call[0] === "create").length, 1);
@@ -991,7 +982,7 @@ for (const sessionState of ["active", "failed"]) {
   callbacks.onAddPair();
   callbacks.onAddPair();
   const firstCreate = deferred();
-  harness.createTask = () => {
+  harness.createTask = (onDelayed) => {
     harness.calls.push(["create"]);
     return firstCreate.promise;
   };
@@ -1044,7 +1035,7 @@ for (const sessionState of ["active", "failed"]) {
     return Promise.resolve({ ...structuredClone(options), filters: [...options.filters, "canonical/**"] });
   };
   let createIndex = 0;
-  harness.createTask = () => {
+  harness.createTask = (onDelayed) => {
     harness.calls.push(["create"]);
     createIndex += 1;
     return Promise.resolve({ task_id: createIndex === 1 ? TASK_B : TASK_C });
@@ -1053,10 +1044,10 @@ for (const sessionState of ["active", "failed"]) {
   harness.startPlan = (...values) => {
     harness.calls.push(["start-plan", ...structuredClone(values.slice(0, 4))]);
     if (values[0] !== TASK_C) return Promise.resolve({ task_id: values[0] });
-    return Promise.reject(new harness.StartPlanUncertainError(() => {
+    return delayedOriginal(values.at(-1), () => {
       exactRetries += 1;
       return Promise.resolve({ task_id: TASK_C });
-    }));
+    });
   };
 
   callbacks.onStartBatch();
@@ -1065,7 +1056,7 @@ for (const sessionState of ["active", "failed"]) {
   assert.equal(harness.model.batch.length, 3, "the queued row being prepared remains removable");
   harness.model.options.filters[0] = "draft-while-preparing/**";
   firstPrepare.resolve({ ...structuredClone(harness.calls.find((call) => call[0] === "prepare")[1]), filters: ["remove-while-preparing/**", "canonical/**"] });
-  await until(() => !harness.model.batchRunning, "pair-owned batch settles");
+  await until(() => typeof harness.model.batch.at(-1).check === "function", "pair-owned batch waits for original outcome");
 
   assert.deepEqual(harness.calls.filter((call) => call[0] === "prepare").map((call) => call[1].filters),
     [["remove-while-preparing/**"], ["reject/**"], ["first/**"], ["second/**"]],
@@ -1082,6 +1073,59 @@ for (const sessionState of ["active", "failed"]) {
   await until(() => exactRetries === 1, "uncertain row exact retry");
   assert.equal(harness.calls.filter((call) => call[0] === "prepare").length, preparesBeforeRetry,
     "an uncertain request retries without canonicalizing its options again");
+}
+
+// Pending folder admission is local, removable work, not a reason to retain a
+// batch effect fence. Neither deliberate removal nor origin Close can permit a
+// late folder reply to continue into task creation.
+for (const action of ["remove", "close"]) {
+  const harness = await loadScenario();
+  const callbacks = harness.callbacks;
+  callbacks.onEdit("source", "C:\\pending-batch-source");
+  callbacks.onEdit("target", "D:\\pending-batch-target");
+  callbacks.onAddPair();
+  const form = harness.model;
+  const row = form.batch[0];
+  const admission = deferred();
+  harness.admitLocation = (purpose, candidate, onDelayed) => {
+    harness.calls.push(["admit", purpose, structuredClone(candidate)]);
+    onDelayed({ state: "pending", check: null });
+    return admission.promise;
+  };
+  callbacks.onStartBatch();
+  await until(() => typeof row.abandonAdmission === "function", "batch folder admission pending");
+  assert.equal(harness.calls.some((call) => call[0] === "create"), false);
+  if (action === "remove") {
+    callbacks.onRemoveBatchRow(row);
+    await until(() => !form.batchRunning && form.batch.length === 0, "explicit row removal releases coordinator");
+  } else {
+    harness.closeTask = (...values) => {
+      harness.calls.push(["close", ...values.slice(0, 2)]);
+      harness.listTasks = () => Promise.resolve({ tasks: [] });
+      return Promise.resolve({ task_id: TASK_A, session_id: null, disposition: "closed" });
+    };
+    harness.railCallbacks.onClose(TASK_A);
+    await until(() => !harness.railTasks.some((task) => task.taskId === TASK_A), "origin Close during folder admission");
+  }
+  admission.resolve(choice("source", "1"));
+  await turns();
+  assert.equal(harness.calls.some((call) => ["create", "start-plan"].includes(call[0])), false,
+    "the late folder reply cannot continue a discarded batch row");
+}
+
+// An unrelated option edit can make the picker result stale, but cannot keep
+// its row pending after the native picker itself has settled.
+{
+  const harness = await loadScenario();
+  const picker = deferred();
+  harness.pickFolder = () => picker.promise;
+  harness.callbacks.onPick("source");
+  await until(() => harness.model.source.pending, "picker holds its row");
+  harness.callbacks.onOption("deletion_policy", "additive");
+  picker.resolve(choice("source", "3"));
+  await until(() => !harness.model.source.pending, "picker releases row after unrelated option edit");
+  assert.equal(harness.model.source.location, null, "the stale result remains unadopted");
+  assert.equal(harness.model.options.deletion_policy, "additive");
 }
 
 await turns();

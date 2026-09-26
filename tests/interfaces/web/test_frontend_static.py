@@ -1227,14 +1227,16 @@ def test_br_g_32_browser_wrapper_owns_exact_ids_response_checks_and_observation(
     ):
         assert f'"{command}"' in source
     assert "function submitStart(payload, command, timeoutMs, onDelayed = null)" in source
-    assert "throw taskUncertainty(error, StartPlanUncertainError);" in source
-    assert "new OutcomeUnavailableError(() => retryObservedResult(state))" in source
-    assert "new OutcomeUnavailableError(null, false)" in source
-    assert "if (state.result === null) await recoverObservedResult(state);" in source
-    outcome_check = source.split("async function retryObservedResult(", 1)[1].split(
+    assert "if (error instanceof OutcomeUnavailableError) throw new StartPlanUncertainError();" in source
+    assert "state.reject(new OutcomeUnavailableError());" in source
+    assert "retryObservedResult" not in source
+    assert "initialSettled" not in source
+    outcome_check = source.split("async function recoverObservedResult(", 1)[1].split(
         "function acceptObservedObservation(", 1
     )[0]
-    assert "recoverObservedResult(state)" in outcome_check
+    assert 'api.dispatch(`observe:${state.requestId}:${state.command}`)' in outcome_check
+    assert 'notifyObservedDelay(state, latestStatus);' in outcome_check
+    assert "state.reject(" not in outcome_check
     assert "dispatchAttempt(" not in outcome_check
     assert "submitStart(" not in outcome_check
     assert "createObservedAttempt(" not in outcome_check
@@ -1429,19 +1431,20 @@ def test_sh_g_7_packaged_shell_has_accessible_process_live_blank_tasks(
     assert 'create.append(createIcon(document, "add-square-multiple", "lg"));' in rail
     assert 'create.ariaLabel = "New task";' in rail
     assert 'close.append(createIcon(document, "dismiss", "sm"));' in rail
-    assert 'entry.close.ariaLabel = closeReason ?? `${closeUnavailable ? "Retry close outcome for"' in rail
+    assert 'entry.close.ariaLabel = checkClose ? `Check Close outcome for ${task.label}` : closeReason ?? `${closeUnavailable ? "Retry close outcome for"' in rail
     assert ': task.closeFailed ? "Retry close for" : "Close"} ${task.label}`;' in rail
-    assert 'entry.retry.ariaLabel = `${task.recoveryRunning ? "Retrying updates for" : "Retry updates for"} ${task.label}`;' in rail
-    assert 'entry.close.disabled = closeReason !== null;' in rail
+    assert 'entry.retry.ariaLabel = `${checkRelease ? "Check release outcome for"' in rail
+    assert ': task.recoveryRunning ? "Retrying updates for" : "Retry updates for"} ${task.label}`;' in rail
+    assert 'entry.close.disabled = closeReason !== null && (!checkClose || task.closeChecking);' in rail
     assert "task.closeBlockReason = taskCloseBlockReason(task);" in app
     assert "task === undefined || taskCloseBlockReason(task) !== null" in app
     assert "task.canCancelAfterFixedReviewOutcome" in review
     assert "[review.message, independentCancel?.message]" in review
     assert "entry.close.title = entry.close.ariaLabel;" in rail
     assert 'document.createElement("h2")' not in panels
-    assert "createTask(() =>" in app
+    assert "createTask((feedback) =>" in app
     assert "listTasks()" in app
-    assert "closeTask(task.taskId, task.sessionId, () =>" in app
+    assert "closeTask(task.taskId, task.sessionId, (feedback) =>" in app
     assert "result.disposition === \"closed\"" in app
     assert "task.closePending = true;" in app
     assert "tasks.get(task.taskId) !== task" in app
@@ -1460,9 +1463,10 @@ def test_sh_g_7_packaged_shell_has_accessible_process_live_blank_tasks(
     assert 'root.dispatchEvent(new Event("change", { bubbles: true }))' in theme
     assert "select.disabled = true;" in theme
     assert "snapshot.revision < state.authoritative.revision" in theme
-    assert "error instanceof BridgeTransportError" in theme
-    assert "await reconcileAfterUncertainty(" in theme
-    assert "expectedRevision," in theme
+    assert "Theme change is still pending. Refresh to read the current theme." in theme
+    assert "Theme response unavailable. Refresh to read the current theme." in theme
+    assert "await open();" in theme
+    assert "replace(state.authoritative.revision, theme," in theme
     assert "result.disposition === \"conflict\"" in theme
     assert "#host-status" not in theme
 

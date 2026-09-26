@@ -1027,12 +1027,27 @@ repeated machinery while preserving operational safety and boundary contracts.
 Safety, settlement, authority, and measurement work made high-risk release
 claims explicit, independently reviewable, and regression-backed.
 
+#### Reduce command recovery to its actual owners (2026-09-26)
+
+- Separate five current-state commands from original-result retention. View,
+  highlight and theme use revisioned refresh; folder rechoice invalidates stale
+  admission replies while dependent Start keeps the latest resolved choice.
+- Keep original observation for eleven effect/lifecycle commands. A bounded
+  Check changes feedback without abandoning the original promise; valid late
+  completion updates its owner automatically. Preserve duplicate protection,
+  actual dependency fences and lifecycle/resource bounds.
+- Qualify the AB-7 study against receipt retirement and real consumers; defer
+  universal resend and protocol redesign. AB-8 remains paused.
+- Remove 55 net production lines; the main reduction is in recovery ownership,
+  not source volume. Keep dependency guards where current state cannot prove
+  the original effect settled.
+
 #### Review AB-7 original-outcome recovery (2026-09-26)
 
-- Record a read-only AB-7 review in POST_M1_8_ABLATION §14: transport response
-  retention duplicates domain outcome records that became test-only reachable,
-  and pending observations turn healthy slow commands into "outcome
-  unavailable" after about 5.4 s.
+- Record a read-only AB-7 proposal in POST_M1_8_ABLATION §14 about overlapping
+  outcome records and healthy pending commands becoming "outcome unavailable"
+  after about 5.4 s. Later validation qualifies the proposed equivalence of
+  those records and rejects blanket removal of transport retention.
 - Propose domain records as the single outcome authority with a declared
   per-command recovery action (identical resend, settlement or authoritative
   re-read) and no outcome timers or page fences. No implementation or M1_PLAN

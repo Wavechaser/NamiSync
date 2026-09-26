@@ -23,8 +23,8 @@ const theme = new HTMLSelectElementFake();
 const settings = new HTMLElementFake();
 const themeOptions = new HTMLElementFake();
 const themeOutcomeStatus = new HTMLElementFake();
-const themeRetryOutcome = new HTMLElementFake();
-themeRetryOutcome.addEventListener = () => {};
+const themeRefresh = new HTMLElementFake();
+themeRefresh.addEventListener = () => {};
 const body = new HTMLElementFake();
 globalThis.document = {
   documentElement: new HTMLElementFake(),
@@ -40,7 +40,7 @@ globalThis.document = {
             ? settings
             : selector === "#theme-options" ? themeOptions
               : selector === "#theme-outcome-status" ? themeOutcomeStatus
-                : selector === "#theme-retry-outcome" ? themeRetryOutcome : null;
+                : selector === "#theme-refresh" ? themeRefresh : null;
   },
 };
 
@@ -122,18 +122,10 @@ function moduleUrl(source) {
 
 const bridgeStub = moduleUrl(`
   export class BridgeTransportError extends Error {}
-  export class OutcomeUnavailableError extends BridgeTransportError {
-    constructor(retry, checkable = true) { super(); this.retry = retry; this.checkable = checkable; }
-  }
-  export class StartPlanUncertainError extends BridgeTransportError {
-    constructor(retry, checkable = true) { super(); this.retry = retry; this.checkable = checkable; }
-  }
-  export class TaskCreateUncertainError extends BridgeTransportError {
-    constructor(retry, checkable = true) { super(); this.retry = retry; this.checkable = checkable; }
-  }
-  export class TaskCloseUncertainError extends BridgeTransportError {
-    constructor(retry, checkable = true) { super(); this.retry = retry; this.checkable = checkable; }
-  }
+  export class OutcomeUnavailableError extends BridgeTransportError {}
+  export class StartPlanUncertainError extends BridgeTransportError {}
+  export class TaskCreateUncertainError extends BridgeTransportError {}
+  export class TaskCloseUncertainError extends BridgeTransportError {}
   globalThis.startupHarness.BridgeTransportError = BridgeTransportError;
   export const whenBridgeApiReady = () => globalThis.startupHarness.whenBridgeApiReady();
   export const acknowledgeShellReady = () => globalThis.startupHarness.acknowledgeShell();

@@ -23,10 +23,10 @@ Planning baseline was `milestone1` at `a7f8402`; execution begins at `6a55239`
 after documentation reconciliation and five study moves. Recheck changed seams
 before dependent implementation. The
 [study](POST_M1_8_ABLATION.md) owns findings, source evidence and compact rejected
-dispositions. This section is the sole AB register. The user activated the full
-AB-1–AB-10 batch; dependent rows start after their named prerequisites close.
-Revision based on `0c74ee7` settles D2/D4 from the user's instructions without executing
-AB-7 or changing the current transport contract in BRIDGE.
+dispositions. This section is the sole AB register. The original AB-1–AB-10 batch
+authorization was later paused after AB-7. AB-7R is now separately authorized;
+AB-8 remains paused. Revision based on `0c74ee7` settled D2/D4; later delivered
+checkpoints update the current transport contract in BRIDGE.
 
 - In scope: W1–W4 documentation/workflow, E1 optional benchmarks, L1–L4,
   bounded S1/S2/S3, S4 only at the response adoption boundary, T1 and the T2
@@ -106,7 +106,8 @@ cleanup commit. New findings do not silently add rows.
 | AB-5 | Bridge response adoption consolidates repeated traversal without weakening boundaries | AB-2 | 5,306 ordinary; 6 installed; 12 imports; response/custody/decoder checks and independent review | Complete in `1cb75fb` |
 | AB-6 | Unsupported reload has one contained restart behavior instead of reinjection recovery | AB-2 | 5,317 ordinary; 34 installed; 12 imports; gestures, custody/close races and two independent reviews | Complete in `2b4a2214` |
 | AB-7 | Existing admission/completion preserves original outcomes without page-timeout result abandonment or replay | AB-6; D2 settled | Delayed/post-effect failed delivery, bounded observation recovery/exhaustion, duplicate protection and close | Complete; original outcomes retained; installed34/34 and independent/Claude review |
-| AB-8 | Existing shell renders bounded authoritative Python task snapshots | AB-4/5/6/7 | Producer→snapshot→page, ordinary/imports and installed task journeys | Pending |
+| AB-7R | Reduce AB-7 recovery to command-specific authority and actual UI dependencies | AB-7; §14 validation and user authorization | Delayed/late results, qualified receipt recovery, current-state reconciliation, ordering/retirement, ordinary/imports and affected installed journeys | Delivered; separate AB-7R reduction commit |
+| AB-8 | Existing shell renders bounded authoritative Python task snapshots | AB-4/5/6/7R | Producer→snapshot→page, ordinary/imports and installed task journeys | Pending; not authorized |
 | AB-9 | Remaining visual/source pins protect behavior rather than incidental spelling | AB-8 | Static/security, computed style, ordinary and installed gallery | Pending |
 | AB-10 | Integrated reductions preserve the complete retained workflow and have coherent docs/evidence | All above | Overall final sweep below | Pending |
 
@@ -565,6 +566,46 @@ complete/diagnostic/installed receipts, `ab7-independent-review.md` and
 Atomic commit: `refactor(web): simplify command completion without timed mutation replay`.
 Pause for user recap; AB-8 implementation remains unauthorized.
 
+#### AB-7R — Reduce command recovery and uncertainty state
+
+Delivered 2026-09-26 on `milestone1`, base `895710fb`, as one separate
+reviewed reduction checkpoint. Outcomes and verification are recorded below;
+frozen inputs and failed receipts remain in ignored AB-7R evidence. AB-8 remains paused.
+
+- **R1/R2:** Five commands no longer retain/observe original responses: picker,
+  location admission, view, highlight and cosmetic replacement. Revisioned
+  Refresh or deliberate folder rechoice supplies current authority, without
+  claiming the earlier effect settled. Row/review/theme ownership rejects stale
+  replies; only the latest resolved folder choice feeds Start/batch. Pending
+  folder admission can be removed or detached by origin Close before Create.
+- **R3:** Eleven effect/lifecycle commands retain original observation. Receipt
+  retirement, selection replay's current projection and execution's unretained
+  no-effect dispositions prevent blanket receipt-based resend. Production drain
+  start receipts also coordinate Close. No new protocol, store or domain owner.
+- **R4/R5:** Bounded observation updates delayed/unavailable feedback and offers
+  read-only Check. The original promise is the sole result adopter; valid late
+  completion updates its owner automatically. Remove duplicate retry/adoption
+  branches and unrelated presentation/folder fences. Keep actual selection→Execute,
+  start/Close and retirement dependencies, duplicate protection, D4 and resource
+  bounds. No elapsed-time mutation abandonment or automatic replay.
+
+Ten production files and fourteen test/probe consumers changed. Production is
+net 55 lines smaller (+556/-611); tests net 157 larger (+487/-330). This is a
+mechanism reduction, not a large source reduction. Native service/lifecycle,
+drain, slots and domain owners remain unchanged. Independent review corrected
+picker pending cleanup after unrelated form edits and misleading folder feedback.
+The first installed gate exposed an obsolete Setup callback requirement; its
+constructor reproducer failed before removal and passed afterward.
+
+Verification: ordinary run 5,323 passed/4 skipped plus one obsolete policy
+expectation, corrected before the full current interfaces rerun (1,785 passed).
+Unchanged domain/tool results are reused by dependency; all 34 installed headed
+cases passed on the corrected frozen build. Twelve import contracts passed;
+fresh adversarial source/evidence review and documentation checks passed.
+Evidence: `build/post-m1-8-ablation-20260925/ab7r-verification.md`,
+`ab7r-frozen-inputs.json`, `ab7r-review.md` and named XML/log receipts.
+Earlier unexplained AB-7 Setup/Plan-again observations are not claimed fixed.
+
 #### AB-8 — Authoritative task snapshots and bounded shell refactor
 
 **Objective.** Implement S3 before inventory extends the same shell, removing the
@@ -579,8 +620,8 @@ event/attempt reduction out of `bridge.js`, `app.js` and `task_status.js`, keepi
 drafts, focus, scroll, pending feedback and visual formatting local. Prefer one
 Python rate/ETA sample history with monotonic time and explicit reset on attempt/
 Gap; the browser only formats the result. Existing panels/renderers remain.
-Complete AB-7 before freezing the snapshot shape; snapshots preserve its explicit
-outcome-unavailable and original-result recovery states. No framework, preparatory
+Complete AB-7R before freezing the snapshot shape; snapshots preserve its qualified
+pending/unavailable feedback and retained original-result recovery. No framework, preparatory
 shell rewrite or S5 merger. D4's highlighting/focus behavior remains intact.
 
 **Acceptance criteria.** Atomic snapshot adoption rejects stale/foreign identity

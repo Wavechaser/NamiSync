@@ -113,7 +113,6 @@ const events = [];
 const panel = createSetupPanel({
   onEdit: (...value) => events.push(["edit", ...value]),
   onValidate: (...value) => events.push(["validate", ...value]),
-  onRetryLocationOutcome: () => events.push(["retry-location-outcome"]),
   onPick: (...value) => events.push(["pick", ...value]),
   onRecent: (...value) => events.push(["recent", ...value]),
   onRecentPair: (...value) => events.push(["recent-pair", ...value]),
@@ -295,15 +294,15 @@ assert.equal(startPlan.disabled, false, "nonempty unadmitted rows stay startable
 model.source.location = { state: "missing", choice_id: null, detail: "Reconnect this folder.", candidates: [] };
 panel.render(model);
 assert.equal(startPlan.disabled, false, "a missing row stays startable for a fresh retry");
-model.source.outcomeUnknown = true;
+model.source.pending = true;
 panel.render(model);
-assert.equal(firstSource.disabled, true, "a fixed-unknown location keeps its input fenced");
+assert.equal(firstSource.disabled, false, "a delayed folder choice permits deliberate editing");
 assert.equal(startPlan.disabled, true);
 assert.equal(addPair.disabled, true);
 assert.equal(allByClass(panel.element, "nami-button--secondary").some(
   (button) => button.textContent === "Retry folder outcome" && !button.hidden), false,
-"a fixed response exposes no ineffective folder Retry");
-model.source.outcomeUnknown = false;
+"CURRENT folder admission exposes no ineffective outcome retry");
+model.source.pending = false;
 const queuedBatchRow = {
   source: { text: "C:\\batch-source" }, target: { text: "D:\\batch-target" },
   state: "queued", options: structuredClone(options), message: "Ready to create.",
@@ -352,20 +351,23 @@ assert.equal(startBatch.hidden, false);
 assert.equal(startBatch.disabled, true, "unknown rows cannot start a batch");
 assert.equal(byClass(panel.element, "nami-setup__clear-batch").disabled, true,
   "unknown rows cannot be cleared as terminal results");
-model.batch = [{ ...queuedBatchRow, state: "uncertain", message: "Retry this request." }];
+model.batchRunning = true;
+model.batch = [{ ...queuedBatchRow, state: "submitting", check: () => {},
+  checking: false, message: "Original request pending." }];
 panel.render(model);
-assert.equal(startBatch.textContent, "Retry outcomes");
-assert.equal(startBatch.disabled, false, "an uncertain row exposes original-outcome checks");
+assert.equal(startBatch.textContent, "Check outcome");
+assert.equal(startBatch.disabled, false, "a submitting row exposes read-only original checks");
 model.mode = "inventory";
 panel.render(model);
 assert.equal(startBatch.hidden, false);
-assert.equal(startBatch.disabled, true, "inventory mode retains but disables the batch retry");
+assert.equal(startBatch.disabled, true, "inventory mode retains but disables the batch check");
 model.mode = "sync-plan";
 model.editable = false;
 panel.render(model);
 assert.equal(startBatch.hidden, false);
-assert.equal(startBatch.disabled, true, "a noneditable form retains but disables the batch retry");
+assert.equal(startBatch.disabled, true, "a noneditable form retains but disables the batch check");
 model.editable = true;
+model.batchRunning = false;
 model.batch = [queuedBatchRow];
 model.batchCount = 48;
 panel.render(model);

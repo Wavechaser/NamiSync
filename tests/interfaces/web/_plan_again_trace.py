@@ -115,11 +115,11 @@ _BRIDGE_VALIDATE_TRACE = r'''  const validateResult = (value) => {
 '''
 
 _BRIDGE_ATTEMPT = r'''  const requestId = mintId();
-  if (COMMAND_POLICY_CONTRACT[command]?.timeout === "mutation-observed"
+  if (COMMAND_POLICY_CONTRACT[command]?.timeout === "mutation-observed") {
 '''
 _BRIDGE_ATTEMPT_TRACE = r'''  const requestId = mintId();
   if (command === "plan_again") namiPlanAgainTrace("bridge-attempt", "created");
-  if (COMMAND_POLICY_CONTRACT[command]?.timeout === "mutation-observed"
+  if (COMMAND_POLICY_CONTRACT[command]?.timeout === "mutation-observed") {
 '''
 
 _BRIDGE_CAPACITY = r'''  if (observedCommandAttempts.size >= OBSERVED_COMMAND_MAX_ATTEMPTS
@@ -143,12 +143,12 @@ _BRIDGE_ENTRY_TRACE = r'''  observedCommandAttempts.set(requestId, state);
   if (command === "plan_again") namiPlanAgainTrace("async-entry", "registered");
 '''
 
-_BRIDGE_READY = r'''  if (state.command === "pick_folder") await waitUntilReady();
-  else await withDeadline(waitUntilReady(), SHELL_READY_TIMEOUT_MS, () => {});
+_BRIDGE_READY = r'''async function dispatchObservedReadyAttempt(request, state, waitUntilReady) {
+  await withDeadline(waitUntilReady(), SHELL_READY_TIMEOUT_MS, () => {});
 '''
-_BRIDGE_READY_TRACE = r'''  if (state.command === "plan_again") namiPlanAgainTrace("bridge-readiness", "waiting");
-  if (state.command === "pick_folder") await waitUntilReady();
-  else await withDeadline(waitUntilReady(), SHELL_READY_TIMEOUT_MS, () => {});
+_BRIDGE_READY_TRACE = r'''async function dispatchObservedReadyAttempt(request, state, waitUntilReady) {
+  if (state.command === "plan_again") namiPlanAgainTrace("bridge-readiness", "waiting");
+  await withDeadline(waitUntilReady(), SHELL_READY_TIMEOUT_MS, () => {});
   if (state.command === "plan_again") namiPlanAgainTrace("bridge-readiness", "ready");
 '''
 
@@ -177,36 +177,34 @@ _PLAN_CLICK_TRACE = r'''  planAgain.addEventListener("click", (event) => {
   });
 '''
 
-_PLAN_RENDER = r'''    planAgain.disabled = review.pending !== null || task.canPlanAgain !== true;
+_PLAN_RENDER = r'''    planAgain.disabled = (review.pending !== null && !checkPlanAgain) || task.canPlanAgain !== true;
 '''
-_PLAN_RENDER_TRACE = r'''    planAgain.disabled = review.pending !== null || task.canPlanAgain !== true;
-    globalThis.__namiPlanAgainTrace?.record("button-projection", review.pending !== null ? "pending" : task.canPlanAgain === true ? "enabled" : "ineligible");
+_PLAN_RENDER_TRACE = r'''    planAgain.disabled = (review.pending !== null && !checkPlanAgain) || task.canPlanAgain !== true;
+    globalThis.__namiPlanAgainTrace?.record("button-projection", !planAgain.disabled ? "enabled" : review.pending !== null ? "pending" : "ineligible");
 '''
 
 _APP_CALLBACK = r'''async function planAgainFromReview(review) {
   const task = currentReviewTask(review);
-  if (task === null || review.pending !== null) return;
 '''
 _APP_CALLBACK_TRACE = r'''async function planAgainFromReview(review) {
   const task = currentReviewTask(review);
   const retained = retainedReviewTask(review);
   globalThis.__namiPlanAgainTrace?.record("callback-identity", task !== null ? "current" : retained !== null ? "retained-not-current" : "replaced");
   globalThis.__namiPlanAgainTrace?.record("callback-pending", review.pending === null ? "clear" : "pending");
-  if (task === null || review.pending !== null) return;
 '''
 
 _APP_ELIGIBILITY = r'''function canStartPlanAgain(task) {
   const form = task?.form;
   if (
-    task === null || currentTask() !== task || task.closePending || task.closeRetry !== null
+    task === null || currentTask() !== task || task.closePending || task.closeCheck !== null
     || task.closeOutcomeUnknown || task.startOutcomeUnknown ||
     form?.canPlanAgain !== true ||
     originHasPendingBatch(task.taskId) || batchTaskBlockReason(task.taskId) !== null ||
     (pageBatch !== null && pageBatch.running !== null)
   ) return false;
   return form.attempt === null || (
-    form.attempt.kind === "plan-again" && !form.attempt.running &&
-    typeof form.attempt.retry === "function"
+    form.attempt.kind === "plan-again" && form.attempt.running &&
+    typeof form.attempt.check === "function" && !form.attempt.checking
   );
 }
 '''
@@ -215,7 +213,7 @@ _APP_ELIGIBILITY_TRACE = r'''function canStartPlanAgain(task) {
   if (task === null || currentTask() !== task) {
     return false;
   }
-  if (task.closePending || task.closeRetry !== null || task.closeOutcomeUnknown) {
+  if (task.closePending || task.closeCheck !== null || task.closeOutcomeUnknown) {
     globalThis.__namiPlanAgainTrace?.record("eligibility", "close");
     return false;
   }
@@ -244,8 +242,8 @@ _APP_ELIGIBILITY_TRACE = r'''function canStartPlanAgain(task) {
     globalThis.__namiPlanAgainTrace?.record("eligibility", "idle");
     return true;
   }
-  const retryIdle = attempt.kind === "plan-again" && !attempt.running &&
-    typeof attempt.retry === "function";
+  const retryIdle = attempt.kind === "plan-again" && attempt.running &&
+    typeof attempt.check === "function" && !attempt.checking;
   globalThis.__namiPlanAgainTrace?.record("eligibility", retryIdle ? "retry-idle" : "other-attempt");
   return retryIdle;
 }

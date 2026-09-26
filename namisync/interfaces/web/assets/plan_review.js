@@ -481,7 +481,7 @@ export function createPlanReviewPanel(callbacks) {
   status.className = "nami-shell__guidance nami-plan-review__status";
   status.setAttribute("role", "status");
   status.ariaLive = "polite";
-  const retryOutcome = button("Retry outcome", "nami-button nami-button--secondary");
+  const retryOutcome = button("Check outcome", "nami-button nami-button--secondary");
   retryOutcome.dataset.action = "retry-outcome";
   retryOutcome.hidden = true;
   const controls = document.createElement("div");
@@ -1283,14 +1283,18 @@ export function createPlanReviewPanel(callbacks) {
     const activeExecution = task.executionStarted && task.sessionState === "active";
     const controlUnavailable = task.drainUnavailable
       || task.reviewSessionId !== task.sessionId;
-    const retryExecution = task.executionAttempt?.state === "uncertain"
-      && typeof task.executionAttempt.retry === "function";
+    const checkExecution = task.executionAttempt?.state === "submitting"
+      && typeof task.executionAttempt.check === "function"
+      && !task.executionAttempt.checking;
     execute.hidden = review.summary.selection_state !== "reviewing";
-    updateText(execute, retryExecution ? "Retry outcome" : "Execute");
-    execute.disabled = review.pending !== null
-      || (task.executionAttempt !== null && !retryExecution)
-      || (!retryExecution && !canExecuteSelection);
-    planAgain.disabled = review.pending !== null || task.canPlanAgain !== true;
+    updateText(execute, checkExecution ? "Check outcome" : "Execute");
+    execute.disabled = (review.pending !== null && !checkExecution)
+      || (task.executionAttempt !== null && !checkExecution)
+      || (!checkExecution && !canExecuteSelection);
+    const checkPlanAgain = review.pending === "plan-again"
+      && typeof task.form?.attempt?.check === "function" && !task.form.attempt.checking;
+    updateText(planAgain, checkPlanAgain ? "Check outcome" : "Plan again");
+    planAgain.disabled = (review.pending !== null && !checkPlanAgain) || task.canPlanAgain !== true;
     controls.hidden = !activeExecution;
     pause.hidden = task.executionControlState === "paused";
     resume.hidden = task.executionControlState !== "paused";
@@ -1308,9 +1312,11 @@ export function createPlanReviewPanel(callbacks) {
     updateText(status, actionMessage);
     status.title = actionMessage;
     status.hidden = actionMessage.length === 0;
-    retryOutcome.hidden = typeof review.outcomeRetry !== "function"
-      && typeof independentCancel?.retry !== "function";
-    retryOutcome.disabled = review.outcomeRunning === true || independentCancel?.pending === true;
+    const checkOutcome = typeof review.outcomeCheck === "function"
+      || typeof independentCancel?.check === "function";
+    retryOutcome.hidden = !checkOutcome && !review.refreshAvailable;
+    updateText(retryOutcome, checkOutcome ? "Check outcome" : "Refresh review");
+    retryOutcome.disabled = review.outcomeRunning === true || independentCancel?.checking === true;
     renderRows(review, task);
     if (focusedPlanRequestId !== review.summary.request_id) focusedPlanRow = null;
     focusedPlanRequestId = review.summary.request_id;

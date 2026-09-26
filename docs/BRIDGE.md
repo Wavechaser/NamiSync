@@ -254,6 +254,13 @@ second cleanup registry is introduced.
 
 ### Original-result observation
 
+Original-result retention applies to `create_task`, `start_plan`,
+`start_inventory`, `plan_again`, `start_execution`, `mutate_plan_selection`,
+`mutate_plan_scope`, `mutate_plan_highlighted_selection`, `control_execution`,
+`release_terminal_session` and `close_task`. Existing domain receipts do not
+provide a complete replacement: they can expire with retirement, replay a current
+projection or omit a no-effect disposition. No identical resend is introduced.
+
 The same native dispatch entry point accepts the canonical control string
 `observe:<original_request_id>:<original_command>` (at most 105 characters).
 It requires the current trusted document, an allowlisted OPEN command and an
@@ -282,15 +289,18 @@ or process loss, result custody stays charged; there is no timer eviction or
 append-only history. Unacknowledged custody can refuse new work at capacity.
 Retiring a response never substitutes for actual worker exit.
 
-Non-picker observed commands have a bounded startup wait before dispatch;
+Observed commands have a bounded startup wait before dispatch;
 startup failure cannot leave a continuation that submits the action later.
 Once dispatched, a five-second
 mutation delay triggers feedback and bounded observation, not
 cancellation or resubmission. One automatic round makes at most three observations,
-each with a one-second deadline and 100/250 ms inter-attempt waits. Exhaustion
-shows outcome unavailable without asserting effect failure or success. Explicit
-Retry observes the same original request and can adopt an already-arrived late
-response. Interactive picker wait, startup, drain, shutdown and resource deadlines
+each with a one-second deadline and 100/250 ms inter-attempt waits. A valid pending
+observation remains pending when the round ends; failed/unavailable communication
+qualifies that feedback without asserting effect failure or success. The original
+promise stays pending and is the sole result-adoption path, so a late valid result
+updates its owner automatically. Explicit **Check** runs another bounded read-only
+observation round; it creates neither a new mutation nor a second adoption owner.
+Interactive picker wait, startup, drain, shutdown and resource deadlines
 retain their separate contracts. Successful pending Close is a real lifecycle
 receipt; later settlement actions remain distinct from retrying its observation.
 Automatic Close continuation requires both that exact pending receipt and terminal
@@ -303,18 +313,33 @@ but its fixed response cannot improve through observation. Acknowledge and retir
 that completed transport entry while retaining the affected UI intent fence.
 Show that the outcome cannot be confirmed and direct the user to close/reopen
 NamiSync and review current state; do not offer a nonworking observation Retry.
-The availability of a Retry closure is not itself the ownership fence.
+The availability of a Check closure is not itself the ownership fence.
 After such a captured noncheckable review/control response, a separate explicit
 Cancel may target the same active execution unless the unknown action was itself
 Cancel. The existing control attempt owns that Cancel and any original-result
 observation; it cannot erase the review's retained warning or permit a second
-unknown Cancel. In-flight and checkable-unknown review commands remain fenced.
+unknown Cancel. In-flight protected review commands remain fenced.
 Task Close exposes the same blocking reason used by its handler.
 
-The interactive picker has no delay timer: a return that never settles does not
-automatically enter observation. A rejected return can use original-result
-recovery; a permanently lost return still requires closing/reopening the host.
-Bounded native retention alone does not guarantee recovery from every loss.
+### Current-state command recovery
+
+`update_plan_view`, `mutate_plan_highlight`, `replace_cosmetic_section`,
+`admit_location` and `pick_folder` do not retain or observe original responses.
+Their submitted promises have no elapsed-time effect deadline. The first four
+have bounded startup waiting and delayed feedback; the picker retains its
+interactive wait and one live picker owner. Worker/exchange/ACK custody stays
+bounded independently of original-result retention. Valid direct response capture
+survives cleanup failure; ACK remains best effort after validated capture.
+
+View, highlight and theme recover through an authoritative current-state read
+after failure or explicit Refresh. That read does not prove the earlier command
+settled. A fresh action uses the displayed revision and new user intent; request
+generations and revisions reject stale UI adoption. Folder editing or rechoice
+can supersede an admission, with row/admission revisions suppressing late replies;
+only the latest resolved choice may feed Start or batch capture. Neither kind of
+uncertainty alone fences unrelated task Close or controls. Selection→Execute,
+start/Close and receipt-retirement guards remain. No mutation is automatically
+replayed and no new outcome store or protocol is introduced.
 
 DocumentChannel owns a separate command FIFO under the same exchange bound and
 one native post owner. Required readiness is selected first; an in-flight native
@@ -379,20 +404,20 @@ BOOTSTRAP rows, commands require OPEN.
 | `read_setup` | `{task_id:null\|TaskId}` | `{task_id:null\|TaskId,snapshot:SetupSnapshot,recents:null\|RecentLocations}` | 5 s; one identical-payload retry |
 | `probe_recent_pairs` | `{}` | `{pairs:[{mapping_id:LocationId,source_id:LocationId,target_id:LocationId,source_state:LocationState,target_state:LocationState}]}` | async-small; 5 s; no automatic retry |
 | `prepare_setup` | `{options:SetupOptions}` | canonical `SetupOptions` | 5 s; one identical-payload retry |
-| `admit_location` | `{purpose:"source"\|"target"\|"inventory",candidate:LocationCandidate}` or `{purpose:"source"\|"target"\|"inventory",continuation_id:SlotId,mount_index:SafeInt}` | `LocationChoice` | observed original result; 5 s feedback; no mutation replay |
+| `admit_location` | `{purpose:"source"\|"target"\|"inventory",candidate:LocationCandidate}` or `{purpose:"source"\|"target"\|"inventory",continuation_id:SlotId,mount_index:SafeInt}` | `LocationChoice` | current-state recovery; 5 s feedback; no mutation replay |
 | `create_task` | `{command_id:HexId}` | `{task_id:TaskId}` | observed original result; 5 s feedback; no mutation replay |
 | `list_tasks` | `{}` | `{tasks:[{task_id:TaskId,task_kind:null\|"sync-plan"\|"inventory",request_id:null\|HexId,session_id:null\|HexId,session_state:null\|"active"\|"completed"\|"failed"\|"canceled"\|"refused",session_released:boolean}]}` | 5 s; one identical-payload retry |
 | `start_plan` | `{task_id:TaskId,command_id:HexId,source_id:SlotId,target_id:SlotId,options:SetupOptions}` | `{task_id:TaskId,request_id:HexId,session_id:HexId}` | observed original result; 5 s feedback; no mutation replay |
 | `start_inventory` | `{task_id:TaskId,command_id:HexId,root_id:SlotId}` | `{task_id:TaskId,request_id:HexId,session_id:HexId}` | observed original result; 5 s feedback; no mutation replay |
 | `plan_again` | `{task_id:TaskId,command_id:HexId,source_mount:null\|string,target_mount:null\|string}` | `{task_id:TaskId,request_id:HexId,session_id:HexId}` | observed original result; 5 s feedback; no mutation replay |
 | `open_plan_view` | `{task_id:TaskId}` | `PlanViewSummary` | 5 s; one identical-payload retry |
-| `update_plan_view` | `{task_id:TaskId,expected_revision:SafeInt,search_query:string,filters:[PlanFilter],sort_column:"path"\|"filename"\|"size"\|"mtime",sort_direction:"ascending"\|"descending",collapse_node_id:null\|NodeId,collapsed:null\|boolean}` | `PlanViewSummary` | observed original result; 5 s feedback; no mutation replay |
+| `update_plan_view` | `{task_id:TaskId,expected_revision:SafeInt,search_query:string,filters:[PlanFilter],sort_column:"path"\|"filename"\|"size"\|"mtime",sort_direction:"ascending"\|"descending",collapse_node_id:null\|NodeId,collapsed:null\|boolean}` | `PlanViewSummary` | current-state recovery; 5 s feedback; no mutation replay |
 | `get_plan_window` | `{task_id:TaskId,expected_revision:SafeInt,offset:SafeInt,limit:1..256}` | `{disposition:"current"\|"conflict",view_revision:SafeInt,offset:SafeInt,total:SafeInt,execution:ExecutionSummary,rows:[PlanWindowRow]}` | 5 s; one identical-payload retry |
 | `get_execution_detail` | `{task_id:TaskId,operation_id:HexId,expected_execution_revision:SafeInt}` | `{disposition:"current"\|"conflict"\|"not-retained",execution_revision:SafeInt,operation_id:HexId,operation:null\|OperationItemView,automatic_verification:null\|IntegrityOutcomeView,evidence:null\|ExecutionEvidence}` | 5 s; one identical-payload retry |
 | `get_plan_anchor` | `{task_id:TaskId,expected_revision:SafeInt,node_id:NodeId}` or `{task_id:TaskId,session_id:HexId,expected_revision:SafeInt,operation_id:HexId}` | `{disposition:"current"\|"conflict",view_revision:SafeInt,node_id:null\|NodeId,index:null\|SafeInt}` | 5 s; one identical-payload retry |
 | `mutate_plan_selection` | `{task_id:TaskId,command_id:HexId,expected_view_revision:SafeInt,expected_selection_revision:SafeInt,node_id:NodeId,selected:boolean}` | `PlanViewSummary` | observed original result; 5 s feedback; no mutation replay |
 | `mutate_plan_scope` | `{task_id:TaskId,command_id:HexId,expected_view_revision:SafeInt,expected_selection_revision:SafeInt,selected:boolean}` | `PlanViewSummary` | observed original result; 5 s feedback; no mutation replay |
-| `mutate_plan_highlight` | `{task_id:TaskId,expected_view_revision:SafeInt,expected_highlight_revision:SafeInt,gesture:"clear"|"replace"|"toggle"|"extend"|"add-range"|"move_up"|"move_down",node_id:null\|NodeId}` | `PlanViewSummary` | observed original result; 5 s feedback; no mutation replay |
+| `mutate_plan_highlight` | `{task_id:TaskId,expected_view_revision:SafeInt,expected_highlight_revision:SafeInt,gesture:"clear"|"replace"|"toggle"|"extend"|"add-range"|"move_up"|"move_down"|"move_up_extend"|"move_down_extend",node_id:null\|NodeId}` | `PlanViewSummary` | current-state recovery; 5 s feedback; no mutation replay |
 | `mutate_plan_highlighted_selection` | `{task_id:TaskId,command_id:HexId,expected_view_revision:SafeInt,expected_highlight_revision:SafeInt,expected_selection_revision:SafeInt,selected:boolean}` | `PlanViewSummary` | observed original result; 5 s feedback; no mutation replay |
 | `start_execution` | `{task_id:TaskId,request_id:HexId,command_id:HexId,expected_revision:SafeInt,destructive_acknowledged:boolean}` | task/session start or `{disposition:"in-flight"\|"frozen"\|"conflict"\|"confirmation-required",revision:SafeInt,state:"reviewing"\|"committing"\|"committed",session:null\|{request_id:HexId,session_id:HexId}}` | observed original result; 5 s feedback; no mutation replay |
 | `control_execution` | `{task_id:TaskId,session_id:HexId,action:"pause"\|"resume"\|"cancel"}` | `{code:string,session_id:HexId,before:null\|string,after:null\|string,detail:string,accepted:boolean}` | observed original result; 5 s feedback; no mutation replay |
@@ -400,7 +425,7 @@ BOOTSTRAP rows, commands require OPEN.
 | `release_terminal_session` | `{task_id:TaskId,session_id:HexId}` | `{task_id:TaskId,session_id:HexId}` | observed original result; 5 s feedback; no mutation replay |
 | `close_task` | `{task_id:TaskId,session_id:null\|HexId}` | `{task_id:TaskId,session_id:null\|HexId,disposition:"pending"\|"closed"}` | observed original result; 5 s feedback; no mutation replay |
 | `read_cosmetic_section` | `{section:"appearance",value_version:1,applied_presentation_revision:SafeInt\|null}` | `{section:"appearance",value_version:1,revision:SafeInt,dirty:boolean,value:{theme:Theme}}` | 5 s; one identical-payload retry |
-| `replace_cosmetic_section` | `{section:"appearance",value_version:1,expected_revision:SafeInt,value:{theme:Theme}}` | same cosmetic snapshot plus `disposition:"applied"\|"noop"\|"conflict"` | observed original result; 5 s feedback; no mutation replay |
+| `replace_cosmetic_section` | `{section:"appearance",value_version:1,expected_revision:SafeInt,value:{theme:Theme}}` | same cosmetic snapshot plus `disposition:"applied"\|"noop"\|"conflict"` | current-state recovery; 5 s feedback; no mutation replay |
 
 Non-null replay sequences crossing the browser remain JavaScript-safe. Command id
 and revision fields are forbidden unless named. Starts submit complete canonical

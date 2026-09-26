@@ -85,8 +85,10 @@ silently reducing the ordinary suite to source-text inspection.
 
 Mutation transport cases use controlled delay, admission/completion loss and
 cleanup failure. Verify one original submission/effect, bounded read-only result
-observation, explicit unavailable state, later original-result adoption and
-true worker settlement. A removed replay expectation is not a regression by
+observation, distinct healthy-pending/unavailable feedback, automatic late-result
+adoption and true worker settlement. Current-state cases cover authoritative
+refresh, deliberate folder replacement and stale-response rejection without
+retaining an original outcome. Check never resubmits a mutation. A removed replay expectation is not a regression by
 itself; retained identity, state, effect and ownership guarantees decide it.
 Keep read/drain/startup/lifecycle/resource deadline cases separate.
 

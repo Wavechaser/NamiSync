@@ -135,14 +135,16 @@ function deferred(collection) {
 globalThis.taskHarness = {
   calls,
   createTask() { calls.push(["create"]); return deferred(creates); },
-  closeTask(taskId, sessionId) {
+  closeTask(taskId, sessionId, onDelayed) {
     calls.push(["close", taskId, sessionId]);
-    return deferred(closes);
+    const promise = deferred(closes);
+    closes.at(-1).delay = onDelayed;
+    return promise;
   },
   listTasks() { calls.push(["list"]); return deferred(lists); },
-  startTaskDrain(taskId, sessionId, acceptUpdate, acceptRefusal, initialState, acceptRelease, acceptRecovered) {
+  startTaskDrain(taskId, sessionId, acceptUpdate, acceptRefusal, initialState, acceptRelease, acceptRecovered, acceptReleaseDelay) {
     calls.push(["drain", taskId, sessionId, initialState]);
-    drains.set(taskId, { acceptUpdate, acceptRefusal, acceptRelease, acceptRecovered });
+    drains.set(taskId, { acceptUpdate, acceptRefusal, acceptRelease, acceptRecovered, acceptReleaseDelay });
     return () => calls.push(["stop", taskId]);
   },
   openPlanView(...args) { calls.push(["open-plan", ...args]); return deferred(planOpens); },
@@ -180,12 +182,16 @@ globalThis.taskHarness = {
   startExecution(...args) {
     assert.equal(typeof args.at(-1), "function", "execution admission exposes delay feedback");
     calls.push(["execute-plan", ...args.slice(0, -1)]);
-    return deferred(planExecutions);
+    const promise = deferred(planExecutions);
+    planExecutions.at(-1).delay = args.at(-1);
+    return promise;
   },
   controlExecution(...args) {
     assert.equal(typeof args.at(-1), "function", "execution control exposes delay feedback");
     calls.push(["control-execution", ...args.slice(0, -1)]);
-    return deferred(executionControls);
+    const promise = deferred(executionControls);
+    executionControls.at(-1).delay = args.at(-1);
+    return promise;
   },
   planAgain(...args) {
     assert.equal(typeof args.at(-1), "function", "plan-again exposes delay feedback");
@@ -987,16 +993,15 @@ assert.equal(firstReview.pending, "execute", "execute feedback precedes admissio
 taskButton("Task 6").click();
 const executionSession = "8".repeat(32);
 const planDrain = drains.get(TASK_G);
-const observedExecutionCalls = [];
-const observedExecution = deferred(observedExecutionCalls);
 let executionOutcomeChecks = 0;
-const retry = () => {
+const checkExecution = () => {
   executionOutcomeChecks += 1;
-  return observedExecution;
+  return Promise.resolve(null);
 };
-planExecutions[1].reject(new StartPlanUncertainErrorType(retry));
-await until(() => firstReview.pending === null);
-assert.equal(reviewRenders.at(-1).executionAttempt.state, "uncertain");
+planExecutions[1].delay({ state: "unavailable", check: checkExecution });
+await until(() => typeof reviewRenders.at(-1).executionAttempt.check === "function");
+assert.equal(firstReview.pending, "execute");
+assert.equal(reviewRenders.at(-1).executionAttempt.state, "submitting");
 globalThis.planReviewHarness.callbacks.onSelect(
   firstReview,
   firstReview.window.rows[0],
@@ -1031,7 +1036,7 @@ await until(() => executionOutcomeChecks === 1);
 assert.equal(planExecutions.length, 2,
   "checking the original confirmed intent after review replacement does not resubmit execution");
 const admissionOpenBase = planOpens.length;
-observedExecutionCalls[0].resolve({ task_id: TASK_G, session_id: executionSession });
+planExecutions[1].resolve({ task_id: TASK_G, session_id: executionSession });
 await until(() => calls.some(
   (call) => call[0] === "drain" && call[1] === TASK_G && call[2] === executionSession,
 ));
@@ -1763,7 +1768,7 @@ const stoppedRetryButton = walk(app).find((element) =>
 assert.ok(stoppedRetryButton);
 assert.equal(typeof stoppedTask.recoveryRetry, "function");
 assert.equal(stoppedTask.recoverySessionId, stoppedTask.sessionId);
-assert.equal(stoppedTask.closeRetry, null);
+assert.equal(stoppedTask.closeCheck, null);
 assert.equal(stoppedRetryButton.disabled, false);
 stoppedRetryButton.click();
 assert.equal(stoppedRecoveryCalls, 1);
@@ -1785,18 +1790,19 @@ await until(() => stoppedTask.review.message === "Pausing execution…" && !stop
 const uncertainCloseIndex = closes.length;
 walk(app).find((element) => element.ariaLabel === `Close ${stoppedTask.label}`).click();
 await until(() => closes.length === uncertainCloseIndex + 1);
-const retryExactClose = () => {
-  calls.push(["close-retry", stoppedTaskId, stoppedSessionId]);
-  return deferred(closes);
+let closeOutcomeChecks = 0;
+const checkExactClose = () => {
+  closeOutcomeChecks += 1;
+  return Promise.resolve(null);
 };
-closes.at(-1).reject(new (await import(bridgeUrl)).TaskCloseUncertainError(retryExactClose));
-await until(() => typeof stoppedTask.closeRetry === "function");
+closes.at(-1).delay({ state: "unavailable", check: checkExactClose });
+await until(() => typeof stoppedTask.closeCheck === "function");
 assert.equal(walk(app).find((element) =>
   element.ariaLabel === `Retry updates for ${stoppedTask.label}`).hidden, true,
   "uncertain Close fences observation retry");
-walk(app).find((element) => element.ariaLabel === `Retry close outcome for ${stoppedTask.label}`).click();
-await until(() => closes.length === uncertainCloseIndex + 2);
-assert.deepEqual(calls.at(-1), ["close-retry", stoppedTaskId, stoppedSessionId]);
+walk(app).find((element) => element.ariaLabel === `Check Close outcome for ${stoppedTask.label}`).click();
+await until(() => closeOutcomeChecks === 1);
+assert.equal(closes.length, uncertainCloseIndex + 1, "Check does not resubmit Close");
 closes.at(-1).resolve({ task_id: stoppedTaskId, session_id: stoppedSessionId, disposition: "closed" });
 await turns();
 assert.ok(taskButton(stoppedTask.label) === undefined);
@@ -1959,7 +1965,7 @@ assert.equal(closes.length, pendingReviewCloseBase,
 planSelections.at(-1).reject(new OutcomeUnavailableErrorType(null, false));
 await until(() => unknownReview.outcomeUnknown === true);
 assert.equal(unknownReview.pending, "outcome");
-assert.equal(unknownReview.outcomeRetry, null);
+assert.equal(unknownReview.outcomeCheck, null);
 assert.match(unknownReview.message, /Close and reopen NamiSync/);
 assert.equal(unknownReviewTask.reviewOutcomeUnknown, true);
 const unknownSelectionCount = planSelections.length;
@@ -1981,7 +1987,7 @@ planWindows.at(-1).resolve(planWindow(unknownSummary));
 await until(() => unknownReviewTask.review !== unknownReview);
 assert.equal(unknownReviewTask.review.pending, "outcome",
   "a read-only review replacement retains the fixed-unknown intent fence");
-assert.equal(unknownReviewTask.review.outcomeRetry, null);
+assert.equal(unknownReviewTask.review.outcomeCheck, null);
 
 async function openActiveUnknownOutcomeTask(hex) {
   const taskId = `task-${hex.repeat(32)}`;
@@ -2006,74 +2012,32 @@ async function openActiveUnknownOutcomeTask(hex) {
   return task;
 }
 
-const unknownHighlightTask = await openActiveUnknownOutcomeTask("0");
-const highlightReview = unknownHighlightTask.review;
+const highlightTask = await openActiveUnknownOutcomeTask("0");
+const highlightReview = highlightTask.review;
 const highlightBase = planHighlights.length;
 deferHighlight = true;
 globalThis.planReviewHarness.callbacks.onHighlight(
   highlightReview, "replace", highlightReview.window.rows[0].node_id,
 );
 await until(() => planHighlights.length === highlightBase + 1);
-planHighlights.at(-1).reject(new OutcomeUnavailableErrorType(null, false));
-await until(() => highlightReview.outcomeUnknown);
+planHighlights.at(-1).reject(new Error("highlight transport failed"));
+await until(() => highlightReview.refreshAvailable === true);
 deferHighlight = false;
-assert.equal(highlightReview.pending, "outcome");
-assert.equal(highlightReview.outcomeAction, null);
-assert.equal(unknownHighlightTask.canCancelAfterFixedReviewOutcome, true);
-assert.match(highlightReview.message, /Close and reopen NamiSync/);
+assert.equal(highlightReview.outcomeUnknown, false);
+assert.equal(highlightReview.pending, null);
+assert.match(highlightReview.message, /Refresh review/);
 const highlightClose = walk(app).find((element) =>
-  element.ariaLabel === "Original outcome cannot be confirmed. Close and reopen NamiSync to review current state.");
-assert.equal(highlightClose?.disabled, true, "unknown highlight keeps Close fenced");
-const highlightCancelBase = executionControls.length;
-globalThis.planReviewHarness.callbacks.onControl(highlightReview, "cancel");
-await until(() => executionControls.length === highlightCancelBase + 1);
-assert.deepEqual(calls.at(-1), ["control-execution", unknownHighlightTask.taskId,
-  unknownHighlightTask.sessionId, "cancel"]);
-assert.equal(highlightReview.pending, "outcome", "independent Cancel does not replace the original fence");
-assert.match(highlightReview.message, /Close and reopen NamiSync/);
-assert.equal(unknownHighlightTask.executionControlAttempt.independent, true);
-globalThis.planReviewHarness.callbacks.onControl(highlightReview, "cancel");
-assert.equal(executionControls.length, highlightCancelBase + 1,
-  "in-flight independent Cancel cannot be resubmitted");
-const cancelObservations = [];
-let cancelObservationCalls = 0;
-const observeCancel = () => {
-  cancelObservationCalls += 1;
-  return deferred(cancelObservations);
-};
-executionControls.at(-1).reject(new OutcomeUnavailableErrorType(observeCancel));
-await until(() => typeof unknownHighlightTask.executionControlAttempt.retry === "function");
-assert.equal(unknownHighlightTask.canCancelAfterFixedReviewOutcome, false);
-assert.equal(highlightReview.outcomeRetry, null,
-  "independent Cancel observation does not overwrite the original unknown action");
-assert.match(unknownHighlightTask.executionControlAttempt.message, /Retry outcome/);
+  element.ariaLabel === `Close ${highlightTask.label}`);
+assert.equal(highlightClose?.disabled, false, "presentation failure does not fence Close");
 const highlightReloadBase = planOpens.length;
 const highlightReloadWindowBase = planWindows.length;
-void globalThis.taskHarness.forceReview(unknownHighlightTask, true);
+globalThis.planReviewHarness.callbacks.onRetryOutcome(highlightReview);
 await until(() => planOpens.length === highlightReloadBase + 1);
 planOpens.at(-1).resolve(highlightReview.summary);
 await until(() => planWindows.length === highlightReloadWindowBase + 1);
 planWindows.at(-1).resolve(planWindow(highlightReview.summary));
-await until(() => unknownHighlightTask.review !== highlightReview);
-const reloadedHighlightReview = unknownHighlightTask.review;
-assert.equal(reloadedHighlightReview.pending, "outcome");
-assert.equal(reloadedHighlightReview.outcomeAction, null);
-assert.match(reloadedHighlightReview.message, /Close and reopen NamiSync/);
-assert.equal(typeof unknownHighlightTask.executionControlAttempt.retry, "function");
-globalThis.planReviewHarness.callbacks.onRetryOutcome(reloadedHighlightReview);
-await until(() => cancelObservations.length === 1);
-assert.equal(cancelObservationCalls, 1);
-assert.equal(executionControls.length, highlightCancelBase + 1,
-  "Cancel Retry observes the exact request without fresh submission");
-cancelObservations[0].reject(new OutcomeUnavailableErrorType(null, false));
-await until(() => unknownHighlightTask.executionControlAttempt.unknown);
-assert.equal(unknownHighlightTask.executionControlAttempt.retry, null);
-assert.equal(unknownHighlightTask.canCancelAfterFixedReviewOutcome, false);
-assert.match(reloadedHighlightReview.message, /Close and reopen NamiSync/);
-globalThis.planReviewHarness.callbacks.onControl(reloadedHighlightReview, "cancel");
-await turns();
-assert.equal(executionControls.length, highlightCancelBase + 1,
-  "fixed unknown Cancel cannot be submitted again");
+await until(() => highlightTask.review !== highlightReview);
+assert.equal(highlightTask.review.outcomeUnknown, false);
 
 const unknownPauseTask = await openActiveUnknownOutcomeTask("1");
 const pauseReview = unknownPauseTask.review;
@@ -2087,6 +2051,30 @@ assert.equal(unknownPauseTask.canCancelAfterFixedReviewOutcome, true);
 globalThis.planReviewHarness.callbacks.onControl(pauseReview, "cancel");
 await until(() => executionControls.length === pauseBase + 2);
 assert.equal(pauseReview.pending, "outcome");
+assert.equal(unknownPauseTask.executionControlAttempt.independent, true);
+let cancelObservationCalls = 0;
+executionControls.at(-1).delay({ state: "unavailable", check: () => {
+  cancelObservationCalls += 1;
+  return Promise.resolve(null);
+} });
+await until(() => typeof unknownPauseTask.executionControlAttempt.check === "function");
+assert.equal(pauseReview.outcomeCheck, null, "independent Cancel cannot replace the original warning");
+globalThis.planReviewHarness.callbacks.onControl(pauseReview, "cancel");
+assert.equal(executionControls.length, pauseBase + 2, "pending Cancel cannot be resubmitted");
+const cancelReloadBase = planOpens.length;
+const cancelReloadWindowBase = planWindows.length;
+void globalThis.taskHarness.forceReview(unknownPauseTask, true);
+await until(() => planOpens.length === cancelReloadBase + 1);
+planOpens.at(-1).resolve(pauseReview.summary);
+await until(() => planWindows.length === cancelReloadWindowBase + 1);
+planWindows.at(-1).resolve(planWindow(pauseReview.summary));
+await until(() => unknownPauseTask.review !== pauseReview);
+const reloadedPauseReview = unknownPauseTask.review;
+assert.equal(reloadedPauseReview.pending, "outcome");
+assert.match(reloadedPauseReview.message, /Close and reopen NamiSync/);
+globalThis.planReviewHarness.callbacks.onRetryOutcome(reloadedPauseReview);
+await until(() => cancelObservationCalls === 1);
+assert.equal(executionControls.length, pauseBase + 2, "Check observes without resubmitting Cancel");
 executionControls.at(-1).resolve({
   code: "accepted", session_id: unknownPauseTask.sessionId,
   before: "running", after: "canceling", detail: "Cancel requested.", accepted: true,
@@ -2094,7 +2082,7 @@ executionControls.at(-1).resolve({
 await until(() => unknownPauseTask.executionControlAttempt.pending === false);
 assert.equal(unknownPauseTask.executionControlAttempt.accepted, true);
 assert.equal(unknownPauseTask.canCancelAfterFixedReviewOutcome, false);
-assert.match(pauseReview.message, /Close and reopen NamiSync/);
+assert.match(reloadedPauseReview.message, /Close and reopen NamiSync/);
 
 const unknownCancelTask = await openActiveUnknownOutcomeTask("4");
 const cancelReview = unknownCancelTask.review;
@@ -2109,6 +2097,49 @@ globalThis.planReviewHarness.callbacks.onControl(cancelReview, "cancel");
 await turns();
 assert.equal(executionControls.length, originalCancelBase + 1,
   "unknown original Cancel cannot be treated as an independent Cancel");
+
+const pendingViewTask = await openActiveUnknownOutcomeTask("6");
+const pendingViewReview = pendingViewTask.review;
+const pendingViewBase = planViewUpdates.length;
+globalThis.planReviewHarness.callbacks.onViewChange(pendingViewReview, { sortColumn: "size" });
+await until(() => planViewUpdates.length === pendingViewBase + 1);
+assert.equal(pendingViewReview.pending, "view");
+const viewCloseBase = closes.length;
+walk(app).find((element) => element.ariaLabel === `Close ${pendingViewTask.label}`).click();
+await until(() => closes.length === viewCloseBase + 1);
+assert.equal(pendingViewTask.closePending, true, "presentation work does not fence Close");
+planViewUpdates.at(-1).resolve(planSummary({ ...pendingViewReview.summary,
+  view_revision: pendingViewReview.summary.view_revision + 1 }));
+await turns();
+assert.equal(pendingViewTask.closePending, true, "late view result cannot clear Close ownership");
+assert.equal(pendingViewReview.pending, "close");
+closes.at(-1).resolve({ task_id: pendingViewTask.taskId,
+  session_id: pendingViewTask.sessionId, disposition: "closed" });
+await until(() => taskButton(pendingViewTask.label) === undefined);
+
+const pendingReleaseTask = await openActiveUnknownOutcomeTask("5");
+const pendingReleaseDrain = drains.get(pendingReleaseTask.taskId);
+let releaseChecks = 0;
+pendingReleaseDrain.acceptReleaseDelay(pendingReleaseTask.taskId,
+  pendingReleaseTask.sessionId, { state: "unavailable", check: () => {
+    releaseChecks += 1;
+    return Promise.resolve(null);
+  } });
+assert.equal(pendingReleaseTask.drainUnavailable, false,
+  "healthy delayed release is not a drain refusal");
+pendingReleaseDrain.acceptRecovered(pendingReleaseTask.taskId, pendingReleaseTask.sessionId);
+assert.match(pendingReleaseTask.error, /Release outcome unavailable/,
+  "unrelated recovery cannot clear pending release feedback");
+const releaseCheckButton = walk(app).find((element) =>
+  element.ariaLabel === `Check release outcome for ${pendingReleaseTask.label}`);
+assert.ok(releaseCheckButton && !releaseCheckButton.hidden);
+releaseCheckButton.click();
+await until(() => releaseChecks === 1);
+assert.equal(pendingReleaseTask.sessionReleased, false,
+  "observation alone does not claim a release receipt");
+pendingReleaseDrain.acceptRelease(pendingReleaseTask.taskId, pendingReleaseTask.sessionId);
+assert.equal(pendingReleaseTask.releaseCheck, null);
+assert.equal(pendingReleaseTask.sessionReleased, true);
 
 const closeRaceTaskId = `task-${"2".repeat(32)}`;
 const closeRaceSessionId = "2".repeat(32);

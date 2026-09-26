@@ -32,20 +32,20 @@ const COMMAND_POLICY_JSON = `{
   "read_setup": {"timeout": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
   "probe_recent_pairs": {"timeout": "local-5-seconds", "retry": "none", "phase": "open"},
   "prepare_setup": {"timeout": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
-  "admit_location": {"timeout": "mutation-observed", "retry": "none", "phase": "open"},
+  "admit_location": {"timeout": "feedback-only", "retry": "none", "phase": "open"},
   "read_cosmetic_section": {"timeout": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
-  "replace_cosmetic_section": {"timeout": "mutation-observed", "retry": "none", "phase": "open"},
+  "replace_cosmetic_section": {"timeout": "feedback-only", "retry": "none", "phase": "open"},
   "start_plan": {"timeout": "mutation-observed", "retry": "none", "phase": "open"},
   "start_inventory": {"timeout": "mutation-observed", "retry": "none", "phase": "open"},
   "plan_again": {"timeout": "mutation-observed", "retry": "none", "phase": "open"},
   "open_plan_view": {"timeout": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
-  "update_plan_view": {"timeout": "mutation-observed", "retry": "none", "phase": "open"},
+  "update_plan_view": {"timeout": "feedback-only", "retry": "none", "phase": "open"},
   "get_plan_window": {"timeout": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
   "get_execution_detail": {"timeout": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
   "get_plan_anchor": {"timeout": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
   "mutate_plan_selection": {"timeout": "mutation-observed", "retry": "none", "phase": "open"},
   "mutate_plan_scope": {"timeout": "mutation-observed", "retry": "none", "phase": "open"},
-  "mutate_plan_highlight": {"timeout": "mutation-observed", "retry": "none", "phase": "open"},
+  "mutate_plan_highlight": {"timeout": "feedback-only", "retry": "none", "phase": "open"},
   "mutate_plan_highlighted_selection": {"timeout": "mutation-observed", "retry": "none", "phase": "open"},
   "start_execution": {"timeout": "mutation-observed", "retry": "none", "phase": "open"},
   "control_execution": {"timeout": "mutation-observed", "retry": "none", "phase": "open"},
@@ -60,6 +60,7 @@ const TIMEOUT_MS_BY_POLICY = Object.freeze({
   "startup-5-seconds": 5000,
   "local-5-seconds": 5000,
   "interactive": null,
+  "feedback-only": null,
   "mutation-observed": null,
   "drain-30-seconds": 30000,
 });
@@ -271,11 +272,9 @@ export class BridgeTransportError extends Error {
 }
 
 export class StartPlanUncertainError extends BridgeTransportError {
-  constructor(retry, checkable = true) {
+  constructor() {
     super("The plan-start response could not be confirmed.");
     this.name = "StartPlanUncertainError";
-    this.retry = retry;
-    this.checkable = checkable;
   }
 }
 
@@ -288,24 +287,20 @@ export class TerminalPresentationError extends BridgeTransportError {
 }
 
 export class TerminalSessionReleaseError extends BridgeTransportError {
-  constructor(retry, unavailable = false, checkable = true) {
+  constructor(retry, unavailable = false) {
     super(unavailable
-      ? checkable
-        ? "The completed task release outcome is unavailable. Retry outcome to check the original release."
-        : "The completed task release outcome cannot be confirmed. Close and reopen NamiSync to review its current state."
+      ? "The completed task release outcome cannot be confirmed. Close and reopen NamiSync to review its current state."
       : "The completed task session could not be released. Retry the release.");
     this.name = "TerminalSessionReleaseError";
     this.retry = retry;
-    this.checkable = checkable;
+    this.checkable = !unavailable;
   }
 }
 
 export class TaskCloseUncertainError extends BridgeTransportError {
-  constructor(retry, checkable = true) {
+  constructor() {
     super("The task-close response could not be confirmed.");
     this.name = "TaskCloseUncertainError";
-    this.retry = retry;
-    this.checkable = checkable;
   }
 }
 
@@ -375,11 +370,9 @@ export async function pickFolder(purpose) {
 }
 
 export class TaskCreateUncertainError extends BridgeTransportError {
-  constructor(retry, checkable = true) {
+  constructor() {
     super("The task-creation response could not be confirmed.");
     this.name = "TaskCreateUncertainError";
-    this.retry = retry;
-    this.checkable = checkable;
   }
 }
 
@@ -452,16 +445,9 @@ export async function createTask(onDelayed = null) {
       CREATE_TASK_TIMEOUT_MS, true, onDelayed,
     );
   } catch (error) {
-    throw taskUncertainty(error, TaskCreateUncertainError);
+    if (error instanceof OutcomeUnavailableError) throw new TaskCreateUncertainError();
+    throw error;
   }
-}
-
-function taskUncertainty(error, ErrorType) {
-  if (!(error instanceof OutcomeUnavailableError)) return error;
-  if (!error.checkable) return new ErrorType(null, false);
-  return new ErrorType(() => error.retry().catch((failure) => {
-    throw taskUncertainty(failure, ErrorType);
-  }));
 }
 
 export async function listTasks() {
@@ -492,6 +478,7 @@ export function startTaskDrain(
   initialState = null,
   acceptRelease = null,
   acceptRecovered = null,
+  acceptReleaseDelay = null,
 ) {
   if (
     typeof taskId !== "string" ||
@@ -512,6 +499,9 @@ export function startTaskDrain(
   }
   if (acceptRecovered !== null && typeof acceptRecovered !== "function") {
     throw new TypeError("startTaskDrain recovery callback must be a function");
+  }
+  if (acceptReleaseDelay !== null && typeof acceptReleaseDelay !== "function") {
+    throw new TypeError("startTaskDrain release delay callback must be a function");
   }
   if (
     initialState !== null &&
@@ -537,6 +527,7 @@ export function startTaskDrain(
     acceptRefusal,
     acceptRelease,
     acceptRecovered,
+    acceptReleaseDelay,
     epoch: 0,
     active: null,
     armScheduled: false,
@@ -672,9 +663,7 @@ export async function closeTask(taskId, sessionId = null, onDelayed = null) {
       return result;
     } catch (error) {
       if (error instanceof OutcomeUnavailableError) {
-        throw error.checkable
-          ? new TaskCloseUncertainError(() => settle(error.retry()))
-          : new TaskCloseUncertainError(null, false);
+        throw new TaskCloseUncertainError();
       }
       if (taskCloseFences.get(taskId) === sessionId) taskCloseFences.delete(taskId);
       throw error;
@@ -697,7 +686,8 @@ function submitStart(payload, command, timeoutMs, onDelayed = null) {
   return dispatchAttempt(
     command, payload, validateResult, timeoutMs, true, onDelayed,
   ).catch((error) => {
-    throw taskUncertainty(error, StartPlanUncertainError);
+    if (error instanceof OutcomeUnavailableError) throw new StartPlanUncertainError();
+    throw error;
   });
 }
 
@@ -804,13 +794,9 @@ export async function getPlanAnchor(taskId, expectedRevision, nodeId) {
 }
 
 export class OutcomeUnavailableError extends BridgeTransportError {
-  constructor(retry, checkable = true) {
-    super(checkable
-      ? "The original action outcome is unavailable. Retry outcome to check it again."
-      : "The original action outcome cannot be confirmed. Close and reopen NamiSync to review its current state.");
+  constructor() {
+    super("The original action outcome cannot be confirmed. Close and reopen NamiSync to review its current state.");
     this.name = "OutcomeUnavailableError";
-    this.retry = retry;
-    this.checkable = checkable;
   }
 }
 
@@ -963,7 +949,8 @@ export function startExecution(taskId, requestId, expectedRevision, destructiveA
     "start_execution", payload, validateExecutionAdmission,
     EXECUTION_START_TIMEOUT_MS, true, onDelayed,
   ).catch((error) => {
-    throw taskUncertainty(error, StartPlanUncertainError);
+    if (error instanceof OutcomeUnavailableError) throw new StartPlanUncertainError();
+    throw error;
   });
 }
 
@@ -1120,7 +1107,7 @@ function createObservedAttempt(
     command, requestId, validateResult, asyncSmall,
     generation: null, responseToken: null, completionToken: null,
     nativeAckStarted: false,
-    earlyCompletion: null, result: null, initialSettled: false,
+    earlyCompletion: null, result: null,
     observationRunning: null, delayedTimer: null, ready: false,
     onDelayed,
     resolve: null, reject: null,
@@ -1137,7 +1124,6 @@ function createObservedAttempt(
   });
   void dispatchObservedReadyAttempt(request, state, waitUntilReady).catch((error) => {
     if (!state.ready) {
-      state.initialSettled = true;
       retireObservedAttempt(state);
       state.reject(error instanceof BridgeTransportError ? error : new BridgeTransportError());
     } else {
@@ -1151,18 +1137,15 @@ function createObservedAttempt(
 }
 
 async function dispatchObservedReadyAttempt(request, state, waitUntilReady) {
-  if (state.command === "pick_folder") await waitUntilReady();
-  else await withDeadline(waitUntilReady(), SHELL_READY_TIMEOUT_MS, () => {});
+  await withDeadline(waitUntilReady(), SHELL_READY_TIMEOUT_MS, () => {});
   const api = bridgeApi();
   if (typeof api?.dispatch !== "function") throw new BridgeTransportError();
   state.ready = true;
-  if (state.command !== "pick_folder") {
-    state.delayedTimer = setTimeout(() => {
-      if (state.result !== null) return;
-      try { state.onDelayed?.(); } catch (_error) { /* Presentation cannot change custody. */ }
-      void recoverObservedResult(state);
-    }, MUTATION_FEEDBACK_MS);
-  }
+  state.delayedTimer = setTimeout(() => {
+    if (state.result !== null) return;
+    notifyObservedDelay(state, "pending");
+    void recoverObservedResult(state);
+  }, MUTATION_FEEDBACK_MS);
   const native = await api.dispatch(request);
   if (!isExactObject(native, ["transport_version", "response_token", "response"])
       && !isExactObject(native, ["transport_version", "response_token", "completion"])) {
@@ -1242,17 +1225,19 @@ function acceptObservedResponse(state, response) {
     void acknowledgeCommandCompletion(message).catch(() => {});
   }
   const fixedUnknown = ["internal_error", "response_too_large"].includes(error?.code);
-  if (fixedUnknown) retireObservedAttempt(state);
-  if (!state.initialSettled) {
-    state.initialSettled = true;
-    if (fixedUnknown) {
-      state.reject(new OutcomeUnavailableError(null, false));
-    } else {
-      retireObservedAttempt(state);
-      if (error === null) state.resolve(value);
-      else state.reject(error);
-    }
-  }
+  retireObservedAttempt(state);
+  if (fixedUnknown) state.reject(new OutcomeUnavailableError());
+  else if (error === null) state.resolve(value);
+  else state.reject(error);
+}
+
+function notifyObservedDelay(state, status) {
+  try {
+    state.onDelayed?.({
+      state: status,
+      check: () => recoverObservedResult(state),
+    });
+  } catch (_error) { /* Presentation cannot change custody. */ }
 }
 
 function retireObservedAttempt(state) {
@@ -1269,6 +1254,7 @@ async function recoverObservedResult(state) {
   if (state.result !== null) return state.result;
   if (state.observationRunning !== null) return state.observationRunning;
   const run = (async () => {
+    let latestStatus = "unavailable";
     for (let index = 0; index < 3; index += 1) {
       if (state.result !== null) break;
       if (index > 0) await delay(OBSERVATION_DELAYS_MS[index - 1]);
@@ -1279,15 +1265,15 @@ async function recoverObservedResult(state) {
           Promise.resolve(api.dispatch(`observe:${state.requestId}:${state.command}`)),
           OBSERVATION_TIMEOUT_MS, () => {},
         );
-        acceptObservedObservation(state, observed);
+        latestStatus = acceptObservedObservation(state, observed);
       } catch (_error) {
         // A failed observation is a communication fact, never an effect verdict.
+        latestStatus = "unavailable";
       }
     }
-    if (state.result === null && !state.initialSettled) {
-      state.initialSettled = true;
+    if (state.result === null) {
       clearTimeout(state.delayedTimer);
-      state.reject(new OutcomeUnavailableError(() => retryObservedResult(state)));
+      notifyObservedDelay(state, latestStatus);
     }
     return state.result;
   })();
@@ -1297,20 +1283,6 @@ async function recoverObservedResult(state) {
   } finally {
     if (state.observationRunning === run) state.observationRunning = null;
   }
-}
-
-async function retryObservedResult(state) {
-  if (state.result === null) await recoverObservedResult(state);
-  if (state.result === null) {
-    throw new OutcomeUnavailableError(() => retryObservedResult(state));
-  }
-  if (["internal_error", "response_too_large"].includes(state.result.error?.code)) {
-    retireObservedAttempt(state);
-    throw new OutcomeUnavailableError(null, false);
-  }
-  retireObservedAttempt(state);
-  if (state.result.error !== null) throw state.result.error;
-  return state.result.value;
 }
 
 function acceptObservedObservation(state, observed) {
@@ -1340,7 +1312,7 @@ function acceptObservedObservation(state, observed) {
   if (observed.state === "unavailable") {
     if (observed.response_token !== null || observed.completion_token !== null
         || observed.response !== null) throw new BridgeTransportError();
-    return;
+    return "unavailable";
   }
   if (observed.state === "pending" && observed.response !== null) {
     throw new BridgeTransportError();
@@ -1363,6 +1335,7 @@ function acceptObservedObservation(state, observed) {
   if (observed.state === "ready" && state.result === null) {
     acceptObservedResponse(state, cloneJsonValue(observed.response));
   }
+  return observed.state;
 }
 
 function createDispatchAttempt(
@@ -1375,8 +1348,7 @@ function createDispatchAttempt(
   onDelayed = null,
 ) {
   const requestId = mintId();
-  if (COMMAND_POLICY_CONTRACT[command]?.timeout === "mutation-observed"
-      || command === "pick_folder") {
+  if (COMMAND_POLICY_CONTRACT[command]?.timeout === "mutation-observed") {
     return createObservedAttempt(
       command, payload, validateResult, requestId, waitUntilReady,
       asyncSmall, onDelayed,
@@ -1386,6 +1358,9 @@ function createDispatchAttempt(
     cancelled: false,
     rejectCancellation: null,
     asyncEntry: null,
+    feedbackOnly: COMMAND_POLICY_CONTRACT[command]?.timeout === "feedback-only",
+    onDelayed,
+    delayedTimer: null,
   };
   const request = JSON.stringify({
     schema_version: BRIDGE_SCHEMA_VERSION,
@@ -1449,7 +1424,11 @@ async function dispatchReadyAttempt(
   attempt,
   waitUntilReady,
 ) {
-  await waitUntilReady();
+  if (attempt.feedbackOnly) {
+    await withDeadline(waitUntilReady(), SHELL_READY_TIMEOUT_MS, () => {});
+  } else {
+    await waitUntilReady();
+  }
   if (attempt.cancelled) {
     throw new BridgeTransportError();
   }
@@ -1457,7 +1436,7 @@ async function dispatchReadyAttempt(
     void resolve;
     attempt.rejectCancellation = reject;
   });
-  let response;
+  let value;
   try {
     const api = bridgeApi();
     if (
@@ -1466,20 +1445,30 @@ async function dispatchReadyAttempt(
     ) {
       throw new BridgeTransportError();
     }
+    if (attempt.feedbackOnly) {
+      attempt.delayedTimer = setTimeout(() => {
+        try {
+          attempt.onDelayed?.({ state: "pending", check: null });
+        } catch (_error) { /* Presentation cannot change custody. */ }
+      }, MUTATION_FEEDBACK_MS);
+    }
     // No await occurs between this final cancellation check and dispatch.
     const transport = Promise.resolve(api.dispatch(request)).then(
-      (nativeResponse) => detachNativeResponse(api, nativeResponse),
+      (nativeResponse) => detachNativeResponse(
+        api, nativeResponse, requestId, validateResult,
+      ),
     );
-    response = await Promise.race([transport, cancelled]);
+    value = await Promise.race([transport, cancelled]);
   } catch (error) {
-    if (error instanceof BridgeTransportError) {
+    if (error instanceof BridgeTransportError || error instanceof BridgeCommandError) {
       throw error;
     }
     throw new BridgeTransportError();
   } finally {
     attempt.rejectCancellation = null;
+    clearTimeout(attempt.delayedTimer);
   }
-  return validateResponse(response, requestId, validateResult);
+  return value;
 }
 
 async function dispatchSmallReadyAttempt(
@@ -1798,7 +1787,7 @@ function isCompletionResponse(value, requestId) {
   return ERROR_MESSAGES[value.error.code] === value.error.message;
 }
 
-async function detachNativeResponse(api, nativeResponse) {
+function detachNativeResponse(api, nativeResponse, requestId, validateResult) {
   if (
     !isExactObject(nativeResponse, [
       "transport_version",
@@ -1817,16 +1806,22 @@ async function detachNativeResponse(api, nativeResponse) {
     throw new BridgeTransportError();
   }
   const responseToken = nativeResponse.response_token;
-  let response;
+  let value;
+  let error = null;
   try {
-    response = cloneJsonValue(nativeResponse.response);
+    value = validateResponse(
+      cloneJsonValue(nativeResponse.response), requestId, validateResult,
+    );
+  } catch (failure) {
+    error = failure;
   } finally {
     nativeResponse = null;
     if (responseToken !== null) {
-      await acknowledgeNativeResponse(api, responseToken);
+      void acknowledgeNativeResponse(api, responseToken).catch(() => {});
     }
   }
-  return response;
+  if (error !== null) throw error;
+  return value;
 }
 
 async function acknowledgeNativeResponse(api, responseToken) {
@@ -2465,6 +2460,12 @@ function runTaskRelease(task) {
       SESSION_RELEASE_TIMEOUT_MS,
       whenBridgeReady,
       true,
+      (status) => {
+        if (!isCurrentTaskRelease(task, epoch)) return;
+        try {
+          task.acceptReleaseDelay?.(task.taskId, task.sessionId, status);
+        } catch (_error) { /* Presentation cannot change release custody. */ }
+      },
     );
   } catch (_error) {
     refuseTaskRelease(task, epoch, new BridgeTransportError());
@@ -2511,19 +2512,7 @@ function refuseTaskRelease(task, epoch, error) {
   }
   task.releaseControl = null;
   if (error instanceof OutcomeUnavailableError) {
-    if (!error.checkable) {
-      reportTaskRefusal(task, new TerminalSessionReleaseError(null, true, false));
-      return;
-    }
-    const retry = () => {
-      if (!isCurrentTaskRelease(task, epoch)) return false;
-      void error.retry().then(
-        () => settleTaskRelease(task, epoch),
-        (failure) => refuseTaskRelease(task, epoch, failure),
-      );
-      return true;
-    };
-    reportTaskRefusal(task, new TerminalSessionReleaseError(retry, true));
+    reportTaskRefusal(task, new TerminalSessionReleaseError(null, true));
     return;
   }
   reportTaskRefusal(task, new TerminalSessionReleaseError(() => beginTaskRelease(task)));

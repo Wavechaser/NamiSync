@@ -447,11 +447,14 @@ domain-effect receipt authority and owns exact session associations; Dispatcher
 custody is not a receipt lifetime. Every admitted direct or task-bound session
 receives an application association before publication.
 
-Desktop transport separately retains an admitted request's original response in
-its existing bounded custody. Read-only result observation cannot call the
-mutation handler or replace application effect receipts. Delayed feedback and
-exhausted observation report availability, not operation success/failure. The
-original remains recoverable until validated capture/ACK or document/host
+Desktop transport retains original responses for the eleven effect/lifecycle
+commands listed in BRIDGE, using existing bounded custody. Read-only observation
+cannot call the mutation handler or replace application effect receipts. A bounded
+observation round reports pending or unavailable communication without abandoning
+the original promise; late valid completion reaches its issuing owner. The five
+current-state commands instead use revisioned refresh or deliberate folder rechoice,
+without claiming that current state proves an earlier effect's outcome. Retained
+originals remain recoverable until validated capture/ACK or document/host
 ownership ends; actual worker settlement remains independent. BRIDGE owns the
 wire shape, bounds, acknowledgment ordering and observation budgets. CLI and
 direct service behavior retain their existing contracts.
@@ -796,7 +799,8 @@ boundary and its race limitation. It also protects the small admission return
 for asynchronous commands; asynchronous completion does not remove that race.
 
 The native bridge separates admission from completion only for `create_task`,
-`start_plan`, `start_inventory`, `plan_again`, `release_terminal_session` and
+`start_plan`, `start_inventory`, `plan_again`, `start_execution`,
+`probe_recent_pairs`, `release_terminal_session` and
 `close_task`. CommandSpec owns that
 classification; custom commands and ordinary Python dispatch retain synchronous
 results. The host binds the dispatcher to its existing DocumentChannel after

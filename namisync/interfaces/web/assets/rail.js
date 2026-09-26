@@ -42,8 +42,12 @@ export function createTaskRail({ onCreate, onSelect, onClose, onRetryUpdates, on
   renderText(empty, "No tasks are available.");
   emptySlot.append(empty);
 
-  function render(tasks, selectedTaskId, creating, settingsVisible = false) {
-    create.disabled = creating;
+  function render(tasks, selectedTaskId, createAttempt, settingsVisible = false) {
+    const checkCreate = typeof createAttempt?.check === "function";
+    create.disabled = createAttempt?.unknown === true
+      || (createAttempt?.running === true && (!checkCreate || createAttempt.checking));
+    create.ariaLabel = checkCreate ? "Check new task outcome" : "New task";
+    create.title = create.ariaLabel;
     settings.ariaCurrent = settingsVisible ? "page" : "false";
     if (tasks.length === 0) {
       for (const entry of entries.values()) {
@@ -114,7 +118,7 @@ export function createTaskRail({ onCreate, onSelect, onClose, onRetryUpdates, on
       }
       entry.select.ariaCurrent = !settingsVisible && task.taskId === selectedTaskId ? "page" : "false";
       const digest = taskStatusDigest(task);
-      const closeUnavailable = task.closeRetry !== null;
+      const closeUnavailable = task.closeOutcomeUnknown;
       renderText(entry.title, closeUnavailable ? "Outcome unavailable" : digest.title);
       const closeReason = typeof task.closeBlockReason === "string" ? task.closeBlockReason : null;
       const closeStatus = task.closePending
@@ -135,12 +139,17 @@ export function createTaskRail({ onCreate, onSelect, onClose, onRetryUpdates, on
       if (digest.progress.indeterminate) entry.progress.removeAttribute?.("aria-valuenow");
       else entry.progress.ariaValueNow = String(digest.progress.value);
       entry.progress.style?.setProperty("--nami-progress-value", `${digest.progress.value}%`);
-      entry.retry.hidden = typeof task.recoveryRetry !== "function" || task.closeRetry !== null;
-      entry.retry.disabled = task.recoveryRunning;
-      renderText(entry.retry, task.recoveryRunning ? "Retrying updates…" : "Retry updates");
-      entry.retry.ariaLabel = `${task.recoveryRunning ? "Retrying updates for" : "Retry updates for"} ${task.label}`;
-      entry.close.disabled = closeReason !== null;
-      entry.close.ariaLabel = closeReason ?? `${closeUnavailable ? "Retry close outcome for"
+      const checkRelease = typeof task.releaseCheck === "function";
+      entry.retry.hidden = (!checkRelease && typeof task.recoveryRetry !== "function")
+        || typeof task.closeCheck === "function";
+      entry.retry.disabled = task.recoveryRunning || task.releaseChecking;
+      renderText(entry.retry, checkRelease ? task.releaseChecking ? "Checking outcome…" : "Check outcome"
+        : task.recoveryRunning ? "Retrying updates…" : "Retry updates");
+      entry.retry.ariaLabel = `${checkRelease ? "Check release outcome for"
+        : task.recoveryRunning ? "Retrying updates for" : "Retry updates for"} ${task.label}`;
+      const checkClose = task.closePending && typeof task.closeCheck === "function";
+      entry.close.disabled = closeReason !== null && (!checkClose || task.closeChecking);
+      entry.close.ariaLabel = checkClose ? `Check Close outcome for ${task.label}` : closeReason ?? `${closeUnavailable ? "Retry close outcome for"
         : task.closeFailed ? "Retry close for" : "Close"} ${task.label}`;
       entry.close.title = entry.close.ariaLabel;
       list.append(entry.row);

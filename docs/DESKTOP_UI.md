@@ -769,12 +769,14 @@ contrast-theme transition.
 The product header now includes the labelled System/Light/Dark selector carried
 by the ratified cosmetic channel. It stays disabled until its initial section
 read succeeds; exhausted initial transport failure leaves only that control
-disabled and does not alter operational readiness. It serializes replacements,
+disabled and does not alter operational readiness. Within one displayed generation
+it serializes replacements,
 reconciles only server-accepted state, and never mutates theme CSS
 optimistically. A delayed replacement keeps its original request and shows
-qualified feedback. Outcome unavailability leaves the selector fenced and offers
-observation-only Retry; later recovery adopts the original result before canonical
-section reconciliation. A new selection cannot replace unresolved intent.
+qualified feedback. Failure or explicit Refresh reads the current canonical
+section and permits a new revision-bound choice. Refresh does not claim the old
+replacement settled; generations prevent its late reply from restoring an older
+display. No original-response observation or sticky outcome fence is retained.
 Document replacement follows the host's close/reopen contract. Save failure remains a sanitized log event
 in the active cosmetic contract;
 it does not block bridge readiness or replace the shell's operational status.
@@ -1169,14 +1171,15 @@ rediscovered from task enumeration.
 One active batch gesture owns its selected rows, each with its own captured
 options. Before admitting a queued pair, its snapshot is independently
 canonicalized; a preparation refusal affects only that row. Removing the row
-during preparation prevents its admission and submission. Uncertain requests
-reuse their canonical options and exact retry without preparing them again.
+during preparation prevents its admission and submission. Delayed requests
+retain their canonical options and original promise without preparing them again.
 Additional batch
 rows and new form starts wait for it to finish; each form also rejects overlapping
 gestures on that same task. This is not a global queue for independent form
-attempts already underway. Uncertain creation or start keeps
-the exact command's Retry action and remains distinct from refusal; retry never
-substitutes edited input or creates a replacement intent.
+attempts already underway. Delayed or unavailable creation/start offers the
+exact command's read-only Check and remains distinct from refusal; Check never
+substitutes edited input or creates a replacement intent. Late completion is
+adopted by the original issuing operation.
 
 Core folder rows and the primary action appear first; More options reveals
 the remaining task-local choices. Start admits unresolved nonempty rows automatically.
@@ -1196,16 +1199,17 @@ Clear results removes settled receipts, without closing created tasks or
 discarding unresolved requests. The table hides only when no entries remain.
 The right-aligned Create batch footer sits 8px below the table. Create batch and
 Clear results both remain visible whenever the table exists. They are disabled
-when no eligible creation/retry or settled result is available, respectively;
+when no eligible creation/Check or settled result is available, respectively;
 creation also retains the existing editing, closure and in-flight guards.
-Remove discards a queued
-row locally, including while an earlier row is being prepared; the runner
-rechecks row membership before submission. Submitted or uncertain requests
-cannot be removed. Closing the origin discards its queued rows, but its close
-control remains unavailable during preparation or while submitting/uncertain
-rows need reconciliation. An adopted task also cannot close or submit a fresh
+Remove discards a queued row locally, including during preparation, or a row
+still waiting for folder admission before task creation. The runner rechecks
+membership before submission; late folder replies cannot revive a removed row.
+Create/Start requests already submitted cannot be removed. Closing the origin
+discards its queued rows and can detach pending folder admission, but its close
+control remains unavailable during preparation or while Create/Start outcomes
+need reconciliation. An adopted task also cannot close or submit a fresh
 form while its batch start needs reconciliation; guidance names the origin.
-The close control explains that reason. Original-outcome observation Retry remains
+The close control explains that reason. Original-outcome observation Check remains
 available on the origin, and navigation never transfers the rows to a new task.
 After a start, per-task readback shows the backend-frozen locations and options.
 Plan again reads fresh availability for the reviewed identities, requests an
@@ -1421,7 +1425,7 @@ scroll within a short viewport. Initial focus is Cancel; Tab
 stays within the dialog, Escape cancels, and closing restores the invoking
 control's focus when it remains available. Confirm is single-shot and begins
 admission immediately. Cancel before submission leaves the review editable;
-uncertain submission instead retains observation-only Retry and disables selection and
+delayed submission instead offers read-only Check and disables selection and
 Close until admission truth is recovered. Shared reduced-motion and
 forced-color rules apply.
 
@@ -1561,7 +1565,7 @@ or while task Close is pending. Keep last-known execution truth: lost updates
 are not proof that work stopped. Retry restores observation of the same session;
 it does not restart work. Controls remain unavailable until recovery delivery
 is validated. Terminal display/release failures reuse their distinct retries.
-An uncertain Close keeps its original-result Retry and fence ahead of observation recovery;
+An unresolved Close keeps its original-result Check and fence ahead of observation recovery;
 a pending Close can finish after recovered terminal delivery.
 
 Closing a live task renders
@@ -1575,22 +1579,29 @@ responses are inert before payload read.
 
 Mutation response delay is availability feedback, not an operation deadline.
 After five seconds, qualify the wait for the original result; finite failed
-observation shows **Outcome unavailable** and an observation-only Retry action.
-Keep the original intent and relevant task/session/revision fences until its
-outcome is resolved. A captured final response that cannot establish the effect
+observation qualifies communication as **Outcome unavailable** and offers a
+read-only Check. A healthy pending response remains pending when the bounded
+round ends. The original promise remains the sole adopter, so a late valid
+response updates its owner automatically. For the eleven protected commands in
+BRIDGE, keep the original intent and relevant task/session/revision fences until
+its outcome is resolved. A captured final response that cannot establish the effect
 keeps the intent fence with close/reopen and fresh-review guidance, without a
 Retry button that cannot recover anything. An unresolved Close blocks new starts
-and replacement tasks; an unresolved folder choice blocks picker, mount, edit,
-clear and recent-choice replacement.
-Retry cannot submit another create, start, control, selection,
-view/highlight, cosmetic replacement or Close. A late valid original result can
-be adopted without repeating confirmation or changing current navigation.
+and replacement tasks. Folder choices remain local: editing, clearing, mount or
+recent-choice replacement invalidates older admission replies; Start/batch uses
+only the latest resolved choice. One live native picker remains separately owned.
+View, highlight and theme use authoritative current-state Refresh, with revisions
+and generations preventing stale adoption. Current state does not prove an old
+effect settled. These five commands do not keep original-outcome fences, and
+their uncertainty alone does not block unrelated Close or controls.
+Check cannot submit another mutation. Late adoption repeats no confirmation
+and does not change current navigation.
 Successful pending Close and live session observation retain their separate
 settlement paths. D4 highlight/focus remains independent of execution selection.
 After a captured noncheckable review response, a user may still Cancel the same
 active execution if the unknown action was not Cancel. Its separate control
-attempt retains its own outcome and observation Retry while the original review
-warning remains. This exception does not reopen in-flight/checkable review work,
+attempt retains its own outcome and observation Check while the original review
+warning remains. This exception does not reopen in-flight protected review work,
 repeat an unknown Cancel or unblock task Close. Disabled Close gives the same
 action-guiding reason enforced by its handler.
 

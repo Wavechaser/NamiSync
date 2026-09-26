@@ -940,10 +940,7 @@ class BridgeDispatcher:
 
             if (
                 native_custody is not None
-                and (
-                    spec.timeout is CommandTimeout.MUTATION_OBSERVED
-                    or name == "pick_folder"
-                )
+                and spec.timeout is CommandTimeout.MUTATION_OBSERVED
             ):
                 if not self._bind_observed_command(
                     native_custody,

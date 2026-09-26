@@ -1,9 +1,4 @@
-import {
-  BridgeTransportError,
-  OutcomeUnavailableError,
-  readCosmeticSection,
-  replaceCosmeticSection,
-} from "./bridge.js";
+import { readCosmeticSection, replaceCosmeticSection } from "./bridge.js";
 import { renderText } from "./render.js";
 
 const THEMES = Object.freeze(["system", "light", "dark"]);
@@ -247,11 +242,7 @@ export function installThemeSelector(
   let current = null;
   let renderedTheme = "system";
   let closed = false;
-  let replacementSettlement = Promise.resolve();
-  let replacementPending = false;
-  let unresolvedRevision = null;
-  let outcomeRetry = null;
-  let outcomeUnknown = false;
+  let pendingReplacements = 0;
 
   select.disabled = true;
 
@@ -285,23 +276,6 @@ export function installThemeSelector(
     return true;
   };
 
-  const observeRevision = (revision) => {
-    if (unresolvedRevision !== null && revision > unresolvedRevision) {
-      unresolvedRevision = null;
-    }
-  };
-
-  const reconcileAfterUncertainty = async (state, expectedRevision) => {
-    try {
-      const snapshot = await read();
-      observeRevision(snapshot.revision);
-      const accepted = accept(state, snapshot);
-      return accepted && snapshot.revision > expectedRevision;
-    } catch {
-      return false;
-    }
-  };
-
   const replaceDesiredThemes = async (state) => {
     state.replacing = true;
     let recoverable = true;
@@ -314,44 +288,27 @@ export function installThemeSelector(
         }
 
         let result;
-        const expectedRevision = state.authoritative.revision;
         try {
-          result = await replace(expectedRevision, theme, () => {
+          result = await replace(state.authoritative.revision, theme, () => {
             if (isCurrent(state)) {
-              onOutcomeStatus("Theme response delayed. Checking its original outcome…", false);
+              onOutcomeStatus("Theme change is still pending. Refresh to read the current theme.", true);
             }
           });
         } catch (error) {
           state.desiredTheme = null;
-          if (error instanceof OutcomeUnavailableError) {
-            outcomeRetry = error.retry;
-            outcomeUnknown = !error.checkable;
-            recoverable = false;
-            onOutcomeStatus(outcomeUnknown
-              ? "Theme outcome cannot be confirmed. Close and reopen NamiSync to review current state."
-              : "Theme outcome unavailable. Retry outcome to check the original change.", !outcomeUnknown);
-          } else if (error instanceof BridgeTransportError) {
-            unresolvedRevision = Math.max(
-              unresolvedRevision ?? expectedRevision,
-              expectedRevision,
-            );
-            recoverable = await reconcileAfterUncertainty(
-              state,
-              expectedRevision,
-            );
-          } else {
-            recoverable = false;
+          recoverable = false;
+          if (isCurrent(state)) {
+            onOutcomeStatus("Theme response unavailable. Refresh to read the current theme.", true);
+            await open();
           }
-          state.desiredTheme = null;
           break;
         }
-        observeRevision(result.revision);
-        onOutcomeStatus(null, false);
         if (!accept(state, result)) {
           recoverable = false;
           state.desiredTheme = null;
           break;
         }
+        onOutcomeStatus(null, false);
         if (result.disposition === "conflict") {
           state.desiredTheme = null;
           break;
@@ -372,7 +329,6 @@ export function installThemeSelector(
     renderAuthoritative(state);
     if (
       !isCurrent(state)
-      || outcomeUnknown
       || state.authoritative === null
       || !isTheme(requestedTheme)
     ) {
@@ -385,19 +341,14 @@ export function installThemeSelector(
     state.desiredTheme = requestedTheme;
     select.disabled = true;
     if (!state.replacing) {
+      pendingReplacements += 1;
       const settlement = replaceDesiredThemes(state);
-      replacementSettlement = settlement;
-      replacementPending = true;
       void settlement.then(
         () => {
-          if (replacementSettlement === settlement) {
-            replacementPending = false;
-          }
+          pendingReplacements -= 1;
         },
         () => {
-          if (replacementSettlement === settlement) {
-            replacementPending = false;
-          }
+          pendingReplacements -= 1;
         },
       );
     }
@@ -424,33 +375,15 @@ export function installThemeSelector(
       replacing: false,
     };
     current = state;
-    if (outcomeRetry !== null) {
-      onOutcomeStatus("Theme outcome unavailable. Retry outcome to check the original change.", true);
-      return false;
-    }
-    if (outcomeUnknown) {
-      onOutcomeStatus("Theme outcome cannot be confirmed. Close and reopen NamiSync to review current state.", false);
-      return false;
-    }
     try {
-      if (replacementPending) {
-        await replacementSettlement;
-        if (!isCurrent(state)) {
-          return false;
-        }
-      }
       const snapshot = await read(appliedPresentationRevision);
-      observeRevision(snapshot.revision);
       if (!accept(state, snapshot)) {
         return false;
       }
-      if (
-        unresolvedRevision !== null
-        && snapshot.revision <= unresolvedRevision
-      ) {
-        return false;
-      }
       select.disabled = false;
+      onOutcomeStatus(pendingReplacements > 0
+        ? "Current theme loaded. An earlier change may still finish; refresh to check again."
+        : null, pendingReplacements > 0);
       return true;
     } catch {
       return false;
@@ -470,34 +403,6 @@ export function installThemeSelector(
     },
     invalidate,
     open,
-    async retryOutcome() {
-      if (closed || outcomeRetry === null) return false;
-      const retry = outcomeRetry;
-      onOutcomeStatus("Checking the original theme outcome…", false);
-      try {
-        const result = await retry();
-        outcomeRetry = null;
-        outcomeUnknown = false;
-        onOutcomeStatus(null, false);
-        if (current !== null && accept(current, result)) {
-          select.disabled = false;
-          return true;
-        }
-        return open();
-      } catch (error) {
-        if (error instanceof OutcomeUnavailableError) {
-          outcomeRetry = error.retry;
-          outcomeUnknown = !error.checkable;
-          onOutcomeStatus(outcomeUnknown
-            ? "Theme outcome cannot be confirmed. Close and reopen NamiSync to review current state."
-            : "Theme outcome unavailable. Retry outcome to check the original change.", !outcomeUnknown);
-          return false;
-        }
-        outcomeRetry = null;
-        onOutcomeStatus("Theme change was refused. Open Settings to read the current theme.", false);
-        return open();
-      }
-    },
     async refresh(appliedPresentationRevision = null) {
       if (closed || current === null) {
         return false;

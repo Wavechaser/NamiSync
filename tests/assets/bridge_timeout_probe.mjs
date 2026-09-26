@@ -550,33 +550,47 @@ assert.equal(asyncRequests.length, readRequestCount + 1,
   "late read cleanup does not issue a second request");
 assert.equal(asyncTimers.size, 0);
 
-// Exhausted observation leaves the original effect uncertain; a later retry
-// observes that same request and never resubmits the command.
+// Exhausted observation leaves the original promise pending. A later exact
+// completion settles it automatically without another command or check.
 let lateExchange;
 delivery = (exchange) => { lateExchange = exchange; return exchange.admission; };
 observationPolicy = (exchange) => exchange === lateExchange ? "pending" : "ready";
 const unavailableRequestCount = asyncRequests.length;
 const unavailableObservationCount = asyncObservations.length;
-const unavailableWork = asyncBridge.createTask();
+const delayedUpdates = [];
+const unavailableWork = asyncBridge.createTask((status) => delayedUpdates.push(status));
 await flush();
 await expireAsync(5000);
-let unavailableError;
-try {
-  await unavailableWork;
-  assert.fail("three pending observations must report an unavailable outcome");
-} catch (error) {
-  unavailableError = error;
-}
-assert.equal(unavailableError.name, "TaskCreateUncertainError");
-assert.equal(typeof unavailableError.retry, "function");
+let unavailableSettled = false;
+void unavailableWork.then(() => { unavailableSettled = true; });
+assert.equal(unavailableSettled, false,
+  "bounded observation exhaustion cannot settle the original promise");
+assert.equal(delayedUpdates.at(-1).state, "pending");
+assert.equal(typeof delayedUpdates.at(-1).check, "function");
 assert.equal(asyncRequests.length, unavailableRequestCount + 1);
 assert.deepEqual(asyncObservations.slice(unavailableObservationCount),
   Array(3).fill(`observe:${lateExchange.request.request_id}:create_task`));
-observationPolicy = () => "ready";
-assert.deepEqual(await unavailableError.retry(), lateExchange.message.response.result);
+send(lateExchange.message);
+assert.deepEqual(await unavailableWork, lateExchange.message.response.result);
 assert.equal(asyncRequests.length, unavailableRequestCount + 1,
-  "manual outcome retry only observes the original request");
-assert.equal(asyncObservations.length, unavailableObservationCount + 4);
+  "late completion cannot resubmit the original request");
+assert.equal(asyncObservations.length, unavailableObservationCount + 3,
+  "late completion needs no manual check");
+
+// The last observation, not an earlier pending poll, qualifies the feedback.
+let mixedExchange;
+let mixedPoll = 0;
+delivery = (exchange) => { mixedExchange = exchange; return exchange.admission; };
+observationPolicy = (exchange) => exchange === mixedExchange
+  ? ["pending", "unavailable", "unavailable"][mixedPoll++] : "ready";
+const mixedUpdates = [];
+const mixedWork = asyncBridge.createTask((status) => mixedUpdates.push(status));
+await flush();
+await expireAsync(5000);
+assert.equal(mixedPoll, 3);
+assert.equal(mixedUpdates.at(-1).state, "unavailable");
+send(mixedExchange.message);
+await mixedWork;
 
 // A captured final error cannot decide whether the effect happened, but its
 // exact result is already available and must not retain a pointless retry slot.
@@ -605,8 +619,8 @@ for (const code of ["internal_error", "response_too_large"]) {
     finalError = error;
   }
   assert.equal(finalError.name, "TaskCreateUncertainError");
-  assert.equal(finalError.checkable, false);
-  assert.equal(finalError.retry, null);
+  assert.equal("checkable" in finalError, false);
+  assert.equal("retry" in finalError, false);
   assert.equal(asyncRequests.length, requestCount + 1,
     "captured error cannot resubmit the original mutation");
   assert.equal(asyncObservations.length, observationCount,
@@ -620,7 +634,10 @@ for (const code of ["internal_error", "response_too_large"]) {
 delivery = (exchange) => exchange.admission;
 const countBefore = asyncRequests.length;
 const observationsBefore = asyncObservations.length;
-const batch = Array.from({ length: 64 }, () => asyncBridge.createTask());
+const batchFeedback = Array.from({ length: 64 }, () => []);
+const batch = batchFeedback.map((updates) => asyncBridge.createTask(
+  (status) => updates.push(status),
+));
 await flush();
 await assert.rejects(asyncBridge.createTask(), (error) => error.code === "bridge_busy");
 assert.equal(asyncRequests.length, countBefore + 64);
@@ -631,9 +648,9 @@ const feedback = [...asyncTimers].filter(([, timer]) => timer.milliseconds === 5
 assert.equal(feedback.length, 64);
 observationPolicy = () => "unavailable";
 for (const [token, timer] of feedback) { asyncTimers.delete(token); timer.callback(); }
-const unavailable = await Promise.allSettled(batch);
-assert.ok(unavailable.every((entry) => entry.status === "rejected"
-  && entry.reason.name === "TaskCreateUncertainError"));
+await flush();
+assert.ok(batchFeedback.every((updates) => updates.at(-1)?.state === "unavailable"
+  && typeof updates.at(-1).check === "function"));
 assert.equal(asyncRequests.length, countBefore + 64,
   "observation exhaustion cannot replay any retained mutation");
 assert.equal(asyncObservations.length - observationsBefore, 64 * 3,
@@ -642,4 +659,9 @@ for (const request of asyncRequests.slice(countBefore)) {
   assert.equal(asyncObservations.slice(observationsBefore).filter((value) =>
     value === `observe:${request.request_id}:create_task`).length, 3);
 }
+observationPolicy = () => "ready";
+await Promise.all(batchFeedback.map((updates) => updates.at(-1).check()));
+await Promise.all(batch);
+assert.equal(asyncRequests.length, countBefore + 64,
+  "manual checks only observe the original 64 requests");
 assert.equal(page.listenerCount("pywebviewready"), 1);

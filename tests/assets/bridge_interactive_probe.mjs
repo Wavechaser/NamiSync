@@ -210,7 +210,7 @@ assert.deepEqual(testWindow.requests.at(-1).payload, {
   mount_index: 1,
 });
 assert.equal(timerCalls, timersBeforeDirectAdmission + 3,
-  "continuation admission owns startup, feedback, and exact cleanup bounds");
+  "continuation admission owns startup and feedback bounds plus fixture cleanup");
 assert.throws(
   () => bridge.admitLocation("source", { continuation_id: continuationId, mount_index: -1 }),
   /candidate or continuation choice/,
@@ -319,13 +319,17 @@ for (const [command, start, mismatch] of [
   ["plan_again", () => bridge.planAgain(taskId), sameTaskStart],
 ]) {
   const before = testWindow.requests.length;
+  const observationBefore = testWindow.observations.length;
   testWindow.queueResults(command, mismatch);
-  await assert.rejects(
-    start(),
-    { name: "StartPlanUncertainError" },
-    `${command} rejects a response with the wrong task identity`,
+  let settled = false;
+  void start().then(
+    () => { settled = true; }, () => { settled = true; },
   );
+  for (let turn = 0; turn < 32; turn += 1) await Promise.resolve();
+  assert.equal(settled, false, `${command} cannot adopt a wrong task identity`);
   assert.equal(testWindow.requests.length, before + 1, "wrong identity never replays a mutation");
+  assert.equal(testWindow.observations.length - observationBefore, 3,
+    "wrong identity checks only the original request");
 }
 
 const typedAmbiguous = {
@@ -417,7 +421,7 @@ await assert.rejects(
     path: "C:\\Typed",
     selected_mount: null,
   }),
-  { name: "OutcomeUnavailableError" },
+  { name: "BridgeTransportError" },
   "location admission remains limited to 27 mount candidates",
 );
 assert.equal(testWindow.requests.length, beforeOversizedAdmission + 1,

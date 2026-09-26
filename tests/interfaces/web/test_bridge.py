@@ -1814,6 +1814,46 @@ def test_observe_direct_original_at_saturation_without_repeating_effect(
     assert calls == [{}]
 
 
+@pytest.mark.parametrize(
+    "timeout", [CommandTimeout.FEEDBACK_ONLY, CommandTimeout.INTERACTIVE]
+)
+def test_current_direct_command_has_no_original_result_custody(
+    timeout: CommandTimeout,
+) -> None:
+    calls: list[object] = []
+    bridge = BridgeDispatcher(
+        document=_trusted_document(),
+        commands={"current": CommandSpec(
+            validate_payload=lambda payload: payload,
+            handler=lambda payload: calls.append(payload) or {"current": True},
+            access=CommandAccess.READ_ONLY,
+            command_id=FieldRequirement.FORBIDDEN,
+            revision=FieldRequirement.FORBIDDEN,
+            timeout=timeout,
+            retry=CommandRetry.NONE,
+        )},
+        admit=_admit_open,
+    )
+    command = json.dumps({
+        "schema_version": BRIDGE_SCHEMA_VERSION,
+        "request_id": _REQUEST_ID,
+        "command": "current",
+        "payload": {},
+    })
+    native: list[dict[str, object]] = []
+    owner = Thread(target=lambda: native.append(bridge._dispatch_native(command)))
+    owner.start()
+    owner.join(1.0)
+    assert not owner.is_alive()
+    response_token = native[0]["response_token"]
+    assert isinstance(response_token, str)
+    assert native[0]["response"]["result"] == {"current": True}
+    assert _observe(bridge, _REQUEST_ID, "current")["state"] == "unavailable"
+    assert bridge._dispatch_native(f"ack:{response_token}") is True
+    bridge.wait_for_handlers(1.0)
+    assert calls == [{}]
+
+
 def test_observe_refuses_wrong_command_and_untrusted_document() -> None:
     bridge = BridgeDispatcher(
         document=_trusted_document(),

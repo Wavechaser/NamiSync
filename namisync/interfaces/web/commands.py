@@ -195,6 +195,7 @@ class CommandTimeout(StrEnum):
     STARTUP_5_SECONDS = "startup-5-seconds"
     LOCAL_5_SECONDS = "local-5-seconds"
     INTERACTIVE = "interactive"
+    FEEDBACK_ONLY = "feedback-only"
     MUTATION_OBSERVED = "mutation-observed"
     DRAIN_30_SECONDS = "drain-30-seconds"
 
@@ -1254,7 +1255,7 @@ def production_command_specs(
                 access=CommandAccess.READ_ONLY,
                 command_id=FieldRequirement.FORBIDDEN,
                 revision=FieldRequirement.FORBIDDEN,
-                timeout=CommandTimeout.MUTATION_OBSERVED,
+                timeout=CommandTimeout.FEEDBACK_ONLY,
                 retry=CommandRetry.NONE,
             ),
             "create_task": CommandSpec(
@@ -1321,7 +1322,7 @@ def production_command_specs(
                 access=CommandAccess.READ_ONLY,
                 command_id=FieldRequirement.FORBIDDEN,
                 revision=FieldRequirement.REQUIRED,
-                timeout=CommandTimeout.MUTATION_OBSERVED,
+                timeout=CommandTimeout.FEEDBACK_ONLY,
                 retry=CommandRetry.NONE,
             ),
             "get_plan_window": CommandSpec(
@@ -1375,7 +1376,7 @@ def production_command_specs(
                 access=CommandAccess.READ_ONLY,
                 command_id=FieldRequirement.FORBIDDEN,
                 revision=FieldRequirement.REQUIRED,
-                timeout=CommandTimeout.MUTATION_OBSERVED,
+                timeout=CommandTimeout.FEEDBACK_ONLY,
                 retry=CommandRetry.NONE,
             ),
             "mutate_plan_highlighted_selection": CommandSpec(
@@ -1450,7 +1451,7 @@ def production_command_specs(
                 access=CommandAccess.MUTATING,
                 command_id=FieldRequirement.FORBIDDEN,
                 revision=FieldRequirement.REQUIRED,
-                timeout=CommandTimeout.MUTATION_OBSERVED,
+                timeout=CommandTimeout.FEEDBACK_ONLY,
                 retry=CommandRetry.NONE,
             ),
         }

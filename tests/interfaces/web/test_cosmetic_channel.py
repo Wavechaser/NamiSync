@@ -249,7 +249,7 @@ def test_br_g_46_browser_cosmetic_rows_are_exact_and_locally_bounded() -> None:
         "phase": "open",
     }
     assert policy["replace_cosmetic_section"] == {
-        "timeout": "mutation-observed",
+        "timeout": "feedback-only",
         "retry": "none",
         "phase": "open",
     }

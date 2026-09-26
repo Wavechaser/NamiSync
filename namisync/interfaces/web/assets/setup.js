@@ -2,7 +2,7 @@ import { createIcon } from "./icons.js";
 import { renderFilesystemText, renderText } from "./render.js";
 
 const MAX_BATCH_PAIRS = 48;
-const CALLBACKS = ["onEdit", "onValidate", "onRetryLocationOutcome", "onPick", "onRecent", "onRecentPair", "onRefreshRecents", "onMode", "onOption", "onAddFilter", "onRemoveFilter", "onMount", "onPlanAgainMount", "onStartPlan", "onStartInventory", "onAddPair", "onRemoveBatchRow", "onClearBatchResults", "onStartBatch", "onPlanAgain"];
+const CALLBACKS = ["onEdit", "onValidate", "onPick", "onRecent", "onRecentPair", "onRefreshRecents", "onMode", "onOption", "onAddFilter", "onRemoveFilter", "onMount", "onPlanAgainMount", "onStartPlan", "onStartInventory", "onAddPair", "onRemoveBatchRow", "onClearBatchResults", "onStartBatch", "onPlanAgain"];
 
 function createButton(text, classes = "nami-button") {
   const button = document.createElement("button");
@@ -218,7 +218,6 @@ function batchStatus(row) {
   if (row.state === "created") return "Created";
   if (row.state === "refused") return "Failed";
   if (row.state === "stopped") return "Stopped";
-  if (row.state === "uncertain") return "Retry needed";
   if (row.state === "unknown") return "Outcome unknown";
   if (row.stage === "creating") return "Creating task";
   if (row.stage === "starting") return "Creating plan";
@@ -237,7 +236,6 @@ export function createSetupPanel(callbacks) {
   const heading = document.createElement("h2");
   const guidance = document.createElement("p");
   const actionStatus = document.createElement("p");
-  const retryLocationOutcome = createButton("Retry folder outcome", "nami-button nami-button--secondary");
   const modeGroup = document.createElement("div");
   const mode = document.createElement("div");
   const modeButtons = new Map();
@@ -288,7 +286,6 @@ export function createSetupPanel(callbacks) {
   guidance.hidden = true;
   actionStatus.classList.add("nami-field__hint", "nami-setup__action-status");
   actionStatus.setAttribute("role", "status");
-  retryLocationOutcome.addEventListener("click", handlers.onRetryLocationOutcome);
   modeGroup.classList.add("nami-setup__mode-group");
   mode.classList.add("nami-segmented", "nami-setup__mode");
   mode.setAttribute("role", "radiogroup");
@@ -427,7 +424,7 @@ export function createSetupPanel(callbacks) {
   recentBody.classList.add("nami-table__body");
   recentTable.append(thead, recentBody);
   recentViewport.append(recentTable);
-  setupCard.append(heading, guidance, actionStatus, retryLocationOutcome, modeGroup, source.field, target.field, options, actions, batch, planAgainChoices);
+  setupCard.append(heading, guidance, actionStatus, modeGroup, source.field, target.field, options, actions, batch, planAgainChoices);
   recentCard.append(recentHeader, recentViewport);
   root.append(setupCard, recentCard);
   startPlan.addEventListener("click", () => handlers.onStartPlan());
@@ -609,8 +606,11 @@ export function createSetupPanel(callbacks) {
       renderText(message, batchStatus(value));
       message.title = value.message;
       statusCell.ariaDescription = value.message;
-      remove.disabled = value.state !== "queued";
-      remove.hidden = value.state !== "queued";
+      const removable = value.state === "queued" || (value.state === "submitting"
+        && value.stage?.startsWith("admitting-"));
+      remove.disabled = !removable;
+      remove.hidden = !removable;
+      remove.ariaLabel = value.state === "queued" ? "Remove queued pair" : "Remove pending folder pair";
       remove.addEventListener("click", () => handlers.onRemoveBatchRow(value));
       folders.append(sourcePath, targetPath);
       statusCell.append(message);
@@ -620,7 +620,8 @@ export function createSetupPanel(callbacks) {
     });
     fillPairPlaceholders(batchBody, rows.length, 4);
     batch.hidden = rows.length === 0;
-    const hasRetryable = rows.some((row) => ["queued", "uncertain"].includes(row.state));
+    const hasRetryable = rows.some((row) => row.state === "queued"
+      || (row.state === "submitting" && typeof row.check === "function" && !row.checking));
     clearBatch.disabled = !rows.some((row) => ["created", "refused", "stopped"].includes(row.state));
     startBatch.disabled ||= !hasRetryable;
   }
@@ -678,12 +679,8 @@ export function createSetupPanel(callbacks) {
     }
     const editable = model.editable;
     const locked = model.attempt !== null;
-    const locationOutcomeUnavailable = typeof model.source.outcomeRetry === "function"
-      || typeof model.target.outcomeRetry === "function";
-    const locationIntentPending = locationOutcomeUnavailable
-      || model.source.outcomeUnknown === true || model.target.outcomeUnknown === true;
     const controlsEditable = editable && !locked && !model.batchRunning
-      && !model.closePending && !locationIntentPending;
+      && !model.closePending;
     const selectedMode = setup.task_kind ?? model.mode;
     const recents = setup.recents ?? { sources: [], targets: [], pairs: [] };
     const nextLocationContext = `${selectedMode}\u0000${controlsEditable}\u0000${model.source.text}\u0000${model.target.text}`;
@@ -703,8 +700,6 @@ export function createSetupPanel(callbacks) {
     });
     renderText(actionStatus, model.actionMessage ?? model.batchMessage ?? "");
     actionStatus.hidden = actionStatus.textContent.length === 0;
-    retryLocationOutcome.hidden = !locationOutcomeUnavailable;
-    retryLocationOutcome.disabled = !editable || locked || model.batchRunning || model.closePending;
     renderLocation(source, model.source, recents.sources, controlsEditable, selectedMode === "inventory" ? "Root" : "Source");
     renderLocation(target, model.target, recents.targets, controlsEditable, "Target");
     target.field.hidden = selectedMode === "inventory";
@@ -727,32 +722,35 @@ export function createSetupPanel(callbacks) {
     additive.input.disabled = !controlsEditable || !hasOptions;
     optionInputs.forEach((input) => { input.disabled = !controlsEditable; });
     ads.input.disabled = true;
-    const retryKind = typeof model.attempt?.retry === "function" && !model.attempt.running
+    const retryKind = typeof model.attempt?.check === "function" && model.attempt.running
+      && !model.attempt.checking
       ? model.attempt.kind
       : null;
     const sourceNeedsMount = model.source.location?.state === "ambiguous";
     const targetNeedsMount = model.target.location?.state === "ambiguous";
-    renderText(startPlan, retryKind === "sync-plan" ? "Retry outcome" : "Create plan");
-    renderText(startInventory, retryKind === "inventory" ? "Retry outcome" : "Create inventory");
-    renderText(planAgain, retryKind === "plan-again" ? "Retry outcome" : "Plan again");
+    renderText(startPlan, retryKind === "sync-plan" ? "Check outcome" : "Create plan");
+    renderText(startInventory, retryKind === "inventory" ? "Check outcome" : "Create inventory");
+    renderText(planAgain, retryKind === "plan-again" ? "Check outcome" : "Plan again");
     startPlan.hidden = selectedMode !== "sync-plan" || !editable;
     startPlan.disabled = retryKind === "sync-plan"
       ? model.batchRunning || model.closePending
-      : !controlsEditable || locationOutcomeUnavailable || model.batchPending || !model.source.text || !model.target.text || sourceNeedsMount || targetNeedsMount;
+      : !controlsEditable || model.source.pending || model.target.pending || model.batchPending || !model.source.text || !model.target.text || sourceNeedsMount || targetNeedsMount;
     startInventory.hidden = selectedMode !== "inventory" || !editable;
     startInventory.disabled = retryKind === "inventory"
       ? model.batchRunning || model.closePending
-      : !controlsEditable || locationOutcomeUnavailable || model.batchPending || !model.source.text || sourceNeedsMount;
+      : !controlsEditable || model.source.pending || model.batchPending || !model.source.text || sourceNeedsMount;
     addPair.hidden = selectedMode !== "sync-plan" || !editable;
-    addPair.disabled = !controlsEditable || model.batchRunning
+    addPair.disabled = !controlsEditable || model.batchRunning || model.source.pending || model.target.pending
       || model.batch.some((row) => row.state === "unknown")
       || (!model.source.text && !model.target.text)
       || (model.batchCount ?? model.batch.length) >= MAX_BATCH_PAIRS;
-    const retryableBatch = model.batch.some((row) => row.state === "uncertain");
-    renderText(startBatch, retryableBatch ? "Retry outcomes" : "Create batch");
-    startBatch.disabled = !editable || selectedMode !== "sync-plan" || model.closePending || model.batchRunning || locked
+    const checkableBatch = model.batch.find((row) => row.state === "submitting"
+      && typeof row.check === "function" && !row.checking);
+    renderText(startBatch, checkableBatch ? "Check outcome" : "Create batch");
+    startBatch.disabled = !editable || selectedMode !== "sync-plan" || model.closePending
+      || (model.batchRunning && checkableBatch === undefined) || locked
       || model.batch.some((row) => row.state === "unknown")
-      || model.batch.every((row) => !["queued", "uncertain"].includes(row.state));
+      || (checkableBatch === undefined && model.batch.every((row) => row.state !== "queued"));
     planAgain.hidden = !model.canPlanAgain;
     const unresolved = setup.plan_again !== null && [
       [setup.plan_again.source_state, model.planAgainMounts.source],
@@ -762,7 +760,7 @@ export function createSetupPanel(callbacks) {
       ? model.batchRunning || model.closePending
       : model.closePending || !model.canPlanAgain || locked || model.batchRunning || model.batchPending || unresolved;
     renderPlanAgain(setup.plan_again, model.planAgainMounts, !locked && !model.batchRunning);
-    const originBatchPending = model.batch.some((row) => ["queued", "submitting", "uncertain", "unknown"].includes(row.state));
+    const originBatchPending = model.batch.some((row) => ["queued", "submitting", "unknown"].includes(row.state));
     if (originBatchPending) {
       startInventory.hidden = true;
       planAgain.hidden = true;

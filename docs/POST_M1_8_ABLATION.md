@@ -573,10 +573,11 @@ User-requested read-only review of delivered AB-7 (`6287db0c`, base `2b4a2214`):
 is anything redundant, including original-outcome recovery itself? Method: the
 diff, current source, the retained AB-7 evidence under
 `build/post-m1-8-ablation-20260925/` and the study's own tiering follow-up.
-No tests or experiments were run; line counts are diagnostics. This section
-proposes; it changes no delivered contract and authorizes no implementation.
+That initial review ran no tests or experiments; line counts are diagnostics.
+Its original proposals are retained below with a later validation/disposition
+table. M1_PLAN owns the subsequently authorized AB-7R checkpoint.
 
-### Findings
+### Original findings (qualified below)
 
 AB-7 was a logical simplification that grew product source by about 936 lines
 (+1,308/−372: `app.js` +463, `bridge.js` +230, `bridge.py` +157). Most of the
@@ -602,7 +603,7 @@ one session per task, task/session-keyed close). Retaining and observing
 transport responses is the redundant mechanism; it duplicates records that
 already exist and has made them unreachable.
 
-### Recommendation
+### Original recommendation
 
 Make the domain record the single outcome authority and retire transport
 response retention:
@@ -627,7 +628,7 @@ Second-ranked alternative: keep AB-7 observation, delete the unreachable domain
 replay-hit paths and stop treating `pending` as exhaustion. It retains the
 weaker record: document-bound, and unable to establish an effect after errors.
 
-### Tiered recovery
+### Original tiering proposal
 
 Tiering is sensible when it is data, not code. Classify commands by the kind of
 effect, not by perceived value; that yields two recovery actions:
@@ -658,7 +659,7 @@ Net effect: one table column and one generic recovery call (tens of lines)
 against the removal of the observation channel, retained responses, most of the
 observed-attempt path and most per-surface outcome state.
 
-### Before adoption
+### Before adoption (original proposal)
 
 Confirm by test, not only by reading: identical resend returns the original
 outcome without a second effect for each keyed command (BRIDGE's replay rule);
@@ -667,7 +668,38 @@ second `start_execution` after committed admission returns an existing
 disposition (`in-flight`, `frozen` or `conflict`) rather than a new session.
 Decide this before AB-8 freezes its snapshot shape, which currently preserves
 AB-7's outcome-unavailable and original-result states. Status: proposal
-awaiting user decision; no M1_PLAN row yet.
+awaiting validation at the time of that review. The qualified disposition below
+supersedes this proposed adoption path.
+
+### Validation and AB-7R disposition
+
+The follow-up checked the delivered diff, receipt and retirement owners, adapter
+revision checks, native custody and all browser issuing surfaces. Six focused
+transport/service/lifecycle cases passed; raw results are
+`ab7-study-validation.xml` and `ab7-study-retirement.xml` in the existing evidence
+directory. This validates specific seams, not a universal resend protocol.
+
+| Finding | Validated disposition |
+| --- | --- |
+| F1 | The +936 net product lines and stock browser's fresh-ID/observe-only behavior are confirmed. The three records are not interchangeable: drain start responses coordinate production Close; selection receipts retain intent and return a current projection; retirement removes replay authority. The claim that their usefulness is test-only, and hence that all transport retention is redundant, is rejected. |
+| F2 | Confirmed: three healthy pending observations were converted to unavailable and late completion awaited Retry. The cited 25 s bound belongs to event draining, not Close. Keep the original promise pending; qualify failed communication separately and automatically adopt a valid late result. |
+| F3 | A fixed error cannot establish the effect, but a domain receipt does not universally answer it either: execution no-effect dispositions lack a permanent start receipt, selection replay is not original-result replay, and an unknown child can retire before resend. Retain effect-critical unknown fences and observation rather than introducing a second recovery protocol. |
+| F4 | View/highlight/location are effects: highlight feeds bulk-selection scope and location admission allocates bounded slots. Their recovery can nevertheless be reduced through current revisioned state or deliberate folder rechoice, with stale-response suppression. Close/release/control cannot be treated as freely repeatable across intervening lifecycle actions. |
+| F5 | Observation adds reconciliation over existing admission/completion, but response/completion tokens and early-completion handling predate AB-7. Removing them or redesigning Close is not part of this reduction. |
+| F6 | The retained evidence has injected delivery loss, not an observed natural loss. The real Setup error and unexplained Plan-again timeouts remain unresolved observations. This does not establish that local delivery cannot fail or authorize unrelated fixes. |
+
+The user authorized the qualified reduction as **AB-7R**, a separate checkpoint
+before AB-8. [M1_PLAN](M1_PLAN.md#ab-7r--reduce-command-recovery-and-uncertainty-state)
+owns its finite register and verification. Five commands (`pick_folder`,
+`admit_location`, `update_plan_view`, `mutate_plan_highlight`,
+`replace_cosmetic_section`) stop retaining/observing original responses. Their
+current-state refresh or fresh choice does not claim the earlier effect settled.
+Eleven effect/lifecycle commands retain original observation and domain duplicate
+protection. Bounded Check updates feedback while the original promise remains the
+sole adopter; remove the separate reject/retry/adopt branch. No automatic replay,
+generic resend, new receipt owner, protocol redesign or D4 reduction is accepted.
+Keep actual selection→Execute, start/Close and receipt-retirement dependencies;
+remove unrelated presentation/folder fences. AB-8 remains paused.
 
 ## Evidence
 

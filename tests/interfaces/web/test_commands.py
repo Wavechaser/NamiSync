@@ -543,11 +543,16 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
         name for name, spec in commands.items()
         if spec.timeout is CommandTimeout.MUTATION_OBSERVED
     } == {
-        "admit_location", "create_task", "start_plan", "start_inventory",
-        "plan_again", "update_plan_view", "mutate_plan_selection",
-        "mutate_plan_scope", "mutate_plan_highlight",
+        "create_task", "start_plan", "start_inventory",
+        "plan_again", "mutate_plan_selection", "mutate_plan_scope",
         "mutate_plan_highlighted_selection", "start_execution",
         "control_execution", "release_terminal_session", "close_task",
+    }
+    assert {
+        name for name, spec in commands.items()
+        if spec.timeout is CommandTimeout.FEEDBACK_ONLY
+    } == {
+        "admit_location", "update_plan_view", "mutate_plan_highlight",
         "replace_cosmetic_section",
     }
     assert all(
@@ -728,7 +733,7 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
         CommandAccess.MUTATING,
         FieldRequirement.FORBIDDEN,
         FieldRequirement.REQUIRED,
-        CommandTimeout.MUTATION_OBSERVED,
+        CommandTimeout.FEEDBACK_ONLY,
         CommandRetry.NONE,
     )
 

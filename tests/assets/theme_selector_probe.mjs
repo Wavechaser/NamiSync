@@ -48,18 +48,16 @@ function moduleUrl(source) {
 
 const bridgeStub = moduleUrl(`
   export class BridgeTransportError extends Error {}
-  export class OutcomeUnavailableError extends BridgeTransportError {
-    constructor(retry, checkable = true) { super(); this.retry = retry; this.checkable = checkable; }
-  }
+  export class BridgeCommandError extends Error {}
   globalThis.themeHarness.BridgeTransportError = BridgeTransportError;
-  globalThis.themeHarness.OutcomeUnavailableError = OutcomeUnavailableError;
+  globalThis.themeHarness.BridgeCommandError = BridgeCommandError;
   export const readCosmeticSection = () => { throw new Error("unexpected default read"); };
   export const replaceCosmeticSection = () => { throw new Error("unexpected default replace"); };
 `);
 let source = await readFile(process.argv[2], "utf8");
 source = source.replace(
   /import \{[\s\S]*?\} from "\.\/bridge\.js";/,
-  `import { BridgeTransportError, OutcomeUnavailableError, readCosmeticSection, replaceCosmeticSection } from "${bridgeStub}";`,
+  `import { readCosmeticSection, replaceCosmeticSection } from "${bridgeStub}";`,
 );
 source = source.replace(
   'import { renderText } from "./render.js";',
@@ -258,8 +256,8 @@ async function flushTurns() {
   assert.equal(select.disabled, true);
 }
 
-// A terminal replacement failure preserves the confirmed value and disables
-// the isolated control without producing another request or shell warning.
+// A replacement refusal reads current truth without producing another mutation
+// or shell warning, then permits a fresh user choice.
 {
   const select = new SelectFake();
   let replacements = 0;
@@ -276,7 +274,7 @@ async function flushTurns() {
   await flushTurns();
   assert.equal(replacements, 1);
   assert.equal(select.value, "light");
-  assert.equal(select.disabled, true);
+  assert.equal(select.disabled, false);
   assert.equal(shell.status, "Ready");
 }
 
@@ -322,8 +320,8 @@ async function flushTurns() {
   assert.equal(select.disabled, true);
 }
 
-// An unchanged revision after uncertain delivery is not proof that the
-// admitted replacement cannot still land. The selector stays disabled.
+// An unchanged revision is current truth, not proof of the old outcome. It can
+// enable fresh intent without automatically repeating the old replacement.
 {
   const select = new SelectFake();
   let reads = 0;
@@ -341,10 +339,11 @@ async function flushTurns() {
   await flushTurns();
   assert.equal(reads, 2);
   assert.equal(select.value, "light");
-  assert.equal(select.disabled, true);
+  assert.equal(select.disabled, false);
 }
 
-// A captured final failure keeps the theme intent fenced without an ineffective Retry.
+// A captured final failure uses current-state reconciliation, not a sticky
+// original-outcome fence or an ineffective original-response Retry.
 {
   const select = new SelectFake();
   const statuses = [];
@@ -354,50 +353,65 @@ async function flushTurns() {
     read: async () => { reads += 1; return section("light", 3); },
     replace: async () => {
       replacements += 1;
-      throw new globalThis.themeHarness.OutcomeUnavailableError(null, false);
+      throw new globalThis.themeHarness.BridgeCommandError("internal_error");
     },
     onOutcomeStatus: (message, canRetry) => statuses.push([message, canRetry]),
   });
   await controller.open();
   select.choose("dark");
   await flushTurns();
-  assert.equal(select.disabled, true);
+  assert.equal(select.disabled, false);
   assert.equal(select.value, "light");
-  assert.match(statuses.at(-1)[0], /Close and reopen NamiSync/);
-  assert.equal(statuses.at(-1)[1], false);
-  assert.equal(await controller.retryOutcome(), false);
-  assert.equal(await controller.open(), false, "Settings reopen cannot silently read past the intent fence");
+  assert.equal(replacements, 1, "reconciliation never replays the mutation");
+  assert.equal(reads, 2);
+  assert.equal(await controller.refresh(), true);
   select.choose("system");
   await flushTurns();
-  assert.equal(replacements, 1);
-  assert.equal(reads, 1);
+  assert.equal(replacements, 2, "only fresh user intent submits a second mutation");
+  assert.equal(reads, 4);
 }
 
-// A new bridge generation waits for an admitted old replacement to settle
-// before it reads and enables its own authoritative state.
+// Explicit Refresh does not wait for a lost original reply. A late reply cannot
+// overwrite a newer displayed choice or clear that choice's pending feedback.
 {
   const select = new SelectFake();
   const admitted = deferred();
+  const latest = deferred();
+  const attempts = [];
+  const statuses = [];
   let reads = 0;
   const controller = installThemeSelector(select, {
     read: async () => {
       reads += 1;
       return reads === 1 ? section("system", 0) : section("dark", 1);
     },
-    replace: () => admitted.promise,
+    replace: (revision, theme, onDelayed) => {
+      attempts.push({ revision, theme });
+      onDelayed();
+      return attempts.length === 1 ? admitted.promise : latest.promise;
+    },
+    onOutcomeStatus: (message, canRefresh) => statuses.push([message, canRefresh]),
   });
   await controller.open();
   select.choose("dark");
   await flushUntil(() => select.disabled);
-  controller.invalidate();
-  const reopened = controller.open();
-  await flushTurns();
-  assert.equal(reads, 1, "the new generation cannot overtake the old mutation");
-  admitted.resolve(replacement("dark", 1));
-  assert.equal(await reopened, true);
+  assert.equal(await controller.refresh(), true);
   assert.equal(reads, 2);
   assert.equal(select.value, "dark");
   assert.equal(select.disabled, false);
+  select.choose("system");
+  const currentFeedback = statuses.at(-1);
+  admitted.resolve(replacement("dark", 1));
+  await flushTurns();
+  assert.equal(select.value, "dark");
+  assert.equal(select.disabled, true);
+  assert.deepEqual(statuses.at(-1), currentFeedback);
+  latest.resolve(replacement("system", 2));
+  await flushUntil(() => !select.disabled);
+  assert.equal(select.value, "system");
+  assert.deepEqual(attempts, [
+    { revision: 0, theme: "dark" }, { revision: 1, theme: "system" },
+  ]);
 }
 
 // A later bridge generation owns the selector even when an older read settles

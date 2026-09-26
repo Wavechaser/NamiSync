@@ -44,12 +44,11 @@ async function waitUntil(predicate, context) {
 const timers = new Map();
 const scheduledDelays = [];
 let nextTimer = 1;
-let holdLocalTimeout = false;
 globalThis.setTimeout = (callback, milliseconds) => {
   const token = nextTimer;
   nextTimer += 1;
   timers.set(token, callback);
-  if (milliseconds !== 30000 && !(holdLocalTimeout && milliseconds === 5000)) {
+  if (milliseconds !== 30000 && milliseconds !== 5000) {
     scheduledDelays.push(milliseconds);
     queueMicrotask(() => {
       if (timers.delete(token)) {
@@ -318,7 +317,6 @@ async function nextRequest(index) {
 }
 
 const operationAnchorIndex = requests.length;
-holdLocalTimeout = true;
 const operationAnchorPromise = bridge.getPlanOperationAnchor(
   task("a"), session("b"), 7, "c".repeat(32),
 );
@@ -326,7 +324,6 @@ await waitUntil(
   () => requests.length > operationAnchorIndex,
   "operation anchor request was not dispatched",
 );
-holdLocalTimeout = false;
 const operationAnchorRequest = requests[operationAnchorIndex];
 assert.equal(operationAnchorRequest.request.command, "get_plan_anchor");
 assert.deepEqual(operationAnchorRequest.request.payload, {
@@ -1710,6 +1707,12 @@ assert.throws(
   TypeError,
 );
 
+assert.throws(
+  () => bridge.startTaskDrain(task("3"), session("d"), () => {}, () => {},
+    null, null, null, {}),
+  TypeError,
+);
+
 // Native admission saturation backs off the read-only drain. Terminal cleanup
 // reports its definitive busy refusal for an explicit retry.
 const saturationRefusals = [];
@@ -1743,8 +1746,9 @@ assert.equal(releaseRequests.length, releaseCountBeforeSaturation + 2);
 stopSaturation();
 
 // Unavailable observation retains the original release and exposes only an
-// original-result check. The later check cannot submit another release.
+// original-result check as delay status, not a recovery refusal.
 const exhaustedReleaseRefusals = [];
+const exhaustedReleaseDelays = [];
 const exhaustedReleaseStart = releaseRequests.length;
 const exhaustedReleaseObserveStart = observedLifecycle.length;
 releaseFailuresRemaining = 1;
@@ -1755,23 +1759,22 @@ const stopExhaustedRelease = bridge.startTaskDrain(
   session("d"),
   () => {},
   (error) => exhaustedReleaseRefusals.push(error),
+  null, null, null,
+  (_taskId, _sessionId, status) => exhaustedReleaseDelays.push(status),
 );
 const exhaustedRelease0 = await nextRequest(exhaustedReleaseDrainStart);
 success(exhaustedRelease0, [terminalRecord(session("d"))]);
 await waitUntil(
-  () => exhaustedReleaseRefusals.length === 1,
-  "exhausted release did not expose its public retry",
+  () => exhaustedReleaseDelays.at(-1)?.state === "unavailable",
+  "exhausted release did not expose its qualified observation state",
 );
 assert.equal(releaseRequests.length, exhaustedReleaseStart + 1);
 assert.equal(observedLifecycle.length - exhaustedReleaseObserveStart, 3);
-assert.equal(exhaustedReleaseRefusals.length, 1);
-assert.equal(
-  exhaustedReleaseRefusals[0].name,
-  "TerminalSessionReleaseError",
-);
-assert.equal(typeof exhaustedReleaseRefusals[0].retry, "function");
+assert.equal(exhaustedReleaseRefusals.length, 0,
+  "healthy pending release cannot enter the refusal channel");
+assert.equal(typeof exhaustedReleaseDelays.at(-1).check, "function");
 releaseObservationUnavailable = false;
-exhaustedReleaseRefusals[0].retry();
+await exhaustedReleaseDelays.at(-1).check();
 await turns(20);
 assert.equal(releaseRequests.length, exhaustedReleaseStart + 1);
 assert.ok(observedLifecycle.length - exhaustedReleaseObserveStart >= 4);
@@ -1781,15 +1784,16 @@ const exhaustedCloseStart = closeRequests.length;
 const exhaustedCloseObserveStart = observedLifecycle.length;
 closeFailuresRemaining = 1;
 closeObservationUnavailable = true;
-let uncertainClose;
-try {
-  await bridge.closeTask(task("4"), session("d"));
-  assert.fail("exhausted close uncertainty must be visible");
-} catch (error) {
-  uncertainClose = error;
-}
-assert.equal(uncertainClose.name, "TaskCloseUncertainError");
-assert.equal(typeof uncertainClose.retry, "function");
+const closeFeedback = [];
+let closeSettled = false;
+const uncertainClose = bridge.closeTask(task("4"), session("d"),
+  (status) => closeFeedback.push(status));
+void uncertainClose.then(() => { closeSettled = true; });
+await waitUntil(() => closeFeedback.at(-1)?.state === "unavailable",
+  "exhausted close must report qualified observation unavailability");
+assert.equal(closeSettled, false,
+  "observation exhaustion cannot settle the original Close");
+assert.equal(typeof closeFeedback.at(-1).check, "function");
 assert.equal(closeRequests.length, exhaustedCloseStart + 1);
 assert.equal(observedLifecycle.length - exhaustedCloseObserveStart, 3);
 assert.throws(
@@ -1797,7 +1801,8 @@ assert.throws(
   TypeError,
 );
 closeObservationUnavailable = false;
-await uncertainClose.retry();
+await closeFeedback.at(-1).check();
+await uncertainClose;
 assert.equal(closeRequests.length, exhaustedCloseStart + 1);
 assert.ok(observedLifecycle.length - exhaustedCloseObserveStart >= 4);
 assert.ok(observedLifecycle.length - exhaustedCloseObserveStart <= 6);

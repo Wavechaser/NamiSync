@@ -48,7 +48,7 @@ const app = document.querySelector("#app");
 const status = document.querySelector("#host-status");
 const themeSelector = document.querySelector("#theme-mode");
 const themeOutcomeStatus = document.querySelector("#theme-outcome-status");
-const themeRetryOutcome = document.querySelector("#theme-retry-outcome");
+const themeRefresh = document.querySelector("#theme-refresh");
 const settingsView = document.querySelector("#settings-view");
 const themeOptions = document.querySelector("#theme-options");
 const UNKNOWN_OUTCOME_GUIDANCE = "Original outcome cannot be confirmed. Close and reopen NamiSync to review current state.";
@@ -57,7 +57,7 @@ if (
   || !(status instanceof HTMLElement)
   || !(themeSelector instanceof HTMLElement)
   || !(themeOutcomeStatus instanceof HTMLElement)
-  || !(themeRetryOutcome instanceof HTMLElement)
+  || !(themeRefresh instanceof HTMLElement)
   || !(settingsView instanceof HTMLElement)
   || !(themeOptions instanceof HTMLElement)
 ) {
@@ -86,13 +86,13 @@ function renderHostStatus(message) {
 const readiness = installReadinessReceiver(window.chrome.webview);
 const themeCombobox = installThemeCombobox(themeSelector);
 const theme = installThemeSelector(themeCombobox, {
-  onOutcomeStatus(message, retryAvailable) {
+  onOutcomeStatus(message, refreshAvailable) {
     renderText(themeOutcomeStatus, message ?? "");
     themeOutcomeStatus.hidden = message === null;
-    themeRetryOutcome.hidden = !retryAvailable;
+    themeRefresh.hidden = !refreshAvailable;
   },
 });
-themeRetryOutcome.addEventListener("click", () => { void theme.retryOutcome(); });
+themeRefresh.addEventListener("click", () => { void theme.refresh(); });
 let appliedPresentationRevision = null;
 installAppearanceReceiver(
   window.chrome.webview,
@@ -117,6 +117,7 @@ let recentPairProbeRevision = 0;
 let recentPairProbeRunning = false;
 let recentPairProbePending = false;
 let pageBatch = null;
+let pickerPending = false;
 let planFollowLookupRunning = false;
 let pendingPlanFollow = null;
 let activePlanFollowKey = null;
@@ -163,7 +164,6 @@ function executionControlMessage(state) {
 const panel = createWorkPanel({
   onEdit: editLocation,
   onValidate: validateLocation,
-  onRetryLocationOutcome: retryLocationOutcomes,
   onPick: pickLocation,
   onRecent: chooseRecentLocation,
   onRecentPair: chooseRecentPair,
@@ -226,15 +226,15 @@ function taskArray() {
 function canCancelAfterFixedReviewOutcome(task, review) {
   const attempt = task.executionControlAttempt;
   return review !== null && review.pending === "outcome"
-    && review.outcomeUnknown && review.outcomeRetry === null
+    && review.outcomeUnknown && review.outcomeCheck === null
     && task.reviewOutcomeUnknown && review.outcomeAction !== "cancel"
     && task.executionStarted && task.sessionState === "active"
     && task.sessionId !== null && task.reviewSessionId === task.sessionId
-    && !task.drainUnavailable && !task.closePending && task.closeRetry === null
+    && !task.drainUnavailable && !task.closePending && task.closeCheck === null
     && !task.closeOutcomeUnknown && !task.startOutcomeUnknown
     && !task.releaseOutcomeUnknown && task.executionAttempt === null
     && task.executionControlState !== "canceling"
-    && (attempt === null || (!attempt.pending && attempt.retry == null
+    && (attempt === null || (!attempt.pending && attempt.check == null
       && !attempt.unknown && !(attempt.independent && attempt.accepted)));
 }
 
@@ -244,16 +244,12 @@ function taskCloseBlockReason(task) {
   }
   if (task.closeOutcomeUnknown || task.startOutcomeUnknown || task.reviewOutcomeUnknown
       || task.releaseOutcomeUnknown
-      || (task.executionAttempt?.state === "uncertain"
-        && task.executionAttempt.retry === null)) return UNKNOWN_OUTCOME_GUIDANCE;
-  if (task.form !== null && (
-    task.form.source.outcomeRetry !== null || task.form.target.outcomeRetry !== null
-    || task.form.source.outcomeUnknown || task.form.target.outcomeUnknown
-  )) return "Resolve the folder outcome before closing this task.";
+      || task.executionAttempt?.state === "uncertain") return UNKNOWN_OUTCOME_GUIDANCE;
   if (task.executionAttempt !== null) return "Resolve the in-flight execution request before closing.";
-  if (task.closeRetry === null && !task.closeManualReady
-      && task.review !== null && task.review.pending !== null) {
-    return task.review.outcomeRetry !== null
+  if (task.closeCheck === null && !task.closeManualReady
+      && task.review !== null && task.review.pending !== null
+      && task.review.pending !== "view") {
+    return task.review.outcomeCheck !== null
       ? "Check the original review outcome before closing this task."
       : "Wait for the current review action before closing this task.";
   }
@@ -275,13 +271,13 @@ function renderTasks() {
         : [];
       task.form.batchCount = syncBatchOwner ? pageBatch?.rows.length ?? 0 : 0;
       task.form.batchPending = syncBatchOwner && (pageBatch?.rows.some((row) => row.originTaskId === task.taskId
-        && ["queued", "submitting", "uncertain", "unknown"].includes(row.state)) ?? false);
+        && ["queued", "submitting", "unknown"].includes(row.state)) ?? false);
       task.form.batchPending ||= batchBlockReason !== null;
       task.form.batchMessage = syncBatchOwner ? batchTaskStartMessage(task.taskId)
         : batchBlockReason === null ? null
           : batchTaskStartMessage(task.taskId)
             ?? "Return to Sync to resolve its in-flight batch request before starting Inventory.";
-      task.form.closePending = task.closePending || task.closeRetry !== null
+      task.form.closePending = task.closePending || task.closeCheck !== null
         || task.closeOutcomeUnknown || task.startOutcomeUnknown;
       if (task.startOutcomeUnknown) task.form.actionMessage = UNKNOWN_OUTCOME_GUIDANCE;
     }
@@ -292,7 +288,7 @@ function renderTasks() {
   rail.render(
     taskArray(),
     selectedTaskId,
-    createAttempt?.running === true || createAttempt?.unknown === true,
+    createAttempt,
     settingsVisible,
   );
   if (settingsVisible) panel.renderSettings();
@@ -460,7 +456,8 @@ function adoptTask(summary) {
       taskKind: summary.task_kind,
       requestId: summary.request_id,
       closePending: false,
-      closeRetry: null,
+      closeCheck: null,
+      closeChecking: false,
       closeAwaitingTerminal: false,
       closeTerminalSeen: false,
       closeAutoConsumed: false,
@@ -469,6 +466,8 @@ function adoptTask(summary) {
       startOutcomeUnknown: false,
       reviewOutcomeUnknown: false,
       releaseOutcomeUnknown: false,
+      releaseCheck: null,
+      releaseChecking: false,
       closeFailed: false,
       closeMessage: null,
       recoveryRetry: null,
@@ -505,6 +504,8 @@ function adoptTask(summary) {
       task.recoveryRetry = null;
       task.recoverySessionId = null;
       task.recoveryRunning = false;
+      task.releaseCheck = null;
+      task.releaseChecking = false;
       task.closeFailed = false;
     }
     if (task.sessionId !== summary.session_id || summary.session_state !== "active") {
@@ -561,6 +562,7 @@ function attachTaskDrain(task) {
     },
     (_taskId, sessionId) => acceptTaskRelease(task, sessionId),
     (_taskId, sessionId) => acceptTaskRecovery(task, sessionId),
+    (_taskId, sessionId, feedback) => acceptTaskReleaseDelay(task, sessionId, feedback),
   );
   task.drainUnavailable = false;
 }
@@ -590,7 +592,7 @@ function acceptTaskUpdate(task, sessionId, update, progressState = null) {
     if (task.executionControlAttempt?.sessionId === sessionId) {
       if (task.executionControlAttempt.pending) {
         task.executionControlAttempt.message = executionControlMessage(task.executionControlState);
-      } else if (task.executionControlAttempt.retry == null
+      } else if (task.executionControlAttempt.check == null
           && !task.executionControlAttempt.unknown
           && !(task.executionControlAttempt.independent
             && task.executionControlAttempt.accepted)) {
@@ -650,6 +652,7 @@ function acceptTaskRefusal(task, sessionId, error, retry = null) {
     && !(error instanceof TerminalPresentationError)
     && !(error instanceof TerminalSessionReleaseError);
   if (drainStopped) task.drainUnavailable = true;
+  if (error instanceof TerminalSessionReleaseError) task.releaseCheck = null;
   task.recoveryRetry = retry ?? (typeof error?.retry === "function" ? error.retry : null);
   task.recoverySessionId = sessionId;
   task.recoveryRunning = false;
@@ -676,7 +679,7 @@ function acceptTaskRecovery(task, sessionId) {
   task.recoverySessionId = null;
   task.recoveryRunning = false;
   task.drainUnavailable = false;
-  clearTaskRecoveryError(task);
+  if (task.releaseCheck === null) clearTaskRecoveryError(task);
   if (task.review?.message === STOPPED_TASK_UPDATES_MESSAGE) {
     task.review.message = task.executionControlAttempt?.sessionId === sessionId
       ? task.executionControlAttempt.message : executionControlMessage(task.executionControlState);
@@ -686,8 +689,25 @@ function acceptTaskRecovery(task, sessionId) {
 
 function retryTaskUpdates(taskId) {
   const task = tasks.get(taskId);
+  if (task !== undefined && typeof task.releaseCheck === "function"
+      && !task.releaseChecking) {
+    task.releaseChecking = true;
+    setTaskRecoveryError(task, "Checking the original release outcome…");
+    renderTasks();
+    void task.releaseCheck().catch(() => {
+      if (tasks.get(taskId) === task && task.releaseCheck !== null) {
+        setTaskRecoveryError(task, "Release check unavailable. Select Check outcome again.");
+      }
+    }).finally(() => {
+      if (tasks.get(taskId) === task) {
+        task.releaseChecking = false;
+        renderTasks();
+      }
+    });
+    return;
+  }
   if (
-    task === undefined || task.recoveryRunning || task.closeRetry !== null ||
+    task === undefined || task.recoveryRunning || task.closeCheck !== null ||
     task.recoverySessionId !== task.sessionId ||
     typeof task.recoveryRetry !== "function"
   ) return;
@@ -736,27 +756,39 @@ async function refreshTasks() {
 }
 
 async function createBlankTask() {
-  if (createAttempt?.running || createAttempt?.unknown) {
+  if (createAttempt?.running) {
+    if (typeof createAttempt.check === "function" && !createAttempt.checking) {
+      const attempt = createAttempt;
+      attempt.checking = true;
+      renderHostStatus("Checking the original task request…");
+      renderTasks();
+      try { await attempt.check(); } finally {
+        if (createAttempt === attempt) attempt.checking = false;
+        renderTasks();
+      }
+    }
     return;
   }
-  if (createAttempt !== null && typeof createAttempt.retry !== "function") return;
+  if (createAttempt?.unknown) return;
   const selectionBaseline = navigationRevision;
-  const retry = createAttempt?.retry ?? null;
-  const attempt = createAttempt ?? {
+  const attempt = {
     running: true,
-    dispatched: true,
-    retry: null,
+    check: null,
+    checking: false,
     unknown: false,
   };
   createAttempt = attempt;
-  attempt.running = true;
-  attempt.retry = null;
-  if (retry !== null) renderHostStatus("Checking the original task outcome…");
   renderTasks();
   try {
-    const result = await (retry === null
-      ? createTask(() => renderHostStatus("Task response delayed. Checking the original outcome…"))
-      : retry());
+    const result = await createTask((feedback) => {
+      if (createAttempt === attempt) {
+        attempt.check = feedback.check;
+        renderHostStatus(feedback.state === "unavailable"
+          ? "Task outcome unavailable. Select Check outcome to observe the original request."
+          : "Task response delayed. Waiting for the original outcome…");
+        renderTasks();
+      }
+    });
     taskMutationRevision += 1;
     const task = adoptTask({
       task_id: result.task_id,
@@ -776,13 +808,9 @@ async function createBlankTask() {
     if (createAttempt !== attempt) return;
     if (error instanceof TaskCreateUncertainError) {
       attempt.running = false;
-      attempt.retry = error.retry;
-      attempt.unknown = !error.checkable;
-      renderHostStatus(
-        error.checkable
-          ? "Task outcome unavailable. Select New task to check the original request."
-          : UNKNOWN_OUTCOME_GUIDANCE,
-      );
+      attempt.unknown = true;
+      attempt.check = null;
+      renderHostStatus(UNKNOWN_OUTCOME_GUIDANCE);
       return;
     }
     createAttempt = null;
@@ -790,7 +818,7 @@ async function createBlankTask() {
       "A task could not be created. Close an unused task or wait, then try again.",
     );
   } finally {
-    if (createAttempt === attempt && attempt.retry === null && !attempt.unknown) createAttempt = null;
+    if (createAttempt === attempt && !attempt.unknown) createAttempt = null;
     renderTasks();
   }
 }
@@ -806,7 +834,26 @@ function continuePendingClose(task) {
 
 async function closeRetainedTask(taskId) {
   const task = tasks.get(taskId);
+  if (task?.closePending && typeof task.closeCheck === "function") {
+    if (task.closeChecking) return;
+    task.closeChecking = true;
+    task.closeMessage = "Checking the original Close request…";
+    renderTasks();
+    try { await task.closeCheck(); } finally {
+      if (tasks.get(taskId) === task) task.closeChecking = false;
+      renderTasks();
+    }
+    return;
+  }
   if (task === undefined || taskCloseBlockReason(task) !== null) return;
+  const pendingFolderRow = pageBatch?.running?.originTaskId === taskId
+    && pageBatch.running.row?.stage?.startsWith("admitting-")
+    ? pageBatch.running.row : null;
+  if (pendingFolderRow !== null) {
+    pageBatch.rows = pageBatch.rows.filter((row) => row !== pendingFolderRow);
+    pageBatch.generation += 1;
+    pendingFolderRow.abandonAdmission?.();
+  }
   if (!task.closeAwaitingTerminal) {
     task.closeTerminalSeen = task.sessionState !== null && task.sessionState !== "active";
     task.closeAutoConsumed = false;
@@ -814,21 +861,27 @@ async function closeRetainedTask(taskId) {
   task.closeAwaitingTerminal = false;
   task.closeManualReady = false;
   task.closePending = true;
+  task.closeCheck = null;
   task.closeFailed = false;
   task.closeMessage = null;
   task.error = null;
-  if (task.review !== null) task.review.pending = "close";
+  if (task.review !== null) {
+    task.review.actionRevision += 1;
+    task.review.pending = "close";
+  }
   renderTasks();
   let remainsPending = false;
   try {
-    const result = await (task.closeRetry === null
-      ? closeTask(task.taskId, task.sessionId, () => {
+    const result = await closeTask(task.taskId, task.sessionId, (feedback) => {
         if (tasks.get(taskId) === task) {
-          task.closeMessage = "Close response delayed. Checking its original outcome…";
+          task.closeCheck = feedback.check;
+          task.closeMessage = feedback.state === "unavailable"
+            ? "Close outcome unavailable. Select Check outcome to observe the original request."
+            : "Close response delayed. Waiting for the original outcome…";
           renderTasks();
         }
-      }) : task.closeRetry());
-    task.closeRetry = null;
+      });
+    task.closeCheck = null;
     task.closeOutcomeUnknown = false;
     task.closeFailed = false;
     task.closeMessage = null;
@@ -861,16 +914,13 @@ async function closeRetainedTask(taskId) {
     }
   } catch (error) {
     if (tasks.get(taskId) === task) {
-      task.closeRetry = error instanceof TaskCloseUncertainError ? error.retry : null;
-      task.closeOutcomeUnknown = error instanceof TaskCloseUncertainError && !error.checkable;
+      task.closeCheck = null;
+      task.closeOutcomeUnknown = error instanceof TaskCloseUncertainError;
       task.closeFailed = true;
       task.closeMessage = null;
       task.error = task.closeOutcomeUnknown
-        ? UNKNOWN_OUTCOME_GUIDANCE
-        : task.closeRetry === null
-        ? "Close was refused. Retry close."
-        : "Close outcome unavailable. Select Retry close to check the original request.";
-      if (task.closeRetry === null && !task.closeOutcomeUnknown
+        ? UNKNOWN_OUTCOME_GUIDANCE : "Close was refused. Retry close.";
+      if (task.closeCheck === null && !task.closeOutcomeUnknown
           && task.review?.pending === "close") task.review.pending = null;
     }
   } finally {
@@ -879,7 +929,7 @@ async function closeRetainedTask(taskId) {
       tasks.get(taskId) === task
     ) {
       task.closePending = false;
-      if (task.closeRetry === null && !task.closeOutcomeUnknown
+      if (task.closeCheck === null && !task.closeOutcomeUnknown
           && task.review?.pending === "close") task.review.pending = null;
     }
     renderTasks();
@@ -917,8 +967,7 @@ function snapshotLocationRow(row) {
     mountIndex: row.mountIndex,
     revision: row.revision,
     admissionRevision: row.admissionRevision,
-    outcomeRetry: null,
-    outcomeUnknown: false,
+    pending: false,
   };
 }
 
@@ -939,8 +988,7 @@ function createForm(snapshot, recents) {
     mountIndex: null,
     revision: 0,
     admissionRevision: 0,
-    outcomeRetry: null,
-    outcomeUnknown: false,
+    pending: false,
   });
   const inventory = snapshot.task_kind === "inventory";
   return {
@@ -1077,22 +1125,25 @@ function formIsEditable(form) {
 
 function originHasPendingBatch(taskId) {
   return pageBatch?.rows.some((row) => row.originTaskId === taskId
-    && ["queued", "submitting", "uncertain", "unknown"].includes(row.state)) ?? false;
+    && ["queued", "submitting", "unknown"].includes(row.state)) ?? false;
 }
 
 function batchTaskBlockReason(taskId) {
-  if (pageBatch?.running?.originTaskId === taskId) {
+  const pendingFolderRow = pageBatch?.running?.originTaskId === taskId
+    && pageBatch.running.row?.stage?.startsWith("admitting-")
+    ? pageBatch.running.row : null;
+  if (pageBatch?.running?.originTaskId === taskId && pendingFolderRow === null) {
     return "Wait for this task's active batch submission before closing.";
   }
-  const retained = pageBatch?.rows.find((row) => ["submitting", "uncertain", "unknown"].includes(row.state)
-    && (row.originTaskId === taskId || row.taskId === taskId));
+  const retained = pageBatch?.rows.find((row) => ["submitting", "unknown"].includes(row.state)
+    && row !== pendingFolderRow && (row.originTaskId === taskId || row.taskId === taskId));
   return retained === undefined
     ? null
-    : "Resolve this task's submitting or uncertain batch pair before closing.";
+    : "Resolve this task's submitting or unknown batch pair before closing.";
 }
 
 function batchTaskStartMessage(taskId) {
-  const row = pageBatch?.rows.find((value) => ["submitting", "uncertain", "unknown"].includes(value.state)
+  const row = pageBatch?.rows.find((value) => ["submitting", "unknown"].includes(value.state)
     && value.taskId === taskId && value.originTaskId !== taskId);
   if (row !== undefined) {
     const origin = tasks.get(row.originTaskId);
@@ -1110,15 +1161,12 @@ function clearLocationChoice(row) {
   row.continuationId = null;
   row.mountIndex = null;
   row.admissionRevision += 1;
-  row.outcomeRetry = null;
-  row.outcomeUnknown = false;
+  row.pending = false;
 }
 
 function editMode(mode) {
   const form = currentForm();
   if (!formIsEditable(form) || !["sync-plan", "inventory"].includes(mode) || form.mode === mode) return;
-  if (form.source.outcomeRetry !== null || form.target.outcomeRetry !== null
-      || form.source.outcomeUnknown || form.target.outcomeUnknown) return;
   form.mode = mode;
   form.revision += 1;
   form.source.revision += 1;
@@ -1129,6 +1177,8 @@ function editMode(mode) {
 
 function acceptTaskRelease(task, sessionId) {
   if (tasks.get(task.taskId) !== task || task.sessionId !== sessionId) return;
+  task.releaseCheck = null;
+  task.releaseChecking = false;
   task.recoveryRetry = null;
   task.recoverySessionId = null;
   task.recoveryRunning = false;
@@ -1139,6 +1189,16 @@ function acceptTaskRelease(task, sessionId) {
   task.executionWindowDirtyRevision += 1;
   renderTasks();
   if (task.taskKind === "sync-plan") void loadPlanReview(task, true);
+}
+
+function acceptTaskReleaseDelay(task, sessionId, feedback) {
+  if (tasks.get(task.taskId) !== task || task.sessionId !== sessionId) return;
+  task.releaseCheck = feedback.check;
+  task.recoverySessionId = sessionId;
+  setTaskRecoveryError(task, feedback.state === "unavailable"
+    ? "Release outcome unavailable. Select Check outcome to observe the original request."
+    : "Release response delayed. Waiting for the original outcome…");
+  renderTasks();
 }
 
 function retireExecutionDetail(review) {
@@ -1325,6 +1385,7 @@ async function loadPlanReview(task, force = false) {
     task === undefined || tasks.get(task.taskId) !== task
     || task.taskKind !== "sync-plan" || task.sessionId === null
     || task.reviewLoading
+    || task.review?.pending === "selection"
     || (!force && task.review !== null && task.reviewSessionId === task.sessionId)
   ) return;
   const request = ++task.reviewRevision;
@@ -1363,8 +1424,8 @@ async function loadPlanReview(task, force = false) {
         : "Plan failed review. Inspect notices and create a fresh plan.";
     const controlAttempt = task.executionControlAttempt?.sessionId === sessionId
       ? task.executionControlAttempt : null;
-    const retainedOutcomeRetry = task.reviewSessionId === sessionId
-      ? task.review?.outcomeRetry ?? null : null;
+    const retainedOutcomeCheck = task.reviewSessionId === sessionId
+      ? task.review?.outcomeCheck ?? null : null;
     const retainedOutcomeUnknown = task.reviewOutcomeUnknown;
     const retainedOutcomeAction = task.reviewSessionId === sessionId
       ? task.review?.outcomeAction ?? null : null;
@@ -1374,21 +1435,21 @@ async function loadPlanReview(task, force = false) {
     task.review = {
       summary,
       window,
-      pending: task.closePending || task.closeRetry !== null || task.closeOutcomeUnknown
+      pending: task.closePending || task.closeCheck !== null || task.closeOutcomeUnknown
         ? "close"
-        : retainedOutcomeRetry !== null || retainedOutcomeUnknown ? "outcome"
+        : retainedOutcomeCheck !== null || retainedOutcomeUnknown ? "outcome"
         : controlAttempt?.pending ? controlAttempt.actionName : null,
-      outcomeRetry: retainedOutcomeRetry,
+      outcomeCheck: retainedOutcomeCheck,
       outcomeUnknown: retainedOutcomeUnknown,
       outcomeAction: retainedOutcomeAction,
       outcomeRunning: false,
+      refreshAvailable: false,
       queuedSearchQuery: null,
       highlightQueue: Promise.resolve(),
       message: retainedOutcomeUnknown
-        || (task.executionAttempt?.state === "uncertain"
-          && task.executionAttempt.retry === null) ? UNKNOWN_OUTCOME_GUIDANCE
-        : retainedOutcomeRetry !== null
-        ? "Outcome unavailable. Retry outcome to check the original action."
+        || task.executionAttempt?.state === "uncertain" ? UNKNOWN_OUTCOME_GUIDANCE
+        : retainedOutcomeCheck !== null
+        ? "Original action still pending. Select Check outcome to observe it."
         : task.drainUnavailable && task.sessionState === "active" && task.executionStarted
         ? STOPPED_TASK_UPDATES_MESSAGE
         : controlAttempt?.message ?? message,
@@ -1490,9 +1551,10 @@ async function changePlanView(review, patch, queued = false) {
       task.taskId,
       review.summary.view_revision,
       gesture,
-      () => {
+      (_feedback) => {
         if (retainedReviewTask(review) === task && review.actionRevision === action) {
-          review.message = "View response delayed. Checking the original outcome…";
+          review.refreshAvailable = true;
+          review.message = "View update is still pending. Refresh to read the current review.";
           renderTasks();
         }
       },
@@ -1513,22 +1575,24 @@ async function changePlanView(review, patch, queued = false) {
     ) return;
     review.summary = summary;
     adoptExecutionWindow(review, window);
+    review.refreshAvailable = false;
     review.message = summary.disposition === "conflict"
       ? "View changed. Current view restored."
       : null;
-  } catch (error) {
+  } catch (_error) {
     if (retainedReviewTask(review) === task && review.actionRevision === action) {
-      if (!retainReviewOutcome(review, error)) {
-        review.message = "View update was refused. Reload the review before trying again.";
-      }
+      review.queuedSearchQuery = null;
+      review.refreshAvailable = true;
+      review.message = "View response unavailable. Refresh to read the current review.";
+      void loadPlanReview(task, true);
     }
   } finally {
     if (retainedReviewTask(review) === task && review.actionRevision === action) {
-      if (review.outcomeRetry === null && !review.outcomeUnknown) review.pending = null;
+      if (review.pending === "view") review.pending = null;
       renderTasks();
       const queuedSearchQuery = review.queuedSearchQuery;
       review.queuedSearchQuery = null;
-      if (review.outcomeRetry === null && !review.outcomeUnknown && queuedSearchQuery !== null
+      if (review.pending === null && queuedSearchQuery !== null
           && queuedSearchQuery !== review.summary.search_query) {
         void changePlanView(review, { searchQuery: queuedSearchQuery }, true);
       }
@@ -1540,15 +1604,13 @@ async function changePlanView(review, patch, queued = false) {
 function retainReviewOutcome(review, error, actionName = review.outcomeAction ?? null) {
   if (!(error instanceof OutcomeUnavailableError)) return false;
   const task = retainedReviewTask(review);
-  review.outcomeRetry = error.retry;
-  review.outcomeUnknown = !error.checkable;
+  review.outcomeCheck = null;
+  review.outcomeUnknown = true;
   review.outcomeAction = actionName;
-  if (task !== null && review.outcomeUnknown) task.reviewOutcomeUnknown = true;
+  if (task !== null) task.reviewOutcomeUnknown = true;
   review.outcomeRunning = false;
   review.pending = "outcome";
-  review.message = error.checkable
-    ? "Outcome unavailable. Retry outcome to check the original action."
-    : UNKNOWN_OUTCOME_GUIDANCE;
+  review.message = UNKNOWN_OUTCOME_GUIDANCE;
   renderTasks();
   return true;
 }
@@ -1556,35 +1618,31 @@ function retainReviewOutcome(review, error, actionName = review.outcomeAction ??
 async function retryReviewOutcome(review) {
   const task = retainedReviewTask(review);
   const cancelAttempt = task?.executionControlAttempt;
-  if (task !== null && review.outcomeUnknown && review.outcomeRetry === null
-      && cancelAttempt?.independent && typeof cancelAttempt.retry === "function") {
+  if (task !== null && review.outcomeUnknown && review.outcomeCheck === null
+      && cancelAttempt?.independent && typeof cancelAttempt.check === "function") {
     await retryIndependentCancelOutcome(task, cancelAttempt);
     return;
   }
-  if (task === null || review.outcomeRunning
-      || typeof review.outcomeRetry !== "function") return;
-  const retry = review.outcomeRetry;
+  if (task === null || review.outcomeRunning) return;
+  if (review.refreshAvailable) {
+    review.refreshAvailable = false;
+    review.actionRevision += 1;
+    await loadPlanReview(task, true);
+    if (task.review === review) {
+      review.refreshAvailable = true;
+      review.message = "Current review unavailable. Select Refresh review to try again.";
+      renderTasks();
+    }
+    return;
+  }
+  if (typeof review.outcomeCheck !== "function") return;
   review.outcomeRunning = true;
-  review.message = "Checking the original action outcome…";
+  review.message = "Checking the original action request…";
   renderTasks();
   try {
-    await retry();
-    review.outcomeRetry = null;
-    review.outcomeUnknown = false;
-    review.outcomeAction = null;
-    review.pending = null;
-    task.executionControlAttempt = null;
-    await loadPlanReview(task, true);
-  } catch (error) {
-    if (!retainReviewOutcome(review, error)) {
-      review.outcomeRetry = null;
-      review.outcomeUnknown = false;
-      review.outcomeAction = null;
-      review.pending = null;
-      review.message = "The action was refused. Reloading the current review…";
-      task.executionControlAttempt = null;
-      await loadPlanReview(task, true);
-    }
+    await review.outcomeCheck();
+  } catch (_error) {
+    if (retainedReviewTask(review) === task) review.message = "Check unavailable. Select Check outcome again.";
   } finally {
     review.outcomeRunning = false;
     renderTasks();
@@ -1676,7 +1734,8 @@ function queuePlanHighlight(review, gesture, nodeId) {
         task.taskId, viewRevision, review.summary.highlight_revision, gesture, nodeId,
         () => {
           if (retainedReviewTask(review) === task && review.actionRevision === action) {
-            review.message = "Highlight response delayed. Checking the original outcome…";
+            review.refreshAvailable = true;
+            review.message = "Highlight is still pending. Select Refresh review to read the current highlight.";
             renderTasks();
           }
         },
@@ -1701,18 +1760,18 @@ function queuePlanHighlight(review, gesture, nodeId) {
           || window.highlight_revision !== summary.highlight_revision) return;
       review.summary = summary;
       adoptExecutionWindow(review, window);
+      review.refreshAvailable = false;
       const focusedRow = window.rows.find((row) => row.node_id === summary.highlight_focus_node_id);
       if (focusedRow?.operation_id === review.executionDetail?.operationId
           && review.executionDetail?.state === "error") {
         void readExecutionDetail(review, focusedRow);
       }
       renderTasks();
-    } catch (error) {
+    } catch (_error) {
       if (retainedReviewTask(review) === task && review.actionRevision === action) {
-        if (!retainReviewOutcome(review, error)) {
-          review.message = "Highlight was refused. Highlight the item again to retry.";
-          renderTasks();
-        }
+        review.refreshAvailable = true;
+        review.message = "Highlight response unavailable. Select Refresh review to read the current highlight.";
+        renderTasks();
       }
     } finally {
       endForegroundWindowRead(review);
@@ -1743,9 +1802,12 @@ async function changePlanSelection(review, row, selected, highlightedScope = fal
   review.message = "Updating selection…";
   beginForegroundWindowRead(review);
   renderTasks();
-  const onDelayed = () => {
+  const onDelayed = (feedback) => {
     if (retainedReviewTask(review) === task && review.actionRevision === action) {
-      review.message = "Selection response delayed. Checking the original outcome…";
+      review.outcomeCheck = feedback.check;
+      review.message = feedback.state === "unavailable"
+        ? "Selection outcome unavailable. Select Check outcome to observe the original request."
+        : "Selection response delayed. Waiting for the original outcome…";
       renderTasks();
     }
   };
@@ -1779,6 +1841,7 @@ async function changePlanSelection(review, row, selected, highlightedScope = fal
     ) return;
     review.summary = summary;
     adoptExecutionWindow(review, window);
+    review.outcomeCheck = null;
     review.message = summary.disposition === "applied"
       ? null
       : summary.disposition === "conflict"
@@ -1798,8 +1861,9 @@ async function changePlanSelection(review, row, selected, highlightedScope = fal
   } finally {
     if (
       retainedReviewTask(review) === task && review.actionRevision === action
-      && review.pending !== null && review.outcomeRetry === null && !review.outcomeUnknown
+      && review.pending === "selection" && !review.outcomeUnknown
     ) {
+      review.outcomeCheck = null;
       review.pending = null;
       renderTasks();
     }
@@ -1809,17 +1873,19 @@ async function changePlanSelection(review, row, selected, highlightedScope = fal
 
 async function executeReviewedPlan(review, returnFocus) {
   const task = currentReviewTask(review);
-  if (
-    task !== null
-    && task.executionAttempt?.state === "uncertain"
-  ) {
-    if (typeof task.executionAttempt.retry === "function") {
-      await submitReviewedExecution(task, task.executionAttempt);
+  if (task !== null && task.executionAttempt?.state === "submitting") {
+    const attempt = task.executionAttempt;
+    if (typeof attempt.check === "function" && !attempt.checking) {
+      attempt.checking = true;
+      try { await attempt.check(); } finally {
+        if (task.executionAttempt === attempt) attempt.checking = false;
+        renderTasks();
+      }
     }
     return;
   }
   if (
-    task === null || task.closePending || task.closeRetry !== null
+    task === null || task.closePending || task.closeCheck !== null
     || task.closeOutcomeUnknown || review.pending !== null
     || review.summary.selection_state !== "reviewing"
     || task.executionAttempt !== null
@@ -1831,7 +1897,8 @@ async function executeReviewedPlan(review, returnFocus) {
     selectionRevision: review.summary.selection_revision,
     destructiveAcknowledged: review.summary.requires_destructive_confirmation,
     destructiveOperationCount: review.summary.destructive_operation_count,
-    retry: null,
+    check: null,
+    checking: false,
     submissionStarted: false,
     state: review.summary.requires_destructive_confirmation ? "confirming" : "submitting",
   };
@@ -1873,24 +1940,25 @@ function cancelReviewedExecution(task, attempt) {
 async function submitReviewedExecution(task, attempt) {
   if (
     task.executionAttempt !== attempt
-    || !["confirming", "submitting", "uncertain"].includes(attempt.state)
+    || !["confirming", "submitting"].includes(attempt.state)
   ) return;
-  if (attempt.state === "uncertain" && typeof attempt.retry !== "function") return;
   if (attempt.submissionStarted) return;
-  const submit = attempt.retry ?? (() => startExecution(
+  const submit = () => startExecution(
     attempt.taskId,
     attempt.requestId,
     attempt.selectionRevision,
     attempt.destructiveAcknowledged,
-    () => {
+    (feedback) => {
       if (tasks.get(task.taskId) === task && task.executionAttempt === attempt
           && task.review !== null) {
-        task.review.message = "Execution response delayed. Checking the original admission…";
+        attempt.check = feedback.check;
+        task.review.message = feedback.state === "unavailable"
+          ? "Execution outcome unavailable. Select Check outcome to observe the original request."
+          : "Execution response delayed. Waiting for the original admission…";
         renderTasks();
       }
     },
-  ));
-  attempt.retry = null;
+  );
   attempt.submissionStarted = true;
   attempt.state = "submitting";
   if (task.review !== null) {
@@ -1948,13 +2016,10 @@ async function submitReviewedExecution(task, attempt) {
     const currentReview = task.review;
     if (error instanceof StartPlanUncertainError) {
       attempt.state = "uncertain";
-      attempt.retry = error.retry;
-      attempt.submissionStarted = false;
+      attempt.check = null;
       if (currentReview !== null) {
-        currentReview.pending = null;
-        currentReview.message = error.checkable
-          ? "Execution outcome unavailable. Retry outcome to check the original request."
-          : UNKNOWN_OUTCOME_GUIDANCE;
+        currentReview.pending = "outcome";
+        currentReview.message = UNKNOWN_OUTCOME_GUIDANCE;
       }
     } else {
       task.executionAttempt = null;
@@ -1993,36 +2058,23 @@ function recordExecutionControlResult(task, attempt, result) {
 }
 
 async function retryIndependentCancelOutcome(task, attempt) {
-  if (task.executionControlAttempt !== attempt || attempt.pending
-      || typeof attempt.retry !== "function" || attempt.unknown
+  if (task.executionControlAttempt !== attempt || attempt.checking
+      || typeof attempt.check !== "function" || attempt.unknown
       || task.sessionId !== attempt.sessionId || task.sessionState !== "active") return;
-  const retry = attempt.retry;
-  attempt.retry = null;
-  attempt.pending = true;
+  attempt.checking = true;
   attempt.message = "Checking the original Cancel outcome…";
   renderTasks();
   const stillOwned = () => tasks.get(task.taskId) === task
     && task.sessionId === attempt.sessionId && task.executionControlAttempt === attempt;
   try {
-    const result = await retry();
+    await attempt.check();
+  } catch (_error) {
     if (stillOwned() && task.sessionState === "active") {
-      recordExecutionControlResult(task, attempt, result);
-    }
-  } catch (error) {
-    if (stillOwned() && task.sessionState === "active") {
-      if (error instanceof OutcomeUnavailableError) {
-        attempt.retry = error.retry;
-        attempt.unknown = !error.checkable;
-        attempt.message = error.checkable
-          ? "Cancel outcome unavailable. Retry outcome to check the original Cancel request."
-          : "Cancel outcome cannot be confirmed. Close and reopen NamiSync before trying another Cancel.";
-      } else {
-        attempt.message = "Cancel refused. Follow live status.";
-      }
+      attempt.message = "Check unavailable. Select Check outcome again.";
     }
   } finally {
     if (stillOwned()) {
-      attempt.pending = false;
+      attempt.checking = false;
       renderTasks();
     }
   }
@@ -2033,12 +2085,13 @@ async function controlReviewedExecution(review, actionName) {
   const independentCancel = task !== null && actionName === "cancel"
     && canCancelAfterFixedReviewOutcome(task, review);
   if (
-    task === null || task.closePending || task.closeRetry !== null
+    task === null || task.closePending || task.closeCheck !== null
     || task.closeOutcomeUnknown || (review.pending !== null && !independentCancel)
     || !task.executionStarted
     || task.sessionState !== "active" || task.sessionId === null
     || task.reviewSessionId !== task.sessionId
     || task.drainUnavailable || task.executionControlAttempt?.pending
+    || task.executionControlAttempt?.unknown
   ) return;
   review.actionRevision += 1;
   const sessionId = task.sessionId;
@@ -2049,7 +2102,8 @@ async function controlReviewedExecution(review, actionName) {
     actionName,
     pending: true,
     message: `${actionName[0].toUpperCase()}${actionName.slice(1)} requested…`,
-    retry: null,
+    check: null,
+    checking: false,
     unknown: false,
     independent: independentCancel,
     accepted: false,
@@ -2068,9 +2122,13 @@ async function controlReviewedExecution(review, actionName) {
   const stillOwned = () => tasks.get(task.taskId) === task
     && task.sessionId === sessionId && task.executionControlAttempt === attempt;
   try {
-    const result = await controlExecution(task.taskId, sessionId, actionName, () => {
+    const result = await controlExecution(task.taskId, sessionId, actionName, (feedback) => {
       if (stillOwned() && task.review !== null) {
-        attempt.message = `${actionName[0].toUpperCase()}${actionName.slice(1)} response delayed. Checking its original outcome…`;
+        attempt.check = feedback.check;
+        attempt.message = feedback.state === "unavailable"
+          ? `${actionName[0].toUpperCase()}${actionName.slice(1)} outcome unavailable. Select Check outcome to observe the original request.`
+          : `${actionName[0].toUpperCase()}${actionName.slice(1)} response delayed. Waiting for the original outcome…`;
+        if (!independentCancel) task.review.outcomeCheck = feedback.check;
         if (!independentCancel) task.review.message = attempt.message;
         renderTasks();
       }
@@ -2086,11 +2144,9 @@ async function controlReviewedExecution(review, actionName) {
       ))
     ) {
       if (independentCancel && error instanceof OutcomeUnavailableError) {
-        attempt.retry = error.retry;
-        attempt.unknown = !error.checkable;
-        attempt.message = error.checkable
-          ? "Cancel outcome unavailable. Retry outcome to check the original Cancel request."
-          : "Cancel outcome cannot be confirmed. Close and reopen NamiSync before trying another Cancel.";
+        attempt.check = null;
+        attempt.unknown = true;
+        attempt.message = "Cancel outcome cannot be confirmed. Close and reopen NamiSync before trying another Cancel.";
       } else if (!independentCancel && task.review !== null
           && retainReviewOutcome(task.review, error, actionName)) {
         attempt.message = task.review.message;
@@ -2103,8 +2159,11 @@ async function controlReviewedExecution(review, actionName) {
     if (stillOwned()) {
       if (independentCancel) {
         attempt.pending = false;
-      } else if (task.review?.outcomeRetry === null) {
+        attempt.check = null;
+      } else {
         attempt.pending = false;
+        attempt.check = null;
+        if (task.review !== null && !task.review.outcomeUnknown) task.review.outcomeCheck = null;
         if (task.review?.pending === actionName) task.review.pending = null;
       }
       renderTasks();
@@ -2114,6 +2173,11 @@ async function controlReviewedExecution(review, actionName) {
 
 async function planAgainFromReview(review) {
   const task = currentReviewTask(review);
+  if (task !== null && review.pending === "plan-again"
+      && typeof task.form?.attempt?.check === "function") {
+    await retryFormAttempt(task, task.form, "plan-again");
+    return;
+  }
   if (task === null || review.pending !== null) return;
   if (!canStartPlanAgain(task)) {
     review.message = "Wait for the current action, then try Plan again.";
@@ -2138,7 +2202,6 @@ function editLocation(purpose, text) {
   const form = currentForm();
   if (!formIsEditable(form)) return;
   const row = form[purpose];
-  if (row.outcomeRetry !== null || row.outcomeUnknown) return;
   row.text = text;
   clearLocationChoice(row);
   row.candidate = text ? { kind: "literal_path", path: text, selected_mount: null } : null;
@@ -2155,54 +2218,6 @@ function acceptLocation(row, result) {
   if (result.display !== null) row.text = result.display;
 }
 
-function retainLocationOutcome(task, form, row, error, accept) {
-  if (!(error instanceof OutcomeUnavailableError)) return false;
-  if (!error.checkable) {
-    row.outcomeRetry = null;
-    row.outcomeUnknown = true;
-    form.actionMessage = UNKNOWN_OUTCOME_GUIDANCE;
-    renderTasks();
-    return true;
-  }
-  const revision = row.revision;
-  row.outcomeRetry = async () => {
-    if (tasks.get(task.taskId) !== task || task.form !== form
-        || row.revision !== revision) return;
-    form.actionMessage = "Checking the original folder outcome…";
-    renderTasks();
-    try {
-      const result = await error.retry();
-      if (tasks.get(task.taskId) !== task || task.form !== form
-          || row.revision !== revision) return;
-      row.outcomeRetry = null;
-      row.outcomeUnknown = false;
-      accept(result);
-      form.actionMessage = null;
-      renderTasks();
-    } catch (failure) {
-      if (tasks.get(task.taskId) !== task || task.form !== form
-          || row.revision !== revision) return;
-      if (!retainLocationOutcome(task, form, row, failure, accept)) {
-        row.outcomeRetry = null;
-        form.actionMessage = "Folder choice was refused. Check the path and try again.";
-        renderTasks();
-      }
-    }
-  };
-  form.actionMessage = "Folder outcome unavailable. Retry outcome to check the original choice.";
-  renderTasks();
-  return true;
-}
-
-async function retryLocationOutcomes() {
-  const task = currentTask();
-  const form = task?.form;
-  if (task === null || form === null) return;
-  for (const row of [form.source, form.target]) {
-    if (typeof row.outcomeRetry === "function") await row.outcomeRetry();
-  }
-}
-
 function resolvedChoice(row, purpose) {
   return row.location?.purpose === purpose && typeof row.location.choice_id === "string"
     ? row.location
@@ -2211,25 +2226,33 @@ function resolvedChoice(row, purpose) {
 
 async function admitRow(task, form, rowName, purpose = rowName) {
   const row = form[rowName];
-  if (!row.text || row.candidate === null || row.outcomeRetry !== null
-      || row.outcomeUnknown) return null;
+  if (!row.text || row.candidate === null || row.pending) return null;
   const revision = row.revision;
   const admissionRevision = ++row.admissionRevision;
+  row.pending = true;
+  renderTasks();
   let result;
   try {
     result = await admitLocation(purpose, row.candidate, () => {
       if (tasks.get(task.taskId) === task && task.form === form
           && row.revision === revision) {
-        form.actionMessage = "Folder response delayed. Checking its original outcome…";
+        form.actionMessage = "Folder choice is still pending. Wait, or edit this folder to choose again.";
         renderTasks();
       }
     });
   } catch (error) {
     if (tasks.get(task.taskId) === task && task.form === form
         && row.revision === revision && row.admissionRevision === admissionRevision) {
-      retainLocationOutcome(task, form, row, error, (value) => acceptLocation(row, value));
+      form.actionMessage = "Folder choice could not be confirmed. Review or choose this folder again.";
+      renderTasks();
     }
     throw error;
+  } finally {
+    if (tasks.get(task.taskId) === task && task.form === form
+        && row.revision === revision && row.admissionRevision === admissionRevision) {
+      row.pending = false;
+      renderTasks();
+    }
   }
   if (tasks.get(task.taskId) !== task || task.form !== form || row.revision !== revision || row.admissionRevision !== admissionRevision) return null;
   acceptLocation(row, result);
@@ -2251,9 +2274,9 @@ async function validateLocation(purpose) {
 async function pickLocation(purpose) {
   const task = currentTask();
   const form = task?.form;
-  if (task === null || !formIsEditable(form)) return;
+  if (task === null || !formIsEditable(form) || pickerPending) return;
+  pickerPending = true;
   const row = form[purpose];
-  if (row.outcomeRetry !== null || row.outcomeUnknown) return;
   const admissionPurpose = locationPurpose(form, purpose);
   const prior = {
     location: row.location,
@@ -2263,7 +2286,8 @@ async function pickLocation(purpose) {
   };
   const revision = ++row.revision;
   const formRevision = ++form.revision;
-  row.admissionRevision += 1;
+  const admissionRevision = ++row.admissionRevision;
+  row.pending = true;
   row.location = null;
   row.candidate = null;
   row.continuationId = null;
@@ -2294,14 +2318,21 @@ async function pickLocation(purpose) {
     acceptLocation(row, result);
     row.text = result.display ?? "";
     renderTasks();
-  } catch (error) {
-    if (!retainLocationOutcome(task, form, row, error, (result) => {
-      if (result === null) restore();
-      else {
-        acceptLocation(row, result);
-        row.text = result.display ?? "";
-      }
-    })) restore();
+  } catch (_error) {
+    restore();
+    if (tasks.get(task.taskId) === task && task.form === form
+        && row.revision === revision) {
+      form.actionMessage = "Folder choice could not be confirmed. Choose it again.";
+      renderTasks();
+    }
+  } finally {
+    pickerPending = false;
+    if (tasks.get(task.taskId) === task && task.form === form
+        && form[purpose] === row && row.revision === revision
+        && row.admissionRevision === admissionRevision) {
+      row.pending = false;
+      renderTasks();
+    }
   }
 }
 
@@ -2310,7 +2341,6 @@ async function chooseRecentLocation(purpose, recent) {
   const form = task?.form;
   if (task === null || !formIsEditable(form)) return;
   const row = form[purpose];
-  if (row.outcomeRetry !== null || row.outcomeUnknown) return;
   row.text = recent.display;
   clearLocationChoice(row);
   row.candidate = { kind: "remembered_location", location_id: recent.location_id, selected_mount: null };
@@ -2328,8 +2358,6 @@ async function chooseRecentPair(pair) {
   const task = currentTask();
   const form = task?.form;
   if (task === null || !formIsEditable(form) || form.mode !== "sync-plan") return;
-  if (form.source.outcomeRetry !== null || form.target.outcomeRetry !== null
-      || form.source.outcomeUnknown || form.target.outcomeUnknown) return;
   const availability = recentPairAvailability[pair.mapping_id];
   if (form.batchRunning || availability?.source !== "online" || availability?.target !== "online"
     || !form.setup.recents.pairs.some((item) => item.mapping_id === pair.mapping_id
@@ -2380,7 +2408,6 @@ async function chooseMount(rowName, mountIndex) {
   const form = task?.form;
   if (task === null || !formIsEditable(form)) return;
   const row = form[rowName];
-  if (row.outcomeRetry !== null || row.outcomeUnknown) return;
   const purpose = locationPurpose(form, rowName);
   if (
     row.location?.state !== "ambiguous" ||
@@ -2398,12 +2425,13 @@ async function chooseMount(rowName, mountIndex) {
   const formRevision = ++form.revision;
   const admissionRevision = ++row.admissionRevision;
   row.mountIndex = mountIndex;
+  row.pending = true;
   renderTasks();
   try {
     const result = await admitLocation(purpose, selection, () => {
       if (tasks.get(task.taskId) === task && task.form === form
           && row.revision === revision) {
-        form.actionMessage = "Folder choice response delayed. Checking its original outcome…";
+        form.actionMessage = "Mount choice is still pending. Wait, or choose another mount.";
         renderTasks();
       }
     });
@@ -2418,17 +2446,23 @@ async function chooseMount(rowName, mountIndex) {
     ) return;
     acceptLocation(row, result);
     renderTasks();
-  } catch (error) {
+  } catch (_error) {
     if (
       tasks.get(task.taskId) === task &&
       task.form === form &&
       row.revision === revision &&
       row.admissionRevision === admissionRevision
     ) {
-      if (!retainLocationOutcome(task, form, row, error, (result) => acceptLocation(row, result))) {
-        clearLocationChoice(row);
-        renderTasks();
-      }
+      row.mountIndex = null;
+      row.pending = false;
+      form.actionMessage = "Folder choice could not be confirmed. Choose a mount again.";
+      renderTasks();
+    }
+  } finally {
+    if (tasks.get(task.taskId) === task && task.form === form
+        && row.revision === revision && row.admissionRevision === admissionRevision) {
+      row.pending = false;
+      renderTasks();
     }
   }
 }
@@ -2443,7 +2477,8 @@ function beginFormAttempt(task, form, kind) {
     kind,
     running: true,
     dispatched: false,
-    retry: null,
+    check: null,
+    checking: false,
   };
   form.attempt = attempt;
   form.actionMessage = null;
@@ -2470,12 +2505,10 @@ async function dispatchFormAttempt(task, form, attempt, submit) {
     if (!currentFormAttempt(task, form, attempt)) return;
     if (error instanceof StartPlanUncertainError) {
       attempt.running = false;
-      attempt.retry = error.retry;
-      attempt.unknown = !error.checkable;
+      attempt.unknown = true;
       if (attempt.unknown) task.startOutcomeUnknown = true;
-      form.actionMessage = error.checkable
-        ? "Outcome unavailable. Retry outcome to check the original request."
-        : UNKNOWN_OUTCOME_GUIDANCE;
+      attempt.check = null;
+      form.actionMessage = UNKNOWN_OUTCOME_GUIDANCE;
       renderTasks();
       return;
     }
@@ -2492,15 +2525,16 @@ async function dispatchFormAttempt(task, form, attempt, submit) {
 async function retryFormAttempt(task, form, kind) {
   const attempt = form.attempt;
   if (
-    attempt === null || attempt.kind !== kind || attempt.running ||
-    typeof attempt.retry !== "function"
+    attempt === null || attempt.kind !== kind || !attempt.running ||
+    attempt.checking || typeof attempt.check !== "function"
   ) return false;
-  const retry = attempt.retry;
-  attempt.running = true;
-  attempt.retry = null;
+  attempt.checking = true;
   form.actionMessage = "Checking the original start outcome…";
   renderTasks();
-  await dispatchFormAttempt(task, form, attempt, retry);
+  try { await attempt.check(); } finally {
+    if (currentFormAttempt(task, form, attempt)) attempt.checking = false;
+    renderTasks();
+  }
   return true;
 }
 
@@ -2525,11 +2559,7 @@ function abandonFreshAttempt(task, form, attempt) {
 function refuseFreshAttempt(task, form, attempt) {
   if (!currentFormAttempt(task, form, attempt) || attempt.dispatched) return;
   form.attempt = null;
-  form.actionMessage = form.source.outcomeUnknown || form.target.outcomeUnknown
-    ? UNKNOWN_OUTCOME_GUIDANCE
-    : form.source.outcomeRetry !== null || form.target.outcomeRetry !== null
-    ? "Folder outcome unavailable. Retry outcome to check the original choice."
-    : "That task could not be started. Review the setup and try again.";
+  form.actionMessage = "That task could not be started. Review the setup and try again.";
   renderTasks();
   void loadTaskSetup(task);
 }
@@ -2538,7 +2568,7 @@ async function startCurrentPlan() {
   const task = currentTask();
   const form = task?.form;
   if (
-    task === null || task.closePending || task.closeRetry !== null || task.closeOutcomeUnknown
+    task === null || task.closePending || task.closeCheck !== null || task.closeOutcomeUnknown
     || task.startOutcomeUnknown || form === null || !form.editable || form.mode !== "sync-plan" ||
     (originHasPendingBatch(task.taskId) || batchTaskBlockReason(task.taskId) !== null) ||
     (pageBatch !== null && pageBatch.running !== null)
@@ -2547,7 +2577,8 @@ async function startCurrentPlan() {
     await retryFormAttempt(task, form, "sync-plan");
     return;
   }
-  if (!form.source.text || !form.target.text || form.options === null) return;
+  if (!form.source.text || !form.target.text || form.options === null
+      || form.source.pending || form.target.pending) return;
   const revision = form.revision;
   const optionsInput = cloneOptions(form.options);
   const attempt = beginFormAttempt(task, form, "sync-plan");
@@ -2561,9 +2592,12 @@ async function startCurrentPlan() {
     form.options = cloneOptions(ready.options);
     await dispatchFormAttempt(
       task, form, attempt,
-      () => startPlan(task.taskId, ready.sourceId, ready.targetId, ready.options, () => {
+      () => startPlan(task.taskId, ready.sourceId, ready.targetId, ready.options, (feedback) => {
         if (currentFormAttempt(task, form, attempt)) {
-          form.actionMessage = "Plan response delayed. Checking its original outcome…";
+          attempt.check = feedback.check;
+          form.actionMessage = feedback.state === "unavailable"
+            ? "Plan outcome unavailable. Select Check outcome to observe the original request."
+            : "Plan response delayed. Waiting for the original outcome…";
           renderTasks();
         }
       }),
@@ -2577,7 +2611,7 @@ async function startCurrentInventory() {
   const task = currentTask();
   const form = task?.form;
   if (
-    task === null || task.closePending || task.closeRetry !== null || task.closeOutcomeUnknown
+    task === null || task.closePending || task.closeCheck !== null || task.closeOutcomeUnknown
     || task.startOutcomeUnknown || form === null || !form.editable || form.mode !== "inventory" ||
     batchTaskBlockReason(task.taskId) !== null ||
     (pageBatch !== null && pageBatch.running !== null)
@@ -2586,7 +2620,7 @@ async function startCurrentInventory() {
     await retryFormAttempt(task, form, "inventory");
     return;
   }
-  if (!form.source.text) return;
+  if (!form.source.text || form.source.pending) return;
   const revision = form.revision;
   const attempt = beginFormAttempt(task, form, "inventory");
   if (attempt === null) return;
@@ -2598,9 +2632,12 @@ async function startCurrentInventory() {
       return;
     }
     await dispatchFormAttempt(task, form, attempt, () => startInventory(
-      task.taskId, root.choice_id, () => {
+      task.taskId, root.choice_id, (feedback) => {
         if (currentFormAttempt(task, form, attempt)) {
-          form.actionMessage = "Inventory response delayed. Checking its original outcome…";
+          attempt.check = feedback.check;
+          form.actionMessage = feedback.state === "unavailable"
+            ? "Inventory outcome unavailable. Select Check outcome to observe the original request."
+            : "Inventory response delayed. Waiting for the original outcome…";
           renderTasks();
         }
       },
@@ -2614,10 +2651,9 @@ function addCurrentPair() {
   const task = currentTask();
   const form = currentForm();
   if (
-    task === null || task.closePending || task.closeRetry !== null || task.closeOutcomeUnknown
+    task === null || task.closePending || task.closeCheck !== null || task.closeOutcomeUnknown
     || task.startOutcomeUnknown || !formIsEditable(form) || form.mode !== "sync-plan" ||
-    form.source.outcomeRetry !== null || form.target.outcomeRetry !== null
-    || form.source.outcomeUnknown || form.target.outcomeUnknown ||
+    form.source.pending || form.target.pending ||
     (pageBatch !== null && pageBatch.running !== null)
   ) return;
   if (pageBatch?.rows.some((row) => row.originTaskId === task.taskId
@@ -2631,7 +2667,8 @@ function addCurrentPair() {
     target: snapshotLocationRow(form.target),
     state: "queued",
     stage: null,
-    retry: null,
+    check: null,
+    checking: false,
     taskId: null,
     sourceId: null,
     targetId: null,
@@ -2644,10 +2681,12 @@ function addCurrentPair() {
 }
 
 function removeBatchRow(row) {
-  if (pageBatch === null || row?.state !== "queued") return;
+  if (pageBatch === null || (row?.state !== "queued"
+      && !(row?.state === "submitting" && row.stage?.startsWith("admitting-")))) return;
   const index = pageBatch.rows.indexOf(row);
   if (index < 0 || row.originTaskId !== selectedTaskId) return;
   pageBatch.rows.splice(index, 1);
+  row.abandonAdmission?.();
   renderTasks();
 }
 
@@ -2662,14 +2701,11 @@ function currentBatchRun(batch, owner, generation) {
   return pageBatch === batch && batch.running === owner && batch.generation === generation;
 }
 
-function batchRowUncertain(row, stage, error) {
-  row.state = error.checkable ? "uncertain" : "unknown";
+function retainBatchUnknown(row, stage) {
+  row.state = "unknown";
   row.stage = stage;
-  row.retry = error.retry;
-  row.message = !error.checkable ? UNKNOWN_OUTCOME_GUIDANCE : stage.startsWith("admitting-")
-    ? "Folder outcome unavailable. Retry outcome for this batch row."
-    : stage === "creating" ? "Task outcome unavailable. Retry outcome for this batch row."
-      : "Plan outcome unavailable. Retry outcome for this batch row.";
+  row.check = null;
+  row.message = UNKNOWN_OUTCOME_GUIDANCE;
 }
 
 function adoptBatchShell(shell, row) {
@@ -2692,30 +2728,6 @@ function adoptBatchShell(shell, row) {
 async function startBatchRow(row, context) {
   try {
     let task = row.taskId === null ? null : tasks.get(row.taskId) ?? null;
-    if (row.state === "uncertain") {
-      const stage = row.stage;
-      const retry = row.retry;
-      if (typeof retry !== "function") throw new BridgeTransportError();
-      row.state = "submitting";
-      row.retry = null;
-      row.message = stage.startsWith("admitting-") ? "Checking folder outcome…"
-        : stage === "creating" ? "Checking task outcome…" : "Checking plan outcome…";
-      renderTasks();
-      const result = await retry();
-      if (stage === "admitting-source" || stage === "admitting-target") {
-        const purpose = stage === "admitting-source" ? "source" : "target";
-        acceptLocation(row[purpose], result);
-        row.state = "queued";
-        row.retry = null;
-        return startBatchRow(row, context);
-      }
-      if (stage === "starting") {
-        row.state = "created";
-        row.message = "Plan task created.";
-        return;
-      }
-      task = adoptBatchShell(result, row);
-    } else {
       const options = await prepareSetup(cloneOptions(row.options));
       if (!context.contains(row) || row.state !== "queued" || !context.canSubmit()) return;
       row.options = cloneOptions(options);
@@ -2724,8 +2736,10 @@ async function startBatchRow(row, context) {
       renderTasks();
       row.stage = "admitting-source";
       const source = await admitBatchRow(row.source, "source", row);
+      if (!context.contains(row) || !context.canSubmit()) return;
       row.stage = "admitting-target";
       const target = await admitBatchRow(row.target, "target", row);
+      if (!context.contains(row) || !context.canSubmit()) return;
       if (typeof source?.choice_id !== "string" || typeof target?.choice_id !== "string") {
         throw new BridgeTransportError();
       }
@@ -2741,14 +2755,17 @@ async function startBatchRow(row, context) {
       row.stage = "creating";
       row.message = "Creating task…";
       renderTasks();
-      const shell = await createTask(() => {
+      const shell = await createTask((feedback) => {
         if (row.state === "submitting") {
-          row.message = "Task response delayed. Checking its original outcome…";
+          row.check = feedback.check;
+          row.message = feedback.state === "unavailable"
+            ? "Task outcome unavailable. Select Check outcome to observe the original request."
+            : "Task response delayed. Waiting for the original outcome…";
           renderTasks();
         }
       });
+      row.check = null;
       task = adoptBatchShell(shell, row);
-    }
     if (!context.canSubmit()) {
       row.state = "stopped";
       row.message = "The blank task was retained; its plan was not submitted because the batch changed.";
@@ -2758,25 +2775,26 @@ async function startBatchRow(row, context) {
     row.stage = "starting";
     row.message = "Creating plan…";
     renderTasks();
-    await startPlan(task.taskId, row.sourceId, row.targetId, row.options, () => {
+    await startPlan(task.taskId, row.sourceId, row.targetId, row.options, (feedback) => {
       if (row.state === "submitting") {
-        row.message = "Plan response delayed. Checking its original outcome…";
+        row.check = feedback.check;
+        row.message = feedback.state === "unavailable"
+          ? "Plan outcome unavailable. Select Check outcome to observe the original request."
+          : "Plan response delayed. Waiting for the original outcome…";
         renderTasks();
       }
     });
+    row.check = null;
     row.state = "created";
     row.message = "Plan task created.";
   } catch (error) {
-    if (error instanceof OutcomeUnavailableError
-        && ["admitting-source", "admitting-target"].includes(row.stage)) {
-      batchRowUncertain(row, row.stage, error);
-    } else if (error instanceof TaskCreateUncertainError) {
-      batchRowUncertain(row, "creating", error);
+    if (error instanceof TaskCreateUncertainError) {
+      retainBatchUnknown(row, "creating");
     } else if (error instanceof StartPlanUncertainError) {
-      batchRowUncertain(row, "starting", error);
+      retainBatchUnknown(row, "starting");
     } else {
       row.state = "refused";
-      row.retry = null;
+      row.check = null;
       row.message = "That pair could not be created. Review its folders and settings, then try again.";
     }
   }
@@ -2786,17 +2804,28 @@ async function startPairBatch() {
   const task = currentTask();
   const form = currentForm();
   const batch = pageBatch;
+  if (batch?.running?.originTaskId === task?.taskId) {
+    const row = batch.running.row;
+    if (typeof row?.check === "function" && !row.checking) {
+      row.checking = true;
+      renderTasks();
+      try { await row.check(); } finally {
+        row.checking = false;
+        renderTasks();
+      }
+    }
+    return;
+  }
   if (
-    task === null || task.closePending || task.closeRetry !== null || task.closeOutcomeUnknown
+    task === null || task.closePending || task.closeCheck !== null || task.closeOutcomeUnknown
     || task.startOutcomeUnknown || !formIsEditable(form) || form.mode !== "sync-plan" || form.attempt !== null
-    || form.source.outcomeRetry !== null || form.target.outcomeRetry !== null
-    || form.source.outcomeUnknown || form.target.outcomeUnknown ||
+    || form.source.pending || form.target.pending ||
     batch === null || batch.running !== null
   ) return;
   if (batch.rows.some((row) => row.originTaskId === task.taskId
       && row.state === "unknown")) return;
   const rows = batch.rows.filter((row) => row.originTaskId === task.taskId
-    && ["queued", "uncertain"].includes(row.state));
+    && row.state === "queued");
   if (rows.length === 0) return;
   const queued = rows.filter((row) => row.state === "queued");
   if (queued.some((row) => row.options === null)) return;
@@ -2807,7 +2836,7 @@ async function startPairBatch() {
     recents: defaultSetup?.recents ?? form.setup.recents,
     contains: (row) => batch.rows.includes(row),
     canSubmit: () => currentBatchRun(batch, owner, generation)
-      && tasks.get(task.taskId) === task && !task.closePending && task.closeRetry === null
+      && tasks.get(task.taskId) === task && !task.closePending && task.closeCheck === null
       && !task.closeOutcomeUnknown && !task.startOutcomeUnknown,
   };
   batch.running = owner;
@@ -2816,7 +2845,8 @@ async function startPairBatch() {
     for (const row of rows) {
       if (!currentBatchRun(batch, owner, generation)) break;
       if (!batch.rows.includes(row)) continue;
-      if (!["queued", "uncertain"].includes(row.state)) continue;
+      if (row.state !== "queued") continue;
+      owner.row = row;
       await startBatchRow(row, context);
       renderTasks();
     }
@@ -2832,12 +2862,19 @@ async function admitBatchRow(row, purpose, batchRow) {
   if (accepted !== null) return accepted;
   if (!row.text || row.candidate === null) return null;
   const revision = row.revision;
-  const result = await admitLocation(purpose, row.candidate, () => {
+  const abandoned = new Promise((resolve) => {
+    batchRow.abandonAdmission = () => resolve(null);
+  });
+  const admission = admitLocation(purpose, row.candidate, () => {
     if (batchRow.state === "submitting") {
-      batchRow.message = "Folder response delayed. Checking its original outcome…";
+      batchRow.message = "Folder response delayed. Wait, or remove this pair and add it again after reviewing the folders.";
       renderTasks();
     }
   });
+  let result;
+  try { result = await Promise.race([admission, abandoned]); }
+  finally { batchRow.abandonAdmission = null; }
+  if (result === null) return null;
   if (row.revision !== revision) return null;
   acceptLocation(row, result);
   return result;
@@ -2854,15 +2891,15 @@ function choosePlanAgainMount(purpose, mount) {
 function canStartPlanAgain(task) {
   const form = task?.form;
   if (
-    task === null || currentTask() !== task || task.closePending || task.closeRetry !== null
+    task === null || currentTask() !== task || task.closePending || task.closeCheck !== null
     || task.closeOutcomeUnknown || task.startOutcomeUnknown ||
     form?.canPlanAgain !== true ||
     originHasPendingBatch(task.taskId) || batchTaskBlockReason(task.taskId) !== null ||
     (pageBatch !== null && pageBatch.running !== null)
   ) return false;
   return form.attempt === null || (
-    form.attempt.kind === "plan-again" && !form.attempt.running &&
-    typeof form.attempt.retry === "function"
+    form.attempt.kind === "plan-again" && form.attempt.running &&
+    typeof form.attempt.check === "function" && !form.attempt.checking
   );
 }
 
@@ -2879,9 +2916,12 @@ async function startPlanAgain(task = currentTask()) {
   if (attempt === null || !freshFormAttempt(task, form, attempt, revision)) return false;
   await dispatchFormAttempt(
     task, form, attempt,
-    () => planAgain(task.taskId, sourceMount, targetMount, () => {
+    () => planAgain(task.taskId, sourceMount, targetMount, (feedback) => {
       if (currentFormAttempt(task, form, attempt)) {
-        form.actionMessage = "Plan-again response delayed. Checking its original outcome…";
+        attempt.check = feedback.check;
+        form.actionMessage = feedback.state === "unavailable"
+          ? "Plan-again outcome unavailable. Select Check outcome to observe the original request."
+          : "Plan-again response delayed. Waiting for the original outcome…";
         renderTasks();
       }
     }),
