@@ -238,30 +238,30 @@ await pendingHandle.check();
 assert.deepEqual(await pendingPlanning, retained.get(pendingRequest.request_id).response.result);
 assert.equal(requests.length, pendingMutationCount, "Check cannot submit another mutation");
 
-// Matching invalid result is visible as a protocol fault without an ACK or
-// terminal abandonment. A later valid original result can still be adopted.
+// Native retains one invalid original response. It becomes a fixed unknown
+// outcome with a diagnostic and exact cleanup, never a reason to replay work.
 invalidOriginalResult = true;
 const faultUpdates = [];
+const faultObservationBase = observations.length;
+const faultRequestBase = requests.length;
 const faultPlanning = bridge.startPlan(taskId, sourceId, targetId, options,
   (handle) => faultUpdates.push(handle));
-for (let turn = 0; turn < 80 && faultUpdates[0]?.state !== "protocol-fault"; turn += 1) {
-  await Promise.resolve();
-}
+await assert.rejects(faultPlanning, { name: "StartPlanUncertainError" });
 const faultHandle = faultUpdates[0];
 const faultRequest = requests.at(-1);
 const faultExchange = retained.get(faultRequest.request_id);
-assert.equal(faultHandle.state, "protocol-fault");
-assert.equal(faultHandle.canCheck, true);
+assert.equal(faultHandle.state, "fixed-unknown");
+assert.equal(faultHandle.canCheck, false);
 assert.match(faultHandle.message, /invalid_result/);
+assert.match(faultHandle.message, /Close and reopen NamiSync/);
 assert.doesNotMatch(faultHandle.message, /private/);
-assert.equal(acknowledgments.includes(`ack:${faultExchange.response_token}`), false);
-faultExchange.response.result = {
-  task_id: taskId, request_id: "3".repeat(32), session_id: "4".repeat(32),
-};
-invalidOriginalResult = false;
-await faultHandle.check();
-assert.deepEqual(await faultPlanning, faultExchange.response.result);
 assert.equal(acknowledgments.includes(`ack:${faultExchange.response_token}`), true);
+assert.equal(observations.length, faultObservationBase);
+assert.equal(requests.length, faultRequestBase + 1);
+await faultHandle.check();
+assert.equal(observations.length, faultObservationBase);
+assert.equal(requests.length, faultRequestBase + 1);
+invalidOriginalResult = false;
 assert.ok(faultUpdates.every((handle) => handle === faultHandle));
 
 // A pending observation can outlive valid direct capture. Its completion must
@@ -479,6 +479,33 @@ for (const command of ["create_task", "start_plan", "close_task", "release_termi
   assert.equal(asyncTimers.size, 0, "late completion leaves no feedback timer");
 }
 
+let invalidAsyncExchange;
+delivery = (exchange) => {
+  invalidAsyncExchange = exchange;
+  exchange.message.response.result = { secret_path: "C:\\private\\original" };
+  send(exchange.message);
+  return exchange.admission;
+};
+const invalidAsyncUpdates = [];
+const invalidAsyncRequestBase = asyncRequests.length;
+const invalidAsyncObservationBase = asyncObservations.length;
+await assert.rejects(asyncBridge.startPlan(taskId, sourceId, targetId, options,
+  (handle) => invalidAsyncUpdates.push(handle)), { name: "StartPlanUncertainError" });
+const invalidAsyncHandle = invalidAsyncUpdates[0];
+assert.equal(invalidAsyncHandle.state, "fixed-unknown");
+assert.equal(invalidAsyncHandle.canCheck, false);
+assert.match(invalidAsyncHandle.message, /invalid_result/);
+assert.doesNotMatch(invalidAsyncHandle.message, /private/);
+assert.equal(asyncRequests.length, invalidAsyncRequestBase + 1);
+assert.equal(asyncObservations.length, invalidAsyncObservationBase);
+assert.ok(cleanup.includes(`ack:${invalidAsyncExchange.admission.response_token}`));
+assert.ok(cleanup.includes(`ack:completion:${hostGeneration}:${invalidAsyncExchange.request.request_id}`
+  + `:${invalidAsyncExchange.message.completion_token}`));
+await invalidAsyncHandle.check();
+assert.equal(asyncRequests.length, invalidAsyncRequestBase + 1);
+assert.equal(asyncObservations.length, invalidAsyncObservationBase);
+assert.ok(invalidAsyncUpdates.every((handle) => handle === invalidAsyncHandle));
+
 // Wrong phase/token/request envelopes cannot deliver a result or clean custody.
 let pending;
 delivery = (exchange) => { pending = exchange; return exchange.admission; };
@@ -688,14 +715,18 @@ for (const code of ["internal_error", "response_too_large"]) {
   };
   const requestCount = asyncRequests.length;
   const observationCount = asyncObservations.length;
+  const errorUpdates = [];
   let finalError;
   try {
-    await asyncBridge.createTask();
+    await asyncBridge.createTask((handle) => errorUpdates.push(handle));
     assert.fail(`${code} cannot declare a failed effect`);
   } catch (error) {
     finalError = error;
   }
   assert.equal(finalError.name, "TaskCreateUncertainError");
+  assert.equal(errorUpdates[0].state, "fixed-unknown");
+  assert.equal(errorUpdates[0].canCheck, false);
+  assert.match(errorUpdates[0].message, /Close and reopen NamiSync/);
   assert.equal("checkable" in finalError, false);
   assert.equal("retry" in finalError, false);
   assert.equal(asyncRequests.length, requestCount + 1,

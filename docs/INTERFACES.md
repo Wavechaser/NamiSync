@@ -454,7 +454,8 @@ observation round reports pending or unavailable communication without abandonin
 the original promise; late valid completion reaches its issuing owner. The five
 current-state commands instead use revisioned refresh or deliberate folder rechoice,
 without claiming that current state proves an earlier effect's outcome. Retained
-originals remain recoverable until validated capture/ACK or document/host
+originals remain recoverable until capture/ACK (including fixed unusable result
+classification) or document/host
 ownership ends; actual worker settlement remains independent. BRIDGE owns the
 wire shape, bounds, acknowledgment ordering and observation budgets. CLI and
 direct service behavior retain their existing contracts.

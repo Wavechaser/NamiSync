@@ -2,8 +2,8 @@
 
 2026-09-26, `milestone1`, base `b4b3b72`. The user authorized three validated
 follow-up corrections, retaining separate commits without a new checkpoint.
-AB-8 remains paused. Page guidance and fixture ownership land first; matching
-invalid-result settlement follows as a separate commit.
+AB-8 remains paused. `67ee229` restores page guidance and fixture ownership;
+this following commit simplifies matching invalid-result settlement.
 
 Plan review now selects the retained uncertain execution handle, including after
 reconstruction. The renderer repro failed before the fix; the app probe rejects
@@ -12,7 +12,7 @@ selection fences. Page doubles are explicit values and Check spies; sentinel
 messages test routing, while actual bridge probes own policy and wording.
 
 Native observation returns the same captured final response, not repaired bytes.
-The pending bridge correction therefore collapses matching invalid results into
+The bridge correction therefore collapses matching invalid results into
 noncheckable `fixed-unknown`, with `invalid_result` guidance and exact cleanup ACK.
 The earlier probe's in-place response rewrite was not a supported native path.
 Communication uncertainty still supports original-result observation. Neither
@@ -22,9 +22,11 @@ Native owners/wire, D4, lifecycle/resource/read bounds and effect fences remain.
 Evidence: `build/post-m1-8-ablation-20260925/correction-*`; 7 focused cases and
 the final bridge guidance rerun pass. Fresh independent review has no blockers.
 All 34 installed tests pass; 12 import contracts are kept. The interfaces gate
-has 1781 passes and one stale bridge identity-probe expectation: it treats
-fixed-unknown rejection as adoption and expects retries of immutable invalid
-data. That second-commit test correction is pending; the page slice is unaffected.
+had 1781 passes and one stale bridge identity-probe expectation: it treated
+fixed-unknown rejection as adoption and expected retries of immutable invalid
+data. Corrected that probe to assert uncertain rejection, no adoption/replay and
+no observations; its targeted rerun passes (`correction-interactive-consumer2`).
+Retain the failed receipt and unaffected passes; no product changes followed them.
 Unchanged domain tests retain the predecessor's ordinary-suite evidence; no
 domain code changed. Documentation links and diff checks pass.
 

@@ -174,9 +174,11 @@ canonical bytes before using the detached value. Ordinary responses validate
 owned views while projecting JSON primitives. Continuation storage keeps its
 separately validated typed snapshot; task drains validate the complete admitted
 typed prefix before queue consumption and project only after that handoff.
-The browser detaches native data at its adoption boundary. Observed mutations
-also validate the response and command identity before acknowledging result
-custody, so cleanup cannot discard an unusable original result.
+The browser detaches native data at its adoption boundary and validates identity
+before acknowledging result custody. A matching final response that fails
+validation is acknowledged as an unusable, fixed outcome; this cleanup does not
+adopt its payload or establish whether the effect succeeded. Foreign identities
+do not earn that acknowledgment.
 
 After handler reservation, trust recheck, envelope decode and allowlist lookup,
 composition's `admit(name)` checks BOOTSTRAP/OPEN context before payload validation.
@@ -234,8 +236,9 @@ retirement. Producing a result, timing out, or failing to post is not worker
 death. These count bounds make no whole-runtime memory or thread claim.
 
 The browser bounds retained original attempts to 64, with at most one early
-completion per asynchronous entry. Validate exact response and command identity
-before capture/adoption and cleanup. Cleanup uses at most two attempts with
+completion per asynchronous entry. Validate exact transport and command identity
+before capture or cleanup; payload validation gates successful result adoption.
+Cleanup uses at most two attempts with
 one-second observation deadlines; its failure cannot turn a captured valid
 response into a failed operation, including ordinary asynchronous reads. Adoption
 does not wait for admission or completion cleanup ACK success. The host generation learned from validated
@@ -289,8 +292,9 @@ results retain the 8 MiB response wall and asynchronous completions their 65,536
 byte wall, with fixed bounded observation metadata outside that original response.
 Bind original request identity before effect and refuse duplicate live identities.
 Native post failure retires that delivery attempt, not the captured original.
-Validated browser capture earns the existing direct native ACK or asynchronous
-completion ACK. Until that acknowledgment, genuine document retirement, host close
+Validated browser capture, or classification of a matching final response as
+unusable, earns the existing direct native ACK or asynchronous completion ACK.
+Until that acknowledgment, genuine document retirement, host close
 or process loss, result custody stays charged; there is no timer eviction or
 append-only history. Unacknowledged custody can refuse new work at capacity.
 Retiring a response never substitutes for actual worker exit.
@@ -307,11 +311,9 @@ delivery has already failed, a pending observation offers **Check** rather than
 claiming another response will arrive automatically. A live original delivery can
 still complete automatically. Persistent unavailable communication also offers
 normal application close/reopen and review of current state as a fallback; it
-does not promise that Check can always recover the result. A matching unreadable
-response is a distinct protocol fault with a bounded diagnostic, not merely
-unavailable communication. Keep its original outcome recoverable and its intent
-fenced; do not acknowledge an invalid observed result or infer effect failure.
-The original promise stays pending and is the sole result-adoption path. Explicit
+does not promise that Check can always recover the result. The original promise
+stays pending while communication is unresolved and is the sole result-adoption
+path. Explicit
 **Check** runs another bounded read-only
 observation round; it creates neither a new mutation nor a second adoption owner.
 Interactive picker wait, startup, drain, shutdown and resource deadlines
@@ -322,8 +324,11 @@ observation, regardless of arrival order. Consume the terminal transition once;
 an unresolved first response or another pending receipt cannot create a Close
 submission loop. Further known-pending settlement remains an explicit action.
 
-A captured final `internal_error` or `response_too_large` can follow an effect,
-but its fixed response cannot improve through observation. Acknowledge and retire
+A captured final `internal_error`, `response_too_large`, or matching response
+that fails validation can follow an effect, but the retained response cannot
+improve through observation: native custody does not rewrite its final bytes.
+Classify these as noncheckable `fixed-unknown`; retain a bounded `invalid_result`
+diagnostic for validation failure. Acknowledge and retire
 that completed transport entry while retaining the affected UI intent fence.
 Show that the outcome cannot be confirmed and direct the user to close/reopen
 NamiSync and review current state; do not offer a nonworking observation Retry.

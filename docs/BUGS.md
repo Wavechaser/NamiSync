@@ -1041,9 +1041,10 @@ defect, and move implementation-level test choreography out of the log.
   no alternative, and invalid matching result data appeared as communication
   loss. Cause: feedback retained neither delivery liveness nor validation failure.
   The original attempt now owns recovery feedback, offers Check or normal
-  close/reopen guidance, and preserves a visible protocol fault without ACK,
-  mutation replay or loss of late valid-result adoption. Fixed native errors
-  remain noncheckable; page ownership and effect fences remain in force.
+  close/reopen guidance, and classifies a matching invalid final result as
+  noncheckable fixed-unknown with `invalid_result` and cleanup ACK: native cannot
+  repair its retained bytes. Communication loss still permits late valid-result
+  adoption; page ownership, effect fences and the no-replay rule remain in force.
 
 - MODERATE - FIXED (2026-09-26). Cleanup/result coupling. A valid asynchronous
   recent-pairs result could be reported as a transport failure when admission

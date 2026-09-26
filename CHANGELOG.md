@@ -1061,7 +1061,8 @@ claims explicit, independently reviewable, and regression-backed.
   handle per original command. Preserve workflow stages and exact owner fences;
   stop observation feedback after settlement. Qualify lost direct delivery,
   offer close/reopen guidance for unavailable communication, and expose matching
-  unreadable results without losing recovery or permitting mutation replay.
+  unreadable final results as noncheckable fixed-unknown with `invalid_result`
+  guidance and exact cleanup ACK, without permitting mutation replay.
 - Restore fixed-unknown execution guidance before and after Plan review reload.
   Page probes now use explicit handle values and sentinel messages to check
   ownership and control wiring; recovery policy and prose stay in bridge probes.

@@ -329,33 +329,34 @@ assert.deepEqual(
 for (const [command, start, mismatch] of [
   [
     "start_plan",
-    () => bridge.startPlan(
+    (onDelayed) => bridge.startPlan(
       taskId,
       `slot-${"8".repeat(32)}`,
       `slot-${"9".repeat(32)}`,
       setupOptions,
+      onDelayed,
     ),
     freshTaskStart,
   ],
   [
     "start_inventory",
-    () => bridge.startInventory(taskId, `slot-${"a".repeat(32)}`),
+    (onDelayed) => bridge.startInventory(taskId, `slot-${"a".repeat(32)}`, onDelayed),
     freshTaskStart,
   ],
-  ["plan_again", () => bridge.planAgain(taskId), sameTaskStart],
+  ["plan_again", (onDelayed) => bridge.planAgain(taskId, null, null, onDelayed), sameTaskStart],
 ]) {
   const before = testWindow.requests.length;
   const observationBefore = testWindow.observations.length;
   testWindow.queueResults(command, mismatch);
-  let settled = false;
-  void start().then(
-    () => { settled = true; }, () => { settled = true; },
-  );
-  for (let turn = 0; turn < 32; turn += 1) await Promise.resolve();
-  assert.equal(settled, false, `${command} cannot adopt a wrong task identity`);
+  const feedback = [];
+  await assert.rejects(start((handle) => feedback.push(handle)),
+    { name: "StartPlanUncertainError" },
+    `${command} cannot adopt a wrong task identity`);
+  assert.equal(feedback.at(-1).state, "fixed-unknown");
+  assert.equal(feedback.at(-1).canCheck, false);
   assert.equal(testWindow.requests.length, before + 1, "wrong identity never replays a mutation");
-  assert.equal(testWindow.observations.length - observationBefore, 3,
-    "wrong identity checks only the original request");
+  assert.equal(testWindow.observations.length, observationBefore,
+    "a retained invalid result needs no observation");
 }
 
 const typedAmbiguous = {

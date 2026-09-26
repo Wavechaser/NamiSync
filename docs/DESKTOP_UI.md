@@ -1583,9 +1583,10 @@ Mutation response delay is availability feedback, not an operation deadline.
 After five seconds, qualify the wait for the original result; finite failed
 observation qualifies communication as **Outcome unavailable** and offers a
 read-only Check, with normal application close/reopen and current-state review
-as a fallback if communication remains unavailable. A matching unreadable response
-has distinct protocol-error guidance and a bounded diagnostic; do not hide it as
-ordinary communication loss. A healthy pending response remains pending when the
+as a fallback if communication remains unavailable. A matching unreadable final
+response is noncheckable fixed-unknown, with an `invalid_result` diagnostic and
+close/reopen guidance. Native cannot repair its retained bytes; acknowledge them
+for cleanup while preserving the intent fence. A healthy pending response remains pending when the
 bounded round ends. If direct delivery already failed, explicitly ask the user
 to Check rather than claiming to await an automatic response. Still-live delivery
 can update its owner through the original promise, which remains the sole adopter.

@@ -220,7 +220,6 @@ function batchStatus(row) {
   if (row.state === "stopped") return "Stopped";
   if (row.state === "unknown") return "Outcome unknown";
   if (row.recovery?.checking) return "Checking outcome";
-  if (row.recovery?.state === "protocol-fault") return "Result invalid";
   if (row.recovery?.state === "unavailable") return "Outcome unavailable";
   if (row.stage === "creating") return "Creating task";
   if (row.stage === "starting") return "Creating plan";

@@ -798,14 +798,6 @@ export class OutcomeUnavailableError extends BridgeTransportError {
   }
 }
 
-export class OutcomeProtocolError extends OutcomeUnavailableError {
-  constructor() {
-    super();
-    this.name = "OutcomeProtocolError";
-    this.code = "invalid_result";
-  }
-}
-
 export async function getPlanOperationAnchor(
   taskId, sessionId, expectedRevision, operationId,
 ) {
@@ -1127,13 +1119,13 @@ function createDispatchAttempt(
       get checking() { return attempt.result === null && attempt.observationRunning !== null; },
       get canCheck() {
         return attempt.result === null && attempt.dispatched
-          && ["pending", "unavailable", "protocol-fault"].includes(attempt.recoveryState);
+          && ["pending", "unavailable"].includes(attempt.recoveryState);
       },
       get message() {
-        if (attempt.recoveryState === "protocol-fault") {
-          return "Original desktop result failed validation (invalid_result). Select Check outcome to observe the original request, or close and reopen NamiSync to review current state.";
-        }
         if (attempt.recoveryState === "fixed-unknown") {
+          if (attempt.result?.error?.code === "invalid_result") {
+            return "Original desktop result failed validation (invalid_result). Close and reopen NamiSync to review current state.";
+          }
           return "Original outcome cannot be confirmed. Close and reopen NamiSync to review current state.";
         }
         if (attempt.recoveryState === "settled") return null;
@@ -1203,9 +1195,7 @@ async function runAttempt(attempt, request, waitUntilReady) {
     if (attempt.observed || attempt.feedbackOnly) {
       attempt.delayedTimer = setTimeout(() => {
         if (attempt.result !== null) return;
-        if (attempt.observed && attempt.recoveryState !== "protocol-fault") {
-          attempt.recoveryState = "pending";
-        }
+        if (attempt.observed) attempt.recoveryState = "pending";
         notifyAttemptDelay(attempt, "pending");
         if (attempt.observed) void recoverObservedResult(attempt);
       }, MUTATION_FEEDBACK_MS);
@@ -1302,15 +1292,11 @@ function captureAttemptResponse(attempt, response) {
   if (attempt.observed && error !== null && !(error instanceof BridgeCommandError)
       && response !== null && typeof response === "object"
       && response.request_id === attempt.requestId) {
-    error = new OutcomeProtocolError();
+    error = new OutcomeUnavailableError();
+    error.code = "invalid_result";
   }
-  if (attempt.observed && error instanceof OutcomeProtocolError) {
-    attempt.recoveryState = "protocol-fault";
-    notifyAttemptDelay(attempt);
-    // The invalid original is not captured, acknowledged, or settled.
-    throw error;
-  }
-  if (attempt.observed && error !== null && !(error instanceof BridgeCommandError)) {
+  if (attempt.observed && error !== null && !(error instanceof BridgeCommandError)
+      && !(error instanceof OutcomeUnavailableError)) {
     throw error;
   }
   if (attempt.observed && ["internal_error", "response_too_large"].includes(error?.code)) {
@@ -1325,15 +1311,11 @@ function settleAttemptResponse(attempt, response) {
   attempt.result = { value, error };
   clearTimeout(attempt.delayedTimer);
   if (attempt.observed) {
-    attempt.recoveryState = error instanceof OutcomeProtocolError ? "protocol-fault"
-      : error instanceof OutcomeUnavailableError ? "fixed-unknown" : "settled";
+    attempt.recoveryState = error instanceof OutcomeUnavailableError ? "fixed-unknown" : "settled";
     notifyAttemptDelay(attempt);
   }
-  if (attempt.observed && !(error instanceof OutcomeProtocolError)) {
-    acknowledgeNativeAdmission(attempt, bridgeApi());
-  }
-  if (attempt.completionToken !== null && attempt.observed
-      && !(error instanceof OutcomeProtocolError)) {
+  if (attempt.observed) acknowledgeNativeAdmission(attempt, bridgeApi());
+  if (attempt.completionToken !== null && attempt.observed) {
     void acknowledgeCommandCompletion({
       generation: attempt.generation, request_id: attempt.requestId,
       completion_token: attempt.completionToken,
@@ -1363,8 +1345,7 @@ async function recoverObservedResult(attempt) {
   if (attempt.result !== null) return attempt.result;
   if (attempt.observationRunning !== null) return attempt.observationRunning;
   const run = (async () => {
-    let latestStatus = attempt.recoveryState === "protocol-fault"
-      ? "protocol-fault" : "unavailable";
+    let latestStatus = "unavailable";
     for (let index = 0; index < 3; index += 1) {
       if (attempt.result !== null) break;
       if (index > 0) await delay(OBSERVATION_DELAYS_MS[index - 1]);
@@ -1376,10 +1357,9 @@ async function recoverObservedResult(attempt) {
           OBSERVATION_TIMEOUT_MS, () => {},
         );
         const status = acceptObservedObservation(attempt, observed);
-        if (latestStatus !== "protocol-fault") latestStatus = status;
-      } catch (error) {
-        if (error instanceof OutcomeProtocolError) latestStatus = "protocol-fault";
-        else if (latestStatus !== "protocol-fault") latestStatus = "unavailable";
+        latestStatus = status;
+      } catch (_error) {
+        latestStatus = "unavailable";
       }
     }
     if (attempt.result === null) {
