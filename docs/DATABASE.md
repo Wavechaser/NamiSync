@@ -161,11 +161,31 @@ absence-to-writer-open race is not an exclusive cross-process creation boundary.
 
 ### Runtime reader ownership and admission diagnostics
 
+Cold file admission above remains byte-preserving. A runtime adopts a database
+role only when it first needs a SQLite reader or recorder. Adoption owns one
+read-only SQLite connection for that role until runtime close; a standalone
+history read does not require or create a ledger peer. Thereafter role
+admission validates the exact schema in a SQLite read transaction on the owned
+database, rather than requiring mutable main/WAL/SHM bytes to remain stationary.
+Ordinary SQLite sidecar bookkeeping and committed recording are permitted in
+this live phase. Planning a fresh pair and explicit cold classification do not
+create databases or adopt connections merely to report readiness. Pair checks
+combine live validation of owned roles with cold preflight of unopened roles.
+
+Live ownership is not a cached pathname verdict: opens require the same role
+and main-file identity, no journal entry, and current SQL contract validation.
+Windows SQLite handles pin their main files against replacement; the explicit
+identity check also refuses observed replacement. New reader/writer connections
+are validated on their own SQLite snapshot. Placement checks still precede
+recording. Standalone constructors without a runtime owner retain the cold
+file preflight. Runtime shutdown releases these ownership connections after
+its readers and history writer; callers must finish task recording before close.
+
 `LocalWorkflowRuntime` owns at most one lazy ledger reader and one lazy history
 reader for its four inventory/mapping and four history presentation-read methods.
 Separate role locks serialize complete queries and view materialization, including
-first construction. Every newly opened handle still receives the full file
-preflight and post-open contract validation. An owned reader is not a detached
+first construction. Every newly opened handle receives live-owner admission
+and post-open contract validation. An owned reader is not a detached
 path/stamp validation cache: it stays bound to its admitted database until retired
 or the runtime closes. Missing history keeps its empty-list/unknown-run behavior
 while no reader is owned, without caching absence. Replacing or resetting database
@@ -183,8 +203,8 @@ quiesces before waiting for active reads, clears only successfully closed owners
 and keeps failed or not-yet-closed owners for an explicit close retry. A queued
 read cannot reopen a reader, and audit setup cannot recreate a history writer,
 after quiescing starts. The service's dispatcher shutdown timeout is not a new
-reader-query or reader-close deadline. Two owned reader handles is not a bound
-on native SQLite cache memory.
+reader-query or reader-close deadline. The two query readers and two role-owner
+connections are not a bound on native SQLite cache memory.
 
 This change amortizes admission, not query work or first-open validation. Let
 `M`, `W`, and `S` denote source main, WAL, and SHM lengths, with absent sidecars
@@ -194,9 +214,10 @@ writes `M + W` copied bytes plus SQLite's private SHM. Pair admission adds a fin
 `M + W + S` recheck per role. These are source-derived diagnostics, excluding
 SQLite page reads, small EOF probes, cache effects, and filesystem allocation;
 they are not measured physical I/O, latency limits, or database-size walls.
-Planning correspondence, location binding, integrity selection, pair checks,
-recorders, initializers, and standalone repositories retain their existing full
-admission paths.
+These formulas apply to cold preflight. Runtime planning correspondence,
+location binding, integrity selection, pair checks and recorders share the
+role-owner admission above. Public initializers and standalone repositories
+without a runtime owner retain full cold preflight.
 
 Standalone-integrity candidate reads are a distinct bounded repository path.
 Fresh full and exact-path reads apply directory and mode eligibility in SQL;
@@ -288,8 +309,9 @@ the mapping's source and target locations.
 
 `connections.py` enables foreign keys, WAL, and bounded busy timeout on writers;
 read repositories open SQLite in `mode=ro` and enable `query_only`. Both
-repository constructors use the shared file preflight above before opening
-that reader, then repeat the exact current contract check before exposing it.
+repository constructors use the shared cold preflight or the runtime's live
+role owner before opening that reader, then check the exact current contract
+before exposing it.
 Live database paths can be validated against
 managed roots before creation; that containment resolver converts long managed
 roots only at the native I/O boundary and compares ordinary logical spellings.
@@ -302,8 +324,9 @@ read-only `validate_database_contracts()` preflight returning a
 `fresh`/`ready`/`refused` pair state — including the exactly-one-present and
 orphaned-sidecar refusals — enforced by the CLI mutation paths and ready for
 the Slice 1 product host to consume before window creation, so history cannot
-be initialized without the ledger. Validation uses the shared immutable or
-private-WAL path above, never source SHM recovery authority.
+be initialized without the ledger. Cold validation uses the shared immutable or
+private-WAL path above, never source SHM recovery authority. Already-owned roles
+use current SQLite snapshot validation as described above.
 Fresh creation is a separate, serialized workflow operation: it
 publishes ledger then history after reserving every main and sidecar cleanup
 target through a Windows ownership lease. Failure cleanup derives a new delete

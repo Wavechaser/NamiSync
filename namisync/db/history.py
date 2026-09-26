@@ -58,8 +58,9 @@ from .connections import (
     QUERY_SUBJECT_BATCH_SIZE,
     connect_history_reader,
     connect_history_writer,
+    validate_database_path,
 )
-from .contracts import require_database_file_contract
+from .contracts import DatabaseConnectionOwner, require_database_file_contract
 from .schema import (
     MAX_HISTORY_ERROR_MESSAGE_BYTES,
     MAX_HISTORY_ERROR_TYPE_BYTES,
@@ -702,12 +703,15 @@ class HistoryStore:
         retry_interval_seconds: float = 0.025,
         managed_roots: tuple[str | Path, ...] = (),
         window_policy: HistoryWindowPolicy = DEFAULT_HISTORY_WINDOW_POLICY,
+        database: DatabaseConnectionOwner | None = None,
     ) -> None:
-        self.path = initialize_history(
-            path,
-            busy_timeout_ms=busy_timeout_ms,
-            managed_roots=managed_roots,
-        )
+        if database is None:
+            self.path = initialize_history(
+                path, busy_timeout_ms=busy_timeout_ms, managed_roots=managed_roots,
+            )
+        else:
+            database.require_role(path, history=True)
+            self.path = validate_database_path(path, managed_roots=managed_roots)
         if not isinstance(window_policy, HistoryWindowPolicy):
             raise TypeError("window_policy must be HistoryWindowPolicy")
         self._clock = clock
@@ -717,7 +721,7 @@ class HistoryStore:
         self._window_policy = window_policy
         self._writer = SerializedWriter(
             self.path,
-            connect_history_writer,
+            connect_history_writer if database is None else database.open_writer,
             busy_timeout_ms=busy_timeout_ms,
             retry_timeout_seconds=retry_timeout_seconds,
             retry_interval_seconds=retry_interval_seconds,
@@ -1683,13 +1687,18 @@ class HistoryRepository:
             DEFAULT_HISTORY_CLASSIFICATION_QUERY
         ),
         busy_timeout_ms: int = DEFAULT_BUSY_TIMEOUT_MS,
+        database: DatabaseConnectionOwner | None = None,
     ) -> None:
         self.path = Path(path).resolve()
         if not isinstance(classification_query, HistoryClassificationQuery):
             raise TypeError("classification_query must be HistoryClassificationQuery")
         self._classification_query = classification_query
-        require_database_file_contract(self.path, history=True)
-        self._connection = connect_history_reader(
+        if database is None:
+            require_database_file_contract(self.path, history=True)
+        else:
+            database.require_role(self.path, history=True)
+        connect = connect_history_reader if database is None else database.open_reader
+        self._connection = connect(
             self.path, busy_timeout_ms=busy_timeout_ms
         )
         try:

@@ -50,6 +50,8 @@ from namisync.core.planning import (
     selection_digest,
 )
 from namisync.db.connections import connect_ledger_reader
+from namisync.db.contracts import DatabaseConnectionOwner
+from namisync.db.schema import initialize_ledger
 from namisync.core.session import (
     Canceled,
     Disposition,
@@ -393,7 +395,9 @@ def test_runtime_derives_correspondence_bounds_only_from_current_file_scans(
     observed: list[tuple[object, ...]] = []
 
     class Repository:
-        def __init__(self, path: Path) -> None:
+        def __init__(self, path: Path, *, database: DatabaseConnectionOwner) -> None:
+            assert isinstance(database, DatabaseConnectionOwner)
+            database.require_role(path, history=False)
             observed.append(("open", Path(path)))
 
         def __enter__(self):
@@ -410,7 +414,7 @@ def test_runtime_derives_correspondence_bounds_only_from_current_file_scans(
         tmp_path / "ledger.db",
         tmp_path / "history.db",
     )
-    runtime.ledger_path.write_bytes(b"present")
+    initialize_ledger(runtime.ledger_path)
     monkeypatch.setattr(runtime_module, "LedgerRepository", Repository)
     try:
         assert runtime._correspondence(source, target) is expected

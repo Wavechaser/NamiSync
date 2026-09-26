@@ -75,8 +75,10 @@ from .connections import (
     DEFAULT_BUSY_TIMEOUT_MS,
     QUERY_SUBJECT_BATCH_SIZE,
     connect_ledger_writer,
+    validate_database_path,
 )
 from .schema import initialize_ledger
+from .contracts import DatabaseConnectionOwner
 from .timestamps import encode_utc
 from .writer import (
     DEFAULT_RETRY_TIMEOUT_SECONDS,
@@ -386,16 +388,19 @@ class LedgerRecorder:
         retry_timeout_seconds: float = DEFAULT_RETRY_TIMEOUT_SECONDS,
         retry_interval_seconds: float = 0.025,
         managed_roots: tuple[str | Path, ...] = (),
+        database: DatabaseConnectionOwner | None = None,
     ) -> None:
-        self.path = initialize_ledger(
-            path,
-            busy_timeout_ms=busy_timeout_ms,
-            managed_roots=managed_roots,
-        )
+        if database is None:
+            self.path = initialize_ledger(
+                path, busy_timeout_ms=busy_timeout_ms, managed_roots=managed_roots,
+            )
+        else:
+            database.require_role(path, history=False)
+            self.path = validate_database_path(path, managed_roots=managed_roots)
         self._clock = clock
         self._writer = SerializedWriter(
             self.path,
-            connect_ledger_writer,
+            connect_ledger_writer if database is None else database.open_writer,
             busy_timeout_ms=busy_timeout_ms,
             retry_timeout_seconds=retry_timeout_seconds,
             retry_interval_seconds=retry_interval_seconds,

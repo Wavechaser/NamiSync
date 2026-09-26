@@ -39,7 +39,7 @@ from .connections import (
     QUERY_SUBJECT_BATCH_SIZE,
     connect_ledger_reader,
 )
-from .contracts import require_database_file_contract
+from .contracts import DatabaseConnectionOwner, require_database_file_contract
 from .schema import validate_ledger_reader_contract
 from .timestamps import decode_utc, encode_utc
 
@@ -512,10 +512,15 @@ class LedgerRepository:
         *,
         busy_timeout_ms: int = DEFAULT_BUSY_TIMEOUT_MS,
         trace_callback: Callable[[str], None] | None = None,
+        database: DatabaseConnectionOwner | None = None,
     ) -> None:
         self.path = Path(path).resolve()
-        require_database_file_contract(self.path, history=False)
-        self._connection = connect_ledger_reader(
+        if database is None:
+            require_database_file_contract(self.path, history=False)
+        else:
+            database.require_role(self.path, history=False)
+        connect = connect_ledger_reader if database is None else database.open_reader
+        self._connection = connect(
             self.path, busy_timeout_ms=busy_timeout_ms
         )
         try:

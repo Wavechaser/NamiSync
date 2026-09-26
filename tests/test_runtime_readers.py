@@ -10,20 +10,220 @@ from threading import Event, Lock, Thread
 import pytest
 
 import namisync.db.history as history_module
+import namisync.db.contracts as contracts_module
 import namisync.db.repositories as repositories_module
 import namisync.db.schema as schema_module
 import namisync.workflows.runtime as runtime_module
 from namisync.core.events import CORE_EVENT_SCHEMA_VERSION, Envelope, PhaseChanged
 from namisync.core.planning import OperationKind, OperationReason
 from namisync.core.session import SessionId, SessionRecord, SessionState
-from namisync.db.connections import connect_history_writer, connect_ledger_writer
+from namisync.db.connections import (
+    connect_history_reader, connect_history_writer, connect_ledger_reader, connect_ledger_writer,
+)
 from namisync.db.history import HistoryContext, HistoryRepository, HistoryStore
 from namisync.db.repositories import LedgerRepository
+from namisync.db.recorder import LedgerRecorder
 from namisync.db.schema import SchemaResetRequired, initialize_history, initialize_ledger
 from namisync.interfaces.service import NamiSyncService
 from namisync.workflows.runtime import LocalWorkflowRuntime
+from namisync.workflows.models import PlanRequest
 
 from _db_fixtures import FakeClock, NOW, file_stat, operation, plan, setup_recorder
+
+
+@pytest.mark.parametrize("role", ["ledger", "history"])
+@pytest.mark.parametrize("activity", ["reader", "writer"])
+def test_live_pair_admission_allows_sqlite_activity_during_schema_check(
+    runtime: LocalWorkflowRuntime, monkeypatch: pytest.MonkeyPatch, role: str, activity: str,
+) -> None:
+    import namisync.db.contracts as contracts
+
+    runtime.initialize_database_contracts()
+    runtime.list_inventory(1)
+    runtime.list_history()
+    path = runtime.ledger_path if role == "ledger" else runtime.history_path
+    writer = (connect_ledger_writer if role == "ledger" else connect_history_writer)(path)
+    reader = (connect_ledger_reader if role == "ledger" else connect_history_reader)(path)
+    validator_name = f"validate_{role}_reader_contract"
+    original = getattr(contracts, validator_name)
+    commits = []
+
+    def validate(connection):
+        original(connection)
+        if activity == "writer":
+            writer.execute(f"PRAGMA user_version = {len(commits) + 1}")
+        else:
+            reader.execute("SELECT count(*) FROM schema_metadata").fetchone()
+        commits.append(True)
+
+    monkeypatch.setattr(contracts, validator_name, validate)
+    monkeypatch.setattr(runtime, "_resources_for_paths", lambda *_: ())
+    request = PlanRequest(
+        "plan-with-live-database", str(path.parent / "source"), str(path.parent / "target"),
+    )
+    try:
+        for _ in range(3):
+            writer.execute(f"PRAGMA user_version = {len(commits) + 100}")
+            assert runtime.prepare_plan(request).checkpoint.request_id == request.request_id
+        assert len(commits) >= 3
+    finally:
+        reader.close()
+        writer.close()
+
+
+def test_runtime_retries_failed_role_owner_close_without_reopening(
+    runtime: LocalWorkflowRuntime, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runtime.initialize_database_contracts()
+    runtime.list_inventory(1)
+    runtime.list_history()
+    owner = runtime._history_database
+    assert owner is not None
+    close = owner.close
+    attempts = []
+
+    def fail_once():
+        attempts.append(True)
+        if len(attempts) == 1:
+            raise OSError("role owner close failed")
+        close()
+
+    monkeypatch.setattr(owner, "close", fail_once)
+    with pytest.raises(OSError, match="role owner close failed"):
+        runtime.close()
+    assert runtime._history_database is owner
+    assert runtime._ledger_database is not None
+    with pytest.raises(RuntimeError, match="workflow runtime is closed"):
+        runtime.list_history()
+    with pytest.raises(PermissionError):
+        runtime.history_path.rename(runtime.history_path.with_suffix(".replacement"))
+    runtime.close()
+    assert len(attempts) == 2
+    assert runtime._history_database is None
+    assert runtime._ledger_database is None
+
+
+@pytest.mark.parametrize("role", ["ledger", "history"])
+@pytest.mark.parametrize("damage", ["marker", "topology", "journal", "identity"])
+def test_live_database_damage_refuses_before_writer_configuration(
+    runtime: LocalWorkflowRuntime, monkeypatch: pytest.MonkeyPatch,
+    role: str, damage: str,
+) -> None:
+    runtime.initialize_database_contracts()
+    _read(runtime, role)
+    database = runtime._database(history=role == "history")
+    path = database.path
+    if damage in ("marker", "topology"):
+        with closing(sqlite3.connect(path, isolation_level=None)) as connection:
+            connection.execute(
+                "UPDATE schema_metadata SET value = 'wrong' WHERE key = 'contract_id'"
+                if damage == "marker" else "CREATE TABLE unexpected(value)"
+            )
+    elif damage == "journal":
+        Path(f"{path}-journal").write_bytes(b"external journal")
+    else:
+        identity = database._main_identity()
+        monkeypatch.setattr(database, "_main_identity", lambda: (identity[0], identity[1] + 1, identity[2]))
+
+    def unexpected_writer(*args, **kwargs):
+        pytest.fail("writer configuration ran after live admission refusal")
+
+    monkeypatch.setattr(contracts_module, f"connect_{role}_writer", unexpected_writer)
+    assert runtime.validate_database_contracts().state == "refused"
+    with pytest.raises(SchemaResetRequired):
+        (LedgerRecorder if role == "ledger" else HistoryStore)(
+            path, clock=FakeClock(), database=database,
+        )
+    assert not database._connection.in_transaction
+
+
+def test_live_connection_owner_requires_its_path_and_role(runtime: LocalWorkflowRuntime) -> None:
+    runtime.initialize_database_contracts()
+    database = runtime._database()
+    with pytest.raises(ValueError, match="path and role"):
+        HistoryRepository(runtime.history_path, database=database)
+    with pytest.raises(ValueError, match="path and role"):
+        LedgerRepository(runtime.history_path, database=database)
+    with pytest.raises(ValueError, match="path and role"):
+        HistoryStore(runtime.ledger_path, clock=FakeClock(), database=database)
+    with pytest.raises(ValueError, match="path and role"):
+        LedgerRecorder(runtime.history_path, clock=FakeClock(), database=database)
+
+
+def test_live_writer_keeps_managed_root_placement_guard(runtime: LocalWorkflowRuntime) -> None:
+    runtime.initialize_database_contracts()
+    database = runtime._database()
+    with pytest.raises(ValueError, match="outside managed root"):
+        LedgerRecorder(
+            runtime.ledger_path, clock=FakeClock(), database=database,
+            managed_roots=(runtime.ledger_path.parent,),
+        )
+
+
+@pytest.mark.parametrize("role", ["ledger", "history"])
+def test_owned_database_main_is_pinned_until_runtime_close(
+    runtime: LocalWorkflowRuntime, role: str,
+) -> None:
+    runtime.initialize_database_contracts()
+    _read(runtime, role)
+    path = runtime.history_path if role == "history" else runtime.ledger_path
+    with pytest.raises(PermissionError):
+        path.rename(path.with_suffix(".replacement"))
+    runtime.close()
+    renamed = path.rename(path.with_suffix(".replacement"))
+    assert renamed.is_file()
+
+
+@pytest.mark.parametrize("owned_role", ["ledger", "history"])
+def test_pair_admission_combines_live_owner_with_cold_peer(
+    runtime: LocalWorkflowRuntime, monkeypatch: pytest.MonkeyPatch, owned_role: str,
+) -> None:
+    runtime.initialize_database_contracts()
+    _read(runtime, owned_role)
+    cold_role = "history" if owned_role == "ledger" else "ledger"
+    cold_path = runtime.history_path if cold_role == "history" else runtime.ledger_path
+    owner = runtime._database(history=owned_role == "history")
+    with closing(owner.open_writer(owner.path)) as writer:
+        original = contracts_module._validate_connection
+        calls = []
+
+        def validate(path, validator, *, immutable):
+            original(path, validator, immutable=immutable)
+            writer.execute("PRAGMA user_version = 7")
+            calls.append(path)
+
+        monkeypatch.setattr(contracts_module, "_validate_connection", validate)
+        assert runtime.validate_database_contracts().state == "ready"
+        assert calls == [cold_path]
+
+
+def test_runtime_cold_classification_and_plan_remain_noncreating(
+    runtime: LocalWorkflowRuntime, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    assert runtime.validate_database_contracts().state == "fresh"
+    monkeypatch.setattr(runtime, "_resources_for_paths", lambda *_: ())
+    request = PlanRequest(
+        "fresh-plan", str(runtime.ledger_path.parent / "source"),
+        str(runtime.ledger_path.parent / "target"),
+    )
+    assert runtime.prepare_plan(request).checkpoint.request_id == request.request_id
+    assert not runtime.ledger_path.exists()
+    assert not runtime.history_path.exists()
+    assert runtime._ledger_database is None
+    assert runtime._history_database is None
+
+
+def test_retired_reader_reopen_rechecks_live_contract(runtime: LocalWorkflowRuntime) -> None:
+    _seed_history(runtime.history_path)
+    runtime.list_history()
+    with pytest.raises(KeyError):
+        runtime.get_history_summary("missing")
+    assert runtime._history_reader is None
+    with closing(sqlite3.connect(runtime.history_path, isolation_level=None)) as writer:
+        writer.execute("UPDATE schema_metadata SET value = 'wrong' WHERE key = 'contract_id'")
+    with pytest.raises(SchemaResetRequired):
+        runtime.list_history()
+    assert runtime._history_reader is None
 
 
 @dataclass
@@ -36,6 +236,13 @@ class _ReaderCalls:
 @pytest.fixture
 def readers(monkeypatch: pytest.MonkeyPatch) -> dict[str, _ReaderCalls]:
     calls = {role: _ReaderCalls() for role in ("ledger", "history")}
+    database_owner = runtime_module.DatabaseConnectionOwner
+
+    def adopt(path, *, history):
+        calls["history" if history else "ledger"].admissions.append(Path(path))
+        return database_owner(path, history=history)
+
+    monkeypatch.setattr(runtime_module, "DatabaseConnectionOwner", adopt)
 
     def install(role, repository_type, owner) -> None:
         require = owner.require_database_file_contract
@@ -308,16 +515,15 @@ def test_post_open_contract_refusal_closes_the_allocated_connection_before_retry
     path = runtime.ledger_path if role == "ledger" else runtime.history_path
     _make_database(path, role)
     owner = repositories_module if role == "ledger" else history_module
-    connect_name = f"connect_{role}_reader"
     validate_name = f"validate_{role}_reader_contract"
-    connect = getattr(owner, connect_name)
+    connect = contracts_module.DatabaseConnectionOwner.open_reader
     validate = getattr(owner, validate_name)
     connections = []
     failure = SchemaResetRequired("post-open contract refusal")
     refused = False
 
-    def track_connection(*args, **kwargs):
-        connection = connect(*args, **kwargs)
+    def track_connection(database, *args, **kwargs):
+        connection = connect(database, *args, **kwargs)
         connections.append(connection)
         return connection
 
@@ -328,7 +534,7 @@ def test_post_open_contract_refusal_closes_the_allocated_connection_before_retry
             raise failure
         validate(connection)
 
-    monkeypatch.setattr(owner, connect_name, track_connection)
+    monkeypatch.setattr(contracts_module.DatabaseConnectionOwner, "open_reader", track_connection)
     monkeypatch.setattr(owner, validate_name, refuse_once)
     with pytest.raises(SchemaResetRequired) as raised:
         _read(runtime, role)
@@ -339,7 +545,7 @@ def test_post_open_contract_refusal_closes_the_allocated_connection_before_retry
         connections[0].execute("SELECT 1")
     _read(runtime, role)
     assert len(connections) == 2
-    assert readers[role].admissions == [path, path]
+    assert readers[role].admissions == [path]
     assert len(readers[role].opened) == 1
 
 
@@ -594,7 +800,7 @@ def test_failed_close_retains_ownership_and_cannot_reopen_a_partial_reader(
     assert readers[role].closed == [reader, reader]
 
 
-def test_query_failure_retires_reader_before_a_fully_admitted_retry(
+def test_query_failure_retires_reader_and_reopens_through_live_owner(
     runtime: LocalWorkflowRuntime, readers: dict[str, _ReaderCalls],
 ) -> None:
     _seed_history(runtime.history_path)
@@ -604,7 +810,7 @@ def test_query_failure_retires_reader_before_a_fully_admitted_retry(
     assert readers["history"].closed == [readers["history"].opened[0]]
     assert len(runtime.list_history()) == 1
     assert len(readers["history"].opened) == 2
-    assert readers["history"].admissions == [runtime.history_path] * 2
+    assert readers["history"].admissions == [runtime.history_path]
 
 
 @pytest.mark.parametrize("close_failure", [False, True])
@@ -657,7 +863,7 @@ def test_failed_read_rollback_retires_the_open_transaction(
     else:
         assert runtime.list_history() == ()
     assert len(readers["history"].opened) == 2
-    assert readers["history"].admissions == [runtime.history_path] * 2
+    assert readers["history"].admissions == [runtime.history_path] * (2 if close_failure else 1)
 
 
 @pytest.mark.parametrize("role", ["ledger", "history"])

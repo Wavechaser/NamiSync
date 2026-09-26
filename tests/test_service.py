@@ -2332,6 +2332,9 @@ def test_workflow_runtime_retains_a_store_whose_close_failed() -> None:
     runtime._close_lock = Lock()
     runtime._ledger_reader_lock = Lock()
     runtime._history_reader_lock = Lock()
+    runtime._database_pair_lock = Lock()
+    runtime._ledger_database = None
+    runtime._history_database = None
     runtime._ledger_reader = None
     runtime._history_reader = None
     runtime._closing = False
@@ -2397,6 +2400,9 @@ def test_concurrent_workflow_runtime_close_waits_for_failed_attempt() -> None:
     runtime._close_lock = Lock()
     runtime._ledger_reader_lock = Lock()
     runtime._history_reader_lock = Lock()
+    runtime._database_pair_lock = Lock()
+    runtime._ledger_database = None
+    runtime._history_database = None
     runtime._ledger_reader = None
     runtime._history_reader = None
     runtime._closing = False

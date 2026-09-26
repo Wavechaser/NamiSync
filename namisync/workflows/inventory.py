@@ -112,6 +112,7 @@ from namisync.core.session import (
     SessionState,
 )
 from namisync.db.recorder import LedgerRecorder
+from namisync.db.contracts import DatabaseConnectionOwner
 from namisync.db.repositories import (
     InventorySnapshot,
     LedgerRepository,
@@ -936,6 +937,7 @@ class InventoryDependencies:
     host_name: str
     save_details: Callable[[InventoryDetails], None]
     ignores: IgnoreSet = IgnoreSet()
+    database: Callable[[], DatabaseConnectionOwner] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -1060,6 +1062,7 @@ def admit_location_candidate(
     ledger_path: Path,
     backend: VolumeBindingBackend,
     resolver: MountedVolumeResolver,
+    database: Callable[[], DatabaseConnectionOwner] | None = None,
 ) -> LocationCandidateResult:
     """Freshly classify and bind one literal or remembered local directory."""
 
@@ -1068,7 +1071,9 @@ def admit_location_candidate(
     if candidate.kind is LocationCandidateKind.REMEMBERED_LOCATION:
         assert candidate.location_id is not None
         try:
-            with LedgerRepository(ledger_path) as repository:
+            with LedgerRepository(
+                ledger_path, database=None if database is None else database(),
+            ) as repository:
                 location = repository.get_location(candidate.location_id)
         except KeyError:
             return LocationCandidateResult(
@@ -1295,6 +1300,7 @@ def bind_inventory_request(
     ledger_path: Path,
     backend: VolumeBindingBackend,
     resolver: MountedVolumeResolver,
+    database: Callable[[], DatabaseConnectionOwner] | None = None,
 ) -> InventoryWorkflowRequest:
     request = _exact_inventory_request(request)
     binding = _bind_request_location(
@@ -1304,6 +1310,7 @@ def bind_inventory_request(
         ledger_path=ledger_path,
         backend=backend,
         resolver=resolver,
+        database=database,
     )
     return InventoryWorkflowRequest(
         request.request_id,
@@ -1319,6 +1326,7 @@ def bind_integrity_request(
     ledger_path: Path,
     backend: VolumeBindingBackend,
     resolver: MountedVolumeResolver,
+    database: Callable[[], DatabaseConnectionOwner] | None = None,
 ) -> IntegrityWorkflowRequest:
     request = _exact_integrity_request(request)
     binding = _bind_request_location(
@@ -1328,6 +1336,7 @@ def bind_integrity_request(
         ledger_path=ledger_path,
         backend=backend,
         resolver=resolver,
+        database=database,
     )
     return IntegrityWorkflowRequest(
         request.request_id,
@@ -1505,7 +1514,8 @@ def run_inventory(
     unadmitted_review_limit = False
     try:
         with LedgerRecorder(
-            deps.ledger_path, clock=deps.clock, managed_roots=(root,)
+            deps.ledger_path, clock=deps.clock, managed_roots=(root,),
+            database=None if deps.database is None else deps.database(),
         ) as recorder:
             host_id, location_id, scan = _register_and_scan(
                 request.request_id,
@@ -1697,7 +1707,9 @@ def run_integrity(
                         error=error,
                     )
                 return OperationResult(SessionState.FAILED, error=error)
-            with LedgerRepository(deps.ledger_path) as repository:
+            with LedgerRepository(
+                deps.ledger_path, database=None if deps.database is None else deps.database(),
+            ) as repository:
                 rows = _integrity_rows(
                     repository,
                     location_id,
@@ -2193,6 +2205,7 @@ def _integrity_recorder(
             deps.ledger_path,
             clock=deps.clock,
             managed_roots=(root,),
+            database=None if deps.database is None else deps.database(),
         )
     except Exception as error:
         recorder_observation[0] = _task_recording_issue(
@@ -2360,12 +2373,13 @@ def change_inventory_visibility(
     ledger_path: Path,
     clock: Clock,
     changed_at: datetime | None = None,
+    database: DatabaseConnectionOwner | None = None,
 ) -> RecordDisposition:
     """Acknowledge or restore one missing row through the ledger owner."""
 
     at = clock.now() if changed_at is None else changed_at
     _require_utc(at, "inventory visibility change")
-    with LedgerRecorder(ledger_path, clock=clock) as recorder:
+    with LedgerRecorder(ledger_path, clock=clock, database=database) as recorder:
         return recorder.change_inventory_visibility(
             InventoryVisibilityCommand(
                 command_id,
@@ -2385,6 +2399,7 @@ def _bind_request_location(
     ledger_path: Path,
     backend: VolumeBindingBackend,
     resolver: MountedVolumeResolver,
+    database: Callable[[], DatabaseConnectionOwner] | None = None,
 ) -> LocationBinding:
     candidate = (
         LocationCandidate.remembered(
@@ -2402,6 +2417,7 @@ def _bind_request_location(
         ledger_path=ledger_path,
         backend=backend,
         resolver=resolver,
+        database=database,
     )
     if result.state is LocationCandidateState.RESOLVED:
         assert result.binding is not None

@@ -1741,19 +1741,20 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Database artifact ownership and rollback
 
-- MODERATE - OPEN (2026-09-27). Owned-activity drift refusal. Plan, inventory,
+- MODERATE - FIXED (2026-09-27). Owned-activity drift refusal. Plan, inventory,
   execution and integrity admission can refuse a healthy pair as
   `ledger-contract` or `history-contract` while the same process uses it.
   Cause: the file preflight hashes main, WAL and SHM and treats any change as
   incompatibility, but runtime readers, running sessions and recorders change
   WAL/SHM legitimately. The desktop adapter normalizes the pre-effect
   `prepare_plan` refusal to `internal_error`, leaving a Setup row unknown.
-  A headless Setup replay with UI-like reads failed 1 of 300 starts this way;
-  pair validation refused 1/883 and 1/894 checks beside `remembered_locations`
-  and `list_history`, and every check beside a raw reader. It is compatible
-  with, not proof of, AB-7's unretained Setup exception. Unverified residual:
-  the unleased CLI prints the delete-both-databases direction on such a
-  refusal. Evidence: `build/trace-20260927/`.
+  Fixed with lazy runtime-owned SQLite connections and transactional live SQL
+  validation; cold file admission retains byte-preserving refusal. Reader/WAL
+  interleavings through Plan, live damage refusal, placement, reopen and Windows
+  owner-lifetime controls cover the distinction. Installed Setup also passes.
+  This mechanism remains compatible with, not proof of, AB-7's unretained
+  exception. Cold admission can still refuse externally changing unowned files.
+  Evidence: `build/trace-20260927/` and `build/admission-bridge-closeout-20260927/`.
 
 - SEVERE - FIXED (2026-08-13). TOCTOU rollback-unlink race. Failed
   fresh-pair initialization compared a reserved artifact's identity and then

@@ -65,6 +65,7 @@ from namisync.core.scalars import (
     scalar_64_to_text,
 )
 from namisync.db.connections import validate_database_path
+from namisync.db.contracts import DatabaseConnectionOwner
 from namisync.db.history import (
     DEFAULT_HISTORY_WINDOW_POLICY,
     HistoryClassificationQuery,
@@ -309,6 +310,8 @@ class LocalWorkflowRuntime:
         self._lock = Lock()
         self._close_lock = Lock()
         self._database_pair_lock = Lock()
+        self._ledger_database: DatabaseConnectionOwner | None = None
+        self._history_database: DatabaseConnectionOwner | None = None
         self._ledger_reader_lock = Lock()
         self._history_reader_lock = Lock()
         self._ledger_reader: LedgerRepository | None = None
@@ -352,6 +355,7 @@ class LocalWorkflowRuntime:
             host_key=self.host_key,
             host_name=self.host_name,
             save_details=self._save_inventory_details,
+            database=self._database,
         )
         self._integrity_deps = IntegrityDependencies(
             ledger_path=self.ledger_path,
@@ -361,6 +365,7 @@ class LocalWorkflowRuntime:
             host_key=self.host_key,
             host_name=self.host_name,
             save_details=self._save_inventory_details,
+            database=self._database,
             verifier_context=lambda context: VerifierContext(
                 run=context,
                 clock=self.clock,
@@ -382,18 +387,41 @@ class LocalWorkflowRuntime:
 
         self._require_open()
         with self._database_pair_lock:
-            return validate_database_pair(self.ledger_path, self.history_path)
+            return validate_database_pair(
+                self.ledger_path, self.history_path,
+                ledger_database=self._ledger_database,
+                history_database=self._history_database,
+            )
 
     def initialize_database_contracts(self) -> DatabasePairContract:
         """Coordinately initialize a fresh pair without resetting existing data."""
 
         self._require_open()
         with self._database_pair_lock:
-            return initialize_database_pair(self.ledger_path, self.history_path)
+            return initialize_database_pair(
+                self.ledger_path, self.history_path,
+                ledger_database=self._ledger_database,
+                history_database=self._history_database,
+            )
 
     def _ensure_database_contracts(self) -> DatabasePairContract:
         with self._database_pair_lock:
-            return ensure_database_pair(self.ledger_path, self.history_path)
+            return ensure_database_pair(
+                self.ledger_path, self.history_path,
+                ledger_database=self._ledger_database,
+                history_database=self._history_database,
+            )
+
+    def _database(self, *, history: bool = False) -> DatabaseConnectionOwner:
+        with self._database_pair_lock:
+            self._require_open()
+            if history:
+                if self._history_database is None:
+                    self._history_database = DatabaseConnectionOwner(self.history_path, history=True)
+                return self._history_database
+            if self._ledger_database is None:
+                self._ledger_database = DatabaseConnectionOwner(self.ledger_path, history=False)
+            return self._ledger_database
 
     def admit_location_candidate(
         self,
@@ -405,6 +433,7 @@ class LocalWorkflowRuntime:
             ledger_path=self.ledger_path,
             backend=self._scanner_backend,
             resolver=self._mounted_volume_resolver,
+            database=self._database,
         )
 
     def admit_plan_locations(
@@ -675,6 +704,7 @@ class LocalWorkflowRuntime:
             ledger_path=self.ledger_path,
             backend=self._scanner_backend,
             resolver=self._mounted_volume_resolver,
+            database=self._database,
         )
         self._validate_prepared_location(prepared.binding)
         self._ensure_database_contracts()
@@ -1132,6 +1162,7 @@ class LocalWorkflowRuntime:
             ledger_path=self.ledger_path,
             clock=self.clock,
             changed_at=at,
+            database=self._database(),
         )
 
     def list_history(self, limit: int = 50) -> tuple[HistoryRunSummaryView, ...]:
@@ -1194,7 +1225,7 @@ class LocalWorkflowRuntime:
         with self._ledger_reader_lock:
             self._require_open()
             if self._ledger_reader is None:
-                self._ledger_reader = LedgerRepository(self.ledger_path)
+                self._ledger_reader = LedgerRepository(self.ledger_path, database=self._database())
             try:
                 yield self._ledger_reader
             except BaseException as error:
@@ -1213,6 +1244,7 @@ class LocalWorkflowRuntime:
                 self._history_reader = HistoryRepository(
                     self.history_path,
                     classification_query=_HISTORY_CLASSIFICATION_QUERY,
+                    database=self._database(history=True),
                 )
             try:
                 yield self._history_reader
@@ -1254,6 +1286,13 @@ class LocalWorkflowRuntime:
                 if self._history_reader is not None:
                     self._history_reader.close()
                     self._history_reader = None
+            with self._database_pair_lock:
+                if self._history_database is not None:
+                    self._history_database.close()
+                    self._history_database = None
+                if self._ledger_database is not None:
+                    self._ledger_database.close()
+                    self._ledger_database = None
             with self._lock:
                 self._plans.clear()
                 self._execution_details.clear()
@@ -1292,6 +1331,7 @@ class LocalWorkflowRuntime:
             ledger_path=self.ledger_path,
             backend=self._scanner_backend,
             resolver=self._mounted_volume_resolver,
+            database=self._database,
         )
         self._validate_prepared_location(prepared.binding)
         self._ensure_database_contracts()
@@ -1345,7 +1385,7 @@ class LocalWorkflowRuntime:
         target_relative = _volume_relative_path(
             target.root.path, target.volume_evidence
         )
-        with LedgerRepository(self.ledger_path) as repository:
+        with LedgerRepository(self.ledger_path, database=self._database()) as repository:
             found = repository.find_current_mapping(
                 source.volume_id,
                 source_relative,
@@ -1443,6 +1483,7 @@ class LocalWorkflowRuntime:
         with LedgerRecorder(
             self.ledger_path,
             clock=self.clock,
+            database=self._database(),
         ) as recorder:
             recorder.finish_run(
                 FinishRunCommand(
@@ -1515,6 +1556,7 @@ class LocalWorkflowRuntime:
                     window_policy=self.history_window_policy,
                     retry_timeout_seconds=HISTORY_WRITER_RETRY_TIMEOUT_SECONDS,
                     managed_roots=managed_roots,
+                    database=self._database(history=True),
                 )
             return self._history_store
 
@@ -1693,6 +1735,7 @@ class _LedgerRunRecording:
         self._owner = LedgerRecorder(
             runtime.ledger_path,
             clock=runtime.clock,
+            database=runtime._database(),
             managed_roots=(
                 spec.plan.source_root.path,
                 spec.plan.target_root.path,

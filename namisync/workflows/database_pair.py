@@ -8,6 +8,8 @@ from pathlib import Path
 import stat
 
 from namisync.db.contracts import (
+    DatabaseConnectionOwner,
+    DatabaseFileEvidence,
     require_database_file_contract,
 )
 from namisync.db.schema import (
@@ -64,8 +66,11 @@ class DatabasePairRefusedError(RuntimeError):
 def validate_database_pair(
     ledger_path: str | Path,
     history_path: str | Path,
+    *,
+    ledger_database: DatabaseConnectionOwner | None = None,
+    history_database: DatabaseConnectionOwner | None = None,
 ) -> DatabasePairContract:
-    """Classify both database roles without creating or changing an artifact."""
+    """Classify cold files without writes, or validate supplied live owners."""
 
     ledger = Path(ledger_path).resolve()
     history = Path(history_path).resolve()
@@ -95,29 +100,44 @@ def validate_database_pair(
         return _refused("inconsistent-pair")
 
     try:
-        ledger_evidence = require_database_file_contract(ledger, history=False)
+        ledger_evidence = _validate_role(ledger, history=False, database=ledger_database)
     except SchemaResetRequired:
         return _refused("ledger-contract")
     try:
-        history_evidence = require_database_file_contract(history, history=True)
+        history_evidence = _validate_role(history, history=True, database=history_database)
     except SchemaResetRequired:
         return _refused("history-contract")
-    if not ledger_evidence.unchanged():
+    if ledger_evidence is not None and not ledger_evidence.unchanged():
         return _refused("ledger-contract")
-    if not history_evidence.unchanged():
+    if history_evidence is not None and not history_evidence.unchanged():
         return _refused("history-contract")
     return DatabasePairContract(DatabasePairState.READY)
+
+
+def _validate_role(
+    path: Path, *, history: bool, database: DatabaseConnectionOwner | None,
+) -> DatabaseFileEvidence | None:
+    if database is None:
+        return require_database_file_contract(path, history=history)
+    database.require_role(path, history=history)
+    database.validate()
+    return None
 
 
 def initialize_database_pair(
     ledger_path: str | Path,
     history_path: str | Path,
+    *,
+    ledger_database: DatabaseConnectionOwner | None = None,
+    history_database: DatabaseConnectionOwner | None = None,
 ) -> DatabasePairContract:
     """Publish a fresh ledger then history, retracting only owned files on error."""
 
     ledger = Path(ledger_path).resolve()
     history = Path(history_path).resolve()
-    state = validate_database_pair(ledger, history)
+    state = validate_database_pair(
+        ledger, history, ledger_database=ledger_database, history_database=history_database,
+    )
     if state.state is not DatabasePairState.FRESH:
         return state
 
@@ -194,10 +214,16 @@ def initialize_database_pair(
 def ensure_database_pair(
     ledger_path: str | Path,
     history_path: str | Path,
+    *,
+    ledger_database: DatabaseConnectionOwner | None = None,
+    history_database: DatabaseConnectionOwner | None = None,
 ) -> DatabasePairContract:
     """Require a ready pair before admitting work that can mutate both stores."""
 
-    contract = validate_database_pair(ledger_path, history_path)
+    contract = validate_database_pair(
+        ledger_path, history_path,
+        ledger_database=ledger_database, history_database=history_database,
+    )
     if contract.state is DatabasePairState.FRESH:
         contract = initialize_database_pair(ledger_path, history_path)
     if contract.state is DatabasePairState.REFUSED:

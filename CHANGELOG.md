@@ -1027,6 +1027,21 @@ repeated machinery while preserving operational safety and boundary contracts.
 Safety, settlement, authority, and measurement work made high-risk release
 claims explicit, independently reviewable, and regression-backed.
 
+#### Separate cold and live database admission (2026-09-27)
+
+- Runtime admission now validates an adopted database through a pinned SQLite
+  connection and a current SQL snapshot. Legitimate reader SHM activity and WAL
+  commits no longer fail the cold file-stability test during later Plan,
+  inventory, integrity or recording admission. Standalone cold validation keeps
+  its byte-preserving checks and exact pair/schema/journal refusals.
+- Each database role is adopted lazily and closed with the runtime; independent
+  history reads and fresh noncreating planning remain supported. Recorder
+  placement guards, reader retirement and retryable shutdown are preserved.
+- Deterministic activity regressions and live refusal/lifetime controls pass;
+  the installed Setup seam and all 12 import contracts pass. Final ordinary
+  suite: 5,379 passed, 4 privilege-related skips and 34 headed deselections.
+  Independent review and evidence are recorded with IR-DB in M1_PLAN.
+
 #### Defer AB-8 stack/wrap investigation (2026-09-27)
 
 - Preserve the candidate live-render/layout-check race, original evidence and

@@ -10,6 +10,7 @@ import sqlite3
 import stat
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from threading import RLock
 from typing import Callable, Iterator
 
 from .schema import (
@@ -17,11 +18,108 @@ from .schema import (
     validate_history_reader_contract,
     validate_ledger_reader_contract,
 )
+from .connections import (
+    DEFAULT_BUSY_TIMEOUT_MS,
+    connect_history_reader,
+    connect_history_writer,
+    connect_ledger_reader,
+    connect_ledger_writer,
+)
 
 
 _ContractValidator = Callable[[sqlite3.Connection], None]
 _ArtifactStamp = tuple[int, int, int, int, int]
 _CONTENT_SUFFIXES = ("", "-wal", "-shm")
+
+
+class DatabaseConnectionOwner:
+    """Keep an admitted database open while its live SQLite users come and go."""
+
+    def __init__(self, path: str | Path, *, history: bool) -> None:
+        self.path = Path(path).resolve()
+        self.history = history
+        self._lock = RLock()
+        require_database_file_contract(self.path, history=history)
+        self._identity = self._main_identity()
+        connect = connect_history_reader if history else connect_ledger_reader
+        self._connection = connect(self.path)
+        self._closed = False
+        try:
+            self.validate()
+        except BaseException:
+            self._connection.close()
+            raise
+
+    def _main_identity(self) -> tuple[int, int, int]:
+        value = self.path.lstat()
+        if not stat.S_ISREG(value.st_mode):
+            raise SchemaResetRequired("owned database main is not a regular file")
+        return value.st_dev, value.st_ino, value.st_mode
+
+    def require_role(self, path: str | Path, *, history: bool) -> None:
+        if Path(path).resolve() != self.path or history != self.history:
+            raise ValueError("database owner does not match the requested path and role")
+
+    def _validate_connection(self, connection: sqlite3.Connection) -> None:
+        validator = (
+            validate_history_reader_contract if self.history else
+            validate_ledger_reader_contract
+        )
+        connection.execute("BEGIN")
+        try:
+            validator(connection)
+        finally:
+            connection.rollback()
+
+    def validate(self) -> None:
+        with self._lock:
+            if self._closed:
+                raise RuntimeError("database connection owner is closed")
+            try:
+                _require_no_journal(self.path)
+                if self._main_identity() != self._identity:
+                    raise SchemaResetRequired("owned database main was replaced")
+                self._validate_connection(self._connection)
+                _require_no_journal(self.path)
+                if self._main_identity() != self._identity:
+                    raise SchemaResetRequired("owned database main was replaced")
+            except (OSError, sqlite3.Error) as error:
+                raise SchemaResetRequired("cannot validate the owned database contract") from error
+
+    def _open(
+        self, path: str | Path, *, readonly: bool, busy_timeout_ms: int,
+    ) -> sqlite3.Connection:
+        self.require_role(path, history=self.history)
+        with self._lock:
+            self.validate()
+            connect = (
+                (connect_history_reader if readonly else connect_history_writer)
+                if self.history else
+                (connect_ledger_reader if readonly else connect_ledger_writer)
+            )
+            connection = connect(self.path, busy_timeout_ms=busy_timeout_ms)
+            try:
+                self._validate_connection(connection)
+            except BaseException:
+                connection.close()
+                raise
+            return connection
+
+    def open_reader(
+        self, path: str | Path, *, busy_timeout_ms: int = DEFAULT_BUSY_TIMEOUT_MS,
+    ) -> sqlite3.Connection:
+        return self._open(path, readonly=True, busy_timeout_ms=busy_timeout_ms)
+
+    def open_writer(
+        self, path: str | Path, *, busy_timeout_ms: int = DEFAULT_BUSY_TIMEOUT_MS,
+    ) -> sqlite3.Connection:
+        return self._open(path, readonly=False, busy_timeout_ms=busy_timeout_ms)
+
+    def close(self) -> None:
+        with self._lock:
+            if not self._closed:
+                self._connection.close()
+                self._closed = True
 
 
 @dataclass(frozen=True, slots=True)

@@ -323,6 +323,13 @@ same-principal code.
   guarantee, however, requires managed roots to remain quiescent from
   non-NamiSync mutation while execution is touching them. A writer that wins
   after the final path-based guard is outside that full guarantee.
+  Database admission distinguishes unowned artifact validation from live SQLite
+  ownership: cold probes preserve source bytes and refuse observed drift;
+  runtime-owned databases permit ordinary SQLite reads and recording while
+  checking identity, journal absence and the SQL contract at admission. Mutable
+  SHM read marks and legitimate WAL commits are not database corruption.
+  [DATABASE](DATABASE.md#runtime-reader-ownership-and-admission-diagnostics)
+  owns that connection lifetime; external schema mutation can still cause refusal.
 - **Same-principal hostile code — outside the security guarantee.** A process
   or injected code already running with the user's authority can alter the same
   files, databases, installed assets, process messages, or mutex namespace.
