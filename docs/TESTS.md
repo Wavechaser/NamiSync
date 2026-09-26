@@ -89,7 +89,11 @@ observation, truthful healthy-pending/lost-direct-delivery feedback, unavailable
 communication versus unreadable matching response, automatic late-result adoption
 where delivery remains live, and true worker settlement. Page recovery cases use
 the same stable handle across notifications and checks; workflow owner and stale
-response guards remain independently asserted. Current-state cases cover authoritative
+response guards remain independently asserted. Page doubles supply explicit
+handle fields and Check spies, not copies of bridge state rules or recovery prose.
+Assert handle ownership, routing of sentinel messages and control wiring there;
+the production bridge probe owns recovery policy, diagnostic wording and cleanup.
+Current-state cases cover authoritative
 refresh, deliberate folder replacement and stale-response rejection without
 retaining an original outcome. Check never resubmits a mutation. A removed replay expectation is not a regression by
 itself; retained identity, state, effect and ownership guarantees decide it.

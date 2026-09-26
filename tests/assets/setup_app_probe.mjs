@@ -53,11 +53,14 @@ function deferred() {
 // The check resolves the original delivery, never a second adoption promise.
 function delayedOriginal(onDelayed, complete) {
   const original = deferred();
-  const recovery = fakeRecoveryHandle(async () => {
+  const recovery = fakeRecoveryHandle({ state: "submitting", canCheck: false,
+    message: null, check: async () => {
     original.resolve(await complete());
-  }, "submitting");
+  } });
   onDelayed(recovery);
   recovery.state = "unavailable";
+  recovery.canCheck = true;
+  recovery.message = "setup-check-sentinel";
   onDelayed(recovery);
   return original.promise;
 }
@@ -399,21 +402,20 @@ async function loadScenario({
   };
   harness.railCallbacks.onCreate();
   await until(
-    () => globalThis.document.querySelector("#host-status").textContent.includes("Select Check outcome"),
+    () => globalThis.document.querySelector("#host-status").textContent.includes("setup-check-sentinel"),
     "new-task uncertainty guidance",
   );
   assert.equal(harness.createStates.at(-1).recovery.canCheck, true, "New task retains one read-only Check");
   assert.equal(harness.createStates.at(-1).running, true);
   assert.match(
     globalThis.document.querySelector("#host-status").textContent,
-    /Select Check outcome to observe the original request/,
+    /setup-check-sentinel/,
     "the same-document retry retains its pending create guidance",
   );
   harness.railCallbacks.onCreate();
   harness.railCallbacks.onCreate();
   await turns();
-  assert.equal(createRetries, 1, "one Check is shared by repeated gestures");
-  await until(() => createRetries === 1, "same new-task retry closure");
+  await until(() => createRetries >= 1, "new-task Check reaches the original owner");
   await until(() => harness.task?.taskId === TASK_B, "original create owner adopts the result");
   assert.equal(harness.calls.filter((call) => call[0] === "create").length, 1);
 }
@@ -422,12 +424,12 @@ async function loadScenario({
   const harness = await loadScenario();
   harness.createTask = (onDelayed) => {
     harness.calls.push(["create"]);
-    onDelayed(fakeRecoveryHandle(null, "fixed-unknown"));
+    onDelayed(fakeRecoveryHandle({ state: "fixed-unknown", message: "create-fixed-sentinel" }));
     return Promise.reject(new harness.TaskCreateUncertainError());
   };
   harness.railCallbacks.onCreate();
   await until(() => globalThis.document.querySelector("#host-status").textContent.includes(
-    "Close and reopen NamiSync"), "fixed-unknown create guidance");
+    "create-fixed-sentinel"), "fixed-unknown create guidance");
   assert.equal(harness.createStates.at(-1).recovery.state, "fixed-unknown",
     "a fixed unknown create keeps New task fenced without an observation retry");
   harness.railCallbacks.onCreate();
@@ -485,12 +487,12 @@ async function loadScenario({
   callbacks.onAddPair();
   harness.closeTask = (...values) => {
     harness.calls.push(["close", ...values.slice(0, 2)]);
-    values.at(-1)(fakeRecoveryHandle(null, "fixed-unknown"));
+    values.at(-1)(fakeRecoveryHandle({ state: "fixed-unknown", message: "close-fixed-sentinel" }));
     return Promise.reject(new harness.TaskCloseUncertainError());
   };
   harness.railCallbacks.onClose(TASK_A);
   await until(() => harness.model.closePending && harness.railTasks.find(
-    (task) => task.taskId === TASK_A)?.closeRecovery?.message?.includes("Close and reopen NamiSync"),
+    (task) => task.taskId === TASK_A)?.closeRecovery?.message === "close-fixed-sentinel",
   "fixed-unknown Close keeps its form fence");
   callbacks.onStartPlan();
   callbacks.onStartInventory();
@@ -588,7 +590,8 @@ async function loadScenario({
   };
   const pendingPlan = deferred();
   harness.startPlan = (...values) => {
-    values.at(-1)(fakeRecoveryHandle(async () => assert.fail("late delivery needs no Check"), "pending"));
+    values.at(-1)(fakeRecoveryHandle({ state: "pending", canCheck: true,
+      check: async () => assert.fail("late delivery needs no Check") }));
     return pendingPlan.promise;
   };
   callbacks.onStartPlan();
@@ -741,12 +744,12 @@ async function loadScenario({
   callbacks.onEdit("target", "D:\\target");
   harness.startPlan = (...values) => {
     harness.calls.push(["start-plan", ...values.slice(0, 4)]);
-    values.at(-1)(fakeRecoveryHandle(null, "fixed-unknown"));
+    values.at(-1)(fakeRecoveryHandle({ state: "fixed-unknown", message: "plan-fixed-sentinel" }));
     return Promise.reject(new harness.StartPlanUncertainError());
   };
   callbacks.onStartPlan();
   await until(() => harness.model.attempt?.recovery?.state === "fixed-unknown", "fixed-unknown plan retained");
-  assert.match(harness.model.attempt.recovery.message, /Close and reopen NamiSync/);
+  assert.equal(harness.model.attempt.recovery.message, "plan-fixed-sentinel");
   const form = harness.model;
   callbacks.onStartPlan();
   callbacks.onStartInventory();

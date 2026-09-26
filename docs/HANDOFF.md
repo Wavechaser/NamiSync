@@ -1,34 +1,32 @@
-# Latest session — Command recovery follow-up fixes
+# Latest session — Recovery feedback and fixed-outcome corrections
 
-2026-09-26, `milestone1`, follow-up base `514d71d`. The user authorized these
-validated AB-7R/S fixes as separate commits without a new checkpoint/register.
-AB-8 remains paused; M1_PLAN still owns the delivered AB-7S record.
+2026-09-26, `milestone1`, base `b4b3b72`. The user authorized three validated
+follow-up corrections, retaining separate commits without a new checkpoint.
+AB-8 remains paused. Page guidance and fixture ownership land first; matching
+invalid-result settlement follows as a separate commit.
 
-- `1aecc87`: preserve Plan again's icon and update its accessible action label.
-- `4838c86`: adopt valid async results independently of cleanup ACK success;
-  rename command policy metadata and migrate native/browser/tool consumers.
-- Current follow-up: each issuing page owner retains the original bridge
-  attempt's stable recovery handle. Remove copied recovery flags and the
-  string-key Check helper; retain workflow stages and exact ownership guards.
-  Lost direct delivery offers Check; unavailable communication offers normal
-  close/reopen guidance; matching unreadable results remain visibly faulted,
-  fenced and recoverable. Settled attempts emit no later observation feedback.
+Plan review now selects the retained uncertain execution handle, including after
+reconstruction. The renderer repro failed before the fix; the app probe rejects
+an execution, checks the same handle after reload, and retains Execute/Close and
+selection fences. Page doubles are explicit values and Check spies; sentinel
+messages test routing, while actual bridge probes own policy and wording.
 
-Native effect/receipt owners, wire, mutation non-replay, selection→Execute/D4,
-fixed-error Cancel exception and read/lifecycle/resource bounds are preserved.
-No timeout or communication failure establishes whether an effect happened.
+Native observation returns the same captured final response, not repaired bytes.
+The pending bridge correction therefore collapses matching invalid results into
+noncheckable `fixed-unknown`, with `invalid_result` guidance and exact cleanup ACK.
+The earlier probe's in-place response rewrite was not a supported native path.
+Communication uncertainty still supports original-result observation. Neither
+cleanup nor fixed-unknown claims effect success or permits mutation replay.
+Native owners/wire, D4, lifecycle/resource/read bounds and effect fences remain.
 
-Evidence is under `build/post-m1-8-ablation-20260925/`, with `followup-` names;
-the initial diagnosis is `ab7s-followup-claims.log`. Each commit received fresh
-independent review. Initial icon/ACK verification: 1,782 interface cases and
-34 installed cases passed. Final handle verification: 7 focused cases and all
-34 installed cases covered (29 unchanged passes in `followup-handle-headed.xml`,
-5 corrected-fixture passes in `followup-handle-transport.xml`); 12 import
-contracts and documentation link/diff checks pass. The final ordinary suite
-passed 5,321 cases with 4 skips. Failed receipts remain: the policy migration
-missed two performance
-helpers, and the shared native fixture still counted callbacks instead of
-observing delayed/checkable feedback. Those direct consumers are corrected.
+Evidence: `build/post-m1-8-ablation-20260925/correction-*`; 7 focused cases and
+the final bridge guidance rerun pass. Fresh independent review has no blockers.
+All 34 installed tests pass; 12 import contracts are kept. The interfaces gate
+has 1781 passes and one stale bridge identity-probe expectation: it treats
+fixed-unknown rejection as adoption and expects retries of immutable invalid
+data. That second-commit test correction is pending; the page slice is unaffected.
+Unchanged domain tests retain the predecessor's ordinary-suite evidence; no
+domain code changed. Documentation links and diff checks pass.
 
 Use unique external test basetemps and announce each foreground batch before
 launch and when finished. Earlier AB-7 Setup `internal_error` and Plan-again

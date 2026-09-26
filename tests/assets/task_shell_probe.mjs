@@ -128,20 +128,14 @@ function deferred(collection, onDelayed = null) {
     resolve = acceptResolve;
     reject = onReject;
   });
-  const recovery = onDelayed === null ? null : fakeRecoveryHandle(null, "submitting");
+  const recovery = onDelayed === null ? null : fakeRecoveryHandle({ state: "submitting", message: null });
   if (recovery !== null) onDelayed(recovery);
   const entry = { promise, resolve, recovery,
-    delay(check) {
-      this.recovery.configure(check);
+    notify(fields) {
+      Object.assign(this.recovery, fields);
       onDelayed?.(this.recovery);
     },
-    reject(error) {
-      if (this.recovery !== null && error instanceof OutcomeUnavailableErrorType) {
-        this.recovery.state = "fixed-unknown";
-        onDelayed?.(this.recovery);
-      }
-      reject(error);
-    },
+    reject,
   };
   collection.push(entry);
   return promise;
@@ -1010,7 +1004,8 @@ const checkExecution = () => {
   executionOutcomeChecks += 1;
   return Promise.resolve(null);
 };
-planExecutions[1].delay(checkExecution);
+planExecutions[1].notify({ state: "unavailable", canCheck: true,
+  message: "execution-check-sentinel", check: checkExecution });
 await until(() => reviewRenders.at(-1).executionAttempt.recovery?.canCheck === true);
 assert.equal(firstReview.pending, "execute");
 assert.equal(reviewRenders.at(-1).executionAttempt.state, "submitting");
@@ -1807,7 +1802,8 @@ const checkExactClose = () => {
   closeOutcomeChecks += 1;
   return Promise.resolve(null);
 };
-closes.at(-1).delay(checkExactClose);
+closes.at(-1).notify({ state: "unavailable", canCheck: true,
+  message: "execution-check-sentinel", check: checkExactClose });
 await until(() => stoppedTask.closeRecovery?.canCheck === true);
 assert.equal(walk(app).find((element) =>
   element.ariaLabel === `Retry updates for ${stoppedTask.label}`).hidden, true,
@@ -1974,11 +1970,13 @@ globalThis.taskHarness.closeRetainedTask(unknownReviewTaskId);
 await turns();
 assert.equal(closes.length, pendingReviewCloseBase,
   "in-flight review cannot silently submit Close");
+planSelections.at(-1).notify({ state: "fixed-unknown", canCheck: false,
+  message: "execution-fixed-outcome-sentinel" });
 planSelections.at(-1).reject(new OutcomeUnavailableErrorType(null, false));
 await until(() => unknownReview.recovery?.state === "fixed-unknown");
 assert.equal(unknownReview.pending, "outcome");
 assert.equal(unknownReview.recovery.canCheck, false);
-assert.match(unknownReview.recovery.message, /Close and reopen NamiSync/);
+assert.equal(unknownReview.recovery.message, "execution-fixed-outcome-sentinel");
 const unknownSelectionCount = planSelections.length;
 globalThis.planReviewHarness.callbacks.onSelect(unknownReview, unknownReview.window.rows[0], false);
 globalThis.planReviewHarness.callbacks.onHighlight(unknownReview, "replace", unknownReview.window.rows[0].node_id);
@@ -2064,6 +2062,8 @@ const pauseReview = unknownPauseTask.review;
 const pauseBase = executionControls.length;
 globalThis.planReviewHarness.callbacks.onControl(pauseReview, "pause");
 await until(() => executionControls.length === pauseBase + 1);
+executionControls.at(-1).notify({ state: "fixed-unknown", canCheck: false,
+  message: "execution-fixed-outcome-sentinel" });
 executionControls.at(-1).reject(new OutcomeUnavailableErrorType(null, false));
 await until(() => pauseReview.recovery?.state === "fixed-unknown");
 assert.equal(pauseReview.outcomeAction, "pause");
@@ -2073,10 +2073,11 @@ await until(() => executionControls.length === pauseBase + 2);
 assert.equal(pauseReview.pending, "outcome");
 assert.equal(unknownPauseTask.executionControlAttempt.independent, true);
 let cancelObservationCalls = 0;
-executionControls.at(-1).delay(() => {
+executionControls.at(-1).notify({ state: "unavailable", canCheck: true,
+  message: "execution-check-sentinel", check: () => {
   cancelObservationCalls += 1;
   return Promise.resolve(null);
-});
+} });
 await until(() => unknownPauseTask.executionControlAttempt.recovery?.canCheck === true);
 assert.equal(pauseReview.recovery.canCheck, false, "independent Cancel cannot replace the original warning");
 assert.equal(walk(app).find((element) => element.ariaLabel ===
@@ -2094,7 +2095,7 @@ planWindows.at(-1).resolve(planWindow(pauseReview.summary));
 await until(() => unknownPauseTask.review !== pauseReview);
 const reloadedPauseReview = unknownPauseTask.review;
 assert.equal(reloadedPauseReview.pending, "outcome");
-assert.match(reloadedPauseReview.recovery.message, /Close and reopen NamiSync/);
+assert.equal(reloadedPauseReview.recovery.message, "execution-fixed-outcome-sentinel");
 globalThis.planReviewHarness.callbacks.onRetryOutcome(reloadedPauseReview);
 await until(() => cancelObservationCalls === 1);
 assert.equal(executionControls.length, pauseBase + 2, "Check observes without resubmitting Cancel");
@@ -2105,13 +2106,15 @@ executionControls.at(-1).resolve({
 await until(() => unknownPauseTask.executionControlAttempt.pending === false);
 assert.equal(unknownPauseTask.executionControlAttempt.accepted, true);
 assert.equal(unknownPauseTask.canCancelAfterFixedReviewOutcome, false);
-assert.match(reloadedPauseReview.recovery.message, /Close and reopen NamiSync/);
+assert.equal(reloadedPauseReview.recovery.message, "execution-fixed-outcome-sentinel");
 
 const unknownCancelTask = await openActiveUnknownOutcomeTask("4");
 const cancelReview = unknownCancelTask.review;
 const originalCancelBase = executionControls.length;
 globalThis.planReviewHarness.callbacks.onControl(cancelReview, "cancel");
 await until(() => executionControls.length === originalCancelBase + 1);
+executionControls.at(-1).notify({ state: "fixed-unknown", canCheck: false,
+  message: "execution-fixed-outcome-sentinel" });
 executionControls.at(-1).reject(new OutcomeUnavailableErrorType(null, false));
 await until(() => cancelReview.recovery?.state === "fixed-unknown");
 assert.equal(cancelReview.outcomeAction, "cancel");
@@ -2144,14 +2147,15 @@ const pendingReleaseTask = await openActiveUnknownOutcomeTask("5");
 const pendingReleaseDrain = drains.get(pendingReleaseTask.taskId);
 let releaseChecks = 0;
 pendingReleaseDrain.acceptReleaseDelay(pendingReleaseTask.taskId,
-  pendingReleaseTask.sessionId, fakeRecoveryHandle(() => {
+  pendingReleaseTask.sessionId, fakeRecoveryHandle({ canCheck: true,
+    message: "release-check-sentinel", check: () => {
     releaseChecks += 1;
     return Promise.resolve(null);
-  }));
+  } }));
 assert.equal(pendingReleaseTask.drainUnavailable, false,
   "healthy delayed release is not a drain refusal");
 pendingReleaseDrain.acceptRecovered(pendingReleaseTask.taskId, pendingReleaseTask.sessionId);
-assert.match(pendingReleaseTask.releaseRecovery.message, /Outcome unavailable/,
+assert.equal(pendingReleaseTask.releaseRecovery.message, "release-check-sentinel",
   "unrelated recovery cannot clear pending release feedback");
 const releaseCheckButton = walk(app).find((element) =>
   element.ariaLabel === `Check release outcome for ${pendingReleaseTask.label}`);
@@ -2207,5 +2211,68 @@ void globalThis.taskHarness.closeRetainedTask(closeRaceTaskId);
 await turns();
 assert.equal(closes.length, closeRaceBase + 3,
   "a settled task cannot receive another Close effect");
+
+// The execution promise rejects after its recovery handle has been retained.
+// A fresh review must leave that handle, its guidance, and the effect fences intact.
+const uncertainExecutionTaskId = `task-${"9".repeat(32)}`;
+const uncertainExecutionSessionId = "9".repeat(32);
+const uncertainOpenBase = planOpens.length;
+const uncertainWindowBase = planWindows.length;
+const uncertainExecutionTask = globalThis.taskHarness.adoptTask({
+  task_id: uncertainExecutionTaskId, session_id: uncertainExecutionSessionId,
+  session_state: "completed", session_released: true,
+  task_kind: "sync-plan", request_id: "9".repeat(32),
+});
+await until(() => planOpens.length === uncertainOpenBase + 1);
+const uncertainSummary = planSummary({
+  task_id: uncertainExecutionTaskId, request_id: "9".repeat(32),
+  preflight_ready: true, preflight_refusal_count: 0, warning_count: 0,
+});
+planOpens.at(-1).resolve(uncertainSummary);
+await until(() => planWindows.length === uncertainWindowBase + 1);
+planWindows.at(-1).resolve(planWindow(uncertainSummary));
+await until(() => uncertainExecutionTask.review?.summary === uncertainSummary);
+taskButton(uncertainExecutionTask.label).click();
+const uncertainExecutionReview = uncertainExecutionTask.review;
+const uncertainExecutionBase = planExecutions.length;
+globalThis.planReviewHarness.callbacks.onExecute(uncertainExecutionReview, executeInvoker);
+await until(() => planExecutions.length === uncertainExecutionBase + 1);
+const uncertainExecution = planExecutions.at(-1);
+const originalRecovery = uncertainExecution.recovery;
+uncertainExecution.notify({ state: "unavailable", canCheck: true,
+  message: "execution-check-sentinel", check: () => Promise.resolve(null) });
+assert.equal(uncertainExecutionTask.executionAttempt.recovery, originalRecovery);
+originalRecovery.state = "fixed-unknown";
+originalRecovery.canCheck = false;
+originalRecovery.message = "execution-admission-owner-sentinel";
+uncertainExecution.reject(new StartPlanUncertainErrorType());
+await until(() => uncertainExecutionTask.executionAttempt?.state === "uncertain");
+assert.equal(uncertainExecutionTask.executionAttempt.recovery, originalRecovery);
+assert.equal(uncertainExecutionReview.pending, "outcome");
+const fencedSelectionBase = planSelections.length;
+globalThis.planReviewHarness.callbacks.onSelect(
+  uncertainExecutionReview, uncertainExecutionReview.window.rows[0], false,
+);
+assert.equal(planSelections.length, fencedSelectionBase);
+globalThis.planReviewHarness.callbacks.onExecute(uncertainExecutionReview, executeInvoker);
+assert.equal(planExecutions.length, uncertainExecutionBase + 1);
+const fencedClose = taskButton(uncertainExecutionTask.label).parentNode.children.find(
+  (element) => element.classList.values.has("nami-task-rail__close"));
+assert.equal(fencedClose?.disabled, true);
+assert.equal(fencedClose.ariaLabel, uncertainExecutionTask.closeBlockReason);
+const closeBase = closes.length;
+fencedClose.click();
+assert.equal(closes.length, closeBase);
+void globalThis.taskHarness.forceReview(uncertainExecutionTask, true);
+await until(() => planOpens.length === uncertainOpenBase + 2);
+planOpens.at(-1).resolve(uncertainSummary);
+await until(() => planWindows.length === uncertainWindowBase + 2);
+planWindows.at(-1).resolve(planWindow(uncertainSummary));
+await until(() => uncertainExecutionTask.review !== uncertainExecutionReview);
+assert.equal(uncertainExecutionTask.executionAttempt.recovery, originalRecovery);
+assert.equal(originalRecovery.message, "execution-admission-owner-sentinel");
+globalThis.planReviewHarness.callbacks.onExecute(uncertainExecutionTask.review, executeInvoker);
+assert.equal(planExecutions.length, uncertainExecutionBase + 1);
+assert.equal(fencedClose.disabled, true);
 
 process.stdout.write("ok");

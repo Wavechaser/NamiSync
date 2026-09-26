@@ -354,7 +354,7 @@ assert.equal(byClass(panel.element, "nami-setup__clear-batch").disabled, true,
   "unknown rows cannot be cleared as terminal results");
 model.batchRunning = true;
 model.batch = [{ ...queuedBatchRow, state: "submitting",
-  recovery: fakeRecoveryHandle(() => {}), message: "Original request pending." }];
+  recovery: fakeRecoveryHandle({ canCheck: true }), message: "Original request pending." }];
 panel.render(model);
 assert.equal(startBatch.textContent, "Check outcome");
 assert.equal(startBatch.disabled, false, "a submitting row exposes read-only original checks");

@@ -1615,6 +1615,8 @@ pair; native cancellation and settlement own that cleanup. It does not resolve
 the earlier unknown outcome. Unknown starts, execution admission, release and
 Close remain fenced. Disabled Close gives the same action-guiding reason
 enforced by its handler.
+An uncertain execution admission also keeps its retained execution handle's
+guidance visible in Plan review, including after the review is reconstructed.
 
 Task closure never purges trash. User-invoked session cleanup and terminal
 execution/verification retry actions, including **Verify remaining**, are

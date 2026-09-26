@@ -1026,6 +1026,15 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Desktop bridge and native-owner lifecycle
 
+- MODERATE - FIXED (2026-09-26). Recovery-owner omission. A fixed-unknown
+  execution admission left the Plan review status blank, or showing ordinary
+  plan feedback after reconstruction, although Execute and Close stayed fenced.
+  Cause: the renderer selected the execution handle only while submitting,
+  then fell back to the unrelated review handle when the attempt became uncertain.
+  Plan review now selects the retained uncertain execution handle in both views.
+  Page probes cover handle/message routing and unchanged control fences; bridge
+  probes own the actual recovery wording and state policy.
+
 - MODERATE - FIXED (2026-09-26). Delivery-state conflation. A rejected direct
   command followed by pending observation claimed to await an automatic result,
   although only Check could recover it. Repeated unavailable observations offered

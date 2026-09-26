@@ -412,7 +412,7 @@ assert.equal(planAgainButton.textContent, "");
 assert.equal(planAgainButton.ariaLabel, "Plan again");
 assert.equal(planAgainButton.title, "Plan again");
 review.pending = "plan-again";
-task.form = { attempt: { recovery: fakeRecoveryHandle(() => {}) } };
+task.form = { attempt: { recovery: fakeRecoveryHandle({ canCheck: true }) } };
 panel.render(task);
 assertSameNode(planAgainButton.children[0], planAgainIcon, "Check outcome keeps the same icon");
 assert.equal(planAgainButton.children.length, 1);
@@ -427,6 +427,28 @@ assert.equal(planAgainButton.children.length, 1);
 assert.equal(planAgainButton.textContent, "");
 assert.equal(planAgainButton.ariaLabel, "Plan again");
 assert.equal(planAgainButton.title, "Plan again");
+const executionRecovery = { state: "fixed-unknown", canCheck: false, checking: false,
+  message: "execution-owner-sentinel", check: () => Promise.resolve(null) };
+const recoveryPanel = createPlanReviewPanel(callbacks);
+const recoveryFooter = findByClass(recoveryPanel.element, "nami-plan-review__status");
+task.executionAttempt = { state: "uncertain", recovery: executionRecovery };
+review.pending = "outcome";
+review.message = "review-owner-sentinel";
+recoveryPanel.render(task);
+assert.ok(findText(recoveryFooter, "execution-owner-sentinel"),
+  "uncertain Execute shows its own recovery guidance");
+assert.equal(findText(recoveryFooter, "review-owner-sentinel"), false);
+assert.equal(findAction(recoveryPanel.element, "execute").disabled, true);
+const reconstructedReview = { ...review, window: { ...review.window } };
+task.review = reconstructedReview;
+recoveryPanel.render(task);
+assert.ok(findText(recoveryFooter, "execution-owner-sentinel"),
+  "review reconstruction retains the execution owner guidance");
+assert.equal(findAction(recoveryPanel.element, "execute").disabled, true);
+recoveryPanel.dispose();
+task.review = review;
+task.executionAttempt = null;
+review.pending = null;
 review.message = null;
 panel.render(task);
 assert.equal(footerMessage.hidden, true, "idle footer text takes no room");
@@ -753,7 +775,7 @@ assert.equal(findAction(panel.element, "pause").disabled, true);
 
 task.sessionId = "a".repeat(32);
 task.executionControlAttempt = { sessionId: task.sessionId,
-  recovery: fakeRecoveryHandle(() => {}) };
+  recovery: fakeRecoveryHandle({ canCheck: true }) };
 review.pending = "pause";
 panel.render(task);
 const controlCheck = findAction(panel.element, "retry-outcome");

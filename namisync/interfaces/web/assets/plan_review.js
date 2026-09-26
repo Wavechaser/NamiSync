@@ -1310,7 +1310,7 @@ export function createPlanReviewPanel(callbacks) {
     const controlAttempt = task.executionControlAttempt?.sessionId === task.sessionId
       ? task.executionControlAttempt : null;
     const independentCancel = controlAttempt?.independent ? controlAttempt : null;
-    const primaryRecovery = review.pending === "execute"
+    const primaryRecovery = review.pending === "execute" || task.executionAttempt?.state === "uncertain"
       ? task.executionAttempt?.recovery
       : review.pending === "plan-again" ? task.form?.attempt?.recovery : review.recovery;
     const actionMessage = [primaryRecovery?.message ?? review.message,
