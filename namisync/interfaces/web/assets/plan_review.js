@@ -811,9 +811,13 @@ export function createPlanReviewPanel(callbacks) {
     diagnostics.hidden = current === null || !detailsExpanded;
   }
 
-  function renderExecution(execution, terminalState) {
+  function renderExecution(execution, terminalState, snapshot = null) {
     const presentation = projectExecutionSummary(execution);
-    executionReview.hidden = !terminalState && execution.session_id === null && execution.gap === null;
+    const gap = execution.gap ?? (snapshot?.gap_first_missed_seq == null ? null : {
+      minimum_first_missed_seq: snapshot.gap_first_missed_seq,
+      maximum_first_missed_seq: snapshot.gap_first_missed_seq,
+    });
+    executionReview.hidden = !terminalState && execution.session_id === null && gap === null;
     executionReview.dataset.status = presentation.status ?? "none";
     diagnostics.dataset.status = presentation.status ?? "none";
     const result = execution.result;
@@ -842,13 +846,13 @@ export function createPlanReviewPanel(callbacks) {
       if (execution.failed_operation_count > 0) issues.push(`${execution.failed_operation_count} operations failed`);
       if (execution.disk_capacity_failure_count > 0) issues.push(`${execution.disk_capacity_failure_count} failures need more target space`);
     }
-    if (execution.gap !== null) {
-      issues.push(execution.gap.minimum_first_missed_seq === execution.gap.maximum_first_missed_seq
-        ? `Gap observed at event ${execution.gap.minimum_first_missed_seq}`
-        : `Gaps observed from event ${execution.gap.minimum_first_missed_seq} through ${execution.gap.maximum_first_missed_seq}`);
+    if (gap !== null) {
+      issues.push(gap.minimum_first_missed_seq === gap.maximum_first_missed_seq
+        ? `Gap observed at event ${gap.minimum_first_missed_seq}`
+        : `Gaps observed from event ${gap.minimum_first_missed_seq} through ${gap.maximum_first_missed_seq}`);
     }
-    updateText(executionAlert, "Execution event history has gaps.", execution.gap !== null);
-    executionAlert.hidden = execution.gap === null;
+    updateText(executionAlert, "Execution event history has gaps.", gap !== null);
+    executionAlert.hidden = gap === null;
     updateText(executionAxes, axes.join(" · "));
     updateText(executionIssues, issues.join(" · "));
     executionIssues.hidden = issues.length === 0;
@@ -1183,7 +1187,10 @@ export function createPlanReviewPanel(callbacks) {
     const planFacts = `${review.summary.selected_operation_count} of ${review.summary.selectable_operation_count} selected · ${formatByteCount(review.summary.required_bytes)} required · ${planningIssues} planning issues`;
     updateText(planDiagnostics, `Plan: ${review.summary.preflight_refusal_count} refusals · ${review.summary.warning_count} warnings · ${review.summary.destructive_operation_count} destructive operations`);
     planDiagnostics.hidden = task.executionStarted;
-    const executionState = task.executionStarted ? task.sessionState : null;
+    const snapshot = task.snapshot != null && task.snapshot.session_id === task.sessionId
+      ? task.snapshot : null;
+    const executionState = task.executionStarted
+      ? snapshot?.session_state ?? task.sessionState : null;
     const canExecuteSelection = review.summary.preflight_ready
       && review.summary.selected_operation_count > 0
       && review.summary.selection_state === "reviewing";
@@ -1195,8 +1202,9 @@ export function createPlanReviewPanel(callbacks) {
         started_at: task.executionStartedAt, ended_at: task.executionEndedAt }
       : retainedExecution;
     const terminalState = task.executionStarted
-      && ["completed", "failed", "refused", "canceled"].includes(task.sessionState);
-    const executionPresentation = renderExecution(displayExecution, terminalState);
+      && ["completed", "failed", "refused", "canceled"].includes(executionState);
+    const executionPresentation = renderExecution(displayExecution, terminalState,
+      task.executionStarted ? snapshot : null);
     updateText(statusTitle, terminalState && displayExecution.result === null
       ? digest.title : executionPresentation.title ?? digest.title);
     const progressFacts = task.executionStarted && digest.progress.phase !== null
@@ -1210,7 +1218,7 @@ export function createPlanReviewPanel(callbacks) {
           : `${Math.ceil(digest.progress.etaSeconds)}s ETA estimate`,
       ].filter(Boolean).join(" · ")
       : null;
-    updateText(facts, terminalState ? terminalStatusLine(displayExecution, task.sessionState)
+    updateText(facts, terminalState ? terminalStatusLine(displayExecution, executionState)
       : executionPresentation.title === null ? planFacts
         : progressFacts ?? digest.detail);
     summary.dataset.status = terminalState && displayExecution.result === null

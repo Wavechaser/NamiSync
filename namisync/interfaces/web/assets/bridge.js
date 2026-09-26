@@ -533,7 +533,7 @@ export function startTaskDrain(
     scheduledEpoch: null,
     desiredReplayFrom: null,
     lastAcceptedSequence: 0,
-    progressState: emptyProgressReducerState(),
+    snapshotRevision: null,
     busyRearmUsed: false,
     transportFailures: 0,
     terminal: initialState?.terminal ?? false,
@@ -1856,14 +1856,15 @@ function settleTaskDrain(task, active, result) {
   task.active = null;
   task.busyRearmUsed = false;
   task.transportFailures = 0;
+  let snapshotDelivered = false;
   for (let index = 0; index < result.updates.length; index += 1) {
     if (task.stopped || task.terminal || task.epoch !== active.epoch) {
       return;
     }
     const update = result.updates[index];
+    const snapshot = index === result.updates.length - 1 ? result.snapshot : null;
     if (update.update_type === "record") {
-      task.progressState = reduceProgressState(task.progressState, update);
-      presentTerminalUpdate(task, update);
+      presentTerminalUpdate(task, update, result.snapshot);
       if (task.terminal && isCurrentTaskEpoch(task, active)) {
         task.recoveryPending = false;
       }
@@ -1871,11 +1872,10 @@ function settleTaskDrain(task, active, result) {
     }
     const event = update.event;
     if (event.body_type === "Gap") {
-      const previousState = task.progressState;
-      task.progressState = reduceProgressState(task.progressState, update);
-      if (!deliverTaskUpdate(task, update, task.lastAcceptedSequence, previousState)) {
+      if (!deliverTaskUpdate(task, update, task.lastAcceptedSequence, snapshot)) {
         return;
       }
+      snapshotDelivered = snapshot !== null;
       const missed = event.body.first_missed_seq;
       const matchingLeadingRecoveryGap =
         index === 0 &&
@@ -1891,13 +1891,13 @@ function settleTaskDrain(task, active, result) {
       continue;
     }
     const previousSequence = task.lastAcceptedSequence;
-    const previousState = task.progressState;
     task.lastAcceptedSequence = event.sequence;
-    task.progressState = reduceProgressState(task.progressState, update);
-    if (!deliverTaskUpdate(task, update, previousSequence, previousState)) {
+    if (!deliverTaskUpdate(task, update, previousSequence, snapshot)) {
       return;
     }
+    snapshotDelivered = snapshot !== null;
   }
+  if (!snapshotDelivered && !deliverTaskUpdate(task, null, task.lastAcceptedSequence, result.snapshot)) return;
   if (!notifyTaskRecovered(task, active)) return;
   rearmTask(task, null);
 }
@@ -1968,12 +1968,14 @@ function validateReadinessEchoResult(value) {
     && typeof value.acknowledged === "boolean";
 }
 
-function presentTerminalUpdate(task, update) {
+function presentTerminalUpdate(task, update, snapshot) {
   if (task.stopped || task.terminal || taskDrains.get(task.taskId) !== task) {
     return;
   }
   if (task.pendingTerminalUpdate === null) {
-    task.pendingTerminalUpdate = freezeJsonValue(cloneJsonValue(update));
+    task.pendingTerminalUpdate = freezeJsonValue({
+      update: cloneJsonValue(update), snapshot: cloneJsonValue(snapshot),
+    });
   }
   if (task.terminalPresentationInProgress) {
     return;
@@ -1981,8 +1983,8 @@ function presentTerminalUpdate(task, update) {
   task.terminalPresentationInProgress = true;
   try {
     task.acceptUpdate(
-      cloneJsonValue(task.pendingTerminalUpdate),
-      progressStateView(task.progressState),
+      cloneJsonValue(task.pendingTerminalUpdate.update),
+      freezeJsonValue(cloneJsonValue(task.pendingTerminalUpdate.snapshot)),
     );
   } catch (_error) {
     task.terminalPresentationInProgress = false;
@@ -1993,6 +1995,7 @@ function presentTerminalUpdate(task, update) {
     return;
   }
   task.terminalPresentationInProgress = false;
+  task.snapshotRevision = task.pendingTerminalUpdate.snapshot.revision;
   task.pendingTerminalUpdate = null;
   task.terminal = true;
   beginTaskRelease(task);
@@ -2007,16 +2010,16 @@ function retryTerminalPresentation(task) {
   ) {
     return;
   }
-  presentTerminalUpdate(task, task.pendingTerminalUpdate);
+  presentTerminalUpdate(task, task.pendingTerminalUpdate.update, task.pendingTerminalUpdate.snapshot);
 }
 
-function deliverTaskUpdate(task, update, previousSequence, previousState) {
+function deliverTaskUpdate(task, update, previousSequence, snapshot) {
   try {
-    task.acceptUpdate(update, progressStateView(task.progressState));
+    task.acceptUpdate(update, snapshot === null ? null : freezeJsonValue(cloneJsonValue(snapshot)));
+    if (snapshot !== null) task.snapshotRevision = snapshot.revision;
     return true;
   } catch (_error) {
     task.lastAcceptedSequence = previousSequence;
-    task.progressState = previousState;
     stopTaskWithRefusal(
       task,
       new BridgeTransportError("The desktop update could not be applied."),
@@ -2229,257 +2232,9 @@ function delay(milliseconds) {
   });
 }
 
-function emptyProgressReducerState() {
-  return freezeJsonValue({
-    phase: null,
-    phaseAuthority: "unknown",
-    progress: null,
-    progressAt: null,
-    activeItem: null,
-  });
-}
-
-function progressStateView(state) {
-  return freezeJsonValue({
-    phase: state.phase,
-    phaseAuthority: state.phaseAuthority,
-    progress: cloneJsonValue(state.progress),
-    progressAt: state.progressAt,
-    activeItem: cloneJsonValue(state.activeItem),
-  });
-}
-
-function progressActiveItem(progress) {
-  if (progress.item_id === null) {
-    return null;
-  }
-  return freezeJsonValue({
-    item_id: progress.item_id,
-    item_type: progress.item_type,
-    item_attempt_id: progress.item_attempt_id,
-    item_bytes_done: progress.item_bytes_done,
-    item_bytes_total: progress.item_bytes_total,
-  });
-}
-
-function sameActiveIdentity(left, right) {
-  return (
-    left.item_id === right.item_id &&
-    left.item_type === right.item_type
-  );
-}
-
-function progressAggregateAdvances(previous, current) {
-  if (
-    current.items_done < previous.items_done ||
-    BigInt(current.bytes_done) < BigInt(previous.bytes_done)
-  ) {
-    return false;
-  }
-  if (
-    previous.items_total !== null &&
-    current.items_total !== previous.items_total
-  ) {
-    return false;
-  }
-  if (
-    previous.bytes_total !== null &&
-    current.bytes_total === null
-  ) {
-    return false;
-  }
-  if (
-    previous.phase === "execute" &&
-    previous.bytes_total !== null &&
-    current.bytes_total !== previous.bytes_total
-  ) {
-    return false;
-  }
-  return !(
-    previous.phase !== "execute" &&
-    previous.bytes_total !== null &&
-    BigInt(current.bytes_total) < BigInt(previous.bytes_total)
-  );
-}
-
-function sameAttemptAdvances(previous, current) {
-  const previousDeterminate = previous.item_bytes_done !== null;
-  const currentDeterminate = current.item_bytes_done !== null;
-  if (!previousDeterminate) {
-    return !currentDeterminate;
-  }
-  if (!currentDeterminate) {
-    return true;
-  }
-  return (
-    BigInt(current.item_bytes_done) >= BigInt(previous.item_bytes_done) &&
-    current.item_bytes_total === previous.item_bytes_total
-  );
-}
-
-function reduceProgressSnapshot(state, progress, progressAt) {
-  let domainState = state;
-  if (
-    state.phase !== null &&
-    progress.phase !== state.phase
-  ) {
-    if (state.phaseAuthority === "phase_changed") {
-      return null;
-    }
-    domainState = emptyProgressReducerState();
-  }
-  if (
-    domainState.progress !== null &&
-    !progressAggregateAdvances(domainState.progress, progress)
-  ) {
-    return null;
-  }
-  const nextActive = progressActiveItem(progress);
-  if (nextActive !== null) {
-    const previousActive = domainState.activeItem;
-    if (previousActive !== null) {
-      const previousAttempt = previousActive.item_attempt_id;
-      const nextAttempt = nextActive.item_attempt_id;
-      if (sameActiveIdentity(previousActive, nextActive)) {
-        if (previousAttempt !== null && nextAttempt === null) {
-          return null;
-        }
-        if (
-          previousAttempt !== null &&
-          nextAttempt === previousAttempt &&
-          !sameAttemptAdvances(previousActive, nextActive)
-        ) {
-          return null;
-        }
-      } else if (
-        previousAttempt !== null &&
-        nextAttempt === previousAttempt
-      ) {
-        return null;
-      }
-    } else if (
-      domainState.progress !== null &&
-      domainState.progress.item_id !== null
-    ) {
-      const previousSnapshotActive = progressActiveItem(domainState.progress);
-      if (
-        sameActiveIdentity(previousSnapshotActive, nextActive) ||
-        (
-          previousSnapshotActive.item_attempt_id !== null &&
-          nextActive.item_attempt_id === previousSnapshotActive.item_attempt_id
-        )
-      ) {
-        return null;
-      }
-    }
-  }
-
-  return freezeJsonValue({
-    phase: progress.phase,
-    phaseAuthority:
-      domainState.phaseAuthority === "phase_changed"
-        ? "phase_changed"
-        : "progress",
-    progress: cloneJsonValue(progress),
-    progressAt,
-    activeItem: nextActive,
-  });
-}
-
-function reduceItemOutcome(state, event) {
-  if (state.phase !== event.body.phase) {
-    return state;
-  }
-  const outcomeIdentity = {
-    item_id: event.body.item_id,
-    item_type: event.body.item_type,
-  };
-  const matchesActive =
-    state.activeItem !== null &&
-    (
-      sameActiveIdentity(state.activeItem, outcomeIdentity) ||
-      (
-        state.phase === "verify" &&
-        event.body_type === "IntegrityOutcome" &&
-        state.activeItem.item_type === "operation" &&
-        state.activeItem.item_id === outcomeIdentity.item_id
-      )
-    );
-  if (!matchesActive) {
-    return state;
-  }
-  return freezeJsonValue({
-    phase: state.phase,
-    phaseAuthority: state.phaseAuthority,
-    progress: state.progress,
-    progressAt: state.progressAt,
-    activeItem: null,
-  });
-}
-
-function reduceProgressState(state, update) {
-  if (update.update_type === "record") {
-    return emptyProgressReducerState();
-  }
-  const event = update.event;
-  switch (event.body_type) {
-    case "PhaseChanged":
-      if (state.phase === event.body.phase) {
-        return freezeJsonValue({
-          phase: state.phase,
-          phaseAuthority: "phase_changed",
-          progress: state.progress,
-          progressAt: state.progressAt,
-          activeItem: state.activeItem,
-        });
-      }
-      return freezeJsonValue({
-        phase: event.body.phase,
-        phaseAuthority: "phase_changed",
-        progress: null,
-        progressAt: null,
-        activeItem: null,
-      });
-    case "Progress":
-      return reduceProgressSnapshot(state, event.body, event.at);
-    case "ItemOutcome":
-    case "IntegrityOutcome":
-      return reduceItemOutcome(state, event);
-    case "Gap":
-    case "Terminal":
-      return emptyProgressReducerState();
-    default:
-      return state;
-  }
-}
-
-function preflightProgressUpdates(updates, initialState, replayFrom) {
-  let state = freezeJsonValue(cloneJsonValue(initialState));
-  for (let index = 0; index < updates.length; index += 1) {
-    const update = updates[index];
-    const nextState = reduceProgressState(state, update);
-    if (nextState === null) {
-      return false;
-    }
-    state = nextState;
-    if (
-      update.update_type === "event" &&
-      update.event.body_type === "Gap" &&
-      !(
-        index === 0 &&
-        replayFrom !== null &&
-        update.event.body.first_missed_seq === replayFrom
-      )
-    ) {
-      break;
-    }
-  }
-  return true;
-}
-
 function validateTaskDrainResult(value, task, drainId, replayFrom) {
   return (
-    isExactObject(value, ["task_id", "session_id", "drain_id", "updates"]) &&
+    isExactObject(value, ["task_id", "session_id", "drain_id", "updates", "snapshot"]) &&
     value.task_id === task.taskId &&
     value.session_id === task.sessionId &&
     value.drain_id === drainId &&
@@ -2490,12 +2245,88 @@ function validateTaskDrainResult(value, task, drainId, replayFrom) {
       task.sessionId,
       task.lastAcceptedSequence,
     ) &&
-    preflightProgressUpdates(
-      value.updates,
-      task.progressState,
-      replayFrom,
-    )
+    validateTaskSnapshot(value.snapshot, task, value.updates)
   );
+}
+
+function validPercentage(value) {
+  return value === null || (typeof value === "number" && Number.isFinite(value)
+    && value >= 0 && value <= 100);
+}
+
+function validEstimate(value) {
+  return value === null || (typeof value === "number" && Number.isFinite(value)
+    && value >= 0);
+}
+
+function validateTaskSnapshot(snapshot, task, updates) {
+  if (!isExactObject(snapshot, [
+    "wire_version", "task_id", "session_id", "revision", "session_state",
+    "control_state", "phase", "phase_authority", "progress", "active_item",
+    "presentation", "gap_first_missed_seq", "terminal_result", "started_at", "ended_at",
+  ]) || snapshot.wire_version !== 1 || snapshot.task_id !== task.taskId
+    || snapshot.session_id !== task.sessionId || !isNonnegativeInteger(snapshot.revision)
+    || (task.snapshotRevision !== null && snapshot.revision < task.snapshotRevision)
+    || !isOneOf(snapshot.session_state, ["active", ...TERMINAL_STATES])
+    || !isOneOf(snapshot.control_state, ["running", "pausing", "paused", "canceling"])
+    || !(snapshot.phase === null || (typeof snapshot.phase === "string"
+      && snapshot.phase.length > 0 && isValidUnicode(snapshot.phase)))
+    || !isOneOf(snapshot.phase_authority, ["unknown", "phase_changed", "progress"])
+    || !isNullableNonnegativeInteger(snapshot.gap_first_missed_seq)
+    || snapshot.gap_first_missed_seq === 0
+    || !(snapshot.started_at === null || isUtcTimestamp(snapshot.started_at))
+    || !(snapshot.ended_at === null || isUtcTimestamp(snapshot.ended_at))) return false;
+  const progress = snapshot.progress;
+  if (snapshot.session_state === "active" && snapshot.ended_at !== null) return false;
+  if (snapshot.session_state !== "active" && (snapshot.ended_at === null
+    || snapshot.phase !== null || progress !== null || snapshot.active_item !== null)) return false;
+  if (progress !== null && (!isExactObject(progress, [
+    "phase", "items_done", "items_total", "bytes_done", "bytes_total",
+    "item_id", "item_type", "item_attempt_id", "item_bytes_done", "item_bytes_total",
+  ]) || progress.phase !== snapshot.phase
+    || !isNonnegativeInteger(progress.items_done) || !isNullableNonnegativeInteger(progress.items_total)
+    || !isScalar64(progress.bytes_done) || !(progress.bytes_total === null || isScalar64(progress.bytes_total))
+    || !(progress.item_id === null || (typeof progress.item_id === "string"
+      && progress.item_id.length > 0 && isValidUnicode(progress.item_id)))
+    || !(progress.item_type === null || isOneOf(progress.item_type, ["operation", "integrity"]))
+    || !(progress.item_attempt_id === null || (typeof progress.item_attempt_id === "string"
+      && ID_PATTERN.test(progress.item_attempt_id)))
+    || !(progress.item_bytes_done === null || isScalar64(progress.item_bytes_done))
+    || !(progress.item_bytes_total === null || isScalar64(progress.item_bytes_total)))) return false;
+  const active = snapshot.active_item;
+  if (active !== null && (!isExactObject(active, [
+    "item_id", "item_type", "item_attempt_id", "item_bytes_done", "item_bytes_total",
+  ]) || progress === null || active.item_id !== progress.item_id
+    || active.item_type !== progress.item_type || active.item_attempt_id !== progress.item_attempt_id
+    || active.item_bytes_done !== progress.item_bytes_done
+    || active.item_bytes_total !== progress.item_bytes_total)) return false;
+  const display = snapshot.presentation;
+  if (!isExactObject(display, [
+    "aggregate_percent", "item_percent", "items_done", "items_total",
+    "value", "determinate", "indeterminate",
+    "throughput_bytes_per_second", "eta_seconds",
+  ]) || !validPercentage(display.aggregate_percent) || !validPercentage(display.item_percent)
+    || !isNullableNonnegativeInteger(display.items_done)
+    || !isNullableNonnegativeInteger(display.items_total)
+    || !validPercentage(display.value) || display.value === null
+    || typeof display.determinate !== "boolean"
+    || typeof display.indeterminate !== "boolean"
+    || !validEstimate(display.throughput_bytes_per_second)
+    || !validEstimate(display.eta_seconds)
+    || display.items_done !== (progress?.items_done ?? null)
+    || display.items_total !== (progress?.items_total ?? null)) return false;
+  const result = snapshot.terminal_result;
+  if (result !== null && !validateOperationResultView(result)) return false;
+  if (snapshot.session_state === "active" && result !== null) return false;
+  if (snapshot.session_state !== "active" && result === null) return false;
+  if (result !== null && snapshot.session_state !== (result.canceled ? "canceled" : result.filesystem)) return false;
+  const record = updates.at(-1)?.update_type === "record" ? updates.at(-1).record : null;
+  if (record !== null) {
+    if (snapshot.session_state !== record.state || snapshot.started_at !== record.started_at
+      || snapshot.ended_at !== record.ended_at || result === null
+      || Object.keys(result).some((key) => JSON.stringify(result[key]) !== JSON.stringify(record.result[key]))) return false;
+  }
+  return true;
 }
 
 function validateTaskUpdates(updates, sessionId, lastAcceptedSequence) {

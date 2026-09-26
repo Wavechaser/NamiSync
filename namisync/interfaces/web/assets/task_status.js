@@ -4,136 +4,6 @@ function pathValue(value) {
   return typeof value === "string" && value.trim() !== "" ? value : "-";
 }
 
-const RATE_HORIZON_SECONDS = 5;
-
-function percent(done, total) {
-  if (done === null || total === null) return null;
-  const doneValue = BigInt(done);
-  const totalValue = BigInt(total);
-  if (totalValue <= 0n) return null;
-  const scaled = Number((doneValue * 1000000n) / totalValue) / 10000;
-  return Math.max(0, Math.min(100, scaled));
-}
-
-function emptyPresentation(phase = null) {
-  return Object.freeze({
-    phase,
-    aggregatePercent: null,
-    aggregateHighWater: null,
-    itemPercent: null,
-    itemHighWater: null,
-    itemsDone: null,
-    itemsTotal: null,
-    throughputBytesPerSecond: null,
-    etaSeconds: null,
-    activeItem: null,
-    sampleAt: null,
-    sampleBytesDone: null,
-    smoothedRate: null,
-    bytesTotal: null,
-  });
-}
-
-export function rebaseProgressSampling(previous) {
-  if (previous === null || typeof previous !== "object") return previous;
-  return Object.freeze({
-    ...previous,
-    throughputBytesPerSecond: null,
-    etaSeconds: null,
-    sampleAt: null,
-    sampleBytesDone: null,
-    smoothedRate: null,
-  });
-}
-
-export function advanceProgressPresentation(previous, progressState, update) {
-  if (update?.update_type === "record"
-      || ["Gap", "Terminal"].includes(update?.event?.body_type)) {
-    return emptyPresentation();
-  }
-  const raw = progressState?.progress;
-  const phase = progressState?.phase ?? null;
-  if (raw === null || typeof raw !== "object") {
-    return previous?.phase === phase ? previous : emptyPresentation(phase);
-  }
-  const samePhase = previous?.phase === phase;
-  const activeItem = progressState?.activeItem ?? null;
-  const sameItem = samePhase
-    && previous?.activeItem !== null
-    && activeItem !== null
-    && previous.activeItem.item_id === activeItem.item_id
-    && previous.activeItem.item_type === activeItem.item_type;
-  const computedAggregatePercent = percent(raw.bytes_done, raw.bytes_total);
-  const aggregateHighWater = computedAggregatePercent === null
-    ? (samePhase ? previous.aggregateHighWater : null)
-    : Math.max(samePhase ? previous.aggregateHighWater ?? 0 : 0, computedAggregatePercent);
-  const computedItemPercent = activeItem === null
-    ? null
-    : percent(activeItem.item_bytes_done, activeItem.item_bytes_total);
-  const itemHighWater = computedItemPercent === null
-    ? (sameItem ? previous.itemHighWater : null)
-    : Math.max(sameItem ? previous.itemHighWater ?? 0 : 0, computedItemPercent);
-  let sampleAt = samePhase ? previous.sampleAt : null;
-  let sampleBytesDone = samePhase ? previous.sampleBytesDone : null;
-  let smoothedRate = samePhase ? previous.smoothedRate : null;
-  let throughputBytesPerSecond = samePhase ? previous.throughputBytesPerSecond : null;
-  let etaSeconds = null;
-  const acceptedProgress = update?.update_type === "event"
-    && update.event?.body_type === "Progress";
-  const totalChanged = samePhase && previous.bytesTotal !== raw.bytes_total;
-  if (acceptedProgress) {
-    const acceptedAt = Date.parse(progressState.progressAt);
-    if (totalChanged || sampleAt === null || sampleBytesDone === null) {
-      sampleAt = acceptedAt;
-      sampleBytesDone = raw.bytes_done;
-      smoothedRate = null;
-      throughputBytesPerSecond = null;
-    } else {
-      const elapsedSeconds = (acceptedAt - sampleAt) / 1000;
-      if (!(elapsedSeconds > 0)) {
-        sampleAt = acceptedAt;
-        sampleBytesDone = raw.bytes_done;
-        smoothedRate = null;
-        throughputBytesPerSecond = null;
-      } else {
-        const exactDelta = BigInt(raw.bytes_done) - BigInt(sampleBytesDone);
-        const observedRate = Number(exactDelta) / elapsedSeconds;
-        const alpha = 1 - Math.exp(-elapsedSeconds / RATE_HORIZON_SECONDS);
-        smoothedRate = smoothedRate === null
-          ? observedRate
-          : alpha * observedRate + (1 - alpha) * smoothedRate;
-        throughputBytesPerSecond = Number.isFinite(smoothedRate) && smoothedRate >= 0
-          ? smoothedRate
-          : null;
-        sampleAt = acceptedAt;
-        sampleBytesDone = raw.bytes_done;
-      }
-    }
-  }
-  if (throughputBytesPerSecond !== null && throughputBytesPerSecond > 0
-      && raw.bytes_total !== null) {
-    const remaining = BigInt(raw.bytes_total) - BigInt(raw.bytes_done);
-    const estimate = Number(remaining) / throughputBytesPerSecond;
-    etaSeconds = Number.isFinite(estimate) && estimate >= 0 ? estimate : null;
-  }
-  return Object.freeze({
-    phase,
-    aggregatePercent: computedAggregatePercent === null ? null : aggregateHighWater,
-    aggregateHighWater,
-    itemPercent: computedItemPercent === null ? null : itemHighWater,
-    itemHighWater,
-    itemsDone: raw.items_done,
-    itemsTotal: raw.items_total,
-    throughputBytesPerSecond,
-    etaSeconds,
-    activeItem,
-    sampleAt,
-    sampleBytesDone,
-    smoothedRate,
-    bytesTotal: raw.bytes_total,
-  });
-}
-
 export function projectActiveOperationProgress(presentation, operationId) {
   const active = presentation?.activeItem;
   if (active === null || active === undefined || active.item_id !== operationId
@@ -152,48 +22,10 @@ export function projectActiveOperationProgress(presentation, operationId) {
   });
 }
 
-function progressDigest(progressState, presentation, active) {
-  const progress = progressState?.progress;
-  if (progress === null || typeof progress !== "object") return { value: 0, determinate: false, indeterminate: active, phase: progressState?.phase ?? null };
-  if (presentation?.aggregatePercent != null) {
-    return {
-      value: presentation.aggregatePercent,
-      determinate: true,
-      indeterminate: false,
-      done: progress.items_done,
-      total: progress.items_total,
-      phase: progressState?.phase ?? null,
-      throughputBytesPerSecond: presentation.throughputBytesPerSecond,
-      etaSeconds: presentation.etaSeconds,
-    };
-  }
-  const itemTotal = progress.items_total;
-  const itemsDone = progress.items_done;
-  if (progress.bytes_total === "0"
-      && Number.isSafeInteger(itemTotal) && itemTotal > 0
-      && Number.isSafeInteger(itemsDone)) {
-    return {
-      value: Math.max(0, Math.min(100, itemsDone / itemTotal * 100)),
-      determinate: true,
-      indeterminate: false,
-      done: itemsDone,
-      total: itemTotal,
-      phase: progressState?.phase ?? null,
-    };
-  }
-  return {
-    value: 0, determinate: false, indeterminate: active,
-    done: progress.items_done, total: progress.items_total,
-    phase: progressState?.phase ?? null,
-    throughputBytesPerSecond: presentation?.throughputBytesPerSecond ?? null,
-    etaSeconds: null,
-  };
-}
-
 const CAPACITY_INTEGRITY_RESULTS = new Set(["not-run", "verified", "baselined"]);
 
 export function isCapacityOnlyExecution(execution, activeResult = execution?.result ?? null) {
-  return activeResult !== null
+  return execution != null && activeResult != null
     && execution?.result === activeResult
     && execution.disk_capacity_failure_count > 0
     && execution.failed_operation_count === execution.disk_capacity_failure_count
@@ -260,8 +92,9 @@ export function terminalStatusLine(execution, sessionState = null) {
 export function taskStatusDigest(task) {
   const summary = task?.review?.summary ?? null;
   const form = task?.form ?? null;
-  const executionState = task?.sessionState ?? null;
-  const active = executionState === "active" && task?.executionControlState !== "paused";
+  const snapshot = task?.snapshot != null && task.snapshot.session_id === task.sessionId
+    ? task.snapshot : null;
+  const executionState = snapshot?.session_state ?? task?.sessionState ?? null;
   // Planning has no item-level progress, but the shell can still tell us that
   // it is underway. Keep the task rail animated while the start request is
   // being admitted, while a new plan view is loading, or while an active task
@@ -277,13 +110,31 @@ export function taskStatusDigest(task) {
     ? { value: 0, determinate: false, indeterminate: true, phase: "plan" }
     : (summary !== null || task?.error != null) && !task?.executionStarted
       ? { value: 0, determinate: false, indeterminate: false, phase: null }
-      : progressDigest(task?.progressState, task?.progressPresentation, active);
+      : snapshot === null
+        ? { value: 0, determinate: false, indeterminate: executionState === "active", phase: null }
+        : {
+          value: snapshot.presentation.value,
+          determinate: snapshot.presentation.determinate,
+          indeterminate: snapshot.presentation.indeterminate,
+          done: snapshot.presentation.items_done,
+          total: snapshot.presentation.items_total,
+          phase: snapshot.phase,
+          throughputBytesPerSecond: snapshot.presentation.throughput_bytes_per_second,
+          etaSeconds: snapshot.presentation.eta_seconds,
+        };
   const retainedExecution = task?.review?.window?.execution ?? null;
-  const activeTerminalResult = task?.executionResult ?? retainedExecution?.result ?? null;
+  const activeTerminalResult = task?.executionStarted
+    ? snapshot?.terminal_result ?? task?.executionResult ?? retainedExecution?.result ?? null : null;
+  const matchingRetainedResult = task?.executionStarted && snapshot !== null
+    && retainedExecution !== null
+    && retainedExecution?.session_id === snapshot.session_id
+    && retainedExecution.result !== null
+    && JSON.stringify(retainedExecution.result) === JSON.stringify(snapshot.terminal_result);
   const terminal = terminalDigest(
     activeTerminalResult,
     executionState,
-    isCapacityOnlyExecution(retainedExecution, activeTerminalResult),
+    isCapacityOnlyExecution(retainedExecution,
+      matchingRetainedResult ? retainedExecution.result : activeTerminalResult),
   );
   const planItemCount = summary?.selected_operation_count ?? 0;
   const planHasItems = (summary?.filter_counts?.all ?? 0) > 0;

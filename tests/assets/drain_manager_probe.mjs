@@ -268,7 +268,46 @@ const terminalRecord = (sessionId, result = operationResult) => ({
   },
 });
 
-function success(pending, updates) {
+const snapshotRevisions = new Map();
+
+function snapshotFor(pending, updates, overrides = {}) {
+  const taskId = pending.request.payload.task_id;
+  const sessionId = pending.request.payload.session_id;
+  const revision = (snapshotRevisions.get(taskId) ?? -1) + 1;
+  snapshotRevisions.set(taskId, revision);
+  const record = updates.findLast((update) => update.update_type === "record")?.record;
+  const terminalResult = record?.result ?? null;
+  return {
+    wire_version: 1,
+    task_id: taskId,
+    session_id: sessionId,
+    revision,
+    session_state: record?.state ?? "active",
+    control_state: "running",
+    phase: null,
+    phase_authority: "unknown",
+    progress: null,
+    active_item: null,
+    presentation: {
+      aggregate_percent: null,
+      item_percent: null,
+      items_done: null,
+      items_total: null,
+      throughput_bytes_per_second: null,
+      eta_seconds: null,
+      value: 0,
+      determinate: false,
+      indeterminate: true,
+    },
+    gap_first_missed_seq: null,
+    terminal_result: terminalResult,
+    started_at: record?.started_at ?? null,
+    ended_at: record?.ended_at ?? null,
+    ...overrides,
+  };
+}
+
+function success(pending, updates, snapshotOverrides = {}) {
   const { request } = pending;
   pending.resolve({
     schema_version: 1,
@@ -279,6 +318,7 @@ function success(pending, updates) {
       session_id: request.payload.session_id,
       drain_id: request.payload.drain_id,
       updates,
+      snapshot: snapshotFor(pending, updates, snapshotOverrides),
     },
   });
 }
@@ -569,7 +609,7 @@ let transportEventRequestIndex = requests.length;
 const stopTransportEvents = bridge.startTaskDrain(
   transportEventTask,
   transportEventSession,
-  (update) => acceptedTransportEvents.push(update),
+  (update) => { if (update !== null) acceptedTransportEvents.push(update); },
   (error) => refusedTransportEvents.push(error),
 );
 const canonicalTransportUpdate = event(
@@ -643,770 +683,124 @@ assert.deepEqual(
 assert.equal(acceptedTransportEvents[0].event.at, 42);
 stopTransportEvents();
 
-const validProgressBody = Object.freeze({
-  phase: "execute",
-  items_done: 0,
-  items_total: 1,
-  bytes_done: "1",
-  bytes_total: "1",
-  current_path: "matrix.bin",
-  item_id: "56".repeat(16),
-  item_type: "operation",
-  item_attempt_id: "12".repeat(16),
-  item_bytes_done: "1",
-  item_bytes_total: "1",
-});
-const operationOutcomeBody = Object.freeze({
-  item_type: "operation",
-  phase: "execute",
-  item_id: "56".repeat(16),
-  kind: "copy",
-  path: "matrix.bin",
-  result: "succeeded",
-  reason: null,
-  detail: {},
-  recording: "ok",
-  recording_reason: null,
-  recording_detail: null,
-  detail_omitted_count: 0,
-});
-
-
-
-// The reducer preflights temporal semantics for the whole applicable batch.
-// Its immutable callback view follows reliable phase authority, admits numeric
-// sequence holes, permits attempt-local reset only under a fresh attempt id,
-// and lets reliable outcomes and Terminal override a retained lossy snapshot.
-const reducerSession = "13".repeat(16);
-const reducerTask = `task-${"24".repeat(16)}`;
-const acceptedReducer = [];
-const refusedReducer = [];
-const stopReducer = bridge.startTaskDrain(
-  reducerTask,
-  reducerSession,
-  (update, progressState) => acceptedReducer.push({ update, progressState }),
-  (error) => refusedReducer.push(error),
+// Task snapshots are native presentation facts. The browser accepts their exact
+// identity and scalar values without replaying event semantics in this probe.
+const snapshotSession = "13".repeat(16);
+const snapshotTask = `task-${"24".repeat(16)}`;
+const acceptedSnapshots = [];
+const refusedSnapshots = [];
+const stopSnapshots = bridge.startTaskDrain(
+  snapshotTask, snapshotSession,
+  (update, snapshot) => acceptedSnapshots.push({ update, snapshot }),
+  (error) => refusedSnapshots.push(error),
 );
-const reducerProgress = (overrides = {}) => ({
-  phase: "execute",
-  items_done: 1,
-  items_total: 2,
-  bytes_done: "2",
-  bytes_total: "64",
-  current_path: "first.bin",
-  item_id: "67".repeat(16),
-  item_type: "operation",
-  item_attempt_id: "45".repeat(16),
-  item_bytes_done: "2",
-  item_bytes_total: "16",
-  ...overrides,
-});
-const reducer0 = await nextRequest(requests.length);
-success(reducer0, [
-  event(reducerSession, 1, "PhaseChanged", { phase: "execute" }),
-  event(reducerSession, 2, "Progress", reducerProgress({ items_done: 0 })),
-  event(reducerSession, 3, "ItemOutcome", {
-    ...operationOutcomeBody,
-    item_id: "78".repeat(16),
-    kind: "mkdir",
-    path: "folder",
-  }),
-  event(reducerSession, 4, "Progress", reducerProgress({
-    bytes_done: "4",
-    item_bytes_done: "4",
-  })),
-]);
-const reducer1 = await nextRequest(requests.length);
-assert.equal(reducer1.request.payload.replay_from, null);
-assert.deepEqual(
-  acceptedReducer.map(({ update }) => update.event.sequence),
-  [1, 2, 3, 4],
-);
-const executingState = acceptedReducer.at(-1).progressState;
-assert.ok(Object.isFrozen(executingState));
-assert.ok(Object.isFrozen(executingState.progress));
-assert.ok(Object.isFrozen(executingState.activeItem));
-assert.equal(executingState.progressAt, at);
-assert.deepEqual(Object.keys(executingState).sort(), [
-  "activeItem",
-  "phase",
-  "phaseAuthority",
-  "progress",
-  "progressAt",
-]);
-assert.equal(executingState.phase, "execute");
-assert.equal(executingState.phaseAuthority, "phase_changed");
-assert.deepEqual(executingState.activeItem, {
-  item_id: "67".repeat(16),
-  item_type: "operation",
-  item_attempt_id: "45".repeat(16),
-  item_bytes_done: "4",
-  item_bytes_total: "16",
-});
-
-const invalidReducerTransitions = [
-  [
-    "same-attempt item regression",
-    reducerProgress({ bytes_done: "4", item_bytes_done: "3" }),
-  ],
-  [
-    "aggregate regression",
-    reducerProgress({
-      bytes_done: "3",
-      item_bytes_done: null,
-      item_bytes_total: null,
-    }),
-  ],
-  [
-    "settled item regression",
-    reducerProgress({
-      items_done: 0,
-      bytes_done: "4",
-      item_bytes_done: "4",
-    }),
-  ],
-  [
-    "fixed executor budget change",
-    reducerProgress({
-      bytes_done: "4",
-      bytes_total: "65",
-      item_bytes_done: "4",
-    }),
-  ],
-  [
-    "selected admission change",
-    reducerProgress({
-      items_total: 3,
-      bytes_done: "4",
-      item_bytes_done: "4",
-    }),
-  ],
-  [
-    "known admissions become unknown",
-    reducerProgress({
-      items_total: null,
-      bytes_done: "4",
-      bytes_total: null,
-      item_bytes_done: "4",
-    }),
-  ],
-  [
-    "same-attempt item total change",
-    reducerProgress({
-      bytes_done: "4",
-      item_bytes_done: "4",
-      item_bytes_total: "17",
-    }),
-  ],
-  [
-    "uninterrupted phase disagreement",
-    reducerProgress({
-      phase: "verify",
-      bytes_done: "4",
-      item_bytes_done: "4",
-    }),
-  ],
-];
-let reducerPending = reducer1;
-for (const [label, body] of invalidReducerTransitions) {
-  success(reducerPending, [
-    event(reducerSession, 5, "Progress", body),
-    event(reducerSession, 6, "StateChanged", { state: "paused" }),
-  ]);
-  const recovery = await nextRequest(requests.length);
-  assert.equal(recovery.request.payload.replay_from, 5, label);
-  assert.equal(acceptedReducer.length, 4, label);
-  assert.equal(refusedReducer.length, 0, label);
-  success(recovery, []);
-  reducerPending = await nextRequest(requests.length);
-  assert.equal(reducerPending.request.payload.replay_from, null, label);
-}
-
-success(reducerPending, [
-  event(reducerSession, 5, "Progress", reducerProgress({
-    bytes_done: "4",
-    item_attempt_id: "56".repeat(16),
-    item_bytes_done: "0",
-    item_bytes_total: "24",
-  })),
-  event(reducerSession, 6, "StateChanged", { state: "paused" }),
-]);
-const reducer2 = await nextRequest(requests.length);
-assert.equal(reducer2.request.payload.replay_from, null);
-const pausedState = acceptedReducer.at(-1).progressState;
-assert.equal(pausedState.activeItem.item_attempt_id, "56".repeat(16));
-assert.equal(pausedState.activeItem.item_bytes_done, "0");
-
-success(reducer2, [
-  event(reducerSession, 7, "Progress", reducerProgress({
-    phase: "verify",
-    bytes_done: "4",
-    item_attempt_id: "56".repeat(16),
-    item_bytes_done: "0",
-    item_bytes_total: "24",
-  })),
-  event(reducerSession, 8, "ItemOutcome", operationOutcomeBody),
-]);
-const reducerPhaseRecovery = await nextRequest(requests.length);
-assert.equal(reducerPhaseRecovery.request.payload.replay_from, 7);
-assert.equal(acceptedReducer.length, 6);
-success(reducerPhaseRecovery, [
-  event(reducerSession, 7, "ItemOutcome", {
-    ...operationOutcomeBody,
-    item_id: "67".repeat(16),
-    path: "first.bin",
-  }),
-]);
-const reducer3 = await nextRequest(requests.length);
-assert.equal(reducer3.request.payload.replay_from, null);
-assert.equal(acceptedReducer.at(-1).progressState.activeItem, null);
-assert.notEqual(acceptedReducer.at(-1).progressState.progress, null);
-
-const postCopyOutcomeBody = Object.freeze({
-  item_type: "integrity",
-  phase: "verify",
-  item_id: "89".repeat(16),
-  row_id: null,
-  location_id: null,
-  kind: "integrity",
-  path: "second.bin",
-  result: "verified",
-  reason: null,
-  detail: null,
-  read_strategy: "windows-unbuffered",
-  recording: "ok",
-  record_disposition: null,
-  detail_omitted_count: 0,
-});
-success(reducer3, [
-  event(reducerSession, 8, "PhaseChanged", { phase: "verify" }),
-  event(reducerSession, 9, "Progress", reducerProgress({
-    phase: "verify",
-    items_done: 0,
-    items_total: 1,
-    bytes_done: "3",
-    bytes_total: "8",
-    current_path: "second.bin",
-    item_id: "89".repeat(16),
-    item_attempt_id: "67".repeat(16),
-    item_bytes_done: "3",
-    item_bytes_total: "8",
-  })),
-  event(reducerSession, 10, "Progress", reducerProgress({
-    phase: "verify",
-    items_done: 0,
-    items_total: 1,
-    bytes_done: "9",
-    bytes_total: "10",
-    current_path: "second.bin",
-    item_id: "89".repeat(16),
-    item_attempt_id: "67".repeat(16),
-    item_bytes_done: null,
-    item_bytes_total: null,
-  })),
-]);
-const reducer4 = await nextRequest(requests.length);
-assert.equal(reducer4.request.payload.replay_from, null);
-assert.equal(acceptedReducer.at(-1).progressState.phase, "verify");
-assert.equal(
-  acceptedReducer.at(-1).progressState.activeItem.item_attempt_id,
-  "67".repeat(16),
-);
-assert.equal(
-  acceptedReducer.at(-1).progressState.activeItem.item_bytes_done,
-  null,
-);
-
-success(reducer4, [
-  event(reducerSession, 11, "Progress", reducerProgress({
-    phase: "verify",
-    items_done: 0,
-    items_total: 1,
-    bytes_done: "9",
-    bytes_total: "10",
-    current_path: "second.bin",
-    item_id: "89".repeat(16),
-    item_attempt_id: "67".repeat(16),
-    item_bytes_done: "8",
-    item_bytes_total: "8",
-  })),
-  event(reducerSession, 12, "IntegrityOutcome", postCopyOutcomeBody),
-]);
-const reducerOvershootRecovery = await nextRequest(requests.length);
-assert.equal(reducerOvershootRecovery.request.payload.replay_from, 11);
-const countBeforeOvershootRecovery = acceptedReducer.length;
-const overshootRecoveryUpdates = [
-  event(reducerSession, 11, "IntegrityOutcome", postCopyOutcomeBody),
-  event(reducerSession, 12, "Terminal", { result: coreOperationResult }),
-  terminalRecord(reducerSession),
-];
-success(reducerOvershootRecovery, overshootRecoveryUpdates);
-await turns();
-assert.equal(acceptedReducer.length, countBeforeOvershootRecovery + 3);
-const postCopyOutcomeState = acceptedReducer.at(-3).progressState;
-assert.equal(postCopyOutcomeState.phase, "verify");
-assert.equal(postCopyOutcomeState.activeItem, null);
-assert.notEqual(postCopyOutcomeState.progress, null);
-for (const { progressState } of acceptedReducer.slice(-2)) {
-  assert.deepEqual(progressState, {
-    phase: null,
-    phaseAuthority: "unknown",
-    progress: null,
-    progressAt: null,
-    activeItem: null,
-  });
-}
-assert.equal(refusedReducer.length, 0);
-stopReducer();
-
-// Lossy snapshots may skip an inactive handoff. A newer snapshot can therefore
-// repoint the current-item spotlight without asserting that the old item
-// settled. Attempt tokens remain item-bound, and reliable settlement still
-// prevents immediate reactivation of the settled identity.
-const handoffSession = "8a".repeat(16);
-const handoffTask = `task-${"6b".repeat(16)}`;
-const acceptedHandoff = [];
-const refusedHandoff = [];
-const stopHandoff = bridge.startTaskDrain(
-  handoffTask,
-  handoffSession,
-  (update, progressState) => acceptedHandoff.push({ update, progressState }),
-  (error) => refusedHandoff.push(error),
-);
-const handoffProgress = (itemId, attemptId, overrides = {}) => ({
-  phase: "execute",
-  items_done: 0,
-  items_total: 3,
-  bytes_done: "2",
-  bytes_total: "24",
-  current_path: `${itemId}.bin`,
-  item_id: itemId,
-  item_type: "operation",
-  item_attempt_id: attemptId,
-  item_bytes_done: "0",
-  item_bytes_total: "8",
-  ...overrides,
-});
-const handoff0 = await nextRequest(requests.length);
-success(handoff0, [
-  event(handoffSession, 1, "PhaseChanged", { phase: "execute" }),
-  event(handoffSession, 2, "Progress", handoffProgress(
-    "a1".repeat(16),
-    "71".repeat(16),
-    { item_bytes_done: "2" },
-  )),
-  event(handoffSession, 3, "Progress", handoffProgress(
-    "a2".repeat(16),
-    "72".repeat(16),
-  )),
-]);
-const handoff1 = await nextRequest(requests.length);
-assert.equal(handoff1.request.payload.replay_from, null);
-assert.deepEqual(
-  acceptedHandoff
-    .map(({ progressState }) => progressState.activeItem?.item_id ?? null)
-    .filter((itemId) => itemId !== null),
-  ["a1".repeat(16), "a2".repeat(16)],
-);
-assert.equal(
-  acceptedHandoff.at(-1).progressState.activeItem.item_id,
-  "a2".repeat(16),
-);
-
-// Reusing B's non-null attempt token for C invalidates the whole batch. A
-// replay with C's own token then applies both the lossy and reliable siblings.
-success(handoff1, [
-  event(handoffSession, 4, "Progress", handoffProgress(
-    "a3".repeat(16),
-    "72".repeat(16),
-  )),
-  event(handoffSession, 5, "StateChanged", { state: "paused" }),
-]);
-const handoffTokenRecovery = await nextRequest(requests.length);
-assert.equal(handoffTokenRecovery.request.payload.replay_from, 4);
-assert.equal(acceptedHandoff.length, 3);
-assert.equal(refusedHandoff.length, 0);
-success(handoffTokenRecovery, [
-  event(handoffSession, 4, "Progress", handoffProgress(
-    "a3".repeat(16),
-    "73".repeat(16),
-  )),
-  event(handoffSession, 5, "StateChanged", { state: "paused" }),
-]);
-const handoff2 = await nextRequest(requests.length);
-assert.equal(handoff2.request.payload.replay_from, null);
-assert.equal(
-  acceptedHandoff.at(-1).progressState.activeItem.item_id,
-  "a3".repeat(16),
-);
-
-const operationCOutcome = {
-  ...operationOutcomeBody,
-  item_id: "a3".repeat(16),
-  path: "operation-c.bin",
+const activeProgress = {
+  phase: "execute", items_done: 1, items_total: 3,
+  bytes_done: "9007199254740993", bytes_total: "9223372036854775807",
+  item_id: "35".repeat(16), item_type: "operation",
+  item_attempt_id: "46".repeat(16),
+  item_bytes_done: "4", item_bytes_total: "8",
 };
-success(handoff2, [
-  event(handoffSession, 6, "ItemOutcome", operationCOutcome),
-  event(handoffSession, 7, "Progress", handoffProgress(
-    "a3".repeat(16),
-    "74".repeat(16),
-    { items_done: 1 },
-  )),
-]);
-const handoffReactivationRecovery = await nextRequest(requests.length);
-assert.equal(handoffReactivationRecovery.request.payload.replay_from, 6);
-assert.equal(acceptedHandoff.length, 5);
-assert.equal(refusedHandoff.length, 0);
-success(handoffReactivationRecovery, [
-  event(handoffSession, 6, "ItemOutcome", operationCOutcome),
-]);
-await turns();
-assert.equal(acceptedHandoff.at(-1).update.event.body_type, "ItemOutcome");
-assert.equal(acceptedHandoff.at(-1).progressState.activeItem, null);
-assert.equal(refusedHandoff.length, 0);
-stopHandoff();
+const activeItem = Object.fromEntries([
+  "item_id", "item_type", "item_attempt_id", "item_bytes_done", "item_bytes_total",
+].map((key) => [key, activeProgress[key]]));
+const activePresentation = {
+  aggregate_percent: 12.5, item_percent: 50,
+  items_done: 1, items_total: 3,
+  throughput_bytes_per_second: 100, eta_seconds: 12,
+  value: 12.5, determinate: true, indeterminate: false,
+};
+const activeFacts = {
+  phase: "execute", phase_authority: "progress",
+  progress: activeProgress, active_item: activeItem,
+  presentation: activePresentation,
+};
+const snapshot0 = await nextRequest(requests.length);
+success(snapshot0, [
+  event(snapshotSession, 1, "StateChanged", { state: "running" }),
+  event(snapshotSession, 2, "Progress", {
+    ...activeProgress, current_path: "observed.bin",
+  }),
+], activeFacts);
+const snapshot1 = await nextRequest(requests.length);
+assert.equal(acceptedSnapshots.length, 2);
+assert.equal(acceptedSnapshots[0].snapshot, null,
+  "only the final callback adopts one response snapshot");
+assert.equal(acceptedSnapshots[1].snapshot.progress.bytes_done,
+  "9007199254740993", "Scalar64 stays exact text");
+assert.deepEqual(acceptedSnapshots[1].snapshot.active_item, activeItem);
+assert.ok(Object.isFrozen(acceptedSnapshots[1].snapshot));
+assert.ok(Object.isFrozen(acceptedSnapshots[1].snapshot.progress));
+assert.equal(refusedSnapshots.length, 0);
 
-// The optional fixture carries real Python producer output through this same
-// packaged reducer. It is omitted for the standalone JavaScript matrix.
+// Empty catch-up can publish a newer revision without manufacturing an update.
+success(snapshot1, [], activeFacts);
+const snapshot2 = await nextRequest(requests.length);
+assert.equal(acceptedSnapshots.at(-1).update, null);
+assert.equal(acceptedSnapshots.at(-1).snapshot.revision, 1);
+const acceptedBeforeInvalidSnapshot = acceptedSnapshots.length;
+const invalidSnapshots = [
+  ["foreign task", { task_id: task("f") }],
+  ["foreign session", { session_id: session("f") }],
+  ["wrong wire version", { wire_version: 2 }],
+  ["Boolean revision", { revision: true }],
+  ["stale revision", { revision: 0 }],
+  ["noncanonical scalar", {
+    ...activeFacts, progress: { ...activeProgress, bytes_done: "01" },
+  }],
+  ["out-of-range scalar", {
+    ...activeFacts, progress: { ...activeProgress,
+      bytes_done: "9223372036854775808" },
+  }],
+];
+let pendingSnapshot = snapshot2;
+let nextSnapshotSequence = 3;
+for (const [label, invalid] of invalidSnapshots) {
+  const updates = [
+    event(snapshotSession, nextSnapshotSequence, "StateChanged", { state: "running" }),
+    event(snapshotSession, nextSnapshotSequence + 1, "StateChanged", { state: "paused" }),
+  ];
+  success(pendingSnapshot, updates, { ...activeFacts, ...invalid });
+  const retry = await nextRequest(requests.length);
+  assert.equal(retry.request.payload.replay_from, nextSnapshotSequence, label);
+  assert.equal(acceptedSnapshots.length, acceptedBeforeInvalidSnapshot
+    + (nextSnapshotSequence - 3), `${label} cannot deliver the valid sibling`);
+  success(retry, updates, activeFacts);
+  pendingSnapshot = await nextRequest(requests.length);
+  assert.deepEqual(acceptedSnapshots.slice(-2).map(({ update }) =>
+    update.event.sequence), [nextSnapshotSequence, nextSnapshotSequence + 1]);
+  nextSnapshotSequence += 2;
+}
+assert.equal(refusedSnapshots.length, 0);
+success(pendingSnapshot, [terminalRecord(snapshotSession)]);
+await turns();
+stopSnapshots();
+
+// The cross-boundary fixture supplies both event envelopes and snapshots from
+// the real Python executor and task adapter. No JavaScript producer model is used.
 if (crossBoundaryFixture !== null) {
-  assert.equal(typeof crossBoundaryFixture, "object");
-  assert.equal(typeof crossBoundaryFixture.task_id, "string");
-  assert.equal(typeof crossBoundaryFixture.session_id, "string");
-  assert.ok(Array.isArray(crossBoundaryFixture.batches));
-  assert.ok(Array.isArray(crossBoundaryFixture.expected_active_ids));
-  const acceptedCrossBoundary = [];
-  const refusedCrossBoundary = [];
-  const crossBoundaryRequestStart = requests.length;
+  assert.equal(crossBoundaryFixture.batches.length,
+    crossBoundaryFixture.snapshots.length);
+  const adopted = [];
   const stopCrossBoundary = bridge.startTaskDrain(
     crossBoundaryFixture.task_id,
     crossBoundaryFixture.session_id,
-    (update, progressState) => {
-      acceptedCrossBoundary.push({ update, progressState });
+    (update, snapshot) => {
+      if (snapshot !== null) adopted.push({ update, snapshot });
     },
-    (error) => refusedCrossBoundary.push(error),
+    assert.fail,
   );
   for (let index = 0; index < crossBoundaryFixture.batches.length; index += 1) {
-    const pending = await nextRequest(crossBoundaryRequestStart + index);
-    assert.equal(
-      pending.request.payload.task_id,
-      crossBoundaryFixture.task_id,
-    );
-    assert.equal(
-      pending.request.payload.session_id,
-      crossBoundaryFixture.session_id,
-    );
-    assert.equal(pending.request.payload.replay_from, null);
-    assert.match(pending.request.payload.drain_id, /^[0-9a-f]{32}$/);
-    success(pending, crossBoundaryFixture.batches[index]);
-    await turns();
-    assert.equal(refusedCrossBoundary.length, 0);
+    const pending = await nextRequest(requests.length);
+    success(pending, crossBoundaryFixture.batches[index],
+      crossBoundaryFixture.snapshots[index]);
   }
-  const acceptedSequences = acceptedCrossBoundary
-    .filter(({ update }) => update.update_type === "event")
-    .map(({ update }) => update.event.sequence);
-  for (let index = 1; index < acceptedSequences.length; index += 1) {
-    assert.ok(acceptedSequences[index] > acceptedSequences[index - 1]);
-  }
-  const distinctActiveIds = [];
-  for (const { progressState } of acceptedCrossBoundary) {
-    const itemId = progressState.activeItem?.item_id ?? null;
-    if (
-      itemId !== null &&
-      distinctActiveIds.at(-1) !== itemId
-    ) {
-      distinctActiveIds.push(itemId);
-    }
-  }
-  assert.deepEqual(
-    distinctActiveIds,
-    crossBoundaryFixture.expected_active_ids,
-  );
-  if (crossBoundaryFixture.expected_outcome_ids !== undefined) {
-    assert.deepEqual(
-      acceptedCrossBoundary
-        .filter(({ update }) => (
-          update.update_type === "event" &&
-          update.event.body_type.endsWith("Outcome")
-        ))
-        .map(({ update }) => update.event.body.item_id),
-      crossBoundaryFixture.expected_outcome_ids,
-    );
-  }
-  if (crossBoundaryFixture.expect_final_inactive === true) {
-    assert.equal(acceptedCrossBoundary.at(-1).progressState.activeItem, null);
-  }
+  await turns();
+  assert.deepEqual(adopted.slice(0, 2).map(({ snapshot }) =>
+    snapshot.active_item?.item_id), crossBoundaryFixture.expected_active_ids);
+  assert.equal(adopted.at(-1).snapshot.active_item, null);
   stopCrossBoundary();
 }
-
-// Gap discards the pre-gap reducer domain. A matching recovery Gap can then
-// deliver self-described Progress even when the reliable PhaseChanged was
-// lost; current_path remains informational and cannot synthesize activity.
-const gapProgressSession = "35".repeat(16);
-const gapProgressTask = `task-${"46".repeat(16)}`;
-const acceptedGapProgress = [];
-const stopGapProgress = bridge.startTaskDrain(
-  gapProgressTask,
-  gapProgressSession,
-  (update, progressState) => acceptedGapProgress.push({ update, progressState }),
-  assert.fail,
-);
-const gapProgress0 = await nextRequest(requests.length);
-success(gapProgress0, [
-  event(gapProgressSession, 1, "PhaseChanged", { phase: "baseline" }),
-  event(gapProgressSession, 2, "Progress", {
-    ...validProgressBody,
-    phase: "baseline",
-    item_id: "integrity-one",
-    item_type: "integrity",
-  }),
-]);
-const gapProgress1 = await nextRequest(requests.length);
-success(gapProgress1, [
-  event(gapProgressSession, 3, "Gap", { first_missed_seq: 3 }),
-  event(gapProgressSession, 4, "StateChanged", { state: "running" }),
-]);
-const gapProgressRecovery = await nextRequest(requests.length);
-assert.equal(gapProgressRecovery.request.payload.replay_from, 3);
-assert.equal(acceptedGapProgress.at(-1).update.event.body_type, "Gap");
-assert.deepEqual(acceptedGapProgress.at(-1).progressState, {
-  phase: null,
-  phaseAuthority: "unknown",
-  progress: null,
-  progressAt: null,
-  activeItem: null,
-});
-success(gapProgressRecovery, [
-  event(gapProgressSession, 3, "Gap", { first_missed_seq: 3 }),
-  event(gapProgressSession, 5, "Progress", {
-    ...validProgressBody,
-    phase: "baseline",
-    bytes_done: "3",
-    bytes_total: "3",
-    current_path: "recovered.bin",
-    item_id: null,
-    item_type: null,
-    item_attempt_id: null,
-    item_bytes_done: null,
-    item_bytes_total: null,
-  }),
-  event(gapProgressSession, 6, "Progress", {
-    ...validProgressBody,
-    phase: "verify",
-    bytes_done: "2",
-    bytes_total: "4",
-    current_path: "newer-phase.bin",
-    item_id: null,
-    item_type: null,
-    item_attempt_id: null,
-    item_bytes_done: null,
-    item_bytes_total: null,
-  }),
-]);
-const gapProgress2 = await nextRequest(requests.length);
-const recoveredBaselineState = acceptedGapProgress.at(-2).progressState;
-assert.equal(recoveredBaselineState.phase, "baseline");
-assert.equal(recoveredBaselineState.phaseAuthority, "progress");
-assert.equal(recoveredBaselineState.progress.current_path, "recovered.bin");
-const recoveredProgressState = acceptedGapProgress.at(-1).progressState;
-assert.equal(acceptedGapProgress.at(-1).update.event.body.phase, "verify");
-assert.equal(recoveredProgressState.phase, "verify");
-assert.equal(recoveredProgressState.phaseAuthority, "progress");
-assert.equal(recoveredProgressState.progress.bytes_done, "2");
-assert.equal(recoveredProgressState.progress.bytes_total, "4");
-assert.equal(recoveredProgressState.progress.current_path, "newer-phase.bin");
-assert.equal(recoveredProgressState.activeItem, null);
-const acceptedBeforeGapRegression = acceptedGapProgress.length;
-success(gapProgress2, [
-  event(gapProgressSession, 7, "StateChanged", { state: "paused" }),
-  event(gapProgressSession, 8, "Progress", {
-    ...validProgressBody,
-    phase: "verify",
-    bytes_done: "1",
-    bytes_total: "4",
-    item_id: null,
-    item_type: null,
-    item_attempt_id: null,
-    item_bytes_done: null,
-    item_bytes_total: null,
-  }),
-]);
-const gapProgressRegressionRecovery = await nextRequest(requests.length);
-assert.equal(gapProgressRegressionRecovery.request.payload.replay_from, 7);
-assert.equal(acceptedGapProgress.length, acceptedBeforeGapRegression);
-success(gapProgressRegressionRecovery, [
-  event(gapProgressSession, 7, "StateChanged", { state: "paused" }),
-  event(gapProgressSession, 8, "Progress", {
-    ...validProgressBody,
-    phase: "verify",
-    bytes_done: "3",
-    bytes_total: "4",
-    item_id: null,
-    item_type: null,
-    item_attempt_id: null,
-    item_bytes_done: null,
-    item_bytes_total: null,
-  }),
-]);
-const gapProgress3 = await nextRequest(requests.length);
-assert.equal(gapProgress3.request.payload.replay_from, null);
-assert.deepEqual(
-  acceptedGapProgress
-    .slice(acceptedBeforeGapRegression)
-    .map(({ update }) => update.event.sequence),
-  [7, 8],
-);
-assert.equal(acceptedGapProgress.at(-1).progressState.progress.bytes_done, "3");
-success(gapProgress3, [terminalRecord(gapProgressSession)]);
-await turns();
-assert.equal(acceptedGapProgress.at(-1).update.update_type, "record");
-assert.equal(acceptedGapProgress.at(-1).progressState.phase, null);
-stopGapProgress();
-
-// Unknown aggregate admissions may become known once and an authoritative
-// inactive snapshot may clear activity without an ItemOutcome at an exceptional
-// reporter boundary. Later known admissions remain subject to temporal guards.
-const inactiveSession = "79".repeat(16);
-const inactiveTask = `task-${"8a".repeat(16)}`;
-const acceptedInactive = [];
-const stopInactive = bridge.startTaskDrain(
-  inactiveTask,
-  inactiveSession,
-  (update, progressState) => acceptedInactive.push({ update, progressState }),
-  assert.fail,
-);
-const inactive0 = await nextRequest(requests.length);
-success(inactive0, [
-  event(inactiveSession, 1, "PhaseChanged", { phase: "verify" }),
-  event(inactiveSession, 2, "Progress", {
-    ...validProgressBody,
-    phase: "verify",
-    items_total: null,
-    bytes_done: "2",
-    bytes_total: null,
-    item_id: "b1".repeat(16),
-    item_type: "integrity",
-    item_bytes_done: "2",
-    item_bytes_total: "8",
-  }),
-  event(inactiveSession, 3, "Progress", {
-    ...validProgressBody,
-    phase: "verify",
-    items_total: 1,
-    bytes_done: "2",
-    bytes_total: "8",
-    current_path: null,
-    item_id: null,
-    item_type: null,
-    item_attempt_id: null,
-    item_bytes_done: null,
-    item_bytes_total: null,
-  }),
-]);
-const inactive1 = await nextRequest(requests.length);
-assert.equal(acceptedInactive.length, 3);
-assert.equal(acceptedInactive.at(-1).progressState.progress.items_total, 1);
-assert.equal(acceptedInactive.at(-1).progressState.progress.bytes_total, "8");
-assert.equal(acceptedInactive.at(-1).progressState.activeItem, null);
-success(inactive1, [terminalRecord(inactiveSession)]);
-await turns();
-stopInactive();
-
-// Repeating reliable authority for the same phase does not reset its temporal
-// domain. The whole batch is refused when a following snapshot tries to use
-// that repeated PhaseChanged as permission to regress aggregate work.
-const samePhaseSession = "57".repeat(16);
-const samePhaseTask = `task-${"68".repeat(16)}`;
-const acceptedSamePhase = [];
-const stopSamePhase = bridge.startTaskDrain(
-  samePhaseTask,
-  samePhaseSession,
-  (update, progressState) => acceptedSamePhase.push({ update, progressState }),
-  assert.fail,
-);
-const samePhase0 = await nextRequest(requests.length);
-success(samePhase0, [
-  event(samePhaseSession, 1, "PhaseChanged", { phase: "execute" }),
-  event(samePhaseSession, 2, "Progress", reducerProgress({
-    items_done: 0,
-    bytes_done: "4",
-    item_bytes_done: "4",
-  })),
-]);
-const samePhase1 = await nextRequest(requests.length);
-success(samePhase1, [
-  event(samePhaseSession, 3, "PhaseChanged", { phase: "execute" }),
-  event(samePhaseSession, 4, "Progress", reducerProgress({
-    items_done: 0,
-    bytes_done: "3",
-    item_bytes_done: "3",
-  })),
-]);
-const samePhaseRecovery = await nextRequest(requests.length);
-assert.equal(samePhaseRecovery.request.payload.replay_from, 3);
-assert.equal(acceptedSamePhase.length, 2);
-success(samePhaseRecovery, [
-  event(samePhaseSession, 3, "PhaseChanged", { phase: "execute" }),
-  event(samePhaseSession, 4, "Progress", reducerProgress({
-    items_done: 0,
-    bytes_done: "5",
-    item_bytes_done: "5",
-  })),
-]);
-const samePhase2 = await nextRequest(requests.length);
-assert.equal(acceptedSamePhase.length, 4);
-assert.equal(acceptedSamePhase.at(-1).progressState.progress.bytes_done, "5");
-assert.equal(acceptedSamePhase.at(-1).progressState.phaseAuthority, "phase_changed");
-success(samePhase2, [terminalRecord(samePhaseSession)]);
-await turns();
-stopSamePhase();
-
-// A local transport timeout rearms the same task from its accepted cursor.
-// The late native response is stale, while the current response still has to
-// obey the retained progress reducer state.
-const resumedSession = "9b".repeat(16);
-const resumedTask = `task-${"ac".repeat(16)}`;
-const acceptedResumed = [];
-const stopResumed = bridge.startTaskDrain(
-  resumedTask,
-  resumedSession,
-  (update, progressState) => acceptedResumed.push({ update, progressState }),
-  assert.fail,
-);
-const resumed0 = await nextRequest(requests.length);
-success(resumed0, [
-  event(resumedSession, 1, "PhaseChanged", { phase: "execute" }),
-  event(resumedSession, 2, "Progress", reducerProgress({
-    items_done: 0, bytes_done: "4", item_bytes_done: "4",
-  })),
-]);
-const staleResumed = await nextRequest(requests.length);
-assert.equal(timers.size, 1);
-const [staleTimer, expireStale] = timers.entries().next().value;
-timers.delete(staleTimer);
-expireStale();
-const currentResumed = await nextRequest(requests.length);
-assert.equal(currentResumed.request.payload.replay_from, 3);
-const regressingProgress = event(resumedSession, 3, "Progress", reducerProgress({
-  items_done: 0, bytes_done: "3", item_bytes_done: null, item_bytes_total: null,
-}));
-success(staleResumed, [regressingProgress]);
-await turns();
-assert.equal(acceptedResumed.length, 2, "late response cannot change task state");
-success(currentResumed, [regressingProgress]);
-const correctedResumed = await nextRequest(requests.length);
-assert.equal(correctedResumed.request.payload.replay_from, 3);
-assert.equal(acceptedResumed.at(-1).progressState.progress.bytes_done, "4");
-success(correctedResumed, [
-  event(resumedSession, 3, "Progress", reducerProgress({
-    items_done: 0, bytes_done: "5", item_bytes_done: "5",
-  })),
-]);
-const resumedTail = await nextRequest(requests.length);
-assert.equal(acceptedResumed.at(-1).progressState.progress.bytes_done, "5");
-success(resumedTail, [terminalRecord(resumedSession)]);
-await turns();
-stopResumed();
-
 // A second busy result in one uninterrupted generation suspends the exact
 // browser entry until explicit replay or stop.
 const definitiveBusyRefusals = [];
@@ -1415,7 +809,10 @@ const definitiveBusyRecovered = [];
 const stopDefinitiveBusy = bridge.startTaskDrain(
   task("8"),
   session("8"),
-  assert.fail,
+  (update, snapshot) => {
+    assert.equal(update, null);
+    assert.equal(snapshot.task_id, task("8"));
+  },
   (error, retry) => {
     definitiveBusyRefusals.push(error);
     definitiveBusyRetries.push(retry);
@@ -1573,7 +970,7 @@ stopSevenReplacement();
 // mutates no native lifetime, and its retry presents the same record before one
 // terminal-session release. Automatic terminal cleanup never closes the task.
 const terminalCallbackAttempts = [];
-const terminalCallbackProgressStates = [];
+const terminalCallbackSnapshots = [];
 const terminalCallbackRefusals = [];
 const terminalCallbackReleaseStart = releaseRequests.length;
 const terminalCallbackCloseStart = closeRequests.length;
@@ -1581,9 +978,9 @@ const terminalCallbackDrainStart = requests.length;
 const stopTerminalCallback = bridge.startTaskDrain(
   task("3"),
   session("c"),
-  (update, progressState) => {
+  (update, snapshot) => {
     terminalCallbackAttempts.push(update);
-    terminalCallbackProgressStates.push(progressState);
+    terminalCallbackSnapshots.push(snapshot);
     if (terminalCallbackAttempts.length === 1) {
       update.record.state = "failed";
       throw new Error("private terminal renderer detail");
@@ -1604,16 +1001,12 @@ assert.equal(closeRequests.length, terminalCallbackCloseStart);
 terminalCallbackRefusals[0].retry();
 await turns(20);
 assert.equal(terminalCallbackAttempts.length, 2);
-assert.equal(terminalCallbackProgressStates.length, 2);
-for (const progressState of terminalCallbackProgressStates) {
-  assert.ok(Object.isFrozen(progressState));
-  assert.deepEqual(progressState, {
-    phase: null,
-    phaseAuthority: "unknown",
-    progress: null,
-    progressAt: null,
-    activeItem: null,
-  });
+assert.equal(terminalCallbackSnapshots.length, 2);
+for (const snapshot of terminalCallbackSnapshots) {
+  assert.ok(Object.isFrozen(snapshot));
+  assert.equal(snapshot.session_state, "completed");
+  assert.equal(snapshot.terminal_result.headline, "success");
+  assert.equal(snapshot.progress, null);
 }
 assert.notEqual(terminalCallbackAttempts[0], terminalCallbackAttempts[1]);
 assert.equal(terminalCallbackAttempts[0].record.state, "failed");

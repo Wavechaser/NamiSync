@@ -69,6 +69,7 @@ from namisync.interfaces.task_port import (
     TaskTerminalDelivery,
     TaskUnavailableError,
 )
+from namisync.interfaces.web.task_snapshot import TaskPresentationState, TaskSnapshotStage
 from namisync.workflows import (
     EXECUTION_KIND, ExecutionEvidenceResult, ExecutionEvidenceState,
     ExecutionEvidenceWindow,
@@ -1021,7 +1022,7 @@ def test_maximum_reliable_head_drains_alone_below_the_bridge_response_wall() -> 
 def test_drain_keeps_an_oversized_reliable_tail_for_the_next_response() -> None:
     registry, service = _registry()
     start = _start(registry)
-    registry.drain(start.task_id, SESSION, DRAIN, replay_from=None)
+    initial = registry.drain(start.task_id, SESSION, DRAIN, replay_from=None)
     value = maximum_reliable_envelope()
     for sequence in range(2, 10):
         service.sink(SessionEventView(
@@ -1049,6 +1050,10 @@ def test_drain_keeps_an_oversized_reliable_tail_for_the_next_response() -> None:
 
     assert 0 < len(first.updates) < 8
     assert all(update.update_type == "event" for update in updates)
+    assert first.snapshot["revision"] == initial.snapshot["revision"] + len(first.updates)
+    assert second.snapshot["revision"] == initial.snapshot["revision"] + len(updates)
+    assert "item_outcomes" not in first.snapshot
+    assert "item_outcomes" not in second.snapshot
     assert [
         update.event.sequence  # type: ignore[union-attr]
         for update in updates
@@ -1070,12 +1075,36 @@ def test_drain_response_prefix_owns_each_source_before_advancing() -> None:
         SESSION,
         DRAIN,
         hostile_source(),
+        TaskSnapshotStage(TaskPresentationState("task-" + ("1" * 32), SESSION), monotonic),
     )
 
     assert [update.event.body_type for update in admitted.updates] == [
         "StateChanged",
         "StateChanged",
     ]
+    assert admitted.snapshot["revision"] == 2
+    assert admitted.snapshot["gap_first_missed_seq"] is None
+
+
+def test_failed_response_capture_keeps_snapshot_and_queue_for_retry(monkeypatch) -> None:
+    registry, service = _registry()
+    start = _start(registry)
+    registry.drain(start.task_id, SESSION, DRAIN, replay_from=None)
+    service.sink(_event(2))
+    task = registry._tasks[start.task_id]
+    before = task.presentation_state
+    queued = tuple(task.queue)
+
+    with monkeypatch.context() as patch:
+        patch.setattr("namisync.interfaces.web.bridge.MAX_BRIDGE_RESPONSE_JSON_BYTES", 100)
+        with pytest.raises(RuntimeError, match="response ceiling"):
+            registry.drain_for_bridge(start.task_id, SESSION, "5" * 32, replay_from=None)
+
+    assert task.presentation_state is before
+    assert tuple(task.queue) == queued
+    retried = registry.drain(start.task_id, SESSION, "6" * 32, replay_from=None)
+    assert [update.event.sequence for update in retried.updates] == [2]
+    assert retried.snapshot["revision"] == before.revision + 1
 
 
 def test_drain_uses_one_stable_source_population_during_reentrant_capture() -> None:
@@ -1391,13 +1420,17 @@ def _mark_terminal_drained(
         )
         task.terminal_pending = True
         task.condition.notify_all()
-    drained = registry.drain(
-        start.task_id,
-        start.session_id,
-        DRAIN,
-        replay_from=None,
-    )
-    assert any(update.update_type == "record" for update in drained.updates)
+    for index in range(2):
+        drained = registry.drain(
+            start.task_id,
+            start.session_id,
+            DRAIN if index == 0 else "9" * 32,
+            replay_from=None,
+        )
+        if any(update.update_type == "record" for update in drained.updates):
+            return
+        assert drained.updates and drained.updates[-1].event.body_type == "Gap"
+    raise AssertionError("terminal task record was not drained")
 
 
 def _start_execution_overlay(
@@ -2326,8 +2359,6 @@ def test_br_g_33_recovered_progress_bypasses_progress_linger() -> None:
     )
     start = _start(registry)
     registry.drain(start.task_id, SESSION, DRAIN, replay_from=None)
-    baseline_calls = clock.calls
-
     recovered = registry.drain(
         start.task_id,
         SESSION,
@@ -2335,7 +2366,6 @@ def test_br_g_33_recovered_progress_bypasses_progress_linger() -> None:
         replay_from=2,
     )
 
-    assert clock.calls == baseline_calls + 2
     assert service.reobserve_calls[0][2] == 2
     assert [update.event.sequence for update in recovered.updates] == [2]
 

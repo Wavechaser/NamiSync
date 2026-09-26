@@ -60,6 +60,7 @@ from namisync.interfaces.web.drain import (
     TaskUnavailableError,
 )
 from namisync.interfaces.web.slots import FolderSlotTable, SlotUnavailableError
+from namisync.interfaces.web.task_snapshot import TaskPresentationState, TaskSnapshotStage
 from namisync.modules.executor import NativeFileSystem, execute
 from namisync.workflows import PLAN_KIND, LocationCandidate
 from namisync.workflows.views import (
@@ -797,10 +798,22 @@ def _real_deferred_mkdir_drain_fixture(tmp_path: Path) -> dict[str, object]:
         for update in batches[0]
     )
 
+    task_id = "task-" + "b1" * 16
+    state = TaskPresentationState(task_id, session_id)
+    snapshots = []
+    for batch in batches:
+        for update in batch:
+            state = state.advance(
+                TaskEventUpdateView("event", SessionEventView(**update["event"])),
+                float(update["event"]["sequence"]),
+            )
+        snapshots.append(state.snapshot())
+
     return {
-        "task_id": "task-" + "b1" * 16,
+        "task_id": task_id,
         "session_id": session_id,
         "batches": batches,
+        "snapshots": snapshots,
         "expected_active_ids": [str(mkdir.op_id), str(child.op_id)],
         "expected_outcome_ids": [str(child.op_id), str(mkdir.op_id)],
         "expect_final_inactive": True,
@@ -926,6 +939,7 @@ def test_br_g_33_next_events_crosses_production_dispatch_as_exact_tagged_views()
                     TaskEventUpdateView("event", event),
                     TaskRecordUpdateView("record", record),
                 ),
+                TaskSnapshotStage(TaskPresentationState(task_id, session_id), monotonic),
             )
 
     commands = production_command_specs(
@@ -952,6 +966,9 @@ def test_br_g_33_next_events_crosses_production_dispatch_as_exact_tagged_views()
             },
         )
     )
+    expected_snapshot = TaskPresentationState(task_id, session_id)
+    expected_snapshot = expected_snapshot.advance(TaskEventUpdateView("event", event), 0.0)
+    expected_snapshot = expected_snapshot.advance(TaskRecordUpdateView("record", record), 0.0)
 
     assert response == {
         "schema_version": 1,
@@ -961,6 +978,7 @@ def test_br_g_33_next_events_crosses_production_dispatch_as_exact_tagged_views()
             "task_id": task_id,
             "session_id": session_id,
             "drain_id": drain_id,
+            "snapshot": json.loads(json.dumps(expected_snapshot.snapshot())),
             "updates": [
                 {
                     "update_type": "event",

@@ -96,6 +96,22 @@ const TASK_F = `task-${"f".repeat(32)}`;
 const SESSION_E = "5".repeat(32);
 const SESSION_G = "7".repeat(32);
 const TASK_G = `task-${"7".repeat(32)}`;
+const snapshotRevisions = new Map();
+const pageSnapshot = (taskId, sessionId, facts = {}) => {
+  const key = `${taskId}:${sessionId}`;
+  const revision = (snapshotRevisions.get(key) ?? 0) + 1;
+  snapshotRevisions.set(key, revision);
+  return {
+    wire_version: 1, task_id: taskId, session_id: sessionId, revision,
+    session_state: "active", control_state: "running", phase: null,
+    phase_authority: "unknown", progress: null, active_item: null,
+    presentation: { aggregate_percent: null, item_percent: null,
+      items_done: null, items_total: null, throughput_bytes_per_second: null,
+      eta_seconds: null, value: 0, determinate: false, indeterminate: true },
+    gap_first_missed_seq: null, terminal_result: null, started_at: null, ended_at: null,
+    ...facts,
+  };
+};
 const calls = [];
 const creates = [];
 const closes = [];
@@ -286,8 +302,11 @@ assert.equal(taskStatusDigest({ sessionState: "completed", review: { summary: {
 assert.equal(taskStatusDigest({ executionStarted: true, sessionState: "active",
   executionControlState: "paused" }).title, "Paused");
 assert.equal(taskStatusDigest({ executionStarted: true, sessionState: "active",
-  progressState: { phase: "verify", progress: {
-    bytes_done: "0", bytes_total: "0", items_done: 2, items_total: 4,
+  sessionId: "8".repeat(32),
+  snapshot: { session_id: "8".repeat(32), session_state: "active", phase: "verify", presentation: {
+    value: 50, determinate: true, indeterminate: false,
+    items_done: 2, items_total: 4,
+    throughput_bytes_per_second: null, eta_seconds: null,
   } } }).progress.value, 50);
 assert.equal(taskStatusDigest({ sessionState: "completed", review: { summary: {
   filter_counts: { all: 180 }, required_bytes: "5368709120", selected_operation_count: 0,
@@ -300,7 +319,12 @@ assert.equal(taskStatusDigest({ sessionState: "completed", review: { summary: {
   filter_counts: { all: 0 }, required_bytes: "0",
 } } }).detail, "Plan is empty.");
 assert.equal(taskStatusDigest({ executionStarted: true, sessionState: "active",
-  progressState: { phase: "verify", progress: null } }).title, "Verifying");
+  sessionId: "8".repeat(32),
+  snapshot: { session_id: "8".repeat(32), session_state: "active", phase: "verify", presentation: {
+    value: 0, determinate: false, indeterminate: true,
+    items_done: null, items_total: null,
+    throughput_bytes_per_second: null, eta_seconds: null,
+  } } }).title, "Verifying");
 assert.equal(taskStatusDigest({ executionStarted: true, sessionState: "refused" }).title, "Error");
 assert.equal(taskStatusDigest({ form: { source: { text: "source" }, target: { text: "" } } }).targetPath, "-");
 const capacityRailResult = {
@@ -683,7 +707,8 @@ await until(() => closes.length === 2);
 closes[1].resolve({ task_id: TASK_E, session_id: SESSION_E, disposition: "pending" });
 await turns();
 assert.ok(byText("Canceling and closing…"));
-drains.get(TASK_E).acceptUpdate({ update_type: "record", record: { state: "canceled" } });
+drains.get(TASK_E).acceptUpdate({ update_type: "record", record: { state: "canceled" } },
+  pageSnapshot(TASK_E, SESSION_E, { session_state: "canceled" }));
 await until(() => closes.length === 3);
 assert.deepEqual(calls.at(-1), ["close", TASK_E, SESSION_E]);
 closes[2].resolve({ task_id: TASK_E, session_id: SESSION_E, disposition: "closed" });
@@ -1043,11 +1068,21 @@ await until(() => executionOutcomeChecks === 1);
 assert.equal(planExecutions.length, 2,
   "checking the original confirmed intent after review replacement does not resubmit execution");
 const admissionOpenBase = planOpens.length;
+const planTerminalSnapshot = pageSnapshot(TASK_G, SESSION_G, {
+  revision: 40, session_state: "completed", terminal_result: null,
+});
+planDrain.acceptUpdate({ update_type: "record", record: { state: "completed" } },
+  planTerminalSnapshot);
+assert.equal(reviewRenders.at(-1).snapshot, planTerminalSnapshot);
 planExecutions[1].resolve({ task_id: TASK_G, session_id: executionSession });
 await until(() => calls.some(
   (call) => call[0] === "drain" && call[1] === TASK_G && call[2] === executionSession,
 ));
 const executionDrain = drains.get(TASK_G);
+assert.equal(reviewRenders.at(-1).snapshot, null,
+  "execution admission retires the Plan session's presentation");
+assert.equal(taskStatusDigest(reviewRenders.at(-1)).title, "Executing",
+  "the rail cannot report the Plan terminal state for active execution");
 assert.notEqual(executionDrain, planDrain, "execution replaces the released plan drain");
 assert.equal(planExecutions.length, 2, "navigation cannot duplicate execution admission");
 await until(() => planOpens.length === admissionOpenBase + 1);
@@ -1070,16 +1105,26 @@ preRefreshReview.pending = null;
 globalThis.planReviewHarness.callbacks.onControl(preRefreshReview, "pause");
 assert.equal(preRefreshReview.pending, "pause", "control feedback precedes its receipt");
 assert.deepEqual(calls.at(-1), ["control-execution", TASK_G, executionSession, "pause"]);
-executionDrain.acceptUpdate(stateUpdate("running"));
+executionDrain.acceptUpdate(stateUpdate("running"),
+  pageSnapshot(TASK_G, executionSession, { control_state: "running" }));
+assert.equal(reviewRenders.at(-1).snapshot?.session_id, executionSession,
+  "the execution's lower independent revision is adopted");
 executionControls[0].resolve({
   code: "accepted", session_id: executionSession, before: "running",
   after: "pausing", detail: "Pause requested; custody is reaching a checkpoint.", accepted: true,
 });
 await until(() => preRefreshReview.pending === null);
-assert.equal(reviewRenders.at(-1).executionControlState, "pausing");
+assert.equal(reviewRenders.at(-1).executionControlState, "running",
+  "the accepted control receipt does not replace snapshot state");
 assert.equal(preRefreshReview.message, "Pausing execution…");
-executionDrain.acceptUpdate(stateUpdate("paused"));
+executionDrain.acceptUpdate(stateUpdate("paused"),
+  pageSnapshot(TASK_G, executionSession, { control_state: "paused" }));
 assert.equal(reviewRenders.at(-1).executionControlState, "paused");
+executionDrain.acceptRefusal(new Error("drain interrupted"), () => true);
+assert.match(preRefreshReview.message, /Task updates stopped/);
+executionDrain.acceptRecovered(TASK_G, executionSession);
+assert.equal(preRefreshReview.message, "Execution paused. Resume available.",
+  "recovery uses settled control state rather than an old Pause receipt");
 
 // Execution admission does not replace the old reviewing object until reload
 // succeeds. Active execution rejects selection before any backend mutation
@@ -1114,7 +1159,8 @@ globalThis.planReviewHarness.callbacks.onSelect(
   retainedAdmissionReview, retainedAdmissionReview.window.rows[0], false,
 );
 await until(() => retainedAdmissionReview.foregroundWindowReaders === 1);
-executionDrain.acceptUpdate(stateUpdate("paused"));
+executionDrain.acceptUpdate(stateUpdate("paused"),
+  pageSnapshot(TASK_G, executionSession, { control_state: "paused" }));
 selectionRecoveryReload.reject(new Error("selection recovery reload failed"));
 await until(() => !reviewRenders.at(-1).reviewLoading);
 await turns();
@@ -1524,7 +1570,8 @@ assert.equal(liveReview.pending, "resume", "resume feedback precedes its receipt
 assert.deepEqual(calls.at(-1), ["control-execution", TASK_G, executionSession, "resume"]);
 const controlWindowBase = planWindows.length;
 executionDrain.acceptUpdate(stateUpdate("pending"));
-executionDrain.acceptUpdate(stateUpdate("running"));
+executionDrain.acceptUpdate(stateUpdate("running"),
+  pageSnapshot(TASK_G, executionSession, { control_state: "running" }));
 await until(() => planWindows.length === controlWindowBase + 1);
 const pendingControlWindow = planWindows[controlWindowBase];
 executionControls[1].resolve({
@@ -1539,7 +1586,8 @@ assert.equal(
 );
 
 globalThis.planReviewHarness.callbacks.onControl(liveReview, "pause");
-executionDrain.acceptUpdate(stateUpdate("running"));
+executionDrain.acceptUpdate(stateUpdate("running"),
+  pageSnapshot(TASK_G, executionSession, { control_state: "running" }));
 executionControls[2].resolve({
   code: "not-found", session_id: executionSession, before: null,
   after: null, detail: "Pause was not accepted.", accepted: false,
@@ -1549,14 +1597,16 @@ assert.equal(reviewRenders.at(-1).executionControlState, "running");
 assert.equal(liveReview.message, "Pause was not accepted.");
 
 globalThis.planReviewHarness.callbacks.onControl(liveReview, "pause");
-executionDrain.acceptUpdate(stateUpdate("running"));
+executionDrain.acceptUpdate(stateUpdate("running"),
+  pageSnapshot(TASK_G, executionSession, { control_state: "running" }));
 executionControls[3].reject(new Error("simulated uncertain control receipt"));
 await until(() => liveReview.pending === null);
 assert.equal(reviewRenders.at(-1).executionControlState, "running");
 assert.equal(liveReview.message, "Pause refused. Follow live status.");
 
 globalThis.planReviewHarness.callbacks.onControl(liveReview, "pause");
-executionDrain.acceptUpdate(stateUpdate("pausing"));
+executionDrain.acceptUpdate(stateUpdate("pausing"),
+  pageSnapshot(TASK_G, executionSession, { control_state: "pausing" }));
 executionControls[4].reject(new Error("simulated late uncertain control receipt"));
 await until(() => liveReview.pending === null);
 assert.equal(reviewRenders.at(-1).executionControlState, "pausing");
@@ -1571,7 +1621,10 @@ assert.equal(planWindows.length, controlWindowBase + 1, "control updates share o
 executionDrain.acceptUpdate({ update_type: "record", record: {
   kind: "sync-execution", state: "refused", result: refusedResult,
   started_at: null, ended_at: "2026-09-23T02:00:00+00:00",
-} });
+} }, pageSnapshot(TASK_G, executionSession, {
+  session_state: "refused", terminal_result: refusedResult,
+  started_at: null, ended_at: "2026-09-23T02:00:00+00:00",
+}));
 await turns();
 assert.equal(reviewRenders.at(-1).sessionState, "refused");
 assert.equal(liveTask.executionResult, refusedResult, "live terminal record precedes retained window capture");
@@ -1738,7 +1791,8 @@ executionControls[acceptedControlIndex].resolve({
 await until(() => stoppedReview.pending === null);
 assert.equal(stoppedReview.message, "Pausing execution…",
   "accepted control feedback survives review replacement");
-assert.equal(stoppedTask.executionControlState, "pausing");
+assert.equal(stoppedTask.executionControlState, "running",
+  "the receipt leaves control state with the last snapshot");
 const stoppedDrain = drains.get(stoppedTaskId);
 assert.ok(stoppedDrain);
 stoppedDrain.acceptRefusal(new (await import(bridgeUrl)).TerminalPresentationError());
@@ -1881,7 +1935,8 @@ pendingRetry.click();
 earlyStoppedDrain.acceptRecovered(earlyStoppedTaskId, earlyStoppedSessionId);
 assert.equal(earlyStoppedTask.closePending, true,
   "empty recovery alone cannot claim terminal Close");
-earlyStoppedDrain.acceptUpdate({ update_type: "record", record: { state: "canceled" } });
+earlyStoppedDrain.acceptUpdate({ update_type: "record", record: { state: "canceled" } },
+  pageSnapshot(earlyStoppedTaskId, earlyStoppedSessionId, { session_state: "canceled" }));
 await until(() => closes.length === pendingCloseIndex + 2);
 closes.at(-1).resolve({
   task_id: earlyStoppedTaskId, session_id: earlyStoppedSessionId, disposition: "closed",
@@ -2179,7 +2234,8 @@ await until(() => drains.has(closeRaceTaskId));
 const closeRaceBase = closes.length;
 void globalThis.taskHarness.closeRetainedTask(closeRaceTaskId);
 await until(() => closes.length === closeRaceBase + 1);
-drains.get(closeRaceTaskId).acceptUpdate({ update_type: "record", record: { state: "canceled" } });
+drains.get(closeRaceTaskId).acceptUpdate({ update_type: "record", record: { state: "canceled" } },
+  pageSnapshot(closeRaceTaskId, closeRaceSessionId, { session_state: "canceled" }));
 await turns();
 assert.equal(closes.length, closeRaceBase + 1,
   "terminal state before the first Close receipt does not submit a second Close");
@@ -2193,7 +2249,8 @@ closes[closeRaceBase + 1].resolve({
   task_id: closeRaceTaskId, session_id: closeRaceSessionId, disposition: "pending",
 });
 await turns();
-drains.get(closeRaceTaskId).acceptUpdate({ update_type: "record", record: { state: "canceled" } });
+drains.get(closeRaceTaskId).acceptUpdate({ update_type: "record", record: { state: "canceled" } },
+  pageSnapshot(closeRaceTaskId, closeRaceSessionId, { session_state: "canceled" }));
 await turns();
 assert.equal(closes.length, closeRaceBase + 2,
   "a pending continuation cannot create an automatic Close loop");
@@ -2274,5 +2331,46 @@ assert.equal(originalRecovery.message, "execution-admission-owner-sentinel");
 globalThis.planReviewHarness.callbacks.onExecute(uncertainExecutionTask.review, executeInvoker);
 assert.equal(planExecutions.length, uncertainExecutionBase + 1);
 assert.equal(fencedClose.disabled, true);
+
+const failedTaskId = `task-${"3".repeat(32)}`;
+const failedPlanSession = "3".repeat(32);
+const failedExecutionSession = "c".repeat(32);
+const failedOpenBase = planOpens.length;
+const failedWindowBase = planWindows.length;
+const failedTask = globalThis.taskHarness.adoptTask({
+  task_id: failedTaskId, session_id: failedPlanSession,
+  session_state: "completed", session_released: true,
+  task_kind: "sync-plan", request_id: "3".repeat(32),
+});
+await until(() => planOpens.length === failedOpenBase + 1);
+const failedPlanSummary = planSummary({ task_id: failedTaskId,
+  request_id: "3".repeat(32), preflight_ready: true,
+  preflight_refusal_count: 0, warning_count: 0 });
+planOpens.at(-1).resolve(failedPlanSummary);
+await until(() => planWindows.length === failedWindowBase + 1);
+planWindows.at(-1).resolve(planWindow(failedPlanSummary));
+await until(() => failedTask.review !== null);
+taskButton(failedTask.label).click();
+const failedPlanDrain = drains.get(failedTaskId);
+failedPlanDrain.acceptUpdate({ update_type: "record", record: { state: "completed" } },
+  pageSnapshot(failedTaskId, failedPlanSession, {
+    revision: 40, session_state: "completed",
+  }));
+const failedExecuteBase = planExecutions.length;
+globalThis.planReviewHarness.callbacks.onExecute(failedTask.review, executeInvoker);
+await until(() => planExecutions.length === failedExecuteBase + 1);
+planExecutions.at(-1).resolve({ task_id: failedTaskId, session_id: failedExecutionSession });
+await until(() => failedTask.sessionId === failedExecutionSession);
+const failedExecutionDrain = drains.get(failedTaskId);
+const terminalFailureResult = executionResult({ headline: "failed", filesystem: "failed" });
+failedExecutionDrain.acceptUpdate({ update_type: "record", record: {
+  kind: "sync-execution", state: "failed", result: terminalFailureResult,
+} }, pageSnapshot(failedTaskId, failedExecutionSession, {
+  session_state: "failed", terminal_result: terminalFailureResult,
+}));
+assert.equal(failedTask.sessionState, "failed",
+  "the new execution's lower revision cannot suppress its failed terminal record");
+assert.equal(failedTask.executionResult, terminalFailureResult);
+assert.equal(taskStatusDigest(failedTask).title, "Failed");
 
 process.stdout.write("ok");

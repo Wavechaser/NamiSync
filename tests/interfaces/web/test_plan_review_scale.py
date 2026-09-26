@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from dataclasses import asdict
+from datetime import datetime, timezone
 from functools import cache
 import json
 import os
@@ -15,6 +17,13 @@ from types import SimpleNamespace
 import pytest
 
 from namisync.core.planning import OperationKind
+from namisync.core.events import CORE_EVENT_SCHEMA_VERSION, Envelope, ItemOutcome
+from namisync.core.evidence import Outcome
+from namisync.core.session import SessionId
+from namisync.interfaces.task_port import TaskEventUpdateView
+from namisync.interfaces.web.bridge import snapshot_task_drain_response_prefix
+from namisync.interfaces.web.task_snapshot import TaskPresentationState, TaskSnapshotStage
+from namisync.workflows.views import session_event_view
 from tools.performance import plan as benchmark
 from tools.performance.plan import build_fixture_manifest, build_plan_fixture
 from namisync.interfaces.web import drain as drain_module
@@ -738,6 +747,44 @@ def test_current_rootless_plan_window_and_visible_folder_collapse() -> None:
     assert changed["collapsed_count"] == 1
     assert len(window["rows"]) == 256
     assert window["rows"][0]["node_id"] == prior[1].node_id
+
+
+def test_large_plan_task_snapshot_does_not_publish_an_outcome_map() -> None:
+    artifact = build_plan_fixture(information_heavy=True)
+    assert len(artifact.plan.operations) == 100_000
+    session_id = "c2" * 16
+    state = TaskPresentationState("task-" + "b1" * 16, session_id)
+    observed_at = datetime(2026, 1, 1, tzinfo=timezone.utc)
+
+    def population(value):
+        if isinstance(value, dict):
+            return 1 + sum(population(child) for child in value.values())
+        if isinstance(value, (tuple, list)):
+            return 1 + sum(population(child) for child in value)
+        return 1
+
+    first_population = None
+    for sequence, operation in enumerate(artifact.plan.operations, 1):
+        # Real public event projections exercise identity turnover across the
+        # existing large corpus; task presentation must not retain its items.
+        update = TaskEventUpdateView("event", session_event_view(Envelope(
+            SessionId(session_id), sequence, observed_at, CORE_EVENT_SCHEMA_VERSION,
+            ItemOutcome(str(operation.op_id), operation.kind,
+                        operation.target_rel_path, Outcome.SUCCEEDED),
+        )))
+        state = state.advance(update, float(sequence))
+        if first_population is None:
+            first_population = population(asdict(state))
+    assert population(asdict(state)) == first_population
+    published = snapshot_task_drain_response_prefix(
+        state.task_id, session_id, "d3" * 16, (),
+        TaskSnapshotStage(state, lambda: 100_001.0),
+    )
+    assert published.updates == ()
+    assert published.snapshot == state.snapshot()
+    assert published.snapshot["terminal_result"] is None
+    assert not any(str(operation.op_id) in json.dumps(published.snapshot)
+                   for operation in (artifact.plan.operations[0], artifact.plan.operations[-1]))
 
 
 def test_selected_plan_memory_case_rejects_false_timing_sample(

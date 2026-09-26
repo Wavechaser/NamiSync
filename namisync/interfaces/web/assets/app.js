@@ -42,7 +42,6 @@ import { createExecutionConfirmation } from "./execution_confirmation.js";
 import { createWorkPanel } from "./panels.js";
 import { createTaskRail } from "./rail.js";
 import { renderText } from "./render.js";
-import { advanceProgressPresentation, rebaseProgressSampling } from "./task_status.js";
 
 const app = document.querySelector("#app");
 const status = document.querySelector("#host-status");
@@ -443,9 +442,6 @@ function selectTask(taskId) {
   navigationRevision += 1;
   const previous = selectedTaskId === null ? null : tasks.get(selectedTaskId) ?? null;
   if (previous?.review != null) retireExecutionDetail(previous.review);
-  if (selectedTaskId !== taskId && task.progressPresentation !== null) {
-    task.progressPresentation = rebaseProgressSampling(task.progressPresentation);
-  }
   selectedTaskId = taskId;
   settingsVisible = false;
   renderTasks();
@@ -503,8 +499,8 @@ function adoptTask(summary) {
       executionWindowDirty: false,
       executionWindowDirtyRevision: 0,
       executionWindowRefreshRunning: false,
-      progressState: null,
       progressPresentation: null,
+      snapshot: null,
     };
     nextTaskNumber += 1;
     tasks.set(task.taskId, task);
@@ -515,6 +511,8 @@ function adoptTask(summary) {
       task.recoveryRunning = false;
       task.releaseRecovery = null;
       task.closeFailed = false;
+      task.snapshot = null;
+      task.progressPresentation = null;
     }
     if (task.sessionId !== summary.session_id || summary.session_state !== "active") {
       const controlAttempt = task.executionControlAttempt;
@@ -562,7 +560,7 @@ function attachTaskDrain(task) {
   task.stopDrain = startTaskDrain(
     task.taskId,
     sessionId,
-    (update, progressState) => acceptTaskUpdate(task, sessionId, update, progressState),
+    (update, snapshot) => acceptTaskUpdate(task, sessionId, update, snapshot),
     (error, retry) => acceptTaskRefusal(task, sessionId, error, retry),
     {
       terminal: task.sessionState !== "active",
@@ -575,61 +573,64 @@ function attachTaskDrain(task) {
   task.drainUnavailable = false;
 }
 
-function acceptTaskUpdate(task, sessionId, update, progressState = null) {
+function acceptTaskUpdate(task, sessionId, update, snapshot = null) {
   if (tasks.get(task.taskId) !== task || task.sessionId !== sessionId) {
     return;
   }
-  if (progressState !== null) {
-    task.progressState = progressState;
-    task.progressPresentation = advanceProgressPresentation(
-      task.progressPresentation, progressState, update,
-    );
+  if (snapshot !== null) {
+    // Revisions restart with each session; a delivered terminal record still needs custody.
+    if (task.snapshot !== null && snapshot.session_id === task.snapshot.session_id
+        && snapshot.revision < task.snapshot.revision && update?.update_type !== "record") return;
+    task.snapshot = snapshot;
+    if (task.executionStarted && snapshot.session_state !== "active") {
+      task.executionResult = snapshot.terminal_result;
+      task.executionStartedAt = snapshot.started_at;
+      task.executionEndedAt = snapshot.ended_at;
+    }
+    task.progressPresentation = {
+      phase: snapshot.phase,
+      activeItem: snapshot.active_item,
+      itemPercent: snapshot.presentation.item_percent,
+      aggregatePercent: snapshot.presentation.aggregate_percent,
+    };
+    if (task.executionControlState !== snapshot.control_state) {
+      task.executionControlRevision += 1;
+      task.executionControlState = snapshot.control_state;
+      if (task.executionControlAttempt?.sessionId === sessionId) {
+        if (task.executionControlAttempt.pending) {
+          task.executionControlAttempt.message = executionControlMessage(snapshot.control_state);
+        } else if (!checkableOutcome(task.executionControlAttempt.recovery)
+            && !fixedOutcome(task.executionControlAttempt.recovery)
+            && !(task.executionControlAttempt.independent
+              && task.executionControlAttempt.accepted)) {
+          task.executionControlAttempt = null;
+        }
+      }
+      if (task.executionStarted && task.review !== null && !fixedOutcome(task.review.recovery)) {
+        task.review.message = executionControlMessage(snapshot.control_state);
+      }
+    }
     if (task.review?.follow != null) {
       task.review.follow.hasTarget = task.progressPresentation?.activeItem?.item_id != null;
     }
   }
   if (task.executionStarted) markExecutionWindowDirty(task);
-  if (
-    update.update_type === "event"
-    && update.event?.body_type === "StateChanged"
-    && ACTIVE_EXECUTION_CONTROL_STATES.has(update.event.body?.state)
-    && task.sessionState === "active"
-  ) {
-    task.executionControlRevision += 1;
-    task.executionControlState = update.event.body.state;
-    if (task.executionControlAttempt?.sessionId === sessionId) {
-      if (task.executionControlAttempt.pending) {
-        task.executionControlAttempt.message = executionControlMessage(task.executionControlState);
-      } else if (!checkableOutcome(task.executionControlAttempt.recovery)
-          && !fixedOutcome(task.executionControlAttempt.recovery)
-          && !(task.executionControlAttempt.independent
-            && task.executionControlAttempt.accepted)) {
-        task.executionControlAttempt = null;
-      }
-    }
-    if (task.executionStarted && task.review !== null && !fixedOutcome(task.review.recovery)) {
-      task.review.message = executionControlMessage(task.executionControlState);
-    }
-    renderTasks();
-    return;
-  }
-  if (update.update_type === "record") {
+  if (update?.update_type === "record") {
     task.recoveryRetry = null;
     task.recoverySessionId = null;
     task.recoveryRunning = false;
     task.drainUnavailable = false;
     clearTaskRecoveryError(task);
     taskMutationRevision += 1;
-    task.executionControlRevision += 1;
     const controlAttempt = task.executionControlAttempt;
     task.executionControlAttempt = null;
     if (task.review !== null && controlAttempt !== null
         && task.review.pending === controlAttempt.actionName) task.review.pending = null;
-    task.sessionState = update.record.state;
-    if (update.record.kind === "sync-execution") {
-      task.executionResult = update.record.result;
-      task.executionStartedAt = update.record.started_at ?? null;
-      task.executionEndedAt = update.record.ended_at ?? null;
+    task.sessionState = snapshot.session_state;
+    if (task.executionStarted) {
+      task.executionResult = snapshot.terminal_result;
+      task.executionStartedAt = snapshot.started_at;
+      task.executionEndedAt = snapshot.ended_at;
     }
     if (task.form !== null) task.form.sessionState = task.sessionState;
     if (task.executionStarted && task.review !== null) {
@@ -1909,6 +1910,8 @@ async function submitReviewedExecution(task, attempt) {
       task.sessionId = result.session_id;
       task.sessionState = "active";
       task.sessionReleased = false;
+      task.snapshot = null;
+      task.progressPresentation = null;
       task.executionStarted = true;
       task.executionResult = null;
       task.executionStartedAt = null;
@@ -1980,8 +1983,6 @@ function recordExecutionControlResult(task, attempt, result) {
   if (task.executionControlRevision !== attempt.controlRevision
       && task.executionControlState !== attempt.controlState) return;
   if (result.accepted && ACTIVE_EXECUTION_CONTROL_STATES.has(result.after)) {
-    task.executionControlRevision += 1;
-    task.executionControlState = result.after;
     attempt.message = executionControlMessage(result.after);
   } else {
     attempt.message = result.detail || `The ${attempt.actionName} request was not accepted.`;
@@ -2024,9 +2025,6 @@ async function controlReviewedExecution(review, actionName) {
     controlState,
   };
   task.executionControlAttempt = attempt;
-  if (actionName === "pause" || actionName === "resume") {
-    task.progressPresentation = rebaseProgressSampling(task.progressPresentation);
-  }
   if (!independentCancel) {
     review.pending = actionName;
     review.message = attempt.message;

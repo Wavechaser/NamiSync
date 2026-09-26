@@ -1645,6 +1645,7 @@ def snapshot_task_drain_response_prefix(
     session_id: str,
     drain_id: str,
     updates: Iterable[TaskUpdateView],
+    stage: object,
 ) -> TaskDrainView:
     """Capture each source update once and return its longest admitted prefix."""
 
@@ -1654,6 +1655,7 @@ def snapshot_task_drain_response_prefix(
             session_id,
             drain_id,
             updates,
+            stage,
         )
     )
 
@@ -1663,31 +1665,41 @@ def _admit_task_drain_response_prefix(
     session_id: str,
     drain_id: str,
     updates: Iterable[TaskUpdateView],
+    stage: object,
 ) -> _AdmittedTaskDrainResponse:
     """Transfer one validated longest-prefix owner without a second copy."""
 
     from .commands import PUBLIC_VIEW_DATACLASSES
 
+    from .task_snapshot import TaskSnapshotStage
+
+    if type(stage) is not TaskSnapshotStage:
+        raise TypeError("task drain snapshot stage is invalid")
     budget = _JsonByteBudget(MAX_BRIDGE_RESPONSE_JSON_BYTES)
     budget.consume(_SUCCESS_RESPONSE_FIXED_CANONICAL_BYTES)
     empty = _snapshot_response_value(
-        TaskDrainView(task_id, session_id, drain_id, ()),
+        TaskDrainView(task_id, session_id, drain_id, (), stage.snapshot()),
         set(),
         PUBLIC_VIEW_DATACLASSES,
         budget,
     )
     if type(empty) is not TaskDrainView:
         raise RuntimeError("bridge response admission changed task drain type")
+    initial_snapshot_budget = _JsonByteBudget(MAX_BRIDGE_RESPONSE_JSON_BYTES)
+    _snapshot_response_value(empty.snapshot, set(), PUBLIC_VIEW_DATACLASSES, initial_snapshot_budget)
+    base_bytes = MAX_BRIDGE_RESPONSE_JSON_BYTES - budget.remaining
+    initial_snapshot_bytes = MAX_BRIDGE_RESPONSE_JSON_BYTES - initial_snapshot_budget.remaining
+    update_bytes = 0
     admitted: list[TaskUpdateView] = []
+    snapshot = empty.snapshot
     for update in updates:
+        update_budget = _JsonByteBudget(MAX_BRIDGE_RESPONSE_JSON_BYTES)
         try:
-            if admitted:
-                budget.consume(1)
             captured = _snapshot_response_value(
                 update,
                 set(),
                 PUBLIC_VIEW_DATACLASSES,
-                budget,
+                update_budget,
             )
         except BridgeResponseTooLargeError:
             if not admitted:
@@ -1695,12 +1707,41 @@ def _admit_task_drain_response_prefix(
             break
         if type(captured) not in {TaskEventUpdateView, TaskRecordUpdateView}:
             raise RuntimeError("bridge response admission changed task update type")
+        candidate = stage.consider(captured)
+        candidate_snapshot_budget = _JsonByteBudget(MAX_BRIDGE_RESPONSE_JSON_BYTES)
+        captured_snapshot = _snapshot_response_value(
+            candidate.snapshot(), set(), PUBLIC_VIEW_DATACLASSES,
+            candidate_snapshot_budget,
+        )
+        candidate_snapshot_bytes = MAX_BRIDGE_RESPONSE_JSON_BYTES - candidate_snapshot_budget.remaining
+        candidate_update_bytes = MAX_BRIDGE_RESPONSE_JSON_BYTES - update_budget.remaining
+        total_bytes = (
+            base_bytes - initial_snapshot_bytes + candidate_snapshot_bytes
+            + update_bytes + candidate_update_bytes + len(admitted)
+        )
+        if total_bytes > MAX_BRIDGE_RESPONSE_JSON_BYTES:
+            if not admitted:
+                raise BridgeResponseTooLargeError("one task update exceeds the bridge response ceiling")
+            break
         admitted.append(captured)
+        update_bytes += candidate_update_bytes
+        snapshot = captured_snapshot
+        stage.accept(candidate)
+        if (
+            type(captured) is TaskEventUpdateView
+            and captured.event.body_type == "Gap"
+            and not (
+                len(admitted) == 1 and stage.replay_from is not None
+                and captured.event.body["first_missed_seq"] == stage.replay_from
+            )
+        ):
+            break
     result = TaskDrainView(
         empty.task_id,
         empty.session_id,
         empty.drain_id,
         tuple(admitted),
+        snapshot,
     )
     _validate_owned_response_tree(result, set())
     return _AdmittedTaskDrainResponse(result, _TASK_DRAIN_ADMISSION_ISSUER)

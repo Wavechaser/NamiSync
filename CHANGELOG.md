@@ -1027,6 +1027,22 @@ repeated machinery while preserving operational safety and boundary contracts.
 Safety, settlement, authority, and measurement work made high-risk release
 claims explicit, independently reviewable, and regression-backed.
 
+#### Render authoritative task snapshots (2026-09-26)
+
+- Move task progress, attempt state and rate/ETA reduction into the Python
+  desktop adapter. Publish one compact versioned task/session snapshot with
+  each admitted drain prefix; keep item windows and exact details separate.
+- Replace browser semantic reduction with snapshot adoption, preserving command
+  recovery, transport replay, terminal-delivery custody, follow, highlighting
+  and pending Close. Gap remains explicit uncertainty after terminal truth.
+- Move semantic tests to the native owner; retain real producer-to-page,
+  transport and interaction witnesses. The existing 100,000-operation fixture
+  checks that snapshots do not accumulate an outcome map.
+- Correct review-found session replacement, item-handoff rate sampling and
+  settled-control feedback regressions before delivery. Complete verification:
+  5,366 passed, 4 privilege skips; 12 import contracts; independent and Opus
+  5.5/high reviews. Pause after AB-8 for the requested recap.
+
 #### Reduce command recovery to its actual owners (2026-09-26)
 
 - Separate five current-state commands from original-result retention. View,

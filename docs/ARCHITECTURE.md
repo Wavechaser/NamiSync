@@ -897,6 +897,7 @@ Interface lifecycle source ownership is:
 | Session observation lifetime | `namisync/interfaces/session_observer.py` |
 | Service composition and application-facing operations | `namisync/interfaces/service.py` |
 | Desktop response replay, queue, drain, generation, and delivery state | `namisync/interfaces/web/drain.py` |
+| Desktop task presentation snapshots and progress estimates | `namisync/interfaces/web/task_snapshot.py` |
 
 The desktop bridge exposes one versioned, allowlisted command surface and
 bounds the complete serialized request to 65,536 UTF-8 bytes before

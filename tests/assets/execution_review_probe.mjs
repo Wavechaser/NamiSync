@@ -23,161 +23,75 @@ const source = (await readFile(process.argv[2], "utf8"))
   .replace("./task_status.js", taskStatusUrl);
 const { projectExecutionRow, projectExecutionSummary } = await import(moduleUrl(source));
 const {
-  advanceProgressPresentation,
   projectActiveOperationProgress,
-  rebaseProgressSampling,
   taskStatusDigest,
   terminalStatusLine,
 } = await import(taskStatusUrl);
 
-const progressUpdate = (at) => ({
-  update_type: "event",
-  event: { body_type: "Progress", at },
-});
-const progressState = (at, patch = {}, activePatch = {}) => ({
-  phase: patch.phase ?? "execute",
-  progressAt: at,
-  progress: {
-    phase: patch.phase ?? "execute",
-    items_done: 1,
-    items_total: 4,
-    bytes_done: "0",
-    bytes_total: "1000",
-    ...patch,
+const digestSession = "8".repeat(32);
+const activeSnapshot = {
+  session_id: digestSession,
+  session_state: "active",
+  phase: "execute",
+  presentation: {
+    value: 50, determinate: true, indeterminate: false,
+    items_done: 1, items_total: 4,
+    throughput_bytes_per_second: 100, eta_seconds: 5,
   },
-  activeItem: {
-    item_id: "2".repeat(32),
-    item_type: "operation",
-    item_attempt_id: "3".repeat(32),
-    item_bytes_done: "0",
-    item_bytes_total: "100",
-    ...activePatch,
-  },
+  terminal_result: null,
+};
+const activeDigest = taskStatusDigest({
+  sessionId: digestSession, sessionState: "active", executionStarted: true,
+  executionControlState: "running", snapshot: activeSnapshot,
 });
-
-let presentation = advanceProgressPresentation(
-  null,
-  progressState("2026-09-22T00:00:00+00:00"),
-  progressUpdate("2026-09-22T00:00:00+00:00"),
-);
-presentation = advanceProgressPresentation(
-  presentation,
-  progressState("2026-09-22T00:00:05+00:00", { bytes_done: "500" }, {
-    item_bytes_done: "50",
-  }),
-  progressUpdate("2026-09-22T00:00:05+00:00"),
-);
-assert.equal(presentation.aggregatePercent, 50);
-assert.equal(presentation.itemPercent, 50);
-assert.equal(presentation.throughputBytesPerSecond, 100);
-assert.equal(presentation.etaSeconds, 5);
-
-const changedRate = advanceProgressPresentation(
-  presentation,
-  progressState("2026-09-22T00:00:10+00:00", { bytes_done: "750" }),
-  progressUpdate("2026-09-22T00:00:10+00:00"),
-);
-const expectedChangedRate = 50 + 50 / Math.E;
-assert.ok(Math.abs(changedRate.throughputBytesPerSecond - expectedChangedRate) < 1e-9,
-  "a changed rate uses the five-second time-weighted EMA");
-assert.ok(Math.abs(changedRate.etaSeconds - 250 / expectedChangedRate) < 1e-9,
-  "phase ETA uses that same smoothed rate");
-
-assert.deepEqual(projectActiveOperationProgress(presentation, "2".repeat(32)), {
+assert.equal(activeDigest.progress.value, 50);
+assert.equal(activeDigest.progress.done, 1);
+assert.equal(activeDigest.progress.total, 4);
+assert.equal(activeDigest.progress.throughputBytesPerSecond, 100);
+assert.equal(activeDigest.progress.etaSeconds, 5);
+assert.deepEqual(projectActiveOperationProgress({
+  phase: "execute",
+  activeItem: { item_id: "2".repeat(32), item_type: "operation" },
+  itemPercent: 50,
+}, "2".repeat(32)), {
   lifecycleKey: "executing", progressPercent: 50,
 });
-
-presentation = advanceProgressPresentation(
-  presentation,
-  progressState("2026-09-22T00:00:05+00:00", { bytes_done: "600" }, {
-    item_attempt_id: "4".repeat(32), item_bytes_done: "0",
-  }),
-  progressUpdate("2026-09-22T00:00:05+00:00"),
-);
-assert.equal(presentation.throughputBytesPerSecond, null, "equal event time rebases");
-assert.equal(presentation.itemPercent, 50, "a retry does not move the row backward");
-
-presentation = advanceProgressPresentation(
-  presentation,
-  progressState("2026-09-22T00:00:10+00:00", {
-    phase: "verify", bytes_done: "400", bytes_total: "2000",
-  }, { item_type: "integrity", item_bytes_done: "40" }),
-  progressUpdate("2026-09-22T00:00:10+00:00"),
-);
-assert.equal(presentation.aggregatePercent, 20, "a phase starts a new display domain");
-assert.deepEqual(projectActiveOperationProgress(presentation, "2".repeat(32)), {
+assert.deepEqual(projectActiveOperationProgress({
+  phase: "verify",
+  activeItem: { item_id: "2".repeat(32), item_type: "integrity" },
+  itemPercent: 40,
+}, "2".repeat(32)), {
   verification: true, verificationProgressPercent: 40,
 });
-const rebased = rebaseProgressSampling(presentation);
-assert.equal(rebased.aggregatePercent, 20);
-assert.equal(rebased.itemPercent, 40);
-assert.equal(rebased.sampleAt, null);
-assert.equal(rebased.throughputBytesPerSecond, null);
-assert.equal(projectActiveOperationProgress(rebased, "9".repeat(32)), null);
+assert.equal(projectActiveOperationProgress({
+  phase: "verify", activeItem: null, itemPercent: null,
+}, "2".repeat(32)), null);
 
-let largeUnknown = advanceProgressPresentation(
-  null,
-  progressState("2026-09-22T01:00:00+00:00", {
-    bytes_done: "90071992547409930", bytes_total: null,
-  }),
-  progressUpdate("2026-09-22T01:00:00+00:00"),
-);
-largeUnknown = advanceProgressPresentation(
-  largeUnknown,
-  progressState("2026-09-22T01:00:05+00:00", {
-    bytes_done: "90071992547410430", bytes_total: null,
-  }),
-  progressUpdate("2026-09-22T01:00:05+00:00"),
-);
-assert.equal(largeUnknown.throughputBytesPerSecond, 100,
-  "Scalar64 subtraction happens before approximate conversion");
-assert.equal(largeUnknown.etaSeconds, null, "unknown total suppresses only ETA");
+const unknownSnapshot = {
+  ...activeSnapshot,
+  presentation: {
+    ...activeSnapshot.presentation,
+    value: 0, determinate: false, indeterminate: true,
+    throughput_bytes_per_second: 100, eta_seconds: null,
+  },
+};
 const unknownDigest = taskStatusDigest({
-  sessionState: "active", executionStarted: true, executionControlState: "running",
-  progressState: progressState("2026-09-22T01:00:05+00:00", {
-    bytes_done: "90071992547410430", bytes_total: null,
-  }),
-  progressPresentation: largeUnknown,
+  sessionId: digestSession, sessionState: "active", executionStarted: true,
+  executionControlState: "running", snapshot: unknownSnapshot,
 });
+assert.equal(unknownDigest.progress.determinate, false);
 assert.equal(unknownDigest.progress.throughputBytesPerSecond, 100);
 assert.equal(unknownDigest.progress.etaSeconds, null);
-assert.equal(unknownDigest.progress.determinate, false);
-largeUnknown = advanceProgressPresentation(
-  largeUnknown,
-  progressState("2026-09-22T00:59:59+00:00", {
-    bytes_done: "90071992547410530", bytes_total: null,
-  }),
-  progressUpdate("2026-09-22T00:59:59+00:00"),
-);
-assert.equal(largeUnknown.throughputBytesPerSecond, null,
-  "backward event time rebases without rejecting progress");
 
-let growingBudget = advanceProgressPresentation(
-  null,
-  progressState("2026-09-22T02:00:00+00:00", {
-    phase: "verify", bytes_done: "800", bytes_total: "1000",
-  }, { item_type: "integrity", item_bytes_done: "80" }),
-  progressUpdate("2026-09-22T02:00:00+00:00"),
-);
-growingBudget = advanceProgressPresentation(
-  growingBudget,
-  progressState("2026-09-22T02:00:05+00:00", {
-    phase: "verify", bytes_done: "900", bytes_total: "2000",
-  }, { item_type: "integrity", item_bytes_done: "40" }),
-  progressUpdate("2026-09-22T02:00:05+00:00"),
-);
-assert.equal(growingBudget.aggregatePercent, 80, "budget growth holds aggregate high-water");
-assert.equal(growingBudget.itemPercent, 80, "same-item verifier retry holds row high-water");
-assert.equal(growingBudget.throughputBytesPerSecond, null, "budget growth restarts sampling");
-
-const terminalPresentation = advanceProgressPresentation(
-  rebased,
-  { phase: null, progressAt: null, progress: null, activeItem: null },
-  { update_type: "record" },
-);
-assert.equal(terminalPresentation.phase, null);
-assert.equal(terminalPresentation.aggregatePercent, null);
-
+const pausedDigest = taskStatusDigest({
+  sessionId: digestSession, sessionState: "active", executionStarted: true,
+  executionControlState: "paused",
+  snapshot: { ...unknownSnapshot, presentation: {
+    ...unknownSnapshot.presentation, indeterminate: false,
+  } },
+});
+assert.equal(pausedDigest.title, "Paused");
+assert.equal(pausedDigest.progress.indeterminate, false);
 const result = (patch = {}) => ({
   headline: "success", filesystem: "completed", integrity: "verified",
   recording: "ok", audit: "ok", disposition: "ran", canceled: false,
@@ -390,7 +304,7 @@ assert.ok(mixedCapacityRow.notes.includes("Stored evidence: Unrecorded"));
 const terminalTask = taskStatusDigest({
   sessionState: "completed", executionStarted: true, executionControlState: "running",
   executionResult: result({ headline: "degraded", recording: "degraded",
-    recording_degraded_items: 1 }), progressState: null, review: null, form: null,
+    recording_degraded_items: 1 }), review: null, form: null,
 });
 assert.equal(terminalTask.title, "Degraded", "known terminal degradation cannot stay green");
 assert.equal(terminalTask.state, "degraded");

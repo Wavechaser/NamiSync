@@ -7,6 +7,8 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Protocol
 
+from namisync.interfaces.ui_state import MAX_JAVASCRIPT_SAFE_INTEGER
+
 from namisync.workflows import (
     EXECUTION_KIND,
     INVENTORY_KIND,
@@ -296,6 +298,7 @@ class TaskDrainView:
     session_id: str
     drain_id: str
     updates: tuple[TaskUpdateView, ...]
+    snapshot: Mapping[str, object]
 
     def __post_init__(self) -> None:
         _require_task_id(self.task_id)
@@ -306,6 +309,17 @@ class TaskDrainView:
             or len(self.updates) > _TASK_DRAIN_CAPACITY
         ):
             raise ValueError("task drain updates are invalid")
+        if type(self.snapshot) is not dict:
+            raise ValueError("task snapshot must be a detached dictionary")
+        if (
+            type(self.snapshot.get("wire_version")) is not int
+            or self.snapshot.get("wire_version") != 1
+            or self.snapshot.get("task_id") != self.task_id
+            or self.snapshot.get("session_id") != self.session_id
+            or type(self.snapshot.get("revision")) is not int
+            or not 0 <= self.snapshot["revision"] <= MAX_JAVASCRIPT_SAFE_INTEGER
+        ):
+            raise ValueError("task snapshot identity is invalid")
 
 
 @dataclass(frozen=True, slots=True)

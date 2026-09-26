@@ -269,6 +269,7 @@ async function proveBrowserGate(sourceId, targetId) {
       mainPlan.task_id,
       mainPlan.session_id,
       (update) => {
+        if (update === null) return;
         mainAccepted.push(update);
         if (
           update.update_type === "event" &&
@@ -337,7 +338,7 @@ async function proveBrowserGate(sourceId, targetId) {
   const stopBusy = startTaskDrain(
     busyPlan.task_id,
     busyPlan.session_id,
-    (update) => busyAccepted.push(update),
+    (update) => { if (update !== null) busyAccepted.push(update); },
     (error) => busyRefusals.push({ name: error.name, code: error.code ?? null }),
   );
   await waitFor(
@@ -360,7 +361,7 @@ async function proveBrowserGate(sourceId, targetId) {
   const stopMalformed = startTaskDrain(
     malformedPlan.task_id,
     malformedPlan.session_id,
-    (update) => malformedAccepted.push(update),
+    (update) => { if (update !== null) malformedAccepted.push(update); },
     (error) => malformedRefusals.push(error),
   );
   await waitFor(

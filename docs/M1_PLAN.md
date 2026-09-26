@@ -24,8 +24,9 @@ after documentation reconciliation and five study moves. Recheck changed seams
 before dependent implementation. The
 [study](POST_M1_8_ABLATION.md) owns findings, source evidence and compact rejected
 dispositions. This section is the sole AB register. The original AB-1–AB-10 batch
-authorization was later paused after AB-7. AB-7R is now separately authorized;
-AB-8 remains paused. Revision based on `0c74ee7` settled D2/D4; later delivered
+authorization was later paused after AB-7. AB-7R/7S and recovery follow-ups are
+delivered; AB-8 is delivered on 2026-09-26, with the requested recap pause now active.
+Revision based on `0c74ee7` settled D2/D4; later delivered
 checkpoints update the current transport contract in BRIDGE.
 
 - In scope: W1–W4 documentation/workflow, E1 optional benchmarks, L1–L4,
@@ -108,7 +109,7 @@ cleanup commit. New findings do not silently add rows.
 | AB-7 | Existing admission/completion preserves original outcomes without page-timeout result abandonment or replay | AB-6; D2 settled | Delayed/post-effect failed delivery, bounded observation recovery/exhaustion, duplicate protection and close | Complete; original outcomes retained; installed34/34 and independent/Claude review |
 | AB-7R | Reduce AB-7 recovery to command-specific authority and actual UI dependencies | AB-7; §14 validation and user authorization | Delayed/late results, qualified receipt recovery, current-state reconciliation, ordering/retirement, ordinary/imports and affected installed journeys | Delivered; separate AB-7R reduction commit |
 | AB-7S | Consolidate recovery implementation and reduce tests to distinct product guarantees | AB-7R; user authorization 2026-09-26 | One attempt/settlement path, local outcome ownership, retained behavior matrix, ordinary/imports and installed journeys; independent review | Complete; separate reviewed product/test reduction |
-| AB-8 | Existing shell renders bounded authoritative Python task snapshots | AB-4/5/6/7S | Producer→snapshot→page, ordinary/imports and installed task journeys | Pending; not authorized |
+| AB-8 | Existing shell renders bounded authoritative Python task snapshots | AB-4/5/6/7S | Producer→snapshot→page, ordinary/imports and installed task journeys | Delivered 2026-09-26; paused for user recap |
 | AB-9 | Remaining visual/source pins protect behavior rather than incidental spelling | AB-8 | Static/security, computed style, ordinary and installed gallery | Pending |
 | AB-10 | Integrated reductions preserve the complete retained workflow and have coherent docs/evidence | All above | Overall final sweep below | Pending |
 
@@ -639,47 +640,42 @@ retain pre-existing AB-3/AB-6 worktree/recovery records for AB-10 accounting.
 
 #### AB-8 — Authoritative task snapshots and bounded shell refactor
 
-**Objective.** Implement S3 before inventory extends the same shell, removing the
-second semantic event interpreter while retaining existing user workflows.
-**Scope and approach.** Python adapter task state in drain owns presentation
-reduction fed by SessionObserver; workflows still own domain truth and dispatcher
-stays domain-blind. Publish detached task/session-bound revisioned snapshots of
-terminal/recording axes, progress and unavailable/incomplete facts. Keep bounded
-item windows and one-detail reads separate. Define/validate the internal wire
-version at browser ingress; do not expose the whole outcome map. Move semantic
-event/attempt reduction out of `bridge.js`, `app.js` and `task_status.js`, keeping
-drafts, focus, scroll, pending feedback and visual formatting local. Prefer one
-Python rate/ETA sample history with monotonic time and explicit reset on attempt/
-Gap; the browser only formats the result. Existing panels/renderers remain.
-Complete AB-7S before freezing the snapshot shape; snapshots preserve its qualified
-pending/unavailable feedback and retained original-result recovery. No framework, preparatory
-shell rewrite or S5 merger. D4's highlighting/focus behavior remains intact.
+**Delivered, 2026-09-26.** The Python desktop adapter now owns one bounded
+presentation reducer per task/session. Drain publishes a detached versioned
+snapshot with its byte-admitted prefix; staged failure cannot consume queue
+custody or advance presentation state. Native replay preserves newer facts and
+explicit Gap uncertainty. Terminal truth does not certify item completeness.
+Item windows and one-detail reads retain their independent bounds and owners;
+the snapshot carries no outcome map.
 
-**Acceptance criteria.** Atomic snapshot adoption rejects stale/foreign identity
-and preserves exact scalar values. Upstream Gap remains unknown until supported
-reconciliation; terminal cannot fabricate item completeness. One semantic progress
-owner; controls/follow/window invalidation/Retry/pending Close still work. CLI and
-history events and mutable execution authority remain unchanged. Retirement frees
-presentation state without changing task/session effect ownership.
-**Regression watchlist.** Deferred directory work, repeated attempts, zero/unrun/
-canceled/degraded outcomes, capacity plus independent failure, large-byte counts,
-Gap immediately before terminal, stale snapshot after navigation or close.
-**Tests and evidence.** Characterize current producer→page cases first; test new
-Python snapshots from real events and page adoption with the same independent
-expected facts. Retain transport/control/cleanup in drain/task-shell JS probes.
-Run interfaces/workflows/dispatcher departments, ordinary/imports and complete
-installed task/Plan/execution/detail/Retry/Close journeys. Count bounded publication
-and window/detail populations at existing large fixtures; optional benchmarks
-can compare the updated real endpoints without certifying speed.
-**Documentation and handoff.** BRIDGE wire/adoption, INTERFACES state/ownership,
-PRESENTATION semantics, ARCHITECTURE locator and PERFORMANCE changed endpoints.
-Review tracer usefulness and remaining S5 joins read-only; neither finding adds
-implementation. T2 removes only superseded event/reload assertions.
-**Adversarial review.** Follow a dropped upstream event, delayed old snapshot,
-terminal with missing details and close race end-to-end. Confirm fewer semantic
-owners rather than the old reducer hidden behind a new DTO.
-**Commit gate.** One server/page protocol change including probes, docs and
-installed verification; `refactor(web): render authoritative task snapshots`.
+The existing shell adopts supplied facts and formats progress/rate/ETA. Browser
+transport cursor, replay, callback retry and actual terminal-delivery custody
+remain; local interaction, D4, command recovery and pending Close are preserved.
+CLI/history events and domain effect authority are unchanged. Real producer,
+native reduction and page-adoption tests replace browser semantic reduction
+tests; direct diagnostic consumers handle snapshot-only callbacks.
+
+Review corrections scope snapshot lifetime/revisions to the current session,
+prevent a retained Plan result or Gap from becoming execution truth, preserve
+aggregate rate samples across ordinary item/outcome handoffs, and retire settled
+control feedback when authoritative control state arrives. Focused red/green
+witnesses cover the lost guarantees. The earlier larger-window stack/wrap
+assertion passed unchanged on rerun; its cause remains unexplained.
+
+Acceptance: complete suite **5,366 passed, 4 Windows symlink-privilege skips**,
+including installed journeys; **12 import contracts kept**; fresh independent
+source review and Opus 5.5/high re-review; documentation links/diff checked.
+Evidence and recovery chronology: `build/ab8-20260926/` and
+`build/ab8-resume-20260926/verification.md`; the expanded activated boundary is
+retained in the latter directory. Recovery `f7a170a` was reconstructed as a
+coherent change on base `4f1537c2`, never merged/cherry-picked.
+
+This consolidates ownership rather than producing a large source reduction:
+product +68 lines, tests -181, tooling +1 before documentation. The Plan-again
+tracer remains useful for command admission/effect diagnosis. S5's settlement,
+observer/dispatcher cleanup and plan-retirement joins remain deferred. No
+framework, new command protocol, S5 merger or AB-9/10 implementation shipped.
+**Pause for user recap before further checkpoint implementation.**
 
 #### AB-9 — Retain behavioral visual tests
 

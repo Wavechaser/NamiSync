@@ -227,6 +227,7 @@ async function finish() {
 
 
 function acceptUpdate(task, update) {
+  if (update === null) return; // Snapshot-only catch-up is not an event sample.
   if (update.update_type === "record") {
     recordSample("terminal_record", update);
     terminalRecords += 1;

@@ -100,6 +100,7 @@ SETUP_OPTIONS = SetupOptionsView(
     False,
     False,
 )
+from namisync.interfaces.web.task_snapshot import TaskPresentationState
 SETUP_OPTIONS_JSON = {
     "filters": ["*.tmp"],
     "deletion_policy": "trash",
@@ -1188,12 +1189,14 @@ PUBLIC_VIEW_WITNESSES: dict[
                 SESSION_ID,
                 DRAIN_ID,
                 (TASK_EVENT_UPDATE, TASK_RECORD_UPDATE),
+                TaskPresentationState(TASK_ID, SESSION_ID).snapshot(),
             ),
             {
                 "task_id": TASK_ID,
                 "session_id": SESSION_ID,
                 "drain_id": DRAIN_ID,
                 "updates": [TASK_EVENT_UPDATE_JSON, TASK_RECORD_UPDATE_JSON],
+                "snapshot": TaskPresentationState(TASK_ID, SESSION_ID).snapshot(),
             },
         ),
     ),

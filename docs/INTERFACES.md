@@ -207,7 +207,8 @@ vocabularies; their exact meanings remain in [CORE.md](CORE.md). Live event
 bodies are supported Python producer projections rather than a second browser
 schema. Required Node coverage sends all seven production event projections
 through the public consumer and keeps public result/record negative cases. The
-required drain probe separately owns transport/reducer behavior.
+required drain probe separately owns transport and snapshot adoption. Python
+task-snapshot tests own semantic progress/attempt reduction.
 
 The browser has one live-event transport check,
 `validateLiveSessionEvent`: an exact wrapper, matching session, positive
@@ -215,7 +216,7 @@ SafeInt sequence, current v5 marker, recognized tag, and plain-object body. It
 does not mirror Python body vocabularies, timestamp grammar, cross-field rules,
 or reliable-byte accounting. The drain still validates update unions, strict
 sequence order, Gap recovery cursors, terminal ordering, batch capacity, and
-reducer transitions before any callback or cursor mutation. The consolidation
+snapshot identity/shape before any callback or cursor mutation. The consolidation
 audit found no surviving legacy helper or semantic twin, and live
 task events reject a retired transport version without advancing the cursor.
 
@@ -225,7 +226,7 @@ byte wall is enforced once by `canonical_event_bytes` before EventHub mutation;
 ASCII and mixed-Unicode exact-maximum/plus-one cases prove its UTF-8 accounting.
 Persistence readback retains exact timestamp, Unicode, scalar, and cross-field
 validation. Browser whole-batch refusal remains for transport, ordering,
-lifecycle, and reducer failures, with clean replay of previously unaccepted
+lifecycle, and snapshot admission failures, with clean replay of previously unaccepted
 updates.
 
 The current public service surface includes:
@@ -572,6 +573,13 @@ compensation. The strong import contract `Web task drain cannot reach domain
 lifecycle owners` forbids both direct and indirect drain paths to those owners,
 including `SessionObserver`.
 
+The same task owner retains one compact presentation state reduced by
+`web/task_snapshot.py`. Its versioned snapshot is captured with the drain's
+byte-admitted prefix; no second lifecycle or complete outcome map is introduced.
+The browser adopts supplied task/progress facts and formats them, retaining local
+interaction and command-recovery state. BRIDGE owns adoption and replay ordering;
+PRESENTATION owns the independent bounded item window/detail representation.
+
 For a Plan execution, the same task owner also keeps one adapter execution epoch.
 The epoch is armed inside the application delivery factory before its sink is
 returned, so a synchronous first event cannot precede overlay state. Admission
@@ -648,11 +656,11 @@ Bare result-free re-observation snapshots remain valid but cannot earn that
 receipt. Explicit replay still invalidates its uncertain observation generation;
 it does not revoke a previously earned delivery receipt. Release consumes that
 receipt even if replay has cleared the transient terminal cache. Browser batch
-refusal precedes callbacks, cursor/reducer advancement, and release; successful
+refusal precedes callbacks, cursor/snapshot adoption, and release; successful
 terminal presentation remains required before the browser requests release.
 Suspended browser observation can explicitly retry this existing exact-session
 replay path. It restores update delivery, not domain execution or a new session.
-The last successfully presented cursor and reducer survive suspension; a failed
+The last successfully presented cursor and snapshot survive suspension; a failed
 presentation restores their prior values. Pending task Close still depends on
 real terminal delivery, with browser retirement fences governed by BRIDGE.
 Failed single-flight starts retain only a closed four-value failure code for

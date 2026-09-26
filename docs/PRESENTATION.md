@@ -4,6 +4,13 @@ This document owns the bridge-facing representation of plan and inventory facts:
 
 ## Retained execution review and evidence classification
 
+Task presentation is reduced once in the Python desktop adapter. Its bounded,
+task/session-bound snapshots supply progress, control and terminal facts to the
+existing shell; the browser owns formatting and local interaction state.
+BRIDGE owns snapshot admission and delivery. A snapshot is not an execution
+authorization, a complete outcome index or proof that an upstream Gap was
+reconciled. Item windows and exact detail keep the independent bounds below.
+
 The workflow retains the exact immutable core terminal result for a task-bound
 execution. Its summary preserves the filesystem, recording, audit,
 disposition, cancellation, phase, byte, error, recording-issue and omission

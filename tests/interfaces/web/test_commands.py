@@ -83,6 +83,7 @@ from namisync.interfaces.web.drain import (
     _TaskDrainResponseCodec,
 )
 from namisync.interfaces.web.slots import FolderSlotTable, SlotUnavailableError
+from namisync.interfaces.web.task_snapshot import TaskPresentationState, TaskSnapshotStage
 from namisync.interfaces.web.readiness import CommandPhase, ReadinessContext
 from namisync.workflows import (
     PLAN_KIND,
@@ -113,6 +114,10 @@ TARGET_ID = "slot-22222222222222222222222222222222"
 COMMAND_ID = "a3" * 16
 TASK_ID = "task-" + "3" * 32
 SESSION_ID = "5" * 32
+
+
+def _task_snapshot(task_id: str = TASK_ID, session_id: str = SESSION_ID) -> dict[str, object]:
+    return TaskPresentationState(task_id, session_id).snapshot()
 DRAIN_ID = "d6" * 16
 BOOTSTRAP_CONTEXT = ReadinessContext(CommandPhase.BOOTSTRAP, 7)
 OPEN_CONTEXT = ReadinessContext(CommandPhase.OPEN, 7)
@@ -342,7 +347,7 @@ class _Service:
         self.calls.append(
             ("drain", task_id, session_id, drain_id, replay_from)
         )
-        return TaskDrainView(task_id, session_id, drain_id, ())
+        return TaskDrainView(task_id, session_id, drain_id, (), _task_snapshot(task_id, session_id))
 
     def drain_for_bridge(
         self,
@@ -369,6 +374,7 @@ class _Service:
             result.session_id,
             result.drain_id,
             result.updates,
+            TaskSnapshotStage(TaskPresentationState(result.task_id, result.session_id), lambda: 0.0),
         )
 
     def request_task_close(
@@ -2424,7 +2430,7 @@ def test_br_g_33_next_events_delegates_exact_authority_and_returns_typed_view() 
         }
     )
 
-    assert result == TaskDrainView(TASK_ID, SESSION_ID, DRAIN_ID, ())
+    assert result == TaskDrainView(TASK_ID, SESSION_ID, DRAIN_ID, (), _task_snapshot())
     assert registry.calls == [
         ("drain", TASK_ID, SESSION_ID, DRAIN_ID, 17)
     ]
@@ -2586,9 +2592,9 @@ def test_br_g_33_next_events_refuses_nonexact_payloads(payload: object) -> None:
     "result",
     [
         object(),
-        TaskDrainView("task-" + "9" * 32, SESSION_ID, DRAIN_ID, ()),
-        TaskDrainView(TASK_ID, "9" * 32, DRAIN_ID, ()),
-        TaskDrainView(TASK_ID, SESSION_ID, "9" * 32, ()),
+        TaskDrainView("task-" + "9" * 32, SESSION_ID, DRAIN_ID, (), _task_snapshot("task-" + "9" * 32)),
+        TaskDrainView(TASK_ID, "9" * 32, DRAIN_ID, (), _task_snapshot(session_id="9" * 32)),
+        TaskDrainView(TASK_ID, SESSION_ID, "9" * 32, (), _task_snapshot()),
     ],
 )
 def test_br_g_33_next_events_refuses_invalid_or_mismatched_registry_result(
@@ -3009,6 +3015,7 @@ def test_br_g_33_codec_approves_only_exact_adapter_task_views() -> None:
         SESSION_ID,
         DRAIN_ID,
         (TaskEventUpdateView("event", event),),
+        _task_snapshot(),
     )
 
     assert ADAPTER_PUBLIC_VIEW_DATACLASSES == {
@@ -3040,6 +3047,7 @@ def test_br_g_33_codec_approves_only_exact_adapter_task_views() -> None:
                 },
             }
         ],
+        "snapshot": _task_snapshot(),
     }
     result = operation_result_view(OperationResult(SessionState.COMPLETED))
     record = SessionRecordView(
@@ -3123,7 +3131,7 @@ def _invalid_task_update_views():
 @pytest.mark.parametrize("update", _invalid_task_update_views())
 def test_next_events_rechecks_exact_nested_task_data(update) -> None:
     commands, _, service = _commands()
-    returned = TaskDrainView(TASK_ID, SESSION_ID, DRAIN_ID, (update,))
+    returned = TaskDrainView(TASK_ID, SESSION_ID, DRAIN_ID, (update,), _task_snapshot())
     service.drain = lambda *args, **kwargs: returned
     with pytest.raises(RuntimeError, match="invalid drain data"):
         _invoke(commands["next_events"], {
@@ -3134,7 +3142,7 @@ def test_next_events_rechecks_exact_nested_task_data(update) -> None:
 
 @pytest.mark.parametrize("update", _invalid_task_update_views())
 def test_task_serializer_rechecks_nested_data(update) -> None:
-    returned = TaskDrainView(TASK_ID, SESSION_ID, DRAIN_ID, (update,))
+    returned = TaskDrainView(TASK_ID, SESSION_ID, DRAIN_ID, (update,), _task_snapshot())
     with pytest.raises(BridgeProtocolError):
         to_primitive_view(returned)
 
@@ -3147,13 +3155,19 @@ def test_task_serializer_rechecks_body_mutated_after_command_return() -> None:
     )
     returned = TaskDrainView(
         TASK_ID, SESSION_ID, DRAIN_ID, (TaskEventUpdateView("event", event),),
+        _task_snapshot(),
     )
     service.drain = lambda *args, **kwargs: returned
     accepted = _invoke(commands["next_events"], {
         "task_id": TASK_ID, "session_id": SESSION_ID,
         "drain_id": DRAIN_ID, "replay_from": None,
     })
-    assert accepted == returned
+    assert accepted.updates == returned.updates
+    assert accepted.task_id == returned.task_id
+    assert accepted.session_id == returned.session_id
+    assert accepted.drain_id == returned.drain_id
+    assert accepted.snapshot["revision"] == 1
+    assert returned.snapshot["revision"] == 0
     assert accepted is not returned
     event.body["state"] = "invented"
     assert to_primitive_view(accepted)["updates"][0]["event"]["body"] == {
@@ -3168,6 +3182,7 @@ def test_task_serializer_does_not_recertify_trusted_event_body() -> None:
     )
     returned = TaskDrainView(
         TASK_ID, SESSION_ID, DRAIN_ID, (TaskEventUpdateView("event", event),),
+        _task_snapshot(),
     )
 
     assert to_primitive_view(returned)["updates"][0]["event"] == {

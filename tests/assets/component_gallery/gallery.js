@@ -477,23 +477,33 @@ window.addEventListener("unhandledrejection", (event) => {
   galleryRail.render([
     {
       taskId: "task-gallery-executing", label: "Current sync", review: null,
+      sessionId: "1".repeat(32),
       form: { source: { text: "C:\\source" }, target: { text: "D:\\target" } },
       sessionState: "active", executionStarted: true, executionControlState: "running",
-      progressState: { progress: { items_done: 4, items_total: 10 }, phase: "sync" },
+      snapshot: { session_id: "1".repeat(32), session_state: "active", phase: "sync", presentation: {
+        value: 40, determinate: true, indeterminate: false,
+        items_done: 4, items_total: 10,
+        throughput_bytes_per_second: null, eta_seconds: null,
+      } },
       error: null, closePending: false, executionAttempt: null,
     },
     {
       taskId: "task-gallery-paused", label: "Paused verification", review: null,
+      sessionId: "2".repeat(32),
       form: { source: { text: "C:\\source" }, target: { text: "D:\\target" } },
       sessionState: "active", executionStarted: true, executionControlState: "paused",
-      progressState: { progress: { items_done: 7, items_total: 10 }, phase: "verify" },
+      snapshot: { session_id: "2".repeat(32), session_state: "active", phase: "verify", presentation: {
+        value: 70, determinate: true, indeterminate: false,
+        items_done: 7, items_total: 10,
+        throughput_bytes_per_second: null, eta_seconds: null,
+      } },
       error: null, closePending: false, executionAttempt: null,
     },
     {
       taskId: "task-gallery-canceled", label: "Canceled sync", review: null,
       form: { source: { text: "C:\\source" }, target: { text: "D:\\target" } },
       sessionState: "canceled", executionStarted: true, executionControlState: "running",
-      progressState: null, error: null, closePending: false, executionAttempt: null,
+      snapshot: null, error: null, closePending: false, executionAttempt: null,
     },
   ], "task-gallery-executing", false);
   galleryRail.element.querySelector('.nami-task-card[aria-current="page"]')

@@ -1843,8 +1843,9 @@ transfer rate or ETA promised to users.
 
 **M1-8 progress presentation.** Events carry dispatcher-stamped UTC `at`;
 ordinary executor/verifier progress is throttled (normally 100 ms), with forced
-boundaries and lossy coalescing, not a delivery metronome. The browser reducer
-retains that time with the accepted Progress body (BRIDGE owns the contract).
+boundaries and lossy coalescing, not a delivery metronome. The Python adapter
+reduces accepted Progress and publishes presentation facts (BRIDGE owns the
+snapshot contract); the browser formats those facts.
 The digest uses phase aggregate bytes, with item-count fallback only for known
 byte-free work. Nominal active-item bytes feed Plan row progress independently;
 automatic verification preserves the settled operation lifecycle.
@@ -1860,22 +1861,27 @@ automatic verification preserves the settled operation lifecycle.
   Reliable outcomes retire active decoration and supply the terminal row result.
   Verification progress remains separate from the already-settled operation
   result; it must not turn a completed copy back into an executing copy.
-- Throughput uses aggregate byte deltas divided by accepted event-time deltas.
+- Throughput uses aggregate byte deltas divided by Python monotonic sample deltas.
   Share one five-second smoothing horizon with phase ETA: a time-weighted EMA
   with `alpha = 1 - exp(-dt / 5s)`, seeded by the first valid two-sample rate.
   Retain only a prior sample and smoothed rate. Subtract Scalar64 bytes exactly
   before approximate rate/ratio conversion. No per-item rate or second filter.
-  Sample once per accepted Progress update, never on repaint or an outcome
-  update that merely retains the prior Progress body/time.
+  Sample once per newly accepted Progress update, never on replay, repaint or an
+  outcome update that merely retains the prior Progress body.
 - ETA is `(bytes_total - bytes_done) / smoothed_rate` for this phase only.
   Unknown totals or a zero/unavailable rate give unavailable ETA; throughput can
   remain available without a total. Estimates never predict subsequent verify
   work from execute, or survive terminal settlement. Label them as estimates.
-- Equal/backward timestamps simply rebase sampling and make the estimate
+- Equal/backward sample times simply rebase sampling and make the estimate
   unavailable until another positive interval; do not reject valid progress.
-  Pause/resume, hidden-task return and budget changes restart sampling; phase,
-  session, explicit Gap and terminal/reset retire the old estimate. Ordinary
-  sequence holes/coalescing use observed deltas with no recovery or compensation.
+  Ordinary item handoffs retain aggregate sampling, including handoff after a
+  reliable outcome; outcomes themselves do not sample. A stream's first attempt
+  ID retains sampling. Pause/resume, retry of the same item and budget changes
+  restart sampling; phase, session, explicit Gap and terminal/reset retire the
+  old estimate. Navigation
+  does not create a second rate history: returning to a task adopts its current
+  authoritative estimate. Ordinary sequence holes/coalescing use observed
+  deltas with no recovery or compensation.
 - Preserve ARCHITECTURE's aggregate high-water rule. Within a phase, displayed
   percentage is a high-water of the valid computed percentages, so an expanded
   verifier budget does not move the bar backward. For the same active item,

@@ -252,7 +252,6 @@ def test_modules_use_only_local_explicit_js_imports(
             "./panels.js",
             "./rail.js",
             "./render.js",
-            "./task_status.js",
         ],
         "appearance.js": [],
         "bridge.js": [],

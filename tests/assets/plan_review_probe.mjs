@@ -194,7 +194,6 @@ const source = (await readFile(process.argv[2], "utf8"))
   .replace("./task_status.js", taskStatusUrl)
   .replace("./render.js", renderUrl);
 const { createPlanReviewPanel } = await import(moduleUrl(source));
-const { advanceProgressPresentation } = await import(taskStatusUrl);
 
 const calls = [];
 const callbacks = Object.fromEntries([
@@ -330,6 +329,12 @@ review.summary = { ...summary, preflight_ready: true, preflight_refusal_count: 0
 panel.render(task);
 assert.equal(tierStatus.textContent, "Plan ready");
 assert.equal(executeButton.disabled, false);
+const planGap = { session_id: "7".repeat(32), session_state: "completed",
+  gap_first_missed_seq: 4 };
+panel.render({ ...task, sessionId: planGap.session_id, snapshot: planGap });
+assert.equal(findByClass(panel.element, "nami-plan-review__execution-alert").hidden, true,
+  "a Plan-session Gap cannot be labeled as execution history loss");
+assert.equal(findByClass(panel.element, "nami-plan-review__execution").hidden, true);
 panel.render({ ...task, review: null, reviewLoading: true });
 for (const action of ["execute", "plan-again", "pause", "resume", "cancel"]) {
   const control = findAction(panel.element, action);
@@ -1230,6 +1235,7 @@ const liveReview = {
 };
 const liveTask = {
   ...executionTask, review: liveReview, executionResult: null, sessionState: "active",
+  sessionId: "8".repeat(32),
   executionControlState: "running",
   progressPresentation: {
     phase: "execute", activeItem: { item_id: operationId, item_type: "operation" },
@@ -1271,17 +1277,14 @@ liveIntent = findByClass(liveElement, "nami-plan-row__intent");
 assert.equal(liveIntent.dataset.lifecycle, "completed", "retirement keeps copy outcome");
 assertSameNode(findByClass(liveIntent, "nami-plan-row__verification"), null);
 assert.ok(document.activeElement === liveElement, "retirement keeps row focus");
-const largeProgress = (bytes, at) => ({ phase: "execute", progressAt: at, activeItem: null,
-  progress: { bytes_done: bytes, bytes_total: "9223372036854775807",
-    items_done: 0, items_total: 1 } });
-const progressEvent = { update_type: "event", event: { body_type: "Progress" } };
-const rateStart = largeProgress("0", "2026-09-23T00:00:00+00:00");
-const rateEnd = largeProgress("90071992547409920", "2026-09-23T00:00:05+00:00");
-const firstRate = advanceProgressPresentation(null, rateStart, progressEvent);
-liveTask.progressPresentation = advanceProgressPresentation(firstRate, rateEnd, progressEvent);
-liveTask.progressState = rateEnd;
-assert.ok(liveTask.progressPresentation.throughputBytesPerSecond > Number.MAX_SAFE_INTEGER,
-  "a valid five-second Scalar64 delta exceeds the exact Number integer boundary");
+liveTask.snapshot = {
+  session_id: liveTask.sessionId, session_state: "active", phase: "execute", terminal_result: null,
+  presentation: {
+    value: 0, determinate: false, indeterminate: true,
+    items_done: 0, items_total: 1,
+    throughput_bytes_per_second: 18014398509481984, eta_seconds: null,
+  },
+};
 livePanel.render(liveTask);
 assert.ok(findText(findByClass(livePanel.element, "nami-plan-review__status-summary"),
   "16.00 PiB/s estimate"), "the approximate large rate renders without violating the exact byte formatter");

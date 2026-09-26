@@ -23,7 +23,7 @@ validation remains in `task_port.py` and its browser consumer.
 
 `next_events` is the current observation operation. It identifies the task, exact session, fresh drain id, and optional positive replay sequence, returns the longest response-byte-admitted ordered prefix of zero to 64 updates and consumes only that prefix. The 8 MiB response wall may admit fewer than 64. The server wait is at most 25 seconds and the browser deadline is 30 seconds. A valid reliable envelope is at most 1,048,576 canonical UTF-8 bytes before sequence, queue, replay, subscriber, or audit mutation, so one valid queue head fits the response wall.
 
-Progress is lossy and may be coalesced; numeric sequence holes alone do not trigger recovery. An explicit `Gap` is visible, stops later batch application, and starts recovery from its first missing sequence. Transport uncertainty uses a new drain id and replay from the last accepted non-Gap sequence plus one. The browser validates a whole response and applies it atomically: an invalid wrapper, order, lifecycle relation, Gap cursor, or reducer relation changes no accepted cursor and runs no callback. A matching leading Gap on recovery proves the prefix is gone; preserve it, apply the available tail, and do not loop. A terminal record stops draining without erasing a visible loss.
+Progress is lossy and may be coalesced; numeric sequence holes alone do not trigger recovery. An explicit `Gap` is visible, stops later batch application, and starts recovery from its first missing sequence. Transport uncertainty uses a new drain id and replay from the last accepted non-Gap sequence plus one. The browser validates the whole response before adoption: an invalid wrapper, order, lifecycle relation, Gap cursor or snapshot changes no accepted cursor and runs no callback. A matching leading Gap on recovery proves the prefix is gone; preserve it, apply the available tail, and do not loop. A terminal record stops draining without erasing a visible loss.
 
 The adapter queue is bounded to 64 updates. New Progress replaces queued Progress or is discarded when reliable entries fill the queue. Reliable events and terminal records may evict Progress, never reliable data; an all-reliable queue backpressures its observation sink until drain or shutdown. One drain at a time owns a task; a competing drain supersedes and wakes the incumbent, waits within its bound, then returns the typed busy result. A progress-only drain may linger once for 150 ms from first availability without extending that deadline; reliable, Gap, terminal, recovery, close, and supersession wake immediately.
 
@@ -59,58 +59,58 @@ only R0 command extension; the Plan execution-summary response also carries
 the terminal record times described above. Progress timestamp retention uses
 existing event fields. PRESENTATION and DESKTOP_UI own view/interaction semantics.
 
-### Progress reduction
+### Authoritative task snapshots
 
-The derived view retains the timestamp
-of its latest accepted Progress envelope alongside that body. The wire already
-transports `at`; no schema change is needed. Body/time must advance atomically
-in reducer preflight and delivery. Non-progress updates that retain the body
-retain its time; fresh phase, Gap and terminal/reset clear both. A repeated
-same-phase PhaseChanged preserves both. Receipt/render time must not replace
-event time. DESKTOP_UI owns rate smoothing; it does not belong in this pure
-protocol reducer.
+The Python desktop adapter owns task presentation reduction and progress
+estimation. Each drain response carries one detached, bounded snapshot with
+an independent internal wire version, exact task/session identity and a safe
+revision. `task_port.py` owns the drain wrapper; `web/task_snapshot.py` owns the
+snapshot fields and reduces captured observations under the drain's existing
+task owner. Browser
+admission checks version, identity, revision, canonical scalars and renderable
+shape before one atomic adoption. It does not replay progress or attempt rules.
 
-Validation also preflights the applicable batch through a pure, immutable
-Progress reducer before moving the cursor or invoking a callback. Its derived
-view is supplied as the optional second `acceptUpdate(update, progressState)`
-argument, so existing one-argument consumers remain compatible. Retained state
-and the exposed view own only `phase`, `phaseAuthority` (`phase_changed`,
-`progress`, or `unknown`), the latest accepted Progress body and its `progressAt`
-timestamp, and the derived active item. `PhaseChanged` starts a fresh temporal domain only when its phase
-changes; repeating the same reliable phase promotes authority without
-discarding aggregate, item, or attempt comparisons. Progress must agree with
-reliable `phase_changed` authority. After `Gap`, progress-only authority remains
-lossy: a later self-described snapshot with a different phase replaces it and
-starts a fresh temporal domain because the intervening reliable phase change
-may be outside the retained replay tail. Same-phase Progress still retains all
-comparisons. Aggregate item/work counters cannot regress. Known selected-item
-admission is fixed,
-executor byte admission is fixed once known, and verifier byte admission may
-grow; an unknown aggregate total may become known once. One attempt's
-determinate counters cannot regress,
-change total, or reappear after becoming indeterminate. Attempt comparison is
-bounded to the current active item, and a reset token must differ from that
-item's current attempt token. A newer lossy snapshot may repoint activity to a
-different item without an observed inactive snapshot or reliable outcome: the
-intermediate clear is itself replaceable and may have been coalesced away.
-That handoff says nothing about settlement, which remains outcome-owned. The
-reducer nevertheless rejects adjacent reuse of one non-null attempt token
-under two different item identities, because an attempt belongs to exactly one
-item.
+Snapshot bytes participate in the same complete response ceiling as the event
+prefix. Reduction and byte admission are staged from captured values; failure
+cannot advance retained presentation state, pop unadmitted queue entries or
+earn a terminal receipt. A non-leading recovery Gap ends the applicable prefix;
+a matching leading replay Gap permits the available tail. Lost delivery may
+leave native presentation ahead of the page: re-observation preserves the
+newer native facts instead of reducing old events again. An old replay Gap
+records uncertainty and rebases estimates without discarding newer progress.
+Snapshot revision is local to its session: replacing a Plan session with an
+execution session retires the prior snapshot before adopting the new session's
+independent revisions. Renderers use only a snapshot bound to the current session;
+Plan Gap is not execution history loss. Revision is presentation identity, not
+effect authority or a new recovery protocol.
 
-Reliable matching outcomes clear derived activity even if the later inactive
-Progress snapshot was coalesced away. In the compound verify phase, an
-`IntegrityOutcome` with the matching plan-operation id clears the active
-`operation` identity without reinterpreting the outcome's reliable namespace.
-The just-settled identity cannot become active again without an intervening
-inactive snapshot, different active identity, or temporal domain.
-An authoritative inactive Progress may also clear activity at a reporter's
-exception boundary. `Gap` clears phase-dependent Progress state and temporal
-comparisons; a later self-described v5 Progress may restore displayable phase
-authority without reconstructing missed outcomes. `Terminal` and the terminal
-session record clear Progress and remain final truth. A pause state does not
-clear activity, and `current_path` never creates or joins identity. Callback
-views are frozen copies, so presentation code cannot mutate retained authority.
+The snapshot carries lifecycle facts, the bounded terminal result, progress and
+explicit incomplete facts; it never carries a complete per-item outcome map.
+The terminal result retains its phase and recording-issue feedback as well as
+headline axes; these are already bounded public values. A new Gap clears
+temporal comparisons and estimates, but its observed loss remains visible.
+Later progress can supply a displayable phase without reconstructing missing
+outcomes. Terminal truth clears activity without proving item completeness.
+Windows and exact details retain their separate existing bounds and owners.
+
+Python retains only current phase/aggregate and active-item/attempt comparison
+state. Reliable phase authority, fixed admitted work, attempt identity and
+counter advancement remain enforced there. Lossy handoff may change the active
+item without an observed inactive event; that does not settle the former item.
+Matching reliable outcomes clear activity, including automatic verification
+joined by operation identity. New phase, Gap and terminal reset temporal state.
+Progress estimates use one monotonic sample history and exact byte subtraction;
+DESKTOP_UI owns their visible presentation policy.
+
+Transport cursor/replay, callback failure and terminal delivery remain browser
+responsibilities. A terminal snapshot alone does not authorize session release:
+the matching terminal record must be successfully presented through the existing
+delivery path. Retry retains the exact terminal presentation and snapshot.
+Local drafts, focus, scrolling, command recovery handles and pending feedback
+remain page-owned. None of these views grant mutable execution authority.
+The drain callback receives the snapshot with the last applicable update, or
+`(null, snapshot)` for an empty catch-up. Raw-event diagnostics ignore that
+snapshot-only notification rather than counting it as an event sample.
 
 ## Command, retry, and concurrency rules
 

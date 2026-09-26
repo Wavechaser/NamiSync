@@ -58,6 +58,7 @@ from namisync.workflows import (
 
 from ._exception_graph import retire_exception_graph as _retire_exception_graph
 from .plan_review import PlanReviewState
+from .task_snapshot import TaskPresentationState, TaskSnapshotStage
 
 
 _CAPACITY = 64
@@ -211,6 +212,7 @@ class _TaskState:
     execution_gap_minimum: int | None = None
     execution_gap_maximum: int | None = None
     execution_membership: Mapping[str, str] | None = None
+    presentation_state: TaskPresentationState | None = None
 
     def sink(self, generation: int) -> Callable[[TaskDeliveryUpdate], None]:
         def accept(update: TaskDeliveryUpdate) -> None:
@@ -376,7 +378,7 @@ class _TaskDrainResponseCodec:
 
     response_too_large_error: type[Exception]
     admit: Callable[
-        [str, str, str, Iterable[TaskUpdateView]],
+        [str, str, str, Iterable[TaskUpdateView], TaskSnapshotStage],
         object,
     ]
     peek: Callable[[object], TaskDrainView]
@@ -1586,6 +1588,7 @@ class TaskRegistry:
                     task.execution_gap_minimum,
                     task.execution_gap_maximum,
                     task.execution_membership,
+                    task.presentation_state,
                 )
                 task.generation += 1
                 task.session_id = None
@@ -1606,6 +1609,7 @@ class TaskRegistry:
                 task.execution_gap_minimum = None
                 task.execution_gap_maximum = None
                 task.execution_membership = execution_membership
+                task.presentation_state = None
                 return task.sink(task.generation)
 
         result: object | None = None
@@ -1734,6 +1738,7 @@ class TaskRegistry:
             task.execution_gap_minimum = prior[13]
             task.execution_gap_maximum = prior[14]
             task.execution_membership = prior[15]
+            task.presentation_state = prior[16]
             task.prior_session_id = None
             task.prior_delivery = None
             task.transition = False
@@ -2160,6 +2165,13 @@ class TaskRegistry:
                 source = iter(queued)
                 if terminal is not None:
                     source = chain(source, (terminal,))
+                stage = TaskSnapshotStage(
+                    task.presentation_state
+                    if task.presentation_state is not None
+                    else TaskPresentationState(task_id, session_id),
+                    task.clock,
+                    replay_from,
+                )
                 task.response_capture_caller = get_ident()
                 try:
                     admitted = response_codec.admit(
@@ -2167,6 +2179,7 @@ class TaskRegistry:
                         session_id,
                         drain_id,
                         (_tag_update(update) for update in source),
+                        stage,
                     )
                 except response_codec.response_too_large_error as error:
                     _retire_exception_graph(error)
@@ -2200,6 +2213,7 @@ class TaskRegistry:
                             task.delivered_terminal_event = update.event
                         elif type(update) is TaskRecordUpdateView:
                             task.delivered_terminal_record = update.record
+                    task.presentation_state = stage.state
                     task.condition.notify_all()
         finally:
             with task.condition:

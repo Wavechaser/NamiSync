@@ -1,38 +1,45 @@
-# Latest session — Recovery feedback and fixed-outcome corrections
+# Latest session — AB-8 delivered; recap pause
 
-2026-09-26, `milestone1`, base `b4b3b72`. The user authorized three validated
-follow-up corrections, retaining separate commits without a new checkpoint.
-AB-8 remains paused. `67ee229` restores page guidance and fixture ownership;
-this following commit simplifies matching invalid-result settlement.
+2026-09-26. AB-8 is complete on `milestone1` as the coherent commit
+`refactor(web): render authoritative task snapshots`, based on `4f1537c2`.
+The user requested a recap pause after AB-8. **Do not implement AB-9/10 without
+new authorization.** M1_PLAN owns their remaining scope and the compact AB-8
+delivery record; subject documents own the resulting contracts.
 
-Plan review now selects the retained uncertain execution handle, including after
-reconstruction. The renderer repro failed before the fix; the app probe rejects
-an execution, checks the same handle after reload, and retains Execute/Close and
-selection fences. Page doubles are explicit values and Check spies; sentinel
-messages test routing, while actual bridge probes own policy and wording.
+Python now owns bounded task presentation reduction. Browser semantic progress
+reduction is retired; snapshot adoption retains transport/replay and terminal
+delivery custody, command recovery, D4 and local interaction. Windows/details
+remain separate. Product code is +68 lines, tests -181, tooling +1 before docs:
+the benefit is one semantic owner, not a large source reduction. S5 stays
+deferred and the Plan-again tracer stays available.
 
-Native observation returns the same captured final response, not repaired bytes.
-The bridge correction therefore collapses matching invalid results into
-noncheckable `fixed-unknown`, with `invalid_result` guidance and exact cleanup ACK.
-The earlier probe's in-place response rewrite was not a supported native path.
-Communication uncertainty still supports original-result observation. Neither
-cleanup nor fixed-unknown claims effect success or permits mutation replay.
-Native owners/wire, D4, lifecycle/resource/read bounds and effect fences remain.
+The user-adjudicated correction fixes stale Plan presentation suppressing a new
+execution's failed terminal record, rate resets at ordinary item handoffs and
+first stream identity, and stale settled-control feedback after recovery.
+Focused red/green witnesses remain. The earlier larger-window narrow status
+stack/wrap assertion passed unchanged on rerun; its cause remains unexplained.
+Do not classify prior AB-7 Setup/Plan-again observations as resolved.
 
-Evidence: `build/post-m1-8-ablation-20260925/correction-*`; 7 focused cases and
-the final bridge guidance rerun pass. Fresh independent review has no blockers.
-All 34 installed tests pass; 12 import contracts are kept. The interfaces gate
-had 1781 passes and one stale bridge identity-probe expectation: it treated
-fixed-unknown rejection as adoption and expected retries of immutable invalid
-data. Corrected that probe to assert uncertain rejection, no adoption/replay and
-no observations; its targeted rerun passes (`correction-interactive-consumer2`).
-Retain the failed receipt and unaffected passes; no product changes followed them.
-Unchanged domain tests retain the predecessor's ordinary-suite evidence; no
-domain code changed. Documentation links and diff checks pass.
+Final verification: complete suite **5,366 passed, 4 Windows symlink-privilege
+skips**, including installed journeys; **12 import contracts kept**; documentation
+links/diff checks. Fresh independent review and Claude Opus 5.5/high confirmed
+the corrections and found no remaining blocker. Raw evidence, review findings,
+usage and cleanup receipts are in `build/ab8-resume-20260926/`; prior failures
+remain in `build/ab8-20260926/`.
 
-Use unique external test basetemps and announce each foreground batch before
-launch and when finished. Earlier AB-7 Setup `internal_error` and Plan-again
-timeouts remain unexplained; this follow-up does not claim their cause or fix.
-No new checkout/ref was allocated or deleted. Retain `codex/ab3-mapping` and
-AB-6 recovery `56802606` for AB-10; prior AB-7 cleanup remains in
-`ab7-cleanup.json`.
+The first resume could not find the saved Claude transcript. The retry reused
+ID `82edad2f-d91a-4e16-9e90-b55ef9f5ed86` with the saved report supplied; its
+final narrow follow-up resumed successfully. This round's cumulative CLI cost
+was $2.1445782 (prior review $5.903408). Original and copied source hashes were
+verified unchanged during each review. Ten fixture files were preserved and
+the disposable review copy removed. Full usage categories remain in raw JSON.
+
+Recovery `f7a170a` was reconstructed, never merged/cherry-picked. Its exact state
+is retained in the verified `build/ab8-resume-20260926/recovery.bundle`; final
+integration/ref accounting is in `integration.json` there. Preserve unrelated
+`codex/ab3-mapping` and AB-6 recovery `56802606` for AB-10 accounting.
+
+For future native tests use a unique basetemp, `PIP_NO_CACHE_DIR=1`, native
+desktop access and process-only `PSExecutionPolicyPreference=RemoteSigned`.
+Announce every foreground batch and when the desktop is free. The desktop is
+free at handoff; no owned review/test process remains running.

@@ -242,7 +242,8 @@ defect, and move implementation-level test choreography out of the log.
   freeze observation and eventually stop the browser task drain. Fixed by
   deactivating the directory spotlight when create work returns, allowing a
   newer lossy snapshot to repoint activity without implying settlement, and
-  exercising the real executor/event-view stream through the packaged reducer.
+  exercising the real executor/event-view stream through presentation reduction.
+  AB-8 moves that reducer to Python and retains the producer-to-page witness.
 - MODERATE - FIXED (2026-08-21). Continuation progress-state loss. Pausing
   after a partial copy retained operation status and mutation evidence but not
   the aggregate byte high-water, so a resumed task could rebuild its reporter
@@ -949,6 +950,23 @@ defect, and move implementation-level test choreography out of the log.
   evidence and reproducer: `build/gui-tuning/halo-10bit/`.
 
 ### Application task lifecycle
+
+- MODERATE - FIXED (2026-09-26). Cross-session presentation retention. The AB-8
+  candidate retained a completed Plan snapshot when Execute replaced its session.
+  Cause: page admission changed session identity without retiring presentation,
+  then compared independent revision counters. A smaller execution's failed
+  terminal record could be ignored while the rail still said Completed. Fixed
+  by retiring presentation on admission, matching snapshot session identity and
+  preserving terminal handling independently of the stale-revision guard.
+  Page regressions cover the real transition and prevent Plan Gap from becoming
+  execution history loss. Domain result and mutation authority were unchanged.
+- MODERATE - FIXED (2026-09-26). Aggregate sampling domain fragmentation. The
+  AB-8 native sampler treated each ordinary active-item handoff as a reset,
+  suppressing rate and ETA throughout many-small-file execution. Cause: aggregate
+  byte sampling inherited an item-identity continuity condition. Sampling now
+  survives file handoff and outcomes, while same-item retry, phase, budget,
+  control and Gap resets remain. A focused native witness failed before correction
+  and now retains the independent expected rate across both handoff forms.
 
 - MODERATE - FIXED (2026-09-24). Observation-recovery ownership loss. Exhausted
   browser drain recovery removed the exact task/session observation owner while

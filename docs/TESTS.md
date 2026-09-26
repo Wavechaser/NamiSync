@@ -78,7 +78,7 @@ on reuse; identity-record serialization does not require a second population sca
 Required ordinary JavaScript tests are unmarked and non-skippable. They execute
 the packaged public event consumers, original-command result observation and interactive
 bridge wrappers, and the production drain-manager live-event
-transport/replay and Progress reducer. Node.js must be available through
+transport/replay and task-snapshot adoption. Node.js must be available through
 `NAMISYNC_TEST_NODE` or `PATH`; the explicit environment setting takes
 precedence. A missing or unusable executable fails these gates rather than
 silently reducing the ordinary suite to source-text inspection.
@@ -117,23 +117,27 @@ Use these automatic safeguards, not routine memory polling or a watching agent.
 Inspect resource evidence when diagnosing a failure or running a named resource
 gate. This probe limit is neither whole-suite nor product memory acceptance.
 
-The drain probe
-executes the packaged transport check and proves whole-batch rejection: an
-invalid event envelope, wrapper, lifecycle transition, or reducer transition
-cannot partially deliver co-batched reliable updates or advance the accepted
-cursor, and a clean replay delivers those reliable updates. It also
-executes the Progress reducer across reliable phase authority, numeric holes,
-Gap recovery without retained `PhaseChanged` (including a newer self-described
-phase in the retained tail), retry attempts, overshoot,
-aggregate and attempt regression refusal, reliable outcome/Terminal
-precedence, compound post-copy identity, immutable callback projections, and
-same-document observation cursor recovery. Its deferred-directory handoff case is a
-cross-boundary fixture: the public Python executor emits real envelopes through
-the lossy event subscriber and exact `SessionEventView`, then the packaged
-JavaScript reducer accepts the coalesced direct change from directory activity
-to child-copy activity without treating it as settlement. These are behavior
-checks against production producers and the packaged JavaScript, not
-source-text witnesses.
+The drain probe executes packaged transport and snapshot admission. Invalid
+wrappers, identity, version, revision, scalar/shape, order or lifecycle cannot
+partially deliver co-batched updates or advance the cursor. Clean replay,
+numeric holes, Gap recovery, callback failure, terminal-presentation retry,
+release and Close retain their transport witnesses.
+
+Python task-snapshot tests own phase/attempt transitions, aggregate and item
+high water, exact large-byte arithmetic, monotonic rate/ETA, Gap uncertainty
+and terminal precedence. A real executor deferred-directory fixture crosses
+the lossy event subscriber and service event projection into the native snapshot,
+then the packaged page consumer. Independent expected facts establish that
+directory-to-child activity handoff is not settlement. Page probes test supplied
+snapshot adoption, formatting, follow, window/detail invalidation and local
+interaction fences; they do not recreate the semantic reducer as a fake.
+Prefix tests preserve one-time capture, complete byte bounds and custody on
+failure. Lost-response replay must preserve newer native presentation while
+terminal release still requires the actual terminal delivery path.
+Page transition cases carry a completed Plan snapshot into execution admission,
+then adopt the execution's lower independent revision and failed terminal result.
+They also retain current control feedback after observation recovery. Native
+aggregate sampling cases cover ordinary file handoff as well as same-item retry.
 
 Current boundary guards divide responsibilities instead of running one event
 graph through duplicate semantic validators. Persistence-decoder tests reject
@@ -142,7 +146,7 @@ cross-field corruption before returning a stored value. Producer tests pin the
 exact reliable-envelope maximum and first excess before `EventHub` mutation;
 the exact maximum event drains alone. Browser tests admit all seven canonical
 producer projections, then atomically reject invalid transport version,
-session, sequence, tag, body-object, lifecycle, or reducer input without
+session, sequence, tag, body-object, lifecycle, or snapshot input without
 advancing the cursor; clean replay remains exact. History-v7 pages cannot carry
 a prior event version. The consolidation closeout search found no downstream
 event-body certifier; retained core guards pin prior, future, and coercive
