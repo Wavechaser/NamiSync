@@ -23,8 +23,9 @@ targeted red/green evidence and fresh review in `followup-icon*.md`. Combined
 installed verification passed all 34 headed cases; 12 import contracts and
 documentation link/diff checks pass. The initial interfaces run passed 1,781
 cases and exposed a missed policy rename in a performance helper; its 29-case
-module now passes, and the full department refresh passed all 1,782 cases. ACK/policy has
-fresh review without blockers; shared-handle work remains in design.
+module now passes, and the full department refresh passed all 1,782 cases. Icon
+fix committed as `1aecc87`. ACK/policy has fresh review without blockers and
+the same integrated evidence; shared-handle work remains in design.
 Predecessor evidence stays under
 `build/post-m1-8-ablation-20260925/ab7s-*`; M1_PLAN owns the delivered AB-7S record.
 

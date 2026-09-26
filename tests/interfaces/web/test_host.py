@@ -26,7 +26,7 @@ from namisync.interfaces.web.commands import (
     CommandAccess,
     CommandRetry,
     CommandSpec,
-    CommandTimeout,
+    CommandResponsePolicy,
     FieldRequirement,
     PickerUnavailableError,
 )
@@ -1321,7 +1321,7 @@ def test_host_admission_uses_the_final_composed_command_mapping() -> None:
             access=CommandAccess.READ_ONLY,
             command_id=FieldRequirement.FORBIDDEN,
             revision=FieldRequirement.FORBIDDEN,
-            timeout=CommandTimeout.INTERACTIVE,
+            response_policy=CommandResponsePolicy.INTERACTIVE,
             retry=CommandRetry.NONE,
         )
     }
@@ -2081,7 +2081,7 @@ def test_third_document_contains_a_held_refused_native_return(
             access=CommandAccess.READ_ONLY,
             command_id=FieldRequirement.FORBIDDEN,
             revision=FieldRequirement.FORBIDDEN,
-            timeout=CommandTimeout.INTERACTIVE,
+            response_policy=CommandResponsePolicy.INTERACTIVE,
             retry=CommandRetry.NONE,
         )},
         admit=lambda _name: AdmissionRefused(),

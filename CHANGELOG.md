@@ -1053,6 +1053,10 @@ claims explicit, independently reviewable, and regression-backed.
 - Restore the icon-only Plan again control after its recovery-label update
   replaced the icon. Keep its accessible name and tooltip aligned with the
   normal or Check action; verify the renderer transition before and after.
+- Adopt valid asynchronous results independently of cleanup ACK success, keeping
+  bounded cleanup and read deadlines. Rename command metadata to `response_policy`
+  across native/browser policy and helper consumers; no wire change. Verify
+  1,782 interface cases, all 34 installed cases and independent review.
 
 #### Review AB-7 original-outcome recovery (2026-09-26)
 

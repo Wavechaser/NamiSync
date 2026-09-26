@@ -23,34 +23,34 @@ const ASYNC_CLEANUP_ACK_TIMEOUT_MS = 1000;
 const COMMAND_COMPLETION_KIND = "namisync.command-completion.v1";
 const COMMAND_COMPLETION_PHASE = "completion";
 const COMMAND_POLICY_JSON = `{
-  "shell_ready": {"timeout": "startup-5-seconds", "retry": "none", "phase": "bootstrap"},
-  "readiness_echo": {"timeout": "startup-5-seconds", "retry": "same-payload-once", "phase": "bootstrap"},
-  "pick_folder": {"timeout": "interactive", "retry": "none", "phase": "open"},
-  "create_task": {"timeout": "mutation-observed", "retry": "none", "phase": "open"},
-  "list_tasks": {"timeout": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
-  "read_setup": {"timeout": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
-  "probe_recent_pairs": {"timeout": "local-5-seconds", "retry": "none", "phase": "open"},
-  "prepare_setup": {"timeout": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
-  "admit_location": {"timeout": "feedback-only", "retry": "none", "phase": "open"},
-  "read_cosmetic_section": {"timeout": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
-  "replace_cosmetic_section": {"timeout": "feedback-only", "retry": "none", "phase": "open"},
-  "start_plan": {"timeout": "mutation-observed", "retry": "none", "phase": "open"},
-  "start_inventory": {"timeout": "mutation-observed", "retry": "none", "phase": "open"},
-  "plan_again": {"timeout": "mutation-observed", "retry": "none", "phase": "open"},
-  "open_plan_view": {"timeout": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
-  "update_plan_view": {"timeout": "feedback-only", "retry": "none", "phase": "open"},
-  "get_plan_window": {"timeout": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
-  "get_execution_detail": {"timeout": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
-  "get_plan_anchor": {"timeout": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
-  "mutate_plan_selection": {"timeout": "mutation-observed", "retry": "none", "phase": "open"},
-  "mutate_plan_scope": {"timeout": "mutation-observed", "retry": "none", "phase": "open"},
-  "mutate_plan_highlight": {"timeout": "feedback-only", "retry": "none", "phase": "open"},
-  "mutate_plan_highlighted_selection": {"timeout": "mutation-observed", "retry": "none", "phase": "open"},
-  "start_execution": {"timeout": "mutation-observed", "retry": "none", "phase": "open"},
-  "control_execution": {"timeout": "mutation-observed", "retry": "none", "phase": "open"},
-  "next_events": {"timeout": "drain-30-seconds", "retry": "none", "phase": "open"},
-  "release_terminal_session": {"timeout": "mutation-observed", "retry": "none", "phase": "open"},
-  "close_task": {"timeout": "mutation-observed", "retry": "none", "phase": "open"}
+  "shell_ready": {"response_policy": "startup-5-seconds", "retry": "none", "phase": "bootstrap"},
+  "readiness_echo": {"response_policy": "startup-5-seconds", "retry": "same-payload-once", "phase": "bootstrap"},
+  "pick_folder": {"response_policy": "interactive", "retry": "none", "phase": "open"},
+  "create_task": {"response_policy": "mutation-observed", "retry": "none", "phase": "open"},
+  "list_tasks": {"response_policy": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
+  "read_setup": {"response_policy": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
+  "probe_recent_pairs": {"response_policy": "local-5-seconds", "retry": "none", "phase": "open"},
+  "prepare_setup": {"response_policy": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
+  "admit_location": {"response_policy": "feedback-only", "retry": "none", "phase": "open"},
+  "read_cosmetic_section": {"response_policy": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
+  "replace_cosmetic_section": {"response_policy": "feedback-only", "retry": "none", "phase": "open"},
+  "start_plan": {"response_policy": "mutation-observed", "retry": "none", "phase": "open"},
+  "start_inventory": {"response_policy": "mutation-observed", "retry": "none", "phase": "open"},
+  "plan_again": {"response_policy": "mutation-observed", "retry": "none", "phase": "open"},
+  "open_plan_view": {"response_policy": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
+  "update_plan_view": {"response_policy": "feedback-only", "retry": "none", "phase": "open"},
+  "get_plan_window": {"response_policy": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
+  "get_execution_detail": {"response_policy": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
+  "get_plan_anchor": {"response_policy": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
+  "mutate_plan_selection": {"response_policy": "mutation-observed", "retry": "none", "phase": "open"},
+  "mutate_plan_scope": {"response_policy": "mutation-observed", "retry": "none", "phase": "open"},
+  "mutate_plan_highlight": {"response_policy": "feedback-only", "retry": "none", "phase": "open"},
+  "mutate_plan_highlighted_selection": {"response_policy": "mutation-observed", "retry": "none", "phase": "open"},
+  "start_execution": {"response_policy": "mutation-observed", "retry": "none", "phase": "open"},
+  "control_execution": {"response_policy": "mutation-observed", "retry": "none", "phase": "open"},
+  "next_events": {"response_policy": "drain-30-seconds", "retry": "none", "phase": "open"},
+  "release_terminal_session": {"response_policy": "mutation-observed", "retry": "none", "phase": "open"},
+  "close_task": {"response_policy": "mutation-observed", "retry": "none", "phase": "open"}
 }`;
 export const COMMAND_POLICY_CONTRACT = freezeCommandPolicies(
   JSON.parse(COMMAND_POLICY_JSON),
@@ -64,39 +64,39 @@ const TIMEOUT_MS_BY_POLICY = Object.freeze({
   "drain-30-seconds": 30000,
 });
 const SHELL_READY_TIMEOUT_MS =
-  TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.shell_ready.timeout];
+  TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.shell_ready.response_policy];
 const READINESS_ECHO_TIMEOUT_MS =
-  TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.readiness_echo.timeout];
+  TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.readiness_echo.response_policy];
 const COSMETIC_READ_TIMEOUT_MS =
-  TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.read_cosmetic_section.timeout];
+  TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.read_cosmetic_section.response_policy];
 const COSMETIC_REPLACE_TIMEOUT_MS =
-  TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.replace_cosmetic_section.timeout];
+  TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.replace_cosmetic_section.response_policy];
 const START_PLAN_TIMEOUT_MS =
-  TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.start_plan.timeout];
+  TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.start_plan.response_policy];
 const CREATE_TASK_TIMEOUT_MS =
-  TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.create_task.timeout];
+  TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.create_task.response_policy];
 const LIST_TASKS_TIMEOUT_MS =
-  TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.list_tasks.timeout];
+  TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.list_tasks.response_policy];
 const SETUP_READ_TIMEOUT_MS =
-  TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.read_setup.timeout];
+  TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.read_setup.response_policy];
 const SETUP_PREPARE_TIMEOUT_MS =
-  TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.prepare_setup.timeout];
+  TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.prepare_setup.response_policy];
 const LOCATION_ADMIT_TIMEOUT_MS =
-  TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.admit_location.timeout];
+  TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.admit_location.response_policy];
 const INVENTORY_START_TIMEOUT_MS =
-  TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.start_inventory.timeout];
+  TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.start_inventory.response_policy];
 const PLAN_AGAIN_TIMEOUT_MS =
-  TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.plan_again.timeout];
+  TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.plan_again.response_policy];
 const PLAN_VIEW_TIMEOUT_MS =
-  TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.open_plan_view.timeout];
+  TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.open_plan_view.response_policy];
 const EXECUTION_START_TIMEOUT_MS =
-  TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.start_execution.timeout];
+  TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.start_execution.response_policy];
 const DRAIN_TIMEOUT_MS =
-  TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.next_events.timeout];
+  TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.next_events.response_policy];
 const SESSION_RELEASE_TIMEOUT_MS =
-  TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.release_terminal_session.timeout];
+  TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.release_terminal_session.response_policy];
 const TASK_CLOSE_TIMEOUT_MS =
-  TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.close_task.timeout];
+  TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.close_task.response_policy];
 const DRAIN_MAX_UPDATES = 64;
 const LOCATION_MOUNT_CANDIDATE_LIMIT = 27;
 const PLAN_AGAIN_MOUNT_CANDIDATE_LIMIT = 53;
@@ -1025,7 +1025,7 @@ export async function prepareSetup(options) {
 export function probeRecentPairs() {
   return dispatchAttempt(
     "probe_recent_pairs", {}, validateRecentPairProbe,
-    TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.probe_recent_pairs.timeout], true,
+    TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.probe_recent_pairs.response_policy], true,
   );
 }
 
@@ -1098,8 +1098,8 @@ function createDispatchAttempt(
   waitUntilReady = whenBridgeReady, asyncSmall = false, onDelayed = null,
 ) {
   const requestId = mintId();
-  const observed = COMMAND_POLICY_CONTRACT[command]?.timeout === "mutation-observed";
-  const feedbackOnly = COMMAND_POLICY_CONTRACT[command]?.timeout === "feedback-only";
+  const observed = COMMAND_POLICY_CONTRACT[command]?.response_policy === "mutation-observed";
+  const feedbackOnly = COMMAND_POLICY_CONTRACT[command]?.response_policy === "feedback-only";
   if ((observed || asyncSmall) && commandAttempts.size >= COMMAND_MAX_ATTEMPTS) {
     throw new BridgeCommandError("bridge_busy", ERROR_MESSAGES.bridge_busy);
   }
@@ -1206,13 +1206,8 @@ async function acceptNativeResponse(attempt, api, native) {
   if (native.response_token !== null) attempt.responseToken = native.response_token;
   if (direct) {
     const response = cloneJsonValue(native.response);
-    if (attempt.asyncSmall && !attempt.observed) {
-      await acknowledgeNativeAdmission(attempt, api);
-    }
     settleAttemptResponse(attempt, response);
-    if (!attempt.asyncSmall || attempt.observed) {
-      await acknowledgeNativeAdmission(attempt, api);
-    }
+    acknowledgeNativeAdmission(attempt, api);
     return "direct";
   }
   const completion = cloneJsonValue(native.completion);
@@ -1232,7 +1227,7 @@ async function acceptNativeResponse(attempt, api, native) {
   attempt.generation = completion.generation;
   attempt.completionToken = completion.completion_token;
   commandHostGeneration = completion.generation;
-  await acknowledgeNativeAdmission(attempt, api);
+  acknowledgeNativeAdmission(attempt, api);
   if (attempt.earlyCompletion !== null) {
     const early = attempt.earlyCompletion;
     attempt.earlyCompletion = null;
@@ -1241,16 +1236,13 @@ async function acceptNativeResponse(attempt, api, native) {
   return "admitted";
 }
 
-async function acknowledgeNativeAdmission(attempt, api) {
+function acknowledgeNativeAdmission(attempt, api) {
   if (attempt.responseToken === null || attempt.nativeAckStarted) return;
   attempt.nativeAckStarted = true;
-  const ack = acknowledgeCleanup(api, `ack:${attempt.responseToken}`);
-  if (attempt.asyncSmall && !attempt.observed) await ack;
-  else void ack.catch(() => {});
+  void acknowledgeCleanup(api, `ack:${attempt.responseToken}`).catch(() => {});
 }
 
-function settleAttemptResponse(attempt, response) {
-  if (attempt.result !== null) return;
+function captureAttemptResponse(attempt, response) {
   let value;
   let error = null;
   try {
@@ -1264,10 +1256,16 @@ function settleAttemptResponse(attempt, response) {
   if (attempt.observed && ["internal_error", "response_too_large"].includes(error?.code)) {
     error = new OutcomeUnavailableError();
   }
+  return { value, error };
+}
+
+function settleAttemptResponse(attempt, response) {
+  if (attempt.result !== null) return;
+  const { value, error } = captureAttemptResponse(attempt, response);
   attempt.result = { value, error };
   clearTimeout(attempt.delayedTimer);
   if (attempt.observed) {
-    void acknowledgeNativeAdmission(attempt, bridgeApi()).catch(() => {});
+    acknowledgeNativeAdmission(attempt, bridgeApi());
   }
   if (attempt.completionToken !== null && attempt.observed) {
     void acknowledgeCommandCompletion({
@@ -1407,30 +1405,22 @@ async function acceptCompletion(attempt, message) {
       || attempt.requestId !== message.request_id
       || attempt.completionToken !== message.completion_token) return;
   attempt.settling = true;
-  if (attempt.observed) {
-    try {
-      settleAttemptResponse(attempt, message.response);
-    } catch (_error) {
-      attempt.settling = false;
-    }
-    return;
-  }
   try {
-    await acknowledgeCommandCompletion(message);
+    if (attempt.cleanupOnly) {
+      captureAttemptResponse(attempt, message.response);
+      retireAttempt(attempt);
+    } else {
+      settleAttemptResponse(attempt, message.response);
+    }
   } catch (_error) {
     attempt.settling = false;
-    if (!attempt.cleanupOnly) {
+    if (!attempt.observed && !attempt.cleanupOnly) {
       retireAttempt(attempt);
       attempt.reject(new BridgeTransportError());
     }
     return;
   }
-  if (commandAttempts.get(attempt.requestId) !== attempt) return;
-  if (attempt.cleanupOnly) {
-    retireAttempt(attempt);
-  } else {
-    settleAttemptResponse(attempt, message.response);
-  }
+  if (!attempt.observed) void acknowledgeCommandCompletion(message).catch(() => {});
 }
 
 async function acknowledgeCommandCompletion(message) {

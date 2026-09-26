@@ -29,7 +29,7 @@ from namisync.interfaces.web.commands import (
     CommandAccess,
     CommandRetry,
     CommandSpec,
-    CommandTimeout,
+    CommandResponsePolicy,
     CommandWork,
     FieldRequirement,
 )
@@ -52,7 +52,7 @@ def _test_spec(handler) -> CommandSpec:
         access=CommandAccess.READ_ONLY,
         command_id=FieldRequirement.FORBIDDEN,
         revision=FieldRequirement.FORBIDDEN,
-        timeout=CommandTimeout.INTERACTIVE,
+        response_policy=CommandResponsePolicy.INTERACTIVE,
         retry=CommandRetry.NONE,
     )
 
@@ -64,7 +64,7 @@ def _async_test_spec(handler) -> CommandSpec:
         access=CommandAccess.MUTATING,
         command_id=FieldRequirement.FORBIDDEN,
         revision=FieldRequirement.FORBIDDEN,
-        timeout=CommandTimeout.MUTATION_OBSERVED,
+        response_policy=CommandResponsePolicy.MUTATION_OBSERVED,
         retry=CommandRetry.NONE,
         work=CommandWork.ASYNC_SMALL,
     )
@@ -77,7 +77,7 @@ def _observed_direct_spec(handler) -> CommandSpec:
         access=CommandAccess.MUTATING,
         command_id=FieldRequirement.FORBIDDEN,
         revision=FieldRequirement.FORBIDDEN,
-        timeout=CommandTimeout.MUTATION_OBSERVED,
+        response_policy=CommandResponsePolicy.MUTATION_OBSERVED,
         retry=CommandRetry.NONE,
     )
 
@@ -89,7 +89,7 @@ def _unobserved_async_spec(handler) -> CommandSpec:
         access=CommandAccess.READ_ONLY,
         command_id=FieldRequirement.FORBIDDEN,
         revision=FieldRequirement.FORBIDDEN,
-        timeout=CommandTimeout.LOCAL_5_SECONDS,
+        response_policy=CommandResponsePolicy.LOCAL_5_SECONDS,
         retry=CommandRetry.NONE,
         work=CommandWork.ASYNC_SMALL,
     )
@@ -1815,10 +1815,10 @@ def test_observe_direct_original_at_saturation_without_repeating_effect(
 
 
 @pytest.mark.parametrize(
-    "timeout", [CommandTimeout.FEEDBACK_ONLY, CommandTimeout.INTERACTIVE]
+    "response_policy", [CommandResponsePolicy.FEEDBACK_ONLY, CommandResponsePolicy.INTERACTIVE]
 )
 def test_current_direct_command_has_no_original_result_custody(
-    timeout: CommandTimeout,
+    response_policy: CommandResponsePolicy,
 ) -> None:
     calls: list[object] = []
     bridge = BridgeDispatcher(
@@ -1829,7 +1829,7 @@ def test_current_direct_command_has_no_original_result_custody(
             access=CommandAccess.READ_ONLY,
             command_id=FieldRequirement.FORBIDDEN,
             revision=FieldRequirement.FORBIDDEN,
-            timeout=timeout,
+            response_policy=response_policy,
             retry=CommandRetry.NONE,
         )},
         admit=_admit_open,

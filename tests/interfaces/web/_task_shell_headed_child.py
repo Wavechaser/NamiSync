@@ -1571,7 +1571,7 @@ class _Control:
 
 def _test_spec(handler: Callable[[object], object]) -> object:
     from namisync.interfaces.web.commands import (
-        CommandAccess, CommandRetry, CommandSpec, CommandTimeout, FieldRequirement,
+        CommandAccess, CommandRetry, CommandSpec, CommandResponsePolicy, FieldRequirement,
     )
 
     return CommandSpec(
@@ -1580,7 +1580,7 @@ def _test_spec(handler: Callable[[object], object]) -> object:
         access=CommandAccess.READ_ONLY,
         command_id=FieldRequirement.FORBIDDEN,
         revision=FieldRequirement.FORBIDDEN,
-        timeout=CommandTimeout.INTERACTIVE,
+        response_policy=CommandResponsePolicy.INTERACTIVE,
         retry=CommandRetry.NONE,
     )
 

@@ -932,7 +932,7 @@ class BridgeDispatcher:
                 CommandAdmissionError,
                 CommandConflictError,
                 CommandPayloadError,
-                CommandTimeout,
+                CommandResponsePolicy,
                 CommandWork,
                 PickerUnavailableError,
                 PlanningRefusedError,
@@ -940,7 +940,7 @@ class BridgeDispatcher:
 
             if (
                 native_custody is not None
-                and spec.timeout is CommandTimeout.MUTATION_OBSERVED
+                and spec.response_policy is CommandResponsePolicy.MUTATION_OBSERVED
             ):
                 if not self._bind_observed_command(
                     native_custody,

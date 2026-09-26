@@ -349,12 +349,12 @@ class _ExecutionReviewPhase:
 
 def _test_spec(handler: Callable[[object], object]) -> object:
     from namisync.interfaces.web.commands import (
-        CommandAccess, CommandRetry, CommandSpec, CommandTimeout, FieldRequirement,
+        CommandAccess, CommandRetry, CommandSpec, CommandResponsePolicy, FieldRequirement,
     )
     return CommandSpec(
         validate_payload=_validate_empty, handler=handler,
         access=CommandAccess.READ_ONLY, command_id=FieldRequirement.FORBIDDEN,
-        revision=FieldRequirement.FORBIDDEN, timeout=CommandTimeout.INTERACTIVE,
+        revision=FieldRequirement.FORBIDDEN, response_policy=CommandResponsePolicy.INTERACTIVE,
         retry=CommandRetry.NONE,
     )
 

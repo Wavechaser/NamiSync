@@ -454,6 +454,33 @@ for (const phase of ["native", "completion"]) {
   cleanupPolicy = null;
 }
 
+for (const command of ["probe_recent_pairs", "create_task"]) {
+  for (const phase of ["native", "completion"]) {
+    let captured;
+    delivery = (exchange) => { captured = exchange; return immediate(exchange); };
+    cleanupPolicy = (ack) => {
+      if ((phase === "completion") === ack.startsWith("ack:completion:")) return false;
+      if (acknowledged.has(ack)) return false;
+      acknowledged.add(ack);
+      return true;
+    };
+    const beforeRequests = asyncRequests.length;
+    const adopted = command === "probe_recent_pairs"
+      ? await asyncBridge.probeRecentPairs() : await asyncBridge.createTask();
+    assert.deepEqual(adopted, captured.message.response.result,
+      `${command} adopts its valid result when ${phase} cleanup refuses both attempts`);
+    assert.equal(asyncRequests.length, beforeRequests + 1);
+    const exactAck = phase === "native"
+      ? `ack:${captured.admission.response_token}`
+      : `ack:completion:${hostGeneration}:${captured.request.request_id}:${captured.message.completion_token}`;
+    assert.equal(cleanup.filter((ack) => ack === exactAck).length, 2,
+      "failed cleanup remains bounded to two exact attempts");
+    await flush();
+    assert.equal(asyncTimers.size, 0);
+    cleanupPolicy = null;
+  }
+}
+
 for (const phase of ["native", "completion"]) {
   delivery = immediate;
   let hung = 0;

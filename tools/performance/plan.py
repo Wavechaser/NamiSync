@@ -1680,7 +1680,7 @@ def _headed_test_spec(handler: Callable[[object], object]) -> object:
         CommandAccess,
         CommandRetry,
         CommandSpec,
-        CommandTimeout,
+        CommandResponsePolicy,
         FieldRequirement,
     )
 
@@ -1692,7 +1692,7 @@ def _headed_test_spec(handler: Callable[[object], object]) -> object:
         access=CommandAccess.MUTATING,
         command_id=FieldRequirement.FORBIDDEN,
         revision=FieldRequirement.FORBIDDEN,
-        timeout=CommandTimeout.INTERACTIVE,
+        response_policy=CommandResponsePolicy.INTERACTIVE,
         retry=CommandRetry.NONE,
     )
 

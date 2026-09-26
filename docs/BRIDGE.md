@@ -237,7 +237,8 @@ The browser bounds retained original attempts to 64, with at most one early
 completion per asynchronous entry. Validate exact response and command identity
 before capture/adoption and cleanup. Cleanup uses at most two attempts with
 one-second observation deadlines; its failure cannot turn a captured valid
-response into a failed operation. The host generation learned from validated
+response into a failed operation, including ordinary asynchronous reads. Adoption
+does not wait for admission or completion cleanup ACK success. The host generation learned from validated
 admission or trusted observation remains completion identity. An unsolicited
 completion cannot create an entry or retire another request's result. Late
 responses remain adoptable while their original identity/ownership is retained.
@@ -253,6 +254,11 @@ bounded custody until genuine document retirement. No read resubmission or
 second cleanup registry is introduced.
 
 ### Original-result observation
+
+The command registry and browser mirror call this classification `response_policy`
+(`CommandResponsePolicy` in Python): it selects a caller deadline, observed
+mutation recovery, interactive wait or feedback-only behavior. It is metadata,
+not a new wire field or recovery protocol.
 
 Original-result retention applies to `create_task`, `start_plan`,
 `start_inventory`, `plan_again`, `start_execution`, `mutate_plan_selection`,

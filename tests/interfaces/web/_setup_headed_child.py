@@ -1839,7 +1839,7 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
 
 def _trace_spec(handler: object) -> object:
     from namisync.interfaces.web.commands import (
-        CommandAccess, CommandRetry, CommandSpec, CommandTimeout, FieldRequirement,
+        CommandAccess, CommandRetry, CommandSpec, CommandResponsePolicy, FieldRequirement,
     )
 
     return CommandSpec(
@@ -1848,7 +1848,7 @@ def _trace_spec(handler: object) -> object:
         access=CommandAccess.READ_ONLY,
         command_id=FieldRequirement.FORBIDDEN,
         revision=FieldRequirement.FORBIDDEN,
-        timeout=CommandTimeout.LOCAL_5_SECONDS,
+        response_policy=CommandResponsePolicy.LOCAL_5_SECONDS,
         retry=CommandRetry.NONE,
     )
 

@@ -57,7 +57,7 @@ from namisync.interfaces.web.commands import (
     CommandConflictError,
     CommandPayloadError,
     CommandRetry,
-    CommandTimeout,
+    CommandResponsePolicy,
     CommandWork,
     FieldRequirement,
     PickerUnavailableError,
@@ -542,7 +542,7 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
         ), name
     assert {
         name for name, spec in commands.items()
-        if spec.timeout is CommandTimeout.MUTATION_OBSERVED
+        if spec.response_policy is CommandResponsePolicy.MUTATION_OBSERVED
     } == {
         "create_task", "start_plan", "start_inventory",
         "plan_again", "mutate_plan_selection", "mutate_plan_scope",
@@ -551,7 +551,7 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
     }
     assert {
         name for name, spec in commands.items()
-        if spec.timeout is CommandTimeout.FEEDBACK_ONLY
+        if spec.response_policy is CommandResponsePolicy.FEEDBACK_ONLY
     } == {
         "admit_location", "update_plan_view", "mutate_plan_highlight",
         "replace_cosmetic_section",
@@ -559,30 +559,30 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
     # Each group shares one policy; the browser mirror is checked separately.
     groups = (
         (("shell_ready",), CommandAccess.READ_ONLY, FieldRequirement.FORBIDDEN,
-         FieldRequirement.FORBIDDEN, CommandTimeout.STARTUP_5_SECONDS, CommandRetry.NONE),
+         FieldRequirement.FORBIDDEN, CommandResponsePolicy.STARTUP_5_SECONDS, CommandRetry.NONE),
         (("readiness_echo",), CommandAccess.READ_ONLY, FieldRequirement.FORBIDDEN,
-         FieldRequirement.FORBIDDEN, CommandTimeout.STARTUP_5_SECONDS, CommandRetry.SAME_PAYLOAD_ONCE),
+         FieldRequirement.FORBIDDEN, CommandResponsePolicy.STARTUP_5_SECONDS, CommandRetry.SAME_PAYLOAD_ONCE),
         (("pick_folder",), CommandAccess.READ_ONLY, FieldRequirement.FORBIDDEN,
-         FieldRequirement.FORBIDDEN, CommandTimeout.INTERACTIVE, CommandRetry.NONE),
+         FieldRequirement.FORBIDDEN, CommandResponsePolicy.INTERACTIVE, CommandRetry.NONE),
         (("create_task", "start_plan", "start_inventory", "plan_again"),
          CommandAccess.MUTATING, FieldRequirement.REQUIRED, FieldRequirement.FORBIDDEN,
-         CommandTimeout.MUTATION_OBSERVED, CommandRetry.NONE),
+         CommandResponsePolicy.MUTATION_OBSERVED, CommandRetry.NONE),
         (("list_tasks", "read_cosmetic_section"), CommandAccess.READ_ONLY,
          FieldRequirement.FORBIDDEN, FieldRequirement.FORBIDDEN,
-         CommandTimeout.LOCAL_5_SECONDS, CommandRetry.SAME_PAYLOAD_ONCE),
+         CommandResponsePolicy.LOCAL_5_SECONDS, CommandRetry.SAME_PAYLOAD_ONCE),
         (("next_events",), CommandAccess.READ_ONLY, FieldRequirement.FORBIDDEN,
-         FieldRequirement.FORBIDDEN, CommandTimeout.DRAIN_30_SECONDS, CommandRetry.NONE),
+         FieldRequirement.FORBIDDEN, CommandResponsePolicy.DRAIN_30_SECONDS, CommandRetry.NONE),
         (("release_terminal_session", "close_task"), CommandAccess.MUTATING,
          FieldRequirement.FORBIDDEN, FieldRequirement.FORBIDDEN,
-         CommandTimeout.MUTATION_OBSERVED, CommandRetry.NONE),
+         CommandResponsePolicy.MUTATION_OBSERVED, CommandRetry.NONE),
         (("replace_cosmetic_section",), CommandAccess.MUTATING, FieldRequirement.FORBIDDEN,
-         FieldRequirement.REQUIRED, CommandTimeout.FEEDBACK_ONLY, CommandRetry.NONE),
+         FieldRequirement.REQUIRED, CommandResponsePolicy.FEEDBACK_ONLY, CommandRetry.NONE),
     )
-    for names, access, command_id, revision, timeout, retry in groups:
+    for names, access, command_id, revision, response_policy, retry in groups:
         for name in names:
             spec = commands[name]
-            assert (spec.access, spec.command_id, spec.revision, spec.timeout, spec.retry) == (
-                access, command_id, revision, timeout, retry,
+            assert (spec.access, spec.command_id, spec.revision, spec.response_policy, spec.retry) == (
+                access, command_id, revision, response_policy, retry,
             ), name
     for name, spec in commands.items():
         assert spec.phase is (

@@ -628,7 +628,7 @@ def _test_report_spec(
         CommandPayloadError,
         CommandRetry,
         CommandSpec,
-        CommandTimeout,
+        CommandResponsePolicy,
         FieldRequirement,
     )
 
@@ -853,7 +853,7 @@ def _test_report_spec(
         access=CommandAccess.READ_ONLY,
         command_id=FieldRequirement.FORBIDDEN,
         revision=FieldRequirement.FORBIDDEN,
-        timeout=CommandTimeout.INTERACTIVE,
+        response_policy=CommandResponsePolicy.INTERACTIVE,
         retry=CommandRetry.NONE,
     )
 def _valid_complete_report(

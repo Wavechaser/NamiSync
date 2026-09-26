@@ -562,7 +562,7 @@ def _run_live(arguments: argparse.Namespace, recorder: _Recorder) -> int:
         CommandAccess,
         CommandRetry,
         CommandSpec,
-        CommandTimeout,
+        CommandResponsePolicy,
         FieldRequirement,
     )
     from namisync.interfaces.web.host import DesktopInstanceIdentity
@@ -577,7 +577,7 @@ def _run_live(arguments: argparse.Namespace, recorder: _Recorder) -> int:
             access=CommandAccess.READ_ONLY,
             command_id=FieldRequirement.FORBIDDEN,
             revision=FieldRequirement.FORBIDDEN,
-            timeout=CommandTimeout.INTERACTIVE,
+            response_policy=CommandResponsePolicy.INTERACTIVE,
             retry=CommandRetry.NONE,
         )
     recorder.set("runtime", _runtime_identity())
@@ -1023,7 +1023,7 @@ def _run_packaged_popup(
         CommandAccess,
         CommandRetry,
         CommandSpec,
-        CommandTimeout,
+        CommandResponsePolicy,
         FieldRequirement,
     )
     from namisync.interfaces.web.host import DesktopInstanceIdentity
@@ -1108,7 +1108,7 @@ def _run_packaged_popup(
             access=CommandAccess.READ_ONLY,
             command_id=FieldRequirement.FORBIDDEN,
             revision=FieldRequirement.FORBIDDEN,
-            timeout=CommandTimeout.INTERACTIVE,
+            response_policy=CommandResponsePolicy.INTERACTIVE,
             retry=CommandRetry.NONE,
         )
         return {"packaged_probe": spec}
@@ -1281,7 +1281,7 @@ def _run_runtime_refusal(
 def _run_reload_containment(arguments: argparse.Namespace, recorder: _Recorder) -> int:
     from namisync.interfaces.web import bridge, host
     from namisync.interfaces.web.commands import (
-        CommandAccess, CommandRetry, CommandSpec, CommandTimeout,
+        CommandAccess, CommandRetry, CommandSpec, CommandResponsePolicy,
         CommandWork, FieldRequirement,
     )
     from namisync.interfaces.web.host import DesktopInstanceIdentity
@@ -1404,7 +1404,7 @@ def _run_reload_containment(arguments: argparse.Namespace, recorder: _Recorder) 
             access=CommandAccess.MUTATING,
             command_id=FieldRequirement.FORBIDDEN,
             revision=FieldRequirement.FORBIDDEN,
-            timeout=CommandTimeout.MUTATION_OBSERVED,
+            response_policy=CommandResponsePolicy.MUTATION_OBSERVED,
             retry=CommandRetry.NONE,
             work=CommandWork.ASYNC_SMALL,
         )}

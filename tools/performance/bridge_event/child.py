@@ -377,7 +377,7 @@ def _benchmark_specs(
         CommandPayloadError,
         CommandRetry,
         CommandSpec,
-        CommandTimeout,
+        CommandResponsePolicy,
         FieldRequirement,
     )
 
@@ -493,7 +493,7 @@ def _benchmark_specs(
     common = {
         "command_id": FieldRequirement.FORBIDDEN,
         "revision": FieldRequirement.FORBIDDEN,
-        "timeout": CommandTimeout.INTERACTIVE,
+        "response_policy": CommandResponsePolicy.INTERACTIVE,
         "retry": CommandRetry.NONE,
     }
     return {

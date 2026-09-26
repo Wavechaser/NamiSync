@@ -1230,7 +1230,7 @@ def test_browser_command_policy_is_an_exact_mirror_of_the_native_table() -> None
     )
     native_policy = {
         name: {
-            "timeout": spec.timeout.value,
+            "response_policy": spec.response_policy.value,
             "retry": spec.retry.value,
             "phase": spec.phase.value,
         }

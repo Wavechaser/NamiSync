@@ -1026,6 +1026,14 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Desktop bridge and native-owner lifecycle
 
+- MODERATE - FIXED (2026-09-26). Cleanup/result coupling. A valid asynchronous
+  recent-pairs result could be reported as a transport failure when admission
+  or completion cleanup ACK failed, while observed mutations adopted the same
+  valid delivery. Cause: ordinary async adoption awaited cleanup success.
+  Capture/adoption now precedes best-effort ACK for both paths; exact identity,
+  two-attempt cleanup, the five-second read deadline and late cleanup remain.
+  Controlled ACK refusal covers both phases and command classes without replay.
+
 - MINOR - FIXED (2026-09-10). Obsolete native-return delivery. A delayed
   create or terminal-release response crossed a document reload, then pywebview
   6.2.1 invoked the destroyed JavaScript callback outside its exception boundary.

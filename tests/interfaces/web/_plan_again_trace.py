@@ -111,11 +111,11 @@ _BRIDGE_VALIDATE_TRACE = r'''  const validateResult = (value) => {
 '''
 
 _BRIDGE_ATTEMPT = r'''  const requestId = mintId();
-  const observed = COMMAND_POLICY_CONTRACT[command]?.timeout === "mutation-observed";
+  const observed = COMMAND_POLICY_CONTRACT[command]?.response_policy === "mutation-observed";
 '''
 _BRIDGE_ATTEMPT_TRACE = r'''  const requestId = mintId();
   if (command === "plan_again") namiPlanAgainTrace("bridge-attempt", "created");
-  const observed = COMMAND_POLICY_CONTRACT[command]?.timeout === "mutation-observed";
+  const observed = COMMAND_POLICY_CONTRACT[command]?.response_policy === "mutation-observed";
 '''
 
 _BRIDGE_CAPACITY = r'''  if ((observed || asyncSmall) && commandAttempts.size >= COMMAND_MAX_ATTEMPTS) {

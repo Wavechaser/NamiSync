@@ -191,7 +191,7 @@ class FieldRequirement(StrEnum):
     REQUIRED = "required"
 
 
-class CommandTimeout(StrEnum):
+class CommandResponsePolicy(StrEnum):
     STARTUP_5_SECONDS = "startup-5-seconds"
     LOCAL_5_SECONDS = "local-5-seconds"
     INTERACTIVE = "interactive"
@@ -354,7 +354,7 @@ class CommandSpec:
     access: CommandAccess
     command_id: FieldRequirement
     revision: FieldRequirement
-    timeout: CommandTimeout
+    response_policy: CommandResponsePolicy
     retry: CommandRetry
     phase: CommandPhase = CommandPhase.OPEN
     work: CommandWork = CommandWork.DIRECT
@@ -1198,7 +1198,7 @@ def production_command_specs(
                 access=CommandAccess.READ_ONLY,
                 command_id=FieldRequirement.FORBIDDEN,
                 revision=FieldRequirement.FORBIDDEN,
-                timeout=CommandTimeout.STARTUP_5_SECONDS,
+                response_policy=CommandResponsePolicy.STARTUP_5_SECONDS,
                 retry=CommandRetry.NONE,
                 phase=CommandPhase.BOOTSTRAP,
             ),
@@ -1208,7 +1208,7 @@ def production_command_specs(
                 access=CommandAccess.READ_ONLY,
                 command_id=FieldRequirement.FORBIDDEN,
                 revision=FieldRequirement.FORBIDDEN,
-                timeout=CommandTimeout.STARTUP_5_SECONDS,
+                response_policy=CommandResponsePolicy.STARTUP_5_SECONDS,
                 retry=CommandRetry.SAME_PAYLOAD_ONCE,
                 phase=CommandPhase.BOOTSTRAP,
             ),
@@ -1218,7 +1218,7 @@ def production_command_specs(
                 access=CommandAccess.READ_ONLY,
                 command_id=FieldRequirement.FORBIDDEN,
                 revision=FieldRequirement.FORBIDDEN,
-                timeout=CommandTimeout.INTERACTIVE,
+                response_policy=CommandResponsePolicy.INTERACTIVE,
                 retry=CommandRetry.NONE,
             ),
             "read_setup": CommandSpec(
@@ -1227,7 +1227,7 @@ def production_command_specs(
                 access=CommandAccess.READ_ONLY,
                 command_id=FieldRequirement.FORBIDDEN,
                 revision=FieldRequirement.FORBIDDEN,
-                timeout=CommandTimeout.LOCAL_5_SECONDS,
+                response_policy=CommandResponsePolicy.LOCAL_5_SECONDS,
                 retry=CommandRetry.SAME_PAYLOAD_ONCE,
             ),
             "probe_recent_pairs": CommandSpec(
@@ -1236,7 +1236,7 @@ def production_command_specs(
                 access=CommandAccess.READ_ONLY,
                 command_id=FieldRequirement.FORBIDDEN,
                 revision=FieldRequirement.FORBIDDEN,
-                timeout=CommandTimeout.LOCAL_5_SECONDS,
+                response_policy=CommandResponsePolicy.LOCAL_5_SECONDS,
                 retry=CommandRetry.NONE,
                 work=CommandWork.ASYNC_SMALL,
             ),
@@ -1246,7 +1246,7 @@ def production_command_specs(
                 access=CommandAccess.READ_ONLY,
                 command_id=FieldRequirement.FORBIDDEN,
                 revision=FieldRequirement.FORBIDDEN,
-                timeout=CommandTimeout.LOCAL_5_SECONDS,
+                response_policy=CommandResponsePolicy.LOCAL_5_SECONDS,
                 retry=CommandRetry.SAME_PAYLOAD_ONCE,
             ),
             "admit_location": CommandSpec(
@@ -1255,7 +1255,7 @@ def production_command_specs(
                 access=CommandAccess.READ_ONLY,
                 command_id=FieldRequirement.FORBIDDEN,
                 revision=FieldRequirement.FORBIDDEN,
-                timeout=CommandTimeout.FEEDBACK_ONLY,
+                response_policy=CommandResponsePolicy.FEEDBACK_ONLY,
                 retry=CommandRetry.NONE,
             ),
             "create_task": CommandSpec(
@@ -1264,7 +1264,7 @@ def production_command_specs(
                 access=CommandAccess.MUTATING,
                 command_id=FieldRequirement.REQUIRED,
                 revision=FieldRequirement.FORBIDDEN,
-                timeout=CommandTimeout.MUTATION_OBSERVED,
+                response_policy=CommandResponsePolicy.MUTATION_OBSERVED,
                 retry=CommandRetry.NONE,
                 work=CommandWork.ASYNC_SMALL,
             ),
@@ -1274,7 +1274,7 @@ def production_command_specs(
                 access=CommandAccess.READ_ONLY,
                 command_id=FieldRequirement.FORBIDDEN,
                 revision=FieldRequirement.FORBIDDEN,
-                timeout=CommandTimeout.LOCAL_5_SECONDS,
+                response_policy=CommandResponsePolicy.LOCAL_5_SECONDS,
                 retry=CommandRetry.SAME_PAYLOAD_ONCE,
             ),
             "start_plan": CommandSpec(
@@ -1283,7 +1283,7 @@ def production_command_specs(
                 access=CommandAccess.MUTATING,
                 command_id=FieldRequirement.REQUIRED,
                 revision=FieldRequirement.FORBIDDEN,
-                timeout=CommandTimeout.MUTATION_OBSERVED,
+                response_policy=CommandResponsePolicy.MUTATION_OBSERVED,
                 retry=CommandRetry.NONE,
                 work=CommandWork.ASYNC_SMALL,
             ),
@@ -1293,7 +1293,7 @@ def production_command_specs(
                 access=CommandAccess.MUTATING,
                 command_id=FieldRequirement.REQUIRED,
                 revision=FieldRequirement.FORBIDDEN,
-                timeout=CommandTimeout.MUTATION_OBSERVED,
+                response_policy=CommandResponsePolicy.MUTATION_OBSERVED,
                 retry=CommandRetry.NONE,
                 work=CommandWork.ASYNC_SMALL,
             ),
@@ -1303,7 +1303,7 @@ def production_command_specs(
                 access=CommandAccess.MUTATING,
                 command_id=FieldRequirement.REQUIRED,
                 revision=FieldRequirement.FORBIDDEN,
-                timeout=CommandTimeout.MUTATION_OBSERVED,
+                response_policy=CommandResponsePolicy.MUTATION_OBSERVED,
                 retry=CommandRetry.NONE,
                 work=CommandWork.ASYNC_SMALL,
             ),
@@ -1313,7 +1313,7 @@ def production_command_specs(
                 access=CommandAccess.READ_ONLY,
                 command_id=FieldRequirement.FORBIDDEN,
                 revision=FieldRequirement.FORBIDDEN,
-                timeout=CommandTimeout.LOCAL_5_SECONDS,
+                response_policy=CommandResponsePolicy.LOCAL_5_SECONDS,
                 retry=CommandRetry.SAME_PAYLOAD_ONCE,
             ),
             "update_plan_view": CommandSpec(
@@ -1322,7 +1322,7 @@ def production_command_specs(
                 access=CommandAccess.READ_ONLY,
                 command_id=FieldRequirement.FORBIDDEN,
                 revision=FieldRequirement.REQUIRED,
-                timeout=CommandTimeout.FEEDBACK_ONLY,
+                response_policy=CommandResponsePolicy.FEEDBACK_ONLY,
                 retry=CommandRetry.NONE,
             ),
             "get_plan_window": CommandSpec(
@@ -1331,7 +1331,7 @@ def production_command_specs(
                 access=CommandAccess.READ_ONLY,
                 command_id=FieldRequirement.FORBIDDEN,
                 revision=FieldRequirement.REQUIRED,
-                timeout=CommandTimeout.LOCAL_5_SECONDS,
+                response_policy=CommandResponsePolicy.LOCAL_5_SECONDS,
                 retry=CommandRetry.SAME_PAYLOAD_ONCE,
             ),
             "get_execution_detail": CommandSpec(
@@ -1340,7 +1340,7 @@ def production_command_specs(
                 access=CommandAccess.READ_ONLY,
                 command_id=FieldRequirement.FORBIDDEN,
                 revision=FieldRequirement.REQUIRED,
-                timeout=CommandTimeout.LOCAL_5_SECONDS,
+                response_policy=CommandResponsePolicy.LOCAL_5_SECONDS,
                 retry=CommandRetry.SAME_PAYLOAD_ONCE,
             ),
             "get_plan_anchor": CommandSpec(
@@ -1349,7 +1349,7 @@ def production_command_specs(
                 access=CommandAccess.READ_ONLY,
                 command_id=FieldRequirement.FORBIDDEN,
                 revision=FieldRequirement.REQUIRED,
-                timeout=CommandTimeout.LOCAL_5_SECONDS,
+                response_policy=CommandResponsePolicy.LOCAL_5_SECONDS,
                 retry=CommandRetry.SAME_PAYLOAD_ONCE,
             ),
             "mutate_plan_selection": CommandSpec(
@@ -1358,7 +1358,7 @@ def production_command_specs(
                 access=CommandAccess.MUTATING,
                 command_id=FieldRequirement.REQUIRED,
                 revision=FieldRequirement.REQUIRED,
-                timeout=CommandTimeout.MUTATION_OBSERVED,
+                response_policy=CommandResponsePolicy.MUTATION_OBSERVED,
                 retry=CommandRetry.NONE,
             ),
             "mutate_plan_scope": CommandSpec(
@@ -1367,7 +1367,7 @@ def production_command_specs(
                 access=CommandAccess.MUTATING,
                 command_id=FieldRequirement.REQUIRED,
                 revision=FieldRequirement.REQUIRED,
-                timeout=CommandTimeout.MUTATION_OBSERVED,
+                response_policy=CommandResponsePolicy.MUTATION_OBSERVED,
                 retry=CommandRetry.NONE,
             ),
             "mutate_plan_highlight": CommandSpec(
@@ -1376,7 +1376,7 @@ def production_command_specs(
                 access=CommandAccess.READ_ONLY,
                 command_id=FieldRequirement.FORBIDDEN,
                 revision=FieldRequirement.REQUIRED,
-                timeout=CommandTimeout.FEEDBACK_ONLY,
+                response_policy=CommandResponsePolicy.FEEDBACK_ONLY,
                 retry=CommandRetry.NONE,
             ),
             "mutate_plan_highlighted_selection": CommandSpec(
@@ -1385,7 +1385,7 @@ def production_command_specs(
                 access=CommandAccess.MUTATING,
                 command_id=FieldRequirement.REQUIRED,
                 revision=FieldRequirement.REQUIRED,
-                timeout=CommandTimeout.MUTATION_OBSERVED,
+                response_policy=CommandResponsePolicy.MUTATION_OBSERVED,
                 retry=CommandRetry.NONE,
             ),
             "start_execution": CommandSpec(
@@ -1394,7 +1394,7 @@ def production_command_specs(
                 access=CommandAccess.MUTATING,
                 command_id=FieldRequirement.REQUIRED,
                 revision=FieldRequirement.REQUIRED,
-                timeout=CommandTimeout.MUTATION_OBSERVED,
+                response_policy=CommandResponsePolicy.MUTATION_OBSERVED,
                 retry=CommandRetry.NONE,
                 work=CommandWork.ASYNC_SMALL,
             ),
@@ -1404,7 +1404,7 @@ def production_command_specs(
                 access=CommandAccess.MUTATING,
                 command_id=FieldRequirement.FORBIDDEN,
                 revision=FieldRequirement.FORBIDDEN,
-                timeout=CommandTimeout.MUTATION_OBSERVED,
+                response_policy=CommandResponsePolicy.MUTATION_OBSERVED,
                 retry=CommandRetry.NONE,
             ),
             "next_events": CommandSpec(
@@ -1413,7 +1413,7 @@ def production_command_specs(
                 access=CommandAccess.READ_ONLY,
                 command_id=FieldRequirement.FORBIDDEN,
                 revision=FieldRequirement.FORBIDDEN,
-                timeout=CommandTimeout.DRAIN_30_SECONDS,
+                response_policy=CommandResponsePolicy.DRAIN_30_SECONDS,
                 retry=CommandRetry.NONE,
             ),
             "release_terminal_session": CommandSpec(
@@ -1422,7 +1422,7 @@ def production_command_specs(
                 access=CommandAccess.MUTATING,
                 command_id=FieldRequirement.FORBIDDEN,
                 revision=FieldRequirement.FORBIDDEN,
-                timeout=CommandTimeout.MUTATION_OBSERVED,
+                response_policy=CommandResponsePolicy.MUTATION_OBSERVED,
                 retry=CommandRetry.NONE,
                 work=CommandWork.ASYNC_SMALL,
             ),
@@ -1432,7 +1432,7 @@ def production_command_specs(
                 access=CommandAccess.MUTATING,
                 command_id=FieldRequirement.FORBIDDEN,
                 revision=FieldRequirement.FORBIDDEN,
-                timeout=CommandTimeout.MUTATION_OBSERVED,
+                response_policy=CommandResponsePolicy.MUTATION_OBSERVED,
                 retry=CommandRetry.NONE,
                 work=CommandWork.ASYNC_SMALL,
             ),
@@ -1442,7 +1442,7 @@ def production_command_specs(
                 access=CommandAccess.READ_ONLY,
                 command_id=FieldRequirement.FORBIDDEN,
                 revision=FieldRequirement.FORBIDDEN,
-                timeout=CommandTimeout.LOCAL_5_SECONDS,
+                response_policy=CommandResponsePolicy.LOCAL_5_SECONDS,
                 retry=CommandRetry.SAME_PAYLOAD_ONCE,
             ),
             "replace_cosmetic_section": CommandSpec(
@@ -1451,7 +1451,7 @@ def production_command_specs(
                 access=CommandAccess.MUTATING,
                 command_id=FieldRequirement.FORBIDDEN,
                 revision=FieldRequirement.REQUIRED,
-                timeout=CommandTimeout.FEEDBACK_ONLY,
+                response_policy=CommandResponsePolicy.FEEDBACK_ONLY,
                 retry=CommandRetry.NONE,
             ),
         }

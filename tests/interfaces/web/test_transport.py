@@ -39,7 +39,7 @@ from namisync.interfaces.web.commands import (
     CommandPayloadError,
     CommandRetry,
     CommandSpec,
-    CommandTimeout,
+    CommandResponsePolicy,
     FieldRequirement,
     PickerUnavailableError,
     PlanningRefusedError,
@@ -180,7 +180,7 @@ def _spec(
         access=CommandAccess.READ_ONLY,
         command_id=FieldRequirement.FORBIDDEN,
         revision=FieldRequirement.FORBIDDEN,
-        timeout=CommandTimeout.INTERACTIVE,
+        response_policy=CommandResponsePolicy.INTERACTIVE,
         retry=CommandRetry.NONE,
         phase=phase,
     )
