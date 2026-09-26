@@ -235,10 +235,12 @@ class _BenchmarkInvocation:
         pending_progress_offsets = []
         pending_reliable_offsets = []
         for tick in range(1_500):
+            context.checkpoint()
             due = started + (tick * 0.04)
             remaining = due - perf_counter()
             if remaining > 0:
                 sleep(remaining)
+            context.checkpoint()
             completed = tick + 1
             attempt = _attempt_sample(
                 self._task_index,
@@ -371,6 +373,7 @@ def _benchmark_specs(
     report_marker: Path,
     failure_marker: Path,
     presented_marker: Path,
+    publisher: EvidencePublisher,
 ):
     from namisync.interfaces.web.commands import (
         CommandAccess,
@@ -482,6 +485,8 @@ def _benchmark_specs(
             return {"accepted": True}
         recorder.set("browser", dict(payload.value))
         recorder.set("browser_report_received", True)
+        if "failure" in payload.value:
+            publisher.publish_failure(recorder.snapshot())
         marker = (
             failure_marker
             if "failure" in payload.value
@@ -524,7 +529,8 @@ def main() -> int:
             {"type": type(error).__name__, "message": str(error)},
         )
         recorder.set("exit_code", 1)
-        publisher.publish_failure(recorder.snapshot())
+        if not EvidencePaths(arguments.evidence_dir).failure.is_file():
+            publisher.publish_failure(recorder.snapshot())
         raise
 
 
@@ -617,6 +623,7 @@ def _run_benchmark(
             report_marker,
             failure_marker,
             presented_marker,
+            publisher,
         )
 
     def observe_composition(production: object, combined: object) -> None:

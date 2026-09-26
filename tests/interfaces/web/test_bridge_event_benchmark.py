@@ -17,7 +17,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from _headed_evidence import EvidencePaths, EvidenceReader
+from _headed_evidence import EvidencePaths, EvidencePublisher, EvidenceReader
+from _frontend_test_support import _node_executable, run_node_probe
 from namisync.interfaces.web.readiness import CommandPhase, ReadinessContext
 
 
@@ -96,6 +97,168 @@ def test_bridge_event_benchmark_keeps_structured_incomplete_evidence(
     assert result["driver_source"]["kind"] == "working-tree"
     assert result["memory"]["job_private_memory"] == {}
     assert result["partial_evidence"] == {}
+
+
+def test_bridge_event_benchmark_parent_keeps_first_browser_failure_and_partial_stream(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> None:
+    benchmark = _benchmark_module()
+    child = _child_module()
+    monkeypatch.setattr(benchmark, "_benchmark_root", lambda *_args: nullcontext(tmp_path))
+    monkeypatch.setattr(
+        benchmark, "_build_archived_wheel",
+        lambda _root: (tmp_path / "wheel.whl", "a" * 40, ()),
+    )
+    monkeypatch.setattr(benchmark, "_install_wheel", lambda *_args: tmp_path / "python.exe")
+    monkeypatch.setattr(benchmark, "_stage_page", lambda *_args: tmp_path / "index.html")
+    monkeypatch.setattr(benchmark, "scenario_deadline", lambda _seconds: object())
+    monkeypatch.setattr(benchmark, "wait_for_window", lambda *_args, **_kwargs: object())
+    monkeypatch.setattr(benchmark, "close_window", lambda _window: None)
+    monkeypatch.setattr(
+        benchmark, "wait_for_process",
+        lambda *_args, **_kwargs: SimpleNamespace(returncode=0),
+    )
+
+    class Process:
+        def poll(self):
+            return 0
+
+        def close_job(self):
+            pass
+
+    monkeypatch.setattr(benchmark, "_start_direct_job_process", lambda *_args, **_kwargs: Process())
+
+    class Sampler:
+        def __init__(self, _process):
+            pass
+
+        def wait_until_ready(self, *_args):
+            pass
+
+        def take_idle_baseline(self, _deadline):
+            pass
+
+        def run_until_browser_report(self, *_args):
+            recorder = child._Recorder(tmp_path / "child-evidence.json")
+            recorder.append_samples([{"sample": 1}])
+            recorder.set("browser", {
+                "failure": "BridgeCommandError",
+                "failure_source": "report:samples",
+                "failure_message": "The desktop action contains invalid data",
+            })
+            EvidencePublisher(EvidencePaths((tmp_path / "child-evidence").resolve())).publish_failure(
+                recorder.snapshot()
+            )
+            return False
+
+        def result(self):
+            return {}
+
+    monkeypatch.setattr(benchmark, "_JobPrivateMemorySampler", Sampler)
+    result = benchmark.run_case("installed", output=tmp_path / "report.json")
+    assert result["status"] == "incomplete"
+    assert result["failure"] == {
+        "exception_type": "BridgeCommandError",
+        "message": "report:samples: The desktop action contains invalid data",
+    }
+    assert result["parent_failure"]["message"] == (
+        "benchmark child did not publish final evidence"
+    )
+    assert result["partial_evidence"]["samples"] == [{"sample": 1}]
+
+
+def test_bridge_event_benchmark_normal_incomplete_exit_retains_unfinished_raw_streams(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> None:
+    benchmark = _benchmark_module()
+    child = _child_module()
+    monkeypatch.setattr(benchmark, "REPOSITORY_ROOT", tmp_path / "checkout")
+    monkeypatch.setattr(
+        benchmark, "_build_archived_wheel",
+        lambda _root: (tmp_path / "wheel.whl", "a" * 40, ()),
+    )
+    monkeypatch.setattr(benchmark, "_install_wheel", lambda *_args: tmp_path / "python.exe")
+    monkeypatch.setattr(benchmark, "_stage_page", lambda *_args: tmp_path / "index.html")
+    monkeypatch.setattr(benchmark, "scenario_deadline", lambda _seconds: object())
+    monkeypatch.setattr(benchmark, "wait_for_window", lambda *_args, **_kwargs: object())
+    monkeypatch.setattr(benchmark, "close_window", lambda _window: None)
+    monkeypatch.setattr(
+        benchmark, "wait_for_process",
+        lambda *_args, **_kwargs: SimpleNamespace(returncode=0),
+    )
+    monkeypatch.setattr(
+        benchmark, "_machine",
+        lambda _root: {"reference_profile_match": False},
+    )
+
+    class Process:
+        def __init__(self, root: Path) -> None:
+            self.root = root
+
+        def poll(self):
+            return 0
+
+        def close_job(self):
+            pass
+
+    monkeypatch.setattr(
+        benchmark, "_start_direct_job_process",
+        lambda *_args, cwd, **_kwargs: Process(cwd),
+    )
+
+    class Sampler:
+        def __init__(self, process: Process) -> None:
+            self.root = process.root
+
+        def wait_until_ready(self, *_args):
+            pass
+
+        def take_idle_baseline(self, _deadline):
+            pass
+
+        def run_until_browser_report(self, *_args):
+            recorder = child._Recorder(self.root / "child-evidence.json")
+            recorder.append_samples([{"sample": 1}])
+            recorder.set("browser", {
+                "failure": "BridgeCommandError",
+                "failure_source": "report:samples",
+                "failure_message": "The desktop action contains invalid data",
+            })
+            publisher = EvidencePublisher(EvidencePaths(self.root / "child-evidence"))
+            publisher.publish_failure(recorder.snapshot())
+            recorder.set("complete", True)
+            recorder.set("exit_code", 0)
+            publisher.publish_final(recorder.snapshot())
+            (self.root / "data").mkdir()
+            (self.root / "data" / "benchmark.failure").write_bytes(b"")
+            (self.root / "child-evidence.json.producer-0.timings.jsonl").write_bytes(
+                b'{"progress":[0.04],"reliable":[]}\n'
+            )
+            return False
+
+        def result(self):
+            return {}
+
+    monkeypatch.setattr(benchmark, "_JobPrivateMemorySampler", Sampler)
+    output = tmp_path / "report.json"
+    result = benchmark.run_case("installed", output=output)
+
+    assert result["status"] == "incomplete"
+    assert result["failure"] == {
+        "exception_type": "BridgeCommandError",
+        "message": "report:samples: The desktop action contains invalid data",
+    }
+    assert "parent_failure" not in result
+    raw = Path(result["raw_evidence"]["path"])
+    assert raw == tmp_path / "report.json.raw-incomplete"
+    assert (raw / "child-evidence" / "failure.json").is_file()
+    assert (raw / "child-evidence" / "final.json").is_file()
+    assert (raw / "child-evidence.json.samples.jsonl").is_file()
+    assert (raw / "child-evidence.json.producer-0.timings.jsonl").read_bytes() == (
+        b'{"progress":[0.04],"reliable":[]}\n'
+    )
+    assert (raw / "data" / "benchmark.failure").is_file()
+    assert not list(tmp_path.glob(".namisync-bridge-benchmark-*"))
 
 
 def test_bridge_event_benchmark_cli_publishes_incomplete_observation(
@@ -200,8 +363,8 @@ def test_bridge_event_benchmark_sources_compile_and_keep_test_seams_external() -
     assert "append_producer_timings" in child
     assert "items_done=reliable_emissions" in child
     assert "items_total=150" in child
-    assert "? event.body.bytes_done" in browser
-    assert "const completed = event.body.bytes_done;" in browser
+    assert "? fixtureBytes(event.body.bytes_done)" in browser
+    assert "const completed = fixtureBytes(event.body.bytes_done);" in browser
     assert "publisher.publish_final(recorder.snapshot())" in child
     assert "publisher.publish_failure(recorder.snapshot())" in child
     assert ".replace(" not in child
@@ -221,6 +384,108 @@ def test_bridge_event_benchmark_sources_compile_and_keep_test_seams_external() -
     assert terminal_preflush < browser.index("samples.push(sample)")
     assert browser.count("flushSamples(true)") == 1
     assert 'sampleClass === "terminal_event" || sampleClass === "terminal_record",' in browser
+
+
+def test_bridge_event_benchmark_page_decodes_v5_and_retains_first_report_failure() -> None:
+    node = _node_executable()
+    assert node is not None
+    completed = run_node_probe(
+        [
+            str(node),
+            str(ROOT / "assets" / "bridge_event_page_probe.mjs"),
+            str(ASSETS / "benchmark.js"),
+        ],
+        timeout=10,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert json.loads(completed.stdout) == {"first_failure": "report:samples"}
+
+
+def test_bridge_event_benchmark_terminal_checks_are_item_free() -> None:
+    benchmark = _benchmark_module()
+    core = {
+        "status": "completed", "recording": "ok", "audit": "ok",
+        "disposition": "ran", "canceled": False, "phase_count": 0,
+        "bytes_done": 1_500, "bytes_total": 1_500, "error": None,
+    }
+    record = {
+        **core, "headline": "success", "filesystem": "completed",
+        "integrity": "not-run",
+    }
+    record.pop("status")
+    assert benchmark._successful_core_result(core)
+    assert benchmark._successful_result_view(record)
+    assert not benchmark._successful_core_result({**core, "items": []})
+    assert not benchmark._successful_result_view({**record, "items": []})
+    assert not benchmark._successful_core_result({**core, "bytes_done": True})
+
+
+def test_bridge_event_benchmark_current_product_wire_has_string_bytes_and_no_items() -> None:
+    from dataclasses import asdict
+
+    from namisync.core.events import (
+        CORE_EVENT_SCHEMA_VERSION, Envelope, Progress, Terminal,
+        TerminalSummary, envelope_to_dict,
+    )
+    from namisync.core.session import OperationResult, SessionState
+    from namisync.workflows.views import operation_result_view
+
+    result = OperationResult(
+        SessionState.COMPLETED, bytes_done=1_500, bytes_total=1_500,
+    )
+    stamp = datetime.now(timezone.utc)
+    progress = envelope_to_dict(Envelope(
+        session_id="f" * 32, seq=1, at=stamp,
+        schema_version=CORE_EVENT_SCHEMA_VERSION,
+        body=Progress(
+            "execute", items_done=150, items_total=150,
+            bytes_done=1_500, bytes_total=1_500, current_path=None,
+        ),
+    ))
+    terminal = envelope_to_dict(Envelope(
+        session_id="f" * 32, seq=2, at=stamp,
+        schema_version=CORE_EVENT_SCHEMA_VERSION,
+        body=Terminal(TerminalSummary.from_result(result)),
+    ))
+    record = asdict(operation_result_view(result))
+    assert progress["body"]["bytes_done"] == "1500"
+    assert terminal["body"]["result"]["bytes_done"] == "1500"
+    assert "items" not in terminal["body"]["result"]
+    assert record["bytes_done"] == "1500"
+    assert "items" not in record
+
+
+def test_bridge_event_benchmark_synthetic_producer_checks_cancel(tmp_path: Path) -> None:
+    child = _child_module()
+
+    class Canceled(Exception):
+        pass
+
+    class Context:
+        def __init__(self) -> None:
+            self.checks = 0
+            self.events = []
+
+        def checkpoint(self) -> None:
+            self.checks += 1
+            if self.checks == 4:
+                raise Canceled
+
+        def emit(self, event) -> None:
+            self.events.append(event)
+
+    context = Context()
+    invocation = child._BenchmarkInvocation(
+        0,
+        SimpleNamespace(wait=lambda _timeout: None),
+        SimpleNamespace(started_at=child.perf_counter),
+        child._Recorder(tmp_path / "producer.json"),
+    )
+    with pytest.raises(Canceled):
+        invocation.run(context)
+    assert context.checks == 4
+    assert len(context.events) == 1
+    assert not list(tmp_path.glob("producer.json.producer-*"))
 
 
 @pytest.mark.parametrize("task_index", range(4))
@@ -656,6 +921,9 @@ def test_bridge_event_benchmark_uses_immutable_handshake_markers(
     report = tmp_path / "benchmark.report"
     failure = tmp_path / "benchmark.failure"
     presented = tmp_path / "benchmark.presented"
+    evidence_root = (tmp_path / "milestones").resolve()
+    evidence_root.mkdir()
+    publisher = EvidencePublisher(EvidencePaths(evidence_root))
     begin.write_bytes(b"")
     spec = child._benchmark_specs(
         object(),
@@ -666,6 +934,7 @@ def test_bridge_event_benchmark_uses_immutable_handshake_markers(
         report,
         failure,
         presented,
+        publisher,
     )["benchmark_report"]
 
     sample = {
@@ -716,6 +985,7 @@ def test_bridge_event_benchmark_uses_immutable_handshake_markers(
         failed_report,
         failed_marker,
         tmp_path / "failed.presented",
+        EvidencePublisher(EvidencePaths(evidence_root)),
     )["benchmark_report"]
     assert failed_spec.invoke(
         {"kind": "complete", "value": {"failure": "BridgeTransportError"}},
@@ -723,6 +993,9 @@ def test_bridge_event_benchmark_uses_immutable_handshake_markers(
     ) == {"accepted": True}
     assert failed_marker.is_file()
     assert not failed_report.exists()
+    assert EvidenceReader(EvidencePaths(evidence_root)).read_failure()["browser"] == {
+        "failure": "BridgeTransportError"
+    }
 
 
 def test_bridge_event_benchmark_publishes_pre_host_setup_failure(
@@ -801,6 +1074,15 @@ def test_bridge_event_benchmark_streams_and_authenticates_live_evidence(
     assert attached["producer_task_3"]["reliable_emission_offsets_seconds"] == [
         3.2
     ]
+    partial_manifest = dict(manifest)
+    partial_manifest["producer_streams"] = {"0": manifest["producer_streams"]["0"]}
+    partial = benchmark._attach_streamed_evidence(
+        partial_manifest, output, require_complete=False,
+    )
+    assert partial["producer_task_0"]["task_index"] == 0
+    assert "producer_task_1" not in partial
+    with pytest.raises(RuntimeError, match="producer-stream manifest"):
+        benchmark._attach_streamed_evidence(partial_manifest, output)
 
     sample_stream = output.with_suffix(output.suffix + ".samples.jsonl")
     sample_stream.write_bytes(sample_stream.read_bytes() + b"{}")
@@ -836,10 +1118,6 @@ def test_bridge_event_benchmark_worst_case_report_batches_fit_ingress() -> None:
         "phase_count": 0,
         "bytes_done": 1_500,
         "bytes_total": 1_500,
-        "items": [
-            [f"task-3-item-{item:03d}", "succeeded"]
-            for item in range(150)
-        ],
         "error": None,
     }
     terminal_sample = {
@@ -870,7 +1148,7 @@ def test_bridge_event_benchmark_worst_case_report_batches_fit_ingress() -> None:
     assert len(encoded(ordinary_samples)) <= 65_536
     assert len(encoded([terminal_sample])) <= 65_536
     assert len(encoded([*ordinary_samples, terminal_sample])) <= 65_536
-    legacy_residue = [ordinary_samples[0]] * 249
+    legacy_residue = [ordinary_samples[0]] * 350
     assert len(encoded([*legacy_residue, *([terminal_sample] * 8)])) > 65_536
 
 
@@ -1165,9 +1443,6 @@ def _passing_evidence(benchmark):
                     "phase_count": 0,
                     "bytes_done": 1_500,
                     "bytes_total": 1_500,
-                    "items": [
-                        [event_id, "succeeded"] for event_id in reliable_ids
-                    ],
                     "error": None,
                 },
                 "latency_ms": 20,
@@ -1194,9 +1469,6 @@ def _passing_evidence(benchmark):
                     "phase_count": 0,
                     "bytes_done": 1_500,
                     "bytes_total": 1_500,
-                    "items": [
-                        [event_id, "succeeded"] for event_id in reliable_ids
-                    ],
                     "error": None,
                 },
                 "latency_ms": 20,

@@ -45,6 +45,7 @@ function isTaskStart(value) {
 
 
 function enqueueReport(kind, value, terminalAdjacent = false) {
+  if (failureReported) return reporting;
   if (kind === "samples") {
     if (
       pendingSampleReports >= MAX_PENDING_SAMPLE_REPORTS ||
@@ -53,6 +54,7 @@ function enqueueReport(kind, value, terminalAdjacent = false) {
     ) {
       const error = new Error("benchmark sample reporting is saturated");
       error.benchmarkStage = "report:samples:capacity";
+      fail(error);
       throw error;
     }
     pendingSampleReports += 1;
@@ -62,13 +64,14 @@ function enqueueReport(kind, value, terminalAdjacent = false) {
   }
   reportQueued += 1;
   const reportIndex = reportQueued;
-  reporting = reporting.then(async () => {
-    activeReport = {
-      index: reportIndex,
-      kind,
-      sample_count: Array.isArray(value) ? value.length : null,
-    };
+  const request = reporting.then(async () => {
     try {
+      if (failureReported) return;
+      activeReport = {
+        index: reportIndex,
+        kind,
+        sample_count: Array.isArray(value) ? value.length : null,
+      };
       const result = await dispatchInteractive(
         "benchmark_report",
         { kind, value },
@@ -77,7 +80,10 @@ function enqueueReport(kind, value, terminalAdjacent = false) {
       reportCompleted = reportIndex;
       return result;
     } catch (error) {
-      error.benchmarkStage = `report:${kind}`;
+      if (typeof error === "object" && error !== null) {
+        error.benchmarkStage = `report:${kind}`;
+      }
+      fail(error);
       throw error;
     } finally {
       activeReport = null;
@@ -89,12 +95,13 @@ function enqueueReport(kind, value, terminalAdjacent = false) {
       }
     }
   });
-  return reporting;
+  reporting = request.catch(() => undefined);
+  return request;
 }
 
 
 function flushSamples(terminalAdjacent = false) {
-  if (samples.length === 0) {
+  if (failureReported || samples.length === 0) {
     return;
   }
   enqueueReport(
@@ -105,8 +112,15 @@ function flushSamples(terminalAdjacent = false) {
 }
 
 
-function summarizeItems(result) {
-  return result.items.map((item) => [item.item_id, item.result]);
+function fixtureBytes(value) {
+  if (typeof value !== "string" || !/^(?:[1-9][0-9]{0,3})$/.test(value)) {
+    throw new TypeError("benchmark byte coordinate is invalid");
+  }
+  const decoded = Number(value);
+  if (decoded < 1 || decoded > 1500) {
+    throw new RangeError("benchmark byte coordinate is outside the fixture");
+  }
+  return decoded;
 }
 
 
@@ -118,9 +132,8 @@ function summarizeCoreTerminal(result) {
     disposition: result.disposition,
     canceled: result.canceled,
     phase_count: result.phases.length,
-    bytes_done: result.bytes_done,
-    bytes_total: result.bytes_total,
-    items: summarizeItems(result),
+    bytes_done: fixtureBytes(result.bytes_done),
+    bytes_total: fixtureBytes(result.bytes_total),
     error: result.error,
   };
 }
@@ -136,9 +149,8 @@ function summarizeRecordTerminal(result) {
     disposition: result.disposition,
     canceled: result.canceled,
     phase_count: result.phases.length,
-    bytes_done: result.bytes_done,
-    bytes_total: result.bytes_total,
-    items: summarizeItems(result),
+    bytes_done: fixtureBytes(result.bytes_done),
+    bytes_total: fixtureBytes(result.bytes_total),
     error: result.error,
   };
 }
@@ -150,6 +162,7 @@ function summarizeStateChanged(body) {
 
 
 function recordSample(sampleClass, update) {
+  if (failureReported) return;
   const event = update.update_type === "event" ? update.event : null;
   const record = update.update_type === "record" ? update.record : null;
   const at = event?.at ?? record?.ended_at;
@@ -178,7 +191,7 @@ function recordSample(sampleClass, update) {
       ? null
       : performance.now() - benchmarkStartedAt,
     position: event?.body_type === "Progress"
-      ? event.body.bytes_done
+      ? fixtureBytes(event.body.bytes_done)
       : null,
     record_state: record?.state ?? null,
     session_id: event?.session_id ?? record.session_id,
@@ -207,8 +220,10 @@ function recordSample(sampleClass, update) {
 
 
 async function finish() {
+  if (failureReported) return;
   flushSamples();
   await reporting;
+  if (failureReported) return;
   await enqueueReport("complete", {
     gap_events: gaps,
     progress_monotonic: progressMonotonic,
@@ -227,6 +242,7 @@ async function finish() {
 
 
 function acceptUpdate(task, update) {
+  if (failureReported) return;
   if (update === null) return; // Snapshot-only catch-up is not an event sample.
   if (update.update_type === "record") {
     recordSample("terminal_record", update);
@@ -238,7 +254,7 @@ function acceptUpdate(task, update) {
   }
   const event = update.event;
   if (event.body_type === "Progress") {
-    const completed = event.body.bytes_done;
+    const completed = fixtureBytes(event.body.bytes_done);
     if (completed < task.lastProgress) {
       progressMonotonic = false;
     }
@@ -275,34 +291,34 @@ function fail(error, source = "task") {
   failureReported = true;
   const name = typeof error?.name === "string" ? error.name : "Error";
   renderText(status, `Benchmark failed (${name}).`);
-  reporting = reporting
-    .catch(() => undefined)
-    .then(() => dispatchInteractive(
-      "benchmark_report",
-      {
-        kind: "complete",
-        value: {
-          failure: name,
-          failure_source: typeof error?.benchmarkStage === "string"
-            ? error.benchmarkStage
-            : source,
-          active_report: activeReport,
-          report_queued: reportQueued,
-          report_completed: reportCompleted,
-          buffered_sample_count: samples.length,
-          gap_events: gaps,
-          progress_monotonic: progressMonotonic,
-          session_ids: [...tasks.values()]
-            .map((task) => task.identity.session_id),
-          task_count: tasks.size,
-          terminal_event_latencies_ms: terminalEventLatencies,
-          terminal_record_latencies_ms: terminalRecordLatencies,
-          terminal_record_count: terminalRecords,
-        },
-      },
-      (result) => result?.accepted === true,
-    ));
-  void reporting.catch(() => {});
+  const bufferedSampleCount = samples.length;
+  samples.length = 0;
+  const failureValue = {
+    failure: name,
+    failure_source: typeof error?.benchmarkStage === "string"
+      ? error.benchmarkStage
+      : source,
+    failure_message: typeof error?.message === "string"
+      ? error.message.slice(0, 256)
+      : null,
+    active_report: activeReport,
+    report_queued: reportQueued,
+    report_completed: reportCompleted,
+    buffered_sample_count: bufferedSampleCount,
+    gap_events: gaps,
+    progress_monotonic: progressMonotonic,
+    session_ids: [...tasks.values()]
+      .map((task) => task.identity.session_id),
+    task_count: tasks.size,
+    terminal_event_latencies_ms: terminalEventLatencies,
+    terminal_record_latencies_ms: terminalRecordLatencies,
+    terminal_record_count: terminalRecords,
+  };
+  void reporting.then(() => dispatchInteractive(
+    "benchmark_report",
+    { kind: "complete", value: failureValue },
+    (result) => result?.accepted === true,
+  )).catch(() => undefined);
 }
 
 

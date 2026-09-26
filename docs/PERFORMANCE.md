@@ -466,11 +466,25 @@ large Plan window/detail witnesses without establishing a new speed target.
 cases; `python -m tools performance bridge-event installed --json
 build/bridge-event.json` runs the bridge case. It stages driver and page assets from the
 working tree but builds the measured product wheel from archived HEAD; the
-report labels `driver_source` and `product_source` separately. Its bounded
-native child and incomplete failures retain available child evidence and failure context.
+report labels `driver_source` and `product_source` separately. The v5 fixture
+decodes its 1–1,500 byte coordinates, checks item-free terminal facts, and
+retains ordered ItemOutcome IDs as its independent item witness. Its bounded
+native child publishes the first browser report failure before Close and keeps
+partial sample and producer streams when cancellation ends the fixture early.
 An incomplete or v4-only observation does not satisfy current event-v5
 transport correctness or the frozen SH-G-8 custody claim. Use the unchanged
 custody tests and their authority below for that gate.
+
+The 2026-09-27 repair verification used archived product `639b2ea` and the
+IR-BRIDGE working-tree driver. `build/admission-bridge-closeout-20260927/bridge-full-final.json`
+records `status=complete`, `measurement_valid=true`, four valid sessions with
+150 ordered reliable outcomes each, and no gaps or browser failures. Historical
+`passed`/`event_passed` are false; this is endpoint completion, not new timing or
+custody acceptance. The injected-report-failure receipt in the same directory
+records an intentional rejection after five accepted batches, normal host exit,
+the original error and report metadata, and a `raw_evidence` directory containing
+failure/final milestones, authenticated samples and four unfinished producer
+timing streams. Earlier failed receipts remain alongside the final evidence.
 
 The frozen v1 [calibration](../tests/interfaces/web/sh_g_8_transport_calibration.json),
 [ceiling](../tests/interfaces/web/sh_g_8_transport_ceiling.json) and

@@ -360,22 +360,24 @@ def _read_sample_stream(
 def _attach_streamed_evidence(
     evidence: dict[str, object],
     evidence_path: Path,
+    *,
+    require_complete: bool = True,
 ) -> dict[str, object]:
     attached = dict(evidence)
-    attached["samples"] = _read_sample_stream(
-        evidence_path.with_suffix(evidence_path.suffix + ".samples.jsonl"),
-        evidence.get("sample_stream"),
-    )
+    if "sample_stream" in evidence:
+        attached["samples"] = _read_sample_stream(
+            evidence_path.with_suffix(evidence_path.suffix + ".samples.jsonl"),
+            evidence["sample_stream"],
+        )
+    elif require_complete:
+        raise RuntimeError("benchmark sample-stream manifest is missing")
     producer_streams = evidence.get("producer_streams")
-    if type(producer_streams) is not dict or set(producer_streams) != {
-        "0",
-        "1",
-        "2",
-        "3",
-    }:
+    if type(producer_streams) is not dict or (
+        require_complete and set(producer_streams) != {"0", "1", "2", "3"}
+    ) or any(key not in {"0", "1", "2", "3"} for key in producer_streams):
         raise RuntimeError("benchmark producer-stream manifest is invalid")
-    for task_index in range(4):
-        metadata = producer_streams[str(task_index)]
+    for key, metadata in producer_streams.items():
+        task_index = int(key)
         if (
             type(metadata) is not dict
             or set(metadata) != {"byte_count", "sha256", "timings"}
@@ -1518,19 +1520,6 @@ def _valid_sample(sample: object) -> bool:
     )
 
 
-def _successful_result_items(items: object) -> bool:
-    return (
-        type(items) is list
-        and all(
-            type(item) is list
-            and len(item) == 2
-            and type(item[0]) is str
-            and item[1] == "succeeded"
-            for item in items
-        )
-    )
-
-
 def _successful_core_result(value: object) -> bool:
     return bool(
         type(value) is dict
@@ -1542,7 +1531,6 @@ def _successful_core_result(value: object) -> bool:
             "canceled",
             "disposition",
             "error",
-            "items",
             "phase_count",
             "recording",
             "status",
@@ -1553,10 +1541,11 @@ def _successful_core_result(value: object) -> bool:
         and value.get("disposition") == "ran"
         and value.get("canceled") is False
         and value.get("phase_count") == 0
-        and value.get("bytes_done") == 1_500
-        and value.get("bytes_total") == 1_500
+        and type(value.get("bytes_done")) is int
+        and value["bytes_done"] == 1_500
+        and type(value.get("bytes_total")) is int
+        and value["bytes_total"] == 1_500
         and value.get("error") is None
-        and _successful_result_items(value.get("items"))
     )
 
 
@@ -1574,7 +1563,6 @@ def _successful_result_view(value: object) -> bool:
             "filesystem",
             "headline",
             "integrity",
-            "items",
             "phase_count",
             "recording",
         }
@@ -1586,10 +1574,11 @@ def _successful_result_view(value: object) -> bool:
         and value.get("disposition") == "ran"
         and value.get("canceled") is False
         and value.get("phase_count") == 0
-        and value.get("bytes_done") == 1_500
-        and value.get("bytes_total") == 1_500
+        and type(value.get("bytes_done")) is int
+        and value["bytes_done"] == 1_500
+        and type(value.get("bytes_total")) is int
+        and value["bytes_total"] == 1_500
         and value.get("error") is None
-        and _successful_result_items(value.get("items"))
     )
 
 
@@ -1767,16 +1756,6 @@ def _summarize(
         state_values = [
             sample["event_result"]["state"] for sample in state_samples
         ]
-        terminal_event_ids = (
-            [item[0] for item in terminal_events[0]["event_result"]["items"]]
-            if terminal_events
-            else []
-        )
-        terminal_record_ids = (
-            [item[0] for item in terminal_records[0]["event_result"]["items"]]
-            if terminal_records
-            else []
-        )
         valid = bool(
             reliable_ids == _expected_reliable_ids(task_index)
             and reliable_sequences == sorted(set(reliable_sequences))
@@ -1810,8 +1789,6 @@ def _summarize(
             and event_samples[-1]["class"] == "terminal_event"
             and len(terminal_events) == 1
             and len(terminal_records) == 1
-            and terminal_event_ids == reliable_ids
-            and terminal_record_ids == reliable_ids
             and [sample["class"] for sample in session_samples[-3:]]
             == ["reliable", "terminal_event", "terminal_record"]
         )
@@ -2224,14 +2201,16 @@ def run_case(
                 evidence, final_published = _read_terminal_evidence(
                     evidence_reader
                 )
+                if evidence:
+                    evidence = _attach_streamed_evidence(
+                        evidence,
+                        evidence_path,
+                        require_complete=browser_succeeded and final_published,
+                    )
                 if completed.returncode != 0:
                     raise RuntimeError(completed.stdout + completed.stderr)
                 if not final_published or evidence.get("complete") is not True:
                     raise RuntimeError("benchmark child did not publish final evidence")
-                evidence = _attach_streamed_evidence(
-                    evidence,
-                    evidence_path,
-                )
             finally:
                 try:
                     job_memory = sampler.result()
@@ -2247,14 +2226,15 @@ def run_case(
                             evidence, final_published = _read_terminal_evidence(
                                 evidence_reader
                             )
-                            if (
-                                final_published
-                                and evidence.get("complete") is True
-                            ):
-                                evidence = _attach_streamed_evidence(
-                                    evidence,
-                                    evidence_path,
-                                )
+                            if evidence:
+                                try:
+                                    evidence = _attach_streamed_evidence(
+                                        evidence,
+                                        evidence_path,
+                                        require_complete=False,
+                                    )
+                                except RuntimeError:
+                                    pass
             result = _summarize(
                 evidence,
                 benchmark_root=root,
@@ -2262,6 +2242,16 @@ def run_case(
                 status=status,
                 job_memory=job_memory,
             )
+            if result.get("measurement_valid") is not True:
+                try:
+                    retained = _preserve_failure_evidence(output, root)
+                    if retained is not None:
+                        raw_artifacts["path"] = str(retained)
+                except Exception as error:
+                    raw_artifacts["preservation_error"] = (
+                        f"{type(error).__name__}: {error}"
+                    )
+                result["raw_evidence"] = dict(raw_artifacts)
     except Exception as error:
         result = _failure_result(
             error,
@@ -2271,6 +2261,20 @@ def run_case(
             job_memory=job_memory,
             raw_artifacts=raw_artifacts,
         )
+    browser = evidence.get("browser")
+    if type(browser) is dict and type(browser.get("failure")) is str:
+        if "failure" in result:
+            result["parent_failure"] = result["failure"]
+        source = browser.get("failure_source", "browser report")
+        message = browser.get("failure_message")
+        result["failure"] = {
+            "exception_type": browser["failure"],
+            "message": (
+                f"{source}: {message}"
+                if type(message) is str and message
+                else str(source)
+            ),
+        }
     if result.get("measurement_valid") is not True:
         result["status"] = "incomplete"
         result.setdefault("failure", {

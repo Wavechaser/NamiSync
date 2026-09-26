@@ -1027,6 +1027,22 @@ repeated machinery while preserving operational safety and boundary contracts.
 Safety, settlement, authority, and measurement work made high-risk release
 claims explicit, independently reviewable, and regression-backed.
 
+#### Repair the installed bridge event diagnostic (2026-09-27)
+
+- Migrate fixture byte coordinates and item-free terminal summaries to current
+  event-v5 values while retaining exact ordered reliable-item witnesses.
+- Stop sampling on the first report rejection, release queued reservations,
+  preserve the original failure and active-report metadata before its marker,
+  and let synthetic workers settle cancellation through normal host cleanup.
+- The final ordinary suite (5,380 passed, 4 privilege-related skips and 34
+  headed deselections) and 35 focused checks pass, including executable
+  page controls and a CRLF copy. The installed 60-second diagnostic completes
+  on database commit `639b2ea`; its four sessions are valid with no gaps.
+  An injected rejection exits normally and retains its original cause,
+  failure/final milestones, sample stream and four unfinished timing streams.
+  Historical timing/provenance scores are not new acceptance, and frozen
+  custody artifacts remain unchanged. PERFORMANCE and M1_PLAN retain evidence.
+
 #### Separate cold and live database admission (2026-09-27)
 
 - Runtime admission now validates an adopted database through a pinned SQLite

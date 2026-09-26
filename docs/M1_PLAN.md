@@ -13,85 +13,42 @@ certify their recorded build and dependencies only.
 
 ## Incident repairs and closeout — 2026-09-27
 
-The user activated four individually reviewed commits following the incident
-investigation at `a0205c08`. This authorizes the database-admission design
-correction and optional bridge diagnostic migration, not unrelated M1 work.
-Detailed checkpoint populations and contract decisions are expanded here before
-their implementation. Evidence lives in `build/admission-bridge-closeout-20260927/`.
+The user authorized four separate reviewed outcomes from `a0205c08`.
+Implementation boundaries and the original finite populations are retained in
+Git history; component documents own the resulting behavior. Evidence is under
+`build/admission-bridge-closeout-20260927/`.
 
-| ID | Authorized outcome and owners | Gate and commit boundary | Status |
+| ID | Delivered outcome | Verification | Commit / status |
 | --- | --- | --- | --- |
-| IR-DB | Database contract admission accommodates legitimate owned SQLite activity while preserving cold nonmutating admission, exact schema/pair compatibility, journal and placement refusal, and truthful effects. Owners: db contracts, workflow pair/runtime and their direct service/CLI/repository consumers; DATABASE/DEFENSE. | Activity/refusal/lifetime controls passed; ordinary suite 5,379 passed, 4 privilege-related skips, 34 headed deselections; installed Setup passed; 12 import contracts and 87 documentation links passed. Independent adversarial review covers source, direct consumer fixture migrations and evidence. One database repair commit. | Verified; final review receipt in `build/admission-bridge-closeout-20260927/db-review.md`. |
-| IR-BRIDGE | Current event/result shapes reach the optional bridge diagnostic; reporting failure remains bounded, retains its cause and permits owned worker/host cleanup. Owners: tools/performance/bridge_event and direct tests; BRIDGE/PERFORMANCE/TOOLS. | Existing owner tests plus direct schema/failure controls and complete installed diagnostic on integrated product; preserve frozen custody JSON, no new timing acceptance. One bridge repair commit. | Implemented; final tests/review and installed evidence on the committed DB dependency pending. |
-| IR-CLOSE | Remove AB-7 focus loss from BUGS; retain the exact diagnostic explanation as an environmental test limitation with no new focus/compositor detector. Retain the enabled-button wait for independent asynchronous-filter sequencing, not historical attribution. Retire the unrealized DWM sentinel obligation per the user's decision. | Source/evidence review, 86 local documentation links and diff checks passed; independent read-only reviewer approved. Helper/product unchanged, so no new native test. One AB-7 closeout commit. | Complete; `build/admission-bridge-closeout-20260927/closeout-review.md` and `closeout-docs-check.json`. |
-| IR-DEFER | Shelve AB-8 stack/wrap and retain the unconfirmed live-render/check race diagnosis, exact historical limitations and where to inspect if it recurs. TESTS owns the troubleshooting note; it is not an OPEN bug or approved fix. | Documentation consistency, 84 local links, evidence references and diff checks passed; independent read-only reviewer approved. No product/test edits. One separate deferral commit. | Complete; `build/admission-bridge-closeout-20260927/defer-review.md` and `defer-docs-check.json`. |
+| IR-DB | Separate strict cold file admission from runtime-owned live SQLite validation. Preserve exact schema/pair/journal/placement refusal, independent role reads, fresh noncreating Plan and truthful effects. DATABASE/DEFENSE own the contract. | Deterministic reader/WAL activity and refusal/lifetime controls; 5,379 ordinary passes, 4 privilege skips, 34 headed deselections; installed Setup passed; 12 import contracts; 87 documentation links; independent review. | Complete: `639b2ea`; `db-review.md`, `db-implementation.md`, `db-ordinary-final.xml`, `db-installed-setup.xml`. |
+| IR-BRIDGE | Migrate the optional diagnostic to current scalar/terminal shapes, retain exact reliable-item witnesses, preserve the first report failure and raw incomplete streams, and settle synthetic cancellation through normal host cleanup. BRIDGE/PERFORMANCE own behavior and observations. | 35 focused passes and CRLF page probe; 5,380 ordinary passes, 4 privilege skips, 34 headed deselections; complete installed observation on `639b2ea`; injected rejection retains raw evidence and exits normally. | Complete; independent review approved. The commit carrying this row delivers IR-BRIDGE. `bridge-review.md`, `bridge-ordinary-final.xml`, `bridge-full-final.json`, `bridge-injected-report-failure.json`. |
+| IR-CLOSE | Remove AB-7 focus loss from BUGS and retain environmental troubleshooting in TESTS. Retain the enabled-button wait for independent asynchronous-filter sequencing. Retire the unrealized DWM sentinel obligation; no new focus/compositor detector. | Source/evidence review, 86 documentation links and diff checks; independent approval. Product/helper unchanged. | Complete: `e8d3613`; `closeout-review.md`, `closeout-docs-check.json`. |
+| IR-DEFER | Shelve AB-8 stack/wrap; retain the unconfirmed renderer/check race, historical limitations and recurrence inspection points in TESTS. | Documentation consistency, 84 links, evidence references and diff checks; independent approval. No CSS/helper/assertion change. | Complete: `8f75f75`; `defer-review.md`, `defer-docs-check.json`. |
 
-Preserve all five original failed incident receipts. No new GUI behavior,
-automatic mutation replay, broad schema migration, environment monitoring or
-AB-8 layout correction. Existing safety and recurrence stops in AGENTS apply;
-new loss of source nonmutation, supported corruption, false durable success or
-changed ownership/effect boundaries stops the affected lane. Stable original
-historical attribution remains qualified even after a reproduced mechanism is
-fixed. Shared source/validators and delivery documents have one writer; final
-evidence is rerun when a dependency changes.
+The database runtime retains two lazy role connections. Later pair checks and
+consumer opens validate current SQL, main identity and journal absence; public
+standalone constructors retain cold byte-preserving preflight. Reader retirement,
+writer placement and retryable runtime shutdown remain intact.
 
-### IR-DB implementation boundary
+The bridge driver decodes only its finite 1–1,500 byte coordinates, consumes
+item-free terminal facts and independently checks 150 ordered reliable outcomes
+per task. Reporting stops on the first rejection, queued counters unwind, and
+failure metadata is captured before cleanup. Failure/final milestones and
+unfinished timing streams survive clean incomplete exits. The current source
+population is the bridge diagnostic package, its focused test module and page
+probe; production host/transport and frozen custody JSON are unchanged.
 
-Separate cold file admission from already-admitted runtime-owned SQLite use.
-Cold probes and standalone constructors retain byte-preserving admission,
-including SHM, private adjacent WAL copies, exact markers/topology, lexical
-journal refusal and fresh-pair publication/rollback. After successful admission,
-a concrete connection owner pins each adopted database until runtime shutdown.
-The runtime retains two lazy role slots; it does not require a peer for an
-independent role read. Subsequent readers, writers and pair checks validate the live SQL
-contract through owned connections with SQLite transaction semantics, rather
-than hashing changing source main/WAL/SHM artifacts. Ordinary sidecar bookkeeping
-after adoption is permitted, as it already is for ordinary repository use.
-This is not cached READY status, pathname authorization or a desktop-only lease.
-Fresh planning must remain noncreating; placement guards remain at point of use.
+Historical advisory `passed`/`event_passed` remain false in the final native
+observation; `status=complete` and `measurement_valid=true` establish the
+diagnostic endpoint only. No new timing/custody acceptance is claimed.
+Original AB-7 Setup and AB-2/AB-10 causal attribution remains qualified.
+All original and intermediate failure receipts are retained.
 
-Finite production population: db contracts/schema/repositories/history/recorder/
-writer facades and direct implementation owners; workflow database_pair/runtime/
-inventory and their reader, history, recorder and correspondence factories.
-Standalone default APIs keep cold behavior. Exact owner lifetime/API and
-Windows path replacement behavior are verified before treating pinned handles
-as authority. No global registry, generic lock framework, opaque transferable
-authorization, schema upgrade or automatic destructive recovery.
-
-Tests include database contracts/schema, runtime readers, the existing service/
-workflow/CLI direct consumers and database identity/native test owners. Acceptance
-requires deterministic live reader and recording admission controls, retirement/
-reopen/shutdown, cold byte-preserving refusals, live invalid-contract refusal,
-unleased runtime/CLI and Windows owner-lifetime evidence, affected database/
-workflows/interfaces departments, ordinary suite, installed Setup and imports.
-DATABASE/DEFENSE own the clarified contract; BUGS/CHANGELOG/HANDOFF record
-delivery. Root serializes shared documents. Any inability to preserve cold
-no-write refusal or a new effect/safety boundary stops this lane for adjudication.
-
-### IR-BRIDGE implementation boundary
-
-At `a0205c08`, the finite population is
-`tools/performance/bridge_event/{__init__.py,child.py,assets/benchmark.js}`,
-`tests/interfaces/web/test_bridge_event_benchmark.py`, one executable page probe
-under existing `tests/assets/` if needed, and BRIDGE/PERFORMANCE (TOOLS only if
-its outcome vocabulary changes), BUGS and the shared delivery documents.
-Decode the known 1–1,500 fixture byte strings into numeric samples; consume
-current item-free terminal facts and retain the exact reliable ItemOutcome
-stream as the independent item witness. Stop report/sample admission on the
-first rejection, unwind queued counters, and durably publish that first failure
-through the existing evidence protocol before Close. Synthetic producers must
-cooperate with cancellation; normal host shutdown policy remains unchanged.
-Canceled producers may lack final streams, so failure collection retains partial
-evidence rather than demanding successful fixture completion.
-
-Acceptance is focused producer/page/parent and first-failure/cancellation
-controls, the interfaces department, a complete installed observation on the
-final integrated DB product, a bounded injected-report-failure installed control
-with normal host exit and original failure retention, and independent review.
-No host change, generic harness replacement, timing-budget acceptance, frozen
-custody artifact edit or result-item reconstruction. Historical advisory fields
-must not be confused with endpoint completion. Independent tool edits may run
-alongside IR-DB; final native evidence waits for its product commit.
+AB-8 implementation, environment monitoring, GUI changes, automatic mutation
+replay, broad schema migration and unrelated M1 work remain excluded. A
+pre-existing performance-CLI error suggests an unsupported replacement flag;
+BUGS records that separate guidance defect, and reruns use fresh report paths.
+No CLI change was included.
 
 ## Post-M1-8 reduction plan
 

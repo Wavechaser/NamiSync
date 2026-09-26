@@ -71,7 +71,16 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Workspace and measurement integrity
 
-- MINOR - OPEN (2026-09-27). Stale observation contract. The optional
+- MINOR - OPEN (2026-09-27). Unsupported recovery advice. Reusing a
+  `tools performance --json` destination safely refuses before launching,
+  but suggests `--replace-report`, which that subcommand does not accept.
+  Cause: the shared output guard uses a replacement-option default that only
+  other callers expose. Use a fresh report destination. This pre-existing CLI
+  guidance defect is deferred outside IR-BRIDGE; the refusal preserves existing
+  reports. Evidence: `build/admission-bridge-closeout-20260927/bridge-report-replacement-guard.log`
+  and `bridge-report-unsupported-option.log` in that directory.
+
+- MINOR - FIXED (2026-09-27). Stale observation contract. The optional
   bridge-event diagnostic rejects current decimal-string Progress positions
   against its integer-only sample validator, and its terminal summaries still
   read the retired result `items` array. Cause: its sample consumer was not
@@ -79,12 +88,14 @@ defect, and move implementation-level test choreography out of the log.
   pending counters until the page callback throws reporting saturation.
   Early Close then meets the helper's uncancelable 60-second workload, returns
   incomplete, and waits at the normal host Retry/Cancel prompt until the
-  parent's deadline. The empty marker loses the in-memory browser error when
-  final publication never occurs. Three instrumented installed reproductions
-  (saturation near 17 s, as in AB-10) and a wire-value rejection/numeric
-  control confirm the current chain; the exact AB-2/AB-10 historical causes
-  remain unproven. Evidence: `build/incident-trace-20260927/findings.md` and
-  `build/trace-20260927/`. No product fix claimed.
+  parent's deadline. The empty marker lost the in-memory browser error when
+  final publication never occurred. Fixed by decoding fixture scalars, consuming
+  current terminal facts, unwinding failed reports, publishing the original
+  failure before its marker and honoring synthetic cancellation. Ordered item
+  witnesses and frozen custody artifacts remain intact. Focused page/producer/
+  parent controls and installed completion verify the migration; exact historical
+  AB-2/AB-10 causes remain unproven. Evidence: `build/incident-trace-20260927/`,
+  `build/trace-20260927/` and `build/admission-bridge-closeout-20260927/`.
 
 - MINOR - FIXED (2026-09-26). Stale observation contract. Seven optional
   execution-UI feedback cases produced the current pending-or-accepted frame
