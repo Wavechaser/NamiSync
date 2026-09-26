@@ -1027,6 +1027,14 @@ repeated machinery while preserving operational safety and boundary contracts.
 Safety, settlement, authority, and measurement work made high-risk release
 claims explicit, independently reviewable, and regression-backed.
 
+#### Defer AB-8 stack/wrap investigation (2026-09-27)
+
+- Preserve the candidate live-render/layout-check race, original evidence and
+  concrete recurrence diagnostics in TESTS; the failing interleaving has not
+  been captured. Keep the later AB-7 larger-shell attribution qualified.
+- Make no CSS, helper, assertion or bug-ledger change. Further reproduction
+  and a fix remain deferred; this is a separate documentation-only closeout.
+
 #### Close AB-7 focus-loss classification (2026-09-27)
 
 - Classify the post-Plan-again focus-ring failure as an external test

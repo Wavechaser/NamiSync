@@ -277,6 +277,23 @@ Application Error 63156, Dwminit 63157 and WER report
 NamiSync causality. Those observations neither require environment detection
 nor make a passing page test a compositor-health claim.
 
+AB-8's larger-shell stack/wrap failure remains deferred and unconfirmed. In
+`_task_shell_headed_child.py`, the Plan-review witness temporarily writes the
+live renderer's status text and `hidden` flag, narrows the summary to 650px,
+then yields one animation frame before comparing geometry. A render through
+`plan_review.js` can reset that same status from the current action message;
+hiding it would invalidate the geometry assertion without a CSS regression.
+This is a candidate mechanism, not a captured failing interleaving. If the
+assertion recurs, inspect the before/after node connection, text, visibility
+and rectangles alongside the live render before choosing a fix. Preserve the
+current check and CSS until the failure is reproduced and work is authorized.
+Evidence: `build/ab8-20260926/installed-native-evidence/`,
+`build/ab8-resume-20260926/verification.md` and the bounded diagnostic copy in
+`build/incident-trace-20260927/native_trace.py`. AB-7's later larger-shell
+post-Plan-again failure may be another occurrence, but its unpreserved
+intermediate script prevents exact line attribution; do not count it as a
+proven second reproduction.
+
 ```powershell
 .\.venv\Scripts\python.exe -m pytest -q --dept interfaces -o "addopts=" -m headed
 ```
