@@ -1027,6 +1027,13 @@ repeated machinery while preserving operational safety and boundary contracts.
 Safety, settlement, authority, and measurement work made high-risk release
 claims explicit, independently reviewable, and regression-backed.
 
+#### Clarify test readiness and database reader documentation (2026-09-27)
+
+- Describe the Plan-again helper's actual readiness checks without attributing
+  the old wait to unverified already-visible notice text.
+- Scope per-connection snapshot admission to role-owner connections and note
+  the two internal direct history readers. Product and helper behavior are unchanged.
+
 #### Distinguish cold database drift from reset-worthy refusal (2026-09-27)
 
 - Retry observed database-file drift with one bounded validation policy; retain

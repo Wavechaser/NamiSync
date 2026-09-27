@@ -193,9 +193,11 @@ combine live validation of owned roles with cold preflight of unopened roles.
 Live ownership is not a cached pathname verdict: opens require the same role
 and main-file identity, no journal entry, and current SQL contract validation.
 Windows SQLite handles pin their main files against replacement; the explicit
-identity check also refuses observed replacement. New reader/writer connections
-are validated on their own SQLite snapshot. Placement checks still precede
-recording. Standalone constructors without a runtime owner retain the cold
+identity check also refuses observed replacement. Reader/writer connections
+opened through `DatabaseConnectionOwner` are validated on their own SQLite
+snapshot. HistoryStore's internal `_load_existing` and `_load_event_receipt`
+readers connect directly and do not repeat schema admission. Placement checks
+still precede recording. Standalone constructors without a runtime owner retain the cold
 file preflight. Runtime shutdown releases these ownership connections after
 its readers and history writer; callers must finish task recording before close.
 

@@ -266,11 +266,10 @@ do not diagnose a failed Plan-again action from that checkpoint label. Mapping
 scripts and original receipts remain in `build/trace-20260927/scripts/plan-again/`
 and `build/post-m1-8-ablation-20260925/ab7-final-evidence/`.
 
-The helper's wait for the preceding notice-filter request to settle and Plan
-again to become enabled remains useful sequencing before its single click. It
-is not a correction for that historical focus loss. Removing it would allow
-already-visible notice text to satisfy the wait while the new filter action is
-still pending. No product button/icon change follows from this test prerequisite.
+After clicking the notice filter, the helper waits for the expected notice
+text, no pending review action, and an enabled Plan-again button before its
+single click. This readiness check is not a correction for the historical
+focus loss. No product button/icon change follows from this test prerequisite.
 For historical compositor context, the August 17 18:29:25 run coincided with
 Application Error 63156, Dwminit 63157 and WER report
 `854b76c5-b80c-4127-acc8-404d18814e0d`; temporal overlap did not establish
