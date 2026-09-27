@@ -13,6 +13,38 @@ certify their recorded build and dependencies only.
 
 ## Incident repairs and closeout — 2026-09-27
 
+### Authorized cold-admission follow-up
+
+From `0e4595e4`, the user authorized two separate commits on `milestone1`:
+
+| ID | Outcome and finite population | Preserved guarantees / verification | Status |
+| --- | --- | --- | --- |
+| CLI-DRIFT | Distinguish observed cold-file drift from stable incompatibility and unavailable artifacts; bound validation-only retries and give persistent drift non-destructive retry guidance. Owners: db contracts, workflow pair admission, CLI and their direct repository/history/initializer consumers; focused database/CLI tests and DATABASE behavior documentation. | Cold source nonmutation, fresh-pair creation/rollback, live-owner checks, existing CLI refusal exit, no mutex or task replay. Deterministic transient/persistent drift, stable mismatch, I/O/journal controls, CLI pair/history paths, ordinary suite, import law and independent review. One fix commit. | Complete in this fix commit: 5,410 ordinary passes, 4 privilege skips, 34 headed deselections; 571 focused passes, 27 exact-count controls, 12 import contracts, 151 documentation links; independent review approved. |
+| DOC-PRECISION | Correct TESTS' unverified already-visible-notice rationale and scope DATABASE's own-snapshot statement to owner-opened connections. No new internal history-reader validation. | Source comparison, documentation links/diff checks and independent review. One separate documentation commit after the fix. | Pending. |
+
+Desktop Setup refusal mapping, cross-process exclusion and unrelated CLI tooling
+changes remain excluded. Existing safety/recurrence stops apply. Evidence lives
+in `build/cold-admission-followup-20260927/`; root serializes shared delivery
+documents. Admission retries must not retry task submission or effects, and
+inconclusive observations must never acquire reset advice merely by exhausting
+the retry policy.
+
+Implementation boundary: schema owns a shared admission-error base with the
+existing mismatch exception as a subtype; contracts owns typed observed drift
+and a single three-attempt validation policy. Pair admission retries a complete
+single-attempt ledger/history/recheck operation, while standalone consumers
+apply the same policy to one role. Cleanup failure or control interruption must
+not disappear into retries. Schema errors remain provisional until source
+stability is rechecked. Three attempts bound repeated work, not total elapsed
+time for reading arbitrarily large files.
+
+Workflow-owned non-destructive guidance passes through DatabaseContractView to
+CLI and the existing host startup display. Direct facade/view consumers and
+their witnesses are in the finite migration. Typed history admission refusals
+use the existing CLI refused exit (3); other history read failures retain exit
+4. Stable incompatibility alone retains reset advice. No fresh publication,
+reservation, task submission or filesystem effect enters a retry body.
+
 The user authorized four separate reviewed outcomes from `a0205c08`.
 Implementation boundaries and the original finite populations are retained in
 Git history; component documents own the resulting behavior. Evidence is under

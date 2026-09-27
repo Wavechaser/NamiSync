@@ -8,11 +8,15 @@ from pathlib import Path
 import stat
 
 from namisync.db.contracts import (
+    DATABASE_UNAVAILABLE_DIRECTION,
+    DatabaseBusyError,
     DatabaseConnectionOwner,
     DatabaseFileEvidence,
-    require_database_file_contract,
+    probe_database_file_contract,
+    retry_database_validation,
 )
 from namisync.db.schema import (
+    DatabaseAdmissionError,
     SchemaResetRequired,
     _initialize_reserved_history,
     _initialize_reserved_ledger,
@@ -44,6 +48,7 @@ class DatabasePairContract:
     state: DatabasePairState
     reason: str | None = None
     reset_direction: str | None = None
+    guidance: str | None = None
 
 
 class DatabasePairInitializationError(RuntimeError):
@@ -58,7 +63,7 @@ class DatabasePairRefusedError(RuntimeError):
             raise ValueError("database refusal requires a refused pair contract")
         super().__init__(
             f"database pair refused ({contract.reason}). "
-            f"{contract.reset_direction}"
+            f"{contract.guidance or contract.reset_direction}"
         )
         self.contract = contract
 
@@ -78,6 +83,22 @@ def validate_database_pair(
         raise ValueError("ledger and history databases must use distinct paths")
 
     try:
+        return retry_database_validation(lambda: _validate_database_pair_once(
+            ledger, history, ledger_database=ledger_database, history_database=history_database,
+        ))
+    except DatabaseBusyError as error:
+        return _refused("database-busy", guidance=str(error))
+    except (DatabaseAdmissionError, OSError):
+        return _refused("database-unavailable")
+
+
+def _validate_database_pair_once(
+    ledger: Path, history: Path, *,
+    ledger_database: DatabaseConnectionOwner | None,
+    history_database: DatabaseConnectionOwner | None,
+) -> DatabasePairContract:
+
+    try:
         ledger_main = _entry_exists(ledger)
         history_main = _entry_exists(history)
         ledger_sidecars = any(_entry_exists(path) for path in _sidecars(ledger))
@@ -86,7 +107,7 @@ def validate_database_pair(
         # directory, or dangling-link journal entry.
         journals = any(_entry_exists(Path(f"{path}-journal")) for path in (ledger, history))
     except OSError:
-        return _refused("inconsistent-pair")
+        return _refused("database-unavailable")
 
     if journals:
         return _refused("inconsistent-pair")
@@ -102,15 +123,15 @@ def validate_database_pair(
     try:
         ledger_evidence = _validate_role(ledger, history=False, database=ledger_database)
     except SchemaResetRequired:
-        return _refused("ledger-contract")
+        return _refused("ledger-contract", reset=True)
     try:
         history_evidence = _validate_role(history, history=True, database=history_database)
     except SchemaResetRequired:
-        return _refused("history-contract")
-    if ledger_evidence is not None and not ledger_evidence.unchanged():
-        return _refused("ledger-contract")
-    if history_evidence is not None and not history_evidence.unchanged():
-        return _refused("history-contract")
+        return _refused("history-contract", reset=True)
+    if ledger_evidence is not None:
+        ledger_evidence.require_unchanged()
+    if history_evidence is not None:
+        history_evidence.require_unchanged()
     return DatabasePairContract(DatabasePairState.READY)
 
 
@@ -118,7 +139,7 @@ def _validate_role(
     path: Path, *, history: bool, database: DatabaseConnectionOwner | None,
 ) -> DatabaseFileEvidence | None:
     if database is None:
-        return require_database_file_contract(path, history=history)
+        return probe_database_file_contract(path, history=history)
     database.require_role(path, history=history)
     database.validate()
     return None
@@ -324,9 +345,12 @@ def _entry_exists(path: Path) -> bool:
     return True
 
 
-def _refused(reason: str) -> DatabasePairContract:
+def _refused(
+    reason: str, *, reset: bool = False, guidance: str = DATABASE_UNAVAILABLE_DIRECTION,
+) -> DatabasePairContract:
     return DatabasePairContract(
         DatabasePairState.REFUSED,
         reason,
-        DATABASE_RESET_DIRECTION,
+        DATABASE_RESET_DIRECTION if reset else None,
+        DATABASE_RESET_DIRECTION if reset else guidance,
     )

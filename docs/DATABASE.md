@@ -21,9 +21,11 @@ Version, contract id, and epoch values are mandatory. Two absent main files
 with no sidecars remain the only fresh state. Any old or mixed pair,
 one-present pair, missing/wrong marker, incomplete/poisoned topology, or orphan
 WAL/SHM/journal sidecar is refused by read-only validation before mutating
-startup or CLI work. The refusal directs the user to close NamiSync and
-archive or delete both database mains and all sidecars together; startup does
-not migrate, repair, or delete them. A standalone read-only history command may
+startup or CLI work. Stable confirmed incompatibility directs the user to close
+NamiSync and archive or delete both database mains and all sidecars together.
+Incomplete pairs, journal presence, access failures, and observed activity
+instead receive non-destructive inspection or retry guidance; startup does not
+migrate, repair, or delete artifacts. A standalone read-only history command may
 open one exact history-v7 database without creating or requiring its ledger
 peer; it still validates the history role, version, contract id, epoch, and
 complete topology through the shared nonmutating file preflight.
@@ -135,7 +137,13 @@ time, and SHA-256 content. Stream reads are bounded by the observed length and
 use at most 1 MiB per chunk. Copying and rechecks reject changed stamps before
 reading or copying enlarged artifacts; final hashes also catch same-stamp
 edits. Membership and journal checks bracket observation, and the pair gate
-rechecks both roles after peer validation. Observed drift refuses; quiescent
+rechecks both roles after peer validation. Cold admission retries only observed
+artifact drift, at most three validation attempts with a 10 ms pause between
+attempts. Pair admission retries the whole classification and both cold roles;
+standalone first reads use the same policy without nested retries. This bounds
+attempt count, not total time spent reading database-sized snapshots. Boolean
+contract probes remain single-attempt observations. A cleanup failure prevents
+retry, preserving its primary error and cleanup evidence. Quiescent
 ready/refusal/error fixtures preserve all source bytes, and injected-drift
 fixtures retain only the external mutation. Private SQLite handles close before
 temporary cleanup. One preflight-local cleanup guard covers source/copy handles,
@@ -144,6 +152,16 @@ errors annotate and preserve the primary error; an existing control
 interruption wins, while a cleanup interruption outranks an ordinary primary
 error. Outer cleanup is still attempted after inner failures. A cleanup
 failure after successful validation refuses admission.
+
+A schema failure is provisional until its source evidence passes the same final
+stability check. Persistent drift refuses with busy/retry guidance. Missing,
+inaccessible, journal-bearing, or otherwise unreadable artifacts refuse with
+non-destructive inspection/access guidance; none of these observations proves
+incompatibility or warrants resetting the pair. Only a stable confirmed schema
+mismatch or SQLite corruption/not-a-database result carries the existing reset
+direction. CLI history reports typed admission refusals with exit code 3;
+unrelated later history-read failures retain exit code 4. Retries never replay a
+task or execute database initialization, recovery, or other effects.
 
 Existing-file initializers return after this preflight without an ordinary
 source connection or `CREATE IF NOT EXISTS` repair. A pre-existing empty main

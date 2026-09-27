@@ -23,7 +23,7 @@ from namisync.db.connections import (
 from namisync.db.history import HistoryContext, HistoryRepository, HistoryStore
 from namisync.db.repositories import LedgerRepository
 from namisync.db.recorder import LedgerRecorder
-from namisync.db.schema import SchemaResetRequired, initialize_history, initialize_ledger
+from namisync.db.schema import DatabaseAdmissionError, SchemaResetRequired, initialize_history, initialize_ledger
 from namisync.interfaces.service import NamiSyncService
 from namisync.workflows.runtime import LocalWorkflowRuntime
 from namisync.workflows.models import PlanRequest
@@ -129,8 +129,10 @@ def test_live_database_damage_refuses_before_writer_configuration(
         pytest.fail("writer configuration ran after live admission refusal")
 
     monkeypatch.setattr(contracts_module, f"connect_{role}_writer", unexpected_writer)
-    assert runtime.validate_database_contracts().state == "refused"
-    with pytest.raises(SchemaResetRequired):
+    contract = runtime.validate_database_contracts()
+    assert contract.state == "refused"
+    assert (contract.reset_direction is not None) == (damage in {"marker", "topology"})
+    with pytest.raises(SchemaResetRequired if damage in {"marker", "topology"} else DatabaseAdmissionError):
         (LedgerRecorder if role == "ledger" else HistoryStore)(
             path, clock=FakeClock(), database=database,
         )

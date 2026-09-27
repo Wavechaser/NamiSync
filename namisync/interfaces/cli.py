@@ -10,6 +10,7 @@ from types import SimpleNamespace
 from typing import TextIO
 
 from namisync.interfaces.service import (
+    DatabaseAdmissionError,
     ExecutionAdmissionView,
     LocationResolutionError,
     NamiSyncService,
@@ -552,6 +553,9 @@ def _run_history(
                 file=stdout,
             )
         return EXIT_SUCCESS
+    except DatabaseAdmissionError as error:
+        print(f"History admission refused: {_safe(error)}", file=stderr)
+        return EXIT_REFUSED
     except Exception as error:
         print(f"History could not be read: {_safe(error)}", file=stderr)
         return EXIT_FAILED
@@ -660,7 +664,7 @@ def _database_refusal(service: NamiSyncService, stderr: TextIO) -> int | None:
     if contract.state != "refused":
         return None
     print(f"Database pair refused: {_safe(contract.reason)}.", file=stderr)
-    print(_safe(contract.reset_direction), file=stderr)
+    print(_safe(contract.guidance or contract.reset_direction), file=stderr)
     return EXIT_REFUSED
 
 

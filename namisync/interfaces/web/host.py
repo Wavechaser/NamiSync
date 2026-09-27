@@ -765,7 +765,7 @@ def run_desktop(
             path_lease.bind_databases()
             contract = service.validate_database_contracts()
         if contract.state != "ready":
-            direction = contract.reset_direction or (
+            direction = contract.guidance or contract.reset_direction or (
                 "Close NamiSync and correct the local database pair, then retry."
             )
             reason = contract.reason or contract.state

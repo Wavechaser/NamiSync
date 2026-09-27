@@ -215,6 +215,7 @@ class _Service:
                 if self.state == "refused"
                 else None
             ),
+            guidance=None,
         )
 
     def initialize_database_contracts(self):

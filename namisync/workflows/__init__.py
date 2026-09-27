@@ -25,7 +25,7 @@ from namisync.workflows.inventory import (
     VolumeResolutionState,
     resolve_reviewed_binding,
 )
-from namisync.workflows.database_pair import DatabasePairContract
+from namisync.workflows.database_pair import DatabaseAdmissionError, DatabasePairContract
 from namisync.workflows.models import (
     ExecutionDetails,
     ExecutionEvidenceResult,
@@ -106,6 +106,7 @@ __all__ = [
     "BASELINE_KIND",
     "CompactUnsignedIntegers",
     "DatabasePairContract",
+    "DatabaseAdmissionError",
     "EXECUTION_KIND",
     "ExecutionDetails",
     "ExecutionEvidenceResult",

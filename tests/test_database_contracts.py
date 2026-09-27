@@ -19,6 +19,7 @@ from namisync.db.connections import connect_history_writer, connect_ledger_write
 from namisync.db.history import HistoryRepository
 from namisync.db.repositories import LedgerRepository
 from namisync.db.schema import (
+    DatabaseAdmissionError,
     HISTORY_CONTRACT_ID,
     LEDGER_CONTRACT_ID,
     SchemaResetRequired,
@@ -34,6 +35,140 @@ from namisync.workflows.database_pair import DatabasePairInitializationError
 
 
 _SIDECAR_SUFFIXES = ("-wal", "-shm", "-journal")
+
+
+@pytest.mark.parametrize("persistent", (False, True))
+@pytest.mark.parametrize("schema_failure", (False, True))
+def test_cold_pair_retries_observed_drift_before_classifying_schema_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    persistent: bool, schema_failure: bool,
+) -> None:
+    ledger = initialize_ledger(tmp_path / "ledger.db")
+    history = initialize_history(tmp_path / "history.db")
+    shm = Path(f"{ledger}-shm")
+    shm.write_bytes(b"external-index-0")
+    validate = file_contracts._validate_connection
+    attempts = 0
+
+    def validate_with_external_drift(path, validator, *, immutable):
+        nonlocal attempts
+        if validator is file_contracts.validate_ledger_reader_contract:
+            attempts += 1
+            if persistent or attempts == 1:
+                shm.write_bytes(f"external-index-{attempts}".encode())
+                if schema_failure:
+                    raise SchemaResetRequired("provisional snapshot mismatch")
+        return validate(path, validator, immutable=immutable)
+
+    before = (ledger.read_bytes(), history.read_bytes())
+    monkeypatch.setattr(file_contracts, "_validate_connection", validate_with_external_drift)
+    result = database_pair.validate_database_pair(ledger, history)
+
+    assert result.state == ("refused" if persistent else "ready")
+    assert attempts == (3 if persistent else 2)
+    assert result.reset_direction is None
+    if persistent:
+        assert result.reason == "database-busy"
+        assert "retry" in result.guidance.lower()
+        assert "delete" not in result.guidance.lower()
+    assert (ledger.read_bytes(), history.read_bytes()) == before
+    assert shm.read_bytes() == f"external-index-{attempts if persistent else 1}".encode()
+    assert not list(tmp_path.glob("namisync-db-contract-*"))
+
+
+@pytest.mark.parametrize("persistent", (False, True))
+def test_pair_retries_final_peer_drift_as_one_complete_attempt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, persistent: bool,
+) -> None:
+    ledger = initialize_ledger(tmp_path / "ledger.db")
+    history = initialize_history(tmp_path / "history.db")
+    shm = Path(f"{ledger}-shm")
+    shm.write_bytes(b"initial")
+    probe = database_pair.probe_database_file_contract
+    roles = []
+
+    def probe_then_change_peer(path, *, history):
+        evidence = probe(path, history=history)
+        roles.append(history)
+        if history and (persistent or len(roles) == 2):
+            shm.write_bytes(str(len(roles)).encode())
+        return evidence
+
+    monkeypatch.setattr(database_pair, "probe_database_file_contract", probe_then_change_peer)
+    result = database_pair.validate_database_pair(ledger, history)
+    assert result.state == ("refused" if persistent else "ready")
+    assert roles == [False, True] * (3 if persistent else 2)
+    assert result.reset_direction is None
+    if persistent:
+        assert result.reason == "database-busy"
+
+
+@pytest.mark.parametrize("primary_kind", ("drift", "schema"))
+def test_cold_admission_never_retries_or_resets_after_failed_cleanup(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, primary_kind: str,
+) -> None:
+    candidate = initialize_ledger(tmp_path / "ledger.db")
+    Path(f"{candidate}-shm").write_bytes(b"index")
+    temporary_factory = file_contracts.TemporaryDirectory
+    cleanups = []
+    primary = (
+        file_contracts.DatabaseArtifactsChanged("observed drift")
+        if primary_kind == "drift" else SchemaResetRequired("provisional mismatch")
+    )
+
+    def temporary_with_failed_cleanup(*args, **kwargs):
+        temporary = temporary_factory(*args, **kwargs)
+        cleanups.append(temporary.cleanup)
+
+        def fail_cleanup():
+            raise OSError("owned snapshot cleanup failed")
+
+        monkeypatch.setattr(temporary, "cleanup", fail_cleanup)
+        return temporary
+
+    def fail_validation(*args, **kwargs):
+        raise primary
+
+    monkeypatch.setattr(file_contracts, "TemporaryDirectory", temporary_with_failed_cleanup)
+    monkeypatch.setattr(file_contracts, "_validate_connection", fail_validation)
+    try:
+        with pytest.raises(DatabaseAdmissionError) as raised:
+            file_contracts.require_database_file_contract(candidate, history=False)
+        assert type(raised.value) is DatabaseAdmissionError
+        assert raised.value.__cause__ is primary
+        assert "cleanup was incomplete" in primary.__notes__[0]
+        assert len(cleanups) == 1
+        assert "delete" not in str(raised.value)
+    finally:
+        for cleanup in cleanups:
+            cleanup()
+
+
+@pytest.mark.parametrize("failure_kind", ("permission", "io", "busy", "journal"))
+def test_owned_pair_availability_refusal_has_no_reset_advice(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure_kind: str,
+) -> None:
+    ledger = initialize_ledger(tmp_path / "ledger.db")
+    history = initialize_history(tmp_path / "history.db")
+    owner = file_contracts.DatabaseConnectionOwner(ledger, history=False)
+    try:
+        if failure_kind == "journal":
+            Path(f"{ledger}-journal").touch()
+        else:
+            error = PermissionError("access denied") if failure_kind == "permission" else (
+                OSError("read failed") if failure_kind == "io" else sqlite3.OperationalError("busy")
+            )
+
+            def fail_validation(*args):
+                raise error
+
+            monkeypatch.setattr(owner, "_validate_connection", fail_validation)
+        result = database_pair.validate_database_pair(ledger, history, ledger_database=owner)
+        assert result.state == "refused"
+        assert result.reset_direction is None
+        assert "delete" not in result.guidance
+    finally:
+        owner.close()
 
 
 def _artifacts(path: Path) -> tuple[Path, ...]:
@@ -91,7 +226,8 @@ def test_orphan_database_sidecar_refuses_without_mutation(
 
     assert result.state == "refused"
     assert result.reason == "inconsistent-pair"
-    assert result.reset_direction is not None
+    assert result.reset_direction is None
+    assert "preserve" in result.guidance
     assert _snapshot(ledger, history) == before
     service.close()
 
@@ -111,7 +247,8 @@ def test_exactly_one_database_main_refuses_without_creating_peer(
 
     assert result.state == "refused"
     assert result.reason == "inconsistent-pair"
-    assert result.reset_direction is not None
+    assert result.reset_direction is None
+    assert "preserve" in result.guidance
     assert _snapshot(ledger, history) == before
     assert not missing.exists()
     service.close()
@@ -473,7 +610,7 @@ def test_any_journal_entry_refuses_before_any_sqlite_connection(
         LedgerRepository if role == "ledger" else HistoryRepository,
         initialize_ledger if role == "ledger" else initialize_history,
     ):
-        with pytest.raises(SchemaResetRequired):
+        with pytest.raises(DatabaseAdmissionError):
             consumer(selected)
     assert _entry_snapshot(ledger, history) == before
 
@@ -710,11 +847,14 @@ def test_admission_drift_refuses_with_only_the_external_mutation(
 ) -> None:
     direct = change in {"new-wal", "new-shm"}
     candidate = initialize_ledger(tmp_path / "candidate.db") if direct else _wal_candidate(tmp_path)
+    original_wal = None if direct else Path(f"{candidate}-wal").read_bytes()
     validate = file_contracts._validate_connection
     after_external_change: dict[Path, bytes] = {}
+    attempts = 0
 
     def validate_then_change(*args, **kwargs):
-        nonlocal after_external_change
+        nonlocal after_external_change, attempts
+        attempts += 1
         validate(*args, **kwargs)
         if change.startswith("same-stamp"):
             changed = candidate if change.endswith("main") else Path(f"{candidate}-shm")
@@ -726,14 +866,17 @@ def test_admission_drift_refuses_with_only_the_external_mutation(
         elif change == "replacement":
             stamp = candidate.stat()
             content = candidate.read_bytes()
-            candidate.rename(tmp_path / "externally-displaced.db")
+            candidate.rename(tmp_path / f"externally-displaced-{attempts}.db")
             candidate.write_bytes(content)
             os.utime(candidate, ns=(stamp.st_atime_ns, stamp.st_mtime_ns))
             assert candidate.stat().st_ino != stamp.st_ino
         elif change in {"grow-wal", "shrink-wal", "remove-wal"}:
             wal = Path(f"{candidate}-wal")
             if change == "remove-wal":
-                wal.unlink()
+                if wal.exists():
+                    wal.unlink()
+                else:
+                    wal.write_bytes(original_wal)
             else:
                 content = wal.read_bytes()
                 wal.write_bytes(content + b"external growth" if change == "grow-wal" else content[:-1])
@@ -750,12 +893,15 @@ def test_admission_drift_refuses_with_only_the_external_mutation(
     if consumer == "probe":
         assert not file_contracts.ledger_file_contract_matches(candidate)
     else:
-        with pytest.raises(SchemaResetRequired):
+        with pytest.raises(DatabaseAdmissionError):
             (LedgerRepository if consumer == "repository" else initialize_ledger)(candidate)
 
     assert after_external_change
     assert _snapshot(candidate) == after_external_change
-    assert len(private_snapshots) == (0 if direct else 1)
+    if consumer == "probe":
+        assert len(private_snapshots) == (0 if direct else 1)
+    else:
+        assert len(private_snapshots) == (2 if direct else 1 if change == "new-journal" else 3)
     assert all(not path.exists() for path in private_snapshots)
 
 
@@ -764,7 +910,7 @@ def test_pair_rechecks_ledger_after_history_validation(
 ) -> None:
     ledger = initialize_ledger(tmp_path / "ledger.db")
     history = initialize_history(tmp_path / "history.db")
-    require = database_pair.require_database_file_contract
+    require = database_pair.probe_database_file_contract
     after_external_change: dict[Path, bytes] = {}
 
     def require_then_change_peer(path: Path, *, history: bool):
@@ -775,11 +921,12 @@ def test_pair_rechecks_ledger_after_history_validation(
             after_external_change = _snapshot(ledger, path)
         return evidence
 
-    monkeypatch.setattr(database_pair, "require_database_file_contract", require_then_change_peer)
+    monkeypatch.setattr(database_pair, "probe_database_file_contract", require_then_change_peer)
     result = database_pair.validate_database_pair(ledger, history)
 
     assert result.state == "refused"
-    assert result.reason == "ledger-contract"
+    assert result.reason == "database-unavailable"
+    assert result.reset_direction is None
     assert _snapshot(ledger, history) == after_external_change
 
 
@@ -882,7 +1029,7 @@ def test_snapshot_failure_closes_handles_cleans_private_files_and_preserves_caus
     monkeypatch.setattr(Path, "open", open_or_fail)
     monkeypatch.setattr(file_contracts.sqlite3, "connect", connect_or_fail)
     monkeypatch.setattr(file_contracts, "validate_ledger_reader_contract", validate_or_fail)
-    with pytest.raises(SchemaResetRequired if error_type is OSError else error_type) as raised:
+    with pytest.raises(DatabaseAdmissionError if error_type is OSError else error_type) as raised:
         file_contracts.require_database_file_contract(candidate, history=False)
     monkeypatch.setattr(Path, "open", open_path)
 
@@ -942,7 +1089,7 @@ def test_snapshot_cleanup_failure_preserves_error_and_control_precedence(
         not isinstance(primary, Exception) or isinstance(cleanup_error, Exception)
     ) else cleanup_error
     try:
-        with pytest.raises(SchemaResetRequired if isinstance(expected, Exception) else type(expected)) as raised:
+        with pytest.raises(DatabaseAdmissionError if isinstance(expected, Exception) else type(expected)) as raised:
             file_contracts.require_database_file_contract(candidate, history=history_role)
         assert (raised.value.__cause__ if isinstance(expected, Exception) else raised.value) is expected
         assert len(owned) == 1
@@ -1038,7 +1185,7 @@ def test_snapshot_handle_close_preserves_error_and_control_precedence(
     expected = primary if primary is not None and (
         not isinstance(primary, Exception) or isinstance(cleanup_error, Exception)
     ) else cleanup_error
-    with pytest.raises(SchemaResetRequired if isinstance(expected, Exception) else type(expected)) as raised:
+    with pytest.raises(DatabaseAdmissionError if isinstance(expected, Exception) else type(expected)) as raised:
         file_contracts.require_database_file_contract(candidate, history=False)
     monkeypatch.setattr(Path, "open", open_path)
 
@@ -1077,7 +1224,7 @@ def test_snapshot_directory_creation_failure_leaves_source_unchanged(
         return create_temporary(*args, **kwargs)
 
     monkeypatch.setattr(file_contracts, "TemporaryDirectory", unavailable)
-    with pytest.raises(SchemaResetRequired) as raised:
+    with pytest.raises(DatabaseAdmissionError) as raised:
         file_contracts.require_database_file_contract(candidate, history=history_role)
 
     assert raised.value.__cause__ is failure
@@ -1123,7 +1270,7 @@ def test_public_initializer_refuses_preexisting_empty_or_orphan_artifacts(
     Path(f"{candidate}{suffix}").touch()
     before = _snapshot(candidate)
 
-    with pytest.raises(SchemaResetRequired):
+    with pytest.raises(SchemaResetRequired if not suffix else DatabaseAdmissionError):
         (initialize_history if history_role else initialize_ledger)(candidate)
 
     assert _snapshot(candidate) == before
@@ -1155,9 +1302,9 @@ def test_journal_access_error_cannot_be_treated_as_absence(
     monkeypatch.setattr(file_contracts.sqlite3, "connect", no_sqlite)
 
     assert database_pair.validate_database_pair(ledger, history).state == "refused"
-    with pytest.raises(SchemaResetRequired):
+    with pytest.raises(DatabaseAdmissionError):
         (HistoryRepository if history_role else LedgerRepository)(candidate)
-    with pytest.raises(SchemaResetRequired if existing else PermissionError):
+    with pytest.raises(DatabaseAdmissionError if existing else PermissionError):
         (initialize_history if history_role else initialize_ledger)(candidate)
     assert _snapshot(ledger, history) == before
 

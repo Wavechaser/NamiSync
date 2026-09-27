@@ -356,8 +356,11 @@ encoding follows bridge/defense domains and identity remains non-arithmetic.
 Execution evidence is an atomic ledger view, never later-start authority; exact
 classification lives in the bridge and [DATABASE.md](DATABASE.md).
 
-`DatabaseContractView` contains only primitive `state`, `reason`, and
-`reset_direction` fields. Its validation method is strictly read-only and
+`DatabaseContractView` contains primitive `state`, `reason`, `guidance`, and
+`reset_direction` fields. Workflow-owned guidance explains a refusal; reset
+directions are reserved for confirmed incompatibility on stable evidence.
+Observed cold-file drift receives bounded validation retries and then retry
+guidance without reset advice. Its validation method is strictly read-only and
 classifies the ledger/history mains plus WAL/SHM/journal sidecars as fresh,
 ready, or refused. Initialization is a separate call and never resets an
 existing file. Sync and location CLI compositions validate before their first
@@ -365,7 +368,8 @@ admission; fresh sync review remains database-free until execution commitment.
 Execution, inventory, integrity, and direct inventory-visibility mutations
 revalidate and ensure the pair before any history observer can open. The
 standalone read-only history composition intentionally does not require or
-create its missing ledger peer.
+create its missing ledger peer. Typed admission refusals, including its first
+history read, use CLI exit 3; other history read failures retain exit 4.
 
 History summary/page limits are `1..256`. Omitting `through_order` or
 `through_seq` starts a fresh traversal and captures the current durable

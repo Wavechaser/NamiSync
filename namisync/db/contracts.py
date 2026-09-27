@@ -11,9 +11,11 @@ import stat
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from threading import RLock
-from typing import Callable, Iterator
+from time import sleep
+from typing import Callable, Iterator, TypeVar
 
 from .schema import (
+    DatabaseAdmissionError,
     SchemaResetRequired,
     validate_history_reader_contract,
     validate_ledger_reader_contract,
@@ -30,6 +32,38 @@ from .connections import (
 _ContractValidator = Callable[[sqlite3.Connection], None]
 _ArtifactStamp = tuple[int, int, int, int, int]
 _CONTENT_SUFFIXES = ("", "-wal", "-shm")
+_ValidationResult = TypeVar("_ValidationResult")
+DATABASE_BUSY_DIRECTION = (
+    "Database files changed during validation. Wait for other database activity "
+    "to settle, then retry."
+)
+DATABASE_UNAVAILABLE_DIRECTION = (
+    "Database files could not be safely read. Check access permissions and the "
+    "database files and sidecars; preserve them for inspection before retrying."
+)
+
+
+class DatabaseArtifactsChanged(OSError):
+    """Observed artifact drift, rather than a schema or access failure."""
+
+
+class DatabaseBusyError(DatabaseAdmissionError):
+    """Cold validation exhausted its bounded artifact-drift retries."""
+
+
+def retry_database_validation(operation: Callable[[], _ValidationResult]) -> _ValidationResult:
+    """Retry a complete, effect-free validation; never retry failed cleanup."""
+
+    for attempt in range(3):
+        try:
+            return operation()
+        except DatabaseArtifactsChanged as error:
+            if getattr(error, "__notes__", ()):
+                raise DatabaseAdmissionError(DATABASE_UNAVAILABLE_DIRECTION) from error
+            if attempt == 2:
+                raise DatabaseBusyError(DATABASE_BUSY_DIRECTION) from error
+            sleep(0.01)
+    raise AssertionError("unreachable validation retry")
 
 
 class DatabaseConnectionOwner:
@@ -53,7 +87,7 @@ class DatabaseConnectionOwner:
     def _main_identity(self) -> tuple[int, int, int]:
         value = self.path.lstat()
         if not stat.S_ISREG(value.st_mode):
-            raise SchemaResetRequired("owned database main is not a regular file")
+            raise DatabaseAdmissionError("owned database main is not a regular file")
         return value.st_dev, value.st_ino, value.st_mode
 
     def require_role(self, path: str | Path, *, history: bool) -> None:
@@ -78,13 +112,15 @@ class DatabaseConnectionOwner:
             try:
                 _require_no_journal(self.path)
                 if self._main_identity() != self._identity:
-                    raise SchemaResetRequired("owned database main was replaced")
+                    raise DatabaseAdmissionError("owned database main was replaced")
                 self._validate_connection(self._connection)
                 _require_no_journal(self.path)
                 if self._main_identity() != self._identity:
-                    raise SchemaResetRequired("owned database main was replaced")
+                    raise DatabaseAdmissionError("owned database main was replaced")
+            except SchemaResetRequired:
+                raise
             except (OSError, sqlite3.Error) as error:
-                raise SchemaResetRequired("cannot validate the owned database contract") from error
+                raise DatabaseAdmissionError(DATABASE_UNAVAILABLE_DIRECTION) from error
 
     def _open(
         self, path: str | Path, *, readonly: bool, busy_timeout_ms: int,
@@ -137,9 +173,14 @@ class DatabaseFileEvidence:
 
     def unchanged(self) -> bool:
         try:
-            return _snapshot_artifacts(self.path, expected=self.artifacts) == self.artifacts
+            self.require_unchanged()
         except OSError:
             return False
+        return True
+
+    def require_unchanged(self) -> None:
+        if _snapshot_artifacts(self.path, expected=self.artifacts) != self.artifacts:
+            raise DatabaseArtifactsChanged("database artifact contents changed during validation")
 
 
 def _entry_stat(path: Path) -> os.stat_result | None:
@@ -188,17 +229,22 @@ def _read_artifact(
 ) -> _ArtifactEvidence | None:
     observed = _entry_stat(path)
     if observed is None:
+        if expected is not None:
+            raise DatabaseArtifactsChanged("database artifact disappeared before reading")
         return None
     if not stat.S_ISREG(observed.st_mode):
         raise OSError("database artifact is not a regular file")
     stamp = _stamp(observed)
     if expected is not None and stamp != expected.stamp:
-        raise OSError("database artifact changed before reading")
+        raise DatabaseArtifactsChanged("database artifact changed before reading")
     digest = hashlib.sha256()
-    source = path.open("rb", buffering=0)
+    try:
+        source = path.open("rb", buffering=0)
+    except FileNotFoundError as error:
+        raise DatabaseArtifactsChanged("database artifact disappeared before opening") from error
     with _cleanup_on_exit(source.close, "database artifact reader close was incomplete"):
         if _stamp(os.fstat(source.fileno())) != stamp:
-            raise OSError("database artifact changed before reading")
+            raise DatabaseArtifactsChanged("database artifact changed before reading")
         output = None if destination is None else destination.open("xb")
         with (
             nullcontext() if output is None else
@@ -208,16 +254,16 @@ def _read_artifact(
             while remaining:
                 chunk = source.read(min(remaining, 1_048_576))
                 if not chunk:
-                    raise OSError("database artifact shrank while reading")
+                    raise DatabaseArtifactsChanged("database artifact shrank while reading")
                 digest.update(chunk)
                 if output is not None:
                     output.write(chunk)
                 remaining -= len(chunk)
             if source.read(1) or _stamp(os.fstat(source.fileno())) != stamp:
-                raise OSError("database artifact changed while reading")
+                raise DatabaseArtifactsChanged("database artifact changed while reading")
     current = _entry_stat(path)
     if current is None or _stamp(current) != stamp:
-        raise OSError("database artifact pathname changed while reading")
+        raise DatabaseArtifactsChanged("database artifact pathname changed while reading")
     return _ArtifactEvidence(stamp, digest.digest())
 
 
@@ -238,7 +284,7 @@ def _snapshot_artifacts(
         if (None if current is None else _stamp(current)) != (
             None if recorded is None else recorded.stamp
         ):
-            raise OSError("database artifact membership changed while reading")
+            raise DatabaseArtifactsChanged("database artifact membership changed while reading")
     _require_no_journal(path)
     return evidence
 
@@ -269,23 +315,46 @@ def _file_contract_matches(
 def require_database_file_contract(path: str | Path, *, history: bool) -> DatabaseFileEvidence:
     """Refuse unstable or incompatible artifacts before an ordinary SQLite open."""
 
+    return retry_database_validation(lambda: probe_database_file_contract(path, history=history))
+
+
+def probe_database_file_contract(path: str | Path, *, history: bool) -> DatabaseFileEvidence:
+    """One cold attempt, so a pair can own retries including its final checks."""
+
     validator = validate_history_reader_contract if history else validate_ledger_reader_contract
     try:
         return _validate_file_contract(Path(path).resolve(), validator)
-    except SchemaResetRequired:
+    except (DatabaseArtifactsChanged, DatabaseAdmissionError):
         raise
     except (OSError, sqlite3.Error, ValueError) as error:
-        role = "history" if history else "ledger"
-        raise SchemaResetRequired(
-            f"cannot validate a stable {role} database contract. "
-            "Close every NamiSync process, then archive or delete both database "
-            "main files and all of their -wal, -shm, and -journal sidecars "
-            "together before restarting."
-        ) from error
+        if (
+            getattr(error, "sqlite_errorcode", 0) & 0xFF
+        ) in (sqlite3.SQLITE_CORRUPT, sqlite3.SQLITE_NOTADB):
+            raise SchemaResetRequired(
+                "The stable database is corrupt or is not a SQLite database. "
+                "Close every NamiSync process, then archive or delete both database "
+                "main files and all of their -wal, -shm, and -journal sidecars "
+                "together before restarting."
+            ) from error
+        raise DatabaseAdmissionError(DATABASE_UNAVAILABLE_DIRECTION) from error
 
 
 def _validate_file_contract(path: Path, validator: _ContractValidator) -> DatabaseFileEvidence:
     evidence = DatabaseFileEvidence(path, _snapshot_artifacts(path))
+    try:
+        _validate_observed_file(path, validator, evidence)
+    except (sqlite3.Error, ValueError) as error:
+        if getattr(error, "__notes__", ()):
+            raise DatabaseAdmissionError(DATABASE_UNAVAILABLE_DIRECTION) from error
+        evidence.require_unchanged()
+        raise
+    evidence.require_unchanged()
+    return evidence
+
+
+def _validate_observed_file(
+    path: Path, validator: _ContractValidator, evidence: DatabaseFileEvidence,
+) -> None:
     if all(artifact is None for artifact in evidence.artifacts[1:]):
         _require_no_journal(path)
         _validate_connection(path, validator, immutable=True)
@@ -301,12 +370,9 @@ def _validate_file_contract(path: Path, validator: _ContractValidator) -> Databa
                 if expected is not None and _read_artifact(
                     Path(f"{path}{suffix}"), Path(f"{snapshot}{suffix}"), expected=expected,
                 ) != expected:
-                    raise OSError("database snapshot differs from observed evidence")
+                    raise DatabaseArtifactsChanged("database snapshot differs from observed evidence")
             _require_no_journal(path)
             _validate_connection(snapshot, validator, immutable=False)
-    if not evidence.unchanged():
-        raise OSError("database artifacts changed during contract validation")
-    return evidence
 
 
 def _validate_connection(path: Path, validator: _ContractValidator, *, immutable: bool) -> None:

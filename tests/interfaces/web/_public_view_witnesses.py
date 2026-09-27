@@ -558,11 +558,12 @@ PUBLIC_VIEW_WITNESSES: dict[
     DatabaseContractView: (
         PublicViewWitness(
             "database-contract",
-            DatabaseContractView("refused", "history-contract", HOSTILE_TEXT),
+            DatabaseContractView("refused", "history-contract", HOSTILE_TEXT, HOSTILE_TEXT),
             {
                 "state": "refused",
                 "reason": "history-contract",
                 "reset_direction": HOSTILE_TEXT,
+                "guidance": HOSTILE_TEXT,
             },
         ),
     ),

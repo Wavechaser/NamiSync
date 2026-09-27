@@ -1027,6 +1027,17 @@ repeated machinery while preserving operational safety and boundary contracts.
 Safety, settlement, authority, and measurement work made high-risk release
 claims explicit, independently reviewable, and regression-backed.
 
+#### Distinguish cold database drift from reset-worthy refusal (2026-09-27)
+
+- Retry observed database-file drift with one bounded validation policy; retain
+  safe refusal and retry guidance when activity persists. Only confirmed
+  incompatibility receives reset advice, including through CLI history reads.
+- Keep source files untouched by cold checks, preserve cleanup failures and
+  interruptions, and exclude creation, task submission and effects from retries.
+- Verification: 5,410 ordinary passes, 4 privilege-related skips and 34 headed
+  deselections; 571 focused passes, 27 exact retry-count controls, 12 import
+  contracts and independent review.
+
 #### Repair the installed bridge event diagnostic (2026-09-27)
 
 - Migrate fixture byte coordinates and item-free terminal summaries to current

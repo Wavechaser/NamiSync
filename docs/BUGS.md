@@ -1752,6 +1752,18 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Database artifact ownership and rollback
 
+- MODERATE - FIXED (2026-09-27). Inconclusive admission reset guidance. Fresh
+  CLI admission and the first history read could interpret normal external
+  database activity as incompatibility and advise archiving or deleting the pair.
+  Cause: artifact drift and unavailable reads shared the schema-mismatch error.
+  Typed drift now retries validation at most three times; persistent drift gives
+  retry guidance, while unavailable reads preserve files for inspection. Only
+  confirmed incompatibility retains reset advice. Provisional schema errors
+  recheck source stability; cleanup failures do not disappear into retries.
+  Pair/history regressions and real SQLite write interleavings cover this
+  distinction. No mutex or effect retry is introduced. Evidence:
+  `build/cold-admission-followup-20260927/`.
+
 - MODERATE - FIXED (2026-09-27). Owned-activity drift refusal. Plan, inventory,
   execution and integrity admission can refuse a healthy pair as
   `ledger-contract` or `history-contract` while the same process uses it.

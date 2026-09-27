@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+from contextlib import closing
 import os
 import re
 import sqlite3
@@ -14,6 +15,7 @@ from types import SimpleNamespace
 import pytest
 
 import namisync.interfaces.cli as cli_module
+import namisync.db.contracts as file_contracts
 from namisync.core.events import CORE_EVENT_SCHEMA_VERSION, Envelope, ItemOutcome
 from namisync.core.evidence import Outcome, RecordingStatus
 from namisync.core.execution import TaskRecordingIssue, TaskRecordingIssueReason
@@ -32,6 +34,7 @@ from namisync.core.session import (
     SessionState,
 )
 from namisync.db.history import HistoryContext, HistoryStore
+from namisync.db.connections import connect_history_writer, connect_ledger_writer
 from namisync.db.schema import initialize_history, initialize_ledger
 from namisync.interfaces.cli import (
     EXIT_CANCELED,
@@ -67,6 +70,134 @@ from namisync.workflows.models import PlanOperationView
 from namisync.workflows.views import result_item_view, session_record_view
 
 from _db_fixtures import FakeClock, NOW
+
+
+@pytest.mark.parametrize("persistent", (False, True))
+def test_history_cold_admission_retries_only_observed_drift(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, persistent: bool,
+) -> None:
+    history = initialize_history(tmp_path / "history.db")
+    shm = Path(f"{history}-shm")
+    shm.write_bytes(b"external-index-0")
+    validate = file_contracts._validate_connection
+    attempts = 0
+
+    def validate_with_external_drift(path, validator, *, immutable):
+        nonlocal attempts
+        attempts += 1
+        if persistent or attempts == 1:
+            shm.write_bytes(f"external-index-{attempts}".encode())
+        return validate(path, validator, immutable=immutable)
+
+    monkeypatch.setattr(file_contracts, "_validate_connection", validate_with_external_drift)
+    stdout, stderr = io.StringIO(), io.StringIO()
+    result = cli_module.main(
+        ["history", "--history-database", str(history)], stdout=stdout, stderr=stderr,
+    )
+
+    assert result == (EXIT_REFUSED if persistent else EXIT_SUCCESS)
+    assert attempts == (3 if persistent else 2)
+    assert "delete" not in stderr.getvalue().lower()
+    if persistent:
+        assert "retry" in stderr.getvalue().lower()
+        assert stdout.getvalue() == ""
+    else:
+        assert "No retained history runs." in stdout.getvalue()
+        assert stderr.getvalue() == ""
+
+
+@pytest.mark.parametrize("entry", ("pair", "history"))
+@pytest.mark.parametrize("persistent", (False, True))
+def test_cli_admission_interleaves_real_sqlite_commits_without_reset_advice(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, entry: str, persistent: bool,
+) -> None:
+    ledger = initialize_ledger(tmp_path / "ledger.db")
+    history = initialize_history(tmp_path / "history.db")
+    candidate = history if entry == "history" else ledger
+    connect = connect_history_writer if entry == "history" else connect_ledger_writer
+    validate = file_contracts._validate_connection
+    attempts = 0
+    mutations = 0
+    after_external_write = None
+    with closing(connect(candidate)) as writer:
+        writer.execute("PRAGMA user_version = 1")
+
+        def validate_then_commit(path, validator, *, immutable):
+            nonlocal attempts, mutations, after_external_write
+            validate(path, validator, immutable=immutable)
+            selected = (
+                file_contracts.validate_history_reader_contract if entry == "history" else
+                file_contracts.validate_ledger_reader_contract
+            )
+            if validator is selected:
+                attempts += 1
+                if persistent or attempts == 1:
+                    mutations += 1
+                    writer.execute(f"PRAGMA user_version = {mutations + 1}")
+                    after_external_write = (
+                        candidate.read_bytes(), Path(f"{candidate}-wal").read_bytes(),
+                    )
+
+        monkeypatch.setattr(file_contracts, "_validate_connection", validate_then_commit)
+        stderr = io.StringIO()
+        if entry == "history":
+            result = main(["history", "--history-database", str(history)],
+                          stdout=io.StringIO(), stderr=stderr)
+        else:
+            with NamiSyncService(ledger, history) as service:
+                result = cli_module._database_refusal(service, stderr)
+        assert result == (EXIT_REFUSED if persistent else EXIT_SUCCESS if entry == "history" else None)
+        assert attempts == (3 if persistent else 2)
+        assert mutations == (3 if persistent else 1)
+        assert "delete" not in stderr.getvalue().lower()
+        if persistent:
+            assert "retry" in stderr.getvalue().lower()
+        assert (candidate.read_bytes(), Path(f"{candidate}-wal").read_bytes()) == after_external_write
+        assert writer.execute("PRAGMA user_version").fetchone()[0] == mutations + 1
+
+
+@pytest.mark.parametrize("entry", ("pair", "history"))
+@pytest.mark.parametrize("failure", ("permission", "sqlite-io", "sqlite-busy", "journal", "schema", "corrupt"))
+def test_cli_admission_reset_guidance_requires_confirmed_stable_incompatibility(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, entry: str, failure: str,
+) -> None:
+    ledger = initialize_ledger(tmp_path / "ledger.db")
+    history = initialize_history(tmp_path / "history.db")
+    calls = 0
+    if failure == "journal":
+        Path(f"{history}-journal").write_bytes(b"preserve journal")
+    elif failure == "schema":
+        with closing(sqlite3.connect(history)) as connection:
+            connection.execute("UPDATE schema_metadata SET value = 'wrong' WHERE key = 'contract_id'")
+            connection.commit()
+    elif failure == "corrupt":
+        history.write_bytes(b"not a SQLite database")
+    else:
+        error = PermissionError("denied") if failure == "permission" else sqlite3.OperationalError("unavailable")
+        if failure != "permission":
+            error.sqlite_errorcode = sqlite3.SQLITE_IOERR if failure == "sqlite-io" else sqlite3.SQLITE_BUSY
+        validate = file_contracts._validate_connection
+
+        def fail_history(path, validator, *, immutable):
+            nonlocal calls
+            if validator is file_contracts.validate_history_reader_contract:
+                calls += 1
+                raise error
+            return validate(path, validator, immutable=immutable)
+
+        monkeypatch.setattr(file_contracts, "_validate_connection", fail_history)
+    before = {path: path.read_bytes() for path in tmp_path.iterdir()}
+    stderr = io.StringIO()
+    if entry == "history":
+        result = main(["history", "--history-database", str(history)],
+                      stdout=io.StringIO(), stderr=stderr)
+    else:
+        with NamiSyncService(ledger, history) as service:
+            result = cli_module._database_refusal(service, stderr)
+    assert result == EXIT_REFUSED
+    assert ("archive or delete" in stderr.getvalue()) == (failure in {"schema", "corrupt"})
+    assert calls == (1 if failure in {"permission", "sqlite-io", "sqlite-busy"} else 0)
+    assert {path: path.read_bytes() for path in tmp_path.iterdir()} == before
 
 
 def _arguments(source: Path, target: Path, ledger: Path, history: Path) -> list[str]:

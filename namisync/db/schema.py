@@ -24,7 +24,11 @@ MAX_HISTORY_ERROR_TYPE_BYTES = 1_024
 MAX_HISTORY_ERROR_MESSAGE_BYTES = 1_024
 
 
-class SchemaResetRequired(sqlite3.DatabaseError):
+class DatabaseAdmissionError(sqlite3.DatabaseError):
+    """Database admission could not safely establish a usable contract."""
+
+
+class SchemaResetRequired(DatabaseAdmissionError):
     """An incompatible pre-release schema must be reset, never migrated."""
 
 

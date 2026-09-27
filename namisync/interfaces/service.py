@@ -24,6 +24,7 @@ from namisync.dispatcher import (
 )
 from namisync.workflows import (
     BASELINE_KIND,
+    DatabaseAdmissionError,
     DatabasePairContract,
     EXECUTION_KIND,
     DeletionPolicy,
@@ -195,6 +196,7 @@ class DatabaseContractView:
     state: str
     reason: str | None
     reset_direction: str | None
+    guidance: str | None
 
 
 class LocationResolutionError(ValueError):
@@ -2835,6 +2837,7 @@ def _database_contract_view(
         state=contract.state.value,
         reason=contract.reason,
         reset_direction=contract.reset_direction,
+        guidance=contract.guidance,
     )
 
 
@@ -2935,6 +2938,7 @@ __all__ = [
     "CommandIdConflictError",
     "ControlView",
     "DatabaseContractView",
+    "DatabaseAdmissionError",
     "ExecutionAdmissionView",
     "ExecutionSession",
     "InventoryDispositionView",
