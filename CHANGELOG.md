@@ -1027,6 +1027,23 @@ repeated machinery while preserving operational safety and boundary contracts.
 Safety, settlement, authority, and measurement work made high-risk release
 claims explicit, independently reviewable, and regression-backed.
 
+#### Plan shared root admission optimization (2026-09-27)
+
+- Investigate core, module and workflow boundaries and add six pending checkpoints
+  checkpoints to M1_PLAN, scheduled before M1-9 by default and required before
+  M1-10. No implementation is authorized by the plan.
+- Propose the user-selected root-continuity contract with invocation-owned
+  identity handles, explicit resume and mounted-root fallback behavior,
+  preserved descendant/effect guards and unchanged stored identities.
+- Define consumer/regression coverage, atomic commit gates, native/installed
+  workflow checks and paired shallow/deep measurements. Production is unchanged.
+- Revise sequencing after review: RO-1a and mechanical preflight/executor/verifier
+  changes land before RO-1b continuity, with a measured intermediate revision.
+  Explicitly retain realpath containment while reducing descendant/parent-volume
+  probes; use existing profile eligibility, witnessed per-access lstat identity
+  and opened-handle sector geometry. Account for pinned-handle device-in-use
+  behavior and isolated baseline/intermediate checkouts with their own venvs.
+
 #### Assess executor and verifier admission costs (2026-09-27)
 
 - Benchmark unchanged `milestone1-adelbert` executor on separate F:/G: SN850X

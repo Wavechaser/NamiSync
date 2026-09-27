@@ -1,93 +1,55 @@
-# Latest session — executor and verifier performance assessment
+# Latest session — root admission plan review and sequencing
 
-2026-09-27, `milestone1-adelbert`, measured revision
-`0e4595e4142fc78cfbf8e274832520a4344f3b5e`. The user authorized assessment and
-temporary fixtures only, with Luna assistance; no production changes or
-optimization implementation. The initially clean checkout was switched from
-`milestone1` to the requested existing branch. The user subsequently requested
-verifier investigation and a documentation commit of investigations so far.
-No merge or remote update was performed. PERFORMANCE owns results and method;
-CHANGELOG records delivery. Production optimization remains unauthorized.
+2026-09-27, `milestone1-adelbert`, inspected source `6a93b038`.
+The user requested revisions to the uncommitted plan and a commit. This delivery
+contains documentation only; optimization implementation remains unauthorized.
+M1_PLAN is the sole scope/decision/register owner; all six rows remain pending.
 
-At user-review follow-up the branch was at `6de6d1c0` (two existing commits beyond
-the measured revision); the agent did not move it. Core/executor source is
-unchanged across those commits. Historical rig/test receipts retain their original
-revision. The original exact-HEAD audit refusal is preserved in
-`review-followup-audit.log`; explicit review-followup checking permits only that
-ancestor advancement with unchanged core/executor code.
+The revised order is RO-1a (current-contract core primitives), RO-2/3/4
+(independent mechanical preflight/executor/verifier changes), measured intermediate
+revision, RO-1b (atomic continuity adoption across core and all three consumers),
+then RO-5 integration. Mechanical rows depend only on RO-1a, not continuity
+bootstrap or AGENTS/DEFENSE ancestry changes. Default completion remains before
+M1-9 and mandatory before M1-10; changing the former needs a user scheduling decision.
 
-The verifier follow-up measured `6de6d1c002fa0b9f22a4d76c25519b6d0dbfae8a`
-using the same read-only F: corpus. Five samples per size band plus two separate
-instrumented passes and three no-tap controls produced 30 fully verified samples
-in eight rig invocations. Small-file median: 3.652 s; 4 GiB: 1.926 s. A separate
-small pass measured 4,000 GetVolumePathNameW calls at 1.1566 s versus 0.5209 s
-inside ReadFile. Four handle snapshots per file cost only 0.0786 s combined.
-RootAuthority is already reused in the verifier context; repeated native API
-binding and consecutive opening snapshots offer additional smaller candidates.
-Post-copy readback shares the same classifier/native reader. No-tap comparisons
-were sequential, not interleaved, and do not isolate tap cost.
+Review changes now explicit in the plan:
 
-`verifier_baseline.ps1`, `verifier_diagnostic.py`, `verifier-*.json/log` and
-`verifier_audit.py` retain commands, raw data and count/result checks. Existing
-rig/native/engine tests pass **148/148** (`verifier-focused-final.xml/log`). The
-first attempt's 135 setup errors were denied access to pytest's default external
-temporary directory; its failed receipt remains. The rerun used a new workspace
-basetemp and passed, with a non-fatal pytest cache permission warning. The
-executor audit now filters executor report envelopes explicitly so verifier
-reports cannot contaminate its historical 47-sample count.
+- Single-lstat descendant/existence work and parent st_dev reuse remove redundant
+  probes. Candidate and root realpath containment stays, with same-step reuse only.
+- Existing reviewed stable_file_identity plus local/non-UNC/non-anchor root
+  evidence selects continuity eligibility. No competing runtime detector or new
+  durable capability bit. Standalone integrity passes the admitted refresh's
+  scan.profile through its currently profile-free verifier context.
+- Witnessed full-width lstat identity/attributes/tag may implement per-access
+  root probes as well as bootstrap. Query/mismatch errors do not downgrade.
+- Verifier gets logical sector geometry from FILE_STORAGE_INFO on its opened
+  handle; RO-4 requires alignment/equivalence and unsupported-query witnesses.
+  RO-1b adds full64 opened-file versus bound-root volume comparison without
+  changing stored low32 identities.
+- The retained root handle prevents file-ID recycling but can keep the volume
+  busy through long reads and retry waits. Pause/exit releases it after settlement;
+  device-in-use guidance belongs with RO-1b. No lock/eject/dismount experiment
+  against the user's F:/G: volumes is authorized.
+- Baseline, mechanical intermediate and final candidate run in isolated pinned
+  checkouts with their own matched Python/dependency environments and explicit
+  driver provenance. Preserve the intermediate before continuity implementation.
 
-User follow-up added preflight to the source review. It reuses authority values
-but performs a full admission per distinct subject; a flat unique 1,000-COPY
-plan has 2,004 full admissions including root/capacity observations, plus other
-native calls. This count is source-derived, not a preflight timing result.
-Scanner brackets enumeration rather than fully admitting every file. PERFORMANCE
-records the distinction and the resolution-order constraint on leaf-check reuse.
+Continuity retains full initial admission and fresh pathname identity probes,
+permits same-object ancestor rerouting within the invocation, and keeps descendant
+and final effect guards. Retry retains the baseline; resume fully admits anew
+and still reconciles temp/published identities. No live root state is stored on
+shared runtime filesystem adapters or in continuation/database/wire values.
 
-Evidence is retained in `build/executor-assessment-20260927/`, with directory
-conventions in its AGENTS.md. Baseline/followup/finalcases scripts preserve exact
-commands. Raw rig JSON/logs, synchronous stage timings, supplementary profiles,
-source/fixture/environment receipts and `summary.json` remain local ignored
-evidence. Reruns need fresh target/report names. The temporary summary reader was
-corrected to handle the rig's diagnostics-off shape; raw reports were unchanged.
+Evidence: investigation commit `6a93b038`, PERFORMANCE, and ignored
+`build/executor-assessment-20260927/` retain historical benchmark/test receipts.
+Planning/review scripts, checks and source-review notes are under
+`build/root-admission-plan-20260927/`. Only document checks and read-only source/API
+research ran in this revision; no production tests, new benchmarks or disk fixtures.
+Original source corpus and prior failed receipts remain unchanged.
 
-Five F: → G: bands ran five times each with readback. Small-file median is
-28.248 s for 1,000 × 4 KiB; 4 GiB median is 2.287 s (1,791.3 MiB/s).
-Three reverse 4 GiB samples gave 1.987 s median. Stage instrumentation found
-27,000 root revalidations costing 16.832 s inclusive in a 27.901 s small-file
-run; supplementary profiles counted 1,401 spelling validations per file.
-Temp finalization, rename and directory flush were much smaller. Whole-tree
-and four-hardlink-UPDATE cases completed and read back successfully.
-
-The 10/1/0.1 ms interleaved polling probe showed no material backend gain.
-Diagnostics-off small-file runs still took about 27 s. User review corrected the
-original optimization ordering: preserve necessary fresh evidence, not current
-probe counts/APIs. `root_probe_review.py/json` times 1,000 read-only admissions:
-2,000 GetVolumePathNameW calls consumed 0.577 of 1.131 s total. A separate root
-open/identity/attributes/close probe had a 30.4 microsecond median. Observed st_dev
-matches the full handle serial; its low 32 bits match existing volume identity.
-PERFORMANCE now prioritizes immutable authority reuse, fewer native calls,
-admission per access/effect step and possible root-handle binding. Explicitly
-resolve current second-anchor observation, lstat classification, mounted-root,
-child-chain and resume-lifetime semantics before implementation. Never cache
-successful admission across accesses. Other runtime condensation has one modest candidate:
-combine progress initialization's two plan walks. Existing pause/cancel and
-settlement distinctions, plus prior shelved reductions, remain intact.
-
-Verification: 23 rig invocations, 47 successful executions, 42 successful
-readbacks; all accepted metrics have zero residual reservations. Existing
-`test_tools_executor.py` and `test_executor_pipeline.py`: **80 passed**
-(`focused.xml/log`). Source/instrument review checked timing boundaries and
-poll overrides. Preflight is excluded from execute timing; nested stage times
-overlap, cProfile timings are perturbed/overlapping, and queue waits/high-water
-are not device utilization. These are diagnostic observations, not release gates.
-
-All task-created F:/G: roots and sibling rig artifacts were removed through
-manifest-validated cleanup, including the retained reverse-source fixture.
-The original `F:\NamiSyncExecutorBenchSource` was kept read-only. Only
-PERFORMANCE, CHANGELOG and this handoff are tracked changes; production/tests
-remain unchanged. No recovery branch/worktree was needed.
-
-Prior incident and AB-10 evidence remains untouched under
-`build/admission-bridge-closeout-20260927/`, `build/incident-trace-20260927/`,
-`build/trace-20260927/` and `build/ab10-20260926/`. Existing M1 decisions and
-deferred findings are not reopened by this assessment.
+Next action after user review is separate implementation authorization, fresh
+branch/source/baseline verification and RO-1a. Exact future commands, native gates,
+stop rules and benchmark topology are in M1_PLAN. Preserve frozen settlement
+baselines, DOC-2, prior incident/AB evidence, stashes and unrelated work. This
+documentation commit does not activate implementation, M1-9 or M1-10. No push or
+merge was requested or performed.

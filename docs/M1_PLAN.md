@@ -11,6 +11,719 @@ retains investigation, rejected proposals and superseded execution recipes;
 the decisions still governing delivery are below. Historical observations
 certify their recorded build and dependencies only.
 
+## Root admission optimization plan — 2026-09-27
+
+### Main objectives
+
+- Remove repeated root derivation, mount discovery and duplicate admission from
+  executor, preflight and verifier while preserving reviewed effects, honest
+  verification and recovery behavior.
+- Share native evidence primitives in core; let each module own its access
+  boundaries, invocation resources and failure policy. Replace repeated
+  configured-root ancestry walks with fresh root-object continuity where the
+  explicitly proposed contract below applies.
+- Finish RO-1a/RO-1b and RO-2–RO-5 before M1-9 by default and **before M1-10 activation without
+  exception**. M1-9 can move ahead only by an explicit user scheduling decision;
+  that does not waive this batch or its M1-10 dependency.
+
+### Scope and decisions
+
+This is the user-requested plan/register, prepared with the `plan-work` skill
+against `6a93b038` on `milestone1-adelbert`. It proposes future contracts, not
+current behavior or implementation authorization. All six rows start pending.
+The user selected **root continuity with an explicit contract change**, rather
+than preserving every configured-root ancestor check at every access.
+[PERFORMANCE](PERFORMANCE.md#executor-assessment--2026-09-27) owns the measured
+executor/verifier findings and source-derived preflight count. The investigation
+commit is `6a93b038`; local raw receipts remain under
+`build/executor-assessment-20260927/`. Core/executor measurements initially used
+`0e4595e4`; verifier follow-up used `6de6d1c0`. Do not relabel them as candidate
+performance or a fresh full-suite baseline.
+
+**Finite scope.** Core `pathing.py`, `root_authority.py`, `file_identity.py` and
+the directly affected executor/verifier protocols; executor `runtime.py` and
+`native.py`; preflight observation in `modules/preflight.py`; verifier
+`engine.py`/`native.py`; composition and invocation lifetimes in
+`workflows/runtime.py`, `sync.py`, `inventory.py` and core context factories.
+Direct compatibility consumers include scanner, inventory/location resolution,
+rigs, custom filesystem/readers and decorators, their tests and helpers.
+Only those seams may change to adopt the new contract. Shared pathing additionally
+requires planner, database, bridge/service and serialization regression coverage.
+The regression map and checkpoint sections close this population by mechanism;
+a newly discovered owner/effect model requires adjudication, not silent expansion.
+
+**Excluded.** Scanner traversal optimization; planning/UI/bridge redesign;
+database schema, stored identity or wire changes; cross-run authorization caches;
+global root sessions; generic permission-token frameworks; general handle-relative
+traversal; new network/filesystem support; pipeline scheduling, flush batching,
+overlapped publication, worker removal, settlement reducer redesign, pause/cancel
+merging and buffer-pool work. The small progress-initialization condensation and
+verifier buffer-reuse leads remain deferred. M1-9/10 behavior, missing-row
+acknowledgement, DOC-2 history rewriting and prior AB deferrals stay separate.
+
+**Sequencing revision.** Current-contract work lands first: RO-1a, then RO-2,
+RO-3 and RO-4 (each depends only on RO-1a; serialize shared-file edits). Record a
+measured mechanical-only intermediate revision before RO-1b introduces continuity
+across the three consumers. RO-1b, then RO-5, still must finish before M1-10.
+Continuity bootstrap, mounted-anchor cases and its AGENTS/DEFENSE contract edits
+do not block the mechanical commits. RO-1 is superseded by RO-1a and RO-1b;
+RO-2/3/4 retain their owners but now exclude continuity adoption until RO-1b.
+
+The proposed design decisions are:
+
+Decisions 2–5 describe RO-1b only. Immutable fact reuse, fewer native calls and
+within-step consolidation are current-contract work in RO-1a/2/3/4; they do not
+wait for continuity-specific witnesses or policy documentation.
+
+1. **Facts are reusable; observations are not permission.** Construct reviewed
+   `RootAuthority` facts once per invocation, including prepared lexical spelling
+   and chain derivation where useful. Core remains standard-library-only and
+   exposes typed stateless observation/comparison primitives. A module-owned
+   invocation scope owns live bindings and handles only in RO-1b; earlier rows
+   reuse immutable facts while performing current-contract admission. There is no TTL, global
+   freshness cache or public `already_admitted=True` escape hatch.
+2. **Full admission establishes the binding.** Before using the optimized path,
+   validate original spelling and reviewed mount/volume, no-follow the configured
+   root chain, and corroborate the opened root with that admission's actual root
+   observation. Keep the original root handle open for the invocation. Compare
+   fresh pathname evidence with its raw 64-bit volume serial and 128-bit file ID,
+   plus ordinary-directory/non-placeholder/non-reparse evidence. Prefer one lstat
+   per access on the witnessed CPython/backend mapping: `st_dev`, `st_ino`,
+   attributes and reparse tag supply the comparison without another explicit
+   handle/ctypes query. Otherwise use a fresh no-follow handle probe; this is a
+   backend implementation choice, not a new product capability detector.
+   Re-statting only the retained handle cannot detect a replaced pathname.
+   Acquire no write authority and permit normal read/write/delete sharing;
+   identity retention must not introduce a root rename/delete sharing lock.
+   The retained handle exists to prevent recycling of the bound root's file ID
+   during the invocation. It also keeps the volume in use: volume lock and safe
+   removal can be blocked throughout long verifies and idle retry waits. Sharing
+   delete access does not remove this effect. Close on pause and every exit;
+   account for device-in-use guidance in RO-1b rather than promising safe removal
+   while active. Never release/reacquire the baseline silently during a retry.
+3. **Explicit ancestry change.** After that full admission, a fresh probe reaching
+   the same ordinary root object may pass even if an ancestor has become another
+   alias/reparse route to that object. A different root, missing root, unsafe root
+   leaf or changed volume refuses before the next access/effect. This replaces
+   repeated configured-root ancestry validation, not descendant checks. Preplaced
+   traps at full admission and traps below the bound root remain refused. Update
+   ARCHITECTURE, DEFENSE, AGENTS and component docs with this precise distinction
+   when implemented; do not claim all ancestors remain ordinary or all races are
+   prevented. Existing quiescent-root assumptions and EW dispositions remain.
+4. **Use existing capability evidence.** Continuity eligibility is the selected
+   reviewed `CapabilityProfile.stable_file_identity`, a local non-UNC root, and
+   a logical root distinct from its admitted/reviewed volume anchor. Equal-anchor
+   roots (including mounted-folder roots), remote roots and false identity profiles
+   retain full admission. Locality must exclude mapped remote drives using existing
+   native locality evidence. Do not add a competing runtime identity-capability
+   detector or a second filesystem-name allowlist: scanner already derives the
+   profile from filesystem type. The profile selects eligibility; it does not prove
+   raw stat/handle equivalence or authorize a particular root object. Witness that
+   mapping in backend tests and corroborate each actual initial binding.
+   Preflight/executor use the reviewed plan profiles; post-copy uses its target
+   profile. Standalone verification must carry the admitted refresh's `scan.profile`
+   through `bind_verifier_context` and its context factory (currently it carries
+   RootAuthority only),
+   not infer a new capability in the reader. No durable profile or wire change.
+   Custom/fake adapters explicitly supply the scoped or full-admission contract.
+   Missing profile uses conservative full admission; an eligible mode's missing,
+   malformed, access/query or mismatched evidence refuses rather than downgrading.
+5. **Invocation lifetime, not task lifetime.** Bind independently for each
+   `observe()`, `execute()` and verifier invocation. In-invocation retries keep
+   the baseline and re-probe; pause/return/cancel/error close every owned handle.
+   Resume/wakeup does fresh location resolution/preflight as today and establishes
+   a new full binding before touching retained paths. Do not serialize handles,
+   bindings or fresh-observation claims into plans, fingerprints, continuation,
+   `ObservedWorld`, ledger/history or bridge values. Retained-temp/published
+   identity guards remain necessary across this reset.
+   A same-object ancestor alias accepted during an invocation can be rejected by
+   the next invocation's full ancestry admission. This is deliberate: continuity
+   is not a promise to preserve an altered namespace through pause/resume.
+6. **One admission per actual access/effect step.** A native operation may consume
+   the immediately preceding admission and its stat evidence within that step.
+   Derivation and queries comprising the same admission can share it when no
+   external callback, wait, content read or effect intervenes. This consolidation
+   is allowed under the current contract and belongs in RO-2/3/4, not behind RO-1b. A recorder call, control callback, stream, retry wait, return/resume
+   or filesystem effect ends the step. Subsequent work re-probes. Source and
+   target checks remain distinct. The COPY path is not a universal six-probe
+   budget; cleanup, backup, metadata and other operation kinds have their own
+   boundaries. Prefer a combined operation or private scoped value with explicit
+   ownership, never a reusable success flag.
+7. **Preserve external identity.** Existing `VolumeId` and persisted
+   `FileIdentity.volume_serial` retain their current representation. Raw root
+   identity is separate: the current handle adapter truncates the volume serial
+   to 32 bits and must not be used as a full-width root binding. File `st_dev`
+   can corroborate its own volume on witnessed backends; compare against reviewed
+   expectations and refuse mismatch rather than stamping a file with the path's
+   volume. Do not generalize the F: NTFS observation to every filesystem.
+   Initial admission still matches the plan's existing volume identity: this
+   proposal does not detect a pre-invocation remap with a colliding low-32 serial
+   merely by adding a subsequently pinned full-width identity. Existing clone
+   ambiguity policy remains; stronger review-time identity is outside this batch.
+
+The Windows sources for the proposed native mechanism are
+[FILE_ID_INFO](https://learn.microsoft.com/en-us/windows/win32/api/winbase/ns-winbase-file_id_info),
+[CreateFileW](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-createfilew)
+and [GetFileInformationByHandleEx](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-getfileinformationbyhandleex).
+Identity compares open objects; it is not a cryptographic clone detector or an
+atomic binding of a later pathname mutation. Retained handles address identity
+lifetime within the invocation. Constant user-space probe count does not promise
+constant kernel lookup latency at increasing depth.
+
+[FILE_STORAGE_INFO](https://learn.microsoft.com/en-us/windows/win32/api/winbase/ns-winbase-file_storage_info)
+defines the opened file's logical sector size used by RO-4; its equivalence and
+alignment witnesses replace path lookup, not unbuffered-read guarantees.
+[FSCTL_LOCK_VOLUME](https://learn.microsoft.com/en-us/windows/win32/api/winioctl/ni-winioctl-fsctl_lock_volume)
+documents refusal while files remain open. RO-1b accounts for that retained-handle
+lifetime effect rather than claiming delete sharing permits active volume removal.
+
+**Evidence still required.** RO-1a validates single-observation/native conversion
+under current behavior; RO-1b separately closes bootstrap, identity lifetime,
+profile propagation and supported-backend witnesses. This is an implementation
+matrix, not a new runtime capability authority. RO-4 witnesses handle-derived
+sector geometry. No claim that the suggested 25-microsecond lstat or historical
+30.4-microsecond handle probe is a universal bound. Widening continuity beyond the
+declared profile/locality/anchor predicate, retaining handles through pause,
+changing path grammar or stored identity, or relaxing descendant checks needs
+user review. Routine helper choices and mechanical reductions need no new policy
+decision or AGENTS/DEFENSE wording change.
+
+### Investigation and regression map
+
+| Mechanism / owner and direct consumers | Failure to prevent | Checkpoint witness |
+| --- | --- | --- |
+| `lexical_absolute_path` currently converts to extended spelling and back; RootAuthority construction repeats this work. Core pathing is used beyond the three modules. | Normalize away an invalid component; alter case/Unicode keys; accept device/ADS/escape spelling; resolve links while doing lexical work; leak native prefixes. | RO-1a: `test_core_scanplan.py`, core root/identity tests, ordinary suite. Preserve validation before normalization, UTF-16 limits, relative-input behavior and existing type/error semantics. |
+| `admit_root` currently performs chain-anchor lookup then volume lookup with a second anchor check. Scanner and workflow location/overlap checks consume the same primitives. | Replace two independent observations with a tautological equality; map missing/access/anchor/volume errors to the wrong consumer result. | RO-1a: migrate `test_second_anchor_change_precedes_volume_identity_acceptance` and `test_missing_or_invalid_second_anchor_is_unavailable` to the single-anchor admission mechanism without deleting the underlying refusal consequences, with changed-root/volume and wrong-runtime-root controls; scanner full/scoped bracket regressions. |
+| `ApplicationRuntime` retains `_observation_fs` and `_executor_fs` across tasks. Core must not own freshness policy. | Store one task's binding on a shared adapter; cross-contaminate concurrent tasks or resume; leak handles on exception. | RO-1b: overlapping invocations with different roots on the same backend, partial initialization, control exits and fresh resume; no binding on singleton filesystem state. |
+| Preflight `observe` deduplicates subjects and already reuses authorities; stat/capacity/temp/trash each admit. Judgment is pure. | Cache observation as authorization; follow a reparse leaf during resolve before checking it; alter recase subject spelling, root gating, absence or reclaimable credit. | RO-2: `test_preflight.py`, execution-review/workflow tests; separate subject error versus root failure, unsafe parent/trash, old-run temp grammar and observed-world identity. |
+| Executor guards call native resolve/stat/revalidate repeatedly; `_stat_path` and component classification repeat observations. | Lose a final guard after recorder/copy/retry callbacks; wrong-volume file identity; out-of-root cleanup; change publication/recording order or retry an effect. | RO-3: native/runtime/ACL/pending-cancel tests and unchanged 30-scenario settlement oracle; COPY/UPDATE/MOVE/MOVE_UPDATE/recase/TRASH/delete/metadata/directory/NOOP paths. |
+| Verifier `_classify_subject`, native bound open and `AuthorityBoundVerificationReader`; rigs wrap readers. | A decorator skips admission; a custom reader validates one root but opens another; stale pre-read snapshot crosses callback; buffered fallback or false content evidence. | RO-4: native/engine, tools-verifier, recorder integration and inventory/post-execution tests; bound/unbound/subclass/decorator dispatch, before/after stats and conditional recording. |
+| Sync/integrity workflows resolve bindings, open recording, wake queued work, pause/resume and hand post-copy candidates across phases. | Initial binding becomes long-lived authority; refresh drops pending work; handle reaches durable/wire state; cleanup masks the original failure or releases custody early. | RO-3/4/5: workflow checkpoints, root replacement after recorder barrier, pending published retry, integrity wakeup/refresh, retained post-copy identity and installed execution journey. |
+| Root identity only replaces configured ancestry; child relative paths remain externally mutable. | Treat retained root identity as authorization for all descendants; follow a preplaced junction/placeholder; accept a same-volume different root or mount-link ID. | RO-1a/RO-1b and module native and injected boundary matrix; RO-5 adversarial preplaced traps and alternate-path-to-same-root control. |
+
+Finite path matrix: ordinary drive/UNC and valid extended spellings, mixed ordinary
+separators, existing relative-input behavior, nonexistent lexical paths, long
+total paths and exact UTF-16 limit; reject existing unsupported namespace,
+drive-relative/absolute ambiguity as applicable to each public entry point,
+empty components, dot/dot-dot, reserved names, ADS, trailing dot/space, NUL and
+invalid surrogate cases before any access. Preserve spelling rather than Unicode
+normalization. Tests distinguish public path conversion from stricter root ingress.
+
+Finite native matrix: unchanged root; same-volume replacement; changed volume;
+same object through changed ancestor route; leaf reparse/placeholder/non-directory;
+unsafe/missing relative parent and leaf; ordinary root below a mounted anchor;
+root equal to mounted anchor; unsupported ID/query/access errors; two overlapping
+invocations; pause/resume and retry; cleanup after partial acquisition. Use real
+Windows NTFS cases where available and injected evidence for remap/rare capability
+branches. Required native witnesses cannot be reported passed from skipped tests;
+record privilege/environment limitations and leave the affected gate open.
+
+Continuity-only identity/lifetime cases belong to RO-1b. They do not block RO-1a
+or mechanical rows whose existing-contract witnesses and named gates pass.
+
+The unchanged baseline is the inspected source plus its current behavior tests
+and frozen settlement oracle. Historical 5,410 ordinary passes at `5e4bf87`,
+80 executor rig/pipeline passes and 148 verifier focused passes are provenance,
+not a substitute for the fresh pre-change run. Before implementation collect
+ordinary suite, import law and the settlement oracle on the actual starting
+revision; preserve failures and resolve baseline ownership before proceeding.
+
+### Checkpoint register
+
+| ID | Accepted outcome | Depends on | Primary verification | Status |
+| --- | --- | --- | --- | --- |
+| RO-1a | Cheaper lexical/native admission primitives under the current ancestry and freshness contract. | Plan review and separate implementation authorization | Path/native/direct-consumer tests, ordinary/import gates; one anchor discovery, unchanged refusal consequences. | pending |
+| RO-2 | Preflight reduces duplicate subject/descendant/parent-volume work with fresh admission per observation step. | RO-1a | Subject/root/temp/trash/recase matrix, workflow preflight and before/after observation measurements. | pending |
+| RO-3 | Executor reuses authority facts and consolidates root/descendant probes within effect steps under the current contract. | RO-1a | Executor/workflow/native gates, frozen oracle, F:/G: correctness/readback and stage measurements. | pending |
+| RO-4 | Verifier consolidates bound opening, native setup and handle-derived sector geometry without continuity. | RO-1a | Reader/decorator/native/recorder/workflow gates, geometry witness, standalone and post-copy measurements. | pending |
+| RO-1b | Adopt invocation-scoped root continuity across core and all three consumers, with existing profile eligibility and explicit lifecycle policy. | RO-2, RO-3, RO-4; measured mechanical-only revision | Bootstrap/stat-handle equivalence/profile-flow/lifetime tests, full-width opened-volume comparison, consumer/native/ordinary/import/oracle gates. | pending |
+| RO-5 | Integrated workflows, native containment, lifecycle and measured work reduction close the batch. | RO-1b and retained passes from RO-1a/2/3/4 | Ordinary/import/oracle, selected installed Windows journeys, baseline/intermediate/final measurements, independent adversarial review. | pending |
+
+The six rows are the completion denominator. Each is an independently reviewable
+commit; RO-1b is the atomic shared-policy migration after the independently useful
+mechanical commits. A stalled continuity matrix does not undo or block those
+commits, but does keep RO-1b/RO-5 and M1-10 open. No checkpoint leaves its own
+regression for a later row.
+
+### Detailed checkpoints
+
+#### RO-1a — Current-contract lexical and native primitives
+
+**Objective.** Deliver reusable cheaper primitives without waiting for root
+continuity, retained handles or a new ancestry policy.
+
+**Scope and approach.** Implement direct lexical normalization preserving original
+spelling validation and namespace behavior. Split anchor discovery from volume
+information queried directly at the admitted anchor: one `GetVolumePathNameW` per
+full admission, with the current no-follow chain, expected volume and consumer
+failure policy. The returned anchor is that admission's observation, not a fake
+second independent probe. Reuse fixed native bindings with call-local buffers and
+correct last-error handling. Expose a witnessed stat-to-volume conversion for
+single-lstat consumers, keeping existing stored serial/file-ID formats.
+Do not introduce pinned root bindings or change the current ancestry policy.
+
+The narrow producer change is explicit: `NativeVolumeInfo.evidence.device_id`
+describes the admitted anchor, not a second independent observation after the
+chain. Supported stable-input mount/volume/ancestry refusals remain; a live
+same-volume re-anchor strictly between the two former lookup points is no longer
+claimed detected by that removed second observation. Test that case explicitly
+and distinguish it from an unsafe structure present before admission/next final
+guard, which must still refuse. This uses DEFENSE's existing quiescent-root and
+path-check-to-use boundary, not the later root-continuity policy. Do not retain
+a tautological equality or imply complete parity with artificial two-call traces.
+
+**Acceptance criteria.** Same accepted/rejected path language and supported
+stable-input root/volume/mount
+refusals and no-follow ordering; no lexical filesystem I/O; no scalar/serialized
+identity changes. Single-lstat volume evidence describes the observed object and
+is compared with expected volume instead of stamped from the pathname. Calls
+retaining only a chain contract do not gain an unexpected volume requirement.
+Ordinary mounted anchors, UNC and non-Windows development paths retain their
+current supported behavior. Native error-stage mapping remains truthful even
+though obsolete second-anchor-specific assertions change.
+
+**Regression watchlist.** Normalization hiding invalid components, casing/Unicode
+key changes, mounted-anchor empty chains, default/injected probe signatures,
+scanner full/scoped brackets, workflow volume overlap/clone policy and loss of
+fresh checks through a reused library binding. Observation multiplicity is not
+itself the safety contract; removed checks need preserved consequence witnesses.
+
+**Tests and evidence.** Characterize the path and volume mismatch/error matrix;
+run `tests/test_core_scanplan.py`, `tests/core/test_root_authority.py`,
+`tests/core/test_scalar_identity_contracts.py`, `tests/test_scanner.py`,
+`tests/test_workflows.py` and `tests/test_inventory_workflow.py`, then ordinary
+suite/imports. Reconcile `test_second_anchor_change_precedes_volume_identity_acceptance`
+and `test_missing_or_invalid_second_anchor_is_unavailable`: retain changed-volume,
+unsafe-chain, wrong-root and missing/error witnesses against the new producer,
+without a tautological anchor comparison or requiring continuity bootstrap.
+Record the explicit same-volume live-reanchor case above and its changed internal
+observation, rather than declaring the obsolete second-probe test equivalent.
+If investigation shows a lost supported-path guarantee instead of that excluded
+live race, stop the affected reduction for review; other mechanical work proceeds.
+Terminal pass is current-contract behavior plus measured removal of repeated
+lexical/anchor work; timings are diagnostic rather than a new speed threshold.
+
+**Documentation and handoff.** CORE and component docs describe actual primitive
+changes; PERFORMANCE retains attribution and this register records evidence.
+No AGENTS/DEFENSE ancestry rewording is a prerequisite or part of this checkpoint.
+The future continuity proposal remains only in this register until RO-1b.
+
+**Adversarial review.** Review all pathing consumers and native probe injection;
+attempt namespace ambiguity, unsafe root/volume mismatch and path-versus-object
+volume disagreement. Confirm native binding reuse caches no filesystem facts.
+
+**Commit gate.** `perf(core): reduce lexical and native admission work` with
+required signature adaptations, tests and matching docs. No continuity behavior,
+new root lifetime or protected baseline edit in this commit.
+
+#### RO-2 — Preflight observation scope
+
+**Objective.** Reduce repeated subject and parent-volume observation work
+while preserving a fresh, scoped observed world for pure judgment.
+
+**Scope and approach.** Keep `observe`'s already-reused reviewed authorities;
+prepare immutable lexical facts once and share a current full admission only
+inside one observation step. No continuity handle or new root scope is required.
+For descendant walks and their callers, eliminate redundant existence/type probes
+using one no-follow stat per observed component with explicit FileNotFoundError
+handling. Preserve rejection of a reparse/placeholder before resolution.
+**Retain root and candidate realpath containment and representability checks**;
+they are separate facts from the lstat chain. Share their results only within the
+same step, not across observations or callbacks. Retain a distinct final subject
+observation when needed after resolution; do not collapse it merely by counting.
+In `reclaimable_temp_bytes`, use the already-observed parent's `st_dev` for the
+same-volume comparison instead of another `observe_native_volume`/mount lookup.
+For the empty parent path observe the root itself freshly. Apply the same
+object-volume reuse to trash/subject observations where the ordering matches;
+keep compatibility behavior where stat volume evidence is not witnessed.
+Retain separately fresh free-space, reclaimable-parent and trash observations.
+
+**Acceptance criteria.** The same remaining distinct subjects/parents are observed;
+root failures gate dependent work while relative failures stay local; missing
+subjects remain absence. No mutation occurs. Capacity credit, temp ownership,
+trash writability/volume checks, recase spelling and ObservedWorld/judge identity
+remain unchanged. Current root/ancestry guards remain at each observation boundary.
+No root binding is introduced here. Reusing one backend cannot leak prepared
+facts between roots/invocations. Parent-volume mismatch prevents reclaimable
+credit; missing, access-denied and nondirectory cases retain distinct behavior.
+
+**Regression watchlist.** Present versus missing final leaf, path resolution of
+reparse leaves, source/target subject-key collisions, case-sensitive recase,
+root versus child error translation, empty target, full-admission fallback and
+non-current-run reclaimable temps. No earlier preflight result authorizes execute.
+
+**Tests and evidence.** Extend `tests/test_preflight.py` and
+`tests/test_execution_review.py`; run preflight/workflows departments and tools
+executor tests, plus RO-1a's changed core cases. Characterize root changes
+between subject calls and interleaved invocations on a shared backend. Add
+deep child trees, empty/nonempty parent and off-volume-parent controls; attribute
+descendant lstat/existence/realpath and per-directory mount calls separately. Measure
+`observe` and pure `preflight` separately using the finite profile below; keep
+subject/result equality and no-mutation receipts. Terminal pass requires unchanged
+verdict/evidence semantics and reduced repeated mount/derivation work on fast paths.
+
+**Documentation and handoff.** PREFLIGHT owns observation boundaries and immutable
+fact reuse; WORKFLOWS owns composition; PERFORMANCE owns measurements. Correct the
+current prose implying authorities are rebuilt for each call, since `observe`
+already reuses them. Record status, raw evidence and fallback cases here/HANDOFF.
+
+**Adversarial review.** Probe root replacement during stat/capacity/trash phases,
+malicious relative paths and a leaf that becomes a reparse point before resolution.
+Review the module/native handoff for reusable-success bypasses and shared state.
+
+**Commit gate.** `perf(preflight): consolidate subject and parent volume observations`;
+tests/docs and independent review close together, with no mutation or refusal
+regression deferred to the executor checkpoint.
+
+#### RO-3 — Executor access and effect steps
+
+**Objective.** Remove the dominant executor overhead without changing the effect
+journal, publication durability or recorded outcome meaning.
+
+**Scope and approach.** Build the two reviewed authorities once per `execute`
+invocation; pass those immutable facts through native without reconstructing
+them. Keep current full/chain admissions at actual access/effect steps; no pinned
+binding or ancestry-policy change is required.
+Make `_stat_path` one no-follow observation with corroborated file-volume identity,
+and classify root components from that same stat rather than following `is_dir`.
+Replace repeated guard/resolve/stat admission inside a step with one native
+boundary. Explicitly map source open, temp creation, finalize, post-recorder final
+guards, publish and published observation; also map backup, ACL/metadata repair,
+trash/move/delete, deferred directories, owned-temp sweep, cancellation cleanup,
+retry and pending-publication reconciliation. Re-probe after callbacks/waits.
+Do not remove effect-specific stat comparisons or conditional native primitives.
+In `_validate_existing_chain`, replace each `lexists` + lstat pair with one lstat
+and FileNotFoundError handling, returning the observed endpoint/existence fact
+so `resolve(must_exist=True)` need not repeat `lexists`. Do not convert access
+failure into absence. **Keep candidate realpath containment and the resolved-root
+comparison**, at most once each within that step; the lstat walk alone does not
+replace those facts. Reuse a leaf observation for `_stat_path` only within the
+same ordered step where freshness and error semantics are equivalent. Profile
+and test root depth and descendant depth separately.
+
+**Acceptance criteria.** All operation kinds keep exact reviewed scope, expected
+source/target checks, atomic same-volume publication and durability-before-recording.
+Current root/leaf replacement guards after copy/recorder/retry remain before
+subsequent touches, including existing published-decoy witnesses; stronger
+same-volume root-object continuity belongs to RO-1b. File-volume mismatch is rejected.
+Missing/error/type classification comes from coherent evidence, with intentional
+replacement of tests pinning the second following `is_dir`. NOOP, retries, pause,
+cancel, capacity failure, recording degradation and pending settlements remain
+truthful; no extra effect/replay, leaked invocation state or cleanup outside owned paths.
+
+**Regression watchlist.** UPDATE backup fallback and recovery; readonly/ACL
+restoration; source mutation during streaming; recase and case-sensitive occupancy;
+MOVE_UPDATE old-target disposition; child-first directory cleanup; post-publish
+failure; callback substitutions; capacity failure during cleanup and failed
+recorder barriers. Preserve the distinction between already-applied effects and
+work still eligible to retry when rebuilding invocation facts on resume.
+
+**Tests and evidence.** Run executor and workflows departments, affected core and
+preflight cases and `tests/test_tools_executor.py`. Before and after run the
+unchanged settlement oracle below; no frozen trace/baseline edit is authorized.
+Add step-boundary injection cases where existing probes are removed, and real
+native tests for single-stat volume/type behavior. Run all five F:/G: bands with
+readback, the mixed hardlink-update and whole-tree fixtures; retain metadata,
+outcomes, bytes/digests, reservations and exact manifest cleanup. Terminal pass
+requires preserved effect/recording traces and demonstrated removal of redundant
+admission/descendant work; wall-clock reporting includes invocation setup.
+Capture this mechanical implementation separately from later RO-1b continuity.
+
+**Documentation and handoff.** EXECUTOR owns the step/effect table and unchanged
+settlement policy; ARCHITECTURE/WORKFLOWS own invocation/continuation boundaries;
+PERFORMANCE owns before/after results. Record each removed check's retained
+consequence witness, not a target call count or a universal six-check rule.
+
+**Adversarial review.** Review native changes separately from runtime adoption.
+Inject root/child swaps after every external callback, recorder barrier and retry
+sleep, then inspect actual filesystem state plus journal/recorder truth. A new
+settlement-policy requirement stops this checkpoint for redesign.
+
+**Commit gate.** `perf(executor): admit roots once per filesystem step`; include
+all required native/runtime/protocol/helper adaptations, tests and docs atomically.
+Ordinary suite also runs if core/protocol changes expand beyond RO-1a's surface.
+
+#### RO-4 — Verifier opening boundary
+
+**Objective.** Make standalone and post-copy reads use one coherent fresh opening
+boundary and reusable native setup without weakening cache-honest attestation.
+
+**Scope and approach.** Reuse reviewed context facts and fixed native bindings.
+Combine engine full admission and default native reader's final-touch admission
+through an explicit bound-open contract; generic/custom readers retain engine
+enforcement unless they implement the complete stronger seam. Migrate structural
+dispatch, subclasses, decorators and `tools/verifier_rig.py` together. Share the
+immediately consecutive native pre-yield and engine before-read snapshot only
+where there is no intervening callback. Keep the size observation after
+`on_stream_start`, fresh post-read stat, opened-volume and final-path checks.
+Open the subject first, then query `FILE_STORAGE_INFO.LogicalBytesPerSector` on
+that same handle. Witness equality with the former `GetDiskFreeSpaceW` value and
+valid unbuffered alignment on supported fixtures; the normal path then needs no
+sector-related mount lookup. Validate the returned value before alignment/buffer
+work. Preserve a narrowly tested legacy geometry path only for documented
+unsupported query capability; access/query corruption or invalid geometry must
+not silently default or produce a verified result. No buffered fallback or
+drive-letter geometry cache. Per-file buffers/hasher bytes remain unchanged.
+This row needs no root continuity. Full-64 opened-volume comparison against a
+bound root is added with RO-1b, not allowed to block this mechanical commit.
+
+**Acceptance criteria.** Every selected item still binds to the exact reviewed
+root, including shortcut/missing/unsupported rows. Bound readers cannot degrade
+to unbound opens; wrappers forward all required capability/evidence. Legacy/custom readers without the
+stronger bound-open seam retain engine full admission; a reader claiming the seam
+with missing or malformed binding refuses rather than falling back. Root/child
+substitution, wrong opened volume/path, short/over-read, drift and hash mismatch
+retain truthful outcomes and conditional recorder behavior. Direct native-reader
+use still refuses unsafe subjects before yielding. No buffered fallback. Pause,
+cancel, retry/error and post-copy handoff close all native resources without
+retaining resources across invocations or resetting retained progress/selection.
+
+**Regression watchlist.** Callback between before-stat and read; reader subclass
+overrides; faulty/missing capability forwarding; identityless candidates;
+conditional evidence conflict; mismatch dominance; zero-byte reads; chunk limits
+and alignment; absent baseline; same-task post-copy selected subset and resume.
+
+**Tests and evidence.** Run verifier/workflows departments,
+`tests/test_tools_verifier.py`, `tests/test_verifier_recorder_integration.py`,
+affected core integrity tests and recorder consumer tests. Add direct/default/
+decorated/custom reader tests for the new handoff before removing the old probes.
+Repeat all five standalone bands and executor readback with exact item/byte/digest
+results; include injected callback mutations, native sharing-mode and
+handle-sector/path-sector equivalence witnesses, zero/invalid sector values,
+small/unaligned tails and documented unsupported-query behavior.
+Terminal pass requires the same evidence decisions and fewer repeated opening
+probes/setup operations, with no cross-callback snapshot reuse.
+
+**Documentation and handoff.** VERIFIER owns reader capability and observation
+semantics, CORE/ARCHITECTURE own protocol meaning, WORKFLOWS owns handoff/resume,
+TOOLS describes tap forwarding, and PERFORMANCE records measured attribution.
+
+**Adversarial review.** Use a decorator/subclass that would accidentally hide the
+new capability, a custom reader returning wrong-volume evidence, and a callback
+that changes the subject. Inspect positive and negative recorder commands as well
+as displayed results. Review scope close and partial-open failure paths.
+
+**Commit gate.** `perf(verifier): consolidate bound reader admission and setup`;
+the reader protocol, all direct wrappers/fixtures and both workflow paths migrate
+in one coherent commit, with no permissive compatibility fallback.
+
+#### RO-1b — Invocation root continuity and consumer adoption
+
+**Objective.** After measuring the independent mechanical gains, replace repeated
+configured-root ancestry walks with the explicitly selected root-object contract.
+
+**Scope and approach.** Core provides raw identity/attribute observation and
+comparison; preflight, executor and verifier own explicit call-local scopes, never
+state on runtime's shared filesystem adapters. Migrate all three consumers in
+this checkpoint, not as unfinished adoption hidden in RO-5. Eligibility uses
+decision 4's existing profile/locality/non-anchor predicate. Carry selected
+profiles through standalone and post-copy context factories without adding
+durable/wire fields or a parallel detector.
+
+Bootstrap: perform current full admission, retaining the final root's independent
+no-follow identity/attribute observation; open a no-follow directory handle and
+compare raw full64 volume/full128 ID and ordinary attributes with that observation
+and reviewed/admitted volume. Corroborate final path against the safely resolved
+root. Only then pin the baseline handle. Raw `FILE_ID_INFO` or a witnessed
+`st_dev`/`st_ino` mapping supplies identity, never the persisted low32 adapter.
+Inject changes between chain, stat, volume, open and final-path observations;
+partial opens close on failure. These checks retain the declared non-atomic,
+quiescent-root limit. Each subsequent access may use one fresh lstat for root
+identity/attributes/tag when the same mapping witness covers it; otherwise use a
+fresh handle probe. Never probe only the pinned handle or cache a prior success.
+
+Retries retain the baseline; pause/return/error/cancel close it; resume fully
+admits anew and still reconciles retained effect identities. At each verifier
+open, compare the opened file's raw full64 serial with the bound root's full64
+serial (including equal-low32/different-high32 refusal). Keep low32 matching for
+the existing reviewed/durable identity and for conservative mode. Do not put the
+raw binding in persisted FileStat/attestation or change scanner identity policy.
+
+**Acceptance criteria.** Same ordinary root through a new ancestor route can pass
+inside the invocation; another object/volume or unsafe root leaf refuses before
+use. Full admission still rejects preplaced ancestry traps; descendant lstat and
+realpath checks remain. Profile false/absent, remote and equal-anchor cases retain
+full admission; errors in an eligible mode never downgrade. Stat and handle probes
+agree in full width on witnessed backends. Bindings are isolated across concurrent
+invocations and close exactly once after partial failure and all normal/control
+exits. Existing published/temp/selection and recorder/settlement truth is preserved.
+
+The retained handle prevents file-ID recycling, but keeps the volume in use during
+long verification and retry waits. This is an explicit lifetime tradeoff, not a
+promise of active safe removal. Verify release on pause/cancel/completion and give
+actionable guidance: pause or finish the operation, allow I/O to settle, then retry
+safe removal; other processes may still hold the volume. Never promise that Close
+or a pause request has released handles before settlement. No dismount/eject/lock
+experiment against the user's F:/G: data volumes is authorized by this plan.
+
+**Regression watchlist.** Same-low32 wrong volume; profile loss on standalone
+context creation; mapped remote drive; root equal to mounted anchor; root/file-ID
+reuse; root versus descendant aliases; callback and recorder boundaries; idle
+retry waits; pause/resume decoys; custom adapters concealing stronger capability;
+unsupported probe versus malformed evidence; close failure masking original error.
+
+**Tests and evidence.** Run affected core/preflight/executor/verifier/workflow
+and tools tests, ordinary suite/imports and the unchanged settlement oracle.
+Witness NTFS and supported identity-backend mappings (including injected high
+bits), stat/handle probe equivalence, explicit eligibility/profile propagation,
+bootstrap races and overlapping scopes. Use owned-handle counters/injected device
+busy outcomes for lifecycle; an actual volume-lock/eject witness, if needed, uses
+only an isolated disposable test volume with separate explicit setup/cleanup.
+Review real Windows handle lifetime evidence without claiming F:/G: lock tests.
+Terminal pass includes all three consumers, no policy downgrade and measured
+continuity-only delta against the saved mechanical revision.
+
+**Documentation and handoff.** This is the row that updates AGENTS, ARCHITECTURE,
+CORE, DEFENSE and module/workflow docs for the ancestry change and root lifetime.
+DESKTOP_UI (and existing relevant error text where applicable) records device-in-use
+guidance; no new eject command, monitor or automatic dismount. PERFORMANCE retains
+the intermediate/final measurements; this register and HANDOFF carry readiness.
+
+**Adversarial review.** Review producer plus every consumer adoption as one policy
+change. Attempt to use a missing profile as authority, accept a high-bit collision,
+share a binding across tasks, reuse a success through callback/resume, hide an
+unreleased handle or turn a failed fast-path probe into full-admission success.
+
+**Commit gate.** `perf: adopt invocation-scoped root continuity` with shared
+contracts, all three consumers/context factories, tests and policy/lifetime docs
+in one coherent checkpoint. No unadopted consumer or cleanup regression is deferred
+to RO-5. Mechanical commits and their evidence remain independently usable.
+
+#### RO-5 — Overall final sweep
+
+**Objective.** Prove the integrated change preserves user workflows and removes
+the identified repeated work; individually green module rows are insufficient.
+
+**Scope and approach.** Review the full diff and every regression-map row against
+the original source and final candidate. Run fresh Plan/review/preflight/Execute,
+automatic readback, standalone baseline/verify/rebaseline and live pause/resume/
+cancel paths. Include queued wakeup, retained published/temp state, concurrent
+tasks sharing runtime adapters and normal Close/shutdown. Preserve current
+M1-10 unrealized behavior; this sweep cannot implement it incidentally.
+
+**Acceptance criteria.** Ordinary, import and frozen-oracle gates pass; required
+native/installed witnesses execute; all six rows' resource, refusal and effect
+claims have terminal observations. No serialization/schema/event drift, handle
+retention beyond invocation or scope widening. Every new finding is resolved
+within scope or adjudicated; no supported hard-wall defect is accepted as a
+performance tradeoff. Docs describe shipped behavior only after implementation.
+
+**Regression watchlist.** Whole-task binding reuse, preflight-to-executor authority
+transfer, manual versus automatic post-copy distinctions, resume with a matching
+decoy, clone ambiguity, child reparse traps, misleading unsupported/verified
+results, stale current-ledger evidence and cleanup masking the causal failure.
+
+**Tests and evidence.** Exact established commands (PowerShell):
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q
+.\.venv\Scripts\lint-imports.exe
+.\.venv\Scripts\python.exe -m tools.executor_settlement_audit check --repeat 3
+.\.venv\Scripts\python.exe -m pytest -q -o "addopts=" -m headed tests/interfaces/web/test_setup_headed.py::test_m1_6_installed_setup_flow tests/interfaces/web/test_task_execution_review_headed.py::test_installed_task_execution_review_real_copy_and_capture
+git diff --check
+```
+
+Focused commands use `--dept core`, `--dept preflight`, `--dept executor`,
+`--dept verifier`, `--dept workflows` and `--dept database` as applicable; exact
+membership stays in `tests/_departments.py`. The oracle must report
+`settlement check passed: 30 scenarios x 3 runs` against the protected baseline.
+Structural settlement changes are excluded; a mismatch requires cause analysis,
+not baseline regeneration. The two installed journeys cover Setup/Plan and real-copy execution presentation
+through the composed runtime. Pause/resume/cancel, standalone integrity, post-copy
+selection, concurrency and cleanup semantics are covered by the named ordinary
+workflow/native and injected cases, not claimed from those two headed journeys.
+Installed journeys use the built wheel and existing
+contained Windows helpers, not a source-only or fake-page substitute. Environment
+failures preserve receipts and leave required native evidence open.
+
+**Finite measurement profile.** Reuse the read-only five F: size bands and
+separate G: rig-owned targets; retain reverse 4 GiB and mixed hardlink/whole-tree
+controls. Add dedicated 1,000 × 4 KiB copies with configured-root depths 1, 8 and
+32 while keeping child paths flat, and a separate depth-8 child tree so root
+and descendant costs are not conflated. Define generator, manifest, path lengths,
+source hash/metadata and exact cleanup before creating fixtures.
+
+Baseline execution is concrete: freeze the pre-RO-1a product revision after its
+fresh baseline tests, create/reuse a suitable isolated managed worktree at that
+exact revision, and give it its own Python 3.13 venv with the same pinned dependency
+versions as the candidate. Check attached worktrees before creation. Invoke each
+side's absolute venv Python with its own checkout as cwd and record both revisions,
+interpreter/dependency versions and driver hashes. Never import candidate modules
+through PYTHONPATH into the baseline or copy a venv across checkouts. The retained
+RO-2/3/4 mechanical revision is a third runnable reference: capture it before
+RO-1b and give it an equally isolated checkout/venv for continuity-only comparison.
+Reuse an accounted checkout sequentially if needed, preserving reports and exact
+revision pins. Original benchmark receipts alone cannot substitute for these runs.
+Use the same external measurement driver bytes where APIs permit; document any
+minimal adapter difference and test both adapters' item/byte/timing boundaries.
+Give each side fresh unique target/report paths, clean them through rig manifests,
+and serialize storage work. Keep the baseline worktree through RO-5 review, then
+archive only after processes stop and artifacts are accounted for.
+
+For baseline
+and candidate collect five interleaved pairs per main band/depth, alternating
+order, with the same driver/profile; serialize storage work. Measure preflight
+observation and pure judgment separately, executor including binding lifetime,
+standalone verification, and post-copy readback. Keep success/recording/readback,
+item/byte/digest, setup/teardown and reservation/resource receipts. Instrument
+one separate small and large pass for API/derivation attribution, including
+descendant lexists/lstat, retained realpath and reclaimable-parent volume work; do not use
+instrumented timings as the headline comparison or sum nested durations.
+
+PERFORMANCE owns fixtures/provenance and DEFENSE §7 owns evidence authority.
+These timings remain Tier 0 diagnostics, not a new release SLO or arbitrary
+percentage target. Completion requires demonstrated removal of the identified
+redundant work and honest before/after results; unexplained timing regression or
+failure to improve the intended small/deep workloads requires analysis and user
+disposition before closing RO-5, not a manufactured speed claim. Exact API counts
+are diagnostic rather than frozen implementation tests. Only RO-1b root-probe count should
+cease scaling with configured-root depth in continuity mode; descendant work and
+kernel lookup cost remain separate.
+
+**Documentation and handoff.** Reconcile AGENTS, CORE, ARCHITECTURE, DEFENSE,
+EXECUTOR, PREFLIGHT, VERIFIER, WORKFLOWS, TOOLS and PERFORMANCE for actual changed
+seams; update this register, CHANGELOG and HANDOFF. README changes only if the
+phase/roadmap synopsis needs it. Preserve failed receipts and starting/candidate
+revisions; account for every fixture and leave the original corpus untouched.
+
+**Adversarial review.** A reviewer separate from implementation checks the complete
+diff, same-object alias policy, native matrix, operation-step inventory, custom
+adapter migration, concurrency and lifecycle. Required artifact: a closed mapping
+from each regression row to tests/receipts plus any explicitly adjudicated residual;
+no parallel delivery register or generic safety checklist.
+
+**Commit gate.** `test: close root admission optimization across workflows` only
+for needed integration witnesses and matching closeout docs; if no additional test
+changes are needed, use `docs: close root admission optimization`. No opportunistic
+refactor or baseline rewrite. Batch completion requires RO-5 itself to pass and the
+register to account for every accepted row before M1-9/M1-10 scheduling advances.
+
+### Resumption block
+
+- Current state: RO-1a pending; RO-2/3/4, RO-1b and RO-5 pending. Planning only; no product/test
+  changes, optimization benchmarks or new native fixtures in this planning turn.
+- Next action: review this proposal, then obtain separate implementation
+  authorization; check branch/HEAD and unrelated changes, run the fresh baseline,
+  and start RO-1a's current-contract tests. Do not wait for RO-1b's bootstrap
+  or capability witnesses to implement authorized mechanical rows. User has chosen
+  the ancestry-to-root-continuity proposal, not authorized implementation.
+- Established commands are in RO-5; reuse the existing rig commands and methods
+  in PERFORMANCE. Create ignored `build/root-admission-optimization-<date>/` only
+  when execution begins, with AGENTS naming/layout/cleanup conventions first.
+- Preserve `build/executor-assessment-20260927/`, source corpus, historical oracle
+  and frozen baselines; do not overwrite old reports. Keep DOC-2, existing stashes,
+  incident/AB evidence and unrelated branches untouched.
+- Open evidence: fresh starting suite and isolated baseline checkout/venv;
+  RO-1b profile propagation/bootstrap and stat/handle equivalence witness;
+  depth profile; native binding bootstrap/lifetime and custom-adapter migration.
+  Existing profile/locality/anchor evidence selects the conservative path; no
+  second runtime detector is planned, and probe failures never downgrade.
+- Stop for supported data loss/corruption, out-of-root or unauthorized effects,
+  false durable/terminal success, replayed mutation, security/hard-wall escape or
+  inability to preserve work. AGENTS recurrence and recovery rules apply. A needed
+  policy/ownership expansion, inability to preserve current supported behavior,
+  or settlement-policy change requires review; never relax a gate for speed.
+
 ## Incident repairs and closeout — 2026-09-27
 
 ### Authorized cold-admission follow-up
@@ -198,8 +911,9 @@ row; [AGENTS](../AGENTS.md) governs scope changes, stops and recovery.
 
 | ID | Accepted outcome | Named verification | Status |
 | --- | --- | --- | --- |
-| M1-9 | Bounded inventory projections, current evidence and the full inventory consumer for sibling sorting. | Complete or prior-complete publication; warnings outside action scope; raw evidence provenance; search/filter/collapse/window/detail, replacement/race and production sort/reset paths; headed witnesses. | Pending. Missing-row acknowledge/restore UI must be explicitly allocated at activation; this row does not silently claim it. |
-| M1-10 | Baseline, verify and rebaseline controls plus first same-task manual post-copy verification, without persistent operation-time hashes. Eligible null-evidence files enter rebaseline; every admitted rebaseline hashes and replaces/creates evidence, and a match is not verified. | Confirm acknowledgement admission before claim/native work; all-null/mixed workflow, service/CLI and desktop paths; conditional recording and supersession races; atomic handoff classification; live pause/resume/cancel and unchanged automatic failed-read retries; overlay/result identity. Independently review operation matrix and conditional recording. Terminal Verify-remaining/subset retry remains deferred. | Pending. Rebaseline confirmation is distinct from missing-row acknowledgement. |
+| RO-1a/RO-1b, RO-2–RO-5 | Shared root evidence refactor and focused executor/preflight/verifier optimization under the proposed root-continuity contract above. | Six-row register, mechanical/intermediate/continuity evidence, native/regression matrix, workflow sweep and paired diagnostic measurements above. | Pending proposal; schedule before M1-9 by default and mandatory before M1-10. Implementation needs separate authorization. |
+| M1-9 | Bounded inventory projections, current evidence and the full inventory consumer for sibling sorting. | Complete or prior-complete publication; warnings outside action scope; raw evidence provenance; search/filter/collapse/window/detail, replacement/race and production sort/reset paths; headed witnesses. | Pending; RO-5 precedes activation unless the user explicitly reschedules M1-9. Missing-row acknowledge/restore UI must be explicitly allocated at activation; this row does not silently claim it. |
+| M1-10 | Baseline, verify and rebaseline controls plus first same-task manual post-copy verification, without persistent operation-time hashes. Eligible null-evidence files enter rebaseline; every admitted rebaseline hashes and replaces/creates evidence, and a match is not verified. | Confirm acknowledgement admission before claim/native work; all-null/mixed workflow, service/CLI and desktop paths; conditional recording and supersession races; atomic handoff classification; live pause/resume/cancel and unchanged automatic failed-read retries; overlay/result identity. Independently review operation matrix and conditional recording. Terminal Verify-remaining/subset retry remains deferred. | Pending; RO-5 completion is a hard activation prerequisite. Rebaseline confirmation is distinct from missing-row acknowledgement. |
 | M1-12 | Close integrated lifecycle/retention across activated task surfaces, then complete adversarial, documentation, ordinary and headed verification. This absorbs former M1-11. | Plan-only, execution-only, linked/manual verification, inventory, refused/canceled/degraded/failed tasks across same-document navigation, contained unsupported reload, explicit close and shutdown; admission bounds, stale-response suppression, exact resource release and retained truth. Applicable settlement oracle, ordinary/headed, installed-wheel/product, imports, diff/active-link checks and independent cross-component review. No aggregate-artifact or whole-owner-graph criterion. | Pending. |
 | M1-Release | Beta packaging and release closure after delivery rows above. | Installed artifact from clean checkout; frozen specification/dependency/CI, notices and corresponding source; standard-integrity host proof and every applicable BR-G/SH-G gate. [INTERFACES](INTERFACES.md) owns host/package/SH-G; [BRIDGE](BRIDGE.md) owns BR-G. | Pending. |
 
