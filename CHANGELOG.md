@@ -1027,6 +1027,28 @@ repeated machinery while preserving operational safety and boundary contracts.
 Safety, settlement, authority, and measurement work made high-risk release
 claims explicit, independently reviewable, and regression-backed.
 
+#### Assess executor and verifier admission costs (2026-09-27)
+
+- Benchmark unchanged `milestone1-adelbert` executor on separate F:/G: SN850X
+  devices: 47 successful execution samples, 42 readbacks, metrics-off controls,
+  polling comparisons, publication/finishing profiles and reverse-direction IO.
+- Attribute the dominant small-file cost to repeated root/path work: 27 root
+  revalidations and 1,401 spelling validations per flat COPY. User review and
+  direct API timing prioritize redundant native calls as well as derivation:
+  preserve fresh evidence at access/effect boundaries, not today's call counts. Shorter
+  polling did not materially improve the measured backend throughput.
+- Record raw-evidence pointers, measurement limits and ranked performance/runtime
+  simplification candidates in PERFORMANCE. No production or test changes;
+  existing rig/pipeline checks pass 80/80 and all task-owned disk fixtures are
+  cleaned through the rig's exact manifests.
+- Extend assessment to verifier: 30 fully verified samples, 148 focused tests,
+  four anchor lookups and four handle snapshots per readable file. Direct API
+  timing again puts anchor lookup ahead of pure derivation; post-copy uses the
+  same reader. Document binding/snapshot reuse candidates and their boundaries.
+- Trace the same full-admission mechanism per distinct preflight subject;
+  distinguish scanner's amortized scan-boundary checks. Keep source-derived
+  counts separate from measured timing and leave production contracts unchanged.
+
 #### Clarify test readiness and database reader documentation (2026-09-27)
 
 - Describe the Plan-again helper's actual readiness checks without attributing

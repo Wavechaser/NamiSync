@@ -208,6 +208,243 @@ outlier deletion, or implicit warm-up discard is applied.
 is valid for an all-NOOP/non-copy plan; otherwise every published candidate and
 byte must verify with non-degraded recording.
 
+### Executor assessment — 2026-09-27
+
+Read-only assessment of `milestone1-adelbert` at
+`0e4595e4142fc78cfbf8e274832520a4344f3b5e`. These are Tier 0 diagnostic
+observations and optimization leads, not release criteria or approved changes.
+No production, test, rig, policy, or settlement-baseline files were changed.
+Executor history includes September 8 runtime consolidation and September 20
+capacity-failure handling; early August is not its last meaningful change.
+
+**Profile and evidence.** Windows 11 Pro 26200, i7-13700K, 63.7 GiB RAM,
+CPython 3.13.14, xxhash 3.8.1; F: and G: are separate 4 TB WD_BLACK SN850X
+NVMe devices (disk 3 and disk 5), both NTFS. The existing read-only
+`F:\NamiSyncExecutorBenchSource` supplied the five size bands below. Its original
+generator seed was not reconstructed; membership/stat identity is retained in
+`source-manifest.json`, and the rig checks published digest consistency and
+source snapshot stability. No cache eviction, device-counter saturation study,
+or control of unrelated desktop activity was performed. Storage benchmarks
+were serialized; read-only source reviews ran alongside them. Results describe
+buffered repeated-source workloads, not cold reads or device peak bandwidth.
+
+Local raw evidence and temporary drivers are retained in
+`build/executor-assessment-20260927/`: `baseline.ps1`, `followup.ps1`,
+`finalcases.ps1`, `diagnostic.py`, `fg-*.json/log`, `gf-1x4GiB.json/log`,
+`stages-*.json/log`, `poll-*.json/log`, `no-metrics-small.json/log`,
+`profile-*.prof/txt/json/log`, environment receipts, source hashes, and derived
+`summary.json`. `summarize.py` derives medians/ranges from raw samples without
+discarding any run. Each invocation used a fresh dedicated target named
+`NamiSyncExecutorAssessment-20260927-*`; all such F:/G: roots and rig artifacts
+were subsequently removed through manifest-validated rig cleanup. The original
+F: corpus remains in place. Ignored build evidence is local, not committed
+acceptance authority. Relevant source, driver, runtime, fixture, or storage
+changes require new observations before carrying these findings forward.
+
+**Baseline.** Each F: band ran five times in one fresh process, using one
+empty-target prepared plan, initial preflight, metrics enabled and readback on
+every sample. All 25 executions and readbacks succeeded with recording OK and
+zero remaining payload reservations. Times cover the public executor call;
+preparation, preflight, manifest handling, cleanup and readback are separate.
+The recorder/event sink are the rig's in-memory seams, so this does not measure
+SQLite, history, workflow event validation or GUI delivery costs.
+
+| F: → G: workload | Execute median [min–max], s | Median MiB/s | Backend median, s | Outside backend median, s | Reader blocked median, s | Writer queue wait median, s |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1,000 × 4 KiB | 28.248 [27.367–29.745] | 0.138 | 0.512 | 27.739 | 0 | 0.114 |
+| 512 × 128 KiB | 14.068 [13.983–16.096] | 4.55 | 0.291 | 13.775 | 0 | 0.074 |
+| 64 × 4 MiB | 2.051 [2.019–2.107] | 124.8 | 0.204 | 1.841 | 0 | 0.103 |
+| 4 × 128 MiB | 0.424 [0.414–0.449] | 1,207.4 | 0.191 | 0.236 | 0 | 0.048 |
+| 1 × 4 GiB | 2.287 [2.104–2.385] | 1,791.3 | 1.592 | 0.733 | 0.062 | 0.135 |
+
+Columns are independently aggregated; their medians need not sum. A reverse
+G: → F: 4 GiB control, using a rig-created and verified G: source, returned
+1.987 s median [1.818–2.029], 2,061.6 MiB/s across three samples in one process;
+all readbacks passed. Direction, source-root spelling and run order differ, so
+this is not a controlled device asymmetry claim.
+
+The [historical hash-refactor table](obsolete/M1_HASH_REFACTOR.md#28-final-m1-executor-results)
+records 2.426 s for 1,000 × 4 KiB and 2.014 s for 4 GiB on F: → G:.
+Today's small-file result is substantially slower, while the large-file result
+is much closer. That old single-pass driver/profile was not rerun: the ratio
+is historical context, not a causal regression measurement or attribution to
+one commit. Its `Final` column is not equated with today's outside-backend time.
+
+**Where the small-file time goes.** A separate instrumented 1,000 × 4 KiB
+run took 27.901 s, including 0.524 s in the backend. Wrappers around synchronous
+runtime/native functions retain call counts and nested inclusive/exclusive
+elapsed time. Inclusive rows overlap and must not be summed with their parents.
+They do not partition the concurrent reader/hasher/writer internals. One sample
+does not prove instrumentation neutrality.
+
+| Observed function or stage | Calls | Inclusive seconds |
+| --- | ---: | ---: |
+| Native root revalidation | 27,000 | 16.832 |
+| Native root-relative resolution, overlapping root revalidation | 13,000 | 10.005 |
+| Temp metadata finalization, including its file flush | 1,000 | 0.453 |
+| Atomic new-file publication | 1,000 | 0.188 |
+| Published metadata observation/conditional repair | 1,000 | 0.303 |
+| Parent directory flush | 1,000 | 0.311 |
+| Recorder call wrapper, in-memory recorder | 1,000 | 0.017 |
+| Reliable settlement | 1,000 | 0.037 |
+
+Root revalidation consumes about 60% of this instrumented execution, including
+its nested work. There are 14 full root admissions and 13 chain-only admissions
+per COPY; `resolve()` repeats chain admission even immediately after
+`_resolve_target_path()` has performed full admission. Freshness across streaming,
+callbacks, finalization and publication remains necessary; repeated adjacent
+derivation is a separate optimization question.
+
+The supplementary small-file cProfile receipt records 508,000
+`to_extended_length_path` calls, 311,000 `lexical_absolute_path` calls and
+1,401,000 `_validate_absolute_path_spelling` calls. The one-file profile repeats
+exactly 1,401 spelling validations and stage instrumentation repeats 27 root
+revalidations. These are observed counts on these fixtures. The small profile
+slowed execution to 64.064 s; worker-thread cumulative timings also overlap.
+Do not use cProfile timing sums or percentages to predict an unprofiled gain.
+Source inspection identifies `lexical_absolute_path`'s ordinary → extended →
+ordinary roundtrip and repeated component validation as avoidable-work leads.
+
+All 1,000 directory flushes succeeded. Exactly 1,000 metadata handles/file
+flushes were used, consistent with one temp finalization and no post-publication
+repair reopen on this corpus. The existing conditional repair is doing its job.
+A diagnostics-off control still took 27.190 s median [27.163–27.978] over three
+samples; diagnostics cannot explain the dominant fixed cost. This control was
+later, not interleaved, so it does not establish a precise instrumentation tax.
+
+**Pipeline bubbles and finishing.** The 4 GiB baseline reaches the 32 MiB
+reservation cap but has only 0.062 s median reader blocking and 0.135 s median
+writer queue waiting inside a 1.592 s median backend call. This does not show
+a large polling-induced bubble. A separate interleaved nine-process probe used
+the existing `poll_seconds` constructor seam, leaving production defaults intact:
+
+| Poll interval | Fresh processes | Execute median [min–max], s | Backend median, s |
+| --- | ---: | ---: | ---: |
+| 10 ms, default | 3 | 1.994 [1.837–2.046] | 1.322 |
+| 1 ms | 3 | 2.047 [1.828–2.099] | 1.311 |
+| 0.1 ms | 3 | 1.936 [1.926–1.946] | 1.334 |
+
+Order was default/1/0.1, default/0.1/1, default/1/0.1 ms. Every readback passed.
+Backend medians stay within 1% of the default; the end-to-end spread does not establish a
+material polling improvement. These nine observations are separate from the
+baseline, not pooled with it. The rig report does not encode the override;
+the retained driver and filename identify it.
+
+Writer wait includes startup, queue acquisition and EOF handoff; reader blocking
+excludes actual read latency and ordinary coordinator work. Reservation high-water
+includes the next whole-chunk reservation before read, even the EOF probe; it is
+not actual memory use or queue occupancy. Low small-file high-water therefore
+does not prove underutilization, and these waits are not device utilization.
+In particular, the 4 MiB band's approximately 0.103 s writer queue wait is only
+one part of its 0.204 s backend and 2.051 s whole execution. Its fixed per-file
+work is the larger opportunity.
+
+A separate 4 GiB stage run took 2.158 s: backend 1.385 s and the required temp
+file flush 0.685 s. There is a real serial durability tail, but removing that
+flush would weaken the contract. A whole-corpus stage run (1,582 files, including
+the 51-byte corpus marker, plus five directories; 4,931.9 MiB) took 44.388 s,
+of which 2.561 s was backend work. Final directory completion took 0.016 s;
+all 1,587 directory flush attempts succeeded. A template case with 60 COPY and
+four UPDATE operations took 2.269 s; four hardlinks took 0.0006 s and four atomic
+replacements 0.0008 s, with 68 successful parent flushes taking 0.024 s. All
+published bytes verified. This covers ordinary hardlink-backed updates, not
+MOVE_UPDATE, ACL preservation, readonly/tunneling repair, cancellation or a
+hardlink-unsupported backup performance profile.
+
+**Review correction and native-call attribution.** User review correctly
+distinguished fresh evidence from preservation of today's probe APIs/counts.
+The initial recommendation to keep every native probe and optimize only pure
+derivation first was too restrictive. cProfile charges ctypes execution to its
+Python caller: `_observe_root_anchor` self time is not pure Python path work,
+although it also includes buffer allocation and other unprofiled native work.
+
+A supplemental read-only diagnostic, `root_probe_review.py/json`, timed the
+actual bound APIs on the existing F: 4 KiB corpus directory. At review the branch
+had advanced to `6de6d1c0`; executor and core source are byte-unchanged from the
+original measured revision. Original rig receipts remain tied to that original
+revision, not reissued for the newer checkout. In one process,
+1,000 full admissions took 1.131 s total: 2,000 `GetVolumePathNameW` calls took
+0.577 s, and 1,000 `GetVolumeInformationW` calls took 0.032 s. Median individual
+calls were 269.6 and 28.3 microseconds respectively; full admission median was
+1,083 microseconds. Separately, 1,000 open-directory/read-`FILE_ID_INFO`/check-basic-
+attributes/close probes had a 30.4 microsecond median [26.9–289.4]. This is a
+single-root microdiagnostic, not an executor speedup or depth-scaling result.
+Native mount discovery is therefore a priority alongside repeated derivation.
+
+The same probe confirmed `st_dev == 0x98AC4C7AAC4C5542`, equal to the handle's
+64-bit serial, with low 32 bits matching `GetVolumeInformationW`'s `AC4C5542`.
+[CPython 3.13.14's stat implementation](https://github.com/python/cpython/blob/v3.13.14/Python/fileutils.c)
+obtains volume identity from file-stat/handle information. The current NamiSync
+handle-identity adapter explicitly truncates the serial to 32 bits; a proposed
+full-width root binding must retain the original 64-bit value separately.
+
+**Revised investigation order, without production implementation authorization:**
+
+1. Reduce calls and reconstruct immutable facts less often. Build the two
+   reviewed `RootAuthority` values once per execution invocation and pass them
+   through without rebuilding them in the native adapter. This retains facts,
+   not successful admission. Add direct lexical normalization while preserving
+   UTF-16, namespace and before-normalization rejection rules. A single no-follow
+   stat can supply entry type, attributes, identity and volume evidence;
+   `_stat_path` need not perform lexists/lstat/stat plus another path-volume
+   lookup. Compare its observed volume against admitted expectations, preserving
+   the existing serial representation and filesystem capability policy. Likewise,
+   classify a root component from its lstat instead of a later following is_dir.
+   Preserve missing-path/error behavior deliberately: the legacy executor adapter
+   and tests currently encode the second is_dir result as authoritative.
+2. Discover the anchor once per admission where that API is still needed, and
+   query volume information using the admitted anchor. Current `admit_root`
+   independently re-observes and compares the anchor after chain traversal;
+   replacing the second observation with the first value would make that equality
+   check tautological. Explicitly revise this observation policy and its tests
+   rather than claiming that two independent observations still occur. For an
+   ordinary drive-root anchor, a fresh no-reparse chain plus observed volume
+   identity is the candidate evidence; mounted-folder anchors need their own
+   binding. A reparse tag alone identifies a kind, not a particular mount target.
+3. Define one admission per actual access/effect step and reuse it only within
+   that step. Source open, temp creation, finalization, final guards, publication
+   and published-file observation are useful COPY phases, not a universal six-
+   check maximum: owned-temp cleanup, backup/security work, retries and resumes
+   also have access/effect boundaries. Prefer a combined native operation over
+   a general `already_admitted=True` bypass. Keep child containment and required
+   leaf guards; do not retain successful admission across intervening work.
+4. Evaluate fresh root-handle identity against a baseline established by full
+   admission. The [Windows identity tuple](https://learn.microsoft.com/en-us/windows/win32/api/winbase/ns-winbase-file_id_info)
+   supplies a 64-bit volume serial and 128-bit file ID, stronger object binding
+   than anchor spelling plus the existing 32-bit volume serial. It does not make
+   subsequent pathname operations handle-relative or atomic. Opening with
+   [OPEN_REPARSE_POINT](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-createfilew)
+   does not certify all intermediate components or descendants; specify whether
+   root-object continuity replaces repeated ancestry validation, while retaining
+   required child-path checks. Decide baseline lifetime across pause/resume,
+   handle retention/identity reuse, mounted-folder handling, unsupported identity
+   behavior and binding to reviewed evidence. Fewer user-space component probes
+   is a credible gain; constant syscall count does not imply depth-independent
+   kernel lookup latency. A shallow/deep fixture comparison remains outstanding.
+5. Keep current single-handle finalization and conditional metadata repair.
+   Small-file worker elimination could save at most the measured backend portion
+   (about 2% on this fixture), while recorder/settlement CPU is smaller still.
+   Directory-flush batching, overlapping publish with the next file, or retaining
+   multiple prepared files changes durability, cancellation and effect ownership;
+   the measurements do not justify starting there. The large-file flush tail
+   merits investigation only under a design preserving durable publication.
+6. Runtime condensation beyond admission work has limited remaining value:
+   `_ProgressTracker.__init__`
+   can combine its two plan walks and avoid its temporary settled-ID set while
+   preserving signed-64 sums and resumed progress. Existing shared rename and
+   publication-observation mechanics already address larger duplication. Earlier
+   [reduction dispositions](obsolete/REDUCTION_FOLLOWUP.md#scope-and-decisions)
+   shelved pause/cancel merging, recording-tail builders and verdict compression;
+   their different effect/recovery order remains a reason to keep them distinct.
+   Structural settlement work still requires EXECUTOR's protected oracle gate.
+
+Across this assessment, 23 benchmark invocations produced 47 successful execution
+samples, including 42 successful readback samples (the diagnostics-off control
+and cProfile runs omitted readback). Existing rig/pipeline tests passed 80/80.
+Independent source/instrument review checked timing boundaries, call attribution,
+poll overrides and metric limitations. These checks support the assessment;
+they do not certify a future optimization or replace its required gates.
+
 ### Benchmark reports
 
 Console output is the artifact-free default. `--json PATH` opt-in publishes one
@@ -287,6 +524,133 @@ time plus median sample throughput. Baseline preparation is labeled and timed
 separately as setup, not silently counted as a sample. Reports retain that setup
 receipt, and sidecar-backed reports include the explicit path, validation
 counts, and stored identity mode.
+
+### Verifier admission assessment — 2026-09-27
+
+The verifier shares the executor's repeated native admission cost, with much
+lower per-file multiplicity. This follow-up measured unchanged code at
+`6de6d1c002fa0b9f22a4d76c25519b6d0dbfae8a` on the same reference machine and
+read-only `F:\NamiSyncExecutorBenchSource` size bands described above. The native
+unbuffered reader used 4 MiB chunks and `xxh3_128`; each band ran five timed
+`tools verifier <band> --baselines primed --repeat 5` samples. Scanning, context
+construction and the one-time baseline pass are outside `run_seconds`. This
+is a single-volume read assessment, not another F:/G: copy measurement or a
+controlled cold-cache experiment. Raw `verifier-*.json/log` and the temporary
+`verifier_baseline.ps1`/`verifier_diagnostic.py` live beside the executor evidence
+in ignored `build/executor-assessment-20260927/`.
+
+| Corpus | Median run seconds | Min–max seconds | Median MiB/s |
+| --- | ---: | ---: | ---: |
+| 1,000 × 4 KiB | 3.652 | 3.575–3.772 | 1.07 |
+| 512 × 128 KiB | 1.913 | 1.837–2.025 | 33.5 |
+| 64 × 4 MiB | 0.311 | 0.307–0.317 | 822.6 |
+| 4 × 128 MiB | 0.237 | 0.236–0.246 | 2,160.0 |
+| 1 × 4 GiB | 1.926 | 1.862–1.956 | 2,126.3 |
+
+All 25 samples returned exactly the expected verified items/bytes and recording
+OK. Three later small-file `--no-tap` samples had median 3.287 s
+(3.282–3.337 s). These were not interleaved controls: timing variation prevents
+attributing their difference solely to instrumentation. The rig's open timer
+covers native reader entry, excluding the engine's earlier admission; its read
+timer covers iterator advancement, including a handle stat, buffer management
+and byte materialization, not only the native read call. Outside-open/read time
+therefore is not pure hashing overhead.
+
+Separate synchronous Python/API wrappers measured one small-file pass at
+3.196 s and one 4 GiB pass at 2.008 s, both fully verified. Counts below apply
+to the 1,000-file pass; native API timings are measured directly rather than
+inferred from cProfile self time. Parent timings overlap their children and
+must not be added. Instrumented timing is diagnostic, not a predicted saving.
+
+| Observation | Calls | Seconds |
+| --- | ---: | ---: |
+| `GetVolumePathNameW` | 4,000 | 1.1566 |
+| `GetVolumeInformationW` | 1,000 | 0.0235 |
+| `GetDiskFreeSpaceW` | 1,000 | 0.0205 |
+| `ReadFile` | 1,000 | 0.5209 |
+| Full root admission, inclusive | 1,000 | 0.9800 |
+| Chain admissions, including those inside full admission | 2,000 | 1.0792 |
+| Native API object construction/signature setup, inclusive | 1,000 | 0.1079 |
+| Handle-stat snapshots, inclusive | 4,000 | 0.0786 |
+| `GetFileInformationByHandleEx`, inside those snapshots | 12,000 | 0.0249 |
+| `VirtualFree` | 1,000 | 0.1031 |
+
+The four anchor lookups per readable file are two in full engine admission,
+one in the reader's later chain admission, and one for sector geometry. Native
+anchor lookup is the largest individually timed API cost here too. The 4 GiB
+pass has the same four anchor calls and four handle snapshots, but 1,024 reads;
+the setup tax is per file rather than per chunk. Root/child chain work also
+scales with path depth; this shallow corpus does not quantify that slope.
+
+Unlike executor, verifier already constructs and passes an immutable
+`RootAuthority` in its run context: instrumentation counted no construction
+during the timed file loop. There are still two selected-root validations per
+readable item and repeat lexical normalization in the bound reader. Both
+standalone verification and post-copy readback reach `_classify_subject` and
+the same native reader, so the native findings apply to both paths; the timing
+table measures standalone verification only.
+
+Priorities and constraints for a future implementation:
+
+- Apply the shared core admission work identified above: fewer anchor calls
+  and potentially fresh root identity at access boundaries. Engine admission
+  and reader admission currently enforce different protocol seams; combining
+  them needs an explicit admission handoff that preserves custom-reader
+  enforcement and the last check before opening. No cached successful admission
+  across files, and no claim that current path checks make the later open atomic.
+- Reuse the verifier reader's native bindings across files. Binding fixed API
+  signatures is not filesystem evidence and requires no per-file refresh.
+  Sector geometry should reuse an admitted anchor where valid; any longer-lived
+  geometry reuse must be bound to volume identity, not merely a drive letter.
+- Consider sharing the immediately consecutive native pre-yield and engine
+  before-read handle snapshot. Native direct-reader rejection of directories
+  and reparse files must remain. The third snapshot is inside `iter_chunks`,
+  after `on_stream_start` can run external code; do not discard it solely from
+  the count. The fresh after-read snapshot, opened-volume identity and final
+  path-by-handle comparison have separate jobs and remain required evidence.
+- Lower-priority candidates are one selected-root normalization per item and
+  reader-lifetime aligned-buffer reuse. The measured buffer release cost makes
+  reuse worth testing, but requires explicit close/error/cancellation ownership.
+  Handle-stat consolidation is modest: all four snapshots together cost only
+  0.079 s here, far below anchor lookup.
+
+These are investigation findings, not changed [VERIFIER](VERIFIER.md) or
+[DEFENSE](DEFENSE.md) contracts. No optimization variant was implemented or
+benchmarked, and no throughput improvement is claimed.
+
+### Preflight and scanner follow-up — 2026-09-27
+
+Source inspection at `6de6d1c0` confirms that preflight shares the admission
+mechanism. `preflight.observe()` already constructs authorities once per root
+and deduplicates subjects by root ID and normalized relative path. Each
+`LocalObservationFileSystem.stat()` nevertheless performs a full `admit_root`,
+then selected-relative chain checks, root/candidate resolution and a final
+no-follow leaf stat. A flat 1,000-COPY plan with distinct source and target
+paths therefore has 2,000 subject admissions, two root observations and two
+target admissions for free-space/reclaimable-temp observation: 2,004 full
+admissions before any optional trash path. Each full admission has the same two
+anchor lookups measured above. Reclaimable-parent volume observations can add
+further native calls; this is not an exact whole-preflight API total. Parent,
+prior-target and trash subjects make other operation mixes different.
+
+This is a source-derived count, not a new preflight timing measurement. Executor
+rig timing excludes its preflight setup, so that cost must not be added to or
+subtracted from the reported execute medians. Shared core probe improvements
+would reach preflight as well as executor and verifier. Pure derivation and
+repeated root resolution deserve investigation, but per-subject freshness is
+separate from immutable authority reuse. Nor are the two leaf observations
+automatically interchangeable: the chain check precedes path resolution; the
+final stat supplies the returned observation afterward. Consolidation must
+preserve rejection before following a reparse target during resolution.
+
+Scanner does not exhibit the same per-file full-admission pattern. Full scans
+bracket enumeration with root/volume checks and discard observations on closing
+drift; individual entries use enumeration and no-follow entry stats. Scoped
+scans add selected-path ancestor checks. This source inspection supports leaving
+scanner out of the current optimization priority, not a claim of measured
+scanner throughput. Borrowing its batch observation boundary for preflight
+would be a separate contract proposal, not permission to cache admission across
+subject observations. No production, acceptance or safety contract was changed.
 
 ### Sidecars
 
