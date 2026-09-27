@@ -1027,9 +1027,9 @@ repeated machinery while preserving operational safety and boundary contracts.
 Safety, settlement, authority, and measurement work made high-risk release
 claims explicit, independently reviewable, and regression-backed.
 
-#### Plan shared root admission optimization (2026-09-27)
+#### Plan shared root admission optimization (2026-09-27 – 2026-09-28)
 
-- Investigate core, module and workflow boundaries and add six pending checkpoints
+- Investigate core, module and workflow boundaries and add nine pending
   checkpoints to M1_PLAN, scheduled before M1-9 by default and required before
   M1-10. No implementation is authorized by the plan.
 - Propose the user-selected root-continuity contract with invocation-owned
@@ -1043,6 +1043,13 @@ claims explicit, independently reviewable, and regression-backed.
   probes; use existing profile eligibility, witnessed per-access lstat identity
   and opened-handle sector geometry. Account for pinned-handle device-in-use
   behavior and isolated baseline/intermediate checkouts with their own venvs.
+- Put verification machinery first. RO-0a migrates the settlement oracle to
+  format v2, which pins settlement policy and effects rather than successful
+  probe calls, and adds a guard-before-effect invariant; the user approved its
+  one-time EXECUTOR baseline override. RO-0b adds a production-shaped root-swap
+  sweep and preflight/verifier baseline differentials. Split executor work into
+  RO-3a (unchanged public call pattern) and RO-3b (per-step consolidation), and
+  keep plans without reviewed volume facts ineligible for continuity.
 
 #### Assess executor and verifier admission costs (2026-09-27)
 
