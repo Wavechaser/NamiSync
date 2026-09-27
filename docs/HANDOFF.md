@@ -1,48 +1,37 @@
-# Latest session — oracle v2 and verification-first sequencing
+# Latest session — resume RO verification after root-contract adjudication
 
-2026-09-28, `milestone1-adelbert`, starting from `85ceecea`. The user reviewed the
-settlement oracle's fitness for the root admission refactor, chose oracle format
-v2, and requested plan updates plus a commit. This delivery contains
-documentation only; implementation remains unauthorized. M1_PLAN is the sole
-scope/decision/register owner; all nine rows remain pending.
+2026-09-28, milestone1-adelbert. The user adjudicated the earlier RO-0b stop as
+a plan error and requested migration from the documentation-only recovery,
+pruning that recovery branch, then resuming RO-0a/RO-0b. All nine RO rows remain
+authorized; none is complete. M1_PLAN now owns the accepted dispositions.
 
-Findings behind the revision:
+The promise begins at each invocation binding. Before binding, including
+preflight-to-execute and pause-to-resume, pathname/volume/per-item guards apply.
+Review-time root-object identity is outside RO. RO-0b must witness creation,
+destructive, junction and volume cases on both sides of a named binding token.
+Present the identity-weak destructive result to the user before its disposition.
+DEFENSE EW-5 lands with RO-0b, not with the plan amendment.
 
-- `TracingFileSystem` records every public `ExecutorFileSystem` call with its
-  arguments and results. The pinned v1 baseline therefore freezes probe
-  multiplicity: 1,155 `revalidate_root`, 527 `resolve`, 352 `stat` and 305
-  `stat_path` entries, plus their `fs:` timeline tokens and first-seen label
-  ordinals. Runtime-level probe consolidation cannot pass it unchanged.
-- The tracer wraps only the outer object, so native-internal changes are
-  invisible to it. RO-1a and RO-3a keep the byte layer identical; RO-3b does not.
-- Independent oracle expectations reference only effect tokens and effect counts,
-  so v2 can drop successful probes without touching them.
-- `second_settlement_probe` matches by occurrence count; removing an earlier
-  probe would silently retarget it.
-- Oracle plans carry no volume id or evidence, so only chain-only admission runs
-  there. Root-swap witnesses exist only as name-hooked spy subclasses in
-  `tests/test_executor_runtime.py`.
-- Production plans lack volume facts only for offline scans, whose `UNKNOWN`
-  profile is already continuity-ineligible.
+Starting evidence at b8baf42d remains reusable: 5,410 ordinary passes, four
+skips, 34 headed deselections; 12 import contracts; v1 oracle 30 scenarios x
+three runs. No product, producer, checker or driver dependencies changed during
+recovery migration. Raw receipts and the original sandbox-denial attempt are in
+build/root-admission-optimization-20260928/baseline/. RO-0a preserves the original
+v1 capture and a read-only 70-row / 391-call guard scan in sibling ro0a/.
 
-Plan changes: decision 8 records v2 (effects, errors, fault-injected calls and
-collaborator tokens stay pinned; successful probes move to diagnostics; labels
-are canonicalized after projection; there is a reviewed probe list and a
-guard-before-effect invariant) and the user's one-time EXECUTOR override. RO-0a
-(oracle v2) and RO-0b (production-shaped root-swap sweep, preflight/verifier
-differentials, baseline checkout) land first against the unchanged product. RO-3
-splits into RO-3a and RO-3b. Decision 4 makes plans without reviewed volume
-facts ineligible for continuity. RO-1b flips only the same-object alias sweep
-expectation.
+The original RO-0b script, result and both trees remain in sibling ro0b/.
+It is now an unchanged-product pathname-contract observation, not a defect to
+repair. Preserve the create-once fixture. The exact user-edited handoff is saved
+as user-adjudicated-handoff.md at the evidence root, with recovery-plan.md and
+recovery-accounting.patch. Recovery commit 3a076dcb changed only M1_PLAN, HANDOFF
+and CHANGELOG. Their useful evidence/dispositions are rebuilt in current docs;
+the stop transcript is retained locally. Never merge/cherry-pick the WIP.
+After the documentation commit and accounting check, prune only
+codex/wip-20260928-0042-root-admission. Leave DOC-2, stashes and other refs alone.
 
-Checks this session: read-only source inspection of the audit tool, baseline,
-fault rules, expectations, native `trash_destination` and scanner offline
-results; `git diff --check` and heading/row-reference consistency on M1_PLAN.
-No product tests, oracle runs, benchmarks or fixtures ran. The previous planning
-evidence remains under `build/root-admission-plan-20260927/`, with the
-investigation receipts under `build/executor-assessment-20260927/`.
-
-Next action after user review: separate implementation authorization, a fresh
-starting suite and oracle run, then RO-0a and RO-0b. The v1 baseline stays
-untouched until RO-0a's projection proof. Preserve DOC-2, prior incident/AB
-evidence, stashes and unrelated work. No push or merge was requested.
+Keep the attached baseline worktree at
+C:\Users\Spectrum\.codex\worktrees\ro-baseline\NamiSync, b8baf42d, with its own
+Python 3.13.14 venv and candidate-matched dependencies. Invoke it with its own cwd
+so imports cannot resolve the candidate. This worktree remains needed by RO-0b
+and later comparisons; do not archive it with the obsolete recovery branch.
+No external source corpus or performance target changed; no push is requested.

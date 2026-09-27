@@ -33,8 +33,10 @@ certify their recorded build and dependencies only.
 ### Scope and decisions
 
 This is the user-requested plan/register, prepared with the `plan-work` skill
-against `6a93b038` on `milestone1-adelbert`. It proposes future contracts, not
-current behavior or implementation authorization. All nine rows start pending.
+against `6a93b038` on `milestone1-adelbert`. On 2026-09-28 the user authorized
+implementation of all nine RO rows using `execute-task`, starting at `b8baf42d`
+on the same branch. Proposed contracts become current only when their owning
+checkpoint passes; the existing dependencies, exclusions and stops remain.
 The user selected **root continuity with an explicit contract change**, rather
 than preserving every configured-root ancestor check at every access.
 [PERFORMANCE](PERFORMANCE.md#executor-assessment--2026-09-27) owns the measured
@@ -68,6 +70,9 @@ overlapped publication, worker removal, settlement reducer redesign, pause/cance
 merging and buffer-pool work. The small progress-initialization condensation and
 verifier buffer-reuse leads remain deferred. M1-9/10 behavior, missing-row
 acknowledgement, DOC-2 history rewriting and prior AB deferrals stay separate.
+Review-to-execution root-object identity is a future candidate outside RO: it
+needs plan/fingerprint/history changes and its own review UX. RO-1b's promise
+starts at each invocation's binding admission, not at review time.
 
 **Sequencing revision.** Verification machinery lands first against the
 unchanged product: RO-0a (settlement oracle v2) and RO-0b (admission and
@@ -129,6 +134,8 @@ wait for continuity-specific witnesses or policy documentation.
    ARCHITECTURE, DEFENSE, AGENTS and component docs with this precise distinction
    when implemented; do not claim all ancestors remain ordinary or all races are
    prevented. Existing quiescent-root assumptions and EW dispositions remain.
+   Before binding, the current pathname, volume and per-item guards apply;
+   continuity does not establish identity with the directory present at review.
 4. **Use existing capability evidence.** Continuity eligibility is the selected
    reviewed `CapabilityProfile.stable_file_identity`, a local non-UNC root, and
    a logical root distinct from its admitted/reviewed volume anchor. Equal-anchor
@@ -164,6 +171,9 @@ wait for continuity-specific witnesses or policy documentation.
    A same-object ancestor alias accepted during an invocation can be rejected by
    the next invocation's full ancestry admission. This is deliberate: continuity
    is not a promise to preserve an altered namespace through pause/resume.
+   Preflight-to-execute and pause-to-resume are pre-binding windows: they keep
+   the pathname/volume/per-item contract, not continuity with the prior root
+   object. A new binding protects only the invocation that owns it.
 6. **One admission per actual access/effect step.** A native operation may consume
    the immediately preceding admission and its stat evidence within that step.
    Derivation and queries comprising the same admission can share it when no
@@ -247,7 +257,7 @@ decision or AGENTS/DEFENSE wording change.
 | Preflight `observe` deduplicates subjects and already reuses authorities; stat/capacity/temp/trash each admit. Judgment is pure. | Cache observation as authorization; follow a reparse leaf during resolve before checking it; alter recase subject spelling, root gating, absence or reclaimable credit. | RO-2: `test_preflight.py`, execution-review/workflow tests; separate subject error versus root failure, unsafe parent/trash, old-run temp grammar and observed-world identity. |
 | Executor guards call native resolve/stat/revalidate repeatedly; `_stat_path` and component classification repeat observations. | Lose a final guard after recorder/copy/retry callbacks; wrong-volume file identity; out-of-root cleanup; change publication/recording order or retry an effect. | RO-3a: native/runtime/ACL/pending-cancel tests with the oracle byte layer unchanged. RO-3b: v2 oracle, guard-before-effect invariant and RO-0b root-swap sweep; COPY/UPDATE/MOVE/MOVE_UPDATE/recase/TRASH/delete/metadata/directory/NOOP paths. |
 | Settlement oracle v1 pins every public filesystem probe, its timeline tokens, first-seen label ordinals and occurrence-counting fault predicates (e.g. `second_settlement_probe`). Its plans carry no reviewed volume/anchor, so only chain-only admission runs. | Block legitimate probe removal; after a re-pin, freeze a wrong guard placement; let a fault rule fire on a different probe than intended; mistake oracle passes for production admission-mode evidence. | RO-0a: v1→v2 mechanical projection proof, reviewed probe classification, semantic fault predicates, guard invariant passing on the unchanged product and failing under seeded guard removal. |
-| Root/leaf swap refusal is witnessed only by hand-written spy subclasses in `tests/test_executor_runtime.py` that hook `revalidate_root`/`resolve`/`stat` by name. Preflight and verifier have no integrated differential authority. | A consolidated or renamed primitive silently bypasses the spy hook and its test still passes; preflight/verifier projections drift without a named test anticipating the case. | RO-0b: production-shaped swap sweep with non-vacuous refusal assertions; baseline-versus-candidate preflight/verifier projection differentials. |
+| Root/leaf swap refusal is witnessed only by hand-written spy subclasses in `tests/test_executor_runtime.py` that hook `revalidate_root`/`resolve`/`stat` by name. Preflight and verifier have no integrated differential authority. | A consolidated or renamed primitive silently bypasses the spy hook and its test still passes; preflight/verifier projections drift without a named test anticipating the case. | RO-0b: production-shaped swap sweep with non-vacuous assertions for required refusals and truthful pathname effects; baseline-versus-candidate preflight/verifier projection differentials. |
 | Verifier `_classify_subject`, native bound open and `AuthorityBoundVerificationReader`; rigs wrap readers. | A decorator skips admission; a custom reader validates one root but opens another; stale pre-read snapshot crosses callback; buffered fallback or false content evidence. | RO-4: native/engine, tools-verifier, recorder integration and inventory/post-execution tests; bound/unbound/subclass/decorator dispatch, before/after stats and conditional recording. |
 | Sync/integrity workflows resolve bindings, open recording, wake queued work, pause/resume and hand post-copy candidates across phases. | Initial binding becomes long-lived authority; refresh drops pending work; handle reaches durable/wire state; cleanup masks the original failure or releases custody early. | RO-3b/4/5: workflow checkpoints, root replacement after recorder barrier, pending published retry, integrity wakeup/refresh, retained post-copy identity and installed execution journey. |
 | Root identity only replaces configured ancestry; child relative paths remain externally mutable. | Treat retained root identity as authorization for all descendants; follow a preplaced junction/placeholder; accept a same-volume different root or mount-link ID. | RO-0b root-swap sweep in current and continuity modes; RO-1a/RO-1b and module native and injected boundary matrix; RO-5 adversarial preplaced traps and alternate-path-to-same-root control. |
@@ -284,8 +294,8 @@ revision; preserve failures and resolve baseline ownership before proceeding.
 
 | ID | Accepted outcome | Depends on | Primary verification | Status |
 | --- | --- | --- | --- | --- |
-| RO-0a | Settlement oracle v2 pins settlement policy and effects, not successful probe multiplicity, and adds a guard-before-effect invariant. | Plan review and separate implementation authorization | v1→v2 projection proof at the starting revision, audit self-tests with seeded violations, `check --repeat 3` on the new pin. | pending |
-| RO-0b | Admission-safety and differential witnesses exist and pass on the unchanged product. | Plan review and separate implementation authorization | Production-shaped root-swap sweep, preflight/verifier differential drivers across the isolated baseline checkout, harness self-tests. | pending |
+| RO-0a | Settlement oracle v2 pins settlement policy and effects, not successful probe multiplicity, and adds a guard-before-effect invariant. | Authorized 2026-09-28 | v1→v2 projection proof at the starting revision, audit self-tests with seeded violations, `check --repeat 3` on the new pin. | ready to resume |
+| RO-0b | Admission-safety and differential witnesses exist and pass on the unchanged product under the adjudicated pathname/binding boundary. | Authorized 2026-09-28 | Production-shaped root-swap sweep, preflight/verifier differential drivers across the isolated baseline checkout, harness self-tests; identity-weak result review before EW-5 disposition. | ready to resume |
 | RO-1a | Cheaper lexical/native admission primitives under the current ancestry and freshness contract. | RO-0b | Path/native/direct-consumer tests, ordinary/import gates, byte-identical oracle, RO-0b differentials; one anchor discovery, unchanged refusal consequences. | pending |
 | RO-2 | Preflight reduces duplicate subject/descendant/parent-volume work with fresh admission per observation step. | RO-1a | Subject/root/temp/trash/recase matrix, preflight differential, workflow preflight and before/after observation measurements. | pending |
 | RO-3a | Executor reuses authority facts and makes each existing public filesystem call cheaper without changing the public call pattern. | RO-1a | Executor/workflow/native gates, byte-identical oracle, swap sweep, F:/G: correctness/readback and stage measurements. | pending |
@@ -293,6 +303,18 @@ revision; preserve failures and resolve baseline ownership before proceeding.
 | RO-4 | Verifier consolidates bound opening, native setup and handle-derived sector geometry without continuity. | RO-1a | Reader/decorator/native/recorder/workflow gates, verifier differential, geometry witness, standalone and post-copy measurements. | pending |
 | RO-1b | Adopt invocation-scoped root continuity across core and all three consumers, with existing profile eligibility and explicit lifecycle policy. | RO-2, RO-3b, RO-4; measured mechanical-only revision | Bootstrap/stat-handle equivalence/profile-flow/lifetime tests, full-width opened-volume comparison, continuity-mode swap sweep, differentials, consumer/native/ordinary/import/v2-oracle gates. | pending |
 | RO-5 | Integrated workflows, native containment, lifecycle and measured work reduction close the batch. | RO-1b and retained passes from RO-0a/0b/1a/2/3a/3b/4 | Ordinary/import/v2 oracle, selected installed Windows journeys, baseline/intermediate/final measurements, independent adversarial review. | pending |
+
+Starting evidence at `b8baf42d`: 5,410 ordinary passes, four skips and 34 headed
+deselections; 12 import contracts; v1 oracle 30 scenarios × three runs. Raw
+receipts are in `build/root-admission-optimization-20260928/baseline/`. The first
+sandboxed suite was interrupted after temp/cache permission failures; the fresh
+unsandboxed run passed. The isolated baseline is
+`C:\Users\Spectrum\.codex\worktrees\ro-baseline\NamiSync`, with its own Python
+3.13.14 environment and candidate-matched dependencies; use its own cwd.
+RO-0a additionally owns the direct `trash_destination` self-admission witness in
+`tests/test_executor_native.py`. Independent expectations remain unchanged on
+the full trace, including the three MKDIR metadata-failure `stat_path` counts;
+the plan's earlier effect-only description of those expectations was imprecise.
 
 The nine rows are the completion denominator. Each is an independently reviewable
 commit; RO-1b is the atomic shared-policy migration after the independently useful
@@ -339,8 +361,8 @@ EXECUTOR's Settlement Stability Gate text; no product code. Implement decision 8
 **Acceptance criteria.** At the starting revision, the v2 capture equals a
 standalone projection function applied to the committed v1 baseline, byte for
 byte. Three consecutive v2 runs are identical. The 30-scenario, 70-row manifest
-and every independent expectation are unchanged; those expectations reference
-only effect tokens, which v2 retains. The guard invariant passes on all rows of
+and every independent expectation are unchanged; expectations run against the
+full trace, including the three MKDIR observer counts noted above. The guard invariant passes on all rows of
 the unchanged product. Non-default baselines remain unpinned diagnostics, and a
 dirty or unpinned baseline still cannot satisfy `check`. If the unchanged
 product violates the declared guard table, treat it as a finding to adjudicate;
@@ -391,11 +413,27 @@ positive evidence that works in production-shaped modes, before any product chan
   - an ancestor replaced by a directory junction to another tree;
   - a relative parent or leaf replaced by a junction.
 
-  Directory junctions need no privilege. Assert that no effect lands after the
-  swap on the decoy or outside the original root, by inspecting both trees.
-  Affected operations must settle truthfully (never false success), and an
-  admission-layer refusal must actually fire, unless the swap follows the run's
-  last effect. Assign the sweep a department in `tests/_departments.py`.
+  Declare the invocation binding point as a named timeline token and sweep both
+  sides, including pause/resume as a pre-binding window. The unchanged product
+  has no continuity binding; its token identifies the future RO-1b boundary,
+  not an existing identity guarantee. Inspect both trees and witness these
+  user-adjudicated expectations, which remain hypotheses until measured:
+  - Current product, and pre-binding under RO-1b: creation in an ordinary
+    same-volume replacement succeeds truthfully at the pathname. Destructive
+    and overwrite effects (UPDATE, TRASH, DELETE, MOVE, conditional publish)
+    refuse on per-item identity. Reparse/junction and different-volume swaps
+    refuse. Do not label an authorized pathname creation false success.
+  - Post-binding under RO-1b: replacement refuses, except the same-object
+    ancestor alias permitted by decision 3. The preserved first-checkpoint COPY
+    replacement therefore changes from success to refusal when RO-1b lands.
+  - Inject `stable_file_identity=False` and record whether matching-metadata
+    replacement copies can be trashed or deleted. Bring the result to the user
+    before writing its disposition; a destructive consequence may reopen the
+    hard-wall question. Do not assume a bounded creation-only consequence for
+    this variant.
+  Required refusals must actually fire unless the swap follows the last effect;
+  settlement and recording must truthfully describe every observed effect.
+  Assign the sweep a department in `tests/_departments.py`.
   Declare its finite shape/position count and runtime.
 - **Differential drivers.** One driver module, with identical bytes on both
   sides, is run by each checkout's own venv against identical fixtures. It uses
@@ -432,6 +470,13 @@ dependency versions and driver hash. The existing spy subclasses in
 **Documentation and handoff.** TESTS describes the new department and its run
 level; TOOLS describes the differential driver; PERFORMANCE is unaffected.
 Record the baseline checkout location and lifecycle in HANDOFF.
+DEFENSE's EW-5 lands with RO-0b, after the identity-weak result is presented:
+during execution, `out-of-supported-model` follows §2.2's quiescence precondition
+(EW-4 shape), with RO-1b binding as the closing rung after binding. Before
+execution or during pause, quiescence does not apply; document pathname-contract
+semantics and the witnessed bounded creation-only consequence, with review-time
+root identity as the future closing rung. The latter consequence must not be
+asserted for any variant whose measured result contradicts it.
 
 **Adversarial review.** Review whether every declared swap position is actually
 reached, and whether a harness bug could observe the original tree while claiming
@@ -807,9 +852,11 @@ unsupported probe versus malformed evidence; close failure masking original erro
 and tools tests, ordinary suite/imports, the v2 settlement oracle with its pin
 unchanged since RO-0a (its volume-less plans stay in the ineligible mode, so it
 guards settlement, not continuity) and the guard invariant. Run the root-swap
-sweep in continuity mode. There the same-object ancestor-alias case flips from
-refusal to pass by decision 3, and every other position must still refuse. That
-expectation change lands with this commit. Run both RO-0b differentials. Witness NTFS and supported identity-backend mappings (including injected high
+sweep in continuity mode. After binding, the same-object ancestor-alias case
+flips from refusal to pass by decision 3, and ordinary root replacements flip
+from pathname-contract outcomes to refusal. Pre-binding and pause/resume retain
+RO-0b's adjudicated expectations. These expectation changes land with this
+commit. Run both RO-0b differentials. Witness NTFS and supported identity-backend mappings (including injected high
 bits), stat/handle probe equivalence, explicit eligibility/profile propagation,
 bootstrap races and overlapping scopes. Use owned-handle counters/injected device
 busy outcomes for lifecycle; an actual volume-lock/eject witness, if needed, uses
@@ -949,15 +996,33 @@ register to account for every accepted row before M1-9/M1-10 scheduling advances
 
 ### Resumption block
 
-- Current state: all nine rows pending. Planning only: no product, test or tool
-  changes, optimization benchmarks or new native fixtures in this planning turn.
-  The user approved oracle format v2 and its one-time EXECUTOR override (decision 8).
-- Next action: review this proposal, then obtain separate implementation
-  authorization; check branch/HEAD and unrelated changes, run the fresh baseline,
-  and start RO-0a and RO-0b against the unchanged product. Then RO-1a's
-  current-contract tests. Do not wait for RO-1b's bootstrap
-  or capability witnesses to implement authorized mechanical rows. User has chosen
-  the ancestry-to-root-continuity proposal, not authorized implementation.
+- Current state (2026-09-28): all nine rows authorized, none completed. Fresh
+  starting gates passed as recorded above. No product, test, tool or oracle
+  baseline changes. The user adjudicated the first RO-0b probe as a plan error
+  and authorized resumption on `milestone1-adelbert`.
+- Stop evidence: `build/root-admission-optimization-20260928/ro0b/`
+  `probe_copy_root_replacement_001/result.json` and the sibling Python driver.
+  A scanner-backed NTFS COPY plan has reviewed volume/anchor/profile facts.
+  At its first control checkpoint the driver renames the target away and
+  creates a different ordinary directory at that pathname on the same volume.
+  Executor returns `completed`, emits `succeeded`, and calls recorder `copied`;
+  the detached original stays empty and the replacement receives `file.bin`.
+  Both trees and the exact driver are retained. The earlier no-decoy-effect
+  criterion was incorrect for the current pathname contract. This observation
+  is the unchanged-product baseline, not a defect to repair in RO-0b.
+- Accepted disposition: decisions 3/5 and RO-0b now distinguish before/after
+  invocation binding, including pause/resume. Review-time root-object identity
+  is excluded. Witness the creation/destructive/reparse/volume cases rather than
+  assuming them. Present the identity-weak destructive result before its
+  disposition; EW-5 lands with RO-0b, not this plan amendment.
+- Recovery accounting: `3a076dcb` contained only three documentation files.
+  Its starting evidence and the user's uncommitted handoff dispositions are
+  migrated here; HANDOFF is replaced with current resumption context and the
+  superseded stop changelog is replaced with an adjudication entry. Exact prior
+  handoff and recovery diff remain in the ignored evidence root. The recovery
+  branch may be pruned after the reviewed documentation commit; no WIP is merged
+  or cherry-picked. Keep the isolated baseline worktree/venv and reproduction
+  trees; do not rerun the create-once driver over them.
 - Established commands are in RO-5; reuse the existing rig commands and methods
   in PERFORMANCE. Create ignored `build/root-admission-optimization-<date>/` only
   when execution begins, with AGENTS naming/layout/cleanup conventions first.
@@ -965,8 +1030,7 @@ register to account for every accepted row before M1-9/M1-10 scheduling advances
   and frozen baselines; do not overwrite old reports. RO-0a's v1→v2 replacement
   is the only authorized oracle baseline edit in this batch. Keep DOC-2, existing stashes,
   incident/AB evidence and unrelated branches untouched.
-- Open evidence: fresh starting suite and isolated baseline checkout/venv;
-  v1→v2 projection proof and guard-invariant pass on the unchanged product;
+- Open evidence: v1→v2 projection proof and guard-invariant pass on the unchanged product;
   root-swap sweep and differentials passing on the unchanged product;
   RO-1b profile propagation/bootstrap and stat/handle equivalence witness;
   depth profile; native binding bootstrap/lifetime and custom-adapter migration.
@@ -1159,13 +1223,14 @@ commits were not merge units.
 
 ## Remaining checkpoints
 
-Pending rows record accepted future outcomes; implementation still needs user
-authorization, active scope and finite verification. A finding does not enlarge a
-row; [AGENTS](../AGENTS.md) governs scope changes, stops and recovery.
+Pending rows record accepted future outcomes. The nine RO rows are authorized;
+other pending rows still need user authorization, active scope and finite
+verification. A finding does not enlarge a row; [AGENTS](../AGENTS.md) governs
+scope changes, stops and recovery.
 
 | ID | Accepted outcome | Named verification | Status |
 | --- | --- | --- | --- |
-| RO-0a/RO-0b, RO-1a/RO-1b, RO-2, RO-3a/RO-3b, RO-4, RO-5 | Verification machinery, then the shared root evidence refactor and focused executor/preflight/verifier optimization under the proposed root-continuity contract above. | Nine-row register, settlement oracle v2 and guard invariant, root-swap sweep and differentials, mechanical/intermediate/continuity evidence, native/regression matrix, workflow sweep and paired diagnostic measurements above. | Pending proposal; schedule before M1-9 by default and mandatory before M1-10. Implementation needs separate authorization. |
+| RO-0a/RO-0b, RO-1a/RO-1b, RO-2, RO-3a/RO-3b, RO-4, RO-5 | Verification machinery, then the shared root evidence refactor and focused executor/preflight/verifier optimization under the proposed root-continuity contract above. | Nine-row register, settlement oracle v2 and guard invariant, root-swap sweep and differentials, mechanical/intermediate/continuity evidence, native/regression matrix, workflow sweep and paired diagnostic measurements above. | Authorized 2026-09-28; RO-0a/0b resume under adjudicated invocation-binding boundary. None completed. |
 | M1-9 | Bounded inventory projections, current evidence and the full inventory consumer for sibling sorting. | Complete or prior-complete publication; warnings outside action scope; raw evidence provenance; search/filter/collapse/window/detail, replacement/race and production sort/reset paths; headed witnesses. | Pending; RO-5 precedes activation unless the user explicitly reschedules M1-9. Missing-row acknowledge/restore UI must be explicitly allocated at activation; this row does not silently claim it. |
 | M1-10 | Baseline, verify and rebaseline controls plus first same-task manual post-copy verification, without persistent operation-time hashes. Eligible null-evidence files enter rebaseline; every admitted rebaseline hashes and replaces/creates evidence, and a match is not verified. | Confirm acknowledgement admission before claim/native work; all-null/mixed workflow, service/CLI and desktop paths; conditional recording and supersession races; atomic handoff classification; live pause/resume/cancel and unchanged automatic failed-read retries; overlay/result identity. Independently review operation matrix and conditional recording. Terminal Verify-remaining/subset retry remains deferred. | Pending; RO-5 completion is a hard activation prerequisite. Rebaseline confirmation is distinct from missing-row acknowledgement. |
 | M1-12 | Close integrated lifecycle/retention across activated task surfaces, then complete adversarial, documentation, ordinary and headed verification. This absorbs former M1-11. | Plan-only, execution-only, linked/manual verification, inventory, refused/canceled/degraded/failed tasks across same-document navigation, contained unsupported reload, explicit close and shutdown; admission bounds, stale-response suppression, exact resource release and retained truth. Applicable settlement oracle, ordinary/headed, installed-wheel/product, imports, diff/active-link checks and independent cross-component review. No aggregate-artifact or whole-owner-graph criterion. | Pending. |

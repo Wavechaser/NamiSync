@@ -1027,6 +1027,16 @@ repeated machinery while preserving operational safety and boundary contracts.
 Safety, settlement, authority, and measurement work made high-risk release
 claims explicit, independently reviewable, and regression-backed.
 
+#### Adjudicate the RO invocation-binding boundary (2026-09-28)
+
+- Preserve the starting evidence on the integration branch: 5,410 ordinary
+  passes, 12 import contracts and settlement oracle 30 × three, plus the
+  isolated baseline environment.
+- Correct RO-0b's blanket replacement refusal: current pathname semantics apply
+  before invocation binding; RO-1b continuity begins at binding. Exclude future
+  review-time root identity, require pause/resume and identity-weak witnesses,
+  and reserve EW-5 for RO-0b. Resume verification without product changes.
+
 #### Plan shared root admission optimization (2026-09-27 – 2026-09-28)
 
 - Investigate core, module and workflow boundaries and add nine pending
