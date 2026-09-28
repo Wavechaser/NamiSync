@@ -512,6 +512,65 @@ These finite call assertions detect lost shortcut selection; they are not a
 throughput gate. Collect throughput separately without instrumentation. The
 historical timings above remain bound to their recorded inputs and drivers.
 
+### Full executor corpus after narrow runtime admission — 2026-09-29
+
+Measured clean implementation `23589bd39a620ef4e5b31ddf8a9940a6628cadbf`
+after its correctness gates and commit. This includes the prior unreadable-
+descendant fix (`db03926`) and removes only adjacent target-root admission in
+the concrete native runtime path. Broader error-classification work is deferred.
+
+The original five F: source bands ran serially to fresh G: targets, five samples
+per band in one fresh process per band. Preparation and initial preflight ran
+once per band; normal pipeline metrics and native readback ran for every sample.
+No method wrappers or profiler were installed. All 25 executions and readbacks
+succeeded with recording OK and zero remaining payload reservations. The 1,587-
+entry source stat manifest still matches the original assessment and is unchanged
+before/after; all product/rig/driver hashes match across the run. All five targets
+and rig sidecars were removed by manifest-owned cleanup. The five bands contain
+1,581 payload files and exclude the original root marker, as both reference runs do.
+
+This is the same Windows/CPython/xxhash and F:/G: NTFS storage profile described
+below. Times cover executor calls only, excluding preparation, preflight,
+readback and cleanup. Current and pre-optimization samples number five per band;
+the separate full-corpus `db05e317` receipts contain three per band. Every sample
+is retained, including the slower first 128 KiB and 4 MiB samples. No warmup or
+outlier was discarded. The table reports median [minimum–maximum] seconds.
+
+| F: → G: workload | Pre-optimization | `db05e317` | `23589bd` | Current MiB/s |
+| --- | ---: | ---: | ---: | ---: |
+| 1,000 × 4 KiB | 28.248 [27.367–29.745] | 7.992 [7.981–8.028] | 3.627 [3.538–4.204] | 1.077 |
+| 512 × 128 KiB | 14.068 [13.983–16.096] | 4.255 [4.205–6.058] | 1.958 [1.881–3.925] | 32.678 |
+| 64 × 4 MiB | 2.051 [2.019–2.107] | 0.641 [0.640–0.936] | 0.372 [0.354–0.659] | 687.661 |
+| 4 × 128 MiB | 0.424 [0.414–0.449] | 0.311 [0.309–0.339] | 0.304 [0.295–0.325] | 1,683.043 |
+| 1 × 4 GiB | 2.287 [2.104–2.385] | 1.956 [1.881–2.119] | 2.004 [1.779–2.120] | 2,043.484 |
+
+Relative to `db05e317`, median execution time changes are −54.6%, −54.0%,
+−41.9%, −2.1% and +2.5% in table order; against pre-optimization they are
+−87.2%, −86.1%, −81.8%, −28.3% and −12.3%. The largest improvements remain in
+per-file-heavy bands. The last two bands overlap the `db05e317` ranges, so these
+observations do not establish a clear change there. Current 4 KiB backend time
+is median 0.428 seconds, versus 3.199 seconds outside the backend. This aggregate
+does not identify the remaining runtime cost. The earlier isolated 3.387-second
+held-resolution reading is faster than this full-corpus 3.627-second reading;
+neither comparison isolates the effect of this narrow runtime commit.
+
+The `db05e317` table uses the separately retained full-corpus run, not the earlier
+9.684-second per-checkpoint 4 KiB receipt. These are sequential historical
+observations with different target spellings/plan fingerprints and sample counts,
+not interleaved causal controls. Policy fingerprints, operation populations,
+source identity and rig flags match. The endpoint delta includes cheap-cache,
+stat-volume, held-resolution, ACL-refusal and runtime changes. Buffered repeated-
+source results make no cold-cache/device-peak claim and exclude SQLite, workflow
+and GUI costs. Stat identity cannot exclude historical same-stat content changes.
+
+Evidence is under `build/root-admission-optimization-20260928/resume/` with prefix
+`executor-runtime-full-23589bd3-20260929-000521-7fea29aa`: five `-fg-*.json/log`
+pairs, `-before.json`, `-after.json`, `-comparison.json`, commands and environment
+receipts. Retained drivers are `runtime_full_corpus.ps1` and
+`runtime_full_corpus_receipt.py`. Reference raw reports remain in
+`build/executor-bench-20260928-db05e317/` and
+`build/executor-assessment-20260927/`. These are diagnostics, not release gates.
+
 ### Executor assessment — 2026-09-27
 
 Read-only assessment of `milestone1-adelbert` at

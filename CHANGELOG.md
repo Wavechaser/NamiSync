@@ -1029,10 +1029,17 @@ claims explicit, independently reviewable, and regression-backed.
 
 #### Optimize root admission with invocation-scoped holds (2026-09-28 – 2026-09-29)
 
+- Run the five-band executor corpus after the narrow runtime commit: all 25
+  executions/readbacks pass with unchanged source and complete rig cleanup. Current
+  4 KiB median is 3.627 seconds / 1.077 MiB/s, versus 7.992 seconds in the
+  retained `db05e317` full-corpus run and 28.248 seconds pre-optimization.
+  PERFORMANCE retains all bands, ranges and comparison limits.
 - Remove only the adjacent duplicate target-root admission in runtime resolution
   for the concrete native adapter with a matching confirmed hold. The resolver
   retains the current attribute query and descendant guards; subclass/custom,
   unheld and malformed-path cases retain admission-first error ordering.
+  All 5,611 ordinary tests and 67 differential groups pass; independent review
+  confirms query-count and subclass-ordering regressions before commit.
 - Pin default production stat/resolve composition to zero physical resolutions
   and zero leaf-volume probes after held admission. All 558 executor-department
   tests pass. Document method-wrapping profiler fallback and why a held-root
@@ -1045,7 +1052,7 @@ claims explicit, independently reviewable, and regression-backed.
   preserving live attributes, descendant guards and custom/unheld fallback.
   All 5,579 ordinary tests and 67 differential groups pass. Same-fixture median
   reaches 3.387 seconds / 1.153 MiB/s; 26,000 physical resolutions disappear,
-  exceeding the non-gating throughput goal. Runtime admission work is pending.
+  exceeding the non-gating throughput goal. Runtime was unchanged at that checkpoint.
 - Reuse a confirmed held root's volume ID when the checked leaf stat device
   serial matches, retaining probe fallback and custom dispatch. All 5,570
   ordinary tests and 67 differential groups pass. Same-fixture median falls

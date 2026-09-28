@@ -204,6 +204,14 @@ correction has a red/green witness; pre-correction and interrupted receipts are
 retained, not accepted. Evidence: `executor/runtime-narrow-*`,
 `resume/executor-runtime-narrow-final-*` and the differential run labeled
 `candidate-executor-runtime-narrow-final-10a4447af828474c87ea4a26faa4fe72`.
+Integrated as `23589bd`; independent review is
+`executor/independent-review-runtime-narrow-20260929.md`. The post-commit full
+corpus passes all 25 executions/readbacks and cleanup, with unchanged source
+and measured code. Medians in band order are 3.627, 1.958, 0.372, 0.304 and
+2.004 seconds. PERFORMANCE owns ranges and both five-band historical comparisons;
+4 KiB throughput is 1.077 MiB/s. Evidence uses the resume prefix
+`executor-runtime-full-23589bd3-20260929-000521-7fea29aa`. No broader runtime or
+error-classification work is authorized by these measurements.
 
 **Approved hold safety contract.** Keep directory access without delete sharing
 and retain write sharing. Confirm once using `GetFinalPathNameByHandleW` on the
@@ -596,7 +604,7 @@ scope changes, stops and recovery.
 
 | ID | Accepted outcome | Named verification | Status |
 | --- | --- | --- | --- |
-| Root admission optimization | Hold each admitted root per invocation, keep the per-access fallback for remote or unholdable roots, and reduce admission calls, per the plan above. Target above 1 MiB/s for 1,000 × 4 KiB F:→G: execution (goal, not gate). | Baseline equivalence differential, existing tests, settlement oracle with one allowed probe-only re-pin, hold witnesses and measurements after each step. | Holds, verifier geometry and executor leaf/path/descendant reductions delivered and gated. Latest executor median 1.153 MiB/s exceeds the fixture goal. Anchor clarification, cheap cache, leaf volume and held resolution complete; narrow runtime delegation is complete and gated; full-corpus measurement follows its commit, while broader error-classification work is deferred. |
+| Root admission optimization | Hold each admitted root per invocation, keep the per-access fallback for remote or unholdable roots, and reduce admission calls, per the plan above. Target above 1 MiB/s for 1,000 × 4 KiB F:→G: execution (goal, not gate). | Baseline equivalence differential, existing tests, settlement oracle with one allowed probe-only re-pin, hold witnesses and measurements after each step. | Holds, verifier geometry and executor leaf/path/descendant reductions delivered and gated. Latest full-corpus executor median 1.077 MiB/s exceeds the fixture goal. Anchor clarification, cheap cache, leaf volume and held resolution complete; narrow runtime delegation and the full-corpus comparison are complete; broader error-classification work is deferred. |
 | M1-9 | Bounded inventory projections, current evidence and the full inventory consumer for sibling sorting. | Complete or prior-complete publication; warnings outside action scope; raw evidence provenance; search/filter/collapse/window/detail, replacement/race and production sort/reset paths; headed witnesses. | Pending. Missing-row acknowledge/restore UI must be explicitly allocated at activation; this row does not silently claim it. |
 | M1-10 | Baseline, verify and rebaseline controls plus first same-task manual post-copy verification, without persistent operation-time hashes. Eligible null-evidence files enter rebaseline; every admitted rebaseline hashes and replaces/creates evidence, and a match is not verified. | Confirm acknowledgement admission before claim/native work; all-null/mixed workflow, service/CLI and desktop paths; conditional recording and supersession races; atomic handoff classification; live pause/resume/cancel and unchanged automatic failed-read retries; overlay/result identity. Independently review operation matrix and conditional recording. Terminal Verify-remaining/subset retry remains deferred. | Pending. Rebaseline confirmation is distinct from missing-row acknowledgement. |
 | M1-12 | Close integrated lifecycle/retention across activated task surfaces, then complete adversarial, documentation, ordinary and headed verification. This absorbs former M1-11. | Plan-only, execution-only, linked/manual verification, inventory, refused/canceled/degraded/failed tasks across same-document navigation, contained unsupported reload, explicit close and shutdown; admission bounds, stale-response suppression, exact resource release and retained truth. Applicable settlement oracle, ordinary/headed, installed-wheel/product, imports, diff/active-link checks and independent cross-component review. No aggregate-artifact or whole-owner-graph criterion. | Pending. |
