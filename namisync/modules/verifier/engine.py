@@ -8,7 +8,7 @@ core protocols and the workflow/dispatcher layers.
 from __future__ import annotations
 
 import os
-from contextlib import AbstractContextManager
+from contextlib import AbstractContextManager, ExitStack
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Callable, Literal
@@ -57,6 +57,7 @@ from namisync.core.pathing import (
 )
 from namisync.core.session import Canceled, PauseRequested
 from namisync.core.root_authority import (
+    NativeVolumeInfo,
     RootAuthority,
     RootAuthorityError,
     RootAuthorityIssue,
@@ -68,7 +69,7 @@ from namisync.core.scalars import (
     require_signed_64,
 )
 
-from .native import WindowsUnbufferedReader
+from .native import WindowsUnbufferedReader, _VerificationInvocation
 
 
 def _reader_for_context(
@@ -107,6 +108,18 @@ def _open_reader(
             authority,
         )
     return reader.open(root, relative_path)
+
+
+def _activate_root_scope(
+    stack: ExitStack,
+    reader: VerificationReader,
+    authority: RootAuthority | None,
+) -> _VerificationInvocation | None:
+    activate = getattr(reader, "root_scope", None)
+    if authority is None or activate is None:
+        return None
+    invocation = stack.enter_context(activate(authority, invocation_owner=reader))
+    return invocation if type(invocation) is _VerificationInvocation else None
 
 
 def baseline(
@@ -173,59 +186,61 @@ def verify_post_copy(
         bytes_total=bytes_total,
     )
 
-    try:
-        actual_reader = _reader_for_context(ctx, reader)
-        for candidate in selection.pending:
-            ctx.run.checkpoint()
-            reporter.item_started(candidate.item_id, candidate.display_path)
-            processed = _process_post_copy_candidate(
-                candidate, ctx, recorder, actual_reader, reporter
-            )
-            _emit_and_complete_post_copy(
-                selection, ctx, reporter, processed, emitted
-            )
-    except PauseRequested:
-        reporter.pause_completed()
-        raise
-    except Canceled:
+    with ExitStack() as root_stack:
         try:
+            actual_reader = _reader_for_context(ctx, reader)
+            root_invocation = _activate_root_scope(root_stack, actual_reader, ctx.root_authority)
             for candidate in selection.pending:
-                processed = _ProcessedItem(
-                    _post_copy_outcome(
-                        candidate,
-                        IntegrityResult.CANCELED,
-                        IntegrityReason.CANCELED,
-                        recording=(
-                            RecordingStatus.OK
-                            if candidate.recorded_identity is not None
-                            else RecordingStatus.DEGRADED
-                        ),
-                    )
+                ctx.run.checkpoint()
+                reporter.item_started(candidate.item_id, candidate.display_path)
+                processed = _process_post_copy_candidate(
+                    candidate, ctx, recorder, actual_reader, reporter, root_invocation
                 )
                 _emit_and_complete_post_copy(
-                    selection,
-                    ctx,
-                    reporter,
-                    processed,
-                    emitted,
-                    emit_progress=False,
+                    selection, ctx, reporter, processed, emitted
                 )
-            reporter.cancellation_completed()
+        except PauseRequested:
+            reporter.pause_completed()
+            raise
+        except Canceled:
+            try:
+                for candidate in selection.pending:
+                    processed = _ProcessedItem(
+                        _post_copy_outcome(
+                            candidate,
+                            IntegrityResult.CANCELED,
+                            IntegrityReason.CANCELED,
+                            recording=(
+                                RecordingStatus.OK
+                                if candidate.recorded_identity is not None
+                                else RecordingStatus.DEGRADED
+                            ),
+                        )
+                    )
+                    _emit_and_complete_post_copy(
+                        selection,
+                        ctx,
+                        reporter,
+                        processed,
+                        emitted,
+                        emit_progress=False,
+                    )
+                reporter.cancellation_completed()
+            except Exception as error:
+                reporter.failure_completed(error)
+                raise
+            raise
         except Exception as error:
             reporter.failure_completed(error)
             raise
-        raise
-    except Exception as error:
-        reporter.failure_completed(error)
-        raise
 
-    reporter.run_completed()
-    recording = (
-        RecordingStatus.DEGRADED
-        if any(outcome.recording is RecordingStatus.DEGRADED for outcome in emitted)
-        else RecordingStatus.OK
-    )
-    return IntegrityRunResult(tuple(emitted), recording)
+        reporter.run_completed()
+        recording = (
+            RecordingStatus.DEGRADED
+            if any(outcome.recording is RecordingStatus.DEGRADED for outcome in emitted)
+            else RecordingStatus.OK
+        )
+        return IntegrityRunResult(tuple(emitted), recording)
 
 
 @dataclass(frozen=True)
@@ -506,57 +521,59 @@ def _run(
         item_type="integrity",
     )
 
-    try:
-        actual_reader = _reader_for_context(ctx, reader)
-        for item in selection.pending:
-            ctx.run.checkpoint()
-            reporter.item_started(item.item_id, item.display_path)
-            processed = _process_item(
-                item, mode, ctx, recorder, actual_reader, reporter
-            )
-            _emit_and_complete(selection, ctx, reporter, processed, emitted)
-    except PauseRequested:
-        # Pending and in-flight items stay pending.  Their reliable outcomes are
-        # emitted only when a resumed pass actually settles them.
-        reporter.pause_completed()
-        raise
-    except Canceled:
-        # The runner aggregates reliable events and cannot inspect module state.
-        # Complete every still-pending row before the payload-free unwind leaves.
+    with ExitStack() as root_stack:
         try:
+            actual_reader = _reader_for_context(ctx, reader)
+            root_invocation = _activate_root_scope(root_stack, actual_reader, ctx.root_authority)
             for item in selection.pending:
-                processed = _ProcessedItem(
-                    _outcome(
-                        item,
-                        mode,
-                        IntegrityResult.CANCELED,
-                        IntegrityReason.CANCELED,
+                ctx.run.checkpoint()
+                reporter.item_started(item.item_id, item.display_path)
+                processed = _process_item(
+                    item, mode, ctx, recorder, actual_reader, reporter, root_invocation
+                )
+                _emit_and_complete(selection, ctx, reporter, processed, emitted)
+        except PauseRequested:
+            # Pending and in-flight items stay pending.  Their reliable outcomes are
+            # emitted only when a resumed pass actually settles them.
+            reporter.pause_completed()
+            raise
+        except Canceled:
+            # The runner aggregates reliable events and cannot inspect module state.
+            # Complete every still-pending row before the payload-free unwind leaves.
+            try:
+                for item in selection.pending:
+                    processed = _ProcessedItem(
+                        _outcome(
+                            item,
+                            mode,
+                            IntegrityResult.CANCELED,
+                            IntegrityReason.CANCELED,
+                        )
                     )
-                )
-                _emit_and_complete(
-                    selection,
-                    ctx,
-                    reporter,
-                    processed,
-                    emitted,
-                    emit_progress=False,
-                )
-            reporter.cancellation_completed()
+                    _emit_and_complete(
+                        selection,
+                        ctx,
+                        reporter,
+                        processed,
+                        emitted,
+                        emit_progress=False,
+                    )
+                reporter.cancellation_completed()
+            except Exception as error:
+                reporter.failure_completed(error)
+                raise
+            raise
         except Exception as error:
             reporter.failure_completed(error)
             raise
-        raise
-    except Exception as error:
-        reporter.failure_completed(error)
-        raise
 
-    reporter.run_completed()
-    recording = (
-        RecordingStatus.DEGRADED
-        if any(outcome.recording is RecordingStatus.DEGRADED for outcome in emitted)
-        else RecordingStatus.OK
-    )
-    return IntegrityRunResult(tuple(emitted), recording)
+        reporter.run_completed()
+        recording = (
+            RecordingStatus.DEGRADED
+            if any(outcome.recording is RecordingStatus.DEGRADED for outcome in emitted)
+            else RecordingStatus.OK
+        )
+        return IntegrityRunResult(tuple(emitted), recording)
 
 
 def _emit_and_complete(
@@ -609,6 +626,7 @@ def _process_post_copy_candidate(
     recorder: IntegrityRecorder,
     reader: VerificationReader,
     reporter: _ProgressReporter,
+    root_invocation: _VerificationInvocation | None = None,
 ) -> _ProcessedItem:
     try:
         validated_path = validate_relative_path(candidate.display_path)
@@ -654,6 +672,7 @@ def _process_post_copy_candidate(
         on_stream_start=reporter.stream_started,
         on_bytes=reporter.bytes_processed,
         success_provenance=Provenance.READBACK_ATTESTED,
+        root_invocation=root_invocation,
     )
     identity = candidate.recorded_identity
     if classification.attestation is None:
@@ -754,6 +773,7 @@ def _process_item(
     recorder: IntegrityRecorder,
     reader: VerificationReader,
     reporter: _ProgressReporter,
+    root_invocation: _VerificationInvocation | None = None,
 ) -> _ProcessedItem:
     try:
         validated_path = validate_relative_path(item.display_path)
@@ -829,6 +849,7 @@ def _process_item(
         on_stream_start=reporter.stream_started,
         on_bytes=reporter.bytes_processed,
         success_provenance=Provenance.VERIFY_ATTESTED,
+        root_invocation=root_invocation,
     )
     if classification.attestation is None:
         if (
@@ -928,11 +949,12 @@ def _classify_subject(
     on_stream_start: Callable[[int], None],
     on_bytes: Callable[[int], None],
     success_provenance: Provenance = Provenance.VERIFY_ATTESTED,
+    root_invocation: _VerificationInvocation | None = None,
 ) -> _SubjectClassification:
     """Guard, hash, and classify bytes without ledger row identity or writes."""
 
     try:
-        _admit_verification_root(root, ctx)
+        _admit_verification_root(root, ctx, reader=reader, root_invocation=root_invocation)
         with _open_reader(reader, root, relative_path, ctx) as stream:
             before = stream.stat()
             _require_reviewed_open_volume(before, ctx)
@@ -1340,12 +1362,30 @@ def _require_selected_root(
     return authority
 
 
-def _admit_verification_root(root: Path, ctx: VerifierContext) -> None:
+def _admit_verification_root(
+    root: Path,
+    ctx: VerifierContext,
+    *,
+    reader: VerificationReader | None = None,
+    root_invocation: _VerificationInvocation | None = None,
+) -> None:
     authority = _require_selected_root(root, ctx)
     if authority is None:
         return
     try:
-        admit_root(authority)
+        matching = (
+            type(root_invocation) is _VerificationInvocation
+            and root_invocation.matches_engine(reader, authority)
+        )
+        if (
+            matching and root_invocation.admitted is not None
+            and root_invocation.hold.confirm()
+        ):
+            root_invocation.hold.require_ordinary()
+        else:
+            admitted = admit_root(authority)
+            if matching and type(admitted) is NativeVolumeInfo and root_invocation.hold.confirm():
+                root_invocation.admitted = admitted
     except RootAuthorityError as error:
         detail = {
             RootAuthorityIssue.ANCHOR_CHANGED: (

@@ -7,6 +7,8 @@ import ntpath
 import os
 from ctypes import wintypes
 from contextlib import contextmanager
+from contextvars import ContextVar
+from dataclasses import dataclass
 from pathlib import Path, PureWindowsPath
 from typing import Iterator
 
@@ -24,10 +26,13 @@ from namisync.core.pathing import (
     validate_relative_path,
 )
 from namisync.core.root_authority import (
+    NativeVolumeInfo,
     RootAuthority,
     RootAuthorityError,
     RootAuthorityIssue,
+    RootHold,
     admit_root_chain,
+    hold_root,
     is_placeholder_stat,
     is_reparse_stat,
 )
@@ -57,6 +62,33 @@ _FILE_BASIC_INFO_CLASS = 0
 _FILE_STANDARD_INFO_CLASS = 1
 
 
+@dataclass(slots=True)
+class _VerificationInvocation:
+    native_reader: WindowsUnbufferedReader
+    dispatched_reader: object
+    authority: RootAuthority
+    hold: RootHold
+    active: bool = True
+    admitted: NativeVolumeInfo | None = None
+
+    def matches_engine(self, reader: object, authority: RootAuthority) -> bool:
+        return (
+            _ROOT_INVOCATION.get() is self and self.active
+            and self.dispatched_reader is reader and self.authority is authority
+        )
+
+    def matches_native(self, reader: object, authority: RootAuthority) -> bool:
+        return (
+            _ROOT_INVOCATION.get() is self and self.active
+            and self.native_reader is reader and self.authority is authority
+        )
+
+
+_ROOT_INVOCATION: ContextVar[_VerificationInvocation | None] = ContextVar(
+    "verifier_root_invocation", default=None
+)
+
+
 class WindowsUnbufferedReader:
     """Read one Windows file through ``FILE_FLAG_NO_BUFFERING``.
 
@@ -67,6 +99,23 @@ class WindowsUnbufferedReader:
 
     def __init__(self, root_authority: RootAuthority | None = None) -> None:
         self._root_authority = root_authority
+
+    @contextmanager
+    def root_scope(
+        self,
+        authority: RootAuthority,
+        *,
+        invocation_owner: object,
+    ) -> Iterator[_VerificationInvocation]:
+        with hold_root(authority) as hold:
+            invocation = _VerificationInvocation(self, invocation_owner, authority, hold)
+            token = _ROOT_INVOCATION.set(invocation)
+            try:
+                yield invocation
+            finally:
+                invocation.active = False
+                invocation.admitted = None
+                _ROOT_INVOCATION.reset(token)
 
     @contextmanager
     def open(self, root: Path, relative_path: str) -> Iterator[_WindowsStream]:
@@ -115,7 +164,16 @@ class WindowsUnbufferedReader:
                 "verification selection root does not match its reviewed root"
             )
         candidate = root_path.joinpath(*PureWindowsPath(normalized).parts)
-        _reject_reparse_components(authority, normalized)
+        invocation = _ROOT_INVOCATION.get()
+        if (
+            type(invocation) is _VerificationInvocation
+            and invocation.matches_native(self, authority)
+            and invocation.admitted is not None
+            and invocation.hold.confirm()
+        ):
+            _reject_reparse_components(authority, normalized, root_hold=invocation.hold)
+        else:
+            _reject_reparse_components(authority, normalized)
 
         api = _WindowsApi()
         sector_size = api.sector_size(candidate)
@@ -132,12 +190,17 @@ class WindowsUnbufferedReader:
 def _reject_reparse_components(
     authority: RootAuthority,
     normalized_path: str,
+    *,
+    root_hold: RootHold | None = None,
 ) -> None:
     try:
-        admit_root_chain(
-            authority,
-            lstat=_verification_lstat,
-        )
+        if root_hold is not None:
+            root_hold.require_ordinary()
+        else:
+            admit_root_chain(
+                authority,
+                lstat=_verification_lstat,
+            )
     except RootAuthorityError as error:
         _raise_verification_root_admission(error)
 

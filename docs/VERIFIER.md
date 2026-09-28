@@ -115,15 +115,27 @@ one ephemeral `RootAuthority`: the exact reviewed logical root, optional
 reviewed mount anchor, and optional expected `VolumeId`. Every selected item,
 including retained missing/unsupported rows and already-baselined shortcuts,
 must name that exact logical root before reader or recorder work. Every readable
-subject then freshly admits the authority before open; the check is evidence at
-that point, not cached authorization. Core exposes a runtime-checkable
+subject admits the authority before open. The native reader's invocation scope
+acquires a core root hold after reporter/reader setup and before the first
+checkpoint; full admission stays at the existing classification boundary. Only
+successful full admission and strict live hold confirmation permit matching
+admission to be reused. Engine and native final-touch reuse each require current
+ordinary attributes on that same handle under their existing refusal policy;
+query failure cannot authorize access or silently select fallback. The private
+handoff binds exact authority, native reader, dispatched reader and live scope.
+Unholdable roots and custom/direct readers without activation keep per-access
+admission. Scope return, pause, cancel and error invalidate the handoff before
+closing all holds; subsequent and nested invocations admit independently.
+[DEFENSE.md](DEFENSE.md)'s quiescent-root precondition still governs check/use.
+Core exposes a runtime-checkable
 `AuthorityBoundVerificationReader` seam. Engine dispatches that seam
 structurally, so native subclasses and decorators cannot silently fall back to
 the unbound `open(root, path)` route; any authority-bound reader in an unbound
 context is refused. The bound open receives only the relative path and authority
 and derives its native root from `authority.logical_root`, so it cannot validate
 one root and open another. The native reader then performs its distinct
-chain-only final-touch check without another volume probe. Its
+chain-only final-touch check without another volume probe; a confirmed held root
+replaces only that root-prefix walk with the current-attribute guard. Its
 root-relative no-follow walk retains raw missing/access behavior while using
 the shared reparse/placeholder classifiers. The default native reader requires
 bound authority, while an unbound context remains only an explicit fake/custom-
@@ -239,7 +251,8 @@ evidence write. Compare-and-accept treatment of genuine rebaseline matches is
 deferred beyond M1. Exact command/receipt replay may still be an idempotent
 `NOOP`; it is not that deferred content-match behavior.
 
-All modes keep fresh root/volume, current-stat, complete-read, and same-subject
+All modes keep fresh invocation root/volume admission, current held attributes
+before admission reuse, current-stat, complete-read, and same-subject
 post-read guards. Missing, unsupported, canceled, drift, and error outcomes
 remain truthful; a failed read cannot install replacement positive evidence.
 Applicable negative invalidations retain their existing conditional-write rule.

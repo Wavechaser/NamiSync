@@ -348,6 +348,49 @@ ordinary gate and are functional evidence only, not timing observations or
 exFAT copy acceptance. Receipts are `preflight-guarded-exfat-*`; the existing
 executor handle-identity compatibility issue remains separate in BUGS.
 
+### Verifier invocation holds — 2026-09-28
+
+After preflight `4263b12`, the verifier holds its root through each invocation
+and guards reused admission with current handle attributes. The comparison with
+`b8baf42d` includes earlier core improvements; it does not isolate their effect.
+
+The same `verifier/measure_verifier.py` runs from both checkouts on the preserved
+F: 1,000 × 4 KiB corpus. It primes real evidence outside timing, then measures
+three fresh VERIFY invocations through the standard native reader tap. Scanning,
+authority/selection construction and priming are outside the measured runner.
+All 1,000 outcomes are verified/applied with successful recording, 4,096,000
+actual read bytes and matching command/outcome IDs. Source FileStat observations
+and product/tools manifests match before/after. Samples run serially after the
+gates and native captures; unrelated desktop activity remains uncontrolled.
+
+| VERIFY runner, seconds | Minimum | Median | Maximum |
+| --- | ---: | ---: | ---: |
+| Baseline | 3.827 | 3.885 | 3.940 |
+| Invocation holds | 1.964 | 1.998 | 2.002 |
+
+A separate one-invocation wrapper counts project ctypes bindings only inside
+VERIFY. Its timings are excluded. Per 1,000 files:
+
+| Call | Baseline | Invocation holds |
+| --- | ---: | ---: |
+| `GetVolumePathNameW` | 4,000 | 1,001 |
+| `GetVolumeInformationW` | 1,000 | 1 |
+| Opens / closes / final paths, each | 2,000 | 2,001 |
+| File handle information | 12,000 | 12,000 |
+| Current root basic information | 0 | 1,999 |
+| Pathname sector query | 1,000 | 1,000 |
+| Reads / allocations / frees, each | 1,000 | 1,000 |
+
+The file-information calls still cover four snapshots per file; the added root
+queries are separate. Sector lookup remains for the next outcome. These are
+diagnostics, not a latency gate or executor-throughput claim. Receipts under
+`build/root-admission-optimization-20260928/verifier/` are
+`baseline-verify-timing.json`, `candidate-verify-timing.json`, both `*-verify-counts.json`
+and their counted reports, with frozen driver/import/source/product provenance.
+The full gate passes 5,502 ordinary tests, 12 imports, unchanged oracle 30 × three
+and guard scan; the expanded 67-group differential has no unexpected differences.
+No exFAT verification or identity-compatibility claim is made.
+
 ### Executor assessment — 2026-09-27
 
 Read-only assessment of `milestone1-adelbert` at

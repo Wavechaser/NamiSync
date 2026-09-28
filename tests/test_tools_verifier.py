@@ -94,9 +94,16 @@ def test_tapped_readers_preserve_the_wrapped_reader_authority_capability(
     tmp_path: Path,
 ) -> None:
     bound_opened: list[tuple[str, RootAuthority]] = []
+    activations: list[tuple[RootAuthority, object]] = []
+    admission_handoff = object()
     unbound_opened: list[tuple[Path, str]] = []
 
     class BoundReader:
+        @contextmanager
+        def root_scope(self, authority, *, invocation_owner):
+            activations.append((authority, invocation_owner))
+            yield admission_handoff
+
         @contextmanager
         def open(self, root: Path, relative_path: str) -> Iterator[object]:
             raise AssertionError("bound dispatch must not use the legacy open seam")
@@ -119,6 +126,9 @@ def test_tapped_readers_preserve_the_wrapped_reader_authority_capability(
 
     authority = RootAuthority(str(tmp_path))
     bound_reader = AuthorityBoundTappedReader(BoundReader())
+    with bound_reader.root_scope(authority, invocation_owner=bound_reader) as handoff:
+        assert handoff is admission_handoff
+    assert activations == [(authority, bound_reader)]
     assert isinstance(bound_reader, AuthorityBoundVerificationReader)
     with pytest.raises(ValueError, match="authority-bound verification reader"):
         verifier_engine._reader_for_context(

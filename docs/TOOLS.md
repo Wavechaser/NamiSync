@@ -260,6 +260,12 @@ domain operations real:
 | Integrity selection | ledger inventory rows | fresh scan plus explicit evidence source |
 | Filesystem, copy backend, reader | native | native inner, optionally instrumented |
 
+The authority-bound verifier tap forwards native invocation activation and its
+private admission handoff while retaining the original bound-open dispatch.
+Readers without that activation retain per-access admission. Root acquisition
+is included in total verifier time, outside individual subject-open timing; the
+tap does not retain handles or admission after invocation exit.
+
 Executor correspondence is intentionally empty. Executor measurements therefore
 represent a first run with no retained history: COPY, UPDATE, NOOP, directory,
 and deletion-policy operations are available, but MOVE and MOVE_UPDATE are not.

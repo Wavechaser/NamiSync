@@ -3,15 +3,19 @@
 from __future__ import annotations
 
 import os
+import ctypes
 import stat as stat_module
 import subprocess
 import sys
+import struct
 from pathlib import Path, PureWindowsPath
 
 import pytest
 from xxhash import xxh3_128
 
 import namisync.modules.verifier.native as verifier_native
+import namisync.modules.verifier.engine as verifier_engine
+import namisync.core.root_authority as root_authority_module
 from namisync.core.integrity import (
     IntegrityReason,
     IntegrityResult,
@@ -254,6 +258,8 @@ def test_windows_reader_safety_rejections_classify_unsupported_never_verified(
         def report_reparse(
             authority: RootAuthority,
             relative_path: str,
+            *,
+            root_hold=None,
         ) -> None:
             candidate = Path(authority.logical_root).joinpath(
                 *PureWindowsPath(relative_path).parts
@@ -274,7 +280,7 @@ def test_windows_reader_safety_rejections_classify_unsupported_never_verified(
 
             with monkeypatch.context() as patch:
                 patch.setattr(verifier_native.os, "lstat", reparse_lstat)
-                original_reject(authority, relative_path)
+                original_reject(authority, relative_path, root_hold=root_hold)
 
         monkeypatch.setattr(
             verifier_native, "_reject_reparse_components", report_reparse
@@ -380,3 +386,125 @@ def test_windows_reader_holds_selected_path_against_write_and_replacement(
 
     assert path.read_bytes() == b"selected subject"
     assert replacement.read_bytes() == b"replacement subject"
+
+
+def _reuse_verifier_root(reader, authority, context, invocation, owner):
+    if owner == "engine":
+        verifier_engine._admit_verification_root(
+            Path(authority.logical_root), context, reader=reader, root_invocation=invocation
+        )
+    else:
+        with reader.open_with_authority("payload.bin", authority):
+            pass
+
+
+@pytest.mark.skipif(os.name != "nt", reason="native Windows held attributes")
+@pytest.mark.parametrize("owner", ("engine", "native"))
+@pytest.mark.parametrize("state", ("placeholder", "query-failure"))
+def test_verifier_held_admission_refuses_current_attributes_before_later_probes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    owner: str,
+    state: str,
+) -> None:
+    context = _native_context([], tmp_path)
+    authority = context.root_authority
+    reader = WindowsUnbufferedReader()
+    queries = []
+    with reader.root_scope(authority, invocation_owner=reader) as invocation:
+        verifier_engine._admit_verification_root(
+            tmp_path, context, reader=reader, root_invocation=invocation
+        )
+        assert invocation.admitted is not None and invocation.hold.confirm()
+        assert root_authority_module._WINDOWS is not None
+
+        def query(handle, kind, output, size):
+            queries.append(kind)
+            assert kind == 0
+            if state == "query-failure":
+                ctypes.set_last_error(5)
+                return False
+            info = ctypes.cast(output, ctypes.POINTER(root_authority_module._FileBasicInfo)).contents
+            info.FileAttributes = 0x10 | 0x400 | 0x1000
+            return True
+
+        def later_probe(*args, **kwargs):
+            raise AssertionError("unsafe held root reached fallback or later probe")
+
+        monkeypatch.setattr(root_authority_module._WINDOWS, "get_file_information_ex", query)
+        monkeypatch.setattr(verifier_engine, "admit_root", later_probe)
+        monkeypatch.setattr(verifier_native, "_verification_lstat", later_probe)
+        monkeypatch.setattr(verifier_native, "_WindowsApi", later_probe)
+        expected = PermissionError if owner == "native" and state == "query-failure" else UnsupportedVerification
+        with pytest.raises(expected):
+            _reuse_verifier_root(reader, authority, context, invocation, owner)
+        assert queries == [0]
+
+
+@pytest.mark.skipif(os.name != "nt", reason="native NTFS in-place root conversion")
+@pytest.mark.parametrize("owner", ("engine", "native"))
+def test_verifier_held_admission_refuses_inplace_attribute_only_conversion(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    owner: str,
+) -> None:
+    root = tmp_path / "root"
+    root.mkdir()
+    sibling = tmp_path / "owned-sibling"
+    sibling.mkdir()
+    marker = sibling / "untouched.bin"
+    marker.write_bytes(b"owned sibling unchanged")
+    context = _native_context([], root)
+    authority = context.root_authority
+    if authority.expected_volume_id.fs_type != "NTFS":
+        pytest.skip("native junction conversion witness requires NTFS")
+    reader = WindowsUnbufferedReader()
+    ioctl = ctypes.WinDLL("kernel32", use_last_error=True).DeviceIoControl
+    ioctl.argtypes = [ctypes.c_void_p, ctypes.c_uint32, ctypes.c_void_p, ctypes.c_uint32,
+                      ctypes.c_void_p, ctypes.c_uint32, ctypes.POINTER(ctypes.c_uint32),
+                      ctypes.c_void_p]
+    ioctl.restype = ctypes.c_int
+    substitute = ("\\??\\" + str(sibling)).encode("utf-16-le")
+    printed = str(sibling).encode("utf-16-le")
+    paths = substitute + b"\0\0" + printed + b"\0\0"
+    data = struct.pack("<LHHHHHH", 0xA0000003, 8 + len(paths), 0,
+                       0, len(substitute), len(substitute) + 2, len(printed)) + paths
+    with reader.root_scope(authority, invocation_owner=reader) as invocation:
+        verifier_engine._admit_verification_root(
+            root, context, reader=reader, root_invocation=invocation
+        )
+        assert invocation.admitted is not None and invocation.hold.confirm()
+        assert root_authority_module._WINDOWS is not None
+        handle = root_authority_module._WINDOWS.create_file(
+            verifier_native._extended_path(root), 0x100, 7, None, 3, 0x02200000, None
+        )
+        assert handle != root_authority_module._INVALID_HANDLE_VALUE
+        converted = False
+        try:
+            buffer = ctypes.create_string_buffer(data)
+            returned = ctypes.c_uint32()
+            converted = bool(ioctl(handle, 0x900A4, buffer, len(data), None, 0,
+                                   ctypes.byref(returned), None))
+            assert converted, ctypes.get_last_error()
+            assert root.lstat().st_file_attributes & 0x400
+
+            def later_probe(*args, **kwargs):
+                raise AssertionError("converted held root reached fallback or later probe")
+
+            monkeypatch.setattr(verifier_engine, "admit_root", later_probe)
+            monkeypatch.setattr(verifier_native, "_verification_lstat", later_probe)
+            monkeypatch.setattr(verifier_native, "_WindowsApi", later_probe)
+            with pytest.raises(UnsupportedVerification, match="reparse"):
+                _reuse_verifier_root(reader, authority, context, invocation, owner)
+            assert marker.read_bytes() == b"owned sibling unchanged"
+        finally:
+            try:
+                if converted:
+                    delete = ctypes.create_string_buffer(struct.pack("<LHH", 0xA0000003, 0, 0))
+                    returned = ctypes.c_uint32()
+                    assert ioctl(handle, 0x900AC, delete, 8, None, 0,
+                                 ctypes.byref(returned), None), ctypes.get_last_error()
+            finally:
+                root_authority_module._WINDOWS.close_handle(handle)
+        assert not root.lstat().st_file_attributes & 0x400
+    root.rename(tmp_path / "released-root")

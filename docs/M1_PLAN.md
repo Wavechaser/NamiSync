@@ -355,6 +355,51 @@ F:→G: counted observations match the K: counts above. PERFORMANCE owns methods
 and limits. Independent whole-outcome review approved the candidate in
 `preflight/independent-review-guarded-preflight-20260928.md`; this closes the gate.
 Earlier partial receipts remain historical under the same evidence root.
+Integrated as `4263b12` after correction `8cdd669`.
+
+**Active outcome — verifier invocation holds.** The user authorized verifier
+after preflight. Revalidate the read-only proposal against `4263b12`, then change
+`modules/verifier/native.py` and `engine.py`, the authority-bound tap in
+`tools/seams.py`, their native/engine/tools verifier tests, and VERIFIER/TOOLS
+documentation. Parent owns this register, PERFORMANCE, CHANGELOG and HANDOFF.
+Core protocols, facade, result/wire/continuation shapes and workflow policy stay
+unchanged. One native invocation record binds exact authority, native reader,
+dispatched reader and live lifetime. Explicitly hand it to engine classification;
+transparent taps forward activation. Acquire after reporter/reader setup and
+before the first checkpoint; fully admit lazily at the existing admission seam.
+Only successful native admission and strict confirmation permit reuse. Both
+engine admission and native final-touch root-prefix reuse require current
+`require_ordinary()` attributes under their existing error mappings. Invalidate
+before releasing on every exit; custom/direct/unactivated readers retain fallback.
+
+Preserve selected-root checks, descendant lstat, per-file root/file final-path
+containment, all four same-handle snapshots, opened-volume identity, no-buffering
+and read-only sharing, alignment, classification and conditional recording.
+No geometry change, native-binding cache, stat consolidation, buffer reuse or
+new diagnostics in this commit. Existing engine/native seams run first, followed
+by held/fallback/tap and all-four-operation cases, first-checkpoint/lazy admission,
+release and copied-context/owner isolation, current-attribute refusal at both
+owners, direct recorder/workflow/tool consumers, ordinary suite, imports,
+unchanged oracle/guard scan, baseline differential retaining custom remount and
+identity-weak controls, separate call counts and uninstrumented small-file timing,
+and fresh independent review. This complete gate defines one atomic commit.
+Existing equivalence and mandatory stops apply. Opened-handle sector geometry
+is the next independently gated outcome; its native NTFS/exFAT capability proof
+does not claim exFAT verification or fix the deferred FileIdInfo issue.
+
+The frozen hold outcome passes 132 focused, 479 direct-consumer tests (two
+skips), and 5,502 ordinary tests (four skips, 34 headed deselections), all 12
+imports, unchanged oracle 30 × three and guard scan 70 rows/391 effects/zero
+missing admissions. Input/output hashes match. The 67-group differential adds
+native/tapped all-mode, blocked first-checkpoint, active case-fallback and custom
+remount/identity-weak controls; all match the checked baseline or complete
+unswapped controls, with no projection relaxation. All eight frozen hashes match.
+Serialized 1,000-file verification median is 3.885→1.998 seconds versus `b8baf42d`,
+including earlier core changes. Separate counts reduce anchor queries 4,000→1,001
+and volume information 1,000→1, retaining 1,999 current root-attribute checks
+and all 12,000 file-information calls. PERFORMANCE owns methods and limits.
+Independent whole-outcome review approves the commit in
+`verifier/independent-review-holds-20260928.md`.
 
 **Findings outside this result** go to BUGS or HANDOFF as short notes and are
 not handled here. Two exist: a same-volume root replacement before execution
@@ -555,7 +600,7 @@ scope changes, stops and recovery.
 
 | ID | Accepted outcome | Named verification | Status |
 | --- | --- | --- | --- |
-| Root admission optimization | Hold each admitted root per invocation, keep the per-access fallback for remote or unholdable roots, and reduce admission calls, per the plan above. Target above 1 MiB/s for 1,000 × 4 KiB F:→G: execution (goal, not gate). | Baseline equivalence differential, existing tests, settlement oracle with one allowed probe-only re-pin, hold witnesses and measurements after each step. | Resumed: user approved current held-handle attributes before access to correct in-place conversion. Core/executor correction first; preflight recovery then verifier; further executor reductions later. |
+| Root admission optimization | Hold each admitted root per invocation, keep the per-access fallback for remote or unholdable roots, and reduce admission calls, per the plan above. Target above 1 MiB/s for 1,000 × 4 KiB F:→G: execution (goal, not gate). | Baseline equivalence differential, existing tests, settlement oracle with one allowed probe-only re-pin, hold witnesses and measurements after each step. | Core, corrected executor and preflight committed; verifier hold gate passed. Opened-handle geometry next, then measured executor reductions. |
 | M1-9 | Bounded inventory projections, current evidence and the full inventory consumer for sibling sorting. | Complete or prior-complete publication; warnings outside action scope; raw evidence provenance; search/filter/collapse/window/detail, replacement/race and production sort/reset paths; headed witnesses. | Pending. Missing-row acknowledge/restore UI must be explicitly allocated at activation; this row does not silently claim it. |
 | M1-10 | Baseline, verify and rebaseline controls plus first same-task manual post-copy verification, without persistent operation-time hashes. Eligible null-evidence files enter rebaseline; every admitted rebaseline hashes and replaces/creates evidence, and a match is not verified. | Confirm acknowledgement admission before claim/native work; all-null/mixed workflow, service/CLI and desktop paths; conditional recording and supersession races; atomic handoff classification; live pause/resume/cancel and unchanged automatic failed-read retries; overlay/result identity. Independently review operation matrix and conditional recording. Terminal Verify-remaining/subset retry remains deferred. | Pending. Rebaseline confirmation is distinct from missing-row acknowledgement. |
 | M1-12 | Close integrated lifecycle/retention across activated task surfaces, then complete adversarial, documentation, ordinary and headed verification. This absorbs former M1-11. | Plan-only, execution-only, linked/manual verification, inventory, refused/canceled/degraded/failed tasks across same-document navigation, contained unsupported reload, explicit close and shutdown; admission bounds, stale-response suppression, exact resource release and retained truth. Applicable settlement oracle, ordinary/headed, installed-wheel/product, imports, diff/active-link checks and independent cross-component review. No aggregate-artifact or whole-owner-graph criterion. | Pending. |

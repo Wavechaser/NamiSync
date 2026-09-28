@@ -7,7 +7,7 @@ collaborator to sample what it did.
 
 from __future__ import annotations
 
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -295,6 +295,13 @@ class AuthorityBoundTappedReader(TappedReader):
             raise TypeError("authority-bound tap requires an authority-bound reader")
         super().__init__(inner)
         self._authority_reader = inner
+
+    def root_scope(self, authority: RootAuthority, *, invocation_owner: object):
+        activate = getattr(self._authority_reader, "root_scope", None)
+        return (
+            nullcontext() if activate is None
+            else activate(authority, invocation_owner=invocation_owner)
+        )
 
     @contextmanager
     def open_with_authority(
