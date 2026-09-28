@@ -1029,6 +1029,10 @@ claims explicit, independently reviewable, and regression-backed.
 
 #### Optimize root admission with invocation-scoped holds (2026-09-28)
 
+- Fix preexisting fail-open descendant admission: only not-found stops the
+  walk; permission and other observation failures now refuse resolve and both
+  trash consumers. Native held/unheld ACL-junction regressions verify refusal
+  without writing through the junction, with checked fixture cleanup.
 - Skip both physical resolutions for the default confirmed held-root path,
   preserving live attributes, descendant guards and custom/unheld fallback.
   All 5,579 ordinary tests and 67 differential groups pass. Same-fixture median

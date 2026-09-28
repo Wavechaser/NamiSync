@@ -1278,7 +1278,7 @@ class NativeFileSystem:
                 self._reject_reparse(current)
             except UnsafeExecutionPath:
                 raise
-            except OSError:
+            except FileNotFoundError:
                 break
 
     def _reject_reparse(self, path: Path) -> os.stat_result:

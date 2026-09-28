@@ -1,60 +1,54 @@
-# Latest session — executor performance round
+# Latest session — executor correctness follow-up
 
-2026-09-28, `milestone1-adelbert`, resumed from `db05e31`. M1_PLAN owns scope.
+2026-09-28, `milestone1-adelbert`, starting clean at `30b0c2c8`.
+M1_PLAN owns the two approved atomic outcomes.
 
-## Delivered
+## Scope and current work
 
-- `d88219d`: document the default anchor self-comparison; preserve meaningful
-  injected-probe validation without adding a bypass API.
-- `acdaefa`: string-only cache eligibility, median 7.756 seconds / 0.504 MiB/s.
-- `0c8d304`: stat-derived leaf volume on matching held serial, median 5.383
-  seconds / 0.726 MiB/s; fresh probe fallback and custom dispatch remain.
-- Current held-resolution outcome: default confirmed holds skip both physical
-  resolutions, preserving live held attributes, descendant no-follow checks,
-  must-exist policy and custom/unheld fallback. Median 3.387 seconds / 1.153
-  MiB/s (3.370–3.388) exceeds the non-gating goal on 1,000 × 4 KiB F:→G:.
+The user reported a preexisting unreadable-junction admission escape and fragile
+fast-path selection under method-wrapping instrumentation. The reported escape
+was classified for a separate fix, not deferred. A clean mandatory stop was
+reported, then the user explicitly approved both corrective outcomes.
 
-Separate profiles confirm physical resolutions 26,000→zero, stat calls unchanged
-at 23,006 and runtime root revalidation still 27,000. Project-native counts stay
-at two anchor/two volume queries, 2,002 opens/closes, two final-path queries and
-37,998 handle-information queries. All copies/readbacks, source rechecks and
-manifest-scoped target cleanup pass; instrumentation is not timing authority.
+1. Verified fix: executor descendant walks stop only on FileNotFoundError; other
+   observation errors propagate. Native resolve and both trash-destination
+   consumers retain all normal-path guards. Native ACL regressions assert
+   refusal only, restore permissions and remove the junction before fixture
+   cleanup. EXECUTOR and BUGS document the corrected behavior and limits of
+   evidence; no full GUI-path reproduction is claimed.
+2. Pending the fix commit: a combined default-production held-root regression
+   asserts zero physical resolutions and zero leaf-volume probes after root
+   admission. Keep method-identity fallback behavior and document why method-
+   wrapping profilers exercise fallback. No capability-flag contract change.
 
-## Verification and review
+Further runtime admission/throughput work stays paused. The earlier runtime
+scope choice is not resolved by this correctness approval.
 
-Latest outcome: 464 focused, 574 direct (two skips), 5,579 ordinary (four skips,
-34 headed exclusions), 12 imports, 30 × three settlement scenarios, guard scan
-70 rows/391 effects/zero missing admissions and all 67 differential groups pass.
-Frozen source/test/component-doc hashes and gate dependency manifests match.
-Draft review corrected default-hook eligibility and completed the declared
-unsafe-held-root resolve witness before freeze. Initial unprivileged receipt
-attempts failed at pytest temporary-directory setup; raw failures and passing
-retries are retained, with no product call failure in those setup-only runs.
+## Verification
 
-Evidence root: `build/root-admission-optimization-20260928/`.
-Latest manifests/receipts: `executor/held-resolve-*`,
-`resume/executor-held-resolve-*`, and differential candidate
-`candidate-executor-held-resolve-frozen-86bed156c3414714a9644d28697832fb`.
-Independent review: `executor/independent-review-held-resolve-20260928.md`.
+Fix gates pass: 468 focused, 574 direct (two skips), 5,583 ordinary (four skips,
+34 headed exclusions), 12 imports, settlement 30 × three, guard scan
+70 rows/391 effects/zero missing admissions and all 67 unchanged differential
+groups. The approved ACL behavior change has its own held/unheld native red
+and passing witnesses. Four frozen files and full-gate dependency hashes match.
+An initial fixture cleanup failure is retained; exact inspection confirmed
+no remaining deny ACEs or junctions and unchanged owned sibling markers.
+The corrected parent-first teardown passed before final gates.
+Independent review: `executor/independent-review-descendant-refusal-20260928.md`.
 
-## Pending runtime decision
+## Evidence and preservation
 
-No runtime changes were made. A Codex question asks whether to implement the
-bounded duplicate removal in `_resolve_target_path`, or investigate broader
-error-preserving admission reuse first. Several other repeated guards preserve
-error classification or ordering; the narrow proposal does not claim one
-admission across every runtime step. Its implementation awaits the user reply.
-Read-only design is complete; refresh native.resolve against this integrated
-predecessor before proceeding. Do not interpret the exceeded goal as authority
-to retire other guards or as completion of the runtime outcome.
+Original user reports are retained in
+`build/executor-review-20260928-30b0c2c8/`; do not rerun the write-through probe.
+New correction receipts live under
+`build/root-admission-optimization-20260928/executor/descendant-refusal-*` and
+`build/root-admission-optimization-20260928/resume/executor-descendant-refusal-*`.
+Existing baseline equivalence fixtures
+remain unchanged; only the explicitly approved unavailable-descendant refusal
+may differ from the old behavior.
 
-## Preservation
-
-Retain the clean managed baseline checkout at
-`C:\Users\Spectrum\.codex\worktrees\root-admission-baseline\NamiSync`, revision
-`b8baf42df91e9aeed1402cd029c86ca9ae287b1b`, primary ignored raw/failed evidence,
-the original F: source corpus and historical recovery refs `cfcc6ef`, `0a04921`,
-`7eb8c19d`. Recovery work was rebuilt, never merged as WIPs. No unrelated
-branch/stash/remote changed. No benchmark fixtures or task test processes remain.
-K: held-attribute, geometry and stat-serial observations pass; the separate
-FileIdInfo compatibility defect remains deferred. No exFAT copy claim.
+The preceding performance outcome at `30b0c2c8` passed 5,579 ordinary tests and
+67 differential groups and measured 3.387 seconds / 1.153 MiB/s on 1,000 × 4 KiB.
+Those are historical measurements, not a new measurement of this correction.
+Preserve the clean `b8baf42d` comparison worktree, original F: corpus, prior
+raw/failed receipts and historical recovery refs. No unrelated work is included.

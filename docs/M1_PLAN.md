@@ -13,6 +13,51 @@ certify their recorded build and dependencies only.
 
 ## Root admission optimization — 2026-09-28
 
+**Approved correctness follow-up (2026-09-28).** The user reported a preexisting
+unreadable-junction escape at `30b0c2c8` and baseline `b8baf42d`. Executor
+descendant admission treats every OSError as absence; preflight instead refuses
+unavailable components. Static planted structure is in DEFENSE's supported
+model; preflight mitigation does not justify this fail-open native boundary.
+The clean checkout was stopped at `30b0c2c8`, and the user explicitly approved
+both corrective outcomes below before implementation. Original reproduction
+sources and review evidence remain in `build/executor-review-20260928-30b0c2c8/`.
+New correction evidence paths below are relative to
+`build/root-admission-optimization-20260928/`.
+
+1. **Complete: fail closed on unavailable descendants.** Change executor native
+   `_validate_existing_chain` to stop only on FileNotFoundError; propagate other
+   observation errors without altering normal-path observations or absence
+   behavior. Owners/direct consumers: native resolve and both trash-destination
+   paths, their native/runtime/settlement tests, EXECUTOR and BUGS; parent owns
+   delivery records. Add held/unheld unreadable-junction refusal, not-found/
+   other-error behavior and trash-consumer regressions. Do not reproduce a write
+   outside the declared test roots. Native ACL fixtures must restore permissions
+   and remove the junction itself before owned fixture cleanup. Gate: focused
+   and direct executor consumers, ordinary suite, imports, settlement oracle,
+   guard scan, unchanged 67-group comparison on unaffected fixtures, explicit
+   new refusal witnesses, docs/diff checks and independent review. Separate fix
+   commit; only the reported fail-open behavior is allowed to differ from the
+   baseline. Any further hard-wall finding triggers a new stop.
+   Clean held/unheld red witnesses failed solely because admission returned;
+   corrected witnesses pass. Final gates: 468 focused, 574 direct (two skips),
+   5,583 ordinary (four skips, 34 headed exclusions), 12 imports, settlement
+   30 × three, guard scan 70/391/zero, and all 67 unchanged baseline groups pass.
+   Four frozen hashes and full-gate dependency manifests match. An initial ACL
+   fixture cleanup failure is retained with exact clean-state accounting; the
+   corrected fixture checks parent-first restoration and junction removal.
+   Evidence: `executor/descendant-refusal-*`,
+   `resume/executor-descendant-refusal-*`; independent review is recorded under
+   `executor/independent-review-descendant-refusal-20260928.md`.
+2. **Pending predecessor: production fast-path regression.** Retain current
+   method-identity fallback semantics; add a combined default NativeFileSystem
+   held-root test asserting zero physical resolutions and zero leaf volume
+   probes after admission, instrumenting below the methods under test. Document
+   why method-wrapping profilers select fallback and which measurements retain
+   production dispatch. Population: native tests, EXECUTOR/PERFORMANCE and
+   delivery records. Gate: focused executor tests, exact default-path native
+   witness, docs/diff checks and independent review. Separate test commit; no
+   capability-flag or custom-adapter contract change. No throughput tuning.
+
 **Current status.** Core, executor, preflight and verifier holds are integrated,
 including the held-attribute correction, verifier geometry and executor leaf/
 pure-path reductions. Single-lstat descendant walks are complete and reviewed
@@ -302,7 +347,8 @@ later-snapshot cautions do not require new approval for the explicitly authorize
 single-lstat consolidation; their independent-guard exclusions still bind.
 
 Acceptance: existing native/runtime/settlement seams; ordered single component
-observations, first-unavailable stopping, unsafe/error/conversion precedence,
+observations, first-unavailable stopping (historical: the approved correctness
+follow-up above supersedes this with not-found-only stopping), unsafe/error/conversion precedence,
 outside-root refusal and override dispatch; direct consumers, ordinary/import/
 oracle/guard gates, unchanged qualified 67-group differential, serialized same-
 fixture timings with separate counts/profile, docs and fresh adversarial review.

@@ -184,9 +184,10 @@ retain the fresh leaf-volume probe and its errors. Stored identity adaptation is
 unchanged; the stat serial comparison does not expand filesystem support.
 
 The existing descendant walk also checks each visited component, including the
-leaf, with one no-follow reparse observation. It stops at the first unavailable
-component; unsafe and path-conversion refusals propagate. The surrounding resolve
-and trash consumers retain their independent directory and volume checks.
+leaf, with one no-follow reparse observation. Only a missing component ends the
+walk. Permission, I/O, unsafe-entry and path-conversion failures propagate rather
+than admitting an unobserved path. This applies to resolve and both owned-trash
+consumers, which retain their independent directory and volume checks.
 
 An active native invocation lazily retains successful pure path conversions for
 at most four exact absolute root/reviewed-anchor spellings, plus one last

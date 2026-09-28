@@ -232,6 +232,17 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- SEVERE - FIXED (2026-09-28). Unreadable descendant admitted as absence.
+  The native descendant walk treated every `OSError` as a missing component.
+  A preplaced junction with ACL-denied no-follow attributes could therefore
+  be accepted by held and unheld resolve, permitting mutation outside the root.
+  Retained reports reproduce unsafe native admission in current and baseline
+  code and demonstrate a bounded write-through; no complete workflow trace is
+  claimed. Preflight observation refusal is mitigation, not an executor guarantee.
+  Fixed by ending the walk only on `FileNotFoundError`; all other observation
+  failures propagate through resolve and both owned-trash consumers. Native regressions
+  assert refusal without writing through the junction, check ACL restoration,
+  and remove the junction before fixture cleanup.
 - MODERATE - OPEN (2026-09-28). Native handle metadata on exFAT.
   A K: exFAT copy witness reports truthful `io-error` / WinError 87 after
   transferring eight bytes; the independent invocation-hold witness passes.

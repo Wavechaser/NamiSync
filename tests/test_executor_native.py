@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from contextvars import copy_context
 from dataclasses import replace
 import ctypes
+import getpass
 import os
 from pathlib import Path
 import stat as stat_module
@@ -2109,8 +2110,67 @@ def test_executor_leaf_stat_preserves_custom_volume_probe_dispatch_and_errors(
         assert calls == [leaf if probe_name == "_volume_id" else str(leaf)]
 
 
+@pytest.mark.skipif(os.name != "nt", reason="native Windows junction ACL refusal")
+@pytest.mark.parametrize("held", [False, True])
+def test_executor_resolve_refuses_unreadable_junction_without_following_it(
+    tmp_path: Path,
+    held: bool,
+) -> None:
+    root = tmp_path / "root"
+    parent = root / "parent"
+    parent.mkdir(parents=True)
+    sibling = tmp_path / "owned-sibling"
+    sibling.mkdir()
+    marker = sibling / "untouched.bin"
+    marker.write_bytes(b"owned sibling unchanged")
+    volume = root_authority_module.observe_native_volume(root)
+    if volume.volume_id.fs_type != "NTFS":
+        pytest.skip("unreadable junction witness requires NTFS ACLs")
+    link = parent / "link"
+    user = getpass.getuser()
+
+    def acl(path, *args):
+        subprocess.run(
+            ["icacls", str(path), *args],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+
+    fs = NativeFileSystem()
+    scoped = executor_module._InvocationRoot("target", RootAuthority(
+        str(root), volume.evidence.device_id, volume.volume_id,
+    ))
+    _create_directory_reparse(link, sibling)
+    try:
+        acl(parent, "/deny", f"{user}:(RD)")
+        acl(link, "/deny", f"{user}:(RA)")
+        with pytest.raises(PermissionError) as denied:
+            link.lstat()
+        assert denied.value.winerror == 5
+        scope = (
+            executor_module._root_invocation_scope(fs, object(), (scoped,), None)
+            if held else nullcontext()
+        )
+        with scope:
+            if held:
+                fs.revalidate_root(root, expected_volume=volume.volume_id)
+                assert scoped.held
+            with pytest.raises(PermissionError) as refused:
+                fs.resolve(root, "parent\\link\\escape.bin", must_exist=False)
+            assert refused.value.winerror == 5
+    finally:
+        acl(parent, "/remove:d", user)
+        acl(link, "/remove:d", user)
+        link.rmdir()
+        assert not os.path.lexists(link)
+        assert marker.read_bytes() == b"owned sibling unchanged"
+        assert list(sibling.iterdir()) == [marker]
+
+
 @pytest.mark.parametrize("failure", [FileNotFoundError(2, "missing"), PermissionError(5, "denied"), OSError(1117, "unavailable")])
-def test_executor_descendant_walk_stops_at_first_unavailable_component(
+def test_executor_descendant_walk_stops_only_at_first_missing_component(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     failure: OSError,
@@ -2129,8 +2189,45 @@ def test_executor_descendant_walk_stops_at_first_unavailable_component(
         return original(path)
 
     monkeypatch.setattr(fs, "_reject_reparse", observe)
-    fs._validate_existing_chain(tmp_path, second / "unvisited-leaf")
+    if isinstance(failure, FileNotFoundError):
+        fs._validate_existing_chain(tmp_path, second / "unvisited-leaf")
+    else:
+        with pytest.raises(type(failure)) as refused:
+            fs._validate_existing_chain(tmp_path, second / "unvisited-leaf")
+        assert refused.value is failure
     assert visited == [first, second]
+
+
+@pytest.mark.parametrize("method", ["trash_destination", "revalidate_trash_destination"])
+def test_executor_trash_consumers_refuse_unreadable_destination(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    method: str,
+) -> None:
+    destination = tmp_path / ".synctrash" / str(RUN_ID) / "parent" / "unreadable.bin"
+    destination.parent.mkdir(parents=True)
+    fs = NativeFileSystem()
+    original = Path.lstat
+    denied = PermissionError(5, "denied")
+    visited = []
+
+    def observe(path, *args, **kwargs):
+        if str(path) == executor_module._win32_path(destination):
+            visited.append(path)
+            raise denied
+        return original(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "lstat", observe)
+    with pytest.raises(PermissionError) as refused:
+        if method == "trash_destination":
+            fs.trash_destination(tmp_path, RUN_ID, "parent\\unreadable.bin")
+        else:
+            fs.revalidate_trash_destination(
+                tmp_path, RUN_ID, "parent\\unreadable.bin", destination,
+            )
+    assert refused.value is denied
+    assert len(visited) == 1
+    assert not destination.exists()
 
 
 @pytest.mark.parametrize("mode,attributes", [(stat_module.S_IFLNK, 0), (stat_module.S_IFREG, 0x400)])
