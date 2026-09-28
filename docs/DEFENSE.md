@@ -324,11 +324,22 @@ same-principal code.
 
 ### 2.2 Threat and fault classes
 
-- **Data and structure author — in scope.** An input author may pre-place
-  arbitrary bytes, names, directory shapes, reparse points, collisions, and
-  malformed values before NamiSync arrives. These are not race-window attacks;
-  a planted trap can wait indefinitely and must be refused, isolated, or
-  handled without crossing a hard wall.
+- **Content author — adversarial at interpretation boundaries.** Anyone who
+  can hand the user a file — a download, archive, clone or attachment — authors
+  its names, bytes and metadata without local access. Wherever such values are
+  displayed or cross into bridge, URL, command, executable or filesystem
+  authority, treat them as adversarial and neutralize them structurally at that
+  boundary (hard wall 7, §4). On the filesystem side, names are ordinary input:
+  representability, length and case collisions are handled at observation.
+- **Structure author — in scope as accident.** Links, reparse points,
+  placeholders, ACLs, directory shape and placement inside managed roots are
+  usually made by the user, their tools or sync clients, often unknowingly.
+  They must not produce link traversal out of a root, absence inferred from an
+  unreadable entry, or effects on a root or volume other than the reviewed one.
+  A preplaced structure needs no race, so timing never excuses it. Structures
+  crafted to evade those checks, and managed roots writable by another
+  principal or shared with other writers, are outside the supported baseline;
+  there NamiSync keeps only its catastrophe backstops (§2.5.2).
 - **Ordinary user and ambient faults — in scope for safe handling.** Mistakes,
   stale gestures, access denial, sharing violations, disk exhaustion,
   disconnects, process crashes, malformed state, and ordinary filesystem drift
@@ -392,7 +403,7 @@ The original capability test remains useful:
 
 It prevents expensive security theater against an already compromised
 same-principal trusted base. It is not, by itself, a safety acceptance test.
-Every finding is decided with four questions:
+Every finding is decided with five questions:
 
 1. **Supported-assumption test.** Did it occur in the supported environment and
    mode, including the applicable quiescence and filesystem preconditions?
@@ -401,12 +412,95 @@ Every finding is decided with four questions:
    persistence, or ambiguity than the actor already possessed?
 4. **Degradation test.** Is the maximum outcome bounded, visible, and
    recoverable, or availability-only?
+5. **Proportionality test.** Is the trigger demonstrably plausible, and is the
+   remedy's scale proportional to its plausibility and damage (§2.5)?
 
 A supported-use hard-wall failure requires a fix even when the same user could
 cause similar harm by another route. The capability test decides the security
 ceiling; the other tests preserve product safety beneath it.
 
-### 2.5 Reopen triggers
+### 2.5 Proportional defense
+
+A built defense must answer a **demonstrably plausible** trigger in supported
+use: a named way the harm actually arises, such as an ordinary accident, a
+common tool or platform behavior, a field report, or a witness reproduced under
+supported assumptions. "It could happen", added confidence, theoretical
+completeness and symmetry with another guard are not triggers.
+
+The defense's scale — runtime cost, code, test and evidence burden,
+maintenance and user friction — must be proportional to the trigger's
+plausibility and the damage it can do. A rare but catastrophic accident may
+justify a check that costs O(1) per run, reads an observation already taken, or
+adds one cheap query at a mutating effect. Heavier per-item or per-access work
+needs a probable trigger or a supported hard wall that no cheaper mechanism
+meets. Prefer the lowest sufficient rung of §5.4.
+
+NamiSync does not try to outsmart its users. Defenses refuse clear accidents
+and disclose limits; they do not guess intent, add heuristics, or build safety
+systems around setups a user chose (§2.3, T4). An unusual configuration gets
+accurate refusal or disclosure, not a defense.
+
+This principle decides the supported baseline and the mechanism, never whether
+a supported-use hard-wall crossing needs a fix (§2.4). Existing defenses are
+not grandfathered: one that fails this test is retired or frozen by recording
+that decision here, which is a scope decision for the user.
+
+#### 2.5.1 Plan fidelity bound
+
+"Execution matches the review" is bounded by the plan, not by the world:
+
+1. **Reviewed facts only.** Compare only recorded facts the planner used to
+   choose that item's action: typically kind, existence, size, mtime and file
+   identity where the profile provides it, plus action-specific facts such as
+   managed attributes for a metadata update or link count for move detection.
+   Observed facts the planner did not use are not fidelity facts.
+2. **Once per effect.** One comparison immediately before each mutating effect,
+   whose observation serves everything that effect needs. Non-mutating steps
+   and repeated accesses within one effect do not re-prove it.
+3. **Detection, not climbing.** A mismatch refuses or fails the item. Fidelity
+   alone never justifies handle-bound or handle-relative machinery.
+
+Any accurate refusal reason is acceptable. When several apply, NamiSync need
+not preserve which one wins; repeated work kept only to preserve refusal-reason
+precedence is not a defense.
+
+#### 2.5.2 Catastrophe backstops
+
+Backstops are a closed list. An entry must be irreversible and broad (root,
+volume or cloud-copy scale, or outside the reviewed roots), have a named
+plausible accidental trigger, refuse rather than adapt, and cost no more than
+§2.5 allows a rare catastrophe. Adding one is a scope decision.
+
+| Backstop | Plausible trigger |
+| --- | --- |
+| Overlapping source and target roots | Selecting a folder inside the other root |
+| Wrong root or volume | A different drive takes the reviewed letter; cloned disks share a serial |
+| Root moved, deleted or converted during an invocation | User or tool reorganizes folders mid-run |
+| Link traversal out of a root | Profile compatibility junctions, pnpm, `mklink` relocations, old backups linking into `C:` |
+| Unreadable or incomplete observation treated as absent | Foreign-machine ACLs, access denial, enumeration errors |
+| Cloud placeholder recall or deletion | Files On-Demand folders inside a managed root |
+
+#### 2.5.3 Guard-family dispositions
+
+This table applies §2.5 to existing guard families. It sets target posture;
+[M1_PLAN](M1_PLAN.md) owns scheduling and delivery of any change.
+
+| Guard family | Owners | Disposition |
+| --- | --- | --- |
+| Overlap, wrong root/volume, placeholder, link, unreadable-as-unknown | preflight, scanner, planner, root authority, executor, verifier | **Keep** as §2.5.2 backstops at observation and at the mutating effect. |
+| Root identity during an invocation | root authority, executor, verifier, preflight | **Keep** the hold; **consolidate** repeated root admission to at most one per effect. |
+| Name representability and collisions | pathing core, scanner, planner | **Keep** at observation; **consolidate** repeated full-spelling revalidation of already-validated descendants. |
+| Hard links and duplicate identity | scanner, planner | **Keep** as warnings and move-detection eligibility; elsewhere link count is not a fidelity fact under §2.5.1. |
+| Review-to-execution drift | preflight, executor | **Keep once** per mutating effect under §2.5.1. |
+| Owned-trash destination | preflight, executor | **Keep** as the promised recovery path; check once per run plus the final move. |
+| Durability barriers before recording | executor | **Keep**; hard wall 5. |
+| Verifier evidence subject (pre-open walk, final path, opened volume, handle reparse) | verifier | **Consolidate**: the post-open final path covers link redirection; keep the pre-open walk only for what it cannot cover, such as refusing placeholder components before open. |
+| Live external-writer and race-proofing work | executor, §6 EW-1..4 | **Freeze**; no further climbing without a plausible supported trigger. Retire checks justified only by a racer. |
+| Refusal-reason precedence | executor, verifier | **Relax** under §2.5.1. |
+| Internal re-certification between first-party modules | workflows, core | Governed by §2.1 rung 3; not yet audited against this section. |
+| Interface ingress and rendering | bridge, interfaces | **Keep**; content author boundary under §2.2 and §4. A separate audit may apply §2.5 to per-layer re-validation. |
+
+### 2.6 Reopen triggers
 
 This model must be reviewed before introducing:
 
@@ -645,7 +739,8 @@ is acceptable merely because an observed interval is short. Scheduling can
 stretch any path-based guard-to-use interval, and quantitative timing or
 likelihood claims must satisfy the measurement authority in §7.
 
-Preplaceable data and namespace structures are in scope and must be handled.
+Preplaceable content and structures are in scope as §2.2 scopes their authors:
+content adversarially at interpretation boundaries, structure as accident.
 Live post-final-guard substitution is classified by the supported preconditions
 and maximum consequence, not by a "microsecond window" argument.
 
@@ -700,7 +795,9 @@ Climb when a supported path can cross T0, when a supposedly T1 result is not
 actually bounded/visible/recoverable, or when field evidence shows that a
 probable supported failure makes the feature unusable. Do not climb solely to
 exclude an already compromised same-principal trusted base when the mitigation
-adds no boundary and prevents no authority amplification.
+adds no boundary and prevents no authority amplification. Plan fidelity and
+catastrophe backstops (§2.5) never justify climbing on their own, and every
+climb condition above still needs a plausible trigger under §2.5.
 
 When the remaining result is genuinely T1 or T2, record it and stop. When it is
 T3, state the precondition that places it outside the model. Never convert an
@@ -733,8 +830,9 @@ Current external-writer classes are decided as follows:
 
 Future findings use this triage:
 
-1. **Preplaceable or live?** Preplaceable input/structure is in scope; a live
-   race proceeds to the supported-assumption test.
+1. **Preplaceable or live?** Preplaceable content and structure are in scope
+   as §2.2 scopes them; a live race proceeds to the supported-assumption test.
+   Either way, the trigger must be plausible under §2.5.
 2. **Which hard wall and consequence?** A supported T0 path is a defect.
 3. **Which tolerance class?** T1/T2 require the exact signal and recovery;
    T3 requires the excluding precondition; T4 requires accurate commitment.

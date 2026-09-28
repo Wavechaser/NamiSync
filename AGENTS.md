@@ -63,7 +63,8 @@ Use the relevant routes below, not a mandatory full-document reading sequence:
   import law and contract-to-source locator. Exact shared shapes are source-owned
   under core; prefer explicit dataclasses and typed functions.
 - Safety, bugfix boundaries, or quantitative claims: [DEFENSE.md](docs/DEFENSE.md), 
-  including §7 for evidence authority. Diagnostics, targets and drift guards are not
+  including §2.5 for proportional defense and §7 for evidence authority. New
+  defenses need a demonstrably plausible trigger. Diagnostics, targets and drift guards are not
   acceptance merely because they were measured. Classify consequence and enforceability
   before choosing the lowest sufficient tier; keep observations separate from
   contracts/validators. Component docs own their criteria; PERFORMANCE owns

@@ -1027,6 +1027,17 @@ repeated machinery while preserving operational safety and boundary contracts.
 Safety, settlement, authority, and measurement work made high-risk release
 claims explicit, independently reviewable, and regression-backed.
 
+#### Adopt proportional defense policy (2026-09-29)
+
+- Require a demonstrably plausible trigger for every built defense and scale
+  each defense to plausibility and damage, without outsmarting user choices.
+- Split the preplaced-input threat: content authors stay adversarial at
+  interpretation boundaries; structure authors are handled as accidents, and
+  crafted evasion or roots shared with other principals leave the baseline.
+- Bound plan fidelity to planner-used facts once per mutating effect, close
+  the catastrophe-backstop list, allow any accurate refusal reason, and record
+  target dispositions for existing guard families.
+
 #### Optimize root admission with invocation-scoped holds (2026-09-28 – 2026-09-29)
 
 - Run the five-band executor corpus after the narrow runtime commit: all 25
