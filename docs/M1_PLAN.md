@@ -400,6 +400,39 @@ and volume information 1,000→1, retaining 1,999 current root-attribute checks
 and all 12,000 file-information calls. PERFORMANCE owns methods and limits.
 Independent whole-outcome review approves the commit in
 `verifier/independent-review-holds-20260928.md`.
+Integrated as `0b85d88`.
+
+**Active outcome — verifier opened-handle geometry.** Refresh the finite
+proposal against `0b85d88`; change only verifier `native.py`, its native and
+engine test files, and VERIFIER behavior documentation, plus parent-owned
+delivery/performance records. Query FileStorageInfo16's positive logical sector
+size on the already opened unbuffered file. On query failure or zero, use the
+existing fresh pathname geometry. If file open fails, perform the old pathname
+query before re-raising, preserving simultaneous geometry-refusal precedence.
+All successful opens close on geometry, containment, stat, read or yield failure.
+No shared geometry cache, engine policy, tools behavior, buffering, identity,
+supported-filesystem or defensive-check change. Existing F:/K: API receipts
+answer capability only; the exFAT FileIdInfo issue remains excluded.
+
+Acceptance: existing native/engine seams first; same-handle positive geometry
+without pathname lookup, unavailable/zero fallback, fallback refusal and exact
+closure, open-missing/access plus successful/refused geometry precedence,
+unchanged final-path/stat/read/selected-subject guards; migrate only the named
+owning API fakes and held-mode geometry counter. Then direct recorder/workflow/
+tools consumers, ordinary/import/oracle/guard gate, unchanged 67-group baseline
+differential, separate native counts and serialized verifier timing, document
+checks and fresh independent review. One complete atomic commit; equivalence
+and mandatory stops remain unchanged. Further executor work follows this gate.
+
+Geometry's frozen four-file outcome passes 144 focused, 479 direct-consumer
+tests (two skips) and 5,514 ordinary tests (four skips, 34 headed deselections),
+12 imports, unchanged oracle 30 × three and guard scan 70/391/zero missing
+admissions. Gate hashes match. The unchanged qualified 67-group differential
+passes without new projection exclusions; post-capture hashes match. Serialized
+verifier median is 1.512 seconds (1.267–1.551), with one anchor/volume query each,
+1,000 handle-sector queries, zero pathname-sector queries and unchanged file
+guards. Independent whole-outcome review approves the commit in
+`verifier/independent-review-geometry-20260928.md`.
 
 **Findings outside this result** go to BUGS or HANDOFF as short notes and are
 not handled here. Two exist: a same-volume root replacement before execution
@@ -600,7 +633,7 @@ scope changes, stops and recovery.
 
 | ID | Accepted outcome | Named verification | Status |
 | --- | --- | --- | --- |
-| Root admission optimization | Hold each admitted root per invocation, keep the per-access fallback for remote or unholdable roots, and reduce admission calls, per the plan above. Target above 1 MiB/s for 1,000 × 4 KiB F:→G: execution (goal, not gate). | Baseline equivalence differential, existing tests, settlement oracle with one allowed probe-only re-pin, hold witnesses and measurements after each step. | Core, corrected executor and preflight committed; verifier hold gate passed. Opened-handle geometry next, then measured executor reductions. |
+| Root admission optimization | Hold each admitted root per invocation, keep the per-access fallback for remote or unholdable roots, and reduce admission calls, per the plan above. Target above 1 MiB/s for 1,000 × 4 KiB F:→G: execution (goal, not gate). | Baseline equivalence differential, existing tests, settlement oracle with one allowed probe-only re-pin, hold witnesses and measurements after each step. | Core, corrected executor, preflight and verifier holds committed; geometry gate passed. Measured executor reductions next. |
 | M1-9 | Bounded inventory projections, current evidence and the full inventory consumer for sibling sorting. | Complete or prior-complete publication; warnings outside action scope; raw evidence provenance; search/filter/collapse/window/detail, replacement/race and production sort/reset paths; headed witnesses. | Pending. Missing-row acknowledge/restore UI must be explicitly allocated at activation; this row does not silently claim it. |
 | M1-10 | Baseline, verify and rebaseline controls plus first same-task manual post-copy verification, without persistent operation-time hashes. Eligible null-evidence files enter rebaseline; every admitted rebaseline hashes and replaces/creates evidence, and a match is not verified. | Confirm acknowledgement admission before claim/native work; all-null/mixed workflow, service/CLI and desktop paths; conditional recording and supersession races; atomic handoff classification; live pause/resume/cancel and unchanged automatic failed-read retries; overlay/result identity. Independently review operation matrix and conditional recording. Terminal Verify-remaining/subset retry remains deferred. | Pending. Rebaseline confirmation is distinct from missing-row acknowledgement. |
 | M1-12 | Close integrated lifecycle/retention across activated task surfaces, then complete adversarial, documentation, ordinary and headed verification. This absorbs former M1-11. | Plan-only, execution-only, linked/manual verification, inventory, refused/canceled/degraded/failed tasks across same-document navigation, contained unsupported reload, explicit close and shutdown; admission bounds, stale-response suppression, exact resource release and retained truth. Applicable settlement oracle, ordinary/headed, installed-wheel/product, imports, diff/active-link checks and independent cross-component review. No aggregate-artifact or whole-owner-graph criterion. | Pending. |

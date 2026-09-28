@@ -1029,12 +1029,16 @@ claims explicit, independently reviewable, and regression-backed.
 
 #### Optimize root admission with invocation-scoped holds (2026-09-28)
 
+- Read verifier sector geometry from the opened file handle, preserving pathname
+  fallback, error precedence and closure. Verify 5,514 ordinary tests and the
+  unchanged 67-group differential. Median 1,000-file verification is 1.512 seconds;
+  anchor and volume queries are one each, with zero pathname sector queries.
 - Hold verifier roots per invocation with lazy admission, current-attribute
   guards and explicit forwarding through the rig's native reader tap. Preserve
   per-file containment, snapshots, volume identity, classification and recording.
   All 5,502 ordinary tests and 67 differential groups pass; median 1,000-file
   verification drops from 3.885 to 1.998 seconds. Anchor/volume queries fall
-  from 4,000/1,000 to 1,001/1; pathname sector lookup remains for the next step.
+  from 4,000/1,000 to 1,001/1 before the separate geometry optimization.
 - Hold preflight roots for one observation, checking current handle attributes
   before cached admission reuse. Preserve typed refusals, custom dispatch,
   descendant/physical checks and per-access fallback. All 5,480 ordinary tests

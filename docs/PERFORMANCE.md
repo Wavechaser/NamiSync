@@ -348,11 +348,13 @@ ordinary gate and are functional evidence only, not timing observations or
 exFAT copy acceptance. Receipts are `preflight-guarded-exfat-*`; the existing
 executor handle-identity compatibility issue remains separate in BUGS.
 
-### Verifier invocation holds — 2026-09-28
+### Verifier invocation holds and geometry — 2026-09-28
 
 After preflight `4263b12`, the verifier holds its root through each invocation
 and guards reused admission with current handle attributes. The comparison with
 `b8baf42d` includes earlier core improvements; it does not isolate their effect.
+A second atomic outcome queries sector geometry on the opened file handle,
+retaining fresh pathname fallback when that query is unavailable or zero.
 
 The same `verifier/measure_verifier.py` runs from both checkouts on the preserved
 F: 1,000 × 4 KiB corpus. It primes real evidence outside timing, then measures
@@ -367,29 +369,46 @@ gates and native captures; unrelated desktop activity remains uncontrolled.
 | --- | ---: | ---: | ---: |
 | Baseline | 3.827 | 3.885 | 3.940 |
 | Invocation holds | 1.964 | 1.998 | 2.002 |
+| Holds and handle geometry | 1.267 | 1.512 | 1.551 |
 
 A separate one-invocation wrapper counts project ctypes bindings only inside
 VERIFY. Its timings are excluded. Per 1,000 files:
 
-| Call | Baseline | Invocation holds |
-| --- | ---: | ---: |
-| `GetVolumePathNameW` | 4,000 | 1,001 |
-| `GetVolumeInformationW` | 1,000 | 1 |
-| Opens / closes / final paths, each | 2,000 | 2,001 |
-| File handle information | 12,000 | 12,000 |
-| Current root basic information | 0 | 1,999 |
-| Pathname sector query | 1,000 | 1,000 |
-| Reads / allocations / frees, each | 1,000 | 1,000 |
+| Call | Baseline | Invocation holds | Holds and handle geometry |
+| --- | ---: | ---: | ---: |
+| `GetVolumePathNameW` | 4,000 | 1,001 | 1 |
+| `GetVolumeInformationW` | 1,000 | 1 | 1 |
+| Opens / closes / final paths, each | 2,000 | 2,001 | 2,001 |
+| File handle information | 12,000 | 12,000 | 12,000 |
+| Current root basic information | 0 | 1,999 | 1,999 |
+| Handle sector information | 0 | 0 | 1,000 |
+| Pathname sector query | 1,000 | 1,000 | 0 |
+| Reads / allocations / frees, each | 1,000 | 1,000 | 1,000 |
 
 The file-information calls still cover four snapshots per file; the added root
-queries are separate. Sector lookup remains for the next outcome. These are
+queries and handle-sector information are separate. These are
 diagnostics, not a latency gate or executor-throughput claim. Receipts under
 `build/root-admission-optimization-20260928/verifier/` are
-`baseline-verify-timing.json`, `candidate-verify-timing.json`, both `*-verify-counts.json`
+`baseline-verify-timing.json`, `candidate-verify-timing.json`, `geometry-verify-timing.json`,
+their `*-verify-counts.json`
 and their counted reports, with frozen driver/import/source/product provenance.
-The full gate passes 5,502 ordinary tests, 12 imports, unchanged oracle 30 × three
-and guard scan; the expanded 67-group differential has no unexpected differences.
+The hold gate passed 5,502 ordinary tests; geometry passes 5,514. Both pass 12
+imports, unchanged oracle 30 × three and guard scan; the same qualified 67-group
+differential has no unexpected differences. Geometry timings run after its gate;
+the unchanged baseline/hold receipts remain diagnostic references, not randomized
+or fresh-process causal measurements.
 No exFAT verification or identity-compatibility claim is made.
+
+**Executor continuation profile.** After these verifier measurements, a separate
+caller-thread cProfile sample wraps only `execute` on 1,000 × 4 KiB F:→fresh G:.
+Copies, native readback, source observations, product manifests and manifest-based
+cleanup pass. Its instrumented 32.4 seconds is not a throughput sample. It records
+160,030 extended-path conversions, 435,084 absolute-spelling validations, 26,000
+physical resolutions and 9,000 `_stat_path` calls. Inclusive costs overlap;
+worker threads are outside this profile. Repeated pure path work and leaf stat
+remain measured leads, not permission to retire physical/descendant checks.
+Raw `resume/executor-after-verifier-profile.{prof,txt,json}` and `-run.json`
+retain the driver/input provenance and complete rig report.
 
 ### Executor assessment — 2026-09-27
 

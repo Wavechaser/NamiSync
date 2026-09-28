@@ -722,7 +722,7 @@ def test_native_reader_keeps_full_and_final_touch_admissions_distinct(
         )
 
     api = SimpleNamespace(
-        sector_size=lambda _candidate: calls.append("sector") or 4096,
+        sector_size_from_handle=lambda _handle, _candidate: calls.append("sector") or 4096,
         open_file=lambda _candidate: calls.append("open") or 73,
         require_expected_final_path=(
             lambda _root, _relative, _handle: calls.append("final")
@@ -764,8 +764,8 @@ def test_native_reader_keeps_full_and_final_touch_admissions_distinct(
         "chain",
         "relative",
         "api",
-        "sector",
         "open",
+        "sector",
         "final",
         "stat",
         "close",
@@ -3086,12 +3086,13 @@ def test_native_verifier_holds_lazy_roots_preserves_checks_and_releases(
     root = tmp_path / "root"
     root.mkdir()
     runner, selection, context = _native_invocation_fixture(root, mode)
-    admissions, relative_stats, final_paths, snapshots, geometry, held_guards = [], [], [], [], [], []
+    admissions, relative_stats, final_paths, snapshots, geometry, pathname_geometry, held_guards = [], [], [], [], [], [], []
     original_admit = verifier_engine.admit_root
     original_lstat = verifier_native._verification_lstat
     original_final = verifier_native._WindowsApi.require_expected_final_path
     original_stat = verifier_native._WindowsApi.stat
-    original_sector = verifier_native._WindowsApi.sector_size
+    original_sector = verifier_native._WindowsApi.sector_size_from_handle
+    original_pathname_sector = verifier_native._WindowsApi.sector_size
     original_guard = root_authority_module.RootHold.require_ordinary
 
     def admit(authority):
@@ -3110,9 +3111,13 @@ def test_native_verifier_holds_lazy_roots_preserves_checks_and_releases(
         snapshots.append(handle)
         return original_stat(api, handle)
 
-    def sector(api, candidate):
-        geometry.append(candidate)
-        return original_sector(api, candidate)
+    def sector(api, handle, candidate):
+        geometry.append((handle, candidate))
+        return original_sector(api, handle, candidate)
+
+    def pathname_sector(api, candidate):
+        pathname_geometry.append(candidate)
+        return original_pathname_sector(api, candidate)
 
     def guard(hold):
         held_guards.append(hold)
@@ -3145,7 +3150,8 @@ def test_native_verifier_holds_lazy_roots_preserves_checks_and_releases(
     monkeypatch.setattr(verifier_native, "_verification_lstat", lstat)
     monkeypatch.setattr(verifier_native._WindowsApi, "require_expected_final_path", final)
     monkeypatch.setattr(verifier_native._WindowsApi, "stat", snapshot)
-    monkeypatch.setattr(verifier_native._WindowsApi, "sector_size", sector)
+    monkeypatch.setattr(verifier_native._WindowsApi, "sector_size_from_handle", sector)
+    monkeypatch.setattr(verifier_native._WindowsApi, "sector_size", pathname_sector)
     monkeypatch.setattr(root_authority_module.RootHold, "require_ordinary", guard)
     reader = AuthorityBoundTappedReader(WindowsUnbufferedReader()) if tap else None
     recorder = _Recorder()
@@ -3157,6 +3163,7 @@ def test_native_verifier_holds_lazy_roots_preserves_checks_and_releases(
     assert relative_stats == [str(root / f"file-{number}.bin") for number in (1, 2)]
     assert final_paths == [f"file-{number}.bin" for number in (1, 2)]
     assert len(snapshots) == 8 and len(geometry) == 2 and len(held_guards) == 3
+    assert pathname_geometry == []
     if tap:
         assert [sample.bytes_read for sample in reader.samples] == [3, 3]
     assert verifier_native._ROOT_INVOCATION.get() is None

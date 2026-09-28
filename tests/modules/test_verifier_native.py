@@ -61,6 +61,161 @@ def test_windows_stream_refuses_alignment_above_public_chunk_ceiling() -> None:
     with pytest.raises(UnsupportedVerification, match="allocation limit"):
         next(stream.iter_chunks(1))
 
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows handle geometry")
+@pytest.mark.parametrize("geometry", ["positive", "unavailable", "zero"])
+def test_windows_handle_geometry_uses_open_handle_or_fresh_pathname_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+    geometry: str,
+) -> None:
+    query_calls: list[tuple[int, int, int]] = []
+    pathname_calls: list[Path] = []
+    path = Path(r"F:\reviewed-root\payload.bin")
+
+    class _Kernel32:
+        def GetFileInformationByHandleEx(
+            self, handle: int, information_class: int, target, size: int
+        ) -> int:
+            query_calls.append((handle, information_class, size))
+            if geometry == "unavailable":
+                ctypes.set_last_error(87)
+                return 0
+            storage = ctypes.cast(
+                target, ctypes.POINTER(verifier_native._FileStorageInfo)
+            ).contents
+            storage.LogicalBytesPerSector = 512 if geometry == "positive" else 0
+            return 1
+
+    api = verifier_native._WindowsApi.__new__(verifier_native._WindowsApi)
+    api._kernel32 = _Kernel32()
+    monkeypatch.setattr(
+        api, "sector_size", lambda candidate: pathname_calls.append(candidate) or 4096
+    )
+
+    assert api.sector_size_from_handle(73, path) == (
+        512 if geometry == "positive" else 4096
+    )
+    assert query_calls == [(73, 16, 28)]
+    assert pathname_calls == ([] if geometry == "positive" else [path])
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows reader error precedence")
+@pytest.mark.parametrize("open_failure", [FileNotFoundError, PermissionError])
+@pytest.mark.parametrize("geometry_refuses", [False, True])
+def test_windows_reader_preserves_open_and_geometry_failure_precedence(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    open_failure: type[OSError],
+    geometry_refuses: bool,
+) -> None:
+    path = tmp_path / "payload.bin"
+    path.write_bytes(b"payload")
+    calls: list[str] = []
+    original_error = open_failure(2 if open_failure is FileNotFoundError else 5, "open failed")
+    alignment_error = UnsupportedVerification("old pathname alignment refusal")
+
+    class _Api:
+        def open_file(self, candidate: Path) -> int:
+            assert candidate == path
+            calls.append("open")
+            raise original_error
+
+        def sector_size(self, candidate: Path) -> int:
+            assert candidate == path
+            calls.append("pathname")
+            if geometry_refuses:
+                raise alignment_error
+            return 512
+
+        def sector_size_from_handle(self, *_args) -> int:
+            raise AssertionError("failed open has no handle geometry")
+
+        def close(self, _handle: int) -> None:
+            raise AssertionError("failed open has no handle to close")
+
+    monkeypatch.setattr(verifier_native, "_WindowsApi", _Api)
+    reader = WindowsUnbufferedReader()
+    expected_error = alignment_error if geometry_refuses else original_error
+    with pytest.raises(type(expected_error)) as refused:
+        with reader.open(tmp_path, path.name):
+            raise AssertionError("failed open yielded a stream")
+    assert refused.value is expected_error
+    assert calls == ["open", "pathname"]
+
+    recorder = _Recorder()
+    result = verify(
+        IntegritySelection((_item(tmp_path, path=path.name, baseline_evidence=None),)),
+        _native_context([], tmp_path), recorder, reader,
+    )
+    outcome = result.outcomes[0]
+    assert (outcome.result, outcome.reason) == (
+        (IntegrityResult.UNSUPPORTED, IntegrityReason.UNSUPPORTED_READ)
+        if geometry_refuses else
+        (IntegrityResult.MISSING, IntegrityReason.NOT_FOUND)
+        if open_failure is FileNotFoundError else
+        (IntegrityResult.ERROR, IntegrityReason.READ_ERROR)
+    )
+    assert outcome.detail is not None and str(expected_error) in outcome.detail
+    assert recorder.commands == []
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows opened handle lifetime")
+@pytest.mark.parametrize("failure_at", ["geometry", "final", "stat", "read", "yield"])
+def test_windows_reader_closes_open_handle_on_all_later_failures(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failure_at: str,
+) -> None:
+    path = tmp_path / "payload.bin"
+    path.write_bytes(b"x")
+    closed: list[int] = []
+    released: list[int] = []
+    failure = OSError(5, "owned failure")
+
+    class _Api:
+        def open_file(self, candidate: Path) -> int:
+            assert candidate == path
+            return 73
+
+        def sector_size_from_handle(self, handle: int, candidate: Path) -> int:
+            assert handle == 73 and candidate == path
+            if failure_at == "geometry":
+                raise failure
+            return 512
+
+        def require_expected_final_path(self, *_args) -> None:
+            if failure_at == "final":
+                raise failure
+
+        def stat(self, handle: int) -> FileStat:
+            assert handle == 73
+            if failure_at == "stat":
+                raise failure
+            return _stat(size=1, identity=None)
+
+        def allocate(self, _size: int) -> int:
+            return 79
+
+        def read(self, *_args) -> int:
+            raise failure
+
+        def release(self, address: int) -> None:
+            released.append(address)
+
+        def close(self, handle: int) -> None:
+            closed.append(handle)
+
+    monkeypatch.setattr(verifier_native, "_WindowsApi", _Api)
+    with pytest.raises(OSError) as refused:
+        with WindowsUnbufferedReader().open(tmp_path, path.name) as stream:
+            if failure_at == "yield":
+                raise failure
+            next(stream.iter_chunks(1))
+    assert refused.value is failure
+    assert closed == [73]
+    assert released == ([79] if failure_at == "read" else [])
+
+
 @pytest.mark.skipif(os.name != "nt", reason="Windows cache-honest integration")
 def test_windows_reader_uses_read_only_share_and_cache_honest_flags(
     tmp_path: Path,
@@ -86,7 +241,8 @@ def test_windows_reader_uses_read_only_share_and_cache_honest_flags(
         def __init__(self) -> None:
             self._kernel32 = _Kernel32()
 
-        def sector_size(self, candidate: Path) -> int:
+        def sector_size_from_handle(self, handle: int, candidate: Path) -> int:
+            assert handle == 73
             assert candidate == path
             return 4096
 
@@ -295,6 +451,10 @@ def test_windows_reader_safety_rejections_classify_unsupported_never_verified(
         expected_detail = "volume reported an invalid sector size"
 
         class _Kernel32:
+            def GetFileInformationByHandleEx(self, *_args: object) -> int:
+                ctypes.set_last_error(87)
+                return 0
+
             def GetVolumePathNameW(
                 self, _path: str, volume_buffer, _size: int
             ) -> int:
@@ -308,6 +468,13 @@ def test_windows_reader_safety_rejections_classify_unsupported_never_verified(
             def __init__(self) -> None:
                 self._kernel32 = _Kernel32()
 
+            def open_file(self, candidate: Path) -> int:
+                assert candidate == path
+                return 73
+
+            def close(self, handle: int) -> None:
+                closed.append(handle)
+
     else:
         expected_detail = (
             "the opened handle does not resolve to the selected root-relative path"
@@ -317,7 +484,8 @@ def test_windows_reader_safety_rejections_classify_unsupported_never_verified(
             def __init__(self) -> None:
                 pass
 
-            def sector_size(self, candidate: Path) -> int:
+            def sector_size_from_handle(self, handle: int, candidate: Path) -> int:
+                assert handle == 73
                 assert candidate == path
                 return 4096
 
@@ -361,7 +529,10 @@ def test_windows_reader_safety_rejections_classify_unsupported_never_verified(
     assert outcome.reason is IntegrityReason.UNSUPPORTED_READ
     assert outcome.detail is not None and expected_detail in outcome.detail
     assert recorder.commands == []
-    assert closed == ([74, 73] if rejection == "containment" else [])
+    assert closed == (
+        [74, 73] if rejection == "containment"
+        else [73] if rejection == "alignment" else []
+    )
 
 
 @pytest.mark.skipif(os.name != "nt", reason="Windows cache-honest integration")

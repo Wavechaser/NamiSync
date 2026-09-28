@@ -170,13 +170,21 @@ items remain pending and emit nothing until resume.
 
 A verification match must attest storage, not merely pages populated by the
 copy that just finished. `WindowsUnbufferedReader` opens the selected file with
-`FILE_FLAG_NO_BUFFERING`, obtains the volume sector size, reads into
+`FILE_FLAG_NO_BUFFERING`, obtains the logical sector size from FileStorageInfo
+on that same opened handle, reads into
 `VirtualAlloc`-aligned buffers in sector-multiple requests, and reports
 `windows-unbuffered` in the item outcome. It rejects reparse components and
 verifies that the opened handle's final path is exactly the selected path below
 the resolved root. The handle permits other readers but denies writer/delete
 sharing so the selected name cannot be replaced while it still refers to the
 old subject. Pre- and post-read stats come from that same handle.
+
+If handle geometry is unavailable or reports zero, the reader uses its existing
+fresh pathname geometry query. If file open fails, that pathname query precedes
+re-raising the open error so an existing alignment refusal retains precedence.
+Every successful open closes its handle on geometry, containment, stat, read or
+yield failure. Geometry stays local to the opened stream; it is not cached across
+subjects or invocations.
 
 The aligned native allocation is created once per opened file and freed when
 that stream ends. Each yielded chunk is still materialized as a Python `bytes`

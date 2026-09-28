@@ -60,6 +60,7 @@ _ERROR_INVALID_PARAMETER = 87
 _WINDOWS_EPOCH_TICKS = 116_444_736_000_000_000
 _FILE_BASIC_INFO_CLASS = 0
 _FILE_STANDARD_INFO_CLASS = 1
+_FILE_STORAGE_INFO_CLASS = 16
 
 
 @dataclass(slots=True)
@@ -176,9 +177,13 @@ class WindowsUnbufferedReader:
             _reject_reparse_components(authority, normalized)
 
         api = _WindowsApi()
-        sector_size = api.sector_size(candidate)
-        handle = api.open_file(candidate)
         try:
+            handle = api.open_file(candidate)
+        except OSError:
+            api.sector_size(candidate)  # preserve geometry-refusal precedence
+            raise
+        try:
+            sector_size = api.sector_size_from_handle(handle, candidate)
             api.require_expected_final_path(root_path, normalized, handle)
             stream = _WindowsStream(api, handle, sector_size)
             stream.stat()  # reject directories/reparse points before yielding
@@ -260,6 +265,18 @@ class _FileStandardInfo(ctypes.Structure):
         ("NumberOfLinks", ctypes.c_uint32),
         ("DeletePending", ctypes.c_ubyte),
         ("Directory", ctypes.c_ubyte),
+    ]
+
+
+class _FileStorageInfo(ctypes.Structure):
+    _fields_ = [
+        ("LogicalBytesPerSector", ctypes.c_uint32),
+        ("PhysicalBytesPerSectorForAtomicity", ctypes.c_uint32),
+        ("PhysicalBytesPerSectorForPerformance", ctypes.c_uint32),
+        ("FileSystemEffectivePhysicalBytesPerSectorForAtomicity", ctypes.c_uint32),
+        ("Flags", ctypes.c_uint32),
+        ("ByteOffsetForSectorAlignment", ctypes.c_uint32),
+        ("ByteOffsetForPartitionAlignment", ctypes.c_uint32),
     ]
 
 
@@ -413,6 +430,14 @@ class _WindowsApi:
         ):
             error = ctypes.get_last_error()
             raise OSError(error, os.strerror(error))
+
+    def sector_size_from_handle(self, handle: int, path: Path) -> int:
+        storage = _FileStorageInfo()
+        try:
+            self._get_file_information(handle, _FILE_STORAGE_INFO_CLASS, storage)
+        except OSError:
+            return self.sector_size(path)
+        return storage.LogicalBytesPerSector or self.sector_size(path)
 
     def sector_size(self, path: Path) -> int:
         volume_buffer = ctypes.create_unicode_buffer(32768)
