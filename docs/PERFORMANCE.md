@@ -470,6 +470,17 @@ The caller-thread profile retains 23,006 `nt.stat`, 26,000 physical resolutions,
 use `resume/executor-cheap-cache-` timing/counts/counted/profile suffixes; inputs
 match before and after. Instrumented runs are diagnostic, not timing authority.
 
+**Leaf volume from the checked stat.** Three same-fixture serialized samples
+measure median 5.383 seconds (5.332–5.387), 0.726 MiB/s, versus 7.756 seconds.
+All copies/readbacks, source checks and manifest-scoped cleanup pass. Separate
+counts show anchor and volume queries each falling from 6,002 to two; opens,
+closes and final-path queries stay 2,002/2,002/two. Handle-information queries
+rise from 31,998 to 37,998 because stat-derived volume reuse checks current held
+attributes. Receipts use `resume/executor-stat-volume-` with the same timing,
+counts, counted and profile suffixes. The profile remains diagnostic; its
+dependency manifests match. These sequential observations are not a randomized
+causal estimate, and the 1 MiB/s goal remains unmet.
+
 ### Executor assessment — 2026-09-27
 
 Read-only assessment of `milestone1-adelbert` at

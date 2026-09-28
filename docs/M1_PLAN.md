@@ -69,6 +69,29 @@ only at external temporary-directory setup; the elevated retry passed unchanged.
 Three copy samples measure median 7.756 seconds (7.519–7.851), 0.504 MiB/s;
 native query counts are unchanged. Separate profile/count receipts use
 `resume/executor-cheap-cache-`; independent review is recorded under `executor/`.
+Integrated as `acdaefa`.
+
+**Completed outcome — leaf volume from the checked stat.** In executor native
+`_stat_path`, use the observed nonnegative integer st_dev low 32 bits when it
+matches the confirmed held root's native serial. Return that root's VolumeId;
+otherwise retain the existing fresh leaf-volume probe. Preserve custom
+`_volume_id`/`_observe_root_volume` dispatch and errors, current held attributes,
+stored identity adaptation and all descendant guards. No persistence or exFAT
+support expansion. Population: native.py, native tests, EXECUTOR and delivery/
+performance records. Cases cover real NTFS stat/serial, upper-bit variation,
+mismatch/unavailable/invalid evidence, custom dispatch and unsafe held roots.
+Read-only F: NTFS leaf and K: exFAT root serial probes match; K: evidence alone
+does not claim copy support. Gate: focused/direct consumers, ordinary suite,
+imports, settlement oracle, guard scan, unchanged 67-group differential,
+separate measurement/count/profile receipts and independent review. One atomic
+commit; any changed error/effect or safety contract stops dependent work.
+All 455 focused, 574 direct (two skips), 5,570 ordinary (four skips, 34 headed
+exclusions), 12 imports, 30 × three settlement scenarios, guard scan 70/391/zero
+and 67 differential comparisons pass. Frozen evidence and review use
+`executor/stat-volume-*`; full gates and serialized measurements use
+`resume/executor-stat-volume-*`. Median is 5.383 seconds (5.332–5.387),
+0.726 MiB/s. Anchor/volume queries fall from 6,002 each to two each; fresh
+held-attribute queries account for the 6,000 added handle-information calls.
 
 **Approved hold safety contract.** Keep directory access without delete sharing
 and retain write sharing. Confirm once using `GetFinalPathNameByHandleW` on the
@@ -460,7 +483,7 @@ scope changes, stops and recovery.
 
 | ID | Accepted outcome | Named verification | Status |
 | --- | --- | --- | --- |
-| Root admission optimization | Hold each admitted root per invocation, keep the per-access fallback for remote or unholdable roots, and reduce admission calls, per the plan above. Target above 1 MiB/s for 1,000 × 4 KiB F:→G: execution (goal, not gate). | Baseline equivalence differential, existing tests, settlement oracle with one allowed probe-only re-pin, hold witnesses and measurements after each step. | Holds, verifier geometry and executor leaf/path/descendant reductions delivered and gated. Latest executor median 0.504 MiB/s; goal unmet. Anchor comparison clarification and cheap cache eligibility complete; leaf volume, held resolution and runtime admission follow. |
+| Root admission optimization | Hold each admitted root per invocation, keep the per-access fallback for remote or unholdable roots, and reduce admission calls, per the plan above. Target above 1 MiB/s for 1,000 × 4 KiB F:→G: execution (goal, not gate). | Baseline equivalence differential, existing tests, settlement oracle with one allowed probe-only re-pin, hold witnesses and measurements after each step. | Holds, verifier geometry and executor leaf/path/descendant reductions delivered and gated. Latest executor median 0.726 MiB/s; goal unmet. Anchor comparison clarification, cheap cache eligibility and leaf volume complete; held resolution and runtime admission follow. |
 | M1-9 | Bounded inventory projections, current evidence and the full inventory consumer for sibling sorting. | Complete or prior-complete publication; warnings outside action scope; raw evidence provenance; search/filter/collapse/window/detail, replacement/race and production sort/reset paths; headed witnesses. | Pending. Missing-row acknowledge/restore UI must be explicitly allocated at activation; this row does not silently claim it. |
 | M1-10 | Baseline, verify and rebaseline controls plus first same-task manual post-copy verification, without persistent operation-time hashes. Eligible null-evidence files enter rebaseline; every admitted rebaseline hashes and replaces/creates evidence, and a match is not verified. | Confirm acknowledgement admission before claim/native work; all-null/mixed workflow, service/CLI and desktop paths; conditional recording and supersession races; atomic handoff classification; live pause/resume/cancel and unchanged automatic failed-read retries; overlay/result identity. Independently review operation matrix and conditional recording. Terminal Verify-remaining/subset retry remains deferred. | Pending. Rebaseline confirmation is distinct from missing-row acknowledgement. |
 | M1-12 | Close integrated lifecycle/retention across activated task surfaces, then complete adversarial, documentation, ordinary and headed verification. This absorbs former M1-11. | Plan-only, execution-only, linked/manual verification, inventory, refused/canceled/degraded/failed tasks across same-document navigation, contained unsupported reload, explicit close and shutdown; admission bounds, stale-response suppression, exact resource release and retained truth. Applicable settlement oracle, ordinary/headed, installed-wheel/product, imports, diff/active-link checks and independent cross-component review. No aggregate-artifact or whole-owner-graph criterion. | Pending. |

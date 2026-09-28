@@ -303,11 +303,13 @@ def _reuse_held_root(fs, root, volume, selector):
         return fs.revalidate_root(root, expected_volume=volume.volume_id)
     if selector == "parent-chain":
         return fs._reject_reparse_chain(root)
+    if selector == "leaf-stat":
+        return fs.stat_path(root / "untouched.bin")
     return fs._volume_id(root)
 
 
 @pytest.mark.skipif(os.name != "nt", reason="native Windows current root attributes")
-@pytest.mark.parametrize("selector", ("revalidate", "parent-chain", "volume"))
+@pytest.mark.parametrize("selector", ("revalidate", "parent-chain", "volume", "leaf-stat"))
 @pytest.mark.parametrize("state", ("ordinary", "placeholder", "query-failure"))
 def test_held_root_reuse_requires_current_attributes_without_diagnostic_queries(
     tmp_path: Path,
@@ -315,6 +317,8 @@ def test_held_root_reuse_requires_current_attributes_without_diagnostic_queries(
     selector: str,
     state: str,
 ) -> None:
+    if selector == "leaf-stat":
+        (tmp_path / "untouched.bin").write_bytes(b"checked leaf")
     volume = root_authority_module.observe_native_volume(tmp_path)
     authority = RootAuthority(str(tmp_path), volume.evidence.device_id, volume.volume_id)
     scoped = executor_module._InvocationRoot("target", authority)
@@ -356,7 +360,7 @@ def test_held_root_reuse_requires_current_attributes_without_diagnostic_queries(
 
 
 @pytest.mark.skipif(os.name != "nt", reason="native NTFS in-place root conversion")
-@pytest.mark.parametrize("selector", ("revalidate", "parent-chain", "volume"))
+@pytest.mark.parametrize("selector", ("revalidate", "parent-chain", "volume", "leaf-stat"))
 def test_held_root_reuse_refuses_inplace_attribute_only_junction_conversion(
     tmp_path: Path,
     selector: str,
@@ -1863,6 +1867,138 @@ def test_executor_descendant_walk_observes_each_component_once_in_order(
     _ObservedFileSystem()._validate_existing_chain(tmp_path, leaf)
     assert dispatched == list(components)
     assert observations == [(path, False) for path in components]
+
+
+@pytest.mark.skipif(os.name != "nt", reason="native Windows stat-volume serial")
+@pytest.mark.parametrize("kind", [EntryKind.FILE, EntryKind.DIRECTORY])
+def test_executor_leaf_stat_native_serial_reuses_guarded_held_volume(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    kind: EntryKind,
+) -> None:
+    leaf = tmp_path / "leaf"
+    if kind is EntryKind.FILE:
+        leaf.write_bytes(b"native serial")
+    else:
+        leaf.mkdir()
+    fs = NativeFileSystem()
+    volume = root_authority_module.observe_native_volume(tmp_path)
+    if volume.volume_id.fs_type != "NTFS":
+        pytest.skip("native leaf identity witness requires NTFS")
+    info = leaf.lstat()
+    assert info.st_dev & 0xFFFFFFFF == int(volume.volume_id.serial, 16)
+    expected = fs.stat_path(leaf)
+    scoped = executor_module._InvocationRoot("target", RootAuthority(
+        str(tmp_path), volume.evidence.device_id, volume.volume_id,
+    ))
+    assert executor_module._WINDOWS is not None
+    assert root_authority_module._WINDOWS is not None
+    original_query = root_authority_module._WINDOWS.get_file_information_ex
+    queries = []
+
+    def query(handle, kind, output, size):
+        queries.append(kind)
+        return original_query(handle, kind, output, size)
+
+    with executor_module._root_invocation_scope(fs, object(), (scoped,), None):
+        fs.revalidate_root(tmp_path, expected_volume=volume.volume_id)
+        assert scoped.held
+        monkeypatch.setattr(root_authority_module._WINDOWS, "get_file_information_ex", query)
+        for name in ("get_volume_path", "get_volume_information"):
+            monkeypatch.setattr(executor_module._WINDOWS, name,
+                                lambda *_args: pytest.fail("matching stat reached volume probe"))
+        assert fs.stat_path(leaf) == expected
+        assert queries == [0]
+
+
+@pytest.mark.skipif(os.name != "nt", reason="native Windows stat-volume selection")
+@pytest.mark.parametrize("device", ["upper-match", "mismatch", "upper-only", "missing", "negative", "bool", "text"])
+def test_executor_leaf_stat_serial_match_and_unavailable_evidence_fallback(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    device: str,
+) -> None:
+    leaf = tmp_path / "leaf"
+    leaf.write_bytes(b"checked snapshot")
+    fs = NativeFileSystem()
+    volume = root_authority_module.observe_native_volume(tmp_path)
+    serial = int(volume.volume_id.serial, 16)
+    expected = fs.stat_path(leaf)
+    observed = leaf.lstat()
+    snapshot = SimpleNamespace(**{
+        name: getattr(observed, name) for name in (
+            "st_mode", "st_size", "st_mtime_ns", "st_ino", "st_nlink",
+            "st_file_attributes", "st_birthtime_ns",
+        )
+    })
+    devices = {
+        "upper-match": (0x12345678 << 32) | serial,
+        "mismatch": serial ^ 1,
+        "upper-only": (serial << 32) | (serial ^ 1),
+        "negative": -1,
+        "bool": True,
+        "text": str(serial),
+    }
+    if device != "missing":
+        snapshot.st_dev = devices[device]
+    scoped = executor_module._InvocationRoot("target", RootAuthority(
+        str(tmp_path), volume.evidence.device_id, volume.volume_id,
+    ))
+    assert executor_module._WINDOWS is not None
+    original_probe = executor_module._WINDOWS.get_volume_path
+    probes = []
+
+    def probe(*args):
+        probes.append(args[0])
+        return original_probe(*args)
+
+    with executor_module._root_invocation_scope(fs, object(), (scoped,), None):
+        fs.revalidate_root(tmp_path, expected_volume=volume.volume_id)
+        assert scoped.held
+        monkeypatch.setattr(fs, "_reject_reparse", lambda path: snapshot)
+        monkeypatch.setattr(executor_module._WINDOWS, "get_volume_path", probe)
+        assert fs.stat_path(leaf) == expected
+        assert len(probes) == (0 if device == "upper-match" else 1)
+
+
+@pytest.mark.skipif(os.name != "nt", reason="native Windows custom volume probes")
+@pytest.mark.parametrize("probe_name", ["_volume_id", "_observe_root_volume"])
+@pytest.mark.parametrize("failure", [None, OSError(1117, "custom volume unavailable"), ValueError("custom volume refusal")])
+def test_executor_leaf_stat_preserves_custom_volume_probe_dispatch_and_errors(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    probe_name: str,
+    failure: Exception | None,
+) -> None:
+    leaf = tmp_path / "leaf"
+    leaf.write_bytes(b"custom volume evidence")
+    fs = NativeFileSystem()
+    volume = root_authority_module.observe_native_volume(tmp_path)
+    scoped = executor_module._InvocationRoot("target", RootAuthority(
+        str(tmp_path), volume.evidence.device_id, volume.volume_id,
+    ))
+    custom_volume = VolumeId("1234ABCD", "NTFS")
+    calls = []
+
+    def probe(path):
+        calls.append(path)
+        if failure is not None:
+            raise failure
+        return custom_volume if probe_name == "_volume_id" else replace(volume, volume_id=custom_volume)
+
+    with executor_module._root_invocation_scope(fs, object(), (scoped,), None):
+        fs.revalidate_root(tmp_path, expected_volume=volume.volume_id)
+        assert scoped.held
+        monkeypatch.setattr(fs, probe_name, probe)
+        if failure is None:
+            result = fs.stat_path(leaf)
+            assert result is not None and result.file_identity is not None
+            assert result.file_identity.volume_serial == custom_volume.serial
+        else:
+            with pytest.raises(type(failure)) as refused:
+                fs.stat_path(leaf)
+            assert refused.value is failure
+        assert calls == [leaf if probe_name == "_volume_id" else str(leaf)]
 
 
 @pytest.mark.parametrize("failure", [FileNotFoundError(2, "missing"), PermissionError(5, "denied"), OSError(1117, "unavailable")])

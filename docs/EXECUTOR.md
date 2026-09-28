@@ -153,7 +153,8 @@ Confirmed holds replace repeated root-prefix admission until
 the call finishes all settlement and cleanup. Each reuse first reads current
 attributes from that same held handle and refuses reparse or placeholder state.
 This applies to the root-revalidation shortcut, the held-root anchor for a
-descendant walk, and exact-root volume reuse. Query failure retains the existing
+descendant walk, exact-root volume reuse, and stat-derived leaf volume reuse.
+Query failure retains the existing
 consumer error policy and cannot authorize access. Diagnostic mode reporting
 does not perform an additional attribute query. The hold's write sharing remains
 compatible with root flushes and ordinary descendant changes; DEFENSE's
@@ -162,7 +163,7 @@ Pause, cancellation and every error
 release them; resume creates a fresh invocation. UNC, mapped network, unavailable
 or mismatching final paths retain per-access admission. Descendant physical
 containment (including root and candidate physical resolution), reparse checks,
-second directory observations, leaf volume probes and
+second directory observations, leaf volume classification and
 per-item stat behavior remain. The shared hold contract is owned by
 [CORE.md](CORE.md) and [DEFENSE.md](DEFENSE.md).
 
@@ -170,8 +171,15 @@ Each native leaf stat uses the single no-follow snapshot returned by its reparse
 guard for kind and all metadata. An unavailable initial observation still returns
 `None`; unsafe-entry, pure path-conversion and later volume/type failures retain
 their refusals. This consolidates leaf observations that were not compared while
-preserving root second-directory checks, containment, leaf volume queries and
+preserving root second-directory checks, containment, volume checks and
 all later operation guards.
+
+On the default Windows probe path, a valid nonnegative integer `st_dev` from that
+checked snapshot selects the admitted held root's `VolumeId` when its low 32 bits
+match the root's native serial. This reuse first checks current held attributes.
+Mismatch, unavailable/invalid stat evidence, unheld roots and custom volume probes
+retain the fresh leaf-volume probe and its errors. Stored identity adaptation is
+unchanged; the stat serial comparison does not expand filesystem support.
 
 The existing descendant walk also checks each visited component, including the
 leaf, with one no-follow reparse observation. It stops at the first unavailable

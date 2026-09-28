@@ -580,7 +580,24 @@ class NativeFileSystem:
             size = 0
         else:
             raise UnsafeExecutionPath(f"unsupported filesystem entry: {path}")
-        volume = self._volume_id(path)
+        volume = None
+        volume_probe = self._volume_id
+        if (
+            os.name == "nt"
+            and getattr(volume_probe, "__func__", None) is _DEFAULT_VOLUME_ID_PROBE
+            and getattr(self._observe_root_volume, "__func__", None) is _DEFAULT_ROOT_VOLUME_PROBE
+        ):
+            scoped = self._scoped_root(path, descendants=True)
+            device = getattr(info, "st_dev", None)
+            if (
+                scoped is not None and scoped.volume is not None
+                and type(device) is int and device >= 0
+                and f"{device & 0xFFFFFFFF:08X}" == scoped.volume.volume_id.serial
+                and self._require_held_root(scoped)
+            ):
+                volume = scoped.volume.volume_id
+        if volume is None:
+            volume = volume_probe(path)
         return FileStat(
             kind=kind,
             size=size,
@@ -1435,6 +1452,7 @@ class NativeFileSystem:
 
 
 _DEFAULT_ROOT_VOLUME_PROBE = NativeFileSystem._observe_root_volume
+_DEFAULT_VOLUME_ID_PROBE = NativeFileSystem._volume_id
 
 
 def _write_all(target: BinaryIO, chunk: bytes, owner: str) -> None:

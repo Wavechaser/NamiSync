@@ -1029,6 +1029,10 @@ claims explicit, independently reviewable, and regression-backed.
 
 #### Optimize root admission with invocation-scoped holds (2026-09-28)
 
+- Reuse a confirmed held root's volume ID when the checked leaf stat device
+  serial matches, retaining probe fallback and custom dispatch. All 5,570
+  ordinary tests and 67 differential groups pass. Same-fixture median falls
+  to 5.383 seconds / 0.726 MiB/s; anchor and volume queries fall to two each.
 - Replace repeated path-object construction for executor cache eligibility with
   a string predicate. Same-fixture median falls from 9.684 to 7.756 seconds
   (0.504 MiB/s), with native query counts unchanged. All 436 focused and 574

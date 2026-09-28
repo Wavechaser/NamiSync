@@ -18,19 +18,18 @@ is introduced just to remove a setup-time comparison. Both Python ASTs match,
 96 local links and diff checks pass; independent review approves in
 `executor/independent-review-anchor-comparison-20260928.md` under the evidence root.
 
-String-only cache eligibility is implemented and verified: 436 focused and 574
-direct checks (two skips), 12 imports, 30 × three settlement cases, guard scan
-70/391/zero and all 67 differential groups pass. The initial direct run failed
-at external temporary-directory setup only; elevated retry passed unchanged.
-Frozen inputs are in `executor/cheap-cache-frozen-inputs.json`, with separate
-`resume/executor-cheap-cache-*` receipts. No ordinary-suite pass is claimed for
-this private predicate; the following wider outcomes run that gate.
+String-only cache eligibility integrated as `acdaefa`. The current leaf-volume
+outcome uses matching stat device low bits with held serial, retaining fallback
+and custom volume dispatch. It passes 455 focused, 574 direct (two skips), 5,570
+ordinary (four skips, 34 headed exclusions), 12 imports, 30 × three settlement
+scenarios, guard scan 70/391/zero and all 67 qualified differential groups.
+Frozen files: `executor/stat-volume-frozen-inputs.json`; gates/measurements:
+`resume/executor-stat-volume-*`. No writers or native fixtures remain active.
 
-Next: stat-derived leaf volume, held-path physical-resolution removal, then
-runtime admission per access/effect step. Read-only design mapped native/runtime
-and the settlement audit adapter. Preserve current held attributes,
-unheld/custom fallback, descendant guards, settlement and dispatch. Do not treat
-an entire plan operation as one step when callbacks, waits or effects divide it.
+Next: held-path physical-resolution removal, then runtime admission per step.
+Preserve live held attributes, descendant checks, unheld/custom fallback,
+settlement and error/effect ordering. Physical setup/overlap observation remains.
+Runtime design is read-only until the held-resolution predecessor is integrated.
 
 ## Baseline and evidence
 
@@ -40,9 +39,9 @@ missing admissions and all 67 qualified differential groups. Receipts remain
 under `build/root-admission-optimization-20260928/`, including
 `executor/independent-review-descendant-stat-20260928.md`.
 
-Last three-sample executor median is 7.756 seconds / 0.504 MiB/s on 1,000 × 4 KiB
+Last three-sample executor median is 5.383 seconds / 0.726 MiB/s on 1,000 × 4 KiB
 F:→G:. A 1 MiB/s result needs about 3.906 seconds; it remains a goal, not a gate.
-`resume/executor-cheap-cache-*` retains timing, separate counts/profile,
+`resume/executor-stat-volume-*` retains timing, separate counts/profile,
 source checks and scoped cleanup. PERFORMANCE owns methods and limits.
 
 Retain the clean managed baseline checkout at
