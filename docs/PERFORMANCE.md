@@ -208,6 +208,44 @@ outlier deletion, or implicit warm-up discard is applied.
 is valid for an all-NOOP/non-copy plan; otherwise every published candidate and
 byte must verify with non-degraded recording.
 
+### Shared root admission optimization — 2026-09-28
+
+The core candidate reuses native bindings and replaces default admission's
+second anchor discovery with a volume-information query at the admitted anchor.
+Consumer invocation holds are not integrated in this measurement.
+
+`build/root-admission-optimization-20260928/core/measure_admission.py` measures
+1,000 sequential default admissions of `F:\GitHubRepositories\NamiSync` on
+NTFS in a fresh process per revision, with Python 3.13.14. Baseline `b8baf42d`
+runs from its isolated checkout; the candidate is the core edit over `3c8b4b41`,
+identified by source SHA-256 in `resume/admission-finalpath-serialized.json`. Both receipts record
+the imported source, runtime, root and native call counts.
+
+| Observation | Baseline | Core candidate |
+| --- | ---: | ---: |
+| `GetVolumePathNameW` calls | 2,000 | 1,000 |
+| `GetVolumeInformationW` calls | 1,000 | 1,000 |
+| Median admission, microseconds | 985.7 | 488.95 |
+| p95 admission, microseconds | 1,248.2 | 687.1 |
+
+These sequential single-root diagnostics establish the call reduction and
+describe the observed timing; they do not establish depth scaling,
+instrumentation neutrality or executor throughput. The executor's custom
+volume-probe path still needs migration. The above-1-MiB/s execution goal
+remains unmeasured for the candidate.
+[M1_PLAN](M1_PLAN.md#root-admission-optimization--2026-09-28) owns that goal and
+the equivalence gate.
+The retained `admission-finalpath.json` diagnostic overlapped the ordinary test
+run; the table uses the subsequent sample with those gates finished.
+Earlier identity-only candidates and their rejected native witnesses remain
+retained separately. The final-path correction has passing one-/two-swap
+regressions and confirmed hold lifetime/release witnesses on NTFS and exFAT
+(K:, serial `BA1F1F45`). `resume/exfat-invocation.txt`, `exfat-volume.json` and
+`exfat-finalpath.xml` bind the external fixture to the frozen implementation.
+The non-admin subst fixture failed full volume admission (native error 144),
+so it does not establish a held-mode transition. Exact mapping removal was
+verified; strict alias rejection has a focused comparison witness.
+
 ### Executor assessment — 2026-09-27
 
 Read-only assessment of `milestone1-adelbert` at

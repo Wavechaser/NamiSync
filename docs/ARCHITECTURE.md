@@ -389,7 +389,7 @@ such as the session states, outcome vocabulary, or observation/judgment split.
 | Filesystem identity, complete Windows file-id adaptation, capability, metadata, records, and scan scopes | `namisync/core/models.py`, `namisync/core/file_identity.py` |
 | Safe integer, signed-64, canonical scalar/file-index codecs, shared population-measure/excess primitives, distinct retained-plan and counter-free producer admissions, admission-bound private exact plan-review signals, scanner population-admission protocol, exact immutable scan adoption, and final shallow-slot admission | `namisync/core/scalars.py`, `namisync/core/review.py` |
 | Relative-path validation, keys, hierarchy, containment, and Windows spelling | `namisync/core/pathing.py` |
-| Ephemeral root authority, native volume evidence, and admission probes | `namisync/core/root_authority.py` |
+| Ephemeral root authority, native volume evidence, admission probes, and scoped root holds | `namisync/core/root_authority.py` |
 | Planning policy, operations, mappings, scopes, plans, fingerprints, and selection digests | `namisync/core/planning.py` |
 | Deeply read-only preflight subjects, observations, refusals, and verdicts | `namisync/core/preflight.py` |
 | Outcomes, recording status, provenance, content evidence, attestation, and hashing protocols | `namisync/core/evidence.py` |
@@ -435,17 +435,35 @@ reviewed mount and expected volume identity. It is never persisted, cached as
 fresh, fingerprinted as a separate permission, or treated as authorization for
 a later touch.
 
-Shared core code performs stateless no-follow component inspection and returns
-typed observations. Each consumer retains its own policy and timing:
+Shared core code performs no-follow component inspection, returns typed
+observations, and provides the scoped `hold_root` primitive. Entering that
+context does not admit the root: callers fully admit after acquisition, then
+call `RootHold.confirm()` to corroborate that the held handle and the current
+admitted logical root share the same namespace before relying on the hold.
+One normalized DOS final-path query on the held handle must match the logical
+root exactly apart from drive-letter case. Other spelling or mount aliases,
+failed queries and incomplete results release the hold for per-access admission.
+There is no reopened comparison handle or native identity requirement.
+The directory-access handle denies delete
+sharing, preventing root and ancestor rename or deletion while allowing changes
+inside the root. A consumer may then omit repeated root admission until the
+invocation pauses or exits. Holds belong to the invocation, never shared
+filesystem adapters, plans, continuations or persistence. UNC, mapped network
+and unholdable roots retain per-access admission, as do roots whose normalized
+DOS final path cannot be confirmed. This does not change stored
+identity or supported filesystems. Descendant and per-item guards
+remain required. Each consumer retains its own policy and timing:
 
 - scanner decides traversal and mounted-root admission;
 - preflight maps read-only observations to refusals;
 - workflows decide overlap and mount ambiguity;
-- executor re-probes at each final mutation guard;
-- verifier re-probes per item and corroborates opened handles.
+- executor owns final mutation guards and root admission or hold scope;
+- verifier owns per-item guards, root admission or hold scope, and opened-handle
+  corroboration.
 
-The remaining path-check-to-use boundary is explicit. A prior successful probe
-never authorizes a later filesystem action.
+The remaining descendant path-check-to-use boundary is explicit. A prior probe
+alone never authorizes a later filesystem action; root continuity may instead
+be maintained by a live, fully admitted hold.
 
 ### 3.4 Scan and inventory types
 

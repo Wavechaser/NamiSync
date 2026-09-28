@@ -1,51 +1,66 @@
-# Latest session — root admission replanned around held roots
+# Latest session — approved root-hold resumption
 
-2026-09-28, milestone1-adelbert. The user stepped back from the nine-row RO
-register, which had never reached implementation, because its up-front
-specification kept stranding the work. M1_PLAN now carries a one-page,
-results-oriented plan. The old register stays in Git history at `c05eea25`. This
-commit is documentation only; implementation starts when the user authorizes it.
+2026-09-28. The user approved replacing identity confirmation with one strict
+normalized DOS final-path query on the original held handle. Delete the second
+open and FILE_ID_INFO comparison. Make one-swap and two-swap cases passing
+regressions, retain cheap case/unavailable fallback witnesses, and expose
+internal fallback reasons through executor diagnostics and the rig in the
+consumer step. No Setup spelling canonicalization is authorized.
 
-Decisions in the new plan:
-- Target above 1 MiB/s for 1,000 × 4 KiB F:→G: execution, as a goal, not a gate.
-- Hold each admitted root per invocation, using directory access without delete
-  sharing, instead of re-admitting it on every access. "In use" failures for
-  rename, move and Safely Remove are acceptable. The point-of-use contract
-  wording changes when the hold ships.
-- Keep the per-access fallback for UNC, mapped or unholdable roots, and still
-  cut `GetVolumePathNameW` and related calls there and in each invocation's
-  single admission.
-- Equivalence against the baseline uses must-match / may-differ /
-  needs-decision bands. One probe-only oracle re-pin is allowed.
-- Commits are atomic with no size cap. There is no M1-9/M1-10 coupling.
-- Oracle v2, root continuity, EW-5/EW-6 and the absolute swap-sweep criteria are
-  dropped.
+Work resumes on `milestone1-adelbert` from
+`3c8b4b413d4ce509f4a639f21f03b7302cb1b970`. Task-owned changes from recovery
+`cfcc6efd495b36cfcf47e9dc700f69ec598b4ce8` were restored as uncommitted files;
+the WIP was not merged or cherry-picked. Keep
+`codex/wip-20260928-1158-root-hold-binding` until all saved work is accounted
+for. The shared core outcome is verified for atomic integration; consumer
+migration remains the next outcome.
 
-Hold witness (read-only scratch probe, cleaned up): on NTFS C: and exFAT K:, a
-held root opened with `FILE_LIST_DIRECTORY` and no `FILE_SHARE_DELETE` blocks
-renaming the root (error 32) and its ancestors (error 5), while changes inside the
-root stay allowed. An attribute-only handle does not block renaming the root. SMB
-is unwitnessed and uses the fallback. Root deletion still needs a witness when
-the hold is implemented.
+## Current work and verification
 
-Reusable evidence under `build/root-admission-optimization-20260928/`:
-- `baseline/`: 5,410 ordinary passes, 12 import contracts, oracle 30 × 3 at
-  `b8baf42d`.
-- `ro0a/`: v1 capture and the 70-row / 391-call guard scan with zero missing
-  guards.
-- `ro0b/`: the root-replacement probe and the 12-case identity-weak probe
-  (identity-bearing cases refused; four identity-less DELETE/TRASH cases acted on
-  the replacement). Both are recorded in the plan as pre-existing findings
-  outside this work.
+M1_PLAN owns the accepted scope, atomic core outcome and gate. The core builder
+owns `root_authority.py`, its focused tests and narrow contract documentation.
+Executor, preflight and verifier consumers remain unchanged. Independent review
+approved the frozen correction. The gate passed: 134 focused seam cases, 5,430
+ordinary tests (four skips, 34 headed deselections), 12 import contracts and the
+unchanged settlement oracle, 30 scenarios x three. Input/output source, test,
+oracle and driver hashes match in `resume/bound-gate-*.json`.
+No oracle re-pin has been used.
 
-The isolated baseline worktree stays at
-C:\Users\Spectrum\.codex\worktrees\ro-baseline\NamiSync (`b8baf42d`, own Python
-3.13.14 venv); run it with its own cwd. It serves the equivalence differential.
+New receipts belong in `build/root-admission-optimization-20260928/resume/`.
+Prior `core/` receipts, including the rejected identity candidate's 5,425-pass
+ordinary run and native two-swap reproducer, remain historical evidence only.
+They do not accept the corrected implementation. The recovery evidence manifest
+records the preserved earlier population.
 
-Recovery branch `codex/wip-20260928-0117-root-admission` holds an untested
-partial oracle-v2 tool edit that is now superseded. Never merge or cherry-pick
-it; prune it once the user agrees nothing in it is needed. DOC-2, stashes and
-other refs are untouched. No push was made.
+The replacement K: reports exFAT, serial `BA1F1F45`, label `New Volume` through
+the native volume adapter. Both native lifetime cases passed there using the
+new owned scratch path recorded in `resume/exfat-invocation.txt`; they require
+confirmed holds. The earlier write-protection failure was a different volume.
+A non-admin subst fixture failed full volume admission with native error 144,
+before confirmation; exact owned mapping cleanup was verified. Strict alias
+comparison is covered without claiming a native held transition.
 
-Next action: user authorization, then step 1 (core hold primitive, witnesses and
-admission call reductions), measured against the target.
+## Consumer continuation
+
+The evidence-only differential lane established zero repeat differences across
+32 baseline groups, final driver SHA-256
+`7e69cce69537a28096bd15be6f67876fbdda6cec73658c2d949c6d2a50c1f2fa`.
+Receipts are `differential/runs/baseline-fixed-input-*`. Only named unfinished
+temp clocks and generated trash-session directory mtime are excluded; managed
+timestamps and all must-match outcomes, recorder commands, trees and artifacts
+remain exact. No candidate comparison is accepted yet. Its baseline checkout is
+`C:\Users\Spectrum\.codex\worktrees\root-admission-baseline\NamiSync` at
+`b8baf42df91e9aeed1402cd029c86ca9ae287b1b`.
+Keep that managed worktree until differential closeout.
+
+After the core gate and atomic commit, migrate executor with invocation-owned
+holds and fallback diagnostics. Preserve custom filesystem dispatch and lazy
+admission/error precedence. Retain descendant physical containment and second
+directory observations initially: removing them changed concurrent refusal
+observations in read-only probes. Preflight/verifier follow with their own
+finite gates. The existing F: 1,000 x 4 KiB corpus remains; throughput samples
+need fresh owned G: targets and manifest-validated cleanup.
+
+Pre-existing same-volume pre-invocation replacement and identity-less
+DELETE/TRASH findings remain excluded. No remote, unrelated recovery, stash or
+user work was changed.

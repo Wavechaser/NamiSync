@@ -242,8 +242,19 @@ history and domain validation are unchanged. BRIDGE owns this narrow mechanism.
 Capacity and freshness are independent of this ladder. Trusted code can
 truthfully produce an excessive population, and the filesystem can change
 after valid evidence was created. Population admission therefore remains at
-every applicable rung, while `RootAuthority` consumers re-probe at their
-existing points of use. Exception-graph retirement is likewise a lifetime
+every applicable rung. `RootAuthority` consumers admit under their own policies
+and either retain per-access admission or hold a local root with directory
+access and no delete sharing after full admission inside the acquired hold and
+native corroboration that its normalized DOS final path matches the logical
+root exactly, allowing drive-letter case alone. Failed or
+unavailable corroboration releases the hold and selects per-access admission,
+including aliases and unavailable final paths. A confirmed
+hold protects root continuity only for that invocation: it ends on pause, return, failure or
+cancellation. UNC, mapped network and unholdable roots retain the fallback;
+descendant and per-item guards remain. Root or ancestor rename/deletion and
+Safely Remove may fail with "in use" during the hold. Volume mount remapping and
+mount-point removal require administrator rights and remain outside the
+supported model. Exception-graph retirement is likewise a lifetime
 obligation, not a trust defense.
 
 Serialization belongs at a real process, browser, persistence, or filesystem

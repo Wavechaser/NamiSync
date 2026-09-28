@@ -1027,13 +1027,27 @@ repeated machinery while preserving operational safety and boundary contracts.
 Safety, settlement, authority, and measurement work made high-risk release
 claims explicit, independently reviewable, and regression-backed.
 
-#### Replan root admission optimization around held roots (2026-09-28)
+#### Optimize root admission with invocation-scoped holds (2026-09-28)
+
+- Add a core directory-hold primitive whose confirmation uses one normalized
+  final-path query on the original handle, with exact spelling except drive
+  letter case. Remove the interim identity/reopen approach. Both junction-swap
+  cases now have passing native regressions; aliases and unavailable evidence
+  release the hold for fresh admission, with internal diagnostic reasons.
+- Verify confirmed hold lifetime and release on NTFS and the replacement exFAT
+  K: volume. A non-admin subst fixture could be created but failed volume
+  admission before confirmation; strict alias comparison remains tested.
+- Measure 1,000 default admissions on the same NTFS root: anchor calls fall from
+  2,000 to 1,000 and latest-candidate median admission time from 985.7 to
+  approximately 489 microseconds. This is a single-root diagnostic, not executor
+  throughput. Consumer invocation holds and rig fallback reporting follow in
+  separate atomic changes.
 
 - Replace the nine-row RO register with a results-oriented plan: a goal of more
   than 1 MiB/s for 1,000 × 4 KiB F:→G: execution, baseline equivalence with
   must-match / may-differ / needs-decision bands, atomic commits and
   measure-then-choose ordering. The old register stays in Git history.
-- Adopt per-invocation root holds (directory access without delete sharing) in
+- Approve per-invocation root holds (directory access without delete sharing) in
   place of repeated root admission. Holds are witnessed on NTFS and exFAT to
   block renames of the root and its ancestors; attribute-only handles do not.
   Keep the per-access fallback for remote or unholdable roots, and still reduce

@@ -53,8 +53,9 @@ Witnessed 2026-09-28 on NTFS (C:) and exFAT (K:):
 | Create, rename or delete files and subdirectories inside the root | Allowed |
 
 The hold implementation pins the access mode with a regression test and adds
-root deletion to the witness. Drive-letter remaps and mount-point removal need
-administrator rights and stay outside the supported model.
+root deletion to the witness. Volume mount remapping and mount-point removal
+stay outside the supported model. A subst alias does not establish held mode:
+its final handle path must pass the same strict spelling rule.
 
 **Fallback.** UNC and mapped network roots keep today's per-access admission.
 SMB behavior is unwitnessed. So does any root whose hold cannot be acquired
@@ -96,7 +97,7 @@ of the oracle baseline is allowed, with evidence that only successful probe
 calls changed and the existing guard scan still passes; EXECUTOR's replacement
 rule is waived for that re-pin. Also run a baseline-versus-candidate
 differential from the isolated baseline worktree
-(`C:\Users\Spectrum\.codex\worktrees\ro-baseline\NamiSync`, `b8baf42d`) over
+(`C:\Users\Spectrum\.codex\worktrees\root-admission-baseline\NamiSync`, `b8baf42d`) over
 executor, preflight and verifier fixtures, including the preserved root-swap
 and identity-weak probes. Build the harness in the first step that changes
 consumer behavior, and grow it with the work.
@@ -116,6 +117,72 @@ mandatory stops still apply.
 3. **Preflight and verifier:** hold per invocation; the verifier takes its
    sector size from the opened handle.
 4. **Review against the target:** optimize only what is still measurably hot.
+
+Implementation activated by the user on 2026-09-28 from `3c8b4b41`, on
+`milestone1-adelbert`. Each step receives independent review before its atomic
+commit; no changes to unrelated branches, recoveries or stashes are included.
+
+**Core atomic outcome — shared admission and hold primitive.** Product and
+test population: `core/root_authority.py` and `tests/core/test_root_authority.py`.
+Reuse native bindings, discover the anchor once for default admission and query
+volume information at that admitted anchor. Preserve the injected root-based
+volume-probe seam and its evidence checks. Add an invocation-local directory
+hold acquired before full admission, with UNC/mapped-network/unholdable fallback
+and deterministic release. Native witnesses cover root rename/deletion, ancestor
+rename, allowed descendant changes, required access/share flags and release.
+This step does not migrate consumers or change settlement, stored identity,
+wire values, or descendant safety policy. The existing fallback refusal codes
+and component checks remain. Documentation population: AGENTS, CORE,
+ARCHITECTURE, DEFENSE, this register, PERFORMANCE, CHANGELOG and HANDOFF.
+Acceptance: focused native/core cases, ordinary suite, import law, unchanged
+settlement oracle, admission call/timing measurement and independent review.
+The baseline differential grows at the first consumer migration. Existing
+equivalence and mandatory stops apply. Commit this complete core outcome before
+executor migration; only the latter can claim executor hold acceleration.
+
+The frozen final-path correction passed 134 focused seam cases, 5,430 ordinary
+tests (four privilege skips, 34 headed deselections), all 12 import contracts
+and the unchanged 30-scenario settlement oracle over three runs. Input/output
+hashes match in `resume/bound-gate-*.json`. Two additional K: exFAT native
+lifetime cases passed. Independent source/test review found no actionable
+findings. No oracle re-pin was used.
+
+The user supplied a replacement writable exFAT volume at K: on resumption.
+Its identity was re-probed and the native hold witness passed there and on NTFS.
+
+**Approved binding correction.** The core primitive confirms the acquired
+handle only after full admission, using exactly one normalized DOS
+`GetFinalPathNameByHandleW` query. It enables held mode only when the returned
+path matches the logical root exactly, allowing drive-letter case alone.
+Identity confirmation, the second open and `FILE_ID_INFO` queries are removed.
+Both intermediate-junction swap cases are passing native regressions. Cheap
+case, short-name, mount-alias and unavailable-evidence cases exercise fallback.
+Fallback reasons are internal observations; case folding or short-name patterns
+never authorize access. Executor integration will expose these reasons in its
+diagnostics and rig report. Setup root spelling is not canonicalized here.
+
+NTFS and replacement exFAT K: lifetime witnesses require a confirmed hold and
+verify root/ancestor mutation refusal, descendant operations and release.
+A non-admin subst fixture was created, but full volume admission failed before
+confirmation (native error 144); it does not prove a held transition. Exact
+owned mapping cleanup is verified, and the strict comparison rule covers
+alias rejection without that native transition claim.
+
+The initial acquire-only and interim endpoint-identity candidates failed the
+same namespace-custody mechanism: an intermediate junction could redirect
+acquisition away from the later admitted root, or be restored before identity
+comparison. The user approved replacing that mechanism on resumption. Raw
+probes and failed receipts remain under `core/`; final correction receipts go
+under `resume/`. Recovery `cfcc6ef` on
+`codex/wip-20260928-1158-root-hold-binding` remains preserved until task
+accounting. Useful changes are rebuilt and verified on the original branch;
+the WIP is never merged or cherry-picked as-is.
+
+For subsequent executor work, retain the later descendant physical-containment
+check and second directory observation initially. Read-only probes showed
+that removing them changes concurrent refusal/error observations. Measure
+hold integration before seeking a separate decision to remove those checks.
+Dependent consumer implementation waits for the corrected core gate.
 
 **Findings outside this result** go to BUGS or HANDOFF as short notes and are
 not handled here. Two exist: a same-volume root replacement before execution
@@ -316,7 +383,7 @@ scope changes, stops and recovery.
 
 | ID | Accepted outcome | Named verification | Status |
 | --- | --- | --- | --- |
-| Root admission optimization | Hold each admitted root per invocation, keep the per-access fallback for remote or unholdable roots, and reduce admission calls, per the plan above. Target above 1 MiB/s for 1,000 × 4 KiB F:→G: execution (goal, not gate). | Baseline equivalence differential, existing tests, settlement oracle with one allowed probe-only re-pin, hold witnesses and measurements after each step. | Planned 2026-09-28; begins when the user authorizes implementation. |
+| Root admission optimization | Hold each admitted root per invocation, keep the per-access fallback for remote or unholdable roots, and reduce admission calls, per the plan above. Target above 1 MiB/s for 1,000 × 4 KiB F:→G: execution (goal, not gate). | Baseline equivalence differential, existing tests, settlement oracle with one allowed probe-only re-pin, hold witnesses and measurements after each step. | Active; final-path confirmation, fallback diagnostics and regression adjustments approved on resumption. |
 | M1-9 | Bounded inventory projections, current evidence and the full inventory consumer for sibling sorting. | Complete or prior-complete publication; warnings outside action scope; raw evidence provenance; search/filter/collapse/window/detail, replacement/race and production sort/reset paths; headed witnesses. | Pending. Missing-row acknowledge/restore UI must be explicitly allocated at activation; this row does not silently claim it. |
 | M1-10 | Baseline, verify and rebaseline controls plus first same-task manual post-copy verification, without persistent operation-time hashes. Eligible null-evidence files enter rebaseline; every admitted rebaseline hashes and replaces/creates evidence, and a match is not verified. | Confirm acknowledgement admission before claim/native work; all-null/mixed workflow, service/CLI and desktop paths; conditional recording and supersession races; atomic handoff classification; live pause/resume/cancel and unchanged automatic failed-read retries; overlay/result identity. Independently review operation matrix and conditional recording. Terminal Verify-remaining/subset retry remains deferred. | Pending. Rebaseline confirmation is distinct from missing-row acknowledgement. |
 | M1-12 | Close integrated lifecycle/retention across activated task surfaces, then complete adversarial, documentation, ordinary and headed verification. This absorbs former M1-11. | Plan-only, execution-only, linked/manual verification, inventory, refused/canceled/degraded/failed tasks across same-document navigation, contained unsupported reload, explicit close and shutdown; admission bounds, stale-response suppression, exact resource release and retained truth. Applicable settlement oracle, ordinary/headed, installed-wheel/product, imports, diff/active-link checks and independent cross-component review. No aggregate-artifact or whole-owner-graph criterion. | Pending. |
