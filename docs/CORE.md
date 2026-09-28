@@ -642,8 +642,9 @@ anchor. `admit_root()` performs that chain admission once. Its default Windows
 path queries volume information directly at the admitted anchor through
 `observe_native_volume_at_anchor()`, without a second anchor discovery. An
 injected volume probe still receives the logical root and must return matching
-anchor evidence before its identity is accepted. The default no longer claims
-two independent anchor observations. Native function bindings are reused;
+anchor evidence before its identity is accepted. For the default Windows path,
+that comparison checks the admitted anchor echoed by the volume observation; it
+is not an independent freshness check. Native function bindings are reused;
 filesystem observations are not cached. Non-Windows probe branches are
 development/test fallbacks only, not production mount-boundary authority.
 

@@ -588,6 +588,8 @@ def admit_root(
         if volume_probe is not None:
             volume = volume_probe(authority.logical_root)
         elif os.name == "nt":
+            # This default observation uses the anchor just admitted above, so
+            # its later anchor comparison echoes that evidence, not a fresh probe.
             volume = observe_native_volume_at_anchor(current_anchor)
         else:
             volume = observe_native_volume(authority.logical_root)

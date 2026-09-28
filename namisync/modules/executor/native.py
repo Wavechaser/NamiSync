@@ -464,6 +464,8 @@ class NativeFileSystem:
 
         def anchored_volume(_path: str) -> NativeVolumeInfo:
             assert observed_anchor is not None
+            # The default Windows volume observation echoes this admitted anchor;
+            # overridden probes still return independently checked anchor evidence.
             return self._observe_root_volume_at_anchor(observed_anchor)
 
         return admit_root(

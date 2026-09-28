@@ -1029,6 +1029,9 @@ claims explicit, independently reviewable, and regression-backed.
 
 #### Optimize root admission with invocation-scoped holds (2026-09-28)
 
+- Clarify that default Windows anchored volume admission does not make a second
+  independent anchor observation. The shared comparison validates injected or
+  overridden probes; its retention adds no default-path freshness guarantee.
 - Consolidate descendant existence/reparse observations while retaining every
   visited component and independent guard. All 5,550 ordinary tests and the
   unchanged 67-group differential pass. Three 1,000-file copy samples measure

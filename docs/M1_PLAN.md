@@ -21,6 +21,29 @@ measurements. This results-oriented plan replaced the unimplemented nine-row RO
 register (last in Git at `c05eea25`). Completed implementation detail and recovery
 chronology remain in Git and the evidence, not a second active register.
 
+**Resumed performance round (user, 2026-09-28).** The pause is lifted. The user
+authorizes documenting/removing the default Windows anchor self-comparison,
+replacing per-conversion PureWindowsPath eligibility with a cheap string test,
+using the observed leaf st_dev low 32 bits to select a matching held root's
+VolumeId (probe on mismatch/unavailability), one runtime admission per step,
+and dropping both real-path lookups on the held path. The earlier HANDOFF
+classification of these requested reductions as pending policy decisions no
+longer applies. Unheld/custom fallback, current held-attribute checks, descendant
+reparse checks, error/dispatch contracts, settlement and persisted identity stay.
+Each independent outcome receives its own reviewed commit and relevant gates;
+measure executable changes separately. The throughput target remains a goal.
+
+First outcome: document the anchor comparison's authority in core admit_root,
+executor _admit_reviewed_root, CORE and EXECUTOR. The default anchored observation
+echoes the already admitted anchor; its comparison is not independent freshness
+evidence. The shared check remains meaningful for injected/overridden volume
+probes. Retaining one shared validation path avoids a new bypass contract solely
+for a setup-time comparison. Comments/documentation only, with source-consistency,
+links, diff checks and fresh independent review; no behavior or acceptance change.
+Complete: both Python ASTs match the predecessor, 96 local links and diff checks
+pass; independent review approves in
+`executor/independent-review-anchor-comparison-20260928.md`.
+
 **Approved hold safety contract.** Keep directory access without delete sharing
 and retain write sharing. Confirm once using `GetFinalPathNameByHandleW` on the
 held handle, with exact normalized DOS spelling except drive-letter case.
@@ -208,9 +231,8 @@ counts, profiling limits and the remaining cost breakdown.
 Independent whole-outcome review approves the atomic commit in
 `executor/independent-review-descendant-stat-20260928.md`.
 
-The user requested a pause after this outcome is reviewed and committed, with
-a recap before investigating the remaining throughput gap. No next optimization
-or investigation is active; preserve the baseline/evidence for resumption.
+Integrated as `db05e31`. The user resumed the performance round with the scope
+above; the baseline and evidence remain available.
 
 **Findings outside this result** go to BUGS or HANDOFF as short notes and are
 not handled here. Two exist: a same-volume root replacement before execution
@@ -412,7 +434,7 @@ scope changes, stops and recovery.
 
 | ID | Accepted outcome | Named verification | Status |
 | --- | --- | --- | --- |
-| Root admission optimization | Hold each admitted root per invocation, keep the per-access fallback for remote or unholdable roots, and reduce admission calls, per the plan above. Target above 1 MiB/s for 1,000 × 4 KiB F:→G: execution (goal, not gate). | Baseline equivalence differential, existing tests, settlement oracle with one allowed probe-only re-pin, hold witnesses and measurements after each step. | Holds, verifier geometry and executor leaf/path/descendant reductions delivered and gated. Latest executor median 0.403 MiB/s; goal unmet. Paused at user request for recap before further investigation. |
+| Root admission optimization | Hold each admitted root per invocation, keep the per-access fallback for remote or unholdable roots, and reduce admission calls, per the plan above. Target above 1 MiB/s for 1,000 × 4 KiB F:→G: execution (goal, not gate). | Baseline equivalence differential, existing tests, settlement oracle with one allowed probe-only re-pin, hold witnesses and measurements after each step. | Holds, verifier geometry and executor leaf/path/descendant reductions delivered and gated. Latest executor median 0.403 MiB/s; goal unmet. Resumed with the five named follow-ups above; anchor comparison clarification is the current outcome. |
 | M1-9 | Bounded inventory projections, current evidence and the full inventory consumer for sibling sorting. | Complete or prior-complete publication; warnings outside action scope; raw evidence provenance; search/filter/collapse/window/detail, replacement/race and production sort/reset paths; headed witnesses. | Pending. Missing-row acknowledge/restore UI must be explicitly allocated at activation; this row does not silently claim it. |
 | M1-10 | Baseline, verify and rebaseline controls plus first same-task manual post-copy verification, without persistent operation-time hashes. Eligible null-evidence files enter rebaseline; every admitted rebaseline hashes and replaces/creates evidence, and a match is not verified. | Confirm acknowledgement admission before claim/native work; all-null/mixed workflow, service/CLI and desktop paths; conditional recording and supersession races; atomic handoff classification; live pause/resume/cancel and unchanged automatic failed-read retries; overlay/result identity. Independently review operation matrix and conditional recording. Terminal Verify-remaining/subset retry remains deferred. | Pending. Rebaseline confirmation is distinct from missing-row acknowledgement. |
 | M1-12 | Close integrated lifecycle/retention across activated task surfaces, then complete adversarial, documentation, ordinary and headed verification. This absorbs former M1-11. | Plan-only, execution-only, linked/manual verification, inventory, refused/canceled/degraded/failed tasks across same-document navigation, contained unsupported reload, explicit close and shutdown; admission bounds, stale-response suppression, exact resource release and retained truth. Applicable settlement oracle, ordinary/headed, installed-wheel/product, imports, diff/active-link checks and independent cross-component review. No aggregate-artifact or whole-owner-graph criterion. | Pending. |

@@ -144,6 +144,11 @@ the supplied filesystem, including overrides. Adapters without native activation
 retain their existing behavior. The tracing adapter explicitly forwards activation
 without adding a filesystem effect to its protected trace.
 
+On Windows, the default volume observation uses the anchor just admitted at that
+guard, so the shared anchor comparison checks echoed evidence rather than a second
+freshness observation. An overridden volume probe still has to return matching
+anchor evidence, and a mismatch remains an admission error.
+
 Confirmed holds replace repeated root-prefix admission until
 the call finishes all settlement and cleanup. Each reuse first reads current
 attributes from that same held handle and refuses reparse or placeholder state.
