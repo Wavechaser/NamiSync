@@ -427,6 +427,18 @@ Receipts are `resume/executor-single-stat-{timing,counts,counted}.json` and
 `resume/executor-single-stat-profile.{prof,txt,json}` plus `-run.json`; profile
 input manifests match.
 
+**Bounded executor path reuse.** On the same serialized fixture, three samples
+measure median 10.757 seconds (10.656–11.819), 0.363 MiB/s. The preceding leaf-only
+median is 12.365 seconds. Copies, native readbacks, source rechecks and scoped rig
+cleanup all pass. Separate caller-thread profiles show extended conversions
+163,030→22,025, spelling validations 441,084→90,074 and lexical conversions
+77,018→8,018. Actual observations remain 17,006 `nt.stat`, 16,000 existence probes,
+26,000 physical resolutions and the unchanged project-ctypes counts above.
+This isolates the count reduction to pure path work; it does not establish a
+randomized causal speedup or satisfy the 1 MiB/s goal. Receipts use the same
+`resume/executor-path-cache-` timing/counts/counted/profile suffixes as the leaf
+outcome; the separate profile summary is diagnostic, and input manifests match.
+
 ### Executor assessment — 2026-09-27
 
 Read-only assessment of `milestone1-adelbert` at

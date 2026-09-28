@@ -1029,6 +1029,10 @@ claims explicit, independently reviewable, and regression-backed.
 
 #### Optimize root admission with invocation-scoped holds (2026-09-28)
 
+- Reuse bounded invocation-local absolute path conversions without caching
+  filesystem observations. All 5,540 ordinary tests and 67 differential groups
+  pass; extended conversions fall from 163,030 to 22,025 and the three-sample
+  copy median measures 10.757 seconds versus the preceding 12.365 seconds.
 - Reuse the checked no-follow leaf snapshot for executor metadata, preserving
   path refusals, unavailable handling, volume errors and dispatch. All 5,529
   ordinary tests and 67 differential groups pass. Three 1,000-file copy samples

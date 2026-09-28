@@ -468,6 +468,42 @@ pass. Separate profiles show 12,000 fewer stat/existence observations, unchanged
 physical resolutions and project-ctypes counts. PERFORMANCE owns the limits and
 receipts. Fresh whole-outcome review approves source, gates, measurements and
 docs in `executor/independent-review-single-stat-20260928.md`.
+Integrated as `7e60a47`.
+
+**Executor bounded pure path reuse — complete.** Refresh the inspected
+native invocation/conversion helpers and runtime reviewed-root comparison against
+`7e60a47`. Cache successful exact absolute conversions within the active native
+invocation: up to four root/reviewed-anchor spellings, plus one last-successful
+nonroot Win32 conversion. Root hits do not evict the latter. Root entries may
+retain lexical Path and extended spelling; the nonroot slot retains only extended
+spelling. Relative/drive-relative/rooted-without-drive forms and failures bypass
+storage. Populate lazily, preserving error timing; no case folding or alias
+canonicalization. Deactivate and clear before exit, including copied contexts,
+and restore nested scopes. Exact runtime root spelling already validated by
+RootAuthority bypasses repeated normalization; spelling variants use the old
+comparison. Custom adapters without native activation keep original helpers.
+
+Population: executor `native.py`, `runtime.py`, their two test files, EXECUTOR
+behavior docs and parent delivery/performance records. Preserve every actual
+filesystem observation, physical resolution, root/descendant/leaf volume check,
+public/subclass dispatch and settlement. No full-plan path map, LRU tuning,
+filesystem-result cache or shared-core policy change. Acceptance: focused native/
+runtime and settlement seams; exact absolute/UNC/extended/long spellings, variants,
+relative+CWD and failed inputs; bounded storage, root-hit/nonroot-slot behavior,
+normal/error/pause/copied/nested lifetime, custom adapters and mixed fallback;
+affected departments, ordinary/import/oracle/guard gate, unchanged 67-group
+differential, serialized same-fixture timing with separate profile/counts, docs
+and fresh adversarial review. One atomic commit. Existing stops remain binding.
+
+Frozen native `4F7E22CB` and runtime `5B6DE694` pass 425 focused and 574 direct
+tests (two skips), 5,540 ordinary tests (four skips, 34 headed deselections),
+12 imports, oracle 30 × three and guard scan 70/391/zero missing admissions.
+Gate manifests match; unchanged qualified 67-group differential has no unexpected
+differences. Three serialized copy samples have median 10.757 seconds / 0.363
+MiB/s. Separate profile conversions fall 163,030→22,025 while actual observations
+and project-ctypes counts remain unchanged. PERFORMANCE owns method and receipts.
+Independent whole-outcome review approves in
+`executor/independent-review-path-cache-20260928.md`.
 
 **Findings outside this result** go to BUGS or HANDOFF as short notes and are
 not handled here. Two exist: a same-volume root replacement before execution

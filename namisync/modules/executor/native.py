@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable, Iterator
 from contextlib import ExitStack, contextmanager
 from contextvars import ContextVar
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 import ctypes
 from ctypes import wintypes
 import os
@@ -283,6 +283,9 @@ class _RootInvocation:
     roots: tuple[_InvocationRoot, ...]
     diagnostics: list[RootAdmissionDiagnostic] | None
     native_owner: object | None = None
+    active: bool = True
+    root_paths: dict[str, tuple[Path | None, str | None]] = field(default_factory=dict)
+    last_win32_path: tuple[str, str] | None = None
 
 
 _ROOT_INVOCATION: ContextVar[_RootInvocation | None] = ContextVar(
@@ -308,10 +311,15 @@ def _root_invocation_scope(
     token = _ROOT_INVOCATION.set(invocation)
     try:
         with ExitStack() as stack:
-            activate = getattr(fs, "root_scope", None)
-            if activate is not None:
-                stack.enter_context(activate(invocation))
-            yield
+            try:
+                activate = getattr(fs, "root_scope", None)
+                if activate is not None:
+                    stack.enter_context(activate(invocation))
+                yield
+            finally:
+                invocation.active = False
+                invocation.root_paths.clear()
+                invocation.last_win32_path = None
     finally:
         _ROOT_INVOCATION.reset(token)
 
@@ -1459,8 +1467,42 @@ def _matches_copied_backup_source(
     return copied_size == before.size and after == before
 
 
+def _conversion_invocation(raw: str) -> _RootInvocation | None:
+    invocation = _ROOT_INVOCATION.get()
+    if (
+        os.name != "nt" or invocation is None or not invocation.active
+        or invocation.native_owner is None
+        or not PureWindowsPath(raw).is_absolute()
+    ):
+        return None
+    return invocation
+
+
+def _is_root_spelling(invocation: _RootInvocation, raw: str) -> bool:
+    return any(
+        root.authority is not None
+        and raw in (root.authority.logical_root, root.authority.reviewed_anchor)
+        for root in invocation.roots
+    )
+
+
 def _win32_path(path: Path | str) -> str:
-    return to_extended_length_path(str(path))
+    raw = str(path)
+    invocation = _conversion_invocation(raw)
+    cached = None if invocation is None else invocation.root_paths.get(raw)
+    if cached is not None and cached[1] is not None:
+        return cached[1]
+    if invocation is not None and invocation.last_win32_path is not None:
+        if invocation.last_win32_path[0] == raw:
+            return invocation.last_win32_path[1]
+    result = to_extended_length_path(raw)
+    if invocation is not None:
+        if _is_root_spelling(invocation, raw):
+            if cached is not None or len(invocation.root_paths) < 4:
+                invocation.root_paths[raw] = (None if cached is None else cached[0], result)
+        else:
+            invocation.last_win32_path = (raw, result)
+    return result
 
 
 def _resolved_logical_path(path: Path | str, *, strict: bool) -> Path:
@@ -1469,7 +1511,16 @@ def _resolved_logical_path(path: Path | str, *, strict: bool) -> Path:
 
 
 def _lexical_logical_path(path: Path | str) -> Path:
-    return Path(lexical_absolute_path(path))
+    raw = str(path)
+    invocation = _conversion_invocation(raw)
+    cached = None if invocation is None else invocation.root_paths.get(raw)
+    if cached is not None and cached[0] is not None:
+        return cached[0]
+    result = Path(lexical_absolute_path(path))
+    if invocation is not None and _is_root_spelling(invocation, raw):
+        if cached is not None or len(invocation.root_paths) < 4:
+            invocation.root_paths[raw] = (result, None if cached is None else cached[1])
+    return result
 
 
 def _windows_ticks(unix_ns: int) -> int:

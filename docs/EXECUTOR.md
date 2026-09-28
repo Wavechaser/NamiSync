@@ -168,6 +168,18 @@ their refusals. This consolidates leaf observations that were not compared while
 preserving root second-directory checks, containment, leaf volume queries and
 all later operation guards.
 
+An active native invocation lazily retains successful pure path conversions for
+at most four exact absolute root/reviewed-anchor spellings, plus one last
+successful nonroot Win32 spelling. Root hits leave that last slot intact. Only
+root entries retain lexical `Path` values; other paths retain no lexical result.
+Relative, drive-relative and rooted-without-drive inputs and failed conversions
+are not stored. Keys are exact input spellings, without case folding or alias
+matching. Exact reviewed runtime roots bypass repeated normalization; variants
+keep the existing comparison. Exit deactivates and clears these values before
+hold release, including copied contexts; nested calls restore the outer scope.
+Adapters without native activation keep the original conversion helpers. This
+stores no filesystem result and changes no physical resolution or guard.
+
 The optional invocation collector receives one immutable diagnostic per used,
 volume-bound source/target role after successful admission. Plans lacking reviewed
 volume identity retain their existing chain-only, per-access policy. The collector

@@ -4633,6 +4633,8 @@ def _require_reviewed_runtime_root(
     *,
     role: str,
 ) -> None:
+    if str(root) == authority.logical_root:
+        return
     try:
         logical_root = lexical_absolute_path(root)
     except PathValidationError as error:

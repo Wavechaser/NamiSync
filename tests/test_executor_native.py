@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+from contextvars import copy_context
 from dataclasses import replace
 import ctypes
 import os
@@ -449,6 +450,191 @@ def test_held_root_parent_guard_refuses_first_and_deeper_descendant_reparse(
         assert marker.read_bytes() == b"no effects"
 
 
+@contextmanager
+def _path_cache_scope(monkeypatch: pytest.MonkeyPatch, fs=None):
+    @contextmanager
+    def unavailable_hold(authority):
+        try:
+            yield RootHold(authority, None, "unavailable")
+        finally:
+            invocation = executor_module._ROOT_INVOCATION.get()
+            assert invocation is not None and not invocation.active
+            assert invocation.root_paths == {} and invocation.last_win32_path is None
+
+    monkeypatch.setattr(executor_module, "hold_root", unavailable_hold)
+    roots = tuple(
+        executor_module._InvocationRoot(role, RootAuthority(root, anchor))
+        for role, root, anchor in (
+            ("source", r"F:\Source", "F:\\"),
+            ("target", r"G:\Target", "G:\\"),
+        )
+    )
+    with executor_module._root_invocation_scope(
+        NativeFileSystem() if fs is None else fs, object(), roots, None
+    ):
+        yield executor_module._ROOT_INVOCATION.get()
+
+
+@pytest.mark.skipif(os.name != "nt", reason="native Windows pure path cache")
+def test_native_path_cache_bounds_exact_spellings_and_keeps_last_nonroot(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    win32_calls, lexical_calls = [], []
+    original_win32 = executor_module.to_extended_length_path
+    original_lexical = executor_module.lexical_absolute_path
+
+    def win32(raw):
+        win32_calls.append(raw)
+        return original_win32(raw)
+
+    def lexical(raw):
+        lexical_calls.append(str(raw))
+        return original_lexical(raw)
+
+    monkeypatch.setattr(executor_module, "to_extended_length_path", win32)
+    monkeypatch.setattr(executor_module, "lexical_absolute_path", lexical)
+    pinned = (r"F:\Source", "F:\\", r"G:\Target", "G:\\")
+    with _path_cache_scope(monkeypatch) as invocation:
+        assert invocation.root_paths == {} and invocation.last_win32_path is None
+        for raw in pinned:
+            for _ in range(2):
+                assert executor_module._win32_path(raw) == original_win32(raw)
+                assert str(executor_module._lexical_logical_path(raw)) == original_lexical(raw)
+        assert win32_calls == list(pinned) and lexical_calls == list(pinned)
+        assert set(invocation.root_paths) == set(pinned)
+
+        leaves = (
+            r"\\server\share\leaf", r"\\?\F:\Source\leaf", r"f:\Source",
+            "F:/Source", "F:\\" + "\\".join(["long-component"] * 24),
+            *(f"F:\\Source\\leaf-{number}" for number in range(40)),
+        )
+        for raw in leaves:
+            before = len(win32_calls)
+            assert executor_module._win32_path(raw) == original_win32(raw)
+            for root in pinned:
+                executor_module._win32_path(root)
+                executor_module._lexical_logical_path(root)
+            assert executor_module._win32_path(raw) == original_win32(raw)
+            assert len(win32_calls) == before + 1
+            assert invocation.last_win32_path == (raw, original_win32(raw))
+            assert len(invocation.root_paths) == 4
+        raw = leaves[-1]
+        before = len(lexical_calls)
+        executor_module._lexical_logical_path(raw)
+        executor_module._lexical_logical_path(raw)
+        assert len(lexical_calls) == before + 2
+        assert invocation.last_win32_path[0] == raw
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows relative path/CWD policy")
+@pytest.mark.parametrize("raw", ["leaf", "F:leaf", "\\leaf"])
+def test_native_path_cache_bypasses_relative_forms_and_tracks_current_directory(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    raw: str,
+) -> None:
+    calls = []
+    original = executor_module.to_extended_length_path
+    monkeypatch.setattr(
+        executor_module, "to_extended_length_path",
+        lambda spelling: calls.append(spelling) or original(spelling),
+    )
+    with _path_cache_scope(monkeypatch) as invocation:
+        for name in ("first", "second"):
+            directory = tmp_path / name
+            directory.mkdir()
+            monkeypatch.chdir(directory)
+            expected = original(raw)
+            assert executor_module._win32_path(raw) == expected
+            assert executor_module._win32_path(raw) == expected
+        assert calls == [raw] * 4
+        assert invocation.root_paths == {} and invocation.last_win32_path is None
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows success-only path cache")
+def test_native_path_cache_does_not_store_failed_conversions(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original = executor_module.to_extended_length_path
+    calls = []
+    retry = r"F:\retry"
+
+    def convert(raw):
+        calls.append(raw)
+        if raw == retry and calls.count(retry) == 1:
+            raise PathValidationError("transient conversion fault")
+        return original(raw)
+
+    monkeypatch.setattr(executor_module, "to_extended_length_path", convert)
+    with _path_cache_scope(monkeypatch) as invocation:
+        previous = r"F:\previous"
+        executor_module._win32_path(previous)
+        stored = invocation.last_win32_path
+        for _ in range(2):
+            with pytest.raises(PathValidationError):
+                executor_module._win32_path("F:\\bad\x00leaf")
+            assert invocation.last_win32_path == stored
+        with pytest.raises(PathValidationError, match="transient"):
+            executor_module._win32_path(retry)
+        assert invocation.last_win32_path == stored
+        assert executor_module._win32_path(retry) == original(retry)
+        assert executor_module._win32_path(retry) == original(retry)
+        assert calls.count(retry) == 2 and calls.count("F:\\bad\x00leaf") == 2
+        assert invocation.root_paths == {}
+
+
+@pytest.mark.skipif(os.name != "nt", reason="native path cache lifetime")
+def test_native_path_cache_restores_nested_scope_and_bypasses_retained_context(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = []
+    original = executor_module.to_extended_length_path
+    monkeypatch.setattr(
+        executor_module, "to_extended_length_path",
+        lambda raw: calls.append(raw) or original(raw),
+    )
+    root, leaf = r"F:\Source", r"F:\Source\leaf"
+    with _path_cache_scope(monkeypatch) as outer:
+        outer_path = executor_module._lexical_logical_path(root)
+        executor_module._win32_path(root)
+        executor_module._win32_path(leaf)
+        retained = copy_context()
+        with _path_cache_scope(monkeypatch) as inner:
+            assert inner is not outer and inner.root_paths == {}
+            executor_module._win32_path(root)
+            executor_module._win32_path(leaf)
+        assert not inner.active and inner.root_paths == {} and inner.last_win32_path is None
+        assert executor_module._ROOT_INVOCATION.get() is outer
+        assert executor_module._lexical_logical_path(root) is outer_path
+        before = len(calls)
+        executor_module._win32_path(leaf)
+        assert len(calls) == before
+    assert not outer.active and outer.root_paths == {} and outer.last_win32_path is None
+    before = len(calls)
+    assert retained.run(executor_module._win32_path, root) == original(root)
+    assert retained.run(executor_module._win32_path, root) == original(root)
+    assert len(calls) == before + 2
+    assert outer.root_paths == {} and outer.last_win32_path is None
+    assert executor_module._ROOT_INVOCATION.get() is None
+
+
+@pytest.mark.skipif(os.name != "nt", reason="native activation path cache")
+def test_custom_adapter_without_native_activation_keeps_original_conversions(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = []
+    original = executor_module.to_extended_length_path
+    monkeypatch.setattr(
+        executor_module, "to_extended_length_path",
+        lambda raw: calls.append(raw) or original(raw),
+    )
+    with _path_cache_scope(monkeypatch, fs=object()) as invocation:
+        for _ in range(2):
+            executor_module._win32_path(r"F:\Source")
+        assert calls == [r"F:\Source"] * 2
+        assert invocation.root_paths == {} and invocation.last_win32_path is None
+
+
 @pytest.mark.skipif(os.name != "nt", reason="native Windows root hold")
 def test_native_invocation_mixes_held_and_fallback_without_sharing_adapter_state(
     tmp_path: Path,
@@ -495,6 +681,8 @@ def test_native_invocation_mixes_held_and_fallback_without_sharing_adapter_state
                                    expected_volume=authority.expected_volume_id)
         assert admissions == [str(source), str(target), str(target)]
         assert roots[0].held and not roots[1].held
+        invocation = executor_module._ROOT_INVOCATION.get()
+        assert {str(source), str(target)} <= set(invocation.root_paths)
         other = NativeFileSystem()
         # A different adapter still performs its own admission inside this scope.
         monkeypatch.setattr(other, "_admit_reviewed_root", admit)

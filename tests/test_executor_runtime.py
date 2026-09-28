@@ -20,6 +20,7 @@ import namisync.modules.executor as executor_facade
 import namisync.modules.executor.native as executor_module
 import namisync.modules.executor.pipeline as executor_pipeline
 import namisync.modules.executor.runtime as executor_runtime
+from namisync.core.root_authority import RootAuthority
 from namisync.core.evidence import Outcome, Provenance, RecordingStatus
 from namisync.core.events import ItemOutcome, Progress, Terminal
 from namisync.core.execution import (
@@ -3224,6 +3225,42 @@ class RootBindingCallSpyFileSystem(NativeFileSystem):
         return root / relative_path
 
 
+def test_runtime_root_exact_reviewed_spelling_skips_only_pure_normalization(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    authority = RootAuthority(str(tmp_path))
+    monkeypatch.setattr(
+        executor_runtime, "lexical_absolute_path",
+        lambda _path: pytest.fail("exact reviewed root was renormalized"),
+    )
+    executor_runtime._require_reviewed_runtime_root(tmp_path, authority, role="target")
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows reviewed root variants")
+@pytest.mark.parametrize("variant", ["case", "extended", "relative"])
+def test_runtime_root_variants_keep_existing_normalization(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    variant: str,
+) -> None:
+    authority = RootAuthority(str(tmp_path))
+    root = (
+        Path(str(tmp_path).upper()) if variant == "case" else
+        Path(executor_module.to_extended_length_path(str(tmp_path))) if variant == "extended"
+        else Path(tmp_path.name)
+    )
+    monkeypatch.chdir(tmp_path.parent)
+    calls = []
+    original = executor_runtime.lexical_absolute_path
+    monkeypatch.setattr(
+        executor_runtime, "lexical_absolute_path",
+        lambda path: calls.append(path) or original(path),
+    )
+    executor_runtime._require_reviewed_runtime_root(root, authority, role="source")
+    assert calls == [root]
+
+
 def test_target_root_guard_refuses_mismatched_runtime_root_before_touch(
     tmp_path: Path,
 ) -> None:
@@ -5186,8 +5223,10 @@ def test_execute_held_root_blocks_swap_and_completes_original_copy(tmp_path: Pat
         target_expected=None, intended=intended,
     )
     attempted = []
+    invocations = []
 
     def swap_after_copy() -> None:
+        invocations.append(executor_module._ROOT_INVOCATION.get())
         for root in (source, target):
             with pytest.raises(OSError) as refused:
                 root.rename(root.with_name(root.name + "-detached"))
@@ -5217,6 +5256,8 @@ def test_execute_held_root_blocks_swap_and_completes_original_copy(tmp_path: Pat
     assert (target / source_file.name).read_bytes() == b"reviewed"
     assert {item.role for item in diagnostics} == {"source", "target"}
     assert all(item.held and item.fallback_reason is None for item in diagnostics)
+    assert len(invocations) == 1 and not invocations[0].active
+    assert invocations[0].root_paths == {} and invocations[0].last_win32_path is None
     for root in (source, target):
         root.rename(root.with_name(root.name + "-released"))
 
@@ -5236,8 +5277,14 @@ def test_execute_releases_entry_holds_on_pause_cancel_and_exception(
     )
     xset = _xset(_plan(source, target, (operation,)))
     attempts = []
+    invocations = []
 
     def fail_at_boundary() -> None:
+        invocation = executor_module._ROOT_INVOCATION.get()
+        invocations.append(invocation)
+        executor_module._win32_path(source)
+        executor_module._win32_path(source / "unused.bin")
+        assert invocation.active and invocation.root_paths and invocation.last_win32_path is not None
         for root in (source, target):
             with pytest.raises(OSError) as refused:
                 root.rename(root.with_name(root.name + "-blocked"))
@@ -5258,6 +5305,8 @@ def test_execute_releases_entry_holds_on_pause_cancel_and_exception(
         execute(xset, RunContext(emit, checkpoint), FakeRecorder(), _policies(), fs)
     assert attempts == [source, target]
     assert executor_module._ROOT_INVOCATION.get() is None
+    assert len(invocations) == 1 and not invocations[0].active
+    assert invocations[0].root_paths == {} and invocations[0].last_win32_path is None
     for root in (source, target):
         renamed = root.rename(root.with_name(root.name + "-released"))
         renamed.rename(root)
