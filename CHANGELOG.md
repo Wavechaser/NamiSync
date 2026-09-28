@@ -1029,6 +1029,14 @@ claims explicit, independently reviewable, and regression-backed.
 
 #### Optimize root admission with invocation-scoped holds (2026-09-28)
 
+- Require fresh basic attributes from the held root handle before each executor
+  admission reuse. This detects in-place junction conversion without reopening
+  the root or repeating final-path confirmation. Retain write sharing, root
+  flushes and descendant operations; native conversion regressions cover all
+  three reuse sites. Use the basic-information query accepted by NTFS and exFAT.
+  The corrected gate passes 5,462 ordinary tests, 12 imports and the unchanged
+  oracle; guarded execution measures 15.27 seconds / 0.256 MiB/s. Preserve the
+  earlier unchecked-hold measurements as historical evidence only.
 - Add a core directory-hold primitive whose confirmation uses one normalized
   final-path query on the original handle, with exact spelling except drive
   letter case. Remove the interim identity/reopen approach. Both junction-swap

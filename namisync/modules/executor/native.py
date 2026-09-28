@@ -373,6 +373,16 @@ class NativeFileSystem:
                 )
             )
 
+    def _require_held_root(self, root: _InvocationRoot) -> bool:
+        if not root.held:
+            return False
+        assert root.hold is not None
+        try:
+            root.hold.require_ordinary()
+        except RootAuthorityError as error:
+            self._raise_root_authority_error(error)
+        return True
+
     def revalidate_root(
         self,
         root: Path,
@@ -390,7 +400,7 @@ class NativeFileSystem:
                 trusted_anchor is None
                 or str(_lexical_logical_path(trusted_anchor)) == reviewed.reviewed_anchor
             )
-            if matching and scoped is not None and scoped.held:
+            if matching and scoped is not None and self._require_held_root(scoped):
                 return
             authority = None
             if matching:
@@ -1234,7 +1244,8 @@ class NativeFileSystem:
             scoped = self._scoped_root(logical, descendants=True)
             held_root = (
                 scoped.require_authority().logical_root
-                if scoped is not None and scoped.held and trusted_anchor is None
+                if scoped is not None and trusted_anchor is None
+                and self._require_held_root(scoped)
                 else None
             )
             anchor = (
@@ -1392,7 +1403,7 @@ class NativeFileSystem:
 
     def _volume_id(self, path: Path) -> VolumeId:
         scoped = self._scoped_root(path)
-        if scoped is not None and scoped.held:
+        if scoped is not None and self._require_held_root(scoped):
             assert scoped.volume is not None
             return scoped.volume.volume_id
         return self._observe_root_volume(str(path)).volume_id

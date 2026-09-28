@@ -1986,6 +1986,16 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- MODERATE - FIXED (2026-09-28). Stale held-root attributes.
+  A confirmed empty NTFS directory could become a junction through an
+  attribute-only write handle while the admission hold stayed open. Cause:
+  delete-sharing denial prevents rename but does not freeze reparse attributes;
+  cached admission omitted the refusal made by baseline root checks. Core now
+  queries current basic attributes on the held handle before executor admission
+  reuse and rejects reparse/placeholder state or query failure. Native regression
+  covers all three reuse sites without mutating through the redirected root.
+  Sharing, root flushes, descendant writes and exFAT attribute queries remain
+  compatible; DEFENSE's existing quiescence rule governs the check/use interval.
 - MODERATE - FIXED (2026-08-30). Linear completion membership. Completing each
   linked or standalone integrity item scanned the immutable candidate tuple to
   confirm its id, making complete settlement quadratic even after workflow

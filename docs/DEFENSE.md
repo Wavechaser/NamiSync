@@ -249,7 +249,11 @@ native corroboration that its normalized DOS final path matches the logical
 root exactly, allowing drive-letter case alone. Failed or
 unavailable corroboration releases the hold and selects per-access admission,
 including aliases and unavailable final paths. A confirmed
-hold protects root continuity only for that invocation: it ends on pause, return, failure or
+hold prevents rename/deletion but permits in-place attribute changes. Before
+each access that reuses admission, consumers query current held-handle attributes
+and refuse reparse or placeholder state; query failure cannot authorize access.
+The existing quiescence assumption applies between this check and use, just as
+it does for per-access pathname checks. The hold ends on pause, return, failure or
 cancellation. UNC, mapped network and unholdable roots retain the fallback;
 descendant and per-item guards remain. Root or ancestor rename/deletion and
 Safely Remove may fail with "in use" during the hold. Volume mount remapping and
@@ -333,7 +337,8 @@ same-principal code.
   and refuses drift where its checks observe it. The full data-preservation
   guarantee, however, requires managed roots to remain quiescent from
   non-NamiSync mutation while execution is touching them. A writer that wins
-  after the final path-based guard is outside that full guarantee.
+  after the final pathname or held-handle attribute guard is outside that full
+  guarantee.
   Database admission distinguishes unowned artifact validation from live SQLite
   ownership: cold probes preserve source bytes and refuse observed drift;
   runtime-owned databases permit ordinary SQLite reads and recording while

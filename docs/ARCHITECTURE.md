@@ -446,8 +446,13 @@ failed queries and incomplete results release the hold for per-access admission.
 There is no reopened comparison handle or native identity requirement.
 The directory-access handle denies delete
 sharing, preventing root and ancestor rename or deletion while allowing changes
-inside the root. A consumer may then omit repeated root admission until the
-invocation pauses or exits. Holds belong to the invocation, never shared
+inside the root. It does not prevent in-place reparse metadata changes. Before
+each access that omits repeated root admission, the consumer requires current
+ordinary-directory attributes through that same held handle with
+`RootHold.require_ordinary()`. Reparse/placeholder state or unavailable evidence
+refuses access under the consumer's existing error policy; it does not silently
+become fallback. This handle query does no pathname probing, and DEFENSE's
+quiescence rule still covers the check/use interval. Holds belong to the invocation, never shared
 filesystem adapters, plans, continuations or persistence. UNC, mapped network
 and unholdable roots retain per-access admission, as do roots whose normalized
 DOS final path cannot be confirmed. This does not change stored
@@ -462,8 +467,8 @@ remain required. Each consumer retains its own policy and timing:
   corroboration.
 
 The remaining descendant path-check-to-use boundary is explicit. A prior probe
-alone never authorizes a later filesystem action; root continuity may instead
-be maintained by a live, fully admitted hold.
+alone never authorizes a later filesystem action; admission reuse requires both
+a live, fully admitted hold and its current attribute guard.
 
 ### 3.4 Scan and inventory types
 

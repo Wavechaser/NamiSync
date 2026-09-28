@@ -660,7 +660,16 @@ the hold and return false, selecting fresh per-access admission. UNC, mapped
 network and unholdable roots also use that fallback. There is no second handle
 or identity comparison, and no stored-identity or filesystem-support change.
 The live scope remembers successful confirmation; repeated confirmation adds
-no native calls. Read-only `fallback_reason` records the observed fallback
+no native calls. Before each access that reuses admitted facts, consumers call
+`RootHold.require_ordinary()`. It freshly reads current `FileBasicInfo`
+attributes through the same held handle, with no pathname probe, final-path
+repeat, comparison handle or identity query. Reparse and placeholder state is
+refused with the existing typed root issues; unavailable attributes never grant
+access or silently select fallback. Read/write sharing permits in-place reparse
+metadata changes even while deletion is blocked. This guard restores the
+point-of-use observation within DEFENSE's existing quiescent-root assumption;
+it does not make the observation-to-use interval atomic.
+Read-only `fallback_reason` records the observed fallback
 class without extra discovery calls. Case-only disagreement, a different drive,
 and a possible short-name component receive explanatory classifications;
 ambiguous same-drive alias disagreement remains a namespace mismatch. These

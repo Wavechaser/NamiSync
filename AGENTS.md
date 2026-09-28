@@ -29,7 +29,9 @@ with matching tests and documentation:
   admit under their own policies. A local root held open with directory access
   and no delete sharing may replace repeated root admission only after full
   admission inside that invocation-owned hold and a normalized DOS final path
-  matching the logical root exactly except drive-letter case; release it on
+  matching the logical root exactly except drive-letter case. Before each access
+  that reuses admission, query the held handle's current attributes and refuse
+  reparse or placeholder state; a failed query cannot authorize access. Release it on
   pause or exit. Remote,
   unholdable or uncorroborated roots retain per-access admission, and descendant
   guards remain. Shared core code probes, holds and classifies; it does not persist

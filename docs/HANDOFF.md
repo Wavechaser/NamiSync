@@ -1,65 +1,70 @@
-# Latest session — executor invocation holds
+# Latest session — per-access held-handle guard
 
-2026-09-28, `milestone1-adelbert`. Core `6536c04` is integrated. The next
-atomic outcome implements executor invocation holds and optional internal
-fallback diagnostics, preserving runtime guard dispatch, descendant checks,
-physical containment, leaf probes and settlement. Holds release on every exit;
-fallback keeps per-access admission. The user explicitly approved the admission
-skip after automatic review blocked the original proposal. No oracle re-pin,
-stored identity, wire or settlement-policy change is included.
+2026-09-28, `milestone1-adelbert`, core/executor correction over `90b57646`.
+The user rejected denying write sharing and approved checking current attributes
+on the held handle before admission reuse. Core now provides `require_ordinary()`;
+all three executor reuse sites call it. The query uses FileBasicInfo0, rejects
+reparse/placeholder state and propagates query failure without authorizing access.
+Diagnostics stay query-free; one final-path confirmation and existing sharing,
+root flushes, descendant checks and physical resolution remain unchanged.
 
-## Verification and observations
+## Verified evidence
 
 Evidence root: `build/root-admission-optimization-20260928/`.
 
-- `resume/executor-ordinary.log`: 5,442 passes, four skips, 34 headed
-  deselections. Twelve import contracts pass; unchanged oracle passes 30
-  scenarios × three; guard scan covers 70 rows/391 effects, zero missing
-  admissions. Full gate input/output hash arrays match.
-- Focused executor cases: 387 passes; tools rig/CLI: 89 passes, two skips.
-  The subsequent cached-exception traceback correction has its focused witness
-  and is included in the full gate. Earlier failed receipts remain retained.
-- Differential candidate `candidate-executor-frozen-8912729bf10c4289a4fb7d7fa54ec049`
-  passes 32 groups against two identical-producer baseline captures. Seven
-  first-checkpoint swaps are prevented by native holds and match full unswapped
-  controls; seven pre-execution swaps retain baseline outcomes. No unexpected
-  difference. Driver SHA-256:
-  `8fbbb0835daaa9c3fbbf9b7f3c95b12ae8cfe1d461c121eaa6233be4337c8b63`.
-- Review found an omitted first descendant guard; it was restored before
-  acceptance. No supported escape or out-of-root mutation was established.
-  The retained before/after regression demonstrates the correction. Frozen
-  native source SHA-256:
-  `04784bec5786adbb56e23fec26fdd323128d8053d0cdf8330a3f141eccda7a96`.
-- Three serialized F:→G: 1,000 × 4 KiB samples: 11.059/11.204/11.708 seconds,
-  median 0.349 MiB/s. All copies/readbacks pass, source unchanged, targets
-  cleaned by rig manifests. Separate execute-only binding-call counts: anchor
-  calls 48,000→6,002, volume-information calls 20,000→6,002, two final-path
-  queries. PERFORMANCE owns the limits. The 1 MiB/s goal remains unmet.
-- K: exFAT root-scope witness passes. Copy witness truthfully fails with error
-  87; read-only queries expose a baseline unconditional FileIdInfo blocker.
-  Exact first failing copy API is untraced. BUGS records this deferred
-  compatibility finding; no exFAT copy success is claimed.
+- `rootguard/native-basic-first.json`: attribute-only and generic-write handles
+  convert an empty held NTFS root, and the original handle sees attributes
+  change from 16 to 1040. Nonempty root/ancestor conversion fails with 145; held-root
+  removal fails with 32. Reparse metadata is restored, root flush and ordinary child
+  operations succeed, all handles close. No redirected executor effect was run.
+- K: EXFAT BA1F1F45 rejects FileAttributeTagInfo9 with 87 but accepts BasicInfo0;
+  both receipts remain. Production `require_ordinary()` lifetime tests on K:
+  pass twice, including exceptional exit and descendant operations.
+- 541 affected tests and 22 focused guard cases pass, including all three real
+  conversion refusal sites, placeholder classification and failed native query.
+  No tests were retired. `rootguard/frozen-inputs.json` binds seven builder files.
+  Core SHA256 `6FBA7B3AEB37B316C99D4EDC4EF229FCF71D830715A7BAA12A1A36A12E1084B4`;
+  executor native `7E68306B01BCDF983AE25204E82AA892AAF6EB898D70C14494B7FE5CFA4E1C17`.
+- `resume/held-attributes-*`: 5,462 ordinary passes, four skips, 34 headed
+  deselections; 12 imports; unchanged settlement oracle 30 × 3; guard scan 70 rows/
+  391 effects/zero missing admissions. Input/output hash arrays match.
+- Differential candidate `candidate-held-attributes-frozen-7d89ad8690664fc0b808996f1ec8315c`
+  passes 46 groups with unchanged producer 243d2173 and all frozen hashes matching.
+  Seven executor swaps are blocked and match full controls. The 14 preflight
+  groups still exercise baseline behavior because preflight is not restored yet.
+- Fresh independent source/test/evidence review has no unresolved finding.
+  Serialized guarded measurements take 15.271/15.711/15.047 seconds for
+  1,000 × 4 KiB F:→G: copies, median 0.256 MiB/s. All copies/readbacks pass,
+  source unchanged, manifest cleanup complete. Goal remains unmet. PERFORMANCE
+  preserves both these and the historical unchecked-hold measurements.
 
-## Immediate continuation and preservation
+## Immediate continuation
 
-Independent source/evidence/document review approved this atomic outcome;
-its receipt is `executor/independent-review-20260928.md` under the evidence root.
-Read-only design identifies the next measured path reduction;
-single-lstat consolidation and preflight/verifier holds remain pending. Preserve
-the second directory observation and physical root/descendant resolution unless
-the user approves a concrete change. M1_PLAN owns the next-step decision.
+Fresh whole-outcome review approved the complete core/executor correction;
+receipt: `rootguard/independent-review-held-attributes-20260928.md`.
+Then rebuild preflight from recovery7eb8c19d: only `modules/preflight.py`,
+`tests/test_preflight.py` and `docs/PREFLIGHT.md`, not its old stop documents.
+Before its sole cached-admission return, call `hold.require_ordinary()`;
+all five backend families already pass through that helper. Preserve invocation
+invalidation, custom dispatch, typed error policy, physical/leaf/parent/trash
+checks. Add the conversion/placeholder/query-failure regression, then rerun its
+focused/direct/full/differential gates and isolated measurements. Commit it
+separately, then implement verifier. Further executor optimization comes last;
+no descendant-check retirement is authorized by probability arguments alone.
 
-Recovery branches remain until final accounting, never merge/cherry-pick as-is:
-`codex/wip-20260928-1158-root-hold-binding` at `cfcc6ef` (useful core rebuilt in
-`6536c04`; rejected identity mechanics replaced), and
-`codex/wip-20260928-1442-executor-hold-approval` at `0a04921` (three draft docs
-rebuilt into this outcome). No remote changed; unrelated recoveries/stashes
-remain untouched.
+## Recovery and exclusions
 
-Managed baseline worktree:
-`C:\Users\Spectrum\.codex\worktrees\root-admission-baseline\NamiSync`,
-`b8baf42df91e9aeed1402cd029c86ca9ae287b1b`. Retain it for later differentials.
-The preserved F: corpus, ignored raw receipts and K: pytest fixtures remain.
-Check resolved owned paths before cleanup; failed-copy scratch is evidence.
-Pre-existing pre-invocation root replacement and identity-less DELETE/TRASH
-findings remain excluded from this refactor.
+`codex/wip-20260928-1549-root-write-sharing` at7eb8c19d preserves preflight's
+83focused/314direct/46differential partial evidence and the interrupted broad
+run. Never merge/cherry-pick it as-is. The root-guard correction replaces its
+rejected deny-write proposal; preflight product work must be rebuilt and reviewed.
+Keep earlier recovery refs cfcc6ef and0a04921 and the managed baseline worktree
+`C:\Users\Spectrum\.codex\worktrees\root-admission-baseline\NamiSync` at
+b8baf42df91e9aeed1402cd029c86ca9ae287b1b until final accounting. Evidence manifest
+`root-write-sharing-recovery-manifest.json` preserves13,351 entries from the stop.
+
+No remote changed, unrelated stashes/branches remain untouched, and native
+fixtures/evidence have not been cleaned. The pre-existing K: copy/FileIdInfo
+compatibility issue remains deferred in BUGS; the current guard does not claim
+an exFAT copy fix. Verifier files and stored identity/wire/settlement contracts
+remain unchanged. DEFENSE's existing quiescence assumption covers check/use.

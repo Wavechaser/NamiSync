@@ -247,6 +247,10 @@ verified; strict alias rejection has a focused comparison witness.
 
 ### Executor invocation holds — 2026-09-28
 
+The initial hold-only observation below predates the required per-access
+held-handle attribute guard. It remains historical timing evidence, not acceptance
+of an unchecked hold. The corrected observation is recorded after its table.
+
 The frozen executor candidate over `6536c04` was measured after the ordinary
 gate finished, using the same preserved 1,000 × 4 KiB F: source and a fresh G:
 rig workspace. Three serialized samples without the native-call wrapper took 11.059, 11.204
@@ -277,6 +281,27 @@ the copy witness fails with error 87. Read-only metadata queries expose a
 pre-existing unsupported handle-identity query; the first failing copy API is
 not traced. [BUGS](BUGS.md) records that separate limitation. No exFAT copy
 throughput or compatibility success is inferred from the root-hold evidence.
+
+The corrected core/executor guard uses `FileBasicInfo` on the held handle before
+admission reuse, retaining one final-path confirmation. Following its completed
+ordinary/import/oracle/differential gates, three serialized samples on the same
+preserved F: source and a fresh G: target took 15.271, 15.711 and 15.047 seconds
+(median 0.256 MiB/s). All 1,000 copies and readbacks per sample passed; the source
+scan was unchanged and manifest-scoped teardown completed. Backend copy time
+was 0.564–0.594 seconds, with 14.481–15.117 seconds outside the backend. The
+goal remains unmet. These samples are slower than the earlier unchecked hold
+samples; no controlled per-query timing attribution is claimed.
+Receipts: `resume/executor-attributes.json` and its log under the same evidence
+root. Standard rig metrics are enabled; the separate binding-call wrapper is
+excluded from these timing samples. NTFS conversion/regression witnesses and
+two K: production guard/lifetime tests establish correctness separately.
+The same execute-only counter driver records 6,002 anchor and 6,002 volume-
+information calls, 2,002 opens/closes, two final-path confirmations and 31,998
+handle-information calls (4,000 in the unchecked hold sample). The added current-
+attribute checks preserve the reduced pathname/volume work. The counted run
+also copied and verified all files and cleaned its owned target; its elapsed
+time is instrumented diagnostic data. `executor-attributes-counts.json` and
+`executor-attributes-counted-run.json` retain hashes, imports and raw counts.
 
 ### Executor assessment — 2026-09-27
 

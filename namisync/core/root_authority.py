@@ -43,6 +43,17 @@ _FILE_FLAG_BACKUP_SEMANTICS = 0x02000000
 _FILE_FLAG_OPEN_REPARSE_POINT = 0x00200000
 _DRIVE_REMOTE = 4
 _INVALID_HANDLE_VALUE = ctypes.c_void_p(-1).value
+_FILE_BASIC_INFO_CLASS = 0
+
+
+class _FileBasicInfo(ctypes.Structure):
+    _fields_ = [
+        ("CreationTime", ctypes.c_longlong),
+        ("LastAccessTime", ctypes.c_longlong),
+        ("LastWriteTime", ctypes.c_longlong),
+        ("ChangeTime", ctypes.c_longlong),
+        ("FileAttributes", wintypes.DWORD),
+    ]
 
 
 class _WindowsBindings:
@@ -89,6 +100,11 @@ class _WindowsBindings:
             wintypes.HANDLE, wintypes.LPWSTR, wintypes.DWORD, wintypes.DWORD
         ]
         self.get_final_path.restype = wintypes.DWORD
+        self.get_file_information_ex = kernel32.GetFileInformationByHandleEx
+        self.get_file_information_ex.argtypes = [
+            wintypes.HANDLE, ctypes.c_int, wintypes.LPVOID, wintypes.DWORD
+        ]
+        self.get_file_information_ex.restype = wintypes.BOOL
 
 
 _WINDOWS = _WindowsBindings() if os.name == "nt" else None
@@ -394,6 +410,47 @@ class RootHold:
         self._close()
         return False
 
+    def require_ordinary(self) -> None:
+        """Freshly require ordinary attributes before reusing root admission."""
+
+        root = self._authority.logical_root
+        if self._handle is None or not self._confirmed:
+            raise RootAuthorityError(
+                RootAuthorityIssue.COMPONENT_UNAVAILABLE,
+                root,
+                "root hold is not live and confirmed",
+            )
+        assert _WINDOWS is not None
+        info = _FileBasicInfo()
+        if not _WINDOWS.get_file_information_ex(
+            self._handle, _FILE_BASIC_INFO_CLASS, ctypes.byref(info), ctypes.sizeof(info)
+        ):
+            error = ctypes.WinError(ctypes.get_last_error())
+            raise RootAuthorityError(
+                RootAuthorityIssue.COMPONENT_UNAVAILABLE, root, logical_error_text(error)
+            ) from error
+        attributes = int(info.FileAttributes)
+        if attributes & FILE_ATTRIBUTE_REPARSE_POINT:
+            placeholder = attributes & (
+                FILE_ATTRIBUTE_OFFLINE
+                | FILE_ATTRIBUTE_RECALL_ON_OPEN
+                | FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS
+            )
+            raise RootAuthorityError(
+                (
+                    RootAuthorityIssue.PLACEHOLDER_COMPONENT
+                    if placeholder else RootAuthorityIssue.REPARSE_COMPONENT
+                ),
+                root,
+                "held root is a placeholder or reparse component",
+            )
+        if not attributes & FILE_ATTRIBUTE_DIRECTORY:
+            raise RootAuthorityError(
+                RootAuthorityIssue.NON_DIRECTORY_COMPONENT,
+                root,
+                "held root is not an ordinary directory",
+            )
+
     def _close(self) -> None:
         if self._handle is not None:
             assert _WINDOWS is not None
@@ -423,7 +480,8 @@ def hold_root(authority: RootAuthority) -> Iterator[RootHold]:
     The caller fully admits inside this scope, then calls ``confirm()`` before
     relying on the hold. False confirmation selects per-access admission, also
     used for UNC, mapped network, unholdable or final-path-unavailable roots.
-    Descendant guards remain necessary.
+    Confirmed consumers require current ordinary attributes before each access
+    that reuses admission. Descendant guards remain necessary.
     """
 
     if os.name != "nt":

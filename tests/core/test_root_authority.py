@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import ctypes
 import stat as stat_module
 import subprocess
 from pathlib import Path
@@ -764,6 +765,78 @@ def test_root_hold_falls_back_for_remote_or_unholdable_roots(
 
 
 @pytest.mark.skipif(os.name != "nt", reason="Windows native root hold witness")
+@pytest.mark.parametrize(
+    ("attributes", "query_ok", "issue"),
+    (
+        (FILE_ATTRIBUTE_DIRECTORY, True, None),
+        (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_OFFLINE, True, None),
+        (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT, True,
+         RootAuthorityIssue.REPARSE_COMPONENT),
+        (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT | FILE_ATTRIBUTE_OFFLINE,
+         True, RootAuthorityIssue.PLACEHOLDER_COMPONENT),
+        (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT | 0x00040000,
+         True, RootAuthorityIssue.PLACEHOLDER_COMPONENT),
+        (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT | 0x00400000,
+         True, RootAuthorityIssue.PLACEHOLDER_COMPONENT),
+        (0, True, RootAuthorityIssue.NON_DIRECTORY_COMPONENT),
+        (FILE_ATTRIBUTE_DIRECTORY, False, RootAuthorityIssue.COMPONENT_UNAVAILABLE),
+    ),
+)
+def test_root_hold_requires_fresh_attributes_without_reconfirming_or_fallback(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    attributes: int,
+    query_ok: bool,
+    issue: RootAuthorityIssue | None,
+) -> None:
+    calls: list[str] = []
+
+    def final_path(_handle, output, _size, _flags):
+        calls.append("final")
+        output.value = to_extended_length_path(str(tmp_path))
+        return len(output.value)
+
+    def query(handle, kind, output, size):
+        calls.append("attributes")
+        assert handle == 73 and kind == 0 and size == 40
+        ctypes.cast(output, ctypes.POINTER(root_authority._FileBasicInfo)).contents.FileAttributes = attributes
+        if not query_ok:
+            ctypes.set_last_error(5)
+        return query_ok
+
+    monkeypatch.setattr(
+        root_authority, "_WINDOWS",
+        SimpleNamespace(
+            get_drive_type=lambda _path: 3,
+            create_file=lambda *_args: 73,
+            get_final_path=final_path,
+            get_file_information_ex=query,
+            close_handle=lambda _handle: calls.append("close"),
+        ),
+    )
+    with hold_root(RootAuthority(str(tmp_path))) as hold:
+        with pytest.raises(RootAuthorityError) as unconfirmed:
+            hold.require_ordinary()
+        assert unconfirmed.value.issue is RootAuthorityIssue.COMPONENT_UNAVAILABLE
+        assert calls == []
+        assert hold.confirm()
+        for _ in range(2):
+            if issue is None:
+                hold.require_ordinary()
+            else:
+                with pytest.raises(RootAuthorityError) as refused:
+                    hold.require_ordinary()
+                assert refused.value.issue is issue
+                if not query_ok:
+                    assert refused.value.__cause__.winerror == 5
+            assert hold.confirm()
+            assert hold.fallback_reason is None
+    with pytest.raises(RootAuthorityError):
+        hold.require_ordinary()
+    assert calls == ["final", "attributes", "attributes", "close"]
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows native root hold witness")
 @pytest.mark.parametrize("fail_inside", (False, True))
 def test_native_root_hold_blocks_root_and_ancestor_mutations_and_releases(
     tmp_path: Path,
@@ -786,6 +859,7 @@ def test_native_root_hold_blocks_root_and_ancestor_mutations_and_releases(
                 if fail_inside:
                     raise OSError("invocation failed")
                 return
+            hold.require_ordinary()
             with pytest.raises(OSError) as rename_error:
                 root.rename(moved_root)
             assert rename_error.value.winerror == 32

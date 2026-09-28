@@ -145,7 +145,15 @@ retain their existing behavior. The tracing adapter explicitly forwards activati
 without adding a filesystem effect to its protected trace.
 
 Confirmed holds replace repeated root-prefix admission until
-the call finishes all settlement and cleanup. Pause, cancellation and every error
+the call finishes all settlement and cleanup. Each reuse first reads current
+attributes from that same held handle and refuses reparse or placeholder state.
+This applies to the root-revalidation shortcut, the held-root anchor for a
+descendant walk, and exact-root volume reuse. Query failure retains the existing
+consumer error policy and cannot authorize access. Diagnostic mode reporting
+does not perform an additional attribute query. The hold's write sharing remains
+compatible with root flushes and ordinary descendant changes; DEFENSE's
+quiescent-root assumption still covers the attribute-check-to-use interval.
+Pause, cancellation and every error
 release them; resume creates a fresh invocation. UNC, mapped network, unavailable
 or mismatching final paths retain per-access admission. Descendant physical
 containment (including root and candidate physical resolution), reparse checks,

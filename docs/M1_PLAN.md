@@ -13,6 +13,71 @@ certify their recorded build and dependencies only.
 
 ## Root admission optimization — 2026-09-28
 
+**Resumed — held-handle attributes before access.** A native owned-scratch witness
+converted a fully admitted, confirmed, held empty directory into a junction
+using a separate write handle and `FSCTL_SET_REPARSE_POINT`; no rename was
+needed. Resolution then reached the owned sibling outside the logical root.
+The script restored the metadata before reporting. No executor mutation or
+user-data effect was attempted. The hold's read/write sharing blocks deletion
+but does not establish the namespace stability assumed by admission reuse.
+This finding affects core `6536c04`, executor `90b57646`, and the uncommitted
+preflight candidate. Their prior passing receipts do not close this new seam.
+Their acceptance must be renewed after the correction below.
+
+AGENTS requires suspension for changed root-safety mechanisms and recovery
+before redesign; this plan also stops on unapproved equivalence differences.
+Preflight's ordinary gate was interrupted (no completed broad pass); its
+focused/direct/differential passes are retained only as partial evidence.
+The user rejected denying write sharing: attribute-only handles may still set
+junction metadata, while stronger sharing denial can break executor root flushes.
+The approved correction keeps the existing hold and checks current attributes
+on its handle before every access that reuses admission, refusing reparse or
+placeholder attributes. Confirmation remains one strict final-path query; the
+new check does no pathname probing. DEFENSE's existing quiescence rule covers
+the check/use interval; this does not promise immunity to concurrent mutation.
+Native witnesses must demonstrate attribute visibility after empty-root junction
+conversion, nonempty-directory conversion refusal, root-flush compatibility and
+ordinary descendant operations. Query failures may never authorize access.
+
+Native selection evidence is under `rootguard/` in the current evidence root:
+attribute-only (`FILE_WRITE_ATTRIBUTES`) and generic-write handles both convert
+an empty held NTFS root; `FileBasicInfo` on the original handle observes ordinary
+attributes becoming reparse attributes. Nonempty root/ancestor conversions fail
+with 145, and removing the held child fails with 32. Restoration, root flush and
+descendant create/write/rename/delete succeed with unchanged sharing. Confirmed
+exFAT K: rejects `FileAttributeTagInfo` with 87 but accepts `FileBasicInfo`; the
+implementation therefore uses the latter. These native observations select the
+mechanism; product regressions and the full gate still establish acceptance.
+
+The frozen correction passes 541 affected tests, 22 focused guard cases and
+two production held-attribute/lifetime cases on K:. The ordinary suite passes
+5,462 tests (four skips, 34 headed deselections), all 12 import contracts,
+unchanged oracle 30 × three and guard scan 70 rows/391 effects with no missing
+admissions; gate input/output hashes match. All 46 differential groups match
+the checked baseline or explicit blocked-rename controls. Source/test review
+has no unresolved finding. Serialized guarded execution measures median
+15.271 seconds / 0.256 MiB/s; anchor/volume queries remain 6,002 each, with
+31,998 handle-information calls and two final-path confirmations. All copies
+and readbacks pass; the performance goal remains unmet. Final documentation
+review approved the atomic correction, recorded in
+`rootguard/independent-review-held-attributes-20260928.md`. Receipts are in `rootguard/`, `resume/held-attributes-*`
+and `differential/runs/candidate-held-attributes-frozen-7d89ad8690664fc0b808996f1ec8315c`.
+
+First atomic correction: core hold/native bindings and executor admission-reuse
+sites, their focused native/runtime/core tests, and CORE/EXECUTOR/ARCHITECTURE/
+DEFENSE/AGENTS policy documentation. Parent owns this register, BUGS, PERFORMANCE,
+CHANGELOG and HANDOFF. Acceptance: conversion regression and placeholder/query-
+failure cases, exact access/share compatibility, full direct-consumer and ordinary
+tests, unchanged settlement oracle/imports, differential, measurement and fresh
+independent review. Do not weaken descendant or physical-containment checks.
+After committing that correction, rebuild preflight from recovery `7eb8c19d`
+using the same per-access handle check, complete its gate, then migrate verifier.
+The later executor pass may examine cached absolute paths, single-lstat and
+redundant root lookup; retiring repeated descendant checks remains a separate
+concrete policy decision, not an authorization inferred from low probability.
+Raw probe and receipt: `build/root-admission-optimization-20260928/preflight/`
+`probe_inplace_root_reparse.py` and `inplace-root-reparse-first-receipt.json`.
+
 This results-oriented plan replaces the nine-row RO register, which never
 reached implementation and remains in Git history (last at `c05eea25`).
 Details beyond this page are decided per step, against real code.
@@ -246,6 +311,36 @@ hold integration before seeking a separate decision to remove those checks.
 The corrected core gate is complete. Preflight/verifier migration and
 single-lstat consolidation remain separate pending outcomes.
 
+**Next outcome — preflight invocation holds.** After executor `90b57646`, the
+user chose preflight, then verifier, then further executor optimization. The
+preflight population is `modules/preflight.py`, its focused tests and direct
+workflow/native and tools-preparation consumers; PREFLIGHT owns behavior,
+PERFORMANCE measurements, and this register/HANDOFF/CHANGELOG delivery status.
+One native invocation scope holds each root before its existing full root
+observation and confirms only successful admission. Preserve supplied filesystem
+dispatch, fallback, subject/parent/trash no-follow checks, both physical
+resolutions, final leaf stat and leaf-volume checks. Hold state stays outside
+ObservedWorld, adapters' lasting state and pure judgment; all exits release it.
+No single-lstat, stored identity, exFAT compatibility or settlement change.
+Acceptance: existing native seams; held/fallback admission counts and rename/
+release witnesses, exception/nesting/override isolation; unchanged-world/verdict
+baseline differential with explicit prevented-swap controls; focused/direct
+consumer and ordinary suites, imports, unchanged oracle, measured preparation
+preflight time/calls, and fresh independent review. Commit the complete preflight
+outcome before verifier implementation. Existing equivalence and mandatory
+stops apply; verifier design remains read-only until this gate closes.
+
+The frozen preflight implementation passes 83 focused and 314 direct-consumer
+tests. Its 46-group differential (including the prior 32 executor groups) has
+zero unexpected differences: three required held swaps are blocked and match
+full controls, the case-mismatched source falls back and retains the baseline
+mutated-world refusal, and all four pre-execution swaps remain unchanged.
+Final producer `243d21732ffac203adea204639de89a46c055fdee10564dd7046ff435d8de3fa`
+has matching baseline repeats; candidate receipts are in
+`differential/runs/candidate-preflight-frozen-fdd4d5eefc534429bc43a7173f5a9922`
+under the current evidence root. Broad gate, measurements and final review
+remain required before commit.
+
 **Findings outside this result** go to BUGS or HANDOFF as short notes and are
 not handled here. Two exist: a same-volume root replacement before execution
 accepts creation effects, and identity-less DELETE/TRASH acts on a
@@ -445,7 +540,7 @@ scope changes, stops and recovery.
 
 | ID | Accepted outcome | Named verification | Status |
 | --- | --- | --- | --- |
-| Root admission optimization | Hold each admitted root per invocation, keep the per-access fallback for remote or unholdable roots, and reduce admission calls, per the plan above. Target above 1 MiB/s for 1,000 × 4 KiB F:→G: execution (goal, not gate). | Baseline equivalence differential, existing tests, settlement oracle with one allowed probe-only re-pin, hold witnesses and measurements after each step. | Core integrated in `6536c04`; executor holds and diagnostics verified and independently approved. Single-lstat and preflight/verifier outcomes pending. |
+| Root admission optimization | Hold each admitted root per invocation, keep the per-access fallback for remote or unholdable roots, and reduce admission calls, per the plan above. Target above 1 MiB/s for 1,000 × 4 KiB F:→G: execution (goal, not gate). | Baseline equivalence differential, existing tests, settlement oracle with one allowed probe-only re-pin, hold witnesses and measurements after each step. | Resumed: user approved current held-handle attributes before access to correct in-place conversion. Core/executor correction first; preflight recovery then verifier; further executor reductions later. |
 | M1-9 | Bounded inventory projections, current evidence and the full inventory consumer for sibling sorting. | Complete or prior-complete publication; warnings outside action scope; raw evidence provenance; search/filter/collapse/window/detail, replacement/race and production sort/reset paths; headed witnesses. | Pending. Missing-row acknowledge/restore UI must be explicitly allocated at activation; this row does not silently claim it. |
 | M1-10 | Baseline, verify and rebaseline controls plus first same-task manual post-copy verification, without persistent operation-time hashes. Eligible null-evidence files enter rebaseline; every admitted rebaseline hashes and replaces/creates evidence, and a match is not verified. | Confirm acknowledgement admission before claim/native work; all-null/mixed workflow, service/CLI and desktop paths; conditional recording and supersession races; atomic handoff classification; live pause/resume/cancel and unchanged automatic failed-read retries; overlay/result identity. Independently review operation matrix and conditional recording. Terminal Verify-remaining/subset retry remains deferred. | Pending. Rebaseline confirmation is distinct from missing-row acknowledgement. |
 | M1-12 | Close integrated lifecycle/retention across activated task surfaces, then complete adversarial, documentation, ordinary and headed verification. This absorbs former M1-11. | Plan-only, execution-only, linked/manual verification, inventory, refused/canceled/degraded/failed tasks across same-document navigation, contained unsupported reload, explicit close and shutdown; admission bounds, stale-response suppression, exact resource release and retained truth. Applicable settlement oracle, ordinary/headed, installed-wheel/product, imports, diff/active-link checks and independent cross-component review. No aggregate-artifact or whole-owner-graph criterion. | Pending. |

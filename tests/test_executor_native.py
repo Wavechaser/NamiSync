@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from dataclasses import replace
+import ctypes
 import os
 from pathlib import Path
 import stat as stat_module
+import struct
 import subprocess
 import sys
 import textwrap
@@ -19,6 +21,7 @@ import _executor_fixtures as executor_fixtures
 import namisync.modules.executor.native as executor_module
 import namisync.modules.executor.pipeline as executor_pipeline
 import namisync.modules.executor.runtime as executor_runtime
+import namisync.core.root_authority as root_authority_module
 from namisync.core.evidence import Outcome, RecordingStatus
 from namisync.core.events import ItemOutcome
 from namisync.core.execution import (
@@ -291,6 +294,124 @@ def test_native_invocation_holds_root_keeps_physical_resolution_and_releases(
     assert diagnostics[0].held and diagnostics[0].fallback_reason is None
     root.rename(tmp_path / "renamed")
     assert executor_module._ROOT_INVOCATION.get() is None
+
+
+def _reuse_held_root(fs, root, volume, selector):
+    if selector == "revalidate":
+        return fs.revalidate_root(root, expected_volume=volume.volume_id)
+    if selector == "parent-chain":
+        return fs._reject_reparse_chain(root)
+    return fs._volume_id(root)
+
+
+@pytest.mark.skipif(os.name != "nt", reason="native Windows current root attributes")
+@pytest.mark.parametrize("selector", ("revalidate", "parent-chain", "volume"))
+@pytest.mark.parametrize("state", ("ordinary", "placeholder", "query-failure"))
+def test_held_root_reuse_requires_current_attributes_without_diagnostic_queries(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    selector: str,
+    state: str,
+) -> None:
+    volume = root_authority_module.observe_native_volume(tmp_path)
+    authority = RootAuthority(str(tmp_path), volume.evidence.device_id, volume.volume_id)
+    scoped = executor_module._InvocationRoot("target", authority)
+    diagnostics = []
+    fs = NativeFileSystem()
+    assert root_authority_module._WINDOWS is not None
+    original_query = root_authority_module._WINDOWS.get_file_information_ex
+    queries: list[int] = []
+
+    def query(handle, kind, output, size):
+        queries.append(kind)
+        assert kind == 0
+        if state == "query-failure":
+            ctypes.set_last_error(5)
+            return False
+        if state == "placeholder":
+            info = ctypes.cast(output, ctypes.POINTER(root_authority_module._FileBasicInfo)).contents
+            info.FileAttributes = 0x10 | 0x400 | FILE_ATTRIBUTE_OFFLINE
+            return True
+        return original_query(handle, kind, output, size)
+
+    monkeypatch.setattr(root_authority_module._WINDOWS, "get_file_information_ex", query)
+    with executor_module._root_invocation_scope(fs, object(), (scoped,), diagnostics):
+        fs.revalidate_root(tmp_path, expected_volume=volume.volume_id)
+        assert scoped.held
+        assert len(diagnostics) == 1 and diagnostics[0].held
+        assert queries == []
+        if state == "ordinary":
+            _reuse_held_root(fs, tmp_path, volume, selector)
+        else:
+            expected = (
+                UnsafeExecutionPath if state == "placeholder" or selector == "parent-chain"
+                else PermissionError
+            )
+            with pytest.raises(expected):
+                _reuse_held_root(fs, tmp_path, volume, selector)
+        assert queries == [0]
+        assert scoped.held and len(diagnostics) == 1
+
+
+@pytest.mark.skipif(os.name != "nt", reason="native NTFS in-place root conversion")
+@pytest.mark.parametrize("selector", ("revalidate", "parent-chain", "volume"))
+def test_held_root_reuse_refuses_inplace_attribute_only_junction_conversion(
+    tmp_path: Path,
+    selector: str,
+) -> None:
+    root = tmp_path / "root"
+    root.mkdir()
+    sibling = tmp_path / "owned-sibling"
+    sibling.mkdir()
+    marker = sibling / "untouched.bin"
+    marker.write_bytes(b"owned sibling unchanged")
+    volume = root_authority_module.observe_native_volume(root)
+    if volume.volume_id.fs_type != "NTFS":
+        pytest.skip("native junction conversion witness requires NTFS")
+    authority = RootAuthority(str(root), volume.evidence.device_id, volume.volume_id)
+    scoped = executor_module._InvocationRoot("target", authority)
+    fs = NativeFileSystem()
+    ioctl = ctypes.WinDLL("kernel32", use_last_error=True).DeviceIoControl
+    ioctl.argtypes = [ctypes.c_void_p, ctypes.c_uint32, ctypes.c_void_p, ctypes.c_uint32,
+                      ctypes.c_void_p, ctypes.c_uint32, ctypes.POINTER(ctypes.c_uint32),
+                      ctypes.c_void_p]
+    ioctl.restype = ctypes.c_int
+    substitute = ("\\??\\" + str(sibling)).encode("utf-16-le")
+    printed = str(sibling).encode("utf-16-le")
+    paths = substitute + b"\0\0" + printed + b"\0\0"
+    data = struct.pack("<LHHHHHH", 0xA0000003, 8 + len(paths), 0,
+                       0, len(substitute), len(substitute) + 2, len(printed)) + paths
+    assert executor_module._WINDOWS is not None
+    with executor_module._root_invocation_scope(fs, object(), (scoped,), None):
+        fs.revalidate_root(root, expected_volume=volume.volume_id)
+        assert scoped.held
+        handle = executor_module._WINDOWS.create_file(
+            to_extended_length_path(str(root)), 0x100, 7, None, 3, 0x02200000, None
+        )
+        assert handle != executor_module._INVALID_HANDLE_VALUE
+        converted = False
+        try:
+            buffer = ctypes.create_string_buffer(data)
+            returned = ctypes.c_uint32()
+            converted = bool(ioctl(handle, 0x900A4, buffer, len(data), None, 0,
+                                   ctypes.byref(returned), None))
+            assert converted, ctypes.get_last_error()
+            assert root.lstat().st_file_attributes & 0x400
+            with pytest.raises(UnsafeExecutionPath, match="reparse"):
+                _reuse_held_root(fs, root, volume, selector)
+            assert marker.read_bytes() == b"owned sibling unchanged"
+        finally:
+            try:
+                if converted:
+                    delete = ctypes.create_string_buffer(struct.pack("<LHH", 0xA0000003, 0, 0))
+                    returned = ctypes.c_uint32()
+                    assert ioctl(handle, 0x900AC, delete, 8, None, 0,
+                                 ctypes.byref(returned), None), ctypes.get_last_error()
+            finally:
+                executor_module._WINDOWS.close_handle(handle)
+        assert not root.lstat().st_file_attributes & 0x400
+        assert fs.flush_directory(root)
+    root.rename(tmp_path / "released-root")
 
 
 @pytest.mark.skipif(os.name != "nt", reason="native Windows reparse guard")
