@@ -1027,6 +1027,20 @@ repeated machinery while preserving operational safety and boundary contracts.
 Safety, settlement, authority, and measurement work made high-risk release
 claims explicit, independently reviewable, and regression-backed.
 
+#### Replan root admission optimization around held roots (2026-09-28)
+
+- Replace the nine-row RO register with a results-oriented plan: a goal of more
+  than 1 MiB/s for 1,000 × 4 KiB F:→G: execution, baseline equivalence with
+  must-match / may-differ / needs-decision bands, atomic commits and
+  measure-then-choose ordering. The old register stays in Git history.
+- Adopt per-invocation root holds (directory access without delete sharing) in
+  place of repeated root admission. Holds are witnessed on NTFS and exFAT to
+  block renames of the root and its ancestors; attribute-only handles do not.
+  Keep the per-access fallback for remote or unholdable roots, and still reduce
+  `GetVolumePathNameW` and related calls. Reconsider the point-of-use wording
+  when the hold ships; drop oracle v2, root continuity, EW-5 and M1-9/M1-10
+  coupling.
+
 #### Adjudicate the RO invocation-binding boundary (2026-09-28)
 
 - Preserve the starting evidence on the integration branch: 5,410 ordinary
