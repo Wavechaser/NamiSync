@@ -313,6 +313,12 @@ single-lstat consolidation remain separate pending outcomes.
 
 **Next outcome — preflight invocation holds.** After executor `90b57646`, the
 user chose preflight, then verifier, then further executor optimization. The
+required held-attribute correction is integrated as `8cdd669`. Rebuild only the
+three preflight files from recovery `7eb8c19d`, and call `require_ordinary()`
+before the helper returns cached admission. All five observation families keep
+their existing typed refusal policy. Renew the conversion, placeholder and
+query-failure evidence and all affected gates; the old partial passes alone
+do not accept the rebuilt candidate. The
 preflight population is `modules/preflight.py`, its focused tests and direct
 workflow/native and tools-preparation consumers; PREFLIGHT owns behavior,
 PERFORMANCE measurements, and this register/HANDOFF/CHANGELOG delivery status.
@@ -330,16 +336,25 @@ preflight time/calls, and fresh independent review. Commit the complete prefligh
 outcome before verifier implementation. Existing equivalence and mandatory
 stops apply; verifier design remains read-only until this gate closes.
 
-The frozen preflight implementation passes 83 focused and 314 direct-consumer
-tests. Its 46-group differential (including the prior 32 executor groups) has
-zero unexpected differences: three required held swaps are blocked and match
-full controls, the case-mismatched source falls back and retains the baseline
-mutated-world refusal, and all four pre-execution swaps remain unchanged.
-Final producer `243d21732ffac203adea204639de89a46c055fdee10564dd7046ff435d8de3fa`
-has matching baseline repeats; candidate receipts are in
-`differential/runs/candidate-preflight-frozen-fdd4d5eefc534429bc43a7173f5a9922`
-under the current evidence root. Broad gate, measurements and final review
-remain required before commit.
+The rebuilt, guarded preflight passes 92 focused and 314 direct-consumer tests.
+All old tests remain; five native conversions exercise each observation family,
+and typed placeholder/query-failure cases preserve output/refusal boundaries.
+An observation-only 1,000-copy plan from F: to empty exFAT K: passes, with source
+unchanged and exact-empty teardown. Its counted run confirms three anchor and
+volume queries, two holds/final-path confirmations and 2,002 fresh basic-attribute
+queries. This is preflight evidence, not an exFAT copy claim or timing result.
+The unchanged 46-group differential producer `243d2173` reuses checked baseline
+repeats; candidate `candidate-preflight-guarded-de75f6c180eb45979f357bb73a7471a8`
+has zero unexpected differences, including three required blocked swaps and
+strict case fallback. The ordinary suite passes 5,480 tests (four skips,
+34 headed deselections), 12 imports, unchanged oracle 30 × three and guard scan
+70 rows/391 effects with zero missing admissions. Input/output hashes match.
+Serialized identical-driver observations have median 2.722 seconds on `b8baf42d`
+and 0.551 seconds on the candidate; pure judgment is about 0.010 seconds on both.
+F:→G: counted observations match the K: counts above. PERFORMANCE owns methods
+and limits. Independent whole-outcome review approved the candidate in
+`preflight/independent-review-guarded-preflight-20260928.md`; this closes the gate.
+Earlier partial receipts remain historical under the same evidence root.
 
 **Findings outside this result** go to BUGS or HANDOFF as short notes and are
 not handled here. Two exist: a same-volume root replacement before execution

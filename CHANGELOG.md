@@ -1029,6 +1029,13 @@ claims explicit, independently reviewable, and regression-backed.
 
 #### Optimize root admission with invocation-scoped holds (2026-09-28)
 
+- Hold preflight roots for one observation, checking current handle attributes
+  before cached admission reuse. Preserve typed refusals, custom dispatch,
+  descendant/physical checks and per-access fallback. All 5,480 ordinary tests
+  and 46 differential groups pass. Median 1,000-file observation drops from
+  2.72 to 0.55 seconds against the preserved baseline; anchor/volume calls drop
+  from 4,009/2,005 to 3/3. Observation-only exFAT coverage passes independently
+  of the deferred executor copy compatibility issue.
 - Require fresh basic attributes from the held root handle before each executor
   admission reuse. This detects in-place junction conversion without reopening
   the root or repeating final-path confirmation. Retain write sharing, root

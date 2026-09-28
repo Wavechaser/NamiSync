@@ -303,6 +303,51 @@ also copied and verified all files and cleaned its owned target; its elapsed
 time is instrumented diagnostic data. `executor-attributes-counts.json` and
 `executor-attributes-counted-run.json` retain hashes, imports and raw counts.
 
+### Preflight invocation holds — 2026-09-28
+
+After the corrected core/executor commit `8cdd669`, preflight owns confirmed
+root holds and checks current handle attributes before cached admission reuse.
+The candidate includes the earlier core call reductions as well as this consumer
+change; comparison with baseline `b8baf42d` does not isolate their timing effects.
+
+The identical `resume/measure_preflight.py` driver runs from each checkout,
+prepares a 1,000 × 4 KiB COPY plan using the preserved F: source and the same
+empty G: target, then performs three fresh observations and judgments. It never
+executes the plan. Source scan equality, exact target emptiness and manifest
+equality are checked outside timed samples; successful exact-empty teardown
+removes the owned fixture. Samples are serialized after broad/native gates;
+there is no cache eviction or control of unrelated desktop activity.
+
+| Observation, seconds | Baseline min / median / max | Candidate min / median / max |
+| --- | --- | --- |
+| Filesystem observation | 2.261 / 2.722 / 2.779 | 0.549 / 0.551 / 0.587 |
+| Pure judgment | 0.0100 / 0.0101 / 0.0137 | 0.0095 / 0.0098 / 0.0117 |
+
+A separate identical wrapper counts project ctypes Win32 binding calls only
+inside `observe`; its timing is excluded. Every counted sample agrees:
+
+| Call per 1,000-file plan | Baseline | Candidate |
+| --- | ---: | ---: |
+| `GetVolumePathNameW` | 4,009 | 3 |
+| `GetVolumeInformationW` | 2,005 | 3 |
+| Root opens / closes each | 0 | 2 |
+| Final-path confirmation | 0 | 2 |
+| Current handle basic information | 0 | 2,002 |
+
+All observations and verdicts pass. Receipts under
+`build/root-admission-optimization-20260928/resume/` are
+`preflight-baseline-timing.json`, `preflight-guarded-timing.json`,
+`preflight-baseline-call-counts.json` and `preflight-guarded-counts.json`, with
+driver/import/manifests and associated counted reports. The ordinary gate passes
+5,480 tests; the unchanged 46-group differential retains complete worlds/verdicts,
+explicit prevented-swap controls and strict mixed-source fallback.
+
+Separate F:→K: observations on exFAT `BA1F1F45` also pass with the candidate
+counts above and successful source/empty-target checks. These ran alongside the
+ordinary gate and are functional evidence only, not timing observations or
+exFAT copy acceptance. Receipts are `preflight-guarded-exfat-*`; the existing
+executor handle-identity compatibility issue remains separate in BUGS.
+
 ### Executor assessment — 2026-09-27
 
 Read-only assessment of `milestone1-adelbert` at

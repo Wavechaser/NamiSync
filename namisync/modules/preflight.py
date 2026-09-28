@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import ExitStack, contextmanager, nullcontext
+from contextvars import ContextVar
+from dataclasses import dataclass
 from datetime import datetime, timezone
 import os
 from pathlib import Path, PureWindowsPath
@@ -51,11 +55,14 @@ from namisync.core.preflight import (
     Verdict,
 )
 from namisync.core.root_authority import (
+    NativeVolumeInfo,
     RootAuthority,
     RootAuthorityError,
     RootAuthorityIssue,
+    RootHold,
     admit_existing_relative_chain,
     admit_root,
+    hold_root,
     is_directory_stat,
     is_placeholder_stat,
     is_reparse_stat,
@@ -173,12 +180,63 @@ def _classify_root_facts(
     return None
 
 
+@dataclass(slots=True)
+class _HeldObservationRoot:
+    hold: RootHold
+    admitted: NativeVolumeInfo | None = None
+
+
+@dataclass(slots=True)
+class _ObservationInvocation:
+    owner: LocalObservationFileSystem
+    stack: ExitStack | None
+    roots: dict[RootAuthority, _HeldObservationRoot]
+
+
+_OBSERVATION_INVOCATION: ContextVar[_ObservationInvocation | None] = ContextVar(
+    "preflight_root_invocation", default=None
+)
+
+
 class LocalObservationFileSystem:
     """Read-only local observation implementation used by composition roots."""
 
+    @contextmanager
+    def root_scope(self) -> Iterator[None]:
+        with ExitStack() as stack:
+            invocation = _ObservationInvocation(self, stack, {})
+            token = _OBSERVATION_INVOCATION.set(invocation)
+            try:
+                yield
+            finally:
+                invocation.stack = None
+                _OBSERVATION_INVOCATION.reset(token)
+
+    def _admit_root(self, authority: RootAuthority) -> NativeVolumeInfo:
+        invocation = _OBSERVATION_INVOCATION.get()
+        if (
+            invocation is None
+            or invocation.owner is not self
+            or invocation.stack is None
+        ):
+            return admit_root(authority)
+        scoped = invocation.roots.get(authority)
+        if scoped is None:
+            scoped = _HeldObservationRoot(
+                invocation.stack.enter_context(hold_root(authority))
+            )
+            invocation.roots[authority] = scoped
+        if scoped.admitted is not None and scoped.hold.confirm():
+            scoped.hold.require_ordinary()
+            return scoped.admitted
+        admitted = admit_root(authority)
+        if scoped.hold.confirm():
+            scoped.admitted = admitted
+        return admitted
+
     def observe_root(self, authority: RootAuthority) -> RootObservation:
         try:
-            admitted = admit_root(authority)
+            admitted = self._admit_root(authority)
             resolved = _resolved_logical_path(
                 authority.logical_root,
                 strict=True,
@@ -215,7 +273,7 @@ class LocalObservationFileSystem:
                 None, logical_error_text(error), True, False
             )
 
-        admitted = admit_root(authority)
+        admitted = self._admit_root(authority)
         try:
             exists = admit_existing_relative_chain(
                 authority,
@@ -289,7 +347,7 @@ class LocalObservationFileSystem:
             )
 
     def free_space(self, authority: RootAuthority) -> int:
-        admit_root(authority)
+        self._admit_root(authority)
         return require_signed_64(
             shutil.disk_usage(_native_path(authority.logical_root)).free,
             "target free space",
@@ -302,7 +360,7 @@ class LocalObservationFileSystem:
         current_run_id: str,
     ) -> int:
         total = 0
-        admitted = admit_root(authority)
+        admitted = self._admit_root(authority)
         root = authority.logical_root
         for parent_path in sorted(parent_paths, key=lambda value: (normalize_relative_path(value, allow_root=True), value)):
             if parent_path and (
@@ -354,7 +412,7 @@ class LocalObservationFileSystem:
         authority: RootAuthority,
     ) -> TrashObservation:
         trash = os.path.join(authority.logical_root, ".synctrash")
-        admit_root(authority)
+        self._admit_root(authority)
         try:
             exists = admit_existing_relative_chain(
                 authority,
@@ -557,6 +615,17 @@ def observe(
     ):
         raise TypeError("preflight review admission has the wrong type")
     review = _require_execution_review(review)
+    scope = getattr(fs, "root_scope", None)
+    with nullcontext() if scope is None else scope():
+        return _observe(review, fs, review_admission=review_admission)
+
+
+def _observe(
+    review: ExecutionReview,
+    fs: ObservationFileSystem,
+    *,
+    review_admission: PlanReviewProducerAdmission | None,
+) -> ObservedWorld:
     plan = review.plan
 
     def authority_for(root: Root) -> RootAuthority:

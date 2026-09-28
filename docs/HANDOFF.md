@@ -1,70 +1,79 @@
-# Latest session — per-access held-handle guard
+# Latest session — guarded preflight invocation holds
 
-2026-09-28, `milestone1-adelbert`, core/executor correction over `90b57646`.
-The user rejected denying write sharing and approved checking current attributes
-on the held handle before admission reuse. Core now provides `require_ordinary()`;
-all three executor reuse sites call it. The query uses FileBasicInfo0, rejects
-reparse/placeholder state and propagates query failure without authorizing access.
-Diagnostics stay query-free; one final-path confirmation and existing sharing,
-root flushes, descendant checks and physical resolution remain unchanged.
+2026-09-28, `milestone1-adelbert`. Core/executor attribute correction is
+integrated as `8cdd669`, after executor holds `90b57646` and core `6536c04`.
+Preflight's three recovery files were rebuilt from `7eb8c19d`; the complete
+candidate adds a current held-handle attribute guard before its sole cached
+admission return. All five observation families retain existing dispatch,
+refusal/error boundaries, physical resolution, leaf/parent/trash checks and
+fallback. Invocation state is invalidated on exit, including copied contexts.
 
-## Verified evidence
+## Verification and measurements
 
 Evidence root: `build/root-admission-optimization-20260928/`.
 
-- `rootguard/native-basic-first.json`: attribute-only and generic-write handles
-  convert an empty held NTFS root, and the original handle sees attributes
-  change from 16 to 1040. Nonempty root/ancestor conversion fails with 145; held-root
-  removal fails with 32. Reparse metadata is restored, root flush and ordinary child
-  operations succeed, all handles close. No redirected executor effect was run.
-- K: EXFAT BA1F1F45 rejects FileAttributeTagInfo9 with 87 but accepts BasicInfo0;
-  both receipts remain. Production `require_ordinary()` lifetime tests on K:
-  pass twice, including exceptional exit and descendant operations.
-- 541 affected tests and 22 focused guard cases pass, including all three real
-  conversion refusal sites, placeholder classification and failed native query.
-  No tests were retired. `rootguard/frozen-inputs.json` binds seven builder files.
-  Core SHA256 `6FBA7B3AEB37B316C99D4EDC4EF229FCF71D830715A7BAA12A1A36A12E1084B4`;
-  executor native `7E68306B01BCDF983AE25204E82AA892AAF6EB898D70C14494B7FE5CFA4E1C17`.
-- `resume/held-attributes-*`: 5,462 ordinary passes, four skips, 34 headed
-  deselections; 12 imports; unchanged settlement oracle 30 × 3; guard scan 70 rows/
-  391 effects/zero missing admissions. Input/output hash arrays match.
-- Differential candidate `candidate-held-attributes-frozen-7d89ad8690664fc0b808996f1ec8315c`
-  passes 46 groups with unchanged producer 243d2173 and all frozen hashes matching.
-  Seven executor swaps are blocked and match full controls. The 14 preflight
-  groups still exercise baseline behavior because preflight is not restored yet.
-- Fresh independent source/test/evidence review has no unresolved finding.
-  Serialized guarded measurements take 15.271/15.711/15.047 seconds for
-  1,000 × 4 KiB F:→G: copies, median 0.256 MiB/s. All copies/readbacks pass,
-  source unchanged, manifest cleanup complete. Goal remains unmet. PERFORMANCE
-  preserves both these and the historical unchecked-hold measurements.
+- `preflight/resumed-frozen-inputs.json`: product SHA256
+  `983EFB8F4445C227A78B45368683450AD6BAECFFFEABB54CA82273E61DC2EFD8`, tests
+  `57852556DDBD9B1E4FAB36CB0D6A676F2347F46B1B2DCD19F5F2EAACF67BFE83`, doc
+  `A5B1F38FAE6B94499C499E66EF6793956D49B4717273863347DE902406AB2534`.
+  All old tests remain. 92 focused and 314 direct-consumer tests pass, including
+  attribute-only junction conversion refusal at all five backend methods and
+  typed placeholder/query-failure handling before further path work.
+- `resume/preflight-guarded-*`: 5,480 ordinary passes, four privilege skips,
+  34 headed deselections; 12 imports; unchanged settlement oracle 30 × 3;
+  guard scan 70 rows/391 effects/zero missing admissions. All 492 input/output
+  hash records match.
+- `differential/runs/candidate-preflight-guarded-de75f6c180eb45979f357bb73a7471a8`:
+  46 groups, zero unexpected differences. Three required preflight swaps are
+  blocked; mixed source fallback stays strict; pre-execution behavior remains.
+  Prior executor groups pass. Unchanged producer `243d2173` and checked baseline
+  pair are reusable; frozen product/test/doc hashes match after capture.
+- Same unwrapped driver and empty G: target, three serialized samples after
+  gates: median observation 2.722 seconds at baseline `b8baf42d`, 0.551 seconds
+  at candidate; pure judgment about 0.010 seconds on both. The candidate includes
+  earlier core improvements. Source scan/target emptiness/manifests/cleanup pass.
+  Separate project binding counts: anchor 4,009→3, volume information 2,005→3,
+  two holds/final-path confirmations and 2,002 current BasicInfo queries.
+- F:→K: exFAT BA1F1F45 observation-only and counted runs pass with those same
+  candidate counts and successful source/empty-target checks. Their elapsed
+  times overlapped ordinary tests and are not performance evidence. No executor
+  copy was attempted. PERFORMANCE owns methods and limitations.
+- Independent whole-outcome review approves source, tests, measurements and
+  documentation without actionable findings:
+  `preflight/independent-review-guarded-preflight-20260928.md`.
 
 ## Immediate continuation
 
-Fresh whole-outcome review approved the complete core/executor correction;
-receipt: `rootguard/independent-review-held-attributes-20260928.md`.
-Then rebuild preflight from recovery7eb8c19d: only `modules/preflight.py`,
-`tests/test_preflight.py` and `docs/PREFLIGHT.md`, not its old stop documents.
-Before its sole cached-admission return, call `hold.require_ordinary()`;
-all five backend families already pass through that helper. Preserve invocation
-invalidation, custom dispatch, typed error policy, physical/leaf/parent/trash
-checks. Add the conversion/placeholder/query-failure regression, then rerun its
-focused/direct/full/differential gates and isolated measurements. Commit it
-separately, then implement verifier. Further executor optimization comes last;
-no descendant-check retirement is authorized by probability arguments alone.
+Preflight is ready for its atomic commit. Then follow the user's order:
+verifier, then further executor optimization.
+`verifier/next-verifier-design.md` holds the read-only finite proposal inspected
+at `8cdd669` plus frozen preflight. Two atomic outcomes: invocation holds with
+current-attribute checks and explicit native-reader handoff, then sector size
+from the opened file handle with existing capability/error fallback. M1_PLAN
+must record each activated population/gate before implementation.
 
-## Recovery and exclusions
+The native FileStorageInfo16 query succeeds on NTFS and exFAT, matches old
+512-byte logical sector observations, closes handles and preserves stat facts.
+Raw split-context receipts and the first access-denied probe are retained in
+`verifier/`; no verifier product/tests have changed. Public reader protocols,
+wire/identity/recording contracts and all per-file snapshots remain protected.
 
-`codex/wip-20260928-1549-root-write-sharing` at7eb8c19d preserves preflight's
-83focused/314direct/46differential partial evidence and the interrupted broad
-run. Never merge/cherry-pick it as-is. The root-guard correction replaces its
-rejected deny-write proposal; preflight product work must be rebuilt and reviewed.
-Keep earlier recovery refs cfcc6ef and0a04921 and the managed baseline worktree
+## Prior correction and accounting
+
+Core `RootHold.require_ordinary()` queries FileBasicInfo0 before admission reuse,
+rejecting reparse/placeholder state and query failures. BasicInfo works on K:
+where FileAttributeTagInfo9 failed with 87. Write sharing, root flushes and child
+operations remain. NTFS nonempty root/ancestor conversion refuses with 145.
+The existing DEFENSE quiescence rule covers the check/use interval.
+`rootguard/independent-review-held-attributes-20260928.md` approves that correction;
+its guarded executor measurement was median 15.271 seconds / 0.256 MiB/s, still
+below the 1 MiB/s goal. Later executor changes require their own concrete scope;
+no descendant-check retirement is inferred from probability arguments.
+
+Retain recovery refs `7eb8c19d`, `cfcc6ef` and `0a04921` until final accounting.
+Never merge/cherry-pick WIPs as-is. Preserve native fixtures, ignored receipts,
+F: corpus and managed baseline worktree
 `C:\Users\Spectrum\.codex\worktrees\root-admission-baseline\NamiSync` at
-b8baf42df91e9aeed1402cd029c86ca9ae287b1b until final accounting. Evidence manifest
-`root-write-sharing-recovery-manifest.json` preserves13,351 entries from the stop.
-
-No remote changed, unrelated stashes/branches remain untouched, and native
-fixtures/evidence have not been cleaned. The pre-existing K: copy/FileIdInfo
-compatibility issue remains deferred in BUGS; the current guard does not claim
-an exFAT copy fix. Verifier files and stored identity/wire/settlement contracts
-remain unchanged. DEFENSE's existing quiescence assumption covers check/use.
+`b8baf42df91e9aeed1402cd029c86ca9ae287b1b`. No remote, unrelated stash/branch,
+or user work was changed. The separate K: executor FileIdInfo compatibility
+issue remains deferred in BUGS; this preflight result does not fix or accept it.
