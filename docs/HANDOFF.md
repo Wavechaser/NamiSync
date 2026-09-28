@@ -1,62 +1,47 @@
-# Latest session — executor correctness follow-up
+# Latest session — narrow runtime admission and corpus comparison
 
-2026-09-28, `milestone1-adelbert`, starting clean at `30b0c2c8`.
-M1_PLAN owns the two approved atomic outcomes.
+2026-09-28–29, `milestone1-adelbert`, starting clean at `eaf62d7d`.
+M1_PLAN owns the approved narrow outcome and post-commit measurement scope.
 
-## Scope and current work
+## Changes and scope
 
-The user reported a preexisting unreadable-junction admission escape and fragile
-fast-path selection under method-wrapping instrumentation. The reported escape
-was classified for a separate fix, not deferred. A clean mandatory stop was
-reported, then the user explicitly approved both corrective outcomes.
+The user selected only the adjacent `_resolve_target_path` admission reduction.
+For the concrete native adapter, an exact reviewed authority in its active
+confirmed hold permits delegation to the immediately following native resolver.
+Current held attributes and descendant checks still run. Subclass/custom,
+unheld, mismatched and malformed paths retain their original admission and
+error ordering. Other source, paired and trash guards remain unchanged.
+The ACL descendant refusal was already committed as `db03926`; its regressions
+remain part of the current gates. Broader runtime/error-classification work is
+deferred while the user reconsiders those boundaries.
 
-1. Committed fix `db03926`: executor descendant walks stop only on FileNotFoundError; other
-   observation errors propagate. Native resolve and both trash-destination
-   consumers retain all normal-path guards. Native ACL regressions assert
-   refusal only, restore permissions and remove the junction before fixture
-   cleanup. EXECUTOR and BUGS document the corrected behavior and limits of
-   evidence; no full GUI-path reproduction is claimed.
-2. Verified test/doc outcome: a combined default-production held-root regression
-   asserts zero physical resolutions and zero leaf-volume probes after root
-   admission. Method-identity fallback behavior remains; EXECUTOR/PERFORMANCE
-   explain which method-wrapping profilers exercise fallback and why held-root
-   diagnostics alone do not prove shortcut selection. No capability-flag change.
+## Verification and immediate context
 
-Further runtime admission/throughput work stays paused. The earlier runtime
-scope choice is not resolved by this correctness approval.
+Final focused native/runtime/settlement tests pass 496 cases; the executor
+department passes 585 (5,064 deselected). A predecessor-function control fails
+on the extra query, and the subclass accessor ordering correction has retained
+red/green witnesses. Four final source/test/doc hashes are frozen in
+`build/root-admission-optimization-20260928/executor/runtime-narrow-final-frozen-inputs.json`.
+The initial ordinary gate was intentionally interrupted before the subclass
+refinement; it is not acceptance evidence. Final gates pass: 5,611 ordinary tests (four skips, 34 headed exclusions),
+12 imports, settlement 30 × three, guard scan 70 rows/391 effects/zero missing
+admissions and all 67 unchanged qualified comparisons. All 492 gate dependency
+entries match before/after; final independent review precedes the commit.
 
-## Verification
+After the implementation commit, run the five original F: to G: executor bands
+serially, five samples each, preparation and initial preflight once per band,
+normal metrics and readback every sample. The prepared ignored driver is
+`build/root-admission-optimization-20260928/resume/runtime_full_corpus.ps1`;
+pass the full implementation commit as `-ExpectedRevision`. It retains raw
+samples, source and product/rig/driver hashes, validates results and manifest
+cleanup, and compares all five bands with the three-sample `db05e317` corpus
+and five-sample pre-optimization readings. No timing is claimed yet.
 
-Fix gates pass: 468 focused, 574 direct (two skips), 5,583 ordinary (four skips,
-34 headed exclusions), 12 imports, settlement 30 × three, guard scan
-70 rows/391 effects/zero missing admissions and all 67 unchanged differential
-groups. The approved ACL behavior change has its own held/unheld native red
-and passing witnesses. Four frozen files and full-gate dependency hashes match.
-An initial fixture cleanup failure is retained; exact inspection confirmed
-no remaining deny ACEs or junctions and unchanged owned sibling markers.
-The corrected parent-first teardown passed before final gates.
-Independent review: `executor/independent-review-descendant-refusal-20260928.md`.
+## Preservation
 
-The separate production fast-path witness passes, and its final executor
-department gate passes all 558 tests (5,064 others deselected). Two frozen
-test/doc hashes match. Product code is unchanged after `db03926`; no new full
-ordinary run or throughput measurement is claimed for this later test commit.
-Receipts under the evidence root: `executor/production-fast-path-*`; review:
-`executor/independent-review-production-fast-path-20260928.md`.
-
-## Evidence and preservation
-
-Original user reports are retained in
-`build/executor-review-20260928-30b0c2c8/`; do not rerun the write-through probe.
-New correction receipts live under
-`build/root-admission-optimization-20260928/executor/descendant-refusal-*` and
-`build/root-admission-optimization-20260928/resume/executor-descendant-refusal-*`.
-Existing baseline equivalence fixtures
-remain unchanged; only the explicitly approved unavailable-descendant refusal
-may differ from the old behavior.
-
-The preceding performance outcome at `30b0c2c8` passed 5,579 ordinary tests and
-67 differential groups and measured 3.387 seconds / 1.153 MiB/s on 1,000 × 4 KiB.
-Those are historical measurements, not a new measurement of this correction.
-Preserve the clean `b8baf42d` comparison worktree, original F: corpus, prior
-raw/failed receipts and historical recovery refs. No unrelated work is included.
+Keep original `F:\NamiSyncExecutorBenchSource`, the clean `b8baf42d` comparison
+worktree, prior raw/failed receipts and historical recovery refs. New evidence
+uses `executor/runtime-narrow-*` and `resume/executor-runtime-*` beneath
+`build/root-admission-optimization-20260928/`. Historical corpus receipts are
+`build/executor-bench-20260928-db05e317/` and
+`build/executor-assessment-20260927/`. No unrelated work is included.

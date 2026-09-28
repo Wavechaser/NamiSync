@@ -173,6 +173,15 @@ lexical identity and the no-follow descendant walk but skips repeated physical
 root and candidate resolution. Required-leaf checks still run. The shared hold contract is owned by
 [CORE.md](CORE.md) and [DEFENSE.md](DEFENSE.md).
 
+For a valid retained target-relative path, runtime's shared target resolver may
+delegate its root revalidation to the immediately following default native
+`resolve`. Eligibility requires the concrete default native adapter, the exact
+reviewed authority in its active confirmed hold and default resolver/guard
+methods. The resolver still queries current held attributes before descending. Custom and unheld
+adapters retain the original runtime-then-native admission sequence; malformed
+paths retain root-admission-first failure precedence. Other runtime source,
+paired and trash guards keep their original ordering and classification.
+
 Each native leaf stat uses the single no-follow snapshot returned by its reparse
 guard for kind and all metadata. An unavailable initial observation still returns
 `None`; unsafe-entry, pure path-conversion and later volume/type failures retain

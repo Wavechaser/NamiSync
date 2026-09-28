@@ -1027,8 +1027,12 @@ repeated machinery while preserving operational safety and boundary contracts.
 Safety, settlement, authority, and measurement work made high-risk release
 claims explicit, independently reviewable, and regression-backed.
 
-#### Optimize root admission with invocation-scoped holds (2026-09-28)
+#### Optimize root admission with invocation-scoped holds (2026-09-28 – 2026-09-29)
 
+- Remove only the adjacent duplicate target-root admission in runtime resolution
+  for the concrete native adapter with a matching confirmed hold. The resolver
+  retains the current attribute query and descendant guards; subclass/custom,
+  unheld and malformed-path cases retain admission-first error ordering.
 - Pin default production stat/resolve composition to zero physical resolutions
   and zero leaf-volume probes after held admission. All 558 executor-department
   tests pass. Document method-wrapping profiler fallback and why a held-root

@@ -1477,10 +1477,33 @@ class NativeFileSystem:
 _DEFAULT_ROOT_VOLUME_PROBE = NativeFileSystem._observe_root_volume
 _DEFAULT_VOLUME_ID_PROBE = NativeFileSystem._volume_id
 _DEFAULT_ROOT_REVALIDATION = NativeFileSystem.revalidate_root
+_DEFAULT_RESOLVE = NativeFileSystem.resolve
 _DEFAULT_REQUIRE_HELD_ROOT = NativeFileSystem._require_held_root
 _DEFAULT_SCOPED_ROOT = NativeFileSystem._scoped_root
 _DEFAULT_VALIDATE_EXISTING_CHAIN = NativeFileSystem._validate_existing_chain
 _DEFAULT_REJECT_REPARSE = NativeFileSystem._reject_reparse
+
+
+def _can_delegate_held_resolution(
+    fs: object, root: Path, authority: RootAuthority
+) -> bool:
+    """Select an already admitted default resolver without querying attributes."""
+    if type(fs) is not NativeFileSystem:
+        return False
+    invocation = _ROOT_INVOCATION.get()
+    if (
+        invocation is None or not invocation.active
+        or invocation.native_owner is not fs
+        or getattr(fs.resolve, "__func__", None) is not _DEFAULT_RESOLVE
+        or getattr(fs.revalidate_root, "__func__", None) is not _DEFAULT_ROOT_REVALIDATION
+        or getattr(fs._require_held_root, "__func__", None) is not _DEFAULT_REQUIRE_HELD_ROOT
+        or getattr(fs._scoped_root, "__func__", None) is not _DEFAULT_SCOPED_ROOT
+        or getattr(fs._validate_existing_chain, "__func__", None) is not _DEFAULT_VALIDATE_EXISTING_CHAIN
+        or getattr(fs._reject_reparse, "__func__", None) is not _DEFAULT_REJECT_REPARSE
+    ):
+        return False
+    scoped = _DEFAULT_SCOPED_ROOT(fs, root)
+    return scoped is not None and scoped.authority == authority and scoped.held
 
 
 def _write_all(target: BinaryIO, chunk: bytes, owner: str) -> None:

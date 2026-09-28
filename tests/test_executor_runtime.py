@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ast
 from contextlib import nullcontext
+import ctypes
 from dataclasses import replace
 import inspect
 import os
@@ -20,6 +21,8 @@ import namisync.modules.executor as executor_facade
 import namisync.modules.executor.native as executor_module
 import namisync.modules.executor.pipeline as executor_pipeline
 import namisync.modules.executor.runtime as executor_runtime
+import namisync.core.root_authority as root_authority_module
+from namisync.core.pathing import PathValidationError
 from namisync.core.root_authority import RootAuthority
 from namisync.core.evidence import Outcome, Provenance, RecordingStatus
 from namisync.core.events import ItemOutcome, Progress, Terminal
@@ -3282,6 +3285,246 @@ def test_target_root_guard_refuses_mismatched_runtime_root_before_touch(
 
     assert fs.revalidate_calls == []
     assert fs.resolve_calls == []
+
+
+@pytest.fixture
+def held_target_resolution(tmp_path: Path):
+    source, target = _roots(tmp_path)
+    volume = root_authority_module.observe_native_volume(target)
+    plan = replace(
+        _plan(source, target, ()),
+        target_volume_id=volume.volume_id,
+        target_volume_evidence=volume.evidence,
+    )
+    xset = _xset(plan)
+    scoped = executor_module._InvocationRoot(
+        "target", executor_runtime._target_root_authority(xset)
+    )
+    fs = NativeFileSystem()
+    with executor_module._root_invocation_scope(fs, xset, (scoped,), None):
+        executor_runtime._revalidate_target_root(fs, xset, target)
+        yield fs, xset, source, target, scoped
+
+
+@pytest.mark.skipif(os.name != "nt", reason="native Windows held target resolution")
+@pytest.mark.parametrize("surface", ["resolve-existing", "resolve-optional", "stat"])
+def test_runtime_target_resolution_delegates_only_duplicate_held_admission(
+    held_target_resolution,
+    monkeypatch: pytest.MonkeyPatch,
+    surface: str,
+) -> None:
+    fs, xset, _, target, scoped = held_target_resolution
+    assert scoped.held
+    parent = target / "nested"
+    parent.mkdir()
+    leaf = parent / "file.bin"
+    leaf.write_bytes(b"retained target")
+    assert root_authority_module._WINDOWS is not None
+    original_query = root_authority_module._WINDOWS.get_file_information_ex
+    queries = []
+
+    def query(handle, kind, output, size):
+        queries.append(kind)
+        return original_query(handle, kind, output, size)
+
+    monkeypatch.setattr(root_authority_module._WINDOWS, "get_file_information_ex", query)
+    if surface != "stat":
+        assert executor_runtime._resolve_target_path(
+            fs, xset, target, leaf, must_exist=surface == "resolve-existing"
+        ) == leaf
+        assert queries == [0]
+    else:
+        observed = executor_runtime._stat_target_path(fs, xset, target, leaf)
+        assert observed is not None and observed.size == len(b"retained target")
+        assert queries == [0, 0]  # resolution, then independent leaf-volume reuse
+
+
+@pytest.mark.skipif(os.name != "nt", reason="native Windows held target resolution")
+@pytest.mark.parametrize(
+    "method", ["resolve", "revalidate_root", "_scoped_root", "_require_held_root",
+               "_validate_existing_chain", "_reject_reparse"]
+)
+def test_runtime_target_resolution_custom_methods_keep_both_admissions(
+    held_target_resolution,
+    monkeypatch: pytest.MonkeyPatch,
+    method: str,
+) -> None:
+    fs, xset, _, target, scoped = held_target_resolution
+    assert scoped.held
+    leaf = target / "file.bin"
+    leaf.write_bytes(b"custom resolver")
+    original_method = getattr(fs, method)
+    monkeypatch.setattr(fs, method, lambda *args, **kwargs: original_method(*args, **kwargs))
+    assert root_authority_module._WINDOWS is not None
+    original_query = root_authority_module._WINDOWS.get_file_information_ex
+    queries = []
+
+    def query(handle, kind, output, size):
+        queries.append(kind)
+        return original_query(handle, kind, output, size)
+
+    monkeypatch.setattr(root_authority_module._WINDOWS, "get_file_information_ex", query)
+    assert executor_runtime._resolve_target_path(
+        fs, xset, target, leaf, must_exist=True
+    ) == leaf
+    assert queries == [0, 0]
+
+
+def test_runtime_target_resolution_unheld_keeps_reviewed_then_chain_admission(
+    fallback_root_holds,
+    held_target_resolution,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fs, xset, _, target, scoped = held_target_resolution
+    assert not scoped.held
+    admissions = []
+    original_reviewed = executor_module.admit_root
+    original_chain = executor_module.admit_root_chain
+
+    def reviewed(authority, **kwargs):
+        admissions.append(("reviewed", authority))
+        return original_reviewed(authority, **kwargs)
+
+    def chain(authority, **kwargs):
+        admissions.append(("chain", authority))
+        return original_chain(authority, **kwargs)
+
+    monkeypatch.setattr(executor_module, "admit_root", reviewed)
+    monkeypatch.setattr(executor_module, "admit_root_chain", chain)
+    leaf = target / "missing.bin"
+    assert executor_runtime._resolve_target_path(
+        fs, xset, target, leaf, must_exist=False
+    ) == leaf
+    assert admissions == [
+        ("reviewed", scoped.authority), ("chain", scoped.chain_authority)
+    ]
+
+
+def test_runtime_target_resolution_subclass_accessor_keeps_original_order(
+    tmp_path: Path,
+) -> None:
+    events = []
+
+    class OrderedFileSystem(NativeFileSystem):
+        def revalidate_root(self, root, **kwargs):
+            events.append("runtime" if "expected_volume" in kwargs else "native")
+            return super().revalidate_root(root, **kwargs)
+
+        @property
+        def resolve(self):
+            events.append("resolve")
+            return super().resolve
+
+    source, target = _roots(tmp_path)
+    xset = _xset(_plan(source, target, ()))
+    scoped = executor_module._InvocationRoot(
+        "target", executor_runtime._target_root_authority(xset)
+    )
+    fs = OrderedFileSystem()
+    leaf = target / "missing.bin"
+    with executor_module._root_invocation_scope(fs, xset, (scoped,), None):
+        assert executor_runtime._resolve_target_path(
+            fs, xset, target, leaf, must_exist=False
+        ) == leaf
+    assert events == ["runtime", "resolve", "native"]
+
+
+@pytest.mark.skipif(os.name != "nt", reason="native Windows held target resolution")
+@pytest.mark.parametrize("state", ["reparse", "placeholder", "query-failure"])
+def test_runtime_target_resolution_refuses_unsafe_held_root_before_descent(
+    held_target_resolution,
+    monkeypatch: pytest.MonkeyPatch,
+    state: str,
+) -> None:
+    fs, xset, _, target, scoped = held_target_resolution
+    assert scoped.held
+    assert root_authority_module._WINDOWS is not None
+    queries = []
+
+    def query(handle, kind, output, size):
+        queries.append(kind)
+        if state == "query-failure":
+            ctypes.set_last_error(5)
+            return False
+        info = ctypes.cast(output, ctypes.POINTER(root_authority_module._FileBasicInfo)).contents
+        info.FileAttributes = 0x10 | 0x400 | (0x1000 if state == "placeholder" else 0)
+        return True
+
+    monkeypatch.setattr(root_authority_module._WINDOWS, "get_file_information_ex", query)
+    monkeypatch.setattr(Path, "lstat", lambda *args, **kwargs: pytest.fail("unsafe root reached descent"))
+    expected = PermissionError if state == "query-failure" else UnsafeExecutionPath
+    with pytest.raises(expected) as refused:
+        executor_runtime._resolve_target_path(
+            fs, xset, target, target / "untouched.bin", must_exist=False
+        )
+    if state == "query-failure":
+        assert refused.value.winerror == 5
+    else:
+        assert "reparse points are not executable" in str(refused.value)
+    assert queries == [0]
+
+
+@pytest.mark.skipif(os.name != "nt", reason="native Windows held target resolution")
+@pytest.mark.parametrize("malformed", ["outside", "device", "parent", "root"])
+@pytest.mark.parametrize("query_fails", [False, True])
+def test_runtime_target_resolution_malformed_keeps_admission_first_errors(
+    held_target_resolution,
+    monkeypatch: pytest.MonkeyPatch,
+    malformed: str,
+    query_fails: bool,
+) -> None:
+    fs, xset, source, target, scoped = held_target_resolution
+    assert scoped.held
+    path = (
+        source / "file.bin" if malformed == "outside" else
+        target / "NUL" if malformed == "device" else
+        target / ".." / "file.bin" if malformed == "parent" else target
+    )
+    assert root_authority_module._WINDOWS is not None
+    original_query = root_authority_module._WINDOWS.get_file_information_ex
+    queries = []
+
+    def query(handle, kind, output, size):
+        queries.append(kind)
+        if query_fails:
+            ctypes.set_last_error(5)
+            return False
+        return original_query(handle, kind, output, size)
+
+    monkeypatch.setattr(root_authority_module._WINDOWS, "get_file_information_ex", query)
+    expected = PermissionError if query_fails else (
+        ValueError if malformed == "outside" else PathValidationError
+    )
+    with pytest.raises(expected) as refused:
+        executor_runtime._resolve_target_path(fs, xset, target, path, must_exist=False)
+    if query_fails:
+        assert refused.value.winerror == 5
+    assert queries == [0]
+
+
+@pytest.mark.skipif(os.name != "nt", reason="native Windows held target resolution")
+@pytest.mark.parametrize("difference", ["root", "anchor", "volume", "inactive", "owner"])
+def test_runtime_target_resolution_requires_exact_active_reviewed_authority(
+    held_target_resolution,
+    monkeypatch: pytest.MonkeyPatch,
+    difference: str,
+) -> None:
+    fs, xset, source, target, scoped = held_target_resolution
+    assert scoped.held
+    authority = scoped.require_authority()
+    root = target
+    if difference == "root":
+        root = source
+    elif difference == "anchor":
+        authority = replace(authority, reviewed_anchor=str(target.parent))
+    elif difference == "volume":
+        authority = replace(authority, expected_volume_id=VolumeId("OTHER", "NTFS"))
+    else:
+        invocation = executor_module._ROOT_INVOCATION.get()
+        assert invocation is not None
+        monkeypatch.setattr(invocation, "active" if difference == "inactive" else "native_owner",
+                            False if difference == "inactive" else object())
+    assert not executor_module._can_delegate_held_resolution(fs, root, authority)
 
 
 def test_source_root_guard_refuses_mismatched_runtime_root_before_touch(

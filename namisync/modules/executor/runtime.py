@@ -45,6 +45,7 @@ from namisync.core.pathing import (
     lexical_absolute_path,
     logical_error_text,
     normalize_relative_path,
+    validate_relative_path,
 )
 from namisync.core.planning import (
     OpId,
@@ -75,6 +76,7 @@ from .native import (
     _SecurityCopyFailure,
     _UpdateBackupBeforeCopyDrift,
     _UpdateBackupDrift,
+    _can_delegate_held_resolution,
     _invocation_root,
     _root_invocation_scope,
 )
@@ -4711,8 +4713,21 @@ def _resolve_target_path(
     *,
     must_exist: bool,
 ) -> Path:
-    _revalidate_target_root(fs, xset, target_root)
-    relative = _target_relative_path(path, target_root)
+    authority = _target_root_authority(xset)
+    _require_reviewed_runtime_root(target_root, authority, role="target")
+    relative = None
+    if _can_delegate_held_resolution(fs, target_root, authority):
+        try:
+            candidate_relative = _target_relative_path(path, target_root)
+            validate_relative_path(candidate_relative)
+        except (ValueError, PathValidationError):
+            # Malformed paths retain root-admission-first error precedence.
+            pass
+        else:
+            relative = candidate_relative
+    if relative is None:
+        _revalidate_target_root(fs, xset, target_root)
+        relative = _target_relative_path(path, target_root)
     guarded = fs.resolve(target_root, relative, must_exist=must_exist)
     if os.path.normcase(str(guarded)) != os.path.normcase(str(path)):
         raise UnsafeExecutionPath(
