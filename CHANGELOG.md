@@ -1029,6 +1029,10 @@ claims explicit, independently reviewable, and regression-backed.
 
 #### Optimize root admission with invocation-scoped holds (2026-09-28)
 
+- Consolidate descendant existence/reparse observations while retaining every
+  visited component and independent guard. All 5,550 ordinary tests and the
+  unchanged 67-group differential pass. Three 1,000-file copy samples measure
+  median 9.684 seconds / 0.403 MiB/s; the 1 MiB/s goal remains unmet.
 - Reuse bounded invocation-local absolute path conversions without caching
   filesystem observations. All 5,540 ordinary tests and 67 differential groups
   pass; extended conversions fall from 163,030 to 22,025 and the three-sample

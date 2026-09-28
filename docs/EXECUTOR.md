@@ -168,6 +168,11 @@ their refusals. This consolidates leaf observations that were not compared while
 preserving root second-directory checks, containment, leaf volume queries and
 all later operation guards.
 
+The existing descendant walk also checks each visited component, including the
+leaf, with one no-follow reparse observation. It stops at the first unavailable
+component; unsafe and path-conversion refusals propagate. The surrounding resolve
+and trash consumers retain their independent directory and volume checks.
+
 An active native invocation lazily retains successful pure path conversions for
 at most four exact absolute root/reviewed-anchor spellings, plus one last
 successful nonroot Win32 spelling. Root hits leave that last slot intact. Only

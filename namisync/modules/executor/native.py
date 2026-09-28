@@ -1231,9 +1231,12 @@ class NativeFileSystem:
         current = root
         for part in relative.parts:
             current = current / part
-            if os.path.lexists(_win32_path(current)):
+            _win32_path(current)  # preserve conversion refusals before observation
+            try:
                 self._reject_reparse(current)
-            else:
+            except UnsafeExecutionPath:
+                raise
+            except OSError:
                 break
 
     def _reject_reparse(self, path: Path) -> os.stat_result:

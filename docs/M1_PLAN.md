@@ -13,74 +13,33 @@ certify their recorded build and dependencies only.
 
 ## Root admission optimization — 2026-09-28
 
-**Resumed — held-handle attributes before access.** A native owned-scratch witness
-converted a fully admitted, confirmed, held empty directory into a junction
-using a separate write handle and `FSCTL_SET_REPARSE_POINT`; no rename was
-needed. Resolution then reached the owned sibling outside the logical root.
-The script restored the metadata before reporting. No executor mutation or
-user-data effect was attempted. The hold's read/write sharing blocks deletion
-but does not establish the namespace stability assumed by admission reuse.
-This finding affects core `6536c04`, executor `90b57646`, and the uncommitted
-preflight candidate. Their prior passing receipts do not close this new seam.
-Their acceptance must be renewed after the correction below.
+**Current status.** Core, executor, preflight and verifier holds are integrated,
+including the held-attribute correction, verifier geometry and executor leaf/
+pure-path reductions. Single-lstat descendant walks are complete and reviewed
+below. The 1 MiB/s executor goal remains unmet; PERFORMANCE owns the
+measurements. This results-oriented plan replaced the unimplemented nine-row RO
+register (last in Git at `c05eea25`). Completed implementation detail and recovery
+chronology remain in Git and the evidence, not a second active register.
 
-AGENTS requires suspension for changed root-safety mechanisms and recovery
-before redesign; this plan also stops on unapproved equivalence differences.
-Preflight's ordinary gate was interrupted (no completed broad pass); its
-focused/direct/differential passes are retained only as partial evidence.
-The user rejected denying write sharing: attribute-only handles may still set
-junction metadata, while stronger sharing denial can break executor root flushes.
-The approved correction keeps the existing hold and checks current attributes
-on its handle before every access that reuses admission, refusing reparse or
-placeholder attributes. Confirmation remains one strict final-path query; the
-new check does no pathname probing. DEFENSE's existing quiescence rule covers
-the check/use interval; this does not promise immunity to concurrent mutation.
-Native witnesses must demonstrate attribute visibility after empty-root junction
-conversion, nonempty-directory conversion refusal, root-flush compatibility and
-ordinary descendant operations. Query failures may never authorize access.
+**Approved hold safety contract.** Keep directory access without delete sharing
+and retain write sharing. Confirm once using `GetFinalPathNameByHandleW` on the
+held handle, with exact normalized DOS spelling except drive-letter case.
+No second open or FILE_ID_INFO comparison is part of confirmation. A failed
+confirmation releases the hold and selects fresh per-access admission. Internal
+executor/rig diagnostics expose case, short-name, mount-alias, unavailable and
+remote fallback reasons; this work does not canonicalize root spelling.
 
-Native selection evidence is under `rootguard/` in the current evidence root:
-attribute-only (`FILE_WRITE_ATTRIBUTES`) and generic-write handles both convert
-an empty held NTFS root; `FileBasicInfo` on the original handle observes ordinary
-attributes becoming reparse attributes. Nonempty root/ancestor conversions fail
-with 145, and removing the held child fails with 32. Restoration, root flush and
-descendant create/write/rename/delete succeed with unchanged sharing. Confirmed
-exFAT K: rejects `FileAttributeTagInfo` with 87 but accepts `FileBasicInfo`; the
-implementation therefore uses the latter. These native observations select the
-mechanism; product regressions and the full gate still establish acceptance.
-
-The frozen correction passes 541 affected tests, 22 focused guard cases and
-two production held-attribute/lifetime cases on K:. The ordinary suite passes
-5,462 tests (four skips, 34 headed deselections), all 12 import contracts,
-unchanged oracle 30 × three and guard scan 70 rows/391 effects with no missing
-admissions; gate input/output hashes match. All 46 differential groups match
-the checked baseline or explicit blocked-rename controls. Source/test review
-has no unresolved finding. Serialized guarded execution measures median
-15.271 seconds / 0.256 MiB/s; anchor/volume queries remain 6,002 each, with
-31,998 handle-information calls and two final-path confirmations. All copies
-and readbacks pass; the performance goal remains unmet. Final documentation
-review approved the atomic correction, recorded in
-`rootguard/independent-review-held-attributes-20260928.md`. Receipts are in `rootguard/`, `resume/held-attributes-*`
-and `differential/runs/candidate-held-attributes-frozen-7d89ad8690664fc0b808996f1ec8315c`.
-
-First atomic correction: core hold/native bindings and executor admission-reuse
-sites, their focused native/runtime/core tests, and CORE/EXECUTOR/ARCHITECTURE/
-DEFENSE/AGENTS policy documentation. Parent owns this register, BUGS, PERFORMANCE,
-CHANGELOG and HANDOFF. Acceptance: conversion regression and placeholder/query-
-failure cases, exact access/share compatibility, full direct-consumer and ordinary
-tests, unchanged settlement oracle/imports, differential, measurement and fresh
-independent review. Do not weaken descendant or physical-containment checks.
-After committing that correction, rebuild preflight from recovery `7eb8c19d`
-using the same per-access handle check, complete its gate, then migrate verifier.
-The later executor pass may examine cached absolute paths, single-lstat and
-redundant root lookup; retiring repeated descendant checks remains a separate
-concrete policy decision, not an authorization inferred from low probability.
-Raw probe and receipt: `build/root-admission-optimization-20260928/preflight/`
-`probe_inplace_root_reparse.py` and `inplace-root-reparse-first-receipt.json`.
-
-This results-oriented plan replaces the nine-row RO register, which never
-reached implementation and remains in Git history (last at `c05eea25`).
-Details beyond this page are decided per step, against real code.
+Before each admission reuse, query current attributes on the held handle and
+refuse reparse/placeholder attributes or unavailable evidence. A hold blocks
+rename/deletion but permits in-place metadata changes; stronger write-sharing
+denial neither closes attribute-only conversion nor preserves root flushes.
+DEFENSE quiescence covers the check/use interval. Native regressions cover
+one-/two-swap continuity and empty-held-root junction conversion; nonempty NTFS
+conversion fails with 145, and root flush/ordinary descendants remain compatible.
+The implementation uses FileBasicInfo, supported by the replacement exFAT K:
+where FileAttributeTagInfo returns 87. This does not resolve the separate exFAT
+FileIdInfo compatibility defect or claim successful exFAT copy/verification.
+See CORE, EXECUTOR and DEFENSE for the current behavior and policy owners.
 
 **Result and target.** Remove repeated root and path work from the executor,
 preflight and verifier. The [investigation](PERFORMANCE.md#executor-assessment--2026-09-27)
@@ -97,7 +56,8 @@ not a gate: missing it means reporting the measured breakdown and deciding the
 next step with the user, not holding back correct improvements.
 
 **Approach: hold the root instead of re-proving it.** Each executor, preflight
-and verifier invocation fully admits its roots once, then holds each root open
+and verifier invocation acquires a hold, fully admits the root inside that hold,
+then confirms the held path before admission reuse. It keeps each root open
 until the invocation pauses, returns, fails or is canceled. The hold opens the
 root with directory access (`FILE_LIST_DIRECTORY`) and without
 `FILE_SHARE_DELETE`. While it is held, renaming the root or any ancestor fails
@@ -187,323 +147,70 @@ Implementation activated by the user on 2026-09-28 from `3c8b4b41`, on
 `milestone1-adelbert`. Each step receives independent review before its atomic
 commit; no changes to unrelated branches, recoveries or stashes are included.
 
-**Core atomic outcome — shared admission and hold primitive.** Product and
-test population: `core/root_authority.py` and `tests/core/test_root_authority.py`.
-Reuse native bindings, discover the anchor once for default admission and query
-volume information at that admitted anchor. Preserve the injected root-based
-volume-probe seam and its evidence checks. Add an invocation-local directory
-hold acquired before full admission, with UNC/mapped-network/unholdable fallback
-and deterministic release. Native witnesses cover root rename/deletion, ancestor
-rename, allowed descendant changes, required access/share flags and release.
-This step does not migrate consumers or change settlement, stored identity,
-wire values, or descendant safety policy. The existing fallback refusal codes
-and component checks remain. Documentation population: AGENTS, CORE,
-ARCHITECTURE, DEFENSE, this register, PERFORMANCE, CHANGELOG and HANDOFF.
-Acceptance: focused native/core cases, ordinary suite, import law, unchanged
-settlement oracle, admission call/timing measurement and independent review.
-The baseline differential grows at the first consumer migration. Existing
-equivalence and mandatory stops apply. Commit this complete core outcome before
-executor migration; only the latter can claim executor hold acceleration.
+**Integrated atomic outcomes.** All received independent source/evidence review
+and their named focused/direct/ordinary/import/oracle/differential gates. Earlier
+unchecked-hold evidence is historical; later acceptance includes current held
+attributes. Evidence paths below are relative to
+`build/root-admission-optimization-20260928/`.
 
-The frozen final-path correction passed 134 focused seam cases, 5,430 ordinary
-tests (four privilege skips, 34 headed deselections), all 12 import contracts
-and the unchanged 30-scenario settlement oracle over three runs. Input/output
-hashes match in `resume/bound-gate-*.json`. Two additional K: exFAT native
-lifetime cases passed. Independent source/test review found no actionable
-findings. No oracle re-pin was used.
-Integrated as `6536c04` on `milestone1-adelbert`.
+| Commit | Shipped outcome | Review/evidence owner |
+| --- | --- | --- |
+| `6536c04` | Shared admission uses one anchor lookup, reused bindings and strict held final-path confirmation; NTFS/exFAT hold lifetime and fallback witnesses. | `core/`, CORE and PERFORMANCE |
+| `90b57646` | Invocation-scoped executor holds, explicit admission skip and visible fallback diagnostics; descendant/physical/settlement guards retained. | `executor/`, EXECUTOR |
+| `8cdd669` | Current held attributes before every executor admission reuse; native conversion and sharing regressions. | `rootguard/independent-review-held-attributes-20260928.md` |
+| `4263b12` | Preflight observation holds with lazy admission and current-attribute reuse checks. | `preflight/independent-review-guarded-preflight-20260928.md` |
+| `0b85d88` | Verifier invocation holds and native tap forwarding, preserving per-file checks and all recording modes. | `verifier/independent-review-holds-20260928.md` |
+| `e189b48` | Opened-handle verifier sector geometry with fresh path fallback and preserved failure precedence/closure. | `verifier/independent-review-geometry-20260928.md` |
+| `7e60a47` | One checked no-follow leaf snapshot for executor metadata; unavailable/refusal/dispatch behavior retained. | `executor/independent-review-single-stat-20260928.md` |
+| `5fe5126` | Bounded exact absolute root/anchor and last-leaf pure conversions, cleared on invocation exit; no filesystem-result caching. | `executor/independent-review-path-cache-20260928.md` |
 
-**Executor atomic outcome — invocation holds and diagnostics.** Revalidate
-the core seams at `6536c04`, then migrate `executor/native.py` and `runtime.py`
-behind the existing facade. One invocation record owns root authorities,
-construction failures, holds and admitted facts. Acquire nonthrowing holds at
-entry; retain full admission and invalid-authority failure at the original
-guard so blocked/no-op/pause and target/source failure precedence remain.
-Scope all settlement and cleanup; release on every exit and reacquire on resume.
-Keep original filesystem dispatch, with explicit activation forwarding in the
-audit tracing wrapper; custom adapters without activation keep existing behavior.
-Default native admission queries the captured anchor directly while overridden
-volume-probe callbacks retain their logical-root argument and dispatch.
+Recovery changes were rebuilt, never merged as WIPs: `cfcc6ef` into the approved
+core outcome, `0a04921` into executor holds, and `7eb8c19d` into corrected preflight.
+The rejected identity-comparison/write-sharing approaches are not current policy.
+HANDOFF owns final preservation/accounting. No unrelated checkpoint, branch,
+stash or remote change is part of this task.
 
-Add invocation-owned internal diagnostics recording source/target hold decisions
-and exact fallback classes, collected by the rig under its existing metrics
-toggle. Do not store mutable last-run state on shared adapters or change event,
-result, recorder, wire or persistence values. Source population includes the
-executor facade if exporting a diagnostic collector, `tools/executor_rig.py`,
-`tools/__main__.py` and the settlement audit's tracing adapter. Test population:
-executor native/runtime/lifecycle/settlement and direct workflow consumers,
-existing facade, rig and CLI tests. Evidence-only differential producer changes
-require renewed baseline repeat captures before candidate comparison.
+The qualified differential now contains 67 executor/preflight/verifier groups,
+using unchanged producer `e7ba9b8d` and its two qualified baseline captures. It
+compares complete outcomes/reasons, recorder commands/evidence, trees and owned
+artifacts; blocked held-root swaps compare complete unswapped controls. Native/
+tap modes, actual case-fallback swaps, custom remounts, identity-weak and undurable
+post-copy controls remain. Later candidates add no projection exclusions.
 
-Preserve physical root resolution, the second root-directory observation,
-descendant physical containment,
-per-item stat behavior and all settlement guards. Single-lstat consolidation is
-a later independently reviewable outcome after measurement. Acceptance: existing
-native finalization/repair/composition and settlement cases first; held/fallback
-mix, pause/resume/exception release, wrapper dispatch and diagnostic isolation;
-baseline differential, ordinary suite, import law, settlement oracle, guard scan,
-NTFS/exFAT native evidence and serialized F:→G: rig measurement. A probe-only
-oracle re-pin remains allowed once under the rule above, not required merely
-because a scope exists. Document behavior in EXECUTOR/TOOLS and evidence in
-PERFORMANCE; update this register, HANDOFF and CHANGELOG. Independent review
-and the equivalence/mandatory stops precede the atomic executor commit.
+**Single-lstat executor descendant walks — complete.** Refreshed against
+`5fe5126`; only `_validate_existing_chain` changes in native.py, with focused
+native tests and EXECUTOR behavior docs plus parent delivery/performance records.
+Its existence and guard snapshots are not compared. Convert each visited path
+before the catch, dispatch `_reject_reparse` once, propagate UnsafeExecutionPath
+and ValueError, and stop on other initial OSError unavailability. Preserve every
+visited component including the leaf, relative containment and override dispatch.
+Consumers are resolve, trash_destination and revalidate_trash_destination; keep
+their actual checks, both physical resolutions, leaf volume evidence, second
+directory observations, final guards, traces and settlement unchanged. Historical
+later-snapshot cautions do not require new approval for the explicitly authorized
+single-lstat consolidation; their independent-guard exclusions still bind.
 
-**Executor admission skip explicitly approved on resumption.** Following an
-automatic-review block, the user answered the concrete prompt: "yes, continue
-with the admission skip." The implementation uses the existing `confirm()` API;
-rejected drafts remain historical evidence only. Frozen source passes 5,442
-ordinary tests (four skips, 34 headed deselections), 12 import contracts,
-unchanged settlement oracle 30 × three and a 70-row/391-effect guard scan with
-zero missing admissions. Gate input/output hashes match. The baseline
-differential passes 32 groups with no unexpected differences, including seven
-blocked first-checkpoint swaps compared with complete unswapped controls and
-seven pre-execution swaps retaining baseline outcomes. No oracle re-pin is used.
+Acceptance: existing native/runtime/settlement seams; ordered single component
+observations, first-unavailable stopping, unsafe/error/conversion precedence,
+outside-root refusal and override dispatch; direct consumers, ordinary/import/
+oracle/guard gates, unchanged qualified 67-group differential, serialized same-
+fixture timings with separate counts/profile, docs and fresh adversarial review.
+One atomic commit. No volume evidence caching, guard retirement or shared-core
+changes. Existing equivalence and mandatory stops remain binding.
 
-Serialized F:→G: samples have median 11.204 seconds / 0.349 MiB/s. Anchor calls
-fall from 48,000 to 6,002 and volume-information calls from 20,000 to 6,002;
-two final-path queries confirm the two held roots. All copies/readbacks pass.
-The goal remains unmet; choose the next bounded reduction from the remaining
-cost after closing this atomic step. PERFORMANCE owns methods and receipts.
-The K: scope witness passes; its copy witness truthfully fails with error 87.
-Read-only queries establish a pre-existing unconditional handle-identity
-compatibility blocker, but do not trace the first failing copy API. BUGS records
-the deferred finding; this step does not change filesystem support or claim
-exFAT copy success. Evidence is under `build/root-admission-optimization-20260928/`
-in `executor/`, `resume/` and `differential/`.
-Independent whole-outcome review approved source, evidence and documentation;
-the receipt is `executor/independent-review-20260928.md` in that evidence root.
+Frozen native `933F0A9A` passes 435 focused and 574 direct tests (two skips),
+5,550 ordinary tests (four skips, 34 headed deselections), 12 imports, oracle
+30 × three and guard scan 70/391/zero missing admissions. Gate manifests match;
+the unchanged qualified 67-group differential passes with all three frozen hashes
+matching. Three serialized copy samples measure median 9.684 seconds / 0.403
+MiB/s; all copies/readbacks and source rechecks pass. PERFORMANCE owns detailed
+counts, profiling limits and the remaining cost breakdown.
+Independent whole-outcome review approves the atomic commit in
+`executor/independent-review-descendant-stat-20260928.md`.
 
-The user supplied a replacement writable exFAT volume at K: on resumption.
-Its identity was re-probed and the native hold witness passed there and on NTFS.
-
-**Approved binding correction.** The core primitive confirms the acquired
-handle only after full admission, using exactly one normalized DOS
-`GetFinalPathNameByHandleW` query. It enables held mode only when the returned
-path matches the logical root exactly, allowing drive-letter case alone.
-Identity confirmation, the second open and `FILE_ID_INFO` queries are removed.
-Both intermediate-junction swap cases are passing native regressions. Cheap
-case, short-name, mount-alias and unavailable-evidence cases exercise fallback.
-Fallback reasons are internal observations; case folding or short-name patterns
-never authorize access. Executor integration exposes these reasons in its
-diagnostics and rig report. Setup root spelling is not canonicalized here.
-
-NTFS and replacement exFAT K: lifetime witnesses require a confirmed hold and
-verify root/ancestor mutation refusal, descendant operations and release.
-A non-admin subst fixture was created, but full volume admission failed before
-confirmation (native error 144); it does not prove a held transition. Exact
-owned mapping cleanup is verified, and the strict comparison rule covers
-alias rejection without that native transition claim.
-
-The initial acquire-only and interim endpoint-identity candidates failed the
-same namespace-custody mechanism: an intermediate junction could redirect
-acquisition away from the later admitted root, or be restored before identity
-comparison. The user approved replacing that mechanism on resumption. Raw
-probes and failed receipts remain under `core/`; final correction receipts go
-under `resume/`. Recovery `cfcc6ef` on
-`codex/wip-20260928-1158-root-hold-binding` remains preserved until task
-accounting. Useful changes are rebuilt and verified on the original branch;
-the WIP is never merged or cherry-picked as-is.
-
-For subsequent executor work, retain the later descendant physical-containment
-check and second directory observation initially. Read-only probes showed
-that removing them changes concurrent refusal/error observations. Measure
-hold integration before seeking a separate decision to remove those checks.
-The corrected core gate is complete. Preflight/verifier migration and
-single-lstat consolidation remain separate pending outcomes.
-
-**Next outcome — preflight invocation holds.** After executor `90b57646`, the
-user chose preflight, then verifier, then further executor optimization. The
-required held-attribute correction is integrated as `8cdd669`. Rebuild only the
-three preflight files from recovery `7eb8c19d`, and call `require_ordinary()`
-before the helper returns cached admission. All five observation families keep
-their existing typed refusal policy. Renew the conversion, placeholder and
-query-failure evidence and all affected gates; the old partial passes alone
-do not accept the rebuilt candidate. The
-preflight population is `modules/preflight.py`, its focused tests and direct
-workflow/native and tools-preparation consumers; PREFLIGHT owns behavior,
-PERFORMANCE measurements, and this register/HANDOFF/CHANGELOG delivery status.
-One native invocation scope holds each root before its existing full root
-observation and confirms only successful admission. Preserve supplied filesystem
-dispatch, fallback, subject/parent/trash no-follow checks, both physical
-resolutions, final leaf stat and leaf-volume checks. Hold state stays outside
-ObservedWorld, adapters' lasting state and pure judgment; all exits release it.
-No single-lstat, stored identity, exFAT compatibility or settlement change.
-Acceptance: existing native seams; held/fallback admission counts and rename/
-release witnesses, exception/nesting/override isolation; unchanged-world/verdict
-baseline differential with explicit prevented-swap controls; focused/direct
-consumer and ordinary suites, imports, unchanged oracle, measured preparation
-preflight time/calls, and fresh independent review. Commit the complete preflight
-outcome before verifier implementation. Existing equivalence and mandatory
-stops apply; verifier design remains read-only until this gate closes.
-
-The rebuilt, guarded preflight passes 92 focused and 314 direct-consumer tests.
-All old tests remain; five native conversions exercise each observation family,
-and typed placeholder/query-failure cases preserve output/refusal boundaries.
-An observation-only 1,000-copy plan from F: to empty exFAT K: passes, with source
-unchanged and exact-empty teardown. Its counted run confirms three anchor and
-volume queries, two holds/final-path confirmations and 2,002 fresh basic-attribute
-queries. This is preflight evidence, not an exFAT copy claim or timing result.
-The unchanged 46-group differential producer `243d2173` reuses checked baseline
-repeats; candidate `candidate-preflight-guarded-de75f6c180eb45979f357bb73a7471a8`
-has zero unexpected differences, including three required blocked swaps and
-strict case fallback. The ordinary suite passes 5,480 tests (four skips,
-34 headed deselections), 12 imports, unchanged oracle 30 × three and guard scan
-70 rows/391 effects with zero missing admissions. Input/output hashes match.
-Serialized identical-driver observations have median 2.722 seconds on `b8baf42d`
-and 0.551 seconds on the candidate; pure judgment is about 0.010 seconds on both.
-F:→G: counted observations match the K: counts above. PERFORMANCE owns methods
-and limits. Independent whole-outcome review approved the candidate in
-`preflight/independent-review-guarded-preflight-20260928.md`; this closes the gate.
-Earlier partial receipts remain historical under the same evidence root.
-Integrated as `4263b12` after correction `8cdd669`.
-
-**Active outcome — verifier invocation holds.** The user authorized verifier
-after preflight. Revalidate the read-only proposal against `4263b12`, then change
-`modules/verifier/native.py` and `engine.py`, the authority-bound tap in
-`tools/seams.py`, their native/engine/tools verifier tests, and VERIFIER/TOOLS
-documentation. Parent owns this register, PERFORMANCE, CHANGELOG and HANDOFF.
-Core protocols, facade, result/wire/continuation shapes and workflow policy stay
-unchanged. One native invocation record binds exact authority, native reader,
-dispatched reader and live lifetime. Explicitly hand it to engine classification;
-transparent taps forward activation. Acquire after reporter/reader setup and
-before the first checkpoint; fully admit lazily at the existing admission seam.
-Only successful native admission and strict confirmation permit reuse. Both
-engine admission and native final-touch root-prefix reuse require current
-`require_ordinary()` attributes under their existing error mappings. Invalidate
-before releasing on every exit; custom/direct/unactivated readers retain fallback.
-
-Preserve selected-root checks, descendant lstat, per-file root/file final-path
-containment, all four same-handle snapshots, opened-volume identity, no-buffering
-and read-only sharing, alignment, classification and conditional recording.
-No geometry change, native-binding cache, stat consolidation, buffer reuse or
-new diagnostics in this commit. Existing engine/native seams run first, followed
-by held/fallback/tap and all-four-operation cases, first-checkpoint/lazy admission,
-release and copied-context/owner isolation, current-attribute refusal at both
-owners, direct recorder/workflow/tool consumers, ordinary suite, imports,
-unchanged oracle/guard scan, baseline differential retaining custom remount and
-identity-weak controls, separate call counts and uninstrumented small-file timing,
-and fresh independent review. This complete gate defines one atomic commit.
-Existing equivalence and mandatory stops apply. Opened-handle sector geometry
-is the next independently gated outcome; its native NTFS/exFAT capability proof
-does not claim exFAT verification or fix the deferred FileIdInfo issue.
-
-The frozen hold outcome passes 132 focused, 479 direct-consumer tests (two
-skips), and 5,502 ordinary tests (four skips, 34 headed deselections), all 12
-imports, unchanged oracle 30 × three and guard scan 70 rows/391 effects/zero
-missing admissions. Input/output hashes match. The 67-group differential adds
-native/tapped all-mode, blocked first-checkpoint, active case-fallback and custom
-remount/identity-weak controls; all match the checked baseline or complete
-unswapped controls, with no projection relaxation. All eight frozen hashes match.
-Serialized 1,000-file verification median is 3.885→1.998 seconds versus `b8baf42d`,
-including earlier core changes. Separate counts reduce anchor queries 4,000→1,001
-and volume information 1,000→1, retaining 1,999 current root-attribute checks
-and all 12,000 file-information calls. PERFORMANCE owns methods and limits.
-Independent whole-outcome review approves the commit in
-`verifier/independent-review-holds-20260928.md`.
-Integrated as `0b85d88`.
-
-**Active outcome — verifier opened-handle geometry.** Refresh the finite
-proposal against `0b85d88`; change only verifier `native.py`, its native and
-engine test files, and VERIFIER behavior documentation, plus parent-owned
-delivery/performance records. Query FileStorageInfo16's positive logical sector
-size on the already opened unbuffered file. On query failure or zero, use the
-existing fresh pathname geometry. If file open fails, perform the old pathname
-query before re-raising, preserving simultaneous geometry-refusal precedence.
-All successful opens close on geometry, containment, stat, read or yield failure.
-No shared geometry cache, engine policy, tools behavior, buffering, identity,
-supported-filesystem or defensive-check change. Existing F:/K: API receipts
-answer capability only; the exFAT FileIdInfo issue remains excluded.
-
-Acceptance: existing native/engine seams first; same-handle positive geometry
-without pathname lookup, unavailable/zero fallback, fallback refusal and exact
-closure, open-missing/access plus successful/refused geometry precedence,
-unchanged final-path/stat/read/selected-subject guards; migrate only the named
-owning API fakes and held-mode geometry counter. Then direct recorder/workflow/
-tools consumers, ordinary/import/oracle/guard gate, unchanged 67-group baseline
-differential, separate native counts and serialized verifier timing, document
-checks and fresh independent review. One complete atomic commit; equivalence
-and mandatory stops remain unchanged. Further executor work follows this gate.
-
-Geometry's frozen four-file outcome passes 144 focused, 479 direct-consumer
-tests (two skips) and 5,514 ordinary tests (four skips, 34 headed deselections),
-12 imports, unchanged oracle 30 × three and guard scan 70/391/zero missing
-admissions. Gate hashes match. The unchanged qualified 67-group differential
-passes without new projection exclusions; post-capture hashes match. Serialized
-verifier median is 1.512 seconds (1.267–1.551), with one anchor/volume query each,
-1,000 handle-sector queries, zero pathname-sector queries and unchanged file
-guards. Independent whole-outcome review approves the commit in
-`verifier/independent-review-geometry-20260928.md`.
-Integrated as `e189b48`.
-
-**Executor single leaf observation — complete.** User/M1 require
-a single-lstat `_stat_path`. Revalidate the read-only executor inspection against
-`e189b48`; native/runtime bytes remain those of `8cdd669`. Change only executor
-`native.py::_stat_path`, `tests/test_executor_native.py`, and EXECUTOR behavior
-documentation, plus parent delivery/performance records. The helper currently
-never compares its existence/reparse/final metadata observations. Use one checked
-no-follow snapshot for type and all metadata, preserving `_reject_reparse`
-dispatch and initial unavailable→None behavior. UnsafeExecutionPath is an OSError
-subclass and must propagate; type and volume failures remain outside the initial
-unavailable catch. Preserve public stat/stat_path and subclass dispatch.
-
-This is the explicitly requested observation consolidation, not retirement of
-an independent guard. Keep root second-directory classification, current held
-attributes, descendant walks, both physical resolutions, leaf volume queries,
-all later operation guards and settlement unchanged. Path-string caches remain
-separate. Acceptance: existing native/runtime/settlement seams first; exactly
-one checked leaf observation, file/directory metadata and scanner parity, missing/
-access/unavailable handling, symlink/reparse/unsupported refusal, volume error
-propagation and subclass/public override dispatch; affected executor/tools
-consumers, ordinary/import/oracle/guard gate, unchanged 67-group differential,
-separate profile/counts and serialized F:→G: timing, documentation and fresh
-review. One atomic commit; inspect any unexpected unchanged-world reason or
-settlement difference under existing stop/adjudication rules.
-
-Frozen native `F28C0DF6` passes 414 focused tests, 574 direct tests (two skips),
-5,529 ordinary tests (four skips, 34 headed deselections), 12 imports, oracle
-30 × three and guard scan 70/391/zero missing admissions; gate manifests match.
-All 67 differential groups match with the unchanged qualified producer. Three
-serialized copy samples measure median 12.365 seconds / 0.316 MiB/s; all readbacks
-pass. Separate profiles show 12,000 fewer stat/existence observations, unchanged
-physical resolutions and project-ctypes counts. PERFORMANCE owns the limits and
-receipts. Fresh whole-outcome review approves source, gates, measurements and
-docs in `executor/independent-review-single-stat-20260928.md`.
-Integrated as `7e60a47`.
-
-**Executor bounded pure path reuse — complete.** Refresh the inspected
-native invocation/conversion helpers and runtime reviewed-root comparison against
-`7e60a47`. Cache successful exact absolute conversions within the active native
-invocation: up to four root/reviewed-anchor spellings, plus one last-successful
-nonroot Win32 conversion. Root hits do not evict the latter. Root entries may
-retain lexical Path and extended spelling; the nonroot slot retains only extended
-spelling. Relative/drive-relative/rooted-without-drive forms and failures bypass
-storage. Populate lazily, preserving error timing; no case folding or alias
-canonicalization. Deactivate and clear before exit, including copied contexts,
-and restore nested scopes. Exact runtime root spelling already validated by
-RootAuthority bypasses repeated normalization; spelling variants use the old
-comparison. Custom adapters without native activation keep original helpers.
-
-Population: executor `native.py`, `runtime.py`, their two test files, EXECUTOR
-behavior docs and parent delivery/performance records. Preserve every actual
-filesystem observation, physical resolution, root/descendant/leaf volume check,
-public/subclass dispatch and settlement. No full-plan path map, LRU tuning,
-filesystem-result cache or shared-core policy change. Acceptance: focused native/
-runtime and settlement seams; exact absolute/UNC/extended/long spellings, variants,
-relative+CWD and failed inputs; bounded storage, root-hit/nonroot-slot behavior,
-normal/error/pause/copied/nested lifetime, custom adapters and mixed fallback;
-affected departments, ordinary/import/oracle/guard gate, unchanged 67-group
-differential, serialized same-fixture timing with separate profile/counts, docs
-and fresh adversarial review. One atomic commit. Existing stops remain binding.
-
-Frozen native `4F7E22CB` and runtime `5B6DE694` pass 425 focused and 574 direct
-tests (two skips), 5,540 ordinary tests (four skips, 34 headed deselections),
-12 imports, oracle 30 × three and guard scan 70/391/zero missing admissions.
-Gate manifests match; unchanged qualified 67-group differential has no unexpected
-differences. Three serialized copy samples have median 10.757 seconds / 0.363
-MiB/s. Separate profile conversions fall 163,030→22,025 while actual observations
-and project-ctypes counts remain unchanged. PERFORMANCE owns method and receipts.
-Independent whole-outcome review approves in
-`executor/independent-review-path-cache-20260928.md`.
+The user requested a pause after this outcome is reviewed and committed, with
+a recap before investigating the remaining throughput gap. No next optimization
+or investigation is active; preserve the baseline/evidence for resumption.
 
 **Findings outside this result** go to BUGS or HANDOFF as short notes and are
 not handled here. Two exist: a same-volume root replacement before execution
@@ -697,14 +404,15 @@ commits were not merge units.
 
 ## Remaining checkpoints
 
-Pending rows record accepted future outcomes. The nine RO rows are authorized;
-other pending rows still need user authorization, active scope and finite
-verification. A finding does not enlarge a row; [AGENTS](../AGENTS.md) governs
+Pending rows record accepted future outcomes. The root-admission result above
+has its own authorized scope; other pending rows still need user authorization,
+active scope and finite verification. A finding does not enlarge a row;
+[AGENTS](../AGENTS.md) governs
 scope changes, stops and recovery.
 
 | ID | Accepted outcome | Named verification | Status |
 | --- | --- | --- | --- |
-| Root admission optimization | Hold each admitted root per invocation, keep the per-access fallback for remote or unholdable roots, and reduce admission calls, per the plan above. Target above 1 MiB/s for 1,000 × 4 KiB F:→G: execution (goal, not gate). | Baseline equivalence differential, existing tests, settlement oracle with one allowed probe-only re-pin, hold witnesses and measurements after each step. | Core, corrected executor, preflight and verifier holds committed; geometry gate passed. Measured executor reductions next. |
+| Root admission optimization | Hold each admitted root per invocation, keep the per-access fallback for remote or unholdable roots, and reduce admission calls, per the plan above. Target above 1 MiB/s for 1,000 × 4 KiB F:→G: execution (goal, not gate). | Baseline equivalence differential, existing tests, settlement oracle with one allowed probe-only re-pin, hold witnesses and measurements after each step. | Holds, verifier geometry and executor leaf/path/descendant reductions delivered and gated. Latest executor median 0.403 MiB/s; goal unmet. Paused at user request for recap before further investigation. |
 | M1-9 | Bounded inventory projections, current evidence and the full inventory consumer for sibling sorting. | Complete or prior-complete publication; warnings outside action scope; raw evidence provenance; search/filter/collapse/window/detail, replacement/race and production sort/reset paths; headed witnesses. | Pending. Missing-row acknowledge/restore UI must be explicitly allocated at activation; this row does not silently claim it. |
 | M1-10 | Baseline, verify and rebaseline controls plus first same-task manual post-copy verification, without persistent operation-time hashes. Eligible null-evidence files enter rebaseline; every admitted rebaseline hashes and replaces/creates evidence, and a match is not verified. | Confirm acknowledgement admission before claim/native work; all-null/mixed workflow, service/CLI and desktop paths; conditional recording and supersession races; atomic handoff classification; live pause/resume/cancel and unchanged automatic failed-read retries; overlay/result identity. Independently review operation matrix and conditional recording. Terminal Verify-remaining/subset retry remains deferred. | Pending. Rebaseline confirmation is distinct from missing-row acknowledgement. |
 | M1-12 | Close integrated lifecycle/retention across activated task surfaces, then complete adversarial, documentation, ordinary and headed verification. This absorbs former M1-11. | Plan-only, execution-only, linked/manual verification, inventory, refused/canceled/degraded/failed tasks across same-document navigation, contained unsupported reload, explicit close and shutdown; admission bounds, stale-response suppression, exact resource release and retained truth. Applicable settlement oracle, ordinary/headed, installed-wheel/product, imports, diff/active-link checks and independent cross-component review. No aggregate-artifact or whole-owner-graph criterion. | Pending. |

@@ -1810,6 +1810,123 @@ def test_published_copy_metadata_survives_process_exit_after_record(
             parent_fs.clear_readonly(published)
 
 
+def test_executor_descendant_walk_observes_each_component_once_in_order(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    first = tmp_path / "first"
+    second = first / "second"
+    second.mkdir(parents=True)
+    leaf = second / "leaf"
+    leaf.write_bytes(b"leaf")
+    components = (first, second, leaf)
+    native_components = {to_extended_length_path(str(path)): path for path in components}
+    observations, dispatched = [], []
+    original_stat, original_lstat = os.stat, os.lstat
+
+    def stat(current, *args, **kwargs):
+        if str(current) in native_components:
+            observations.append((native_components[str(current)], kwargs.get("follow_symlinks", True)))
+        return original_stat(current, *args, **kwargs)
+
+    def lstat(current, *args, **kwargs):
+        if str(current) in native_components:
+            observations.append((native_components[str(current)], False))
+        return original_lstat(current, *args, **kwargs)
+
+    class _ObservedFileSystem(NativeFileSystem):
+        def _reject_reparse(self, path):
+            dispatched.append(path)
+            return super()._reject_reparse(path)
+
+    monkeypatch.setattr(os, "stat", stat)
+    monkeypatch.setattr(os, "lstat", lstat)
+    _ObservedFileSystem()._validate_existing_chain(tmp_path, leaf)
+    assert dispatched == list(components)
+    assert observations == [(path, False) for path in components]
+
+
+@pytest.mark.parametrize("failure", [FileNotFoundError(2, "missing"), PermissionError(5, "denied"), OSError(1117, "unavailable")])
+def test_executor_descendant_walk_stops_at_first_unavailable_component(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failure: OSError,
+) -> None:
+    first = tmp_path / "first"
+    second = first / "second"
+    first.mkdir()
+    fs = NativeFileSystem()
+    original = fs._reject_reparse
+    visited = []
+
+    def observe(path):
+        visited.append(path)
+        if path == second:
+            raise failure
+        return original(path)
+
+    monkeypatch.setattr(fs, "_reject_reparse", observe)
+    fs._validate_existing_chain(tmp_path, second / "unvisited-leaf")
+    assert visited == [first, second]
+
+
+@pytest.mark.parametrize("mode,attributes", [(stat_module.S_IFLNK, 0), (stat_module.S_IFREG, 0x400)])
+def test_executor_descendant_walk_propagates_checked_leaf_reparse_refusal(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mode: int,
+    attributes: int,
+) -> None:
+    first = tmp_path / "first"
+    leaf = first / "leaf"
+    native_leaf = to_extended_length_path(str(leaf))
+    observed = []
+
+    def lstat(path):
+        observed.append(str(path))
+        return SimpleNamespace(
+            st_mode=mode if str(path) == native_leaf else stat_module.S_IFDIR,
+            st_file_attributes=attributes if str(path) == native_leaf else 0,
+        )
+
+    monkeypatch.setattr(Path, "lstat", lstat)
+    with pytest.raises(UnsafeExecutionPath, match="reparse points"):
+        NativeFileSystem()._validate_existing_chain(tmp_path, leaf)
+    assert observed == [to_extended_length_path(str(first)), native_leaf]
+
+
+@pytest.mark.parametrize("boundary", ["equal-root", "outside-root", "invalid-conversion", "guard-value"])
+def test_executor_descendant_walk_keeps_containment_conversion_and_error_order(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    boundary: str,
+) -> None:
+    fs = NativeFileSystem()
+    visited = []
+    failure = ValueError("owning guard failure")
+
+    def observe(path):
+        visited.append(path)
+        raise failure
+
+    monkeypatch.setattr(fs, "_reject_reparse", observe)
+    if boundary == "equal-root":
+        monkeypatch.setattr(executor_module, "_win32_path", lambda _path: pytest.fail("root equality reached a descendant conversion"))
+        fs._validate_existing_chain(tmp_path, tmp_path)
+    else:
+        candidate = (
+            tmp_path.parent / "outside" / "leaf" if boundary == "outside-root" else
+            tmp_path / "bad\x00component" / "leaf" if boundary == "invalid-conversion"
+            else tmp_path / "first" / "leaf"
+        )
+        expected = UnsafeExecutionPath if boundary == "outside-root" else PathValidationError if boundary == "invalid-conversion" else ValueError
+        with pytest.raises(expected) as refused:
+            fs._validate_existing_chain(tmp_path, candidate)
+        if boundary == "guard-value":
+            assert refused.value is failure
+    assert visited == ([tmp_path / "first"] if boundary == "guard-value" else [])
+
+
 @pytest.mark.skipif(os.name != "nt", reason="native Windows leaf observations")
 @pytest.mark.parametrize("kind", [EntryKind.FILE, EntryKind.DIRECTORY])
 def test_executor_leaf_stat_uses_one_checked_snapshot_for_all_metadata(

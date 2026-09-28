@@ -439,6 +439,26 @@ randomized causal speedup or satisfy the 1 MiB/s goal. Receipts use the same
 `resume/executor-path-cache-` timing/counts/counted/profile suffixes as the leaf
 outcome; the separate profile summary is diagnostic, and input manifests match.
 
+**Single-lstat descendant walks and final breakdown.** Three serialized samples
+measure median 9.684 seconds (9.155–10.471), 0.403 MiB/s, versus the preceding
+10.757 seconds. Every copy/readback and source recheck passes, and all rig-owned
+targets are removed. Separate profiles show existence probes 16,000→3,000 and
+`nt.stat` 17,006→23,006 as unavailable descendants now reach the checked lstat:
+7,000 fewer observations in this step, 19,000 fewer across leaf and descendant
+consolidation. Actual extended conversions stay 22,025 despite helper calls
+rising by 6,000; the bounded cache absorbs that duplicate pure work. Project-
+ctypes counts remain unchanged. Receipts use `resume/executor-descendant-stat-`
+with timing/counts/counted/profile suffixes; profile input manifests match.
+
+The goal remains unmet. Remaining caller-thread profile leads are 26,000 physical
+resolutions (4.326 inclusive seconds), 6,000 leaf volume observations (3.822) and
+90,074 absolute-spelling validations (3.610). Inclusive times overlap and are
+instrumented; do not sum them or subtract them from uninstrumented throughput.
+Each leaf volume observation currently performs one fresh anchor and one fresh
+volume query; none is a duplicate within that observation. Replacing these with
+held-root facts, or retiring physical/descendant/directory checks, requires a
+concrete policy decision. No such retirement is inferred from these measurements.
+
 ### Executor assessment — 2026-09-27
 
 Read-only assessment of `milestone1-adelbert` at
