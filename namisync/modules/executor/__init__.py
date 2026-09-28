@@ -1,6 +1,6 @@
 """Public facade for guarded execution of reviewed sync plans."""
 
-from .native import NativeFileSystem, UnsafeExecutionPath
+from .native import NativeFileSystem, RootAdmissionDiagnostic, UnsafeExecutionPath
 from .pipeline import CopyPipelineMetrics, NativeCopyBackend
 from .runtime import (
     BoundedFailurePolicy,
@@ -17,6 +17,7 @@ __all__ = [
     "NativeCopyBackend",
     "NativeFileSystem",
     "OperationFailure",
+    "RootAdmissionDiagnostic",
     "SystemClock",
     "UnsafeExecutionPath",
     "execute",

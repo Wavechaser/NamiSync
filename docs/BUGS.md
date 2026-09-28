@@ -232,6 +232,16 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- MODERATE - OPEN (2026-09-28). Native handle metadata on exFAT.
+  A K: exFAT copy witness reports truthful `io-error` / WinError 87 after
+  transferring eight bytes; the independent invocation-hold witness passes.
+  Read-only handle queries accept basic/size metadata but reject `FileIdInfo`.
+  `_stat_handle` unconditionally requests that identity in the baseline too,
+  before the identity-weak capability profile can discard it. This establishes
+  a pre-existing compatibility blocker, but the copy's first failing native
+  call has not been traced. Deferred outside the root-admission change; no
+  exFAT copy success is claimed. Raw evidence: `build/root-admission-optimization-20260928/`
+  `executor/exfat-handle-metadata.log` and `resume/executor-exfat-diagnostic.log`.
 - MODERATE - FIXED (2026-08-26). Cancellation settlement ownership gap.
   A reliable collaborator raising `Canceled` after outcome retention could
   replace cancellation with an invariant error despite publication and a

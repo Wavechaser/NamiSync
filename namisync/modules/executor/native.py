@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from dataclasses import replace
+from collections.abc import Callable, Iterator
+from contextlib import ExitStack, contextmanager
+from contextvars import ContextVar
+from dataclasses import dataclass, replace
 import ctypes
 from ctypes import wintypes
 import os
@@ -44,8 +46,10 @@ from namisync.core.root_authority import (
     RootAuthority,
     RootAuthorityError,
     RootAuthorityIssue,
+    RootHold,
     admit_root,
     admit_root_chain,
+    hold_root,
 )
 
 
@@ -237,8 +241,137 @@ class _ExecutorRootStat:
         self.st_reparse_tag = 0
 
 
+@dataclass(frozen=True, slots=True)
+class RootAdmissionDiagnostic:
+    """One invocation-local root decision, separate from execution results."""
+
+    role: str
+    logical_root: str
+    held: bool
+    fallback_reason: str | None
+
+
+@dataclass(slots=True)
+class _InvocationRoot:
+    role: str
+    authority: RootAuthority | None
+    construction_error: Exception | None = None
+    hold: RootHold | None = None
+    volume: NativeVolumeInfo | None = None
+    chain_authority: RootAuthority | None = None
+    reported: bool = False
+
+    def require_authority(self) -> RootAuthority:
+        if self.construction_error is not None:
+            raise self.construction_error.with_traceback(None)
+        assert self.authority is not None
+        return self.authority
+
+    @property
+    def held(self) -> bool:
+        # confirm() is cached only while the invocation-owned handle is live.
+        return (
+            self.volume is not None
+            and self.hold is not None
+            and self.hold.confirm()
+        )
+
+
+@dataclass(slots=True)
+class _RootInvocation:
+    key: object
+    roots: tuple[_InvocationRoot, ...]
+    diagnostics: list[RootAdmissionDiagnostic] | None
+    native_owner: object | None = None
+
+
+_ROOT_INVOCATION: ContextVar[_RootInvocation | None] = ContextVar(
+    "executor_root_invocation", default=None
+)
+
+
+def _invocation_root(key: object, role: str) -> _InvocationRoot | None:
+    invocation = _ROOT_INVOCATION.get()
+    if invocation is None or invocation.key is not key:
+        return None
+    return next(root for root in invocation.roots if root.role == role)
+
+
+@contextmanager
+def _root_invocation_scope(
+    fs: object,
+    key: object,
+    roots: tuple[_InvocationRoot, ...],
+    diagnostics: list[RootAdmissionDiagnostic] | None,
+) -> Iterator[None]:
+    invocation = _RootInvocation(key, roots, diagnostics)
+    token = _ROOT_INVOCATION.set(invocation)
+    try:
+        with ExitStack() as stack:
+            activate = getattr(fs, "root_scope", None)
+            if activate is not None:
+                stack.enter_context(activate(invocation))
+            yield
+    finally:
+        _ROOT_INVOCATION.reset(token)
+
+
+def _strict_root_prefix(path: str, root: str) -> bool:
+    """Select held facts without folding directory-name case."""
+    return path[:1].upper() == root[:1].upper() and (
+        path[1:] == root[1:]
+        or path[1:].startswith(root[1:].rstrip("\\/") + os.sep)
+    )
+
+
 class NativeFileSystem:
     """Native local-filesystem primitives retained by the executor machine."""
+
+    @contextmanager
+    def root_scope(self, invocation: _RootInvocation) -> Iterator[None]:
+        """Activate holds for this concrete adapter, preserving caller dispatch."""
+        invocation.native_owner = self
+        with ExitStack() as stack:
+            for root in invocation.roots:
+                if root.authority is not None:
+                    root.chain_authority = RootAuthority(root.authority.logical_root)
+                    root.hold = stack.enter_context(hold_root(root.authority))
+            yield
+
+    def _scoped_root(
+        self, logical: Path, *, descendants: bool = False
+    ) -> _InvocationRoot | None:
+        invocation = _ROOT_INVOCATION.get()
+        if invocation is None or invocation.native_owner is not self:
+            return None
+        for root in invocation.roots:
+            authority = root.authority
+            if authority is None:
+                continue
+            matches = (
+                _strict_root_prefix(str(logical), authority.logical_root)
+                if descendants
+                else str(logical) == authority.logical_root
+            )
+            if matches:
+                return root
+        return None
+
+    def _report_root(self, root: _InvocationRoot) -> None:
+        invocation = _ROOT_INVOCATION.get()
+        assert invocation is not None
+        if root.reported:
+            return
+        root.reported = True
+        if invocation.diagnostics is not None:
+            invocation.diagnostics.append(
+                RootAdmissionDiagnostic(
+                    root.role,
+                    root.require_authority().logical_root,
+                    root.held,
+                    None if root.hold is None else root.hold.fallback_reason,
+                )
+            )
 
     def revalidate_root(
         self,
@@ -249,15 +382,32 @@ class NativeFileSystem:
     ) -> None:
         logical = _lexical_logical_path(root)
         try:
-            authority = RootAuthority(
-                str(logical),
-                (
-                    None
-                    if trusted_anchor is None
-                    else str(_lexical_logical_path(trusted_anchor))
-                ),
-                expected_volume,
+            scoped = self._scoped_root(logical)
+            reviewed = None if scoped is None else scoped.authority
+            matching = reviewed is not None and (
+                expected_volume is None or expected_volume == reviewed.expected_volume_id
+            ) and (
+                trusted_anchor is None
+                or str(_lexical_logical_path(trusted_anchor)) == reviewed.reviewed_anchor
             )
+            if matching and scoped is not None and scoped.held:
+                return
+            authority = None
+            if matching:
+                if expected_volume is not None:
+                    authority = reviewed
+                elif scoped is not None and trusted_anchor is None:
+                    authority = scoped.chain_authority
+            if authority is None:
+                authority = RootAuthority(
+                    str(logical),
+                    (
+                        None
+                        if trusted_anchor is None
+                        else str(_lexical_logical_path(trusted_anchor))
+                    ),
+                    expected_volume,
+                )
             if expected_volume is None:
                 admit_root_chain(
                     authority,
@@ -265,18 +415,45 @@ class NativeFileSystem:
                     anchor_probe=self._observe_root_anchor,
                 )
             else:
-                admit_root(
-                    authority,
-                    lstat=self._observe_root_component,
-                    anchor_probe=self._observe_root_anchor,
-                    volume_probe=self._observe_root_volume,
-                )
+                volume = self._admit_reviewed_root(authority)
+                if matching and scoped is not None and scoped.volume is None:
+                    scoped.volume = volume
+                    assert scoped.hold is not None
+                    scoped.hold.confirm()
+                    self._report_root(scoped)
         except PathValidationError as error:
             raise UnsafeExecutionPath(
                 "reviewed root volume anchor changed before filesystem access"
             ) from error
         except RootAuthorityError as error:
             self._raise_root_authority_error(error)
+
+    def _admit_reviewed_root(self, authority: RootAuthority) -> NativeVolumeInfo:
+        volume_probe = self._observe_root_volume
+        if getattr(volume_probe, "__func__", None) is not _DEFAULT_ROOT_VOLUME_PROBE:
+            return admit_root(
+                authority,
+                lstat=self._observe_root_component,
+                anchor_probe=self._observe_root_anchor,
+                volume_probe=volume_probe,
+            )
+        observed_anchor: str | None = None
+
+        def anchor_probe(path: str) -> str:
+            nonlocal observed_anchor
+            observed_anchor = self._observe_root_anchor(path)
+            return observed_anchor
+
+        def anchored_volume(_path: str) -> NativeVolumeInfo:
+            assert observed_anchor is not None
+            return self._observe_root_volume_at_anchor(observed_anchor)
+
+        return admit_root(
+            authority,
+            lstat=self._observe_root_component,
+            anchor_probe=anchor_probe,
+            volume_probe=anchored_volume if os.name == "nt" else volume_probe,
+        )
 
     def _observe_root_anchor(self, path: str) -> str:
         logical = _lexical_logical_path(path)
@@ -1054,8 +1231,16 @@ class NativeFileSystem:
     ) -> None:
         logical = _lexical_logical_path(path)
         try:
+            scoped = self._scoped_root(logical, descendants=True)
+            held_root = (
+                scoped.require_authority().logical_root
+                if scoped is not None and scoped.held and trusted_anchor is None
+                else None
+            )
             anchor = (
-                str(trusted_anchor)
+                held_root
+                if held_root is not None
+                else str(trusted_anchor)
                 if trusted_anchor is not None
                 else self._observe_root_anchor(str(logical))
             )
@@ -1171,12 +1356,19 @@ class NativeFileSystem:
             _win32_path(logical), volume_path, len(volume_path)
         ):
             raise ctypes.WinError(ctypes.get_last_error())
+        return self._observe_root_volume_at_anchor(
+            from_extended_length_path(volume_path.value)
+        )
+
+    def _observe_root_volume_at_anchor(self, anchor: str) -> NativeVolumeInfo:
+        assert _WINDOWS is not None
+        native_anchor = _win32_path(anchor).rstrip("\\/") + "\\"
         serial = wintypes.DWORD()
         max_component = wintypes.DWORD()
         flags = wintypes.DWORD()
         filesystem = ctypes.create_unicode_buffer(261)
         if not _WINDOWS.get_volume_information(
-            volume_path.value,
+            native_anchor,
             None,
             0,
             ctypes.byref(serial),
@@ -1192,13 +1384,17 @@ class NativeFileSystem:
                 filesystem.value.upper() or "UNKNOWN",
             ),
             VolumeEvidence(
-                device_id=from_extended_length_path(volume_path.value)
+                device_id=from_extended_length_path(native_anchor)
             ),
             int(max_component.value),
             int(flags.value),
         )
 
     def _volume_id(self, path: Path) -> VolumeId:
+        scoped = self._scoped_root(path)
+        if scoped is not None and scoped.held:
+            assert scoped.volume is not None
+            return scoped.volume.volume_id
         return self._observe_root_volume(str(path)).volume_id
 
     def _volume_serial(self, path: Path) -> str:
@@ -1210,6 +1406,9 @@ class NativeFileSystem:
         if value is None and os.name == "nt":
             value = getattr(info, "st_ctime_ns", None)
         return None if value is None else int(value)
+
+
+_DEFAULT_ROOT_VOLUME_PROBE = NativeFileSystem._observe_root_volume
 
 
 def _write_all(target: BinaryIO, chunk: bytes, owner: str) -> None:

@@ -411,6 +411,10 @@ class TracingFileSystem:
         self.counts: dict[str, int] = {}
         self._timeline = timeline if timeline is not None else []
 
+    def root_scope(self, *args: object, **kwargs: object) -> object:
+        """Forward invocation activation outside the public filesystem trace."""
+        return self._inner.root_scope(*args, **kwargs)
+
     def __getattr__(self, name: str) -> object:
         target = getattr(self._inner, name)
         if not callable(target):

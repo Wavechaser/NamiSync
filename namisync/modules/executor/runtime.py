@@ -68,11 +68,15 @@ from namisync.core.session import (
 )
 
 from .native import (
+    RootAdmissionDiagnostic,
     UnsafeExecutionPath,
+    _InvocationRoot,
     _READONLY,
     _SecurityCopyFailure,
     _UpdateBackupBeforeCopyDrift,
     _UpdateBackupDrift,
+    _invocation_root,
+    _root_invocation_scope,
 )
 from .pipeline import _allocation_size, _copy_chunk_size
 
@@ -877,6 +881,8 @@ def execute(
     recorder: Recorder,
     policies: ExecutorPolicies,
     fs: ExecutorFileSystem,
+    *,
+    root_diagnostics: list[RootAdmissionDiagnostic] | None = None,
 ) -> OperationResult:
     """Apply remaining selected operations without emitting a terminal event.
 
@@ -885,6 +891,27 @@ def execute(
     guards that remain necessary at every point of touch.
     """
 
+    roots: list[_InvocationRoot] = []
+    for role, factory in (
+        ("source", _source_root_authority),
+        ("target", _target_root_authority),
+    ):
+        try:
+            roots.append(_InvocationRoot(role, factory(xset)))
+        except Exception as error:
+            # Preserve the original operation guard's failure/settlement timing.
+            roots.append(_InvocationRoot(role, None, error))
+    with _root_invocation_scope(fs, xset, tuple(roots), root_diagnostics):
+        return _execute(xset, ctx, recorder, policies, fs)
+
+
+def _execute(
+    xset: ExecutionSet,
+    ctx: RunContext,
+    recorder: Recorder,
+    policies: ExecutorPolicies,
+    fs: ExecutorFileSystem,
+) -> OperationResult:
     source_root = Path(xset.plan.source_root.path)
     target_root = Path(xset.plan.target_root.path)
     state = _ExecutionState(
@@ -4623,6 +4650,9 @@ def _require_reviewed_runtime_root(
 def _target_root_authority(
     xset: ExecutionSet,
 ) -> RootAuthority:
+    root = _invocation_root(xset, "target")
+    if root is not None:
+        return root.require_authority()
     evidence = xset.plan.target_volume_evidence
     try:
         return RootAuthority(
@@ -4639,6 +4669,9 @@ def _target_root_authority(
 def _source_root_authority(
     xset: ExecutionSet,
 ) -> RootAuthority:
+    root = _invocation_root(xset, "source")
+    if root is not None:
+        return root.require_authority()
     evidence = xset.plan.source_volume_evidence
     try:
         return RootAuthority(

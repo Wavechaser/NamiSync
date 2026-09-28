@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import replace
 import os
 from pathlib import Path
@@ -38,7 +39,7 @@ from namisync.core.planning import (
     OperationKind,
     PreservationPolicy,
 )
-from namisync.core.root_authority import FILE_ATTRIBUTE_OFFLINE
+from namisync.core.root_authority import FILE_ATTRIBUTE_OFFLINE, RootAuthority, RootHold
 from namisync.core.session import Canceled, RunContext, SessionState
 from namisync.modules.executor import (
     NativeCopyBackend,
@@ -233,6 +234,158 @@ def test_native_filesystem_revalidates_an_empty_chain_mount_anchor(
 
     with pytest.raises(UnsafeExecutionPath, match="volume anchor changed"):
         fs.revalidate_root(configured, trusted_anchor=configured)
+
+
+@pytest.mark.skipif(os.name != "nt", reason="native Windows root hold")
+def test_native_invocation_holds_root_keeps_physical_resolution_and_releases(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = tmp_path / "managed"
+    root.mkdir()
+    child = root / "child"
+    child.mkdir()
+    fs = NativeFileSystem()
+    volume = fs._observe_root_volume(str(root))
+    authority = RootAuthority(str(root), volume.evidence.device_id, volume.volume_id)
+    state = executor_module._InvocationRoot("target", authority)
+    diagnostics = []
+    resolutions: list[Path] = []
+    original_resolve = executor_module._resolved_logical_path
+
+    def resolve(path, *, strict):
+        resolutions.append(Path(path))
+        return original_resolve(path, strict=strict)
+
+    monkeypatch.setattr(executor_module, "_resolved_logical_path", resolve)
+    assert executor_module._WINDOWS is not None
+    original_probe = executor_module._WINDOWS.get_volume_path
+    probes = []
+
+    def probe(*args):
+        probes.append(args[0])
+        return original_probe(*args)
+
+    monkeypatch.setattr(executor_module._WINDOWS, "get_volume_path", probe)
+    with executor_module._root_invocation_scope(fs, object(), (state,), diagnostics):
+        for _ in range(2):
+            fs.revalidate_root(root, trusted_anchor=Path(authority.reviewed_anchor),
+                               expected_volume=volume.volume_id)
+        assert state.held
+        assert len(probes) == 1
+        assert fs.resolve(root, "child", must_exist=True) == child
+        assert resolutions == [root, child]
+        fs._reject_reparse_chain(child)
+        with pytest.raises(OSError) as refused:
+            root.rename(tmp_path / "renamed")
+        assert refused.value.winerror == 32
+        (child / "allowed.bin").write_bytes(b"inside")
+        (child / "allowed.bin").unlink()
+        # Leaf volume evidence is still fresh; only the exact held root reuses it.
+        assert fs._volume_id(child) == volume.volume_id
+        assert len(probes) == 2
+        assert fs._volume_id(root) == volume.volume_id
+        assert len(probes) == 2
+    assert not state.held
+    assert len(diagnostics) == 1
+    assert diagnostics[0].held and diagnostics[0].fallback_reason is None
+    root.rename(tmp_path / "renamed")
+    assert executor_module._ROOT_INVOCATION.get() is None
+
+
+@pytest.mark.skipif(os.name != "nt", reason="native Windows reparse guard")
+@pytest.mark.parametrize("depth", (0, 1))
+def test_held_root_parent_guard_refuses_first_and_deeper_descendant_reparse(
+    tmp_path: Path,
+    depth: int,
+) -> None:
+    root = tmp_path / "managed"
+    root.mkdir()
+    redirected = tmp_path / "redirected"
+    redirected.mkdir()
+    (redirected / "child").mkdir()
+    marker = redirected / "child" / "untouched.bin"
+    marker.write_bytes(b"no effects")
+    _require_directory_reparse(tmp_path, redirected)
+    parent = root
+    if depth:
+        parent = root / "ordinary"
+        parent.mkdir()
+    junction = parent / "link"
+    _create_directory_reparse(junction, redirected)
+    fs = NativeFileSystem()
+    volume = fs._observe_root_volume(str(root))
+    authority = RootAuthority(str(root), volume.evidence.device_id, volume.volume_id)
+    state = executor_module._InvocationRoot("target", authority)
+    with executor_module._root_invocation_scope(fs, object(), (state,), None):
+        fs.revalidate_root(root, trusted_anchor=Path(authority.reviewed_anchor),
+                           expected_volume=volume.volume_id)
+        assert state.held
+        # Invoke only the parent guard; no cleanup or filesystem effect is run.
+        with pytest.raises(UnsafeExecutionPath, match="reparse points"):
+            fs._reject_reparse_chain(junction / "child")
+        assert marker.read_bytes() == b"no effects"
+
+
+@pytest.mark.skipif(os.name != "nt", reason="native Windows root hold")
+def test_native_invocation_mixes_held_and_fallback_without_sharing_adapter_state(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source, target = _roots(tmp_path)
+    fs = NativeFileSystem()
+    source_volume = fs._observe_root_volume(str(source))
+    target_volume = fs._observe_root_volume(str(target))
+    roots = tuple(
+        executor_module._InvocationRoot(
+            role, RootAuthority(str(path), volume.evidence.device_id, volume.volume_id)
+        )
+        for role, path, volume in (
+            ("source", source, source_volume), ("target", target, target_volume)
+        )
+    )
+    original_hold = executor_module.hold_root
+
+    @contextmanager
+    def mixed_hold(authority):
+        if authority.logical_root == str(target):
+            yield RootHold(authority, None, "case_mismatch")
+        else:
+            with original_hold(authority) as hold:
+                yield hold
+
+    monkeypatch.setattr(executor_module, "hold_root", mixed_hold)
+    admissions = []
+    original_admit = fs._admit_reviewed_root
+
+    def admit(authority):
+        admissions.append(authority.logical_root)
+        return original_admit(authority)
+
+    monkeypatch.setattr(fs, "_admit_reviewed_root", admit)
+    diagnostics = []
+    with executor_module._root_invocation_scope(fs, object(), roots, diagnostics):
+        for _ in range(2):
+            for state in roots:
+                authority = state.require_authority()
+                fs.revalidate_root(Path(authority.logical_root),
+                                   trusted_anchor=Path(authority.reviewed_anchor),
+                                   expected_volume=authority.expected_volume_id)
+        assert admissions == [str(source), str(target), str(target)]
+        assert roots[0].held and not roots[1].held
+        other = NativeFileSystem()
+        # A different adapter still performs its own admission inside this scope.
+        monkeypatch.setattr(other, "_admit_reviewed_root", admit)
+        other.revalidate_root(source, expected_volume=source_volume.volume_id)
+        assert admissions[-1] == str(source)
+        assert len(admissions) == 4
+    assert [(item.role, item.held, item.fallback_reason) for item in diagnostics] == [
+        ("source", True, None), ("target", False, "case_mismatch")
+    ]
+    assert not roots[0].held
+    assert executor_module._ROOT_INVOCATION.get() is None
+    fs.revalidate_root(source, expected_volume=source_volume.volume_id)
+    assert len(admissions) == 5
 
 
 def test_native_filesystem_refuses_same_serial_with_different_filesystem(

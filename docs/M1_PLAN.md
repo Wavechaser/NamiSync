@@ -146,6 +146,67 @@ and the unchanged 30-scenario settlement oracle over three runs. Input/output
 hashes match in `resume/bound-gate-*.json`. Two additional K: exFAT native
 lifetime cases passed. Independent source/test review found no actionable
 findings. No oracle re-pin was used.
+Integrated as `6536c04` on `milestone1-adelbert`.
+
+**Executor atomic outcome — invocation holds and diagnostics.** Revalidate
+the core seams at `6536c04`, then migrate `executor/native.py` and `runtime.py`
+behind the existing facade. One invocation record owns root authorities,
+construction failures, holds and admitted facts. Acquire nonthrowing holds at
+entry; retain full admission and invalid-authority failure at the original
+guard so blocked/no-op/pause and target/source failure precedence remain.
+Scope all settlement and cleanup; release on every exit and reacquire on resume.
+Keep original filesystem dispatch, with explicit activation forwarding in the
+audit tracing wrapper; custom adapters without activation keep existing behavior.
+Default native admission queries the captured anchor directly while overridden
+volume-probe callbacks retain their logical-root argument and dispatch.
+
+Add invocation-owned internal diagnostics recording source/target hold decisions
+and exact fallback classes, collected by the rig under its existing metrics
+toggle. Do not store mutable last-run state on shared adapters or change event,
+result, recorder, wire or persistence values. Source population includes the
+executor facade if exporting a diagnostic collector, `tools/executor_rig.py`,
+`tools/__main__.py` and the settlement audit's tracing adapter. Test population:
+executor native/runtime/lifecycle/settlement and direct workflow consumers,
+existing facade, rig and CLI tests. Evidence-only differential producer changes
+require renewed baseline repeat captures before candidate comparison.
+
+Preserve physical root resolution, the second root-directory observation,
+descendant physical containment,
+per-item stat behavior and all settlement guards. Single-lstat consolidation is
+a later independently reviewable outcome after measurement. Acceptance: existing
+native finalization/repair/composition and settlement cases first; held/fallback
+mix, pause/resume/exception release, wrapper dispatch and diagnostic isolation;
+baseline differential, ordinary suite, import law, settlement oracle, guard scan,
+NTFS/exFAT native evidence and serialized F:→G: rig measurement. A probe-only
+oracle re-pin remains allowed once under the rule above, not required merely
+because a scope exists. Document behavior in EXECUTOR/TOOLS and evidence in
+PERFORMANCE; update this register, HANDOFF and CHANGELOG. Independent review
+and the equivalence/mandatory stops precede the atomic executor commit.
+
+**Executor admission skip explicitly approved on resumption.** Following an
+automatic-review block, the user answered the concrete prompt: "yes, continue
+with the admission skip." The implementation uses the existing `confirm()` API;
+rejected drafts remain historical evidence only. Frozen source passes 5,442
+ordinary tests (four skips, 34 headed deselections), 12 import contracts,
+unchanged settlement oracle 30 × three and a 70-row/391-effect guard scan with
+zero missing admissions. Gate input/output hashes match. The baseline
+differential passes 32 groups with no unexpected differences, including seven
+blocked first-checkpoint swaps compared with complete unswapped controls and
+seven pre-execution swaps retaining baseline outcomes. No oracle re-pin is used.
+
+Serialized F:→G: samples have median 11.204 seconds / 0.349 MiB/s. Anchor calls
+fall from 48,000 to 6,002 and volume-information calls from 20,000 to 6,002;
+two final-path queries confirm the two held roots. All copies/readbacks pass.
+The goal remains unmet; choose the next bounded reduction from the remaining
+cost after closing this atomic step. PERFORMANCE owns methods and receipts.
+The K: scope witness passes; its copy witness truthfully fails with error 87.
+Read-only queries establish a pre-existing unconditional handle-identity
+compatibility blocker, but do not trace the first failing copy API. BUGS records
+the deferred finding; this step does not change filesystem support or claim
+exFAT copy success. Evidence is under `build/root-admission-optimization-20260928/`
+in `executor/`, `resume/` and `differential/`.
+Independent whole-outcome review approved source, evidence and documentation;
+the receipt is `executor/independent-review-20260928.md` in that evidence root.
 
 The user supplied a replacement writable exFAT volume at K: on resumption.
 Its identity was re-probed and the native hold witness passed there and on NTFS.
@@ -158,7 +219,7 @@ Identity confirmation, the second open and `FILE_ID_INFO` queries are removed.
 Both intermediate-junction swap cases are passing native regressions. Cheap
 case, short-name, mount-alias and unavailable-evidence cases exercise fallback.
 Fallback reasons are internal observations; case folding or short-name patterns
-never authorize access. Executor integration will expose these reasons in its
+never authorize access. Executor integration exposes these reasons in its
 diagnostics and rig report. Setup root spelling is not canonicalized here.
 
 NTFS and replacement exFAT K: lifetime witnesses require a confirmed hold and
@@ -182,7 +243,8 @@ For subsequent executor work, retain the later descendant physical-containment
 check and second directory observation initially. Read-only probes showed
 that removing them changes concurrent refusal/error observations. Measure
 hold integration before seeking a separate decision to remove those checks.
-Dependent consumer implementation waits for the corrected core gate.
+The corrected core gate is complete. Preflight/verifier migration and
+single-lstat consolidation remain separate pending outcomes.
 
 **Findings outside this result** go to BUGS or HANDOFF as short notes and are
 not handled here. Two exist: a same-volume root replacement before execution
@@ -383,7 +445,7 @@ scope changes, stops and recovery.
 
 | ID | Accepted outcome | Named verification | Status |
 | --- | --- | --- | --- |
-| Root admission optimization | Hold each admitted root per invocation, keep the per-access fallback for remote or unholdable roots, and reduce admission calls, per the plan above. Target above 1 MiB/s for 1,000 × 4 KiB F:→G: execution (goal, not gate). | Baseline equivalence differential, existing tests, settlement oracle with one allowed probe-only re-pin, hold witnesses and measurements after each step. | Active; final-path confirmation, fallback diagnostics and regression adjustments approved on resumption. |
+| Root admission optimization | Hold each admitted root per invocation, keep the per-access fallback for remote or unholdable roots, and reduce admission calls, per the plan above. Target above 1 MiB/s for 1,000 × 4 KiB F:→G: execution (goal, not gate). | Baseline equivalence differential, existing tests, settlement oracle with one allowed probe-only re-pin, hold witnesses and measurements after each step. | Core integrated in `6536c04`; executor holds and diagnostics verified and independently approved. Single-lstat and preflight/verifier outcomes pending. |
 | M1-9 | Bounded inventory projections, current evidence and the full inventory consumer for sibling sorting. | Complete or prior-complete publication; warnings outside action scope; raw evidence provenance; search/filter/collapse/window/detail, replacement/race and production sort/reset paths; headed witnesses. | Pending. Missing-row acknowledge/restore UI must be explicitly allocated at activation; this row does not silently claim it. |
 | M1-10 | Baseline, verify and rebaseline controls plus first same-task manual post-copy verification, without persistent operation-time hashes. Eligible null-evidence files enter rebaseline; every admitted rebaseline hashes and replaces/creates evidence, and a match is not verified. | Confirm acknowledgement admission before claim/native work; all-null/mixed workflow, service/CLI and desktop paths; conditional recording and supersession races; atomic handoff classification; live pause/resume/cancel and unchanged automatic failed-read retries; overlay/result identity. Independently review operation matrix and conditional recording. Terminal Verify-remaining/subset retry remains deferred. | Pending. Rebaseline confirmation is distinct from missing-row acknowledgement. |
 | M1-12 | Close integrated lifecycle/retention across activated task surfaces, then complete adversarial, documentation, ordinary and headed verification. This absorbs former M1-11. | Plan-only, execution-only, linked/manual verification, inventory, refused/canceled/degraded/failed tasks across same-document navigation, contained unsupported reload, explicit close and shutdown; admission bounds, stale-response suppression, exact resource release and retained truth. Applicable settlement oracle, ordinary/headed, installed-wheel/product, imports, diff/active-link checks and independent cross-component review. No aggregate-artifact or whole-owner-graph criterion. | Pending. |

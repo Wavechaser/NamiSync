@@ -486,6 +486,15 @@ interpretation, reports and rerun policy. Driver structure is under
 `tools/`; tests stay under `tests/`; generated output belongs in ignored
 `build/` or an explicitly owned external workspace.
 
+Executor metrics also collect invocation-local root admission diagnostics. Each
+used native source/target role reports held mode or its exact observed fallback
+reason once; unused roots do not claim admission. The rig snapshots these records
+per sample, renders them beside pipeline diagnostics and retains them in the
+`root_admission` report field. `--no-metrics` installs no collector and leaves
+that field empty. The observations explain which execution path was measured;
+they are not acceptance, operation outcomes or cached filesystem authorization.
+Core owns classification; possible short-name aliases remain tentative.
+
 `tools/performance/` owns selected Plan, execution receipt/UI, bridge-event and
 history measurements. Assets live beside their driver; small fixture/runner
 helpers are shared only where used. These drivers may compose the real

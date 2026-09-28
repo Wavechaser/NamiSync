@@ -1040,8 +1040,16 @@ claims explicit, independently reviewable, and regression-backed.
 - Measure 1,000 default admissions on the same NTFS root: anchor calls fall from
   2,000 to 1,000 and latest-candidate median admission time from 985.7 to
   approximately 489 microseconds. This is a single-root diagnostic, not executor
-  throughput. Consumer invocation holds and rig fallback reporting follow in
-  separate atomic changes.
+  throughput.
+- Hold admitted executor roots through settlement and cleanup, skipping repeated
+  root admission only after strict confirmation. Preserve descendant checks,
+  physical containment, custom adapter dispatch and per-access fallback; expose
+  internal fallback reasons in optional rig diagnostics.
+- Verify 5,442 ordinary tests, 12 import contracts, unchanged settlement oracle,
+  guard scan and 32 differential groups. Measure median 11.20 seconds for
+  1,000 × 4 KiB F:→G: (0.35 MiB/s); anchor queries fall from 48,000 to 6,002.
+  The 1 MiB/s goal remains unmet. K: root holds pass; a separate pre-existing
+  exFAT handle-metadata compatibility blocker remains deferred.
 
 - Replace the nine-row RO register with a results-oriented plan: a goal of more
   than 1 MiB/s for 1,000 × 4 KiB F:→G: execution, baseline equivalence with

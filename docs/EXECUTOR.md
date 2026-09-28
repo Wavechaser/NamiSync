@@ -115,7 +115,7 @@ contract remains in `test_executor_acl.py`.
 ## Entry Contract
 
 ```python
-execute(xset, ctx, recorder, policies, fs) -> OperationResult
+execute(xset, ctx, recorder, policies, fs, *, root_diagnostics=None) -> OperationResult
 ```
 
 The caller holds deterministic physical-volume custody and validates the exact
@@ -134,6 +134,31 @@ phase, progress, and item outcomes only, returns one complete
 scalar, omission, and envelope rules are centralized in
 [BRIDGE.md](BRIDGE.md). `Canceled`/`PauseRequested` unwind to the runner
 after executor's own safe operation-boundary cleanup.
+
+Each call owns one root invocation record. Native adapters acquire directory
+holds before the first checkpoint, then fully admit each used root at its existing
+reviewed guard. Only successful admission followed by strict held-handle final-path
+confirmation enables reuse. Invalid reviewed authority is reported at that guard;
+blocked or unused roots acquire no admission. Runtime guards still dispatch through
+the supplied filesystem, including overrides. Adapters without native activation
+retain their existing behavior. The tracing adapter explicitly forwards activation
+without adding a filesystem effect to its protected trace.
+
+Confirmed holds replace repeated root-prefix admission until
+the call finishes all settlement and cleanup. Pause, cancellation and every error
+release them; resume creates a fresh invocation. UNC, mapped network, unavailable
+or mismatching final paths retain per-access admission. Descendant physical
+containment (including root and candidate physical resolution), reparse checks,
+second directory observations, leaf volume probes and
+per-item stat behavior remain. The shared hold contract is owned by
+[CORE.md](CORE.md) and [DEFENSE.md](DEFENSE.md).
+
+The optional invocation collector receives one immutable diagnostic per used,
+volume-bound source/target role after successful admission. Plans lacking reviewed
+volume identity retain their existing chain-only, per-access policy. The collector
+reports held mode or the core's
+observed fallback classification; it neither authorizes access nor changes results,
+events or recorder values. No mutable last-run state lives on a filesystem adapter.
 
 ## Universal Operation Rules
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+from contextlib import nullcontext
 from dataclasses import replace
 import inspect
 import os
@@ -44,6 +45,7 @@ from namisync.core.planning import (
     Plan,
     PlanOperation,
 )
+from namisync.core.root_authority import RootHold
 from namisync.core.session import (
     Canceled,
     PauseRequested,
@@ -83,6 +85,19 @@ from _executor_fixtures import (
     _sharing_violation,
     _xset,
 )
+
+
+@pytest.fixture
+def fallback_root_holds(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep actual root swaps covered on the original unholdable path.
+
+    The held counterpart independently proves blocked rename and unswapped
+    success; these tests still require the swap and the original refusal.
+    """
+    monkeypatch.setattr(
+        executor_module, "hold_root",
+        lambda authority: nullcontext(RootHold(authority, None, "acquisition_failed")),
+    )
 
 
 def test_executor_derives_root_authority_from_reviewed_plan_facts(
@@ -1989,6 +2004,7 @@ class RootSwapAfterCopyBackend(NativeCopyBackend):
     "swap_boundary",
     ("source-open", "after-copy"),
 )
+@pytest.mark.usefixtures("fallback_root_holds")
 def test_copy_prepare_revalidates_root_after_blocking_boundaries(
     tmp_path: Path,
     swap_boundary: str,
@@ -2095,6 +2111,7 @@ class TargetRootSwappingRecorder(FakeRecorder):
         self.swapped = True
 
 
+@pytest.mark.usefixtures("fallback_root_holds")
 def test_update_rejects_target_root_swap_after_recorder_barrier(
     tmp_path: Path,
 ) -> None:
@@ -2180,6 +2197,7 @@ class PublishedBackoffRootSwapFileSystem(TargetRootReadGuardFileSystem):
     "failure_point",
     ("published-metadata", "committed-publish"),
 )
+@pytest.mark.usefixtures("fallback_root_holds")
 def test_published_retry_rejects_matching_decoy_after_target_root_swap(
     tmp_path: Path,
     failure_point: str,
@@ -5154,6 +5172,101 @@ def test_executor_imports_core_but_no_sibling_module() -> None:
     assert "WinDLL" not in inspect.getsource(NativeFileSystem)
 
 
+@pytest.mark.skipif(os.name != "nt", reason="native Windows root hold")
+def test_execute_held_root_blocks_swap_and_completes_original_copy(tmp_path: Path) -> None:
+    source, target = _roots(tmp_path)
+    source_file = source / "file.bin"
+    source_file.write_bytes(b"reviewed")
+    fs = NativeFileSystem()
+    intended = fs.stat(source, source_file.name)
+    assert intended is not None
+    operation = _operation(
+        1, OperationKind.COPY, source_rel_path=source_file.name,
+        target_rel_path=source_file.name, source_expected=intended,
+        target_expected=None, intended=intended,
+    )
+    attempted = []
+
+    def swap_after_copy() -> None:
+        for root in (source, target):
+            with pytest.raises(OSError) as refused:
+                root.rename(root.with_name(root.name + "-detached"))
+            assert refused.value.winerror == 32
+            attempted.append(root)
+
+    events = []
+    diagnostics = []
+    source_volume = fs._observe_root_volume(str(source))
+    target_volume = fs._observe_root_volume(str(target))
+    plan = replace(
+        _plan(source, target, (operation,)),
+        source_volume_id=source_volume.volume_id,
+        target_volume_id=target_volume.volume_id,
+        source_volume_evidence=source_volume.evidence,
+        target_volume_evidence=target_volume.evidence,
+    )
+    result = execute(
+        _xset(plan),
+        RunContext(events.append, lambda: None), FakeRecorder(),
+        _policies(copy_backend=RootSwapAfterCopyBackend(swap_after_copy)), fs,
+        root_diagnostics=diagnostics,
+    )
+    assert result.status is SessionState.COMPLETED
+    assert _item_outcome(events).outcome is Outcome.SUCCEEDED
+    assert attempted == [source, target]
+    assert (target / source_file.name).read_bytes() == b"reviewed"
+    assert {item.role for item in diagnostics} == {"source", "target"}
+    assert all(item.held and item.fallback_reason is None for item in diagnostics)
+    for root in (source, target):
+        root.rename(root.with_name(root.name + "-released"))
+
+
+@pytest.mark.skipif(os.name != "nt", reason="native Windows root hold")
+@pytest.mark.parametrize("boundary", ("checkpoint", "initial-emit"))
+@pytest.mark.parametrize("exception", (PauseRequested, Canceled, RuntimeError))
+def test_execute_releases_entry_holds_on_pause_cancel_and_exception(
+    tmp_path: Path,
+    boundary: str,
+    exception: type[Exception],
+) -> None:
+    source, target = _roots(tmp_path)
+    operation = _operation(
+        1, OperationKind.NOOP, source_rel_path=None, target_rel_path="unused.bin",
+        source_expected=None, target_expected=None, intended=None,
+    )
+    xset = _xset(_plan(source, target, (operation,)))
+    attempts = []
+
+    def fail_at_boundary() -> None:
+        for root in (source, target):
+            with pytest.raises(OSError) as refused:
+                root.rename(root.with_name(root.name + "-blocked"))
+            assert refused.value.winerror == 32
+            attempts.append(root)
+        raise exception()
+
+    def emit(_event) -> None:
+        if boundary == "initial-emit":
+            fail_at_boundary()
+
+    def checkpoint() -> None:
+        if boundary == "checkpoint":
+            fail_at_boundary()
+
+    fs = NativeFileSystem()
+    with pytest.raises(exception):
+        execute(xset, RunContext(emit, checkpoint), FakeRecorder(), _policies(), fs)
+    assert attempts == [source, target]
+    assert executor_module._ROOT_INVOCATION.get() is None
+    for root in (source, target):
+        renamed = root.rename(root.with_name(root.name + "-released"))
+        renamed.rename(root)
+    # Resume/new call on the same adapter reacquires fresh entry holds.
+    _run(xset, fs=fs)
+    for root in (source, target):
+        root.rename(root.with_name(root.name + "-after-resume"))
+
+
 def test_executor_public_facade_preserves_exact_exports_and_signatures() -> None:
     assert executor_facade.__all__ == [
         "BoundedFailurePolicy",
@@ -5162,6 +5275,7 @@ def test_executor_public_facade_preserves_exact_exports_and_signatures() -> None
         "NativeCopyBackend",
         "NativeFileSystem",
         "OperationFailure",
+        "RootAdmissionDiagnostic",
         "SystemClock",
         "UnsafeExecutionPath",
         "execute",
@@ -5202,7 +5316,8 @@ def test_executor_public_facade_preserves_exact_exports_and_signatures() -> None
     assert signatures == {
         "execute": (
             "(xset: 'ExecutionSet', ctx: 'RunContext', recorder: 'Recorder', "
-            "policies: 'ExecutorPolicies', fs: 'ExecutorFileSystem') -> "
+            "policies: 'ExecutorPolicies', fs: 'ExecutorFileSystem', *, "
+            "root_diagnostics: 'list[RootAdmissionDiagnostic] | None' = None) -> "
             "'OperationResult'"
         ),
         "BoundedFailurePolicy": (

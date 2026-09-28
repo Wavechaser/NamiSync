@@ -230,9 +230,8 @@ the imported source, runtime, root and native call counts.
 
 These sequential single-root diagnostics establish the call reduction and
 describe the observed timing; they do not establish depth scaling,
-instrumentation neutrality or executor throughput. The executor's custom
-volume-probe path still needs migration. The above-1-MiB/s execution goal
-remains unmeasured for the candidate.
+instrumentation neutrality or executor throughput. Consumer measurements follow
+below; the core figures remain a separate endpoint.
 [M1_PLAN](M1_PLAN.md#root-admission-optimization--2026-09-28) owns that goal and
 the equivalence gate.
 The retained `admission-finalpath.json` diagnostic overlapped the ordinary test
@@ -245,6 +244,39 @@ regressions and confirmed hold lifetime/release witnesses on NTFS and exFAT
 The non-admin subst fixture failed full volume admission (native error 144),
 so it does not establish a held-mode transition. Exact mapping removal was
 verified; strict alias rejection has a focused comparison witness.
+
+### Executor invocation holds — 2026-09-28
+
+The frozen executor candidate over `6536c04` was measured after the ordinary
+gate finished, using the same preserved 1,000 × 4 KiB F: source and a fresh G:
+rig workspace. Three serialized samples without the native-call wrapper took 11.059, 11.204
+and 11.708 seconds (median 0.349 MiB/s), versus the earlier assessment's
+28.2 seconds / 0.14 MiB/s. Each sample copied and verified all 1,000 files;
+the source recheck was unchanged and manifest-scoped teardown succeeded.
+Both roots report held mode. Backend copy time was 0.491–0.522 seconds;
+10.568–11.186 seconds remained outside the backend. This does not isolate
+all remaining path costs, and the above-1-MiB/s goal remains unmet.
+
+A separate native-call wrapper counted only `execute`, on isolated baseline
+`b8baf42d` and the frozen candidate, using identical driver bytes and fresh
+targets. Its timing is instrumented diagnostic data, excluded from the samples.
+
+| Project ctypes Win32 binding calls during execute, 1,000 copies | Baseline | Held candidate |
+| --- | ---: | ---: |
+| `GetVolumePathNameW` | 48,000 | 6,002 |
+| `GetVolumeInformationW` | 20,000 | 6,002 |
+| `CreateFileW` / `CloseHandle` each | 2,000 | 2,002 |
+| `GetFinalPathNameByHandleW` | 0 | 2 |
+| `GetFileInformationByHandleEx` | 4,000 | 4,000 |
+
+Receipts and source/driver hashes live in
+`build/root-admission-optimization-20260928/resume/`: `executor-held.json`,
+`executor-baseline-counts.json`, `executor-held-counts.json` and corresponding
+logs/run reports. The independent K: exFAT root-scope witness passes, while
+the copy witness fails with error 87. Read-only metadata queries expose a
+pre-existing unsupported handle-identity query; the first failing copy API is
+not traced. [BUGS](BUGS.md) records that separate limitation. No exFAT copy
+throughput or compatibility success is inferred from the root-hold evidence.
 
 ### Executor assessment — 2026-09-27
 
