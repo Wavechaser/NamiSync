@@ -433,6 +433,41 @@ verifier median is 1.512 seconds (1.267–1.551), with one anchor/volume query e
 1,000 handle-sector queries, zero pathname-sector queries and unchanged file
 guards. Independent whole-outcome review approves the commit in
 `verifier/independent-review-geometry-20260928.md`.
+Integrated as `e189b48`.
+
+**Executor single leaf observation — complete.** User/M1 require
+a single-lstat `_stat_path`. Revalidate the read-only executor inspection against
+`e189b48`; native/runtime bytes remain those of `8cdd669`. Change only executor
+`native.py::_stat_path`, `tests/test_executor_native.py`, and EXECUTOR behavior
+documentation, plus parent delivery/performance records. The helper currently
+never compares its existence/reparse/final metadata observations. Use one checked
+no-follow snapshot for type and all metadata, preserving `_reject_reparse`
+dispatch and initial unavailable→None behavior. UnsafeExecutionPath is an OSError
+subclass and must propagate; type and volume failures remain outside the initial
+unavailable catch. Preserve public stat/stat_path and subclass dispatch.
+
+This is the explicitly requested observation consolidation, not retirement of
+an independent guard. Keep root second-directory classification, current held
+attributes, descendant walks, both physical resolutions, leaf volume queries,
+all later operation guards and settlement unchanged. Path-string caches remain
+separate. Acceptance: existing native/runtime/settlement seams first; exactly
+one checked leaf observation, file/directory metadata and scanner parity, missing/
+access/unavailable handling, symlink/reparse/unsupported refusal, volume error
+propagation and subclass/public override dispatch; affected executor/tools
+consumers, ordinary/import/oracle/guard gate, unchanged 67-group differential,
+separate profile/counts and serialized F:→G: timing, documentation and fresh
+review. One atomic commit; inspect any unexpected unchanged-world reason or
+settlement difference under existing stop/adjudication rules.
+
+Frozen native `F28C0DF6` passes 414 focused tests, 574 direct tests (two skips),
+5,529 ordinary tests (four skips, 34 headed deselections), 12 imports, oracle
+30 × three and guard scan 70/391/zero missing admissions; gate manifests match.
+All 67 differential groups match with the unchanged qualified producer. Three
+serialized copy samples measure median 12.365 seconds / 0.316 MiB/s; all readbacks
+pass. Separate profiles show 12,000 fewer stat/existence observations, unchanged
+physical resolutions and project-ctypes counts. PERFORMANCE owns the limits and
+receipts. Fresh whole-outcome review approves source, gates, measurements and
+docs in `executor/independent-review-single-stat-20260928.md`.
 
 **Findings outside this result** go to BUGS or HANDOFF as short notes and are
 not handled here. Two exist: a same-volume root replacement before execution

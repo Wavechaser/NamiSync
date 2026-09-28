@@ -161,6 +161,13 @@ second directory observations, leaf volume probes and
 per-item stat behavior remain. The shared hold contract is owned by
 [CORE.md](CORE.md) and [DEFENSE.md](DEFENSE.md).
 
+Each native leaf stat uses the single no-follow snapshot returned by its reparse
+guard for kind and all metadata. An unavailable initial observation still returns
+`None`; unsafe-entry, pure path-conversion and later volume/type failures retain
+their refusals. This consolidates leaf observations that were not compared while
+preserving root second-directory checks, containment, leaf volume queries and
+all later operation guards.
+
 The optional invocation collector receives one immutable diagnostic per used,
 volume-bound source/target role after successful admission. Plans lacking reviewed
 volume identity retain their existing chain-only, per-access policy. The collector

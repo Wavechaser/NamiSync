@@ -30,13 +30,14 @@ from namisync.core.execution import (
     validated_run_id,
 )
 from namisync.core.models import (
+    EntryKind,
     FileStat,
     IgnoreSet,
     Root,
     VolumeEvidence,
     VolumeId,
 )
-from namisync.core.pathing import to_extended_length_path
+from namisync.core.pathing import PathValidationError, to_extended_length_path
 from namisync.core.planning import (
     OpId,
     OperationKind,
@@ -1619,6 +1620,147 @@ def test_published_copy_metadata_survives_process_exit_after_record(
         parent_fs.clear_readonly(source_path)
         if published.exists():
             parent_fs.clear_readonly(published)
+
+
+@pytest.mark.skipif(os.name != "nt", reason="native Windows leaf observations")
+@pytest.mark.parametrize("kind", [EntryKind.FILE, EntryKind.DIRECTORY])
+def test_executor_leaf_stat_uses_one_checked_snapshot_for_all_metadata(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    kind: EntryKind,
+) -> None:
+    path = tmp_path / "leaf"
+    if kind is EntryKind.FILE:
+        path.write_bytes(b"leaf evidence")
+    else:
+        path.mkdir()
+    info = path.lstat()
+    native_path = to_extended_length_path(str(path))
+    observations: list[tuple[str, bool]] = []
+    original_stat, original_lstat = os.stat, os.lstat
+    fs = NativeFileSystem()
+
+    def observe_stat(current, *args, **kwargs):
+        if str(current) == native_path:
+            observations.append(("stat", kwargs.get("follow_symlinks", True)))
+        return original_stat(current, *args, **kwargs)
+
+    def observe_lstat(current, *args, **kwargs):
+        if str(current) == native_path:
+            observations.append(("lstat", False))
+        return original_lstat(current, *args, **kwargs)
+
+    monkeypatch.setattr(os, "stat", observe_stat)
+    monkeypatch.setattr(os, "lstat", observe_lstat)
+    actual = fs.stat_path(path)
+
+    assert observations == [("stat", False)]
+    assert actual is not None and actual.kind is kind
+    assert actual.size == (info.st_size if kind is EntryKind.FILE else 0)
+    assert actual.mtime_ns == info.st_mtime_ns and actual.nlink == info.st_nlink
+    assert actual.metadata.attributes == info.st_file_attributes
+    assert actual.metadata.created_ns == info.st_birthtime_ns
+    if actual.file_identity is not None:
+        assert actual.file_identity.file_index == info.st_ino
+
+
+@pytest.mark.parametrize("failure", [FileNotFoundError(2, "missing"), PermissionError(5, "denied"), OSError(1117, "unavailable")])
+def test_executor_leaf_initial_unavailable_observation_returns_none(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failure: OSError,
+) -> None:
+    fs = NativeFileSystem()
+    calls: list[Path] = []
+    path = tmp_path / "leaf"
+
+    def unavailable(observed: Path):
+        calls.append(observed)
+        raise failure
+
+    monkeypatch.setattr(fs, "_reject_reparse", unavailable)
+    monkeypatch.setattr(fs, "_volume_id", lambda _path: pytest.fail("unavailable leaf reached volume probe"))
+    assert fs.stat_path(path) is None
+    assert calls == [path]
+
+
+@pytest.mark.parametrize("mode,attributes", [(stat_module.S_IFLNK, 0), (stat_module.S_IFREG, 0x400), (stat_module.S_IFIFO, 0)])
+def test_executor_leaf_unsafe_type_and_reparse_refusals_propagate(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mode: int,
+    attributes: int,
+) -> None:
+    fs = NativeFileSystem()
+    monkeypatch.setattr(Path, "lstat", lambda _path: SimpleNamespace(st_mode=mode, st_file_attributes=attributes))
+    monkeypatch.setattr(fs, "_volume_id", lambda _path: pytest.fail("unsafe leaf reached volume probe"))
+    with pytest.raises(UnsafeExecutionPath):
+        fs.stat_path(tmp_path / "leaf")
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows path-conversion refusals")
+@pytest.mark.parametrize("spelling", ["F:\\bad\x00leaf", "F:\\NUL", "\\\\.\\C:\\bad"])
+def test_executor_leaf_conversion_refuses_before_unavailable_policy(
+    monkeypatch: pytest.MonkeyPatch,
+    spelling: str,
+) -> None:
+    fs = NativeFileSystem()
+    monkeypatch.setattr(fs, "_reject_reparse", lambda _path: pytest.fail("conversion refusal reached leaf observation"))
+    with pytest.raises(PathValidationError):
+        fs.stat_path(Path(spelling))
+
+
+@pytest.mark.parametrize("stage", ["observation-value", "volume-os", "volume-value"])
+def test_executor_leaf_noninitial_failures_keep_original_exception(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    stage: str,
+) -> None:
+    path = tmp_path / "leaf"
+    path.write_bytes(b"leaf")
+    fs = NativeFileSystem()
+    failure = OSError(1117, "volume failure") if stage == "volume-os" else ValueError("owning failure")
+
+    def fail(_path):
+        raise failure
+
+    monkeypatch.setattr(fs, "_reject_reparse" if stage == "observation-value" else "_volume_id", fail)
+    with pytest.raises(type(failure)) as refused:
+        fs.stat_path(path)
+    assert refused.value is failure
+
+
+def test_executor_leaf_stat_preserves_private_and_public_override_dispatch(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "leaf"
+    path.write_bytes(b"leaf")
+    calls: list[str] = []
+
+    class _ObservedFileSystem(NativeFileSystem):
+        def resolve(self, root, relative_path, *, must_exist):
+            assert root == tmp_path and relative_path == path.name and not must_exist
+            calls.append("resolve")
+            return path
+
+        def stat_path(self, observed):
+            calls.append("public")
+            return super().stat_path(observed)
+
+        def _stat_path(self, observed):
+            calls.append("private")
+            return super()._stat_path(observed)
+
+        def _reject_reparse(self, observed):
+            calls.append("guard")
+            return super()._reject_reparse(observed)
+
+    fs = _ObservedFileSystem()
+    assert fs.stat(tmp_path, path.name) is not None
+    assert calls == ["resolve", "public", "private", "guard"]
+    calls.clear()
+    assert fs.stat_path(path) is not None
+    assert calls == ["public", "private", "guard"]
 
 
 def test_executor_live_stat_matches_native_scanner_evidence(tmp_path: Path) -> None:

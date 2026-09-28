@@ -555,11 +555,13 @@ class NativeFileSystem:
         return self._stat_path(path)
 
     def _stat_path(self, path: Path) -> FileStat | None:
-        native = Path(_win32_path(path))
-        if not os.path.lexists(native):
+        _win32_path(path)  # preserve conversion refusals before leaf observation
+        try:
+            info = self._reject_reparse(path)
+        except UnsafeExecutionPath:
+            raise
+        except OSError:
             return None
-        self._reject_reparse(path)
-        info = native.stat(follow_symlinks=False)
         if stat_module.S_ISREG(info.st_mode):
             kind = EntryKind.FILE
             size = info.st_size

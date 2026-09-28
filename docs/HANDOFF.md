@@ -1,75 +1,59 @@
-# Latest session — verifier geometry and executor continuation
+# Latest session — executor single leaf observation
 
-2026-09-28, `milestone1-adelbert`. Integrated: core `6536c04`, executor holds
-`90b57646`, current held-attribute correction `8cdd669`, preflight `4263b12`,
-verifier invocation holds `0b85d88`. Opened-handle geometry is fully verified and
-independently approved for its atomic commit.
+2026-09-28, `milestone1-adelbert`. Integrated core `6536c04`, executor holds
+`90b57646`, held-attribute correction `8cdd669`, preflight `4263b12`, verifier
+holds `0b85d88` and opened-handle geometry `e189b48`. Single-leaf observation
+is implemented and gated; fresh whole-outcome review approves its atomic commit
+in `executor/independent-review-single-stat-20260928.md` under the evidence root.
 
-## Geometry outcome
+## Current outcome and evidence
 
-Only verifier native.py, its native/engine tests and VERIFIER behavior docs
-changed. FileStorageInfo16 supplies positive logical sector size from the opened
-unbuffered file. Unavailable/zero information falls back to the old fresh path
-query. Failed open still queries old geometry before re-raising, preserving
-dual-failure precedence. All successful opens close on every subsequent failure.
-Root/descendant/final-path guards, four file snapshots, sharing, identity,
-classification, recording, public contracts and supported filesystems remain.
+Executor `_stat_path` uses its checked no-follow snapshot for all metadata.
+Eager path validation, unavailable-to-None handling, unsafe refusals, later type/
+volume errors and public/subclass dispatch remain. Root attributes, second root
+directory observations, descendants, physical resolutions and settlement remain.
 
 Evidence root: `build/root-admission-optimization-20260928/`.
 
-- `verifier/geometry-frozen-inputs.json`: four source/test/doc hashes; native
-  `384CC16E`. Final focused 144 pass, direct 479 pass/two symlink privilege skips.
-  The first default-temp setup failure and corrected 132-pass baseline remain.
-- `resume/verifier-geometry-*`: 5,514 ordinary passes, four skips, 34 headed
-  deselections; 12 imports, unchanged oracle 30 × three, guard scan 70 rows/
-  391 effects/zero missing admissions. Gate input/output manifests match.
-- `differential/runs/candidate-verifier-geometry-frozen-513d81cb54ab48e69b0ea2ee46e0fc53`:
-  67 groups, zero unexpected differences, same qualified producer `e7ba9b8d`
-  and baseline pair. Held swaps block with 32; active case fallback and custom
-  remount/identity-weak controls stay strict. Four frozen hashes match; engine
-  `0A5A5002` and tools tap `41670E93` remain unchanged. Checker source is retained.
-- `verifier/geometry-verify-{timing,counts,counted}.json`: three serialized
-  timings, median 1.512 seconds (1.267–1.551), versus held median 1.998 and
-  original baseline 3.885. Separate counts: one anchor/volume query each, 1,000
-  handle-sector queries, zero pathname-sector queries, 1,999 root attributes
-  and unchanged 12,000 file-information queries. All 1,000 files verified/applied;
-  read bytes, command IDs, source observations and product manifests match.
-- Independent whole-outcome review approves source, tests, gates, measurements
-  and docs: `verifier/independent-review-geometry-20260928.md`.
+- `executor/single-stat-frozen-inputs.json`: native `F28C0DF6`, tests `5FCD914A`,
+  EXECUTOR doc `510E1E5F`. Focused 414 pass; direct 574 pass/two privilege skips.
+- `resume/executor-single-stat-*`: 5,529 ordinary pass, four skips, 34 headed
+  deselections; 12 imports, oracle 30 × three, guard scan 70/391/zero missing
+  admissions. Gate input/output hashes match.
+- `differential/runs/candidate-executor-single-stat-frozen-e3c56eeedb584ac2bc00212a46a9b390`:
+  all 67 full comparisons match, unchanged qualified producer `e7ba9b8d` and
+  baseline pair. Frozen hashes match. Supplemental checker source is retained.
+- `resume/executor-single-stat-{timing,counts,counted}.json` and profile receipts:
+  three uninstrumented samples median 12.365 seconds (11.934–13.104), 0.316 MiB/s;
+  prior guarded median 15.271 seconds. Every copy/readback passes, source remains
+  unchanged and rig-owned targets are cleaned. Separate profile finds 12,000
+  fewer stat/existence observations, unchanged 26,000 physical resolutions;
+  project-ctypes counts unchanged. Pure path conversions rise by 3,000 as missing
+  leaves reach the checked observation. Profiles are not throughput evidence.
 
-## Next executor outcome
+## Next outcome
 
-The read-only inspection recommends a separate `_stat_path` single-lstat commit,
-already authorized by the user/M1. It currently never compares its observations;
-reuse the checked no-follow snapshot for kind and all metadata, preserve initial
-unavailable→None policy, rethrow UnsafeExecutionPath (an OSError subclass), and
-keep volume failures outside that catch. Preserve subclass/public dispatch and
-all root, descendant, physical and settlement checks. Activate its finite
-native.py/native-tests/EXECUTOR-doc population and gate in M1 after geometry commits.
-No executor implementation changes have started.
-
-The new `resume/executor-after-verifier-profile.{prof,txt,json}` plus `-run.json`
-profile only executor caller-thread work on 1,000 × 4 KiB F:→fresh G:. All copies
-and readbacks pass, source observations/inputs match and rig cleanup completes.
-The instrumented 32.4 seconds is not throughput evidence. It shows 160,030
-extended-path conversions, 435,084 spelling validations, 26,000 physical resolves
-and 9,000 `_stat_path` calls. Inclusive costs overlap. Pure invocation-local path
-reuse is a later measured outcome; no descendant or physical check retirement
-is inferred. Existing retained copy paths rule out an indiscriminate full-plan map.
+After committing this reviewed outcome, activate bounded pure path reuse in M1:
+up to four exact absolute root/reviewed-anchor spellings plus one last-successful
+nonroot Win32 conversion slot. Root hits must not evict that slot. Cache only
+successful pure conversions, bypass relative forms, preserve error timing and
+invalidate/clear before scope exit including copied contexts. Runtime exact
+reviewed-root spelling can bypass repeated lexical normalization; variants keep
+existing checks. Refresh the design against the integrated leaf change first.
+No actual filesystem observation or descendant/physical check retirement is
+approved by this outcome. No next-outcome product edits have started.
 
 ## Preservation and exclusions
 
-Corrected uninstrumented executor median remains 15.271 seconds / 0.256 MiB/s,
-below the 1 MiB/s goal. Earlier unchecked-hold timings are historical. Preflight
-observation median is 2.722→0.551 seconds, including prior core improvements.
-K: supports held-attribute and geometry queries plus preflight observations;
-the separate FileIdInfo compatibility defect remains deferred in BUGS. No exFAT
-copy/verification success is claimed. DEFENSE quiescence covers check/use.
+The 1 MiB/s executor goal remains unmet. Preflight median observation is
+2.722→0.551 seconds; verifier held/geometry median is 3.885→1.512 seconds, each
+with method limits in PERFORMANCE. K: supports held attributes, geometry and
+preflight observation. Its separate FileIdInfo compatibility defect is deferred
+in BUGS; no exFAT copy/verification success is claimed.
 
-Retain recovery refs `7eb8c19d`, `cfcc6ef`, `0a04921` until final accounting;
-never merge/cherry-pick WIPs. Preserve ignored receipts/fixtures, F: corpus and
+Retain recovery refs `7eb8c19d`, `cfcc6ef`, `0a04921` until final accounting; never
+merge/cherry-pick WIPs. Preserve ignored evidence/fixtures, the F: corpus and the
 managed baseline worktree
 `C:\Users\Spectrum\.codex\worktrees\root-admission-baseline\NamiSync` at
-`b8baf42df91e9aeed1402cd029c86ca9ae287b1b`. No remote, unrelated stash/branch or
-user work changed. Prior independent review receipts remain under the owning
-`rootguard/`, `preflight/` and `verifier/` evidence directories.
+`b8baf42df91e9aeed1402cd029c86ca9ae287b1b`. No remote or unrelated work changed.
+Prior independent review receipts remain under their owning evidence directories.

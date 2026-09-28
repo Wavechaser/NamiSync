@@ -410,6 +410,23 @@ remain measured leads, not permission to retire physical/descendant checks.
 Raw `resume/executor-after-verifier-profile.{prof,txt,json}` and `-run.json`
 retain the driver/input provenance and complete rig report.
 
+**Executor single leaf observation.** The checked no-follow snapshot now also
+supplies leaf metadata. Three serialized uninstrumented samples on the same
+1,000 × 4 KiB F:→G: fixture measure 12.365 seconds median (11.934–13.104),
+0.316 MiB/s, versus the prior guarded 15.271 seconds. All copies/readbacks and
+source rechecks pass; rig-owned targets are removed. This remains a diagnostic
+comparison without randomized order or cache eviction, below the 1 MiB/s goal.
+Separate project-ctypes counts remain unchanged: 6,002 anchor and volume calls
+each, 2,002 opens/closes, two final-path queries and 31,998 information queries.
+The caller-thread profile records 17,006 `nt.stat` and 16,000 `nt._path_lexists`
+calls, versus 20,006 and 25,000 before consolidation: 12,000 fewer observations.
+Physical resolutions remain 26,000. Extended-path conversions rise from 160,030
+to 163,030 because missing leaves now reach the checked observation; pure-path
+reuse remains a separate optimization. Instrumented time is not throughput.
+Receipts are `resume/executor-single-stat-{timing,counts,counted}.json` and
+`resume/executor-single-stat-profile.{prof,txt,json}` plus `-run.json`; profile
+input manifests match.
+
 ### Executor assessment — 2026-09-27
 
 Read-only assessment of `milestone1-adelbert` at

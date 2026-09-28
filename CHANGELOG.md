@@ -1029,6 +1029,10 @@ claims explicit, independently reviewable, and regression-backed.
 
 #### Optimize root admission with invocation-scoped holds (2026-09-28)
 
+- Reuse the checked no-follow leaf snapshot for executor metadata, preserving
+  path refusals, unavailable handling, volume errors and dispatch. All 5,529
+  ordinary tests and 67 differential groups pass. Three 1,000-file copy samples
+  measure median 12.365 seconds versus 15.271 previously; all readbacks pass.
 - Read verifier sector geometry from the opened file handle, preserving pathname
   fallback, error precedence and closure. Verify 5,514 ordinary tests and the
   unchanged 67-group differential. Median 1,000-file verification is 1.512 seconds;
