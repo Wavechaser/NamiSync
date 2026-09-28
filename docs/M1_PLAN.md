@@ -48,15 +48,23 @@ New correction evidence paths below are relative to
    Evidence: `executor/descendant-refusal-*`,
    `resume/executor-descendant-refusal-*`; independent review is recorded under
    `executor/independent-review-descendant-refusal-20260928.md`.
-2. **Pending predecessor: production fast-path regression.** Retain current
+   Integrated as `db03926`.
+2. **Complete: production fast-path regression.** Retain current
    method-identity fallback semantics; add a combined default NativeFileSystem
    held-root test asserting zero physical resolutions and zero leaf volume
    probes after admission, instrumenting below the methods under test. Document
    why method-wrapping profilers select fallback and which measurements retain
    production dispatch. Population: native tests, EXECUTOR/PERFORMANCE and
-   delivery records. Gate: focused executor tests, exact default-path native
+   delivery records. Gate: executor department tests, exact default-path native
    witness, docs/diff checks and independent review. Separate test commit; no
    capability-flag or custom-adapter contract change. No throughput tuning.
+   The exact native witness passes, and all 558 executor-department tests pass
+   (5,064 other tests deselected). The two frozen files match their manifest;
+   no product code changed after `db03926`. Evidence is
+   `executor/production-fast-path-*`; review is
+   `executor/independent-review-production-fast-path-20260928.md`. The earlier
+   full ordinary-suite result belongs to the fix; this later test/doc outcome
+   uses its declared executor-department gate without claiming a new benchmark.
 
 **Current status.** Core, executor, preflight and verifier holds are integrated,
 including the held-attribute correction, verifier geometry and executor leaf/

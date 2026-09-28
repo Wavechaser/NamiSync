@@ -10,16 +10,17 @@ fast-path selection under method-wrapping instrumentation. The reported escape
 was classified for a separate fix, not deferred. A clean mandatory stop was
 reported, then the user explicitly approved both corrective outcomes.
 
-1. Verified fix: executor descendant walks stop only on FileNotFoundError; other
+1. Committed fix `db03926`: executor descendant walks stop only on FileNotFoundError; other
    observation errors propagate. Native resolve and both trash-destination
    consumers retain all normal-path guards. Native ACL regressions assert
    refusal only, restore permissions and remove the junction before fixture
    cleanup. EXECUTOR and BUGS document the corrected behavior and limits of
    evidence; no full GUI-path reproduction is claimed.
-2. Pending the fix commit: a combined default-production held-root regression
+2. Verified test/doc outcome: a combined default-production held-root regression
    asserts zero physical resolutions and zero leaf-volume probes after root
-   admission. Keep method-identity fallback behavior and document why method-
-   wrapping profilers exercise fallback. No capability-flag contract change.
+   admission. Method-identity fallback behavior remains; EXECUTOR/PERFORMANCE
+   explain which method-wrapping profilers exercise fallback and why held-root
+   diagnostics alone do not prove shortcut selection. No capability-flag change.
 
 Further runtime admission/throughput work stays paused. The earlier runtime
 scope choice is not resolved by this correctness approval.
@@ -35,6 +36,13 @@ An initial fixture cleanup failure is retained; exact inspection confirmed
 no remaining deny ACEs or junctions and unchanged owned sibling markers.
 The corrected parent-first teardown passed before final gates.
 Independent review: `executor/independent-review-descendant-refusal-20260928.md`.
+
+The separate production fast-path witness passes, and its final executor
+department gate passes all 558 tests (5,064 others deselected). Two frozen
+test/doc hashes match. Product code is unchanged after `db03926`; no new full
+ordinary run or throughput measurement is claimed for this later test commit.
+Receipts under the evidence root: `executor/production-fast-path-*`; review:
+`executor/independent-review-production-fast-path-20260928.md`.
 
 ## Evidence and preservation
 

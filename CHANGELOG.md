@@ -1029,6 +1029,10 @@ claims explicit, independently reviewable, and regression-backed.
 
 #### Optimize root admission with invocation-scoped holds (2026-09-28)
 
+- Pin default production stat/resolve composition to zero physical resolutions
+  and zero leaf-volume probes after held admission. All 558 executor-department
+  tests pass. Document method-wrapping profiler fallback and why a held-root
+  diagnostic alone does not prove shortcut eligibility.
 - Fix preexisting fail-open descendant admission: only not-found stops the
   walk; permission and other observation failures now refuse resolve and both
   trash consumers. Native held/unheld ACL-junction regressions verify refusal

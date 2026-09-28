@@ -156,7 +156,11 @@ This applies to the root-revalidation shortcut, the held-root anchor for a
 descendant walk, exact-root volume reuse, and stat-derived leaf volume reuse.
 Query failure retains the existing
 consumer error policy and cannot authorize access. Diagnostic mode reporting
-does not perform an additional attribute query. The hold's write sharing remains
+does not perform an additional attribute query. A `held` diagnostic confirms
+the root hold, not eligibility for the `resolve` and stat-derived leaf-volume
+shortcuts. Those shortcuts also require default method identities, so
+method-wrapping profilers select the safe fallback while the root remains held.
+The hold's write sharing remains
 compatible with root flushes and ordinary descendant changes; DEFENSE's
 quiescent-root assumption still covers the attribute-check-to-use interval.
 Pause, cancellation and every error

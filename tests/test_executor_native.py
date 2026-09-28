@@ -383,6 +383,66 @@ def test_native_invocation_hold_skips_physical_resolution_and_releases(
     assert executor_module._ROOT_INVOCATION.get() is None
 
 
+@pytest.mark.skipif(os.name != "nt", reason="native Windows held-root stat fast path")
+def test_native_stat_composes_held_root_and_leaf_volume_fast_paths(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = tmp_path / "managed"
+    root.mkdir()
+    leaf = root / "leaf.bin"
+    leaf.write_bytes(b"native held-root stat")
+    fs = NativeFileSystem()
+    expected = fs.stat_path(leaf)
+    assert expected is not None and expected.kind is EntryKind.FILE
+    assert expected.size == len(b"native held-root stat")
+    volume = root_authority_module.observe_native_volume(root)
+    if volume.volume_id.fs_type != "NTFS":
+        pytest.skip("held leaf-volume stat witness requires NTFS")
+    assert leaf.lstat().st_dev & 0xFFFFFFFF == int(volume.volume_id.serial, 16)
+    scoped = executor_module._InvocationRoot(
+        "target",
+        RootAuthority(str(root), volume.evidence.device_id, volume.volume_id),
+    )
+    assert executor_module._WINDOWS is not None
+    resolved_paths: list[Path] = []
+    volume_paths: list[str] = []
+    volume_information: list[str] = []
+    original_resolve = executor_module._resolved_logical_path
+    original_get_volume_path = executor_module._WINDOWS.get_volume_path
+    original_get_volume_information = executor_module._WINDOWS.get_volume_information
+
+    def resolve(path, *, strict):
+        resolved_paths.append(Path(path))
+        return original_resolve(path, strict=strict)
+
+    def get_volume_path(path, *args):
+        volume_paths.append(str(path))
+        return original_get_volume_path(path, *args)
+
+    def get_volume_information(path, *args):
+        volume_information.append(str(path))
+        return original_get_volume_information(path, *args)
+
+    with executor_module._root_invocation_scope(fs, object(), (scoped,), None):
+        fs.revalidate_root(root, expected_volume=volume.volume_id)
+        assert scoped.held
+        monkeypatch.setattr(executor_module, "_resolved_logical_path", resolve)
+        monkeypatch.setattr(
+            executor_module._WINDOWS, "get_volume_path", get_volume_path
+        )
+        monkeypatch.setattr(
+            executor_module._WINDOWS,
+            "get_volume_information",
+            get_volume_information,
+        )
+
+        assert fs.stat(root, leaf.name) == expected
+        assert resolved_paths == []
+        assert volume_paths == []
+        assert volume_information == []
+
+
 def _reuse_held_root(fs, root, volume, selector):
     if selector == "revalidate":
         return fs.revalidate_root(root, expected_volume=volume.volume_id)

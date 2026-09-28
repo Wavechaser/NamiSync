@@ -494,6 +494,24 @@ final-path queries and 37,998 handle-information queries. Receipts use
 matching input manifests. These are sequential same-fixture observations;
 instrumented runs remain separate from timing authority.
 
+**Executor instrumentation and fast-path eligibility.** Method-wrapping stage
+timers can change the path being measured. Replacing methods checked by the
+resolve or stat-derived leaf-volume selectors, even through `functools.wraps`,
+makes the corresponding selector use its custom-method fallback as described
+in EXECUTOR. Such timings characterize that
+wrapped adapter, not the default production shortcuts. Root diagnostics showing
+`held=true` attest the root hold; they do not prove that both resolve and leaf
+volume shortcuts ran.
+
+To inspect default dispatch, use a profiler such as `cProfile.runcall` that does
+not replace these methods, or count below their dispatch boundary at the module
+physical resolver and native volume bindings. A combined native regression
+checks the normal production stat/resolve composition after held admission:
+correct file evidence, zero physical resolutions and zero leaf-volume probes.
+These finite call assertions detect lost shortcut selection; they are not a
+throughput gate. Collect throughput separately without instrumentation. The
+historical timings above remain bound to their recorded inputs and drivers.
+
 ### Executor assessment — 2026-09-27
 
 Read-only assessment of `milestone1-adelbert` at
