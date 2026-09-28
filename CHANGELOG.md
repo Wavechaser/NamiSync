@@ -1029,6 +1029,11 @@ claims explicit, independently reviewable, and regression-backed.
 
 #### Optimize root admission with invocation-scoped holds (2026-09-28)
 
+- Replace repeated path-object construction for executor cache eligibility with
+  a string predicate. Same-fixture median falls from 9.684 to 7.756 seconds
+  (0.504 MiB/s), with native query counts unchanged. All 436 focused and 574
+  direct checks, imports, settlement oracle, guard scan and 67 differential
+  groups pass; separate instrumentation remains diagnostic.
 - Clarify that default Windows anchored volume admission does not make a second
   independent anchor observation. The shared comparison validates injected or
   overridden probes; its retention adds no default-path freshness guarantee.

@@ -1477,10 +1477,37 @@ def _conversion_invocation(raw: str) -> _RootInvocation | None:
     if (
         os.name != "nt" or invocation is None or not invocation.active
         or invocation.native_owner is None
-        or not PureWindowsPath(raw).is_absolute()
+        or not _is_absolute_windows_spelling(raw)
     ):
         return None
     return invocation
+
+
+def _is_absolute_windows_spelling(raw: str) -> bool:
+    """Cheaply select rooted spellings eligible for invocation-local caching."""
+
+    if (
+        len(raw) >= 3
+        and ("A" <= raw[0] <= "Z" or "a" <= raw[0] <= "z")
+        and raw[1] == ":"
+        and raw[2] in "\\/"
+    ):
+        return True
+    if len(raw) < 5 or raw[0] not in "\\/" or raw[1] not in "\\/":
+        return False
+    backslash = raw.find("\\", 2)
+    slash = raw.find("/", 2)
+    if backslash < 0:
+        server_end = slash
+    elif slash < 0 or backslash < slash:
+        server_end = backslash
+    else:
+        server_end = slash
+    return (
+        server_end > 2
+        and server_end + 1 < len(raw)
+        and raw[server_end + 1] not in "\\/"
+    )
 
 
 def _is_root_spelling(invocation: _RootInvocation, raw: str) -> bool:

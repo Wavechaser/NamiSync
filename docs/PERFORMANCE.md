@@ -456,8 +456,19 @@ resolutions (4.326 inclusive seconds), 6,000 leaf volume observations (3.822) an
 instrumented; do not sum them or subtract them from uninstrumented throughput.
 Each leaf volume observation currently performs one fresh anchor and one fresh
 volume query; none is a duplicate within that observation. Replacing these with
-held-root facts, or retiring physical/descendant/directory checks, requires a
-concrete policy decision. No such retirement is inferred from these measurements.
+held-root facts and dropping the two held-path physical resolutions were explicitly
+authorized in the resumed round. Other guard retirements are not inferred from
+these measurements.
+
+**String-only cache eligibility.** Three serialized samples on the same fixture
+measure median 7.756 seconds (7.519–7.851), 0.504 MiB/s, versus 9.684 seconds.
+All 1,000 copies and readbacks per sample, source rechecks and scoped cleanup
+pass. Separate counts retain 6,002 anchor and volume queries each, 2,002 opens
+and closes, two final-path queries and 31,998 handle-information queries.
+The caller-thread profile retains 23,006 `nt.stat`, 26,000 physical resolutions,
+6,000 leaf volume observations and 22,025 actual extended conversions. Receipts
+use `resume/executor-cheap-cache-` timing/counts/counted/profile suffixes; inputs
+match before and after. Instrumented runs are diagnostic, not timing authority.
 
 ### Executor assessment — 2026-09-27
 

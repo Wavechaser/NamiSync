@@ -526,6 +526,25 @@ def test_native_path_cache_bounds_exact_spellings_and_keeps_last_nonroot(
         assert invocation.last_win32_path[0] == raw
 
 
+def test_absolute_windows_cache_eligibility_is_a_plain_string_check(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        executor_module,
+        "PureWindowsPath",
+        lambda *_args, **_kwargs: pytest.fail("eligibility parsed a Windows path"),
+    )
+    for spelling in (
+        r"F:\root", "F:/root", r"\\server\share", "//server/share",
+        r"\\?\F:\root", r"\\?\UNC\server\share\root",
+    ):
+        assert executor_module._is_absolute_windows_spelling(spelling)
+    for spelling in (
+        "leaf", r"F:leaf", "F:", r"\root", r"\\server", "\\\\server\\",
+    ):
+        assert not executor_module._is_absolute_windows_spelling(spelling)
+
+
 @pytest.mark.skipif(os.name != "nt", reason="Windows relative path/CWD policy")
 @pytest.mark.parametrize("raw", ["leaf", "F:leaf", "\\leaf"])
 def test_native_path_cache_bypasses_relative_forms_and_tracks_current_directory(

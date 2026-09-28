@@ -182,8 +182,11 @@ An active native invocation lazily retains successful pure path conversions for
 at most four exact absolute root/reviewed-anchor spellings, plus one last
 successful nonroot Win32 spelling. Root hits leave that last slot intact. Only
 root entries retain lexical `Path` values; other paths retain no lexical result.
-Relative, drive-relative and rooted-without-drive inputs and failed conversions
-are not stored. Keys are exact input spellings, without case folding or alias
+Eligibility uses a plain drive-prefix or UNC anchor/share check; it only selects
+spellings that may use the cache and does not validate them. Relative,
+drive-relative and rooted-without-drive inputs and failed conversions are not
+stored; the existing converters still reject malformed and device paths before
+storing success. Keys are exact input spellings, without case folding or alias
 matching. Exact reviewed runtime roots bypass repeated normalization; variants
 keep the existing comparison. Exit deactivates and clears these values before
 hold release, including copied contexts; nested calls restore the outer scope.

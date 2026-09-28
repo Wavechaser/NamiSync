@@ -10,7 +10,7 @@ M1_PLAN owns scope; no additional filesystem-support or persistence change.
 
 ## Current outcome
 
-Comments and CORE/EXECUTOR documentation clarify the default anchor comparison.
+Commit `d88219d` and CORE/EXECUTOR documentation clarify the default anchor comparison.
 Its default observation echoes the admitted anchor, so comparison is not a
 second freshness observation. Shared validation remains meaningful for injected
 volume probes, including executor overrides. No bypass API or executable change
@@ -18,9 +18,17 @@ is introduced just to remove a setup-time comparison. Both Python ASTs match,
 96 local links and diff checks pass; independent review approves in
 `executor/independent-review-anchor-comparison-20260928.md` under the evidence root.
 
-The next small executable outcome is string-only cache eligibility. A read-only
-lane is mapping the last three outcomes against native/runtime owners and the
-archived plan's access/effect-step boundaries. Preserve current held attributes,
+String-only cache eligibility is implemented and verified: 436 focused and 574
+direct checks (two skips), 12 imports, 30 × three settlement cases, guard scan
+70/391/zero and all 67 differential groups pass. The initial direct run failed
+at external temporary-directory setup only; elevated retry passed unchanged.
+Frozen inputs are in `executor/cheap-cache-frozen-inputs.json`, with separate
+`resume/executor-cheap-cache-*` receipts. No ordinary-suite pass is claimed for
+this private predicate; the following wider outcomes run that gate.
+
+Next: stat-derived leaf volume, held-path physical-resolution removal, then
+runtime admission per access/effect step. Read-only design mapped native/runtime
+and the settlement audit adapter. Preserve current held attributes,
 unheld/custom fallback, descendant guards, settlement and dispatch. Do not treat
 an entire plan operation as one step when callbacks, waits or effects divide it.
 
@@ -32,9 +40,9 @@ missing admissions and all 67 qualified differential groups. Receipts remain
 under `build/root-admission-optimization-20260928/`, including
 `executor/independent-review-descendant-stat-20260928.md`.
 
-Last three-sample executor median is 9.684 seconds / 0.403 MiB/s on 1,000 × 4 KiB
+Last three-sample executor median is 7.756 seconds / 0.504 MiB/s on 1,000 × 4 KiB
 F:→G:. A 1 MiB/s result needs about 3.906 seconds; it remains a goal, not a gate.
-`resume/executor-descendant-stat-*` retains timing, separate counts/profile,
+`resume/executor-cheap-cache-*` retains timing, separate counts/profile,
 source checks and scoped cleanup. PERFORMANCE owns methods and limits.
 
 Retain the clean managed baseline checkout at

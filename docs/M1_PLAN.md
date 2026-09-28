@@ -43,6 +43,32 @@ links, diff checks and fresh independent review; no behavior or acceptance chang
 Complete: both Python ASTs match the predecessor, 96 local links and diff checks
 pass; independent review approves in
 `executor/independent-review-anchor-comparison-20260928.md`.
+Integrated as `d88219d`.
+
+**Completed outcome — cheap executor cache eligibility.** Replace the per-call
+PureWindowsPath construction in native `_conversion_invocation` with a plain
+string eligibility check. Eligibility is not validation: existing conversion
+helpers still validate before any success is stored. Preserve exact raw keys,
+relative/drive-relative/root-relative bypass, malformed/device refusals, absolute
+drive/UNC/extended/long support, bounded storage and invocation cleanup. False
+eligibility must never cache a CWD-dependent successful conversion.
+Population: executor native.py, native tests and EXECUTOR behavior docs, plus
+delivery/performance records. No changes to pathing policy, filesystem probes,
+runtime, dispatch or settlement. Reuse predecessor executable baseline (the last
+commit changed comments only, with equal ASTs). Gate: focused native/runtime and
+direct executor/tools/workflow consumers, import contracts, settlement oracle and
+guard scan, unchanged qualified 67-group differential, separate profile/counts
+and serialized copy timing, link/diff checks and fresh review. The later volume/
+runtime/held-resolution outcomes also run the ordinary suite; this private pure
+predicate outcome uses its fully identified direct consumer population.
+
+Verification: 436 focused and 574 direct passes (two skips), 12 imports,
+30 × three settlement cases, 70 guard rows/391 effects/zero missing admissions,
+and all 67 qualified differential groups pass. The first direct attempt failed
+only at external temporary-directory setup; the elevated retry passed unchanged.
+Three copy samples measure median 7.756 seconds (7.519–7.851), 0.504 MiB/s;
+native query counts are unchanged. Separate profile/count receipts use
+`resume/executor-cheap-cache-`; independent review is recorded under `executor/`.
 
 **Approved hold safety contract.** Keep directory access without delete sharing
 and retain write sharing. Confirm once using `GetFinalPathNameByHandleW` on the
@@ -434,7 +460,7 @@ scope changes, stops and recovery.
 
 | ID | Accepted outcome | Named verification | Status |
 | --- | --- | --- | --- |
-| Root admission optimization | Hold each admitted root per invocation, keep the per-access fallback for remote or unholdable roots, and reduce admission calls, per the plan above. Target above 1 MiB/s for 1,000 × 4 KiB F:→G: execution (goal, not gate). | Baseline equivalence differential, existing tests, settlement oracle with one allowed probe-only re-pin, hold witnesses and measurements after each step. | Holds, verifier geometry and executor leaf/path/descendant reductions delivered and gated. Latest executor median 0.403 MiB/s; goal unmet. Resumed with the five named follow-ups above; anchor comparison clarification is the current outcome. |
+| Root admission optimization | Hold each admitted root per invocation, keep the per-access fallback for remote or unholdable roots, and reduce admission calls, per the plan above. Target above 1 MiB/s for 1,000 × 4 KiB F:→G: execution (goal, not gate). | Baseline equivalence differential, existing tests, settlement oracle with one allowed probe-only re-pin, hold witnesses and measurements after each step. | Holds, verifier geometry and executor leaf/path/descendant reductions delivered and gated. Latest executor median 0.504 MiB/s; goal unmet. Anchor comparison clarification and cheap cache eligibility complete; leaf volume, held resolution and runtime admission follow. |
 | M1-9 | Bounded inventory projections, current evidence and the full inventory consumer for sibling sorting. | Complete or prior-complete publication; warnings outside action scope; raw evidence provenance; search/filter/collapse/window/detail, replacement/race and production sort/reset paths; headed witnesses. | Pending. Missing-row acknowledge/restore UI must be explicitly allocated at activation; this row does not silently claim it. |
 | M1-10 | Baseline, verify and rebaseline controls plus first same-task manual post-copy verification, without persistent operation-time hashes. Eligible null-evidence files enter rebaseline; every admitted rebaseline hashes and replaces/creates evidence, and a match is not verified. | Confirm acknowledgement admission before claim/native work; all-null/mixed workflow, service/CLI and desktop paths; conditional recording and supersession races; atomic handoff classification; live pause/resume/cancel and unchanged automatic failed-read retries; overlay/result identity. Independently review operation matrix and conditional recording. Terminal Verify-remaining/subset retry remains deferred. | Pending. Rebaseline confirmation is distinct from missing-row acknowledgement. |
 | M1-12 | Close integrated lifecycle/retention across activated task surfaces, then complete adversarial, documentation, ordinary and headed verification. This absorbs former M1-11. | Plan-only, execution-only, linked/manual verification, inventory, refused/canceled/degraded/failed tasks across same-document navigation, contained unsupported reload, explicit close and shutdown; admission bounds, stale-response suppression, exact resource release and retained truth. Applicable settlement oracle, ordinary/headed, installed-wheel/product, imports, diff/active-link checks and independent cross-component review. No aggregate-artifact or whole-owner-graph criterion. | Pending. |
