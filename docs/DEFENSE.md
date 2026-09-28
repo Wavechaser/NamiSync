@@ -331,7 +331,7 @@ same-principal code.
   authority, treat them as adversarial and neutralize them structurally at that
   boundary (hard wall 7, §4). On the filesystem side, names are ordinary input:
   representability, length and case collisions are handled at observation.
-- **Structure author — in scope as accident.** Links, reparse points,
+- **Structure author — ordinary input, not an adversary.** Links, reparse points,
   placeholders, ACLs, directory shape and placement inside managed roots are
   usually made by the user, their tools or sync clients, often unknowingly.
   They must not produce link traversal out of a root, absence inferred from an
@@ -422,23 +422,26 @@ ceiling; the other tests preserve product safety beneath it.
 ### 2.5 Proportional defense
 
 A built defense must answer a **demonstrably plausible** trigger in supported
-use: a named way the harm actually arises, such as an ordinary accident, a
+use: a named way the harm actually arises, such as an ordinary mistake, a
 common tool or platform behavior, a field report, or a witness reproduced under
 supported assumptions. "It could happen", added confidence, theoretical
 completeness and symmetry with another guard are not triggers.
 
 The defense's scale — runtime cost, code, test and evidence burden,
 maintenance and user friction — must be proportional to the trigger's
-plausibility and the damage it can do. A rare but catastrophic accident may
+plausibility and the damage it can do. A rare but catastrophic trigger may
 justify a check that costs O(1) per run, reads an observation already taken, or
 adds one cheap query at a mutating effect. Heavier per-item or per-access work
 needs a probable trigger or a supported hard wall that no cheaper mechanism
 meets. Prefer the lowest sufficient rung of §5.4.
 
-NamiSync does not try to outsmart its users. Defenses refuse clear accidents
-and disclose limits; they do not guess intent, add heuristics, or build safety
-systems around setups a user chose (§2.3, T4). An unusual configuration gets
-accurate refusal or disclosure, not a defense.
+NamiSync does not try to outsmart its users. The backend executes what the
+user reviewed and committed, including choices the user may later regret
+(§2.3, T4). It never judges whether a reviewed effect is wise, guesses intent,
+or applies heuristics about what the user "really" wants, and it builds no
+safety system around a setup the user chose. Helping users choose well —
+warnings, previews, defaults and confirmation — belongs to the interface
+layers as disclosure, not to backend refusal.
 
 This principle decides the supported baseline and the mechanism, never whether
 a supported-use hard-wall crossing needs a fix (§2.4). Existing defenses are
@@ -466,19 +469,26 @@ precedence is not a defense.
 
 #### 2.5.2 Catastrophe backstops
 
-Backstops are a closed list. An entry must be irreversible and broad (root,
-volume or cloud-copy scale, or outside the reviewed roots), have a named
-plausible accidental trigger, refuse rather than adapt, and cost no more than
-§2.5 allows a rare catastrophe. Adding one is a scope decision.
+A backstop refuses only when carrying out the reviewed plan would produce
+effects other than the reviewed ones: effects outside the reviewed roots or on
+a different root, volume or object; effects that rely on an observation that
+could not be made; hidden effects the plan does not show; or a plan whose own
+effects would change its inputs. It never refuses a faithfully executable plan
+because the plan looks unwise.
 
-| Backstop | Plausible trigger |
-| --- | --- |
-| Overlapping source and target roots | Selecting a folder inside the other root |
-| Wrong root or volume | A different drive takes the reviewed letter; cloned disks share a serial |
-| Root moved, deleted or converted during an invocation | User or tool reorganizes folders mid-run |
-| Link traversal out of a root | Profile compatibility junctions, pnpm, `mklink` relocations, old backups linking into `C:` |
-| Unreadable or incomplete observation treated as absent | Foreign-machine ACLs, access denial, enumeration errors |
-| Cloud placeholder recall or deletion | Files On-Demand folders inside a managed root |
+Backstops are a closed list. An entry must also be irreversible and broad
+(root, volume or cloud-copy scale, or outside the reviewed roots), have a
+demonstrably plausible trigger, refuse rather than adapt, and cost no more
+than §2.5 allows a rare catastrophe. Adding one is a scope decision.
+
+| Backstop | How the effect would differ from the review | Plausible trigger |
+| --- | --- | --- |
+| Overlapping source and target roots | The plan's own effects change its inputs | Selecting a folder inside the other root |
+| Wrong root or volume | Effects land on a root or volume other than the reviewed one | A different drive takes the reviewed letter; cloned disks share a serial |
+| Root moved, deleted or converted during an invocation | Effects follow the root elsewhere or through a link | User or tool reorganizes folders mid-run |
+| Link traversal out of a root | Effects land outside the reviewed root | Profile compatibility junctions, pnpm, `mklink` relocations, old backups linking into `C:` |
+| Unreadable or incomplete observation treated as absent | Effects rely on an observation that was never made | Foreign-machine ACLs, access denial, enumeration errors |
+| Cloud placeholder recall or deletion | Hidden effects: downloading content, or deleting the cloud copy | Files On-Demand folders inside a managed root |
 
 #### 2.5.3 Guard-family dispositions
 
@@ -740,7 +750,8 @@ stretch any path-based guard-to-use interval, and quantitative timing or
 likelihood claims must satisfy the measurement authority in §7.
 
 Preplaceable content and structures are in scope as §2.2 scopes their authors:
-content adversarially at interpretation boundaries, structure as accident.
+content adversarially at interpretation boundaries, structure as ordinary input
+under plan fidelity and the backstops (§2.5).
 Live post-final-guard substitution is classified by the supported preconditions
 and maximum consequence, not by a "microsecond window" argument.
 

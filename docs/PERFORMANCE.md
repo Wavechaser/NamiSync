@@ -232,8 +232,8 @@ These sequential single-root diagnostics establish the call reduction and
 describe the observed timing; they do not establish depth scaling,
 instrumentation neutrality or executor throughput. Consumer measurements follow
 below; the core figures remain a separate endpoint.
-[M1_PLAN](M1_PLAN.md#root-admission-optimization--2026-09-28) owns that goal and
-the equivalence gate.
+[M1_PLAN](M1_PLAN.md#root-admission-optimization--2026-09-28) records that goal
+and the round's delivery.
 The retained `admission-finalpath.json` diagnostic overlapped the ordinary test
 run; the table uses the subsequent sample with those gates finished.
 Earlier identity-only candidates and their rejected native witnesses remain
@@ -570,6 +570,34 @@ receipts. Retained drivers are `runtime_full_corpus.ps1` and
 `runtime_full_corpus_receipt.py`. Reference raw reports remain in
 `build/executor-bench-20260928-db05e317/` and
 `build/executor-assessment-20260927/`. These are diagnostics, not release gates.
+
+### Device ceilings — 2026-09-29
+
+Standalone probes outside NamiSync, recorded to size the executor finishing and
+direct-write work in [M1_PLAN](M1_PLAN.md). They are diagnostics, not acceptance.
+Each used 4 MiB requests with one outstanding at a time, so they are not the
+devices' queue-depth maxima. G: writes went to a uniquely named owned scratch
+folder that was removed afterwards; F: was only read. Raw results and scripts are
+in `build/executor-simplification-20260929/ceilings/`.
+
+| 4 GiB probe | Median total, s | MiB/s |
+| --- | ---: | ---: |
+| G: buffered write, then file flush (the executor's current pattern) | 1.579 (flush 0.651) | 2,594 |
+| G: unbuffered write, then file flush | 0.733 (flush ~0) | 5,588 |
+| G: buffered write-through, mean of two | 1.883 | 2,175 |
+| F: unbuffered read, mean of two | 0.835 | 4,908 |
+| F: buffered sequential read, with or without `xxh3_128` | ~1.07 | ~3,830 |
+
+The executor's 0.685 s large-file flush tail in the 2026-09-27 assessment is
+therefore dirty cache draining through a buffered path that tops out near
+2,600 MiB/s, not a slow device flush.
+
+Per 4 KiB file on G: (median of three 500-file runs): create, write, close and
+rename take 0.164 ms; adding a file flush gives 0.447 ms; adding a per-file
+directory flush gives 0.677 ms; one directory flush per 500-file batch instead
+gives 0.460 ms; write-through with per-file directory flushes gives 0.627 ms.
+The current durability contract's raw floor is about 0.68 ms per file, against
+about 3.5 ms per file in the executor at `23589bd`.
 
 ### Executor assessment — 2026-09-27
 

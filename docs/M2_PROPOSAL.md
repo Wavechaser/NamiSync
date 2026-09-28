@@ -3,6 +3,7 @@
 - **Execution retries.** Let users retry a whole run or a reviewed subset after an unsuccessful execution.
 - **Verification retries.** Let users retry terminal verification or verify remaining files, including standalone verification.
 - **Session cleanup.** Let users explicitly clean up NamiSync-owned session temporary files and trash.
+- **Batched directory flushes.** Publish a group of small files, flush their parent directory once, then record the group, keeping durability before recording. Saves about 0.22 ms per 4 KiB file on the measured volume, but changes recording cadence and pause/cancel/resume settlement.
 - **Specific I/O errors.** Explain filesystem failures with more specific causes than the generic I/O message.
 - **Durable task recovery.** Preserve tasks and recoverable session state across application closure or restart.
 - **Durable queue.** Retain queued work across application restarts.

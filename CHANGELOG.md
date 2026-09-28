@@ -1037,6 +1037,13 @@ claims explicit, independently reviewable, and regression-backed.
 - Bound plan fidelity to planner-used facts once per mutating effect, close
   the catastrophe-backstop list, allow any accurate refusal reason, and record
   target dispositions for existing guard families.
+- Execute what the user reviewed: backstops refuse only when the actual effect
+  would differ from the reviewed one, and judging what users want moves to the
+  interface layers.
+- Consolidate the delivered root-admission and incident rounds in M1_PLAN,
+  register the executor simplification and throughput run with its declared
+  oracle changes, record G:/F: device ceilings, and propose directory-flush
+  batching for M2.
 
 #### Optimize root admission with invocation-scoped holds (2026-09-28 – 2026-09-29)
 
