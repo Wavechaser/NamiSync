@@ -217,6 +217,61 @@ def test_native_filesystem_rejects_lexical_root_before_resolving_children(
     assert observed[-1] == configured
 
 
+@pytest.mark.parametrize(
+    "custom_validation",
+    ["none", "revalidate", "descendant-walk", "reparse-guard", "class-patched-guard"],
+)
+def test_native_resolve_keeps_physical_checks_without_default_confirmed_hold(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    custom_validation: str,
+) -> None:
+    root = tmp_path / "root"
+    root.mkdir()
+    candidate = root / "missing.bin"
+
+    class CustomValidationFileSystem(NativeFileSystem):
+        def revalidate_root(self, root, *, trusted_anchor=None, expected_volume=None):
+            return super().revalidate_root(
+                root,
+                trusted_anchor=trusted_anchor,
+                expected_volume=expected_volume,
+            )
+
+    fs = (
+        CustomValidationFileSystem()
+        if custom_validation == "revalidate"
+        else NativeFileSystem()
+    )
+    if custom_validation == "descendant-walk":
+        original_walk = fs._validate_existing_chain
+        monkeypatch.setattr(
+            fs,
+            "_validate_existing_chain",
+            lambda root, path: original_walk(root, path),
+        )
+    elif custom_validation == "reparse-guard":
+        original_guard = fs._reject_reparse
+        monkeypatch.setattr(fs, "_reject_reparse", lambda path: original_guard(path))
+    elif custom_validation == "class-patched-guard":
+        original_guard = NativeFileSystem._reject_reparse
+        monkeypatch.setattr(
+            NativeFileSystem,
+            "_reject_reparse",
+            lambda self, path: original_guard(self, path),
+        )
+    resolutions: list[tuple[Path, bool]] = []
+    original_resolve = executor_module._resolved_logical_path
+
+    def resolve(path, *, strict):
+        resolutions.append((Path(path), strict))
+        return original_resolve(path, strict=strict)
+
+    monkeypatch.setattr(executor_module, "_resolved_logical_path", resolve)
+    assert fs.resolve(root, "missing.bin", must_exist=False) == candidate
+    assert resolutions == [(root, True), (candidate, False)]
+
+
 def test_native_filesystem_revalidates_an_empty_chain_mount_anchor(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -242,7 +297,7 @@ def test_native_filesystem_revalidates_an_empty_chain_mount_anchor(
 
 
 @pytest.mark.skipif(os.name != "nt", reason="native Windows root hold")
-def test_native_invocation_holds_root_keeps_physical_resolution_and_releases(
+def test_native_invocation_hold_skips_physical_resolution_and_releases(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -279,7 +334,36 @@ def test_native_invocation_holds_root_keeps_physical_resolution_and_releases(
         assert state.held
         assert len(probes) == 1
         assert fs.resolve(root, "child", must_exist=True) == child
+        assert resolutions == []
+        with pytest.raises(FileNotFoundError):
+            fs.resolve(root, "missing.bin", must_exist=True)
+        assert resolutions == []
+        original_lstat = Path.lstat
+        native_child = to_extended_length_path(str(child))
+
+        def lstat(path, *args, **kwargs):
+            if str(path) == native_child:
+                return SimpleNamespace(
+                    st_mode=stat_module.S_IFLNK,
+                    st_file_attributes=0,
+                )
+            return original_lstat(path, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "lstat", lstat)
+        with pytest.raises(UnsafeExecutionPath, match="reparse points"):
+            fs.resolve(root, "child", must_exist=True)
+        assert resolutions == []
+        monkeypatch.setattr(Path, "lstat", original_lstat)
+        original_guard = NativeFileSystem._reject_reparse
+        monkeypatch.setattr(
+            NativeFileSystem,
+            "_reject_reparse",
+            lambda self, path: original_guard(self, path),
+        )
+        assert fs.resolve(root, "child", must_exist=True) == child
         assert resolutions == [root, child]
+        resolutions.clear()
+        monkeypatch.setattr(NativeFileSystem, "_reject_reparse", original_guard)
         fs._reject_reparse_chain(child)
         with pytest.raises(OSError) as refused:
             root.rename(tmp_path / "renamed")
@@ -305,11 +389,15 @@ def _reuse_held_root(fs, root, volume, selector):
         return fs._reject_reparse_chain(root)
     if selector == "leaf-stat":
         return fs.stat_path(root / "untouched.bin")
+    if selector == "resolve":
+        return fs.resolve(root, "untouched.bin", must_exist=False)
     return fs._volume_id(root)
 
 
 @pytest.mark.skipif(os.name != "nt", reason="native Windows current root attributes")
-@pytest.mark.parametrize("selector", ("revalidate", "parent-chain", "volume", "leaf-stat"))
+@pytest.mark.parametrize(
+    "selector", ("revalidate", "parent-chain", "volume", "leaf-stat", "resolve")
+)
 @pytest.mark.parametrize("state", ("ordinary", "placeholder", "query-failure"))
 def test_held_root_reuse_requires_current_attributes_without_diagnostic_queries(
     tmp_path: Path,
@@ -346,8 +434,24 @@ def test_held_root_reuse_requires_current_attributes_without_diagnostic_queries(
         assert scoped.held
         assert len(diagnostics) == 1 and diagnostics[0].held
         assert queries == []
+        descendants: list[Path] = []
+        original_lstat = Path.lstat
+        native_leaf = to_extended_length_path(str(tmp_path / "untouched.bin"))
+
+        def observe_lstat(path, *args, **kwargs):
+            if str(path) == native_leaf:
+                descendants.append(tmp_path / "untouched.bin")
+            return original_lstat(path, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "lstat", observe_lstat)
         if state == "ordinary":
             _reuse_held_root(fs, tmp_path, volume, selector)
+            expected_descendants = (
+                [tmp_path / "untouched.bin"]
+                if selector in {"leaf-stat", "resolve"}
+                else []
+            )
+            assert descendants == expected_descendants
         else:
             expected = (
                 UnsafeExecutionPath if state == "placeholder" or selector == "parent-chain"
@@ -355,12 +459,16 @@ def test_held_root_reuse_requires_current_attributes_without_diagnostic_queries(
             )
             with pytest.raises(expected):
                 _reuse_held_root(fs, tmp_path, volume, selector)
+            if selector == "resolve":
+                assert descendants == []
         assert queries == [0]
         assert scoped.held and len(diagnostics) == 1
 
 
 @pytest.mark.skipif(os.name != "nt", reason="native NTFS in-place root conversion")
-@pytest.mark.parametrize("selector", ("revalidate", "parent-chain", "volume", "leaf-stat"))
+@pytest.mark.parametrize(
+    "selector", ("revalidate", "parent-chain", "volume", "leaf-stat", "resolve")
+)
 def test_held_root_reuse_refuses_inplace_attribute_only_junction_conversion(
     tmp_path: Path,
     selector: str,

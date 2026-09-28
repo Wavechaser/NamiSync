@@ -623,9 +623,13 @@ extended-length prefix only to the operand passed to Windows I/O, no-follow
 validate every lexical-root component below a trusted drive/share or reviewed
 volume mount before physical resolution, and strip native spelling from
 returned paths. Physical root resolution is separate observation evidence for
-overlap/containment and never replaces the lexical domain identity. The inverse
-conversion accepts only drive and complete UNC filesystem namespaces that
-round-trip to a stable ordinary spelling. Device/NT namespaces, malformed
+overlap/containment and never replaces the lexical domain identity. Executor
+resolution may use a confirmed invocation-held exact root, its current
+attributes, and the lexical no-follow descendant walk instead of repeating
+physical root/candidate resolution; setup and overlap observations still use
+physical resolution. The inverse conversion accepts only drive and complete
+UNC filesystem namespaces that round-trip to a stable ordinary spelling.
+Device/NT namespaces, malformed
 extended UNC anchors, trailing-dot/space or reserved DOS components, and other
 ordinary-ambiguous absolute names are refused rather than normalized onto
 another tree. Reserved DOS aliases include `CONIN$`, `CONOUT$`, and the

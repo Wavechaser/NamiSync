@@ -16,7 +16,7 @@ certify their recorded build and dependencies only.
 **Current status.** Core, executor, preflight and verifier holds are integrated,
 including the held-attribute correction, verifier geometry and executor leaf/
 pure-path reductions. Single-lstat descendant walks are complete and reviewed
-below. The 1 MiB/s executor goal remains unmet; PERFORMANCE owns the
+below. The latest executor samples exceed the 1 MiB/s goal; PERFORMANCE owns the
 measurements. This results-oriented plan replaced the unimplemented nine-row RO
 register (last in Git at `c05eea25`). Completed implementation detail and recovery
 chronology remain in Git and the evidence, not a second active register.
@@ -92,6 +92,45 @@ and 67 differential comparisons pass. Frozen evidence and review use
 `resume/executor-stat-volume-*`. Median is 5.383 seconds (5.332–5.387),
 0.726 MiB/s. Anchor/volume queries fall from 6,002 each to two each; fresh
 held-attribute queries account for the 6,000 added handle-information calls.
+Integrated as `0c8d304`; independent review:
+`executor/independent-review-stat-volume-20260928.md`.
+
+**Completed outcome — held-root lexical containment.** In default native resolve,
+skip both physical root/candidate resolutions after fresh admission of an exact
+confirmed invocation-held root. Preserve relative-path validation, current held
+attributes, every no-follow descendant check, must-exist behavior and returned
+lexical identity. Unheld roots and custom validation retain physical resolution.
+Setup/overlap physical observations remain. Population: native.py, native tests,
+EXECUTOR, and narrow CORE/DEFENSE policy qualifications plus delivery records.
+Witness zero held physical calls, both fallback calls, descendant/leaf reparse
+refusals, unavailable required leaf and unsafe held-root refusal before descent.
+Gate: focused/direct, ordinary/imports/oracle/guard, qualified 67 comparisons,
+separate serialized timings/count/profile, links/diff and independent review.
+One atomic commit; no other descendant, directory or effect guard retirement.
+All 464 focused, 574 direct (two skips), 5,579 ordinary (four skips, 34 headed
+exclusions), 12 imports, 30 × three settlement scenarios, guard scan 70/391/zero
+and the unchanged 67-group differential pass. Five frozen hashes match; exact
+receipts are `executor/held-resolve-*` and `resume/executor-held-resolve-*`.
+Initial focused/direct receipt attempts failed at external pytest temporary
+directory setup only; passing elevated receipts and failures are both retained.
+Independent review corrected draft custom-hook eligibility and added the
+declared held-root refusal-through-resolve witness before final freeze.
+Three serialized samples measure median 3.387 seconds (3.370–3.388),
+1.153 MiB/s, exceeding the non-gating goal on this fixture. Separate profiles
+show physical resolutions falling from 26,000 to zero, with 23,006 stat calls
+and project-native query counts unchanged. Runtime remains unchanged.
+
+**Runtime adjudication pending.** Read-only inspection found a smaller direct
+delegation: the shared `_resolve_target_path` helper can omit its runtime
+revalidation when the immediately following default native resolver proves the
+same exact active held root and performs the current attribute check. Custom,
+unheld and malformed-path cases retain the original sequence. Source guards
+before `_guard_present`, paired guards and trash guards also preserve failure
+classification or ordering; dropping them requires more than deleting calls.
+The user question offers this bounded reduction now versus investigating the
+broader error-preserving refactor. This narrows the one-admission-per-step
+outcome, so dependent implementation waits for adjudication; independent held
+resolution proceeds. No runtime edits have been made.
 
 **Approved hold safety contract.** Keep directory access without delete sharing
 and retain write sharing. Confirm once using `GetFinalPathNameByHandleW` on the
@@ -483,7 +522,7 @@ scope changes, stops and recovery.
 
 | ID | Accepted outcome | Named verification | Status |
 | --- | --- | --- | --- |
-| Root admission optimization | Hold each admitted root per invocation, keep the per-access fallback for remote or unholdable roots, and reduce admission calls, per the plan above. Target above 1 MiB/s for 1,000 × 4 KiB F:→G: execution (goal, not gate). | Baseline equivalence differential, existing tests, settlement oracle with one allowed probe-only re-pin, hold witnesses and measurements after each step. | Holds, verifier geometry and executor leaf/path/descendant reductions delivered and gated. Latest executor median 0.726 MiB/s; goal unmet. Anchor comparison clarification, cheap cache eligibility and leaf volume complete; held resolution and runtime admission follow. |
+| Root admission optimization | Hold each admitted root per invocation, keep the per-access fallback for remote or unholdable roots, and reduce admission calls, per the plan above. Target above 1 MiB/s for 1,000 × 4 KiB F:→G: execution (goal, not gate). | Baseline equivalence differential, existing tests, settlement oracle with one allowed probe-only re-pin, hold witnesses and measurements after each step. | Holds, verifier geometry and executor leaf/path/descendant reductions delivered and gated. Latest executor median 1.153 MiB/s exceeds the fixture goal. Anchor clarification, cheap cache, leaf volume and held resolution complete; runtime scope awaits the user decision above. |
 | M1-9 | Bounded inventory projections, current evidence and the full inventory consumer for sibling sorting. | Complete or prior-complete publication; warnings outside action scope; raw evidence provenance; search/filter/collapse/window/detail, replacement/race and production sort/reset paths; headed witnesses. | Pending. Missing-row acknowledge/restore UI must be explicitly allocated at activation; this row does not silently claim it. |
 | M1-10 | Baseline, verify and rebaseline controls plus first same-task manual post-copy verification, without persistent operation-time hashes. Eligible null-evidence files enter rebaseline; every admitted rebaseline hashes and replaces/creates evidence, and a match is not verified. | Confirm acknowledgement admission before claim/native work; all-null/mixed workflow, service/CLI and desktop paths; conditional recording and supersession races; atomic handoff classification; live pause/resume/cancel and unchanged automatic failed-read retries; overlay/result identity. Independently review operation matrix and conditional recording. Terminal Verify-remaining/subset retry remains deferred. | Pending. Rebaseline confirmation is distinct from missing-row acknowledgement. |
 | M1-12 | Close integrated lifecycle/retention across activated task surfaces, then complete adversarial, documentation, ordinary and headed verification. This absorbs former M1-11. | Plan-only, execution-only, linked/manual verification, inventory, refused/canceled/degraded/failed tasks across same-document navigation, contained unsupported reload, explicit close and shutdown; admission bounds, stale-response suppression, exact resource release and retained truth. Applicable settlement oracle, ordinary/headed, installed-wheel/product, imports, diff/active-link checks and independent cross-component review. No aggregate-artifact or whole-owner-graph criterion. | Pending. |

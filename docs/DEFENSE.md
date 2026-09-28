@@ -670,7 +670,10 @@ only if no irreversible loss or false evidence has already occurred.
 Bottom to top, each rung closes more of the path-to-use gap at rising cost:
 
 1. **Lexical validation and no-follow admission.** Reject escapes and reparse
-   components before physical resolution. *Implemented baseline.*
+   components before physical resolution. Executor resolution may skip repeated
+   physical root/candidate resolution only for an exact confirmed invocation
+   hold, after checking current held attributes and the lexical descendant walk.
+   *Implemented baseline.*
 2. **Re-stat or revalidate at point of touch.** Recheck root, parent, leaf,
    identity, and relevant metadata immediately before the operation.
    *Implemented where the current operation has evidence to compare.*

@@ -539,12 +539,35 @@ class NativeFileSystem:
         canonical = validate_relative_path(relative_path)
         root_path = _lexical_logical_path(root)
         self.revalidate_root(root_path)
-        resolved_root = _resolved_logical_path(root_path, strict=True)
+        held_root = (
+            getattr(self.revalidate_root, "__func__", None)
+            is _DEFAULT_ROOT_REVALIDATION
+            and getattr(self._require_held_root, "__func__", None)
+            is _DEFAULT_REQUIRE_HELD_ROOT
+            and getattr(self._scoped_root, "__func__", None)
+            is _DEFAULT_SCOPED_ROOT
+            and getattr(self._validate_existing_chain, "__func__", None)
+            is _DEFAULT_VALIDATE_EXISTING_CHAIN
+            and getattr(self._reject_reparse, "__func__", None)
+            is _DEFAULT_REJECT_REPARSE
+        )
+        scoped = (
+            _DEFAULT_SCOPED_ROOT(self, root_path) if held_root else None
+        )
+        held_root = held_root and scoped is not None and scoped.held
+        resolved_root = (
+            None
+            if held_root
+            else _resolved_logical_path(root_path, strict=True)
+        )
         candidate = root_path.joinpath(*PureWindowsPath(canonical).parts)
         self._validate_existing_chain(root_path, candidate)
         if must_exist and not os.path.lexists(_win32_path(candidate)):
             raise FileNotFoundError(candidate)
+        if held_root:
+            return candidate
         resolved = _resolved_logical_path(candidate, strict=must_exist)
+        assert resolved_root is not None
         try:
             common = os.path.commonpath((str(resolved_root), str(resolved)))
             if os.path.normcase(common) != os.path.normcase(
@@ -1453,6 +1476,11 @@ class NativeFileSystem:
 
 _DEFAULT_ROOT_VOLUME_PROBE = NativeFileSystem._observe_root_volume
 _DEFAULT_VOLUME_ID_PROBE = NativeFileSystem._volume_id
+_DEFAULT_ROOT_REVALIDATION = NativeFileSystem.revalidate_root
+_DEFAULT_REQUIRE_HELD_ROOT = NativeFileSystem._require_held_root
+_DEFAULT_SCOPED_ROOT = NativeFileSystem._scoped_root
+_DEFAULT_VALIDATE_EXISTING_CHAIN = NativeFileSystem._validate_existing_chain
+_DEFAULT_REJECT_REPARSE = NativeFileSystem._reject_reparse
 
 
 def _write_all(target: BinaryIO, chunk: bytes, owner: str) -> None:

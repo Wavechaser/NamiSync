@@ -481,6 +481,19 @@ counts, counted and profile suffixes. The profile remains diagnostic; its
 dependency manifests match. These sequential observations are not a randomized
 causal estimate, and the 1 MiB/s goal remains unmet.
 
+**Held-root physical-resolution removal.** Three serialized samples measure
+median 3.387 seconds (3.370–3.388), 1.153 MiB/s, versus the preceding 5.383
+seconds. The goal is exceeded on this fixture, not promoted into a release
+gate. Every sample completes 1,000 copies and native readbacks, preserves the
+source and cleans the exact rig-owned target set. Separate caller-thread
+profiles show 26,000 physical-resolution calls falling to zero; stat calls
+remain 23,006, and runtime root revalidation still runs 27,000 times. Project-
+native counts remain two anchor/two volume queries, 2,002 opens/closes, two
+final-path queries and 37,998 handle-information queries. Receipts use
+`resume/executor-held-resolve-` timing/counts/counted/profile suffixes, with
+matching input manifests. These are sequential same-fixture observations;
+instrumented runs remain separate from timing authority.
+
 ### Executor assessment — 2026-09-27
 
 Read-only assessment of `milestone1-adelbert` at

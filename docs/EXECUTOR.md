@@ -162,9 +162,11 @@ quiescent-root assumption still covers the attribute-check-to-use interval.
 Pause, cancellation and every error
 release them; resume creates a fresh invocation. UNC, mapped network, unavailable
 or mismatching final paths retain per-access admission. Descendant physical
-containment (including root and candidate physical resolution), reparse checks,
-second directory observations, leaf volume classification and
-per-item stat behavior remain. The shared hold contract is owned by
+containment for unheld or custom-validated roots, reparse checks, second directory
+observations, leaf volume classification and per-item stat behavior remain. For
+an exact confirmed hold under the default native validators, `resolve` retains
+lexical identity and the no-follow descendant walk but skips repeated physical
+root and candidate resolution. Required-leaf checks still run. The shared hold contract is owned by
 [CORE.md](CORE.md) and [DEFENSE.md](DEFENSE.md).
 
 Each native leaf stat uses the single no-follow snapshot returned by its reparse
@@ -215,7 +217,9 @@ events or recorder values. No mutable last-run state lives on a filesystem adapt
   preconditions against live filesystem evidence: expected identity/type/stat,
   required absence/occupancy, root containment, and directory emptiness where
   relevant. Drift fails that operation without guessing.
-- Validate paths lexically and by resolved handle; use long-path-safe APIs.
+- Validate paths lexically and by resolved handle for unheld or custom-validated
+  roots; an exact confirmed native hold may replace repeated physical resolution
+  after current held attributes and no-follow descendant checks. Use long-path-safe APIs.
 - Keep plan, continuation, recorder, diagnostic, and returned `Path` values in
   ordinary absolute drive/UNC spelling. `NativeFileSystem` introduces the
   extended-length prefix only at Windows resolution, observation, stream,

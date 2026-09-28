@@ -1029,6 +1029,11 @@ claims explicit, independently reviewable, and regression-backed.
 
 #### Optimize root admission with invocation-scoped holds (2026-09-28)
 
+- Skip both physical resolutions for the default confirmed held-root path,
+  preserving live attributes, descendant guards and custom/unheld fallback.
+  All 5,579 ordinary tests and 67 differential groups pass. Same-fixture median
+  reaches 3.387 seconds / 1.153 MiB/s; 26,000 physical resolutions disappear,
+  exceeding the non-gating throughput goal. Runtime admission work is pending.
 - Reuse a confirmed held root's volume ID when the checked leaf stat device
   serial matches, retaining probe fallback and custom dispatch. All 5,570
   ordinary tests and 67 differential groups pass. Same-fixture median falls
