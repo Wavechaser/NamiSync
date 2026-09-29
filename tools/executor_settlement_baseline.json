@@ -1611,7 +1611,7 @@
               "remove_owned_temp": 2,
               "resolve": 8,
               "revalidate_root": 14,
-              "stat": 5,
+              "stat": 4,
               "stat_path": 4
             },
             "trace": [
@@ -1941,15 +1941,6 @@
               },
               {
                 "args": [
-                  "$TARGET",
-                  "copy.bin"
-                ],
-                "call": "stat",
-                "kwargs": {},
-                "result": null
-              },
-              {
-                "args": [
                   "$TARGET"
                 ],
                 "call": "revalidate_root",
@@ -2225,8 +2216,6 @@
             "fs:resolve:end",
             "fs:stat_path:begin",
             "fs:stat_path:end",
-            "fs:stat:begin",
-            "fs:stat:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
             "fs:publish_new:begin",
@@ -2327,7 +2316,7 @@
               "remove_owned_temp": 2,
               "resolve": 9,
               "revalidate_root": 15,
-              "stat": 7,
+              "stat": 6,
               "stat_path": 5
             },
             "trace": [
@@ -2691,15 +2680,6 @@
               },
               {
                 "args": [
-                  "$TARGET",
-                  "renamed.bin"
-                ],
-                "call": "stat",
-                "kwargs": {},
-                "result": null
-              },
-              {
-                "args": [
                   "$TARGET"
                 ],
                 "call": "revalidate_root",
@@ -3026,8 +3006,6 @@
             "fs:resolve:end",
             "fs:stat_path:begin",
             "fs:stat_path:end",
-            "fs:stat:begin",
-            "fs:stat:end",
             "fs:stat:begin",
             "fs:stat:end",
             "fs:revalidate_root:begin",
@@ -5067,7 +5045,7 @@
               "remove_owned_temp": 1,
               "resolve": 7,
               "revalidate_root": 12,
-              "stat": 5,
+              "stat": 4,
               "stat_path": 2
             },
             "trace": [
@@ -5397,15 +5375,6 @@
               },
               {
                 "args": [
-                  "$TARGET",
-                  "copy.bin"
-                ],
-                "call": "stat",
-                "kwargs": {},
-                "result": null
-              },
-              {
-                "args": [
                   "$TARGET"
                 ],
                 "call": "revalidate_root",
@@ -5698,8 +5667,6 @@
             "fs:resolve:end",
             "fs:stat_path:begin",
             "fs:stat_path:end",
-            "fs:stat:begin",
-            "fs:stat:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
             "fs:publish_new:begin",
@@ -5837,7 +5804,7 @@
               "remove_owned_temp": 3,
               "resolve": 12,
               "revalidate_root": 21,
-              "stat": 7,
+              "stat": 6,
               "stat_path": 2
             },
             "trace": [
@@ -6412,15 +6379,6 @@
               },
               {
                 "args": [
-                  "$TARGET",
-                  "copy.bin"
-                ],
-                "call": "stat",
-                "kwargs": {},
-                "result": null
-              },
-              {
-                "args": [
                   "$TARGET"
                 ],
                 "call": "revalidate_root",
@@ -6780,8 +6738,6 @@
             "fs:resolve:end",
             "fs:stat_path:begin",
             "fs:stat_path:end",
-            "fs:stat:begin",
-            "fs:stat:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
             "fs:publish_new:begin",
@@ -8563,7 +8519,7 @@
               "remove_owned_temp": 2,
               "resolve": 8,
               "revalidate_root": 14,
-              "stat": 5,
+              "stat": 4,
               "stat_path": 4
             },
             "trace": [
@@ -8893,15 +8849,6 @@
               },
               {
                 "args": [
-                  "$TARGET",
-                  "copy.bin"
-                ],
-                "call": "stat",
-                "kwargs": {},
-                "result": null
-              },
-              {
-                "args": [
                   "$TARGET"
                 ],
                 "call": "revalidate_root",
@@ -9210,8 +9157,6 @@
             "fs:resolve:end",
             "fs:stat_path:begin",
             "fs:stat_path:end",
-            "fs:stat:begin",
-            "fs:stat:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
             "fs:publish_new:begin",
@@ -10549,7 +10494,7 @@
               "remove_owned_temp": 2,
               "resolve": 9,
               "revalidate_root": 15,
-              "stat": 7,
+              "stat": 6,
               "stat_path": 5
             },
             "trace": [
@@ -10910,15 +10855,6 @@
                   "nlink": 1,
                   "size": 11
                 }
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "renamed.bin"
-                ],
-                "call": "stat",
-                "kwargs": {},
-                "result": null
               },
               {
                 "args": [
@@ -11284,8 +11220,6 @@
             "fs:stat_path:end",
             "fs:stat:begin",
             "fs:stat:end",
-            "fs:stat:begin",
-            "fs:stat:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
             "fs:publish_new:begin",
@@ -11409,7 +11343,7 @@
               "remove_owned_temp": 1,
               "resolve": 8,
               "revalidate_root": 13,
-              "stat": 5,
+              "stat": 4,
               "stat_path": 3
             },
             "trace": [
@@ -11736,15 +11670,6 @@
                   "nlink": 1,
                   "size": 12
                 }
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "copy.bin"
-                ],
-                "call": "stat",
-                "kwargs": {},
-                "result": null
               },
               {
                 "args": [
@@ -12073,8 +11998,6 @@
             "fs:resolve:end",
             "fs:stat_path:begin",
             "fs:stat_path:end",
-            "fs:stat:begin",
-            "fs:stat:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
             "fs:publish_new:begin",
@@ -12180,7 +12103,7 @@
               "remove_owned_temp": 1,
               "resolve": 8,
               "revalidate_root": 13,
-              "stat": 5,
+              "stat": 4,
               "stat_path": 3
             },
             "trace": [
@@ -12507,15 +12430,6 @@
                   "nlink": 1,
                   "size": 12
                 }
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "copy.bin"
-                ],
-                "call": "stat",
-                "kwargs": {},
-                "result": null
               },
               {
                 "args": [
@@ -12836,8 +12750,6 @@
             "fs:resolve:end",
             "fs:stat_path:begin",
             "fs:stat_path:end",
-            "fs:stat:begin",
-            "fs:stat:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
             "fs:publish_new:begin",
@@ -12933,7 +12845,7 @@
               "remove_owned_temp": 1,
               "resolve": 8,
               "revalidate_root": 13,
-              "stat": 5,
+              "stat": 4,
               "stat_path": 3
             },
             "trace": [
@@ -13260,15 +13172,6 @@
                   "nlink": 1,
                   "size": 12
                 }
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "copy.bin"
-                ],
-                "call": "stat",
-                "kwargs": {},
-                "result": null
               },
               {
                 "args": [
@@ -13593,8 +13496,6 @@
             "fs:resolve:end",
             "fs:stat_path:begin",
             "fs:stat_path:end",
-            "fs:stat:begin",
-            "fs:stat:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
             "fs:publish_new:begin",
@@ -14581,7 +14482,7 @@
               "resolve": 13,
               "revalidate_root": 20,
               "revalidate_trash_destination": 3,
-              "stat": 9,
+              "stat": 8,
               "stat_path": 7,
               "trash_destination": 1
             },
@@ -14943,15 +14844,6 @@
                   "nlink": 1,
                   "size": 11
                 }
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "renamed.bin"
-                ],
-                "call": "stat",
-                "kwargs": {},
-                "result": null
               },
               {
                 "args": [
@@ -15553,8 +15445,6 @@
             "fs:resolve:end",
             "fs:stat_path:begin",
             "fs:stat_path:end",
-            "fs:stat:begin",
-            "fs:stat:end",
             "fs:stat:begin",
             "fs:stat:end",
             "fs:revalidate_root:begin",
@@ -28123,7 +28013,7 @@
               "remove_owned_temp": 1,
               "resolve": 7,
               "revalidate_root": 12,
-              "stat": 5,
+              "stat": 4,
               "stat_path": 2
             },
             "trace": [
@@ -28453,15 +28343,6 @@
               },
               {
                 "args": [
-                  "$TARGET",
-                  "copy.bin"
-                ],
-                "call": "stat",
-                "kwargs": {},
-                "result": null
-              },
-              {
-                "args": [
                   "$TARGET"
                 ],
                 "call": "revalidate_root",
@@ -28760,8 +28641,6 @@
             "fs:resolve:end",
             "fs:stat_path:begin",
             "fs:stat_path:end",
-            "fs:stat:begin",
-            "fs:stat:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
             "fs:publish_new:begin",
@@ -29552,7 +29431,7 @@
               "remove_owned_temp": 1,
               "resolve": 7,
               "revalidate_root": 12,
-              "stat": 5,
+              "stat": 4,
               "stat_path": 2
             },
             "trace": [
@@ -29882,15 +29761,6 @@
               },
               {
                 "args": [
-                  "$TARGET",
-                  "copy.bin"
-                ],
-                "call": "stat",
-                "kwargs": {},
-                "result": null
-              },
-              {
-                "args": [
                   "$TARGET"
                 ],
                 "call": "revalidate_root",
@@ -30185,8 +30055,6 @@
             "fs:resolve:end",
             "fs:stat_path:begin",
             "fs:stat_path:end",
-            "fs:stat:begin",
-            "fs:stat:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
             "fs:publish_new:begin",
@@ -30346,7 +30214,7 @@
               "remove_owned_temp": 2,
               "resolve": 14,
               "revalidate_root": 24,
-              "stat": 10,
+              "stat": 8,
               "stat_path": 4
             },
             "trace": [
@@ -30673,15 +30541,6 @@
                   "nlink": 1,
                   "size": 12
                 }
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "first.bin"
-                ],
-                "call": "stat",
-                "kwargs": {},
-                "result": null
               },
               {
                 "args": [
@@ -31096,15 +30955,6 @@
               },
               {
                 "args": [
-                  "$TARGET",
-                  "second.bin"
-                ],
-                "call": "stat",
-                "kwargs": {},
-                "result": null
-              },
-              {
-                "args": [
                   "$TARGET"
                 ],
                 "call": "revalidate_root",
@@ -31488,8 +31338,6 @@
             "fs:resolve:end",
             "fs:stat_path:begin",
             "fs:stat_path:end",
-            "fs:stat:begin",
-            "fs:stat:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
             "fs:publish_new:begin",
@@ -31572,8 +31420,6 @@
             "fs:resolve:end",
             "fs:stat_path:begin",
             "fs:stat_path:end",
-            "fs:stat:begin",
-            "fs:stat:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
             "fs:publish_new:begin",
@@ -31818,7 +31664,7 @@
               "resolve": 26,
               "revalidate_root": 58,
               "revalidate_trash_destination": 8,
-              "stat": 17,
+              "stat": 15,
               "stat_path": 15,
               "trash_destination": 1
             },
@@ -32146,15 +31992,6 @@
                   "nlink": 1,
                   "size": 13
                 }
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "first.bin"
-                ],
-                "call": "stat",
-                "kwargs": {},
-                "result": null
               },
               {
                 "args": [
@@ -33639,15 +33476,6 @@
                   "nlink": 1,
                   "size": 13
                 }
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "third.bin"
-                ],
-                "call": "stat",
-                "kwargs": {},
-                "result": null
               },
               {
                 "args": [
@@ -36389,8 +36217,6 @@
             "fs:resolve:end",
             "fs:stat_path:begin",
             "fs:stat_path:end",
-            "fs:stat:begin",
-            "fs:stat:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
             "fs:publish_new:begin",
@@ -36674,8 +36500,6 @@
             "fs:resolve:end",
             "fs:stat_path:begin",
             "fs:stat_path:end",
-            "fs:stat:begin",
-            "fs:stat:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
             "fs:publish_new:begin",
@@ -41424,7 +41248,7 @@
               "remove_owned_temp": 1,
               "resolve": 8,
               "revalidate_root": 17,
-              "stat": 7,
+              "stat": 6,
               "stat_path": 3
             },
             "trace": [
@@ -41751,15 +41575,6 @@
                   "nlink": 1,
                   "size": 12
                 }
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "copy.bin"
-                ],
-                "call": "stat",
-                "kwargs": {},
-                "result": null
               },
               {
                 "args": [
@@ -42173,8 +41988,6 @@
             "fs:resolve:end",
             "fs:stat_path:begin",
             "fs:stat_path:end",
-            "fs:stat:begin",
-            "fs:stat:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
             "fs:publish_new:begin",
@@ -42337,7 +42150,7 @@
               "remove_owned_temp": 1,
               "resolve": 9,
               "revalidate_root": 16,
-              "stat": 5,
+              "stat": 4,
               "stat_path": 4
             },
             "trace": [
@@ -42664,15 +42477,6 @@
                   "nlink": 1,
                   "size": 12
                 }
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "copy.bin"
-                ],
-                "call": "stat",
-                "kwargs": {},
-                "result": null
               },
               {
                 "args": [
@@ -43060,8 +42864,6 @@
             "fs:resolve:end",
             "fs:stat_path:begin",
             "fs:stat_path:end",
-            "fs:stat:begin",
-            "fs:stat:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
             "fs:publish_new:begin",
@@ -43222,7 +43024,7 @@
               "resolve": 14,
               "revalidate_root": 25,
               "revalidate_trash_destination": 4,
-              "stat": 11,
+              "stat": 10,
               "stat_path": 7,
               "trash_destination": 1
             },
@@ -43584,15 +43386,6 @@
                   "nlink": 1,
                   "size": 11
                 }
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "renamed.bin"
-                ],
-                "call": "stat",
-                "kwargs": {},
-                "result": null
               },
               {
                 "args": [
@@ -44326,8 +44119,6 @@
             "fs:resolve:end",
             "fs:stat_path:begin",
             "fs:stat_path:end",
-            "fs:stat:begin",
-            "fs:stat:end",
             "fs:stat:begin",
             "fs:stat:end",
             "fs:revalidate_root:begin",
@@ -46292,7 +46083,7 @@
               "resolve": 39,
               "revalidate_root": 79,
               "revalidate_trash_destination": 10,
-              "stat": 31,
+              "stat": 29,
               "stat_path": 18,
               "trash_destination": 3
             },
@@ -46620,15 +46411,6 @@
                   "nlink": 1,
                   "size": 12
                 }
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "copy.bin"
-                ],
-                "call": "stat",
-                "kwargs": {},
-                "result": null
               },
               {
                 "args": [
@@ -48044,15 +47826,6 @@
                   "nlink": 1,
                   "size": 11
                 }
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "renamed.bin"
-                ],
-                "call": "stat",
-                "kwargs": {},
-                "result": null
               },
               {
                 "args": [
@@ -49853,8 +49626,6 @@
             "fs:resolve:end",
             "fs:stat_path:begin",
             "fs:stat_path:end",
-            "fs:stat:begin",
-            "fs:stat:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
             "fs:publish_new:begin",
@@ -50119,8 +49890,6 @@
             "fs:resolve:end",
             "fs:stat_path:begin",
             "fs:stat_path:end",
-            "fs:stat:begin",
-            "fs:stat:end",
             "fs:stat:begin",
             "fs:stat:end",
             "fs:revalidate_root:begin",

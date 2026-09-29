@@ -76,9 +76,9 @@ guard scan, independently classified 70-row oracle re-pin and committed 30×3
 oracle passed. All 25 five-band executions/readbacks passed; the small-file
 median is 1.163 MiB/s, below the non-gating goal. PERFORMANCE and
 `build/executor-simplification-20260929/` retain measurements and exact evidence.
-Automatic approval review rejected target-fidelity consolidation even after the
-user explicitly approved the bounded proposal. That portion remains unapplied;
-the first outcome uses the smaller source-only consolidation instead.
+Automatic approval review initially rejected target-fidelity consolidation even
+after explicit user approval. The first outcome therefore contains only the
+source-side portion; the user-reopened remainder is recorded below.
 
 **Reopened target consolidation — user-authorized 2026-09-29.** After cleaning
 the ACL-witness leftovers, retry the bounded remainder on `d444a6a`. Fresh COPY
@@ -96,6 +96,20 @@ and its three-run check, guard scan, fixed baseline differential, five-band
 measurement and fresh independent review. One small atomic commit closes this
 remainder; direct writes and the recorded native own-effect defect remain out
 of scope. The earlier refusal is retained as history, not a new approval request.
+The classified candidate's three-run diagnostic precedes the atomic commit;
+the official pinned three-run gate requires clean committed HEAD and follows
+that commit immediately. This reopened remainder has one deletion-only re-pin
+in that same commit: independent review classified 21 successful absent-target
+stat deletions across 18 of 70 rows, with the other 52 rows and every effect,
+tree, recorder and settlement fact unchanged.
+The bounded patch was accepted on retry. The full native ordinary suite passes
+5,704 tests with four skips, covering the development runs' executor/workflow
+population. Imports, the candidate three-run oracle diagnostic, the 67-group
+starting-baseline differential and the 70-row/391-effect admission scan pass.
+All 25 five-band executions/readbacks pass; medians are 3.134 / 1.641 / 0.351 /
+0.303 / 2.011 seconds, close to the user's rerun. PERFORMANCE records source-drive
+contention in the earlier finishing runs; those runs do not establish a regression.
+Final independent review precedes the atomic commit and official pinned check.
 
 **Second outcome delivered — `0d7dd6b`.** One
 invocation-owned descriptor now covers writing, metadata, flush, conditional
@@ -202,8 +216,9 @@ verifier disposition. Direct writes remain deferred.
     as `handle-acl-<original-id>-receipt.json`; `acl-fixture-cleanup.json` records
     their original paths and hashes after user-requested fixture removal.
   - **Oracle traces and counts.** Filesystem traces, per-method counts and
-    guard-scan admission counts shrink. The guard scan still requires an
-    admission and a fidelity check before every mutating effect.
+    guard-scan admission counts shrink. The guard scan requires root admission
+    before each recognized effect; independent source review and focused tests
+    verify the retained per-effect fidelity checks.
   - **Direct writes.** Trace changes only; a padded or partial tail is never
     visible at a live name.
   - **Mid-invocation external mutation.** A change made by another process

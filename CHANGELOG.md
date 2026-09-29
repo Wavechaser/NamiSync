@@ -1035,6 +1035,15 @@ claims explicit, independently reviewable, and regression-backed.
 - Restore inherited ACLs and remove the inaccessible task-created witness and
   pytest fixtures. Preserve three original witness receipts with verified hashes
   and the original/restored ACL manifests; keep all logs and benchmark evidence.
+- Complete the reauthorized target-check remainder: fresh COPY/MOVE_UPDATE
+  reuse preparation's target fidelity; retries and final target-root admission
+  remain. UPDATE, conditional publication and durable settlement are unchanged.
+  Independently classify 21 successful target-stat deletions across 18 oracle
+  rows; preserve every effect/settlement fact and all 52 unchanged rows.
+- Pass 5,704 native ordinary tests, import/differential/admission checks and
+  25 fresh five-band samples for the target remainder. The 4 KiB median is
+  3.134 s (1.247 MiB/s), and the 4 GiB median is 2.011 s (2,036.859 MiB/s),
+  close to the user's rerun; no isolated gain from the two checks is claimed.
 - Reuse fresh COPY/MOVE_UPDATE preparation's source observation at publication;
   retained retries still recheck source fidelity. Remove final source admissions
   from these publishes and MOVE/RECASE rename, where no source access remains.
@@ -1074,8 +1083,8 @@ claims explicit, independently reviewable, and regression-backed.
   0.628 MiB/s and the 4 GiB band is 1,765.673 MiB/s; goals remain unmet and
   overlapping ranges establish no lift. Archive only the clean task-created
   baseline checkout; preserve original fixtures and all evidence.
-- Direct writes remain deferred; target-fidelity consolidation remains
-  unapplied after automatic approval review rejected it.
+- Direct writes remain deferred. Target consolidation was initially blocked
+  by automatic approval review; the bounded retry was accepted on user request.
 
 #### Adopt proportional defense policy (2026-09-29)
 

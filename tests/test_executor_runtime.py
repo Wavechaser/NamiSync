@@ -833,51 +833,80 @@ def test_source_drift_after_stream_removes_temp_and_records_nothing(tmp_path: Pa
 
 
 @pytest.mark.parametrize("kind", (OperationKind.COPY, OperationKind.MOVE_UPDATE))
-@pytest.mark.parametrize("retry_source_drift", (False, True), ids=("fresh", "retry-drift"))
-def test_copy_publication_reuses_fresh_source_fidelity_and_rechecks_retry(
+@pytest.mark.parametrize(
+    "retry_drift",
+    (None, "source", "target"),
+    ids=("fresh", "retry-source-drift", "retry-target-drift"),
+)
+def test_copy_publication_reuses_fresh_fidelity_and_rechecks_retry(
     tmp_path: Path,
     kind: OperationKind,
-    retry_source_drift: bool,
+    retry_drift: str | None,
 ) -> None:
     source, target = _roots(tmp_path)
     operation, published = _reviewed_byte_operation(
         kind, source, target, NativeFileSystem()
     )
 
-    class SourceObservationFileSystem(NativeFileSystem):
+    class FidelityObservationFileSystem(NativeFileSystem):
         def __init__(self) -> None:
             self.source_observations = 0
+            self.target_observations = 0
             self.publish_attempts = 0
+            self.last_access: tuple[str, Path] | None = None
 
         def stat(self, root: Path, relative_path: str) -> FileStat | None:
             if root == source:
                 self.source_observations += 1
-            return super().stat(root, relative_path)
+            elif root == target and relative_path == operation.target_rel_path:
+                self.target_observations += 1
+            result = super().stat(root, relative_path)
+            self.last_access = ("stat", root)
+            return result
+
+        def stat_path(self, path: Path) -> FileStat | None:
+            result = super().stat_path(path)
+            self.last_access = ("stat_path", path)
+            return result
+
+        def revalidate_root(self, root: Path, **kwargs) -> None:
+            super().revalidate_root(root, **kwargs)
+            self.last_access = ("root", root)
 
         def publish_new(self, temp: Path, target: Path) -> None:
+            assert self.last_access == ("root", target.parent)
             self.publish_attempts += 1
-            if retry_source_drift and self.publish_attempts == 1:
+            if retry_drift is not None and self.publish_attempts == 1:
                 raise _sharing_violation("sharing violation before publication")
             super().publish_new(temp, target)
 
-    fs = SourceObservationFileSystem()
+    fs = FidelityObservationFileSystem()
 
-    def mutate_source(_delay: float) -> None:
-        (source / operation.source_rel_path).write_bytes(b"source-drift")
+    def mutate_reviewed_subject(_delay: float) -> None:
+        if retry_drift == "source":
+            (source / operation.source_rel_path).write_bytes(b"source-drift")
+        else:
+            published.write_bytes(b"external")
 
     result, events, recorder = _run(
         _xset(_plan(source, target, (operation,))),
         fs=fs,
-        policies=_policies(sleep=mutate_source),
+        policies=_policies(sleep=mutate_reviewed_subject),
     )
 
     assert fs.publish_attempts == 1
-    assert fs.source_observations == (3 if retry_source_drift else 2)
+    assert fs.source_observations == (3 if retry_drift is not None else 2)
+    assert fs.target_observations == (3 if retry_drift == "target" else 2)
     assert not list(target.glob("*.synctmp-*"))
-    if retry_source_drift:
+    if retry_drift is not None:
         assert result.status is SessionState.FAILED
-        assert _item_outcome(events).reason == "source-drift"
-        assert not published.exists()
+        assert _item_outcome(events).reason == (
+            "source-drift" if retry_drift == "source" else "destination-occupied"
+        )
+        if retry_drift == "source":
+            assert not published.exists()
+        else:
+            assert published.read_bytes() == b"external"
         assert recorder.calls == []
         if kind is OperationKind.MOVE_UPDATE:
             assert (target / "old.bin").read_bytes() == b"old-version"

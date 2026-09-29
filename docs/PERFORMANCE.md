@@ -532,6 +532,37 @@ evidence. Their throughput-goal observations describe those runs, not a stable
 regression attributable to the changes. The target-check follow-up is measured
 separately after correctness verification.
 
+### Target-check consolidation follow-up — 2026-09-29
+
+Measured the frozen candidate on documentation commit `9c96893` after the
+5,704-test native ordinary run, reviewed deletion-only oracle classification
+and fixed starting-baseline differential. Five serial samples in each original
+F:→G: band used normal metrics and native readback. All 25 executions/readbacks
+passed with recording OK and zero reservations. Product/rig/test/driver and
+source manifests stayed fixed; the original 1,587-entry source was unchanged,
+and all owned targets/sidecars were removed.
+
+| Band | Candidate median [min–max], s | MiB/s | User-reported pre-follow-up median, s |
+| --- | ---: | ---: | ---: |
+| 1,000 × 4 KiB | 3.134 [3.092–3.516] | 1.247 | 3.150 |
+| 512 × 128 KiB | 1.641 [1.626–1.700] | 38.992 | 1.640 |
+| 64 × 4 MiB | 0.351 [0.338–0.453] | 728.387 | 0.373 |
+| 4 × 128 MiB | 0.303 [0.296–0.332] | 1,691.124 | 0.297 |
+| 1 × 4 GiB | 2.011 [1.810–2.082] | 2,036.859 | 1.956 |
+
+These results are close to the user's separate rerun. They do not isolate a
+throughput gain from the two removed checks. The older contended finishing runs
+are not a causal comparison. Small-file backend/outside medians are
+0.405/2.728 s; the 4 GiB split is 1.453/0.440 s. Separate medians need not sum to
+the total median. No sample was discarded; these buffered repeated-source
+observations do not establish cold-cache/device ceilings. The non-gating
+small-file goal and large-copy headroom goal remain open.
+
+Evidence prefix: `build/executor-simplification-20260929/measurements/`
+`target-9c96893b-20260929-191353-d421178a`. The existing predecessor comparison
+retains the contended `result3b-84ce0fb2-20260929-175649-85162057` receipt and its
+accepted `d444a6a` attribution for chronology, not causal performance judgment.
+
 ### Source-check consolidation — 2026-09-29
 
 The first executor-simplification candidate on `dadc1fe` reuses fresh-copy

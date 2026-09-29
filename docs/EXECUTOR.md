@@ -184,12 +184,14 @@ paths are converted to root-relative spelling once; native resolution owns
 descendant-spelling validation. Malformed paths may refuse before root admission;
 any accurate refusal reason is sufficient. Other runtime source, paired and
 trash guards retain their admission policies. COPY and MOVE_UPDATE reuse the
-post-checkpoint source fidelity observation from fresh preparation for
-publication; retained unpublished copies take a fresh source observation before
-retry. Target absence/state, prepared-temp identity and MOVE_UPDATE's old-path
-checks remain at publication. After the final source observation, publication
-and MOVE/RECASE rename do not repeat source admission because they make no
-further source access. Final target admission remains at the mutating effect.
+post-checkpoint source and destination fidelity observations from fresh
+preparation for publication; retained unpublished copies take fresh source and
+destination observations before retry. Prepared-temp identity and MOVE_UPDATE's
+old-path checks remain at publication. UPDATE retains its live-target checks
+after backup preparation and the recorder barrier. After the final source
+observation, publication and MOVE/RECASE rename do not repeat source admission
+because they make no further source access. Final target admission remains at
+the mutating effect.
 
 Each native leaf stat uses the single no-follow snapshot returned by its reparse
 guard for kind and all metadata. An unavailable initial observation still returns

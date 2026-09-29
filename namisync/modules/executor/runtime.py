@@ -2110,7 +2110,8 @@ def _copy(
                 ExecutionReason.TARGET_DRIFT,
                 "prepared copy temp drifted before retry",
             )
-            _guard_expected_target(fs, target_root, operation)
+            if existing is not None:
+                _guard_expected_target(fs, target_root, operation)
             try:
                 _revalidate_target_root(fs, xset, target_root)
                 fs.publish_new(prepared.temp, prepared.target)
@@ -2814,7 +2815,8 @@ def _move_update(
             continuation.old_stat = _profiled_stat(
                 old_actual, xset.plan.target_profile.stable_file_identity
             )
-            _guard_expected_target(fs, target_root, operation)
+            if existing is not None:
+                _guard_expected_target(fs, target_root, operation)
             try:
                 _revalidate_target_root(fs, xset, target_root)
                 fs.publish_new(prepared.temp, prepared.target)
