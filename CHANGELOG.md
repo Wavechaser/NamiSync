@@ -1027,6 +1027,24 @@ repeated machinery while preserving operational safety and boundary contracts.
 Safety, settlement, authority, and measurement work made high-risk release
 claims explicit, independently reviewable, and regression-backed.
 
+#### Simplify executor checks and copied-file finishing (2026-09-29)
+
+- Reuse fresh COPY/MOVE_UPDATE preparation's source observation at publication;
+  retained retries still recheck source fidelity. Remove final source admissions
+  from these publishes and MOVE/RECASE rename, where no source access remains.
+- Remove retained-target refusal-precedence scaffolding and duplicate spelling
+  validation. Keep target fidelity/admission, fallback checks and UPDATE behavior.
+- Re-pin the settlement oracle with independently reviewed deletion-only source
+  probe traces: 27 changed and 43 unchanged rows, with settlement facts unchanged.
+  The 67-group differential against `b1b58476` has no compared-result differences.
+- Pass 5,611 ordinary tests (four unavailable symlink-privilege skips), all 12
+  import contracts and all 25 five-band executions/readbacks. Small-file median
+  is 3.358 s / 1.163 MiB/s; the 1.6 MiB/s goal remains unmet and historical
+  timing ranges overlap. Retain exact provenance and raw samples in PERFORMANCE.
+- Record the approved retained-handle ACL exception for subsequent finishing
+  work. Direct writes remain deferred; target-fidelity consolidation remains
+  unapplied after automatic approval review rejected it.
+
 #### Adopt proportional defense policy (2026-09-29)
 
 - Clarify per-effect fidelity versus retained per-access root fallback and

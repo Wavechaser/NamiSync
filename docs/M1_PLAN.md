@@ -69,9 +69,10 @@ facts and their settlement meaning may not.
 
 **First atomic outcome — fresh-copy publication checks.** Runtime owns the
 change; native adapters and executor fixtures/oracle are direct consumers.
-Reuse the post-checkpoint preparation fidelity observations for fresh COPY and
-MOVE_UPDATE publication, retaining retry observations, temp identity, the
-MOVE_UPDATE old-path check and final target admission. Remove repeated final
+Reuse the post-checkpoint preparation source-fidelity observation for fresh COPY
+and MOVE_UPDATE publication, retaining retry observations, unconditional target
+fidelity, temp identity, the MOVE_UPDATE old-path check and final target admission.
+Remove repeated final
 source admission only where no further source access occurs (these publication
 paths and MOVE/RECASE rename). Simplify retained-target malformed-path refusal
 ordering. Preserve dispatch admission, UPDATE backup sequencing, fallback and
@@ -84,6 +85,25 @@ Acceptance is the verification below, including per-row trace disposition and
 fresh independent review, in one atomic production commit. No handle-lifecycle,
 drift-fact or direct-write edits belong to this outcome. The run's decision and
 mandatory-stop rules apply unchanged.
+Automatic approval review rejected target-fidelity consolidation even after the
+user explicitly approved the bounded proposal. That portion remains unapplied;
+the first outcome uses the smaller source-only consolidation instead.
+
+**Next atomic outcome — native copied-file handle continuity.** After the first
+outcome closes, keep existing core filesystem and pipeline signatures and retain
+the owned-temp descriptor inside the native invocation. Reuse it through
+metadata, flush, conditional publication/replacement and the first successful
+post-publication observation. Release per file, including terminal failure and
+backup paths; invocation exit remains the final cleanup boundary. Keep retry and
+uncertain-publication namespace observations and existing UPDATE recovery order.
+The finite population is executor native and its narrow runtime release seam,
+native/runtime/ACL/settlement tests, the oracle/baseline only if traces change,
+and EXECUTOR, PERFORMANCE, CHANGELOG and HANDOFF. Revalidate these seams against
+the integrated predecessor. Native continuity, ACL, rename/replacement,
+timestamp and lifecycle witnesses plus the run's verification below form the
+gate for one atomic commit. No new core contract, pipeline API, direct-write
+mode or race-defense mechanism is included. The retained-permission exception
+below is approved; other undeclared differences still require a decision.
 
 **Equivalence against the starting commit.**
 - *Must match:* effects, final managed trees, owned artifacts, recorder commands
@@ -101,6 +121,13 @@ mandatory-stop rules apply unchanged.
   - **Finishing failure classification.** Handle-based publication may report a
     sharing or access failure under a different accurate reason. Effects, owned
     artifacts and recoverability do not change.
+  - **Retained-handle permissions (user-approved 2026-09-29).** An already-granted
+    owned-temp handle may finish the reviewed copy when a later reopen or
+    path-based publication would be denied by copied or inherited ACLs. This
+    may turn the former finishing refusal into successful publication or
+    metadata completion. Containment, atomicity, durability and truthful
+    settlement remain required. The finite native witnesses and restored-ACL
+    receipt are under `build/executor-simplification-20260929/handle-acl-witness/`.
   - **Oracle traces and counts.** Filesystem traces, per-method counts and
     guard-scan admission counts shrink. The guard scan still requires an
     admission and a fidelity check before every mutating effect.
@@ -114,7 +141,8 @@ mandatory-stop rules apply unchanged.
     not a decision.
 - *Needs a decision:* anything else, usually a one-line question. The candidate
   never performs an effect the starting commit refused on a filesystem left
-  unchanged during the invocation, except under the drift change above.
+  unchanged during the invocation, except under the drift and retained-handle
+  permissions changes above.
 
 **Oracle.** Each result may re-pin the settlement baseline once, in the same
 atomic commit as its cause, with a receipt classifying every changed row and

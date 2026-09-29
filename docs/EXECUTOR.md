@@ -178,9 +178,17 @@ delegate its root revalidation to the immediately following default native
 `resolve`. Eligibility requires the concrete default native adapter, the exact
 reviewed authority in its active confirmed hold and default resolver/guard
 methods. The resolver still queries current held attributes before descending. Custom and unheld
-adapters retain the original runtime-then-native admission sequence; malformed
-paths retain root-admission-first failure precedence. Other runtime source,
-paired and trash guards keep their original ordering and classification.
+adapters retain the original runtime-then-native admission sequence. Retained
+paths are converted to root-relative spelling once; native resolution owns
+descendant-spelling validation. Malformed paths may refuse before root admission;
+any accurate refusal reason is sufficient. Other runtime source, paired and
+trash guards retain their admission policies. COPY and MOVE_UPDATE reuse the
+post-checkpoint source fidelity observation from fresh preparation for
+publication; retained unpublished copies take a fresh source observation before
+retry. Target absence/state, prepared-temp identity and MOVE_UPDATE's old-path
+checks remain at publication. After the final source observation, publication
+and MOVE/RECASE rename do not repeat source admission because they make no
+further source access. Final target admission remains at the mutating effect.
 
 Each native leaf stat uses the single no-follow snapshot returned by its reparse
 guard for kind and all metadata. An unavailable initial observation still returns
@@ -678,6 +686,11 @@ published success evidence. A compact direct policy matrix owns those reduction
 axes while operation tests retain filesystem-probe and call-timing coverage.
 
 ## Settlement Stability Gate
+
+The active [executor simplification run](M1_PLAN.md#executor-simplification-and-throughput--2026-09-29)
+permits its declared trace re-pins in the same atomic commit as their cause,
+with a per-row disposition receipt and a restarted three-run gate. This is the
+run-specific exception to the dedicated replacement-commit rule below.
 
 Settlement refactoring is blocked on an independent retained oracle, not only
 on differential parity with the current implementation. Its scenario manifest

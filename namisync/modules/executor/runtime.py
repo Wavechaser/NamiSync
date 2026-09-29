@@ -45,7 +45,6 @@ from namisync.core.pathing import (
     lexical_absolute_path,
     logical_error_text,
     normalize_relative_path,
-    validate_relative_path,
 )
 from namisync.core.planning import (
     OpId,
@@ -2090,15 +2089,16 @@ def _copy(
                 expected=prepared.temp,
             )
         else:
-            _revalidate_source_root(fs, xset, source_root)
-            _guard_present(
-                fs,
-                source_root,
-                operation.source_rel_path,
-                operation.source_expected,
-                missing=ExecutionReason.SOURCE_MISSING,
-                drift=ExecutionReason.SOURCE_DRIFT,
-            )
+            if existing is not None:
+                _revalidate_source_root(fs, xset, source_root)
+                _guard_present(
+                    fs,
+                    source_root,
+                    operation.source_rel_path,
+                    operation.source_expected,
+                    missing=ExecutionReason.SOURCE_MISSING,
+                    drift=ExecutionReason.SOURCE_DRIFT,
+                )
             _guard_path_stat(
                 temp_stat,
                 continuation.prepared_stat,
@@ -2107,7 +2107,6 @@ def _copy(
             )
             _guard_expected_target(fs, target_root, operation)
             try:
-                _revalidate_source_root(fs, xset, source_root)
                 _revalidate_target_root(fs, xset, target_root)
                 fs.publish_new(prepared.temp, prepared.target)
             except FileExistsError as error:
@@ -2529,7 +2528,6 @@ def _guarded_reviewed_target_rename(
         _guard_absent(fs, target_root, operation.target_rel_path)
     old = fs.resolve(target_root, old_rel, must_exist=True)
     new = fs.resolve(target_root, operation.target_rel_path, must_exist=False)
-    _revalidate_source_root(fs, xset, source_root)
     _revalidate_target_root(fs, xset, target_root)
     mutation = _retain_mutation_attempt(
         state,
@@ -2769,15 +2767,16 @@ def _move_update(
                 expected=prepared.temp,
             )
         else:
-            _revalidate_source_root(fs, xset, source_root)
-            _guard_present(
-                fs,
-                source_root,
-                operation.source_rel_path,
-                operation.source_expected,
-                missing=ExecutionReason.SOURCE_MISSING,
-                drift=ExecutionReason.SOURCE_DRIFT,
-            )
+            if existing is not None:
+                _revalidate_source_root(fs, xset, source_root)
+                _guard_present(
+                    fs,
+                    source_root,
+                    operation.source_rel_path,
+                    operation.source_expected,
+                    missing=ExecutionReason.SOURCE_MISSING,
+                    drift=ExecutionReason.SOURCE_DRIFT,
+                )
             _guard_path_stat(
                 temp_stat,
                 continuation.prepared_stat,
@@ -2794,7 +2793,6 @@ def _move_update(
             )
             _guard_expected_target(fs, target_root, operation)
             try:
-                _revalidate_source_root(fs, xset, source_root)
                 _revalidate_target_root(fs, xset, target_root)
                 fs.publish_new(prepared.temp, prepared.target)
             except FileExistsError as error:
@@ -4715,19 +4713,9 @@ def _resolve_target_path(
 ) -> Path:
     authority = _target_root_authority(xset)
     _require_reviewed_runtime_root(target_root, authority, role="target")
-    relative = None
-    if _can_delegate_held_resolution(fs, target_root, authority):
-        try:
-            candidate_relative = _target_relative_path(path, target_root)
-            validate_relative_path(candidate_relative)
-        except (ValueError, PathValidationError):
-            # Malformed paths retain root-admission-first error precedence.
-            pass
-        else:
-            relative = candidate_relative
-    if relative is None:
+    relative = _target_relative_path(path, target_root)
+    if not _can_delegate_held_resolution(fs, target_root, authority):
         _revalidate_target_root(fs, xset, target_root)
-        relative = _target_relative_path(path, target_root)
     guarded = fs.resolve(target_root, relative, must_exist=must_exist)
     if os.path.normcase(str(guarded)) != os.path.normcase(str(path)):
         raise UnsafeExecutionPath(

@@ -512,6 +512,39 @@ These finite call assertions detect lost shortcut selection; they are not a
 throughput gate. Collect throughput separately without instrumentation. The
 historical timings above remain bound to their recorded inputs and drivers.
 
+### Source-check consolidation — 2026-09-29
+
+The first executor-simplification candidate on `dadc1fe` reuses fresh-copy
+source fidelity and removes source admissions with no later source access.
+Its exact precommit product/tool/test/driver hashes and status match before and
+after measurement; the original 1,587-entry source manifest is unchanged.
+The existing five F:→G: bands ran serially, five samples each, with normal rig
+metrics and native readback. All 25 executions/readbacks completed with recording
+OK and zero payload reservations; manifest-owned teardown removed every target
+and sidecar. Timings cover executor calls, not preparation or readback.
+
+| Workload | Candidate median [min–max], s | MiB/s | Time versus latest `23589bd` |
+| --- | ---: | ---: | ---: |
+| 1,000 × 4 KiB | 3.358 [3.262–4.044] | 1.163 | −7.4% |
+| 512 × 128 KiB | 1.775 [1.681–3.619] | 36.049 | −9.4% |
+| 64 × 4 MiB | 0.349 [0.345–0.648] | 732.733 | −6.2% |
+| 4 × 128 MiB | 0.316 [0.307–0.337] | 1,617.852 | +4.0% |
+| 1 × 4 GiB | 2.135 [1.976–2.335] | 1,918.723 | +6.5% |
+
+All ranges overlap the latest historical endpoint below; these sequential,
+buffered repeated-source observations do not isolate causal speedup or establish
+cold-cache/device ceilings. No sample was discarded. The non-gating 1.6 MiB/s
+small-file goal remains unmet: its backend median is 0.417 s and time outside
+the backend is 2.941 s. The 4 GiB split is 1.579 s inside and 0.545 s outside
+the backend. The rig excludes SQLite, workflow and GUI costs.
+
+Receipts are under `build/executor-simplification-20260929/measurements/`,
+prefix `result1-dadc1fef-20260929-153840-0bb41f93`: raw reports/logs, commands,
+before/after manifests, environment, comparison and latest-comparison files.
+The task's `scripts/five_band.ps1` and `five_band_receipt.py` adapt the existing
+full-corpus driver to bind an exact precommit candidate; historical references
+and all failed correctness receipts remain intact.
+
 ### Full executor corpus after narrow runtime admission — 2026-09-29
 
 Measured clean implementation `23589bd39a620ef4e5b31ddf8a9940a6628cadbf`

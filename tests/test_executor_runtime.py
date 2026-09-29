@@ -832,6 +832,63 @@ def test_source_drift_after_stream_removes_temp_and_records_nothing(tmp_path: Pa
     assert outcome.reason == "source-drift"
 
 
+@pytest.mark.parametrize("kind", (OperationKind.COPY, OperationKind.MOVE_UPDATE))
+@pytest.mark.parametrize("retry_source_drift", (False, True), ids=("fresh", "retry-drift"))
+def test_copy_publication_reuses_fresh_source_fidelity_and_rechecks_retry(
+    tmp_path: Path,
+    kind: OperationKind,
+    retry_source_drift: bool,
+) -> None:
+    source, target = _roots(tmp_path)
+    operation, published = _reviewed_byte_operation(
+        kind, source, target, NativeFileSystem()
+    )
+
+    class SourceObservationFileSystem(NativeFileSystem):
+        def __init__(self) -> None:
+            self.source_observations = 0
+            self.publish_attempts = 0
+
+        def stat(self, root: Path, relative_path: str) -> FileStat | None:
+            if root == source:
+                self.source_observations += 1
+            return super().stat(root, relative_path)
+
+        def publish_new(self, temp: Path, target: Path) -> None:
+            self.publish_attempts += 1
+            if retry_source_drift and self.publish_attempts == 1:
+                raise _sharing_violation("sharing violation before publication")
+            super().publish_new(temp, target)
+
+    fs = SourceObservationFileSystem()
+
+    def mutate_source(_delay: float) -> None:
+        (source / operation.source_rel_path).write_bytes(b"source-drift")
+
+    result, events, recorder = _run(
+        _xset(_plan(source, target, (operation,))),
+        fs=fs,
+        policies=_policies(sleep=mutate_source),
+    )
+
+    assert fs.publish_attempts == 1
+    assert fs.source_observations == (3 if retry_source_drift else 2)
+    assert not list(target.glob("*.synctmp-*"))
+    if retry_source_drift:
+        assert result.status is SessionState.FAILED
+        assert _item_outcome(events).reason == "source-drift"
+        assert not published.exists()
+        assert recorder.calls == []
+        if kind is OperationKind.MOVE_UPDATE:
+            assert (target / "old.bin").read_bytes() == b"old-version"
+    else:
+        assert result.status is SessionState.COMPLETED
+        assert published.read_bytes() == b"new-version"
+        assert _recorder_names(recorder) == [
+            "move_updated" if kind is OperationKind.MOVE_UPDATE else "copied"
+        ]
+
+
 class MidReadMutationStream:
     def __init__(
         self,
@@ -3466,12 +3523,10 @@ def test_runtime_target_resolution_refuses_unsafe_held_root_before_descent(
 
 @pytest.mark.skipif(os.name != "nt", reason="native Windows held target resolution")
 @pytest.mark.parametrize("malformed", ["outside", "device", "parent", "root"])
-@pytest.mark.parametrize("query_fails", [False, True])
-def test_runtime_target_resolution_malformed_keeps_admission_first_errors(
+def test_runtime_target_resolution_malformed_refuses_before_filesystem_access(
     held_target_resolution,
     monkeypatch: pytest.MonkeyPatch,
     malformed: str,
-    query_fails: bool,
 ) -> None:
     fs, xset, source, target, scoped = held_target_resolution
     assert scoped.held
@@ -3481,25 +3536,14 @@ def test_runtime_target_resolution_malformed_keeps_admission_first_errors(
         target / ".." / "file.bin" if malformed == "parent" else target
     )
     assert root_authority_module._WINDOWS is not None
-    original_query = root_authority_module._WINDOWS.get_file_information_ex
-    queries = []
 
     def query(handle, kind, output, size):
-        queries.append(kind)
-        if query_fails:
-            ctypes.set_last_error(5)
-            return False
-        return original_query(handle, kind, output, size)
+        pytest.fail("malformed path reached held-root attribute observation")
 
     monkeypatch.setattr(root_authority_module._WINDOWS, "get_file_information_ex", query)
-    expected = PermissionError if query_fails else (
-        ValueError if malformed == "outside" else PathValidationError
-    )
-    with pytest.raises(expected) as refused:
+    expected = ValueError if malformed == "outside" else PathValidationError
+    with pytest.raises(expected):
         executor_runtime._resolve_target_path(fs, xset, target, path, must_exist=False)
-    if query_fails:
-        assert refused.value.winerror == 5
-    assert queries == [0]
 
 
 @pytest.mark.skipif(os.name != "nt", reason="native Windows held target resolution")
