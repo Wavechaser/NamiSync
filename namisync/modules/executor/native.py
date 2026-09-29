@@ -57,16 +57,19 @@ _READONLY = 0x00000001
 _REPARSE_POINT = 0x00000400
 _GENERIC_READ = 0x80000000
 _GENERIC_WRITE = 0x40000000
+_DELETE = 0x00010000
 _FILE_READ_ATTRIBUTES = 0x0080
 _FILE_WRITE_ATTRIBUTES = 0x0100
 _FILE_SHARE_READ = 0x00000001
 _FILE_SHARE_WRITE = 0x00000002
 _FILE_SHARE_DELETE = 0x00000004
 _OPEN_EXISTING = 3
+_CREATE_NEW = 1
 _FILE_ATTRIBUTE_NORMAL = 0x00000080
 _FILE_FLAG_BACKUP_SEMANTICS = 0x02000000
 _FILE_BASIC_INFO_CLASS = 0
 _FILE_STANDARD_INFO_CLASS = 1
+_FILE_RENAME_INFO_CLASS = 3
 _FILE_ALLOCATION_INFO_CLASS = 5
 _WINDOWS_EPOCH_TICKS = 116_444_736_000_000_000
 _INVALID_HANDLE_VALUE = ctypes.c_void_p(-1).value
@@ -95,6 +98,15 @@ class _FileStandardInfo(ctypes.Structure):
 
 class _FileAllocationInfo(ctypes.Structure):
     _fields_ = [("AllocationSize", ctypes.c_longlong)]
+
+
+class _FileRenameInfo(ctypes.Structure):
+    _fields_ = [
+        ("ReplaceIfExists", wintypes.BOOL),
+        ("RootDirectory", wintypes.HANDLE),
+        ("FileNameLength", wintypes.DWORD),
+        ("FileName", wintypes.WCHAR * 1),
+    ]
 
 
 class _WindowsBindings:
@@ -278,6 +290,12 @@ class _InvocationRoot:
 
 
 @dataclass(slots=True)
+class _CopiedFile:
+    descriptor: int
+    handle: int
+
+
+@dataclass(slots=True)
 class _RootInvocation:
     key: object
     roots: tuple[_InvocationRoot, ...]
@@ -286,11 +304,22 @@ class _RootInvocation:
     active: bool = True
     root_paths: dict[str, tuple[Path | None, str | None]] = field(default_factory=dict)
     last_win32_path: tuple[str, str] | None = None
+    copied_files: dict[Path, _CopiedFile] = field(default_factory=dict)
 
 
 _ROOT_INVOCATION: ContextVar[_RootInvocation | None] = ContextVar(
     "executor_root_invocation", default=None
 )
+
+
+def _release_copied_files() -> None:
+    """Retire this serial operation's descriptors, or the invocation leftovers."""
+    invocation = _ROOT_INVOCATION.get()
+    if invocation is None:
+        return
+    while invocation.copied_files:
+        _, copied = invocation.copied_files.popitem()
+        os.close(copied.descriptor)
 
 
 def _invocation_root(key: object, role: str) -> _InvocationRoot | None:
@@ -344,7 +373,25 @@ class NativeFileSystem:
                 if root.authority is not None:
                     root.chain_authority = RootAuthority(root.authority.logical_root)
                     root.hold = stack.enter_context(hold_root(root.authority))
-            yield
+            try:
+                yield
+            finally:
+                _release_copied_files()
+
+    def _copied_files(self) -> dict[Path, _CopiedFile] | None:
+        invocation = _ROOT_INVOCATION.get()
+        if (
+            invocation is None or not invocation.active
+            or invocation.native_owner is not self
+        ):
+            return None
+        return invocation.copied_files
+
+    def _release_copied_file(self, path: Path) -> None:
+        files = self._copied_files()
+        copied = None if files is None else files.pop(path, None)
+        if copied is not None:
+            os.close(copied.descriptor)
 
     def _scoped_root(
         self, logical: Path, *, descendants: bool = False
@@ -647,6 +694,7 @@ class NativeFileSystem:
         return target.with_name(f"{target.name}.synctmp-{run_text}-{op_text}")
 
     def remove_owned_temp(self, path: Path) -> None:
+        self._release_copied_file(path)
         self._reject_reparse_chain(path.parent)
         try:
             self._reject_reparse(path)
@@ -717,14 +765,42 @@ class NativeFileSystem:
         if allocation_size is not None and allocation_size < 0:
             raise ValueError("allocation size cannot be negative")
         flags = os.O_CREAT | os.O_EXCL | os.O_RDWR
+        files = self._copied_files() if os.name == "nt" else None
         if os.name == "nt":
             flags |= os.O_BINARY
-        descriptor = os.open(_win32_path(path), flags, 0o666)
+        if files is None:
+            descriptor = os.open(_win32_path(path), flags, 0o666)
+        else:
+            import msvcrt
+
+            assert _WINDOWS is not None
+            handle = _WINDOWS.create_file(
+                _win32_path(path),
+                _GENERIC_READ | _GENERIC_WRITE | _FILE_READ_ATTRIBUTES
+                | _FILE_WRITE_ATTRIBUTES | _DELETE,
+                _FILE_SHARE_READ | _FILE_SHARE_WRITE | _FILE_SHARE_DELETE,
+                None,
+                _CREATE_NEW,
+                _FILE_ATTRIBUTE_NORMAL,
+                None,
+            )
+            if handle == _INVALID_HANDLE_VALUE:
+                raise ctypes.WinError(ctypes.get_last_error())
+            try:
+                descriptor = msvcrt.open_osfhandle(handle, os.O_RDWR | os.O_BINARY)
+            except BaseException:
+                self._close_handle(handle)
+                raise
         try:
-            stream = cast(BinaryIO, os.fdopen(descriptor, "w+b", buffering=0))
+            stream = cast(
+                BinaryIO,
+                open(descriptor, "w+b", buffering=0, closefd=files is None),
+            )
         except BaseException:
             os.close(descriptor)
             raise
+        if files is not None:
+            files[path] = _CopiedFile(descriptor, handle)
         if os.name != "nt" or not allocation_size:
             return stream
 
@@ -742,6 +818,7 @@ class NativeFileSystem:
             error = ctypes.get_last_error()
             if error not in _ALLOCATION_UNSUPPORTED_ERRORS:
                 stream.close()
+                self._release_copied_file(path)
                 raise ctypes.WinError(error)
         return stream
 
@@ -852,7 +929,9 @@ class NativeFileSystem:
                 raise FileNotFoundError(path)
             return result
 
-        handle = self._open_metadata_handle(path)
+        files = self._copied_files()
+        copied = None if files is None else files.get(path)
+        handle = self._open_metadata_handle(path) if copied is None else copied.handle
         try:
             if acl_source is not None:
                 try:
@@ -886,13 +965,15 @@ class NativeFileSystem:
             self._flush_handle(handle)
             result = self._stat_handle(handle, normalized)
         except BaseException:
-            try:
-                self._close_handle(handle)
-            except Exception:
-                pass
+            if copied is None:
+                try:
+                    self._close_handle(handle)
+                except Exception:
+                    pass
             raise
         else:
-            self._close_handle(handle)
+            if copied is None:
+                self._close_handle(handle)
             return result
 
     def ensure_published_metadata(
@@ -906,7 +987,13 @@ class NativeFileSystem:
     ) -> FileStat:
         """Observe once and repair only publication-damaged managed fields."""
 
-        observed = self._stat_path(path)
+        files = self._copied_files()
+        copied = None if files is None else files.get(path)
+        observed = (
+            self._stat_path(path)
+            if copied is None
+            else self._stat_handle(copied.handle)
+        )
         if observed is None:
             raise FileNotFoundError(path)
         repair_mtime = observed.mtime_ns != finalized_temp.mtime_ns
@@ -924,6 +1011,7 @@ class NativeFileSystem:
             observed.metadata.attributes & MANAGED_FILE_ATTRIBUTE_MASK
         ) != desired_managed
         if not (repair_mtime or repair_created or repair_attributes):
+            self._release_copied_file(path)
             return observed
 
         if os.name != "nt":
@@ -949,7 +1037,7 @@ class NativeFileSystem:
                 raise FileNotFoundError(path)
             return repaired
 
-        handle = self._open_metadata_handle(path)
+        handle = self._open_metadata_handle(path) if copied is None else copied.handle
         try:
             current = self._basic_info(handle)
             creation = (
@@ -983,20 +1071,49 @@ class NativeFileSystem:
             self._flush_handle(handle)
             result = self._stat_handle(handle, final_basic)
         except BaseException:
-            try:
-                self._close_handle(handle)
-            except Exception:
-                pass
+            if copied is None:
+                try:
+                    self._close_handle(handle)
+                except Exception:
+                    pass
             raise
         else:
-            self._close_handle(handle)
+            if copied is None:
+                self._close_handle(handle)
+            else:
+                self._release_copied_file(path)
             return result
 
     def publish_new(self, temp: Path, target: Path) -> None:
-        os.rename(_win32_path(temp), _win32_path(target))
+        self._publish_copy(temp, target, replace_existing=False)
 
     def replace(self, temp: Path, target: Path) -> None:
-        os.replace(_win32_path(temp), _win32_path(target))
+        self._publish_copy(temp, target, replace_existing=True)
+
+    def _publish_copy(
+        self, temp: Path, target: Path, *, replace_existing: bool
+    ) -> None:
+        files = self._copied_files()
+        copied = None if files is None else files.get(temp)
+        if copied is None:
+            rename = os.replace if replace_existing else os.rename
+            rename(_win32_path(temp), _win32_path(target))
+            return
+        assert _WINDOWS is not None and files is not None
+        name = _win32_path(target).encode("utf-16-le")
+        offset = _FileRenameInfo.FileName.offset
+        buffer = ctypes.create_string_buffer(
+            max(ctypes.sizeof(_FileRenameInfo), offset + len(name) + 2)
+        )
+        rename_info = _FileRenameInfo.from_buffer(buffer)
+        rename_info.ReplaceIfExists = replace_existing
+        rename_info.FileNameLength = len(name)
+        ctypes.memmove(ctypes.addressof(buffer) + offset, name, len(name))
+        if not _WINDOWS.set_file_information(
+            copied.handle, _FILE_RENAME_INFO_CLASS, buffer, len(buffer)
+        ):
+            raise ctypes.WinError(ctypes.get_last_error())
+        files[target] = files.pop(temp)
 
     def hardlink(self, source: Path, target: Path) -> None:
         os.link(_win32_path(source), _win32_path(target))
@@ -1044,6 +1161,7 @@ class NativeFileSystem:
             validate_destination()
             self.publish_new(temp, target)
             published = True
+            self._release_copied_file(target)
         except BaseException as error:
             if not published:
                 try:

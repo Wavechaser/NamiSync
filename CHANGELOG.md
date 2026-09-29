@@ -1041,8 +1041,17 @@ claims explicit, independently reviewable, and regression-backed.
   import contracts and all 25 five-band executions/readbacks. Small-file median
   is 3.358 s / 1.163 MiB/s; the 1.6 MiB/s goal remains unmet and historical
   timing ranges overlap. Retain exact provenance and raw samples in PERFORMANCE.
-- Record the approved retained-handle ACL exception for subsequent finishing
-  work. Direct writes remain deferred; target-fidelity consolidation remains
+- Carry the native owned-temp handle through writing, metadata, flush,
+  conditional publication and post-publication observation; close it before
+  recording and on operation/invocation exit. Preserve retry namespace proofs
+  and UPDATE recovery order. Native lifecycle, ACL and exFAT rename witnesses
+  cover the approved retained-handle permission behavior.
+- Pass 5,633 ordinary tests for handle continuity, the unchanged 30×3 oracle
+  and all 25 five-band executions/readbacks. The new small-file median is
+  5.298 s / 0.737 MiB/s: slower than the preceding run, with no throughput lift
+  claimed. Preserve fallback fault-control assertions and native blocked-access
+  witnesses; PERFORMANCE retains samples and diagnostic limits.
+- Direct writes remain deferred; target-fidelity consolidation remains
   unapplied after automatic approval review rejected it.
 
 #### Adopt proportional defense policy (2026-09-29)

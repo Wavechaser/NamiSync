@@ -1,65 +1,80 @@
 # Latest session — policy-driven executor simplification
 
 2026-09-29, `milestone1-adelbert`, starting clean at `9b694e0a`.
-The equivalence baseline remains `b1b58476`; policy refinements are committed
-as `dadc1fe`. The user authorized results 1–3 and small atomic commits using
-execute-task. Direct writes remain deferred.
+The equivalence baseline remains `b1b58476`. The user authorized results 1–3
+and small atomic commits using execute-task. Direct writes remain deferred.
 
-## Current outcome
+## Delivered and current outcome
 
-The source-only consolidation candidate reuses fresh COPY/MOVE_UPDATE source
-fidelity, retains retry and all target checks, removes final source admissions
-where no source access remains, and retires retained-target refusal precedence.
-UPDATE, public contracts, native primitives and pipeline APIs are unchanged.
+Policy refinements are committed as `dadc1fe`; source-only consolidation is
+`a6e2306`. The latter reuses fresh COPY/MOVE_UPDATE source fidelity, retains
+retry and all target checks, removes source admissions with no later source
+access, and retires retained-target refusal precedence.
+
+The current native handle outcome carries an invocation-owned descriptor
+through writing, metadata, flush, conditional publication and successful
+post-publication observation. It releases before recording and on backup,
+cleanup, operation retirement and invocation exit. Public contracts,
+continuations, UPDATE recovery and retry namespace proofs remain unchanged.
+The user approved finishing with already-granted handle rights when copied or
+inherited ACLs would deny the old reopen/path publication.
 
 Automatic approval review rejected target-fidelity consolidation even after
-explicit user approval; those edits remain unapplied. The source-only safer
-alternative passed review. No rejection was bypassed.
-
-The next handle-continuity outcome is recorded in M1_PLAN. The user explicitly
-approved retaining already-granted handle rights when copied/inherited ACLs
-would prevent old finishing reopens or path publication. Native witnesses and
-restored-ACL receipts are under `build/executor-simplification-20260929/handle-acl-witness/`.
-No handle implementation has begun.
+explicit user approval; that portion remains unapplied. No rejection was
+bypassed. The smaller source-only outcome passed its gate and review.
 
 ## Verification
 
 Evidence root: `build/executor-simplification-20260929/`.
 
-- Focused candidate checks: 37 passed. Initial native/runtime baseline: 305 passed.
-- Native executor/workflow/tools neighborhood: 1,792 passed, three skips.
-- Ordinary suite after the oracle pin change: 5,611 passed, four unavailable
-  symlink-privilege skips, 34 deselected; `differential/result1-ordinary.log`.
-- Import contracts: all 12 kept. Guard scan: 70 rows, 391 effects, zero missing
-  admissions; source/effect fidelity independently inspected.
-- Candidate oracle capture and precommit custom-baseline check: 30 scenarios
-  times three. Independent review classified 27 deletion-only source-probe
-  rows and 43 unchanged rows; all settlement fields remain exact. Approved
-  semantic pin: `2509b4e543afb32efdc347149a34be05838335c59fc86b71b1b56ecee82f22a9`.
-  Official committed-baseline check must run after the atomic commit.
-- Differential: all 67 groups, zero compared-result differences. Raw captures
-  are `differential/runs/baseline-b1b58476-1677e16405314dbfbe06e27ba745d8e6/`
-  and `candidate-result1-source-753c89f8c7934b22b4f823532fc3252a/`.
-  Checkout-byte provenance proves 22 other physical hash differences are CRLF
-  only; runtime is the sole semantic product difference.
-- Five-band measurements: all 25 executions/readbacks pass with original source
-  unchanged and all owned targets/sidecars removed. Prefix
-  `measurements/result1-dadc1fef-20260929-153840-0bb41f93`; small-file median
-  3.358 s / 1.163 MiB/s, below the non-gating 1.6 MiB/s goal. PERFORMANCE records
-  all bands and overlapping historical ranges. Independent closeout review passed
-  with no findings across source, tests, documentation and raw evidence.
+- Native/ACL/retry focused run: 168 passed; final migrated control family:
+  21 passed. Executor/workflow neighborhood: 1,479 passed in
+  `handle-control-final-neighborhood.log`.
+- Ordinary final: 5,633 passed, four unavailable symlink-privilege skips,
+  34 deselected; `differential/result2-ordinary-final.log`. Imports: all 12 kept.
+- Oracle unchanged: 30 scenarios × three, `differential/result2-oracle-initial.log`.
+  Its baseline/pin remain those accepted in `a6e2306`.
+- Differential: 67 groups, zero differences or oracle errors; capture
+  `differential/runs/candidate-result2-handles-790e67a4c7e44f9bb3af36c594f6cfb9/`.
+  Independent dependency audit matches current product/helper/adapter bytes.
+  Guard scan: 70 rows, 391 effects, zero missing admissions.
+- Native NTFS continuity, metadata-after-close, restrictive ACL, conditional
+  rename and lifecycle witnesses pass. `handle-exfat-witness.json` proves
+  K: exFAT rename/collision/replacement and close stability only; it avoids the
+  separately excluded FileIdInfo defect and is not full executor acceptance.
+- Retain failed ordinary/neighborhood and diagnostic receipts. Held-file
+  pathname replacement/read blocked external mutation controls before their
+  intended mutations. Seven narrowly scoped test sites exercise real fallback
+  substitution/root-swap guards with all original assertions retained; native
+  witnesses cover blocked attempts, truthful settlement and descriptor close.
+  Source-open and after-close controls retain native behavior. No production
+  changes were needed for this test migration.
 
-Retain failed setup receipts: sandbox token differs from getpass identity, so
-ACL fixtures require native execution; repository-local pytest temporary roots
-are correctly refused by tool workspace tests. The successful native-default
-rerun resolves both environment issues without product/test changes.
+Five-band measurement passed all 25 executions/readbacks; prefix
+`measurements/result2-a6e23064-20260929-163929-812e188a`. Small-file median is
+5.298 s / 0.737 MiB/s, slower than the preceding run; no throughput lift is
+claimed. The bounded 20-sample ABBA diagnostic has pooled retained-handle
+median 5.679 s versus fallback 5.909 s, with overlapping ranges. It does not
+attribute the historical slowdown to handle selection. Prefix
+`measurements/handle-abba-20260929-164758-75598d0c` retains all samples and
+provenance; the earlier zero-sample driver failure is preserved.
+Source/outcome, final test-migration and delivery-document independent reviews
+have no findings. Supplemental import-origin and complete measurement audits
+are retained beside the measurement receipts.
 
-## Preservation and next action
+## Immediate continuation
 
-The task-created baseline checkout is
+The handle outcome is verified. Continue with the recorded planner-fidelity
+outcome and independent verifier-leaf outcome after its atomic integration.
+Read-only design refreshed native/runtime handle seams; bind it to the
+integrated commit before implementation. UPDATE backup repair/restoration and
+failed DELETE restoration must use the full admitted target observation while
+retaining strict recovery comparisons. M1_PLAN owns the finite population.
+
+Keep the task-created baseline checkout at
 `C:/Users/Spectrum/.codex/worktrees/executor-simplification-baseline/NamiSync`
-at `b1b58476`; keep it through task closeout. Do not alter the pre-existing
-`b8baf42d` root-admission baseline checkout, original F: benchmark source,
-historical failed/raw receipts or recovery bundle. All new evidence is ignored
-under the task evidence root. Commit exact task
-paths, run the official oracle gate, then start the recorded handle outcome.
+through task closeout. Preserve the pre-existing `b8baf42d` root-admission
+baseline, original F: benchmark source, historical evidence and recovery bundle.
+All new evidence is ignored under the task evidence root. Native ACL gates use
+the actual Windows user and standard external pytest temp; sandbox identity and
+repository-local tool fixtures are not valid substitutes.

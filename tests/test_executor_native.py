@@ -46,7 +46,7 @@ from namisync.core.planning import (
     PreservationPolicy,
 )
 from namisync.core.root_authority import FILE_ATTRIBUTE_OFFLINE, RootAuthority, RootHold
-from namisync.core.session import Canceled, RunContext, SessionState
+from namisync.core.session import Canceled, PauseRequested, RunContext, SessionState
 from namisync.modules.executor import (
     NativeCopyBackend,
     NativeFileSystem,
@@ -1251,6 +1251,13 @@ class FinalizationOrderFileSystem(NativeFileSystem):
         self.last_access_values: list[int] = []
         self.acl_applied = False
         self.writer_flushes = 0
+        self.copied_descriptor: int | None = None
+
+    def create_temp(self, path: Path, *, allocation_size: int | None):
+        stream = super().create_temp(path, allocation_size=allocation_size)
+        self.copied_descriptor = stream.fileno()
+        self.calls.append("create")
+        return stream
 
     def flush_file(self, stream) -> None:
         self.writer_flushes += 1
@@ -1278,6 +1285,198 @@ class FinalizationOrderFileSystem(NativeFileSystem):
     def _close_handle(self, handle) -> None:
         self.calls.append("close")
         super()._close_handle(handle)
+
+
+@pytest.mark.skipif(os.name != "nt", reason="requires native copied-file handles")
+@pytest.mark.parametrize("replace_existing", (False, True), ids=("copy", "update"))
+@pytest.mark.parametrize("readonly", (False, True), ids=("ordinary", "readonly"))
+def test_retained_copy_handle_publishes_and_closes_with_stable_metadata(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    replace_existing: bool,
+    readonly: bool,
+) -> None:
+    source = tmp_path / "source.bin"
+    temp = tmp_path / "temp.bin"
+    target = tmp_path / "target.bin"
+    source.write_bytes(b"payload")
+    fs = NativeFileSystem()
+    intended = fs.stat_path(source)
+    assert intended is not None
+    intended = replace(
+        intended,
+        mtime_ns=intended.mtime_ns - 4_000_000_000,
+        metadata=replace(intended.metadata, attributes=1 if readonly else 0),
+    )
+    if replace_existing:
+        target.write_bytes(b"displaced")
+    with executor_module._root_invocation_scope(fs, object(), (), None):
+        with fs.create_temp(temp, allocation_size=None) as writer:
+            descriptor = writer.fileno()
+            writer.write(b"payload")
+        assert os.fstat(descriptor).st_size == len(b"payload")
+        files = fs._copied_files()
+        assert files is not None
+        copied = files[temp]
+        monkeypatch.setattr(
+            fs, "_open_metadata_handle",
+            lambda _path: pytest.fail("copied file reopened for metadata"),
+        )
+        monkeypatch.setattr(
+            fs, "_stat_path",
+            lambda _path: pytest.fail("copied file observed through its name"),
+        )
+        finalized = fs.finalize_temp(
+            temp, intended, preserve_created=True, acl_source=None
+        )
+        publish = fs.replace if replace_existing else fs.publish_new
+        publish(temp, target)
+        assert files[target] is copied and temp not in files
+        published = fs.ensure_published_metadata(
+            target, finalized, intended,
+            preserve_created=True, apply_readonly=True,
+        )
+        assert published.file_identity == finalized.file_identity
+        assert files == {}
+        with pytest.raises(OSError):
+            os.fstat(descriptor)
+    after_close = NativeFileSystem().stat_path(target)
+    assert after_close == published
+    assert target.read_bytes() == b"payload"
+    if readonly:
+        NativeFileSystem().clear_readonly(target)
+
+
+@pytest.mark.skipif(os.name != "nt", reason="requires native copied-file handles")
+def test_retained_copy_collision_preserves_handle_for_conditional_retry(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source.bin"
+    temp = tmp_path / "temp.bin"
+    target = tmp_path / "target.bin"
+    source.write_bytes(b"new")
+    target.write_bytes(b"old")
+    fs = NativeFileSystem()
+    intended = fs.stat_path(source)
+    assert intended is not None
+    with executor_module._root_invocation_scope(fs, object(), (), None):
+        with fs.create_temp(temp, allocation_size=None) as writer:
+            descriptor = writer.fileno()
+            writer.write(b"new")
+        finalized = fs.finalize_temp(
+            temp, intended, preserve_created=True, acl_source=None
+        )
+        files = fs._copied_files()
+        assert files is not None
+        copied = files[temp]
+        with pytest.raises(FileExistsError):
+            fs.publish_new(temp, target)
+        assert files == {temp: copied}
+        assert target.read_bytes() == b"old"
+        with pytest.raises(PermissionError):
+            temp.read_bytes()
+        os.lseek(descriptor, 0, os.SEEK_SET)
+        assert os.read(descriptor, 3) == b"new"
+        fs.replace(temp, target)
+        fs.ensure_published_metadata(
+            target, finalized, intended, preserve_created=True, apply_readonly=True
+        )
+        with pytest.raises(OSError):
+            os.fstat(descriptor)
+    assert target.read_bytes() == b"new"
+
+
+@pytest.mark.skipif(os.name != "nt", reason="requires native copied-file handles")
+@pytest.mark.parametrize(
+    "interruption", ("complete", "finalize", "publish", "observe", "pause", "cancel", "escape")
+)
+def test_native_copy_descriptors_retire_before_next_operation_or_invocation_exit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    interruption: str,
+) -> None:
+    source, target = _roots(tmp_path)
+    descriptors: list[list[object]] = []
+    native_close = os.close
+
+    def observe_close(descriptor: int) -> None:
+        native_close(descriptor)
+        for record in reversed(descriptors):
+            if record == [descriptor, False]:
+                with pytest.raises(OSError):
+                    os.fstat(descriptor)
+                record[1] = True
+                break
+
+    monkeypatch.setattr(os, "close", observe_close)
+
+    class LifecycleFileSystem(NativeFileSystem):
+        interrupt_stream = False
+        failed = False
+
+        def create_temp(self, path: Path, *, allocation_size: int | None):
+            assert self._copied_files() == {}
+            stream = super().create_temp(path, allocation_size=allocation_size)
+            descriptors.append([stream.fileno(), False])
+            self.interrupt_stream = interruption in {"pause", "cancel"}
+            return stream
+
+        def fail(self, stage: str) -> None:
+            selected = "observe" if interruption == "escape" else interruption
+            if not self.failed and selected == stage:
+                self.failed = True
+                raise OSError(f"injected {stage} failure")
+
+        def finalize_temp(self, path: Path, *args, **kwargs) -> FileStat:
+            self.fail("finalize")
+            return super().finalize_temp(path, *args, **kwargs)
+
+        def publish_new(self, temp: Path, target: Path) -> None:
+            self.fail("publish")
+            super().publish_new(temp, target)
+
+        def ensure_published_metadata(self, path: Path, *args, **kwargs) -> FileStat:
+            self.fail("observe")
+            return super().ensure_published_metadata(path, *args, **kwargs)
+
+    fs = LifecycleFileSystem()
+    operations = []
+    for index in (1, 2):
+        name = f"file-{index}.bin"
+        (source / name).write_bytes(b"payload")
+        intended = fs.stat(source, name)
+        assert intended is not None
+        operations.append(_operation(
+            index, OperationKind.COPY, source_rel_path=name, target_rel_path=name,
+            source_expected=intended, target_expected=None, intended=intended,
+        ))
+
+    def checkpoint() -> None:
+        if fs.interrupt_stream:
+            fs.interrupt_stream = False
+            raise PauseRequested() if interruption == "pause" else Canceled()
+
+    class EscapingPolicy:
+        def on_item_failed(self, *args):
+            raise RuntimeError("injected policy escape")
+
+    def run() -> None:
+        _run(
+            _xset(_plan(source, target, tuple(operations))), fs=fs,
+            checkpoint=checkpoint,
+            policies=_policies(failure=EscapingPolicy())
+            if interruption == "escape" else _policies(),
+        )
+
+    if interruption in {"pause", "cancel", "escape"}:
+        expected = {"pause": PauseRequested, "cancel": Canceled, "escape": RuntimeError}
+        with pytest.raises(expected[interruption]):
+            run()
+        assert len(descriptors) == 1
+    else:
+        run()
+        assert len(descriptors) == 2
+    assert all(closed for _, closed in descriptors)
 
 
 @pytest.mark.skipif(os.name != "nt", reason="requires native metadata handles")
@@ -1395,7 +1594,10 @@ def test_full_copy_has_no_writer_flush_and_finalizes_before_restrictive_acl(
     assert result.status is SessionState.COMPLETED
     assert (target / "file.bin").read_bytes() == b"payload"
     assert fs.writer_flushes == 0
-    assert fs.calls == ["open", "acl", "basic", "flush", "close"]
+    assert fs.calls == ["create", "acl", "basic", "flush"]
+    assert fs.copied_descriptor is not None
+    with pytest.raises(OSError):
+        os.fstat(fs.copied_descriptor)
     assert _recorder_names(recorder) == ["copied"]
 
 
@@ -1527,6 +1729,15 @@ class NoRepairReuseFileSystem(NativeFileSystem):
     def _stat_path(self, path: Path) -> FileStat | None:
         result = super()._stat_path(path)
         if path == self.published_path and result is not None:
+            self.target_comparisons += 1
+            self.comparison_stat = result
+        return result
+
+    def _stat_handle(self, handle: int, basic=None) -> FileStat:
+        result = super()._stat_handle(handle, basic)
+        files = self._copied_files()
+        copied = None if files is None else files.get(self.published_path)
+        if copied is not None and copied.handle == handle:
             self.target_comparisons += 1
             self.comparison_stat = result
         return result
@@ -1862,7 +2073,9 @@ def test_published_copy_metadata_survives_process_exit_after_record(
         if windows is None:
             os._exit(90)
         native_flush = windows.flush_file_buffers
+        native_close = os.close
         handle_events = []
+        copied_descriptors = {}
 
         def observe_native_flush(handle):
             handle_events.append(("native-flush", None, handle))
@@ -1870,22 +2083,36 @@ def test_published_copy_metadata_survives_process_exit_after_record(
 
         windows.flush_file_buffers = observe_native_flush
 
+        def observe_descriptor_close(descriptor):
+            native_close(descriptor)
+            handle = copied_descriptors.pop(descriptor, None)
+            if handle is not None:
+                handle_events.append(("close", None, handle))
+
+        os.close = observe_descriptor_close
+
         class FlushObservedFileSystem(ns["NativeFileSystem"]):
             def __init__(self):
                 self.directory_flushed = False
 
-            def _open_metadata_handle(self, path):
-                handle = super()._open_metadata_handle(path)
+            def create_temp(self, path, *, allocation_size):
+                import msvcrt
+                stream = super().create_temp(path, allocation_size=allocation_size)
+                descriptor = stream.fileno()
+                handle = msvcrt.get_osfhandle(descriptor)
+                copied_descriptors[descriptor] = handle
                 handle_events.append(("open", path, handle))
-                return handle
+                return stream
+
+            def publish_new(self, temp, target):
+                files = self._copied_files()
+                handle = files[temp].handle
+                super().publish_new(temp, target)
+                handle_events.append(("publish", target, handle))
 
             def _set_basic_info(self, handle, basic):
                 handle_events.append(("basic", None, handle))
                 return super()._set_basic_info(handle, basic)
-
-            def _close_handle(self, handle):
-                handle_events.append(("close", None, handle))
-                return super()._close_handle(handle)
 
             def flush_directory(self, path):
                 result = super().flush_directory(path)
@@ -1940,9 +2167,17 @@ def test_published_copy_metadata_survives_process_exit_after_record(
                     ("open", temp_handle),
                     ("basic", temp_handle),
                     ("native-flush", temp_handle),
+                    ("publish", temp_handle),
+                    ("basic", temp_handle),
+                    ("native-flush", temp_handle),
                     ("close", temp_handle),
                 ]:
                     os._exit(25)
+                observed = fs.stat(target, "file.bin")
+                if (observed.mtime_ns != attestation.subject.mtime_ns
+                        or observed.file_identity != attestation.subject.file_identity
+                        or observed.metadata != source_stat.metadata):
+                    os._exit(26)
                 with marker.open("wb", buffering=0) as stream:
                     stream.write(attestation.content.digest.hex().encode("ascii"))
                     os.fsync(stream.fileno())
@@ -2637,6 +2872,7 @@ class BackupShapeFileSystem(NativeFileSystem):
         self.security_pairs: list[tuple[Path, Path]] = []
         self.writer_flushes = 0
         self.handle_flushes = 0
+        self.temp_descriptors: dict[Path, int] = {}
 
     def open_source(self, path: Path):
         stream = super().open_source(path)
@@ -2644,7 +2880,9 @@ class BackupShapeFileSystem(NativeFileSystem):
 
     def create_temp(self, path: Path, *, allocation_size: int | None):
         self.temp_requests.append((path, allocation_size))
-        return super().create_temp(path, allocation_size=allocation_size)
+        stream = super().create_temp(path, allocation_size=allocation_size)
+        self.temp_descriptors[path] = stream.fileno()
+        return stream
 
     def finalize_temp(self, path: Path, *args, **kwargs) -> FileStat:
         before = self.handle_flushes
@@ -2690,6 +2928,17 @@ def test_copied_backup_stays_serial_hashless_fixed_chunk_and_unallocated(
         intended=source_stat,
     )
     backend = CountingCopyBackend()
+    closed_descriptors: set[int] = set()
+    native_close = os.close
+
+    def observe_close(descriptor: int) -> None:
+        native_close(descriptor)
+        if descriptor in fs.temp_descriptors.values():
+            with pytest.raises(OSError):
+                os.fstat(descriptor)
+            closed_descriptors.add(descriptor)
+
+    monkeypatch.setattr(os, "close", observe_close)
     worker_names: list[str | None] = []
     real_thread = executor_pipeline.Thread
 
@@ -2730,6 +2979,9 @@ def test_copied_backup_stays_serial_hashless_fixed_chunk_and_unallocated(
     assert backup_temps[0][0] in fs.finalized_paths
     assert fs.writer_flushes == 0
     assert dict(fs.finalization_flushes)[backup_temps[0][0]] == 1
+    if os.name == "nt":
+        assert len(fs.temp_descriptors) == 2
+        assert set(fs.temp_descriptors.values()) == closed_descriptors
     assert worker_names == [
         "namisync-copy-hasher",
         "namisync-copy-writer",

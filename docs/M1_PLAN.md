@@ -67,43 +67,63 @@ use small atomic commits with their own verification and independent review.
 Refusal selection may change; publication, recovery-artifact and recording
 facts and their settlement meaning may not.
 
-**First atomic outcome — fresh-copy publication checks.** Runtime owns the
-change; native adapters and executor fixtures/oracle are direct consumers.
-Reuse the post-checkpoint preparation source-fidelity observation for fresh COPY
-and MOVE_UPDATE publication, retaining retry observations, unconditional target
-fidelity, temp identity, the MOVE_UPDATE old-path check and final target admission.
-Remove repeated final
-source admission only where no further source access occurs (these publication
-paths and MOVE/RECASE rename). Simplify retained-target malformed-path refusal
-ordering. Preserve dispatch admission, UPDATE backup sequencing, fallback and
-held-attribute obligations, all effects, settlement and recovery facts.
-The finite population is executor runtime, its runtime/native/settlement tests,
-the existing settlement oracle/baseline if traces change, and EXECUTOR,
-PERFORMANCE, CHANGELOG and HANDOFF. Existing differential and guard-scan helpers
-provide evidence, with any needed checker correction reviewed explicitly.
-Acceptance is the verification below, including per-row trace disposition and
-fresh independent review, in one atomic production commit. No handle-lifecycle,
-drift-fact or direct-write edits belong to this outcome. The run's decision and
-mandatory-stop rules apply unchanged.
+**First outcome delivered — `a6e2306`.** Fresh COPY/MOVE_UPDATE publication
+reuses preparation's source fidelity; retries still recheck it. Final source
+admissions with no later source access and retained-target refusal-precedence
+scaffolding are removed. Target checks, UPDATE, fallback admission, effects and
+settlement remain unchanged. Ordinary tests, imports, 67-group differential,
+guard scan, independently classified 70-row oracle re-pin and committed 30×3
+oracle passed. All 25 five-band executions/readbacks passed; the small-file
+median is 1.163 MiB/s, below the non-gating goal. PERFORMANCE and
+`build/executor-simplification-20260929/` retain measurements and exact evidence.
 Automatic approval review rejected target-fidelity consolidation even after the
 user explicitly approved the bounded proposal. That portion remains unapplied;
 the first outcome uses the smaller source-only consolidation instead.
 
-**Next atomic outcome — native copied-file handle continuity.** After the first
-outcome closes, keep existing core filesystem and pipeline signatures and retain
-the owned-temp descriptor inside the native invocation. Reuse it through
-metadata, flush, conditional publication/replacement and the first successful
-post-publication observation. Release per file, including terminal failure and
-backup paths; invocation exit remains the final cleanup boundary. Keep retry and
-uncertain-publication namespace observations and existing UPDATE recovery order.
-The finite population is executor native and its narrow runtime release seam,
-native/runtime/ACL/settlement tests, the oracle/baseline only if traces change,
-and EXECUTOR, PERFORMANCE, CHANGELOG and HANDOFF. Revalidate these seams against
-the integrated predecessor. Native continuity, ACL, rename/replacement,
-timestamp and lifecycle witnesses plus the run's verification below form the
-gate for one atomic commit. No new core contract, pipeline API, direct-write
-mode or race-defense mechanism is included. The retained-permission exception
-below is approved; other undeclared differences still require a decision.
+**Second outcome verified — native copied-file handle continuity.** One
+invocation-owned descriptor now covers writing, metadata, flush, conditional
+publication and successful observation, with release before recording and on
+operation/invocation exit. Public APIs, retry namespace proofs and UPDATE
+recovery remain unchanged. Native continuity, ACL, timestamp, lifecycle and
+exFAT rename witnesses pass; the latter does not exercise the excluded FileIdInfo
+defect. The unchanged 30×3 oracle, 67-group differential, guard scan, all 12
+imports, 1,479 executor/workflow tests and 5,633 ordinary tests pass.
+All 25 five-band executions/readbacks pass, but medians are slower than result 1:
+small-file throughput is 0.737 MiB/s. PERFORMANCE retains the measured breakdown
+and bounded handle/fallback diagnostic; no throughput lift is claimed.
+Real external-mutation controls remain on narrowly scoped path-finishing
+fallbacks where native retained handles prevent their setup. All original
+identity/refusal assertions remain; native witnesses separately prove blocked
+pathname access and truthful settlement. Source-open and post-close controls
+retain native behavior. No new namespace/race guard was introduced.
+
+**Following atomic outcomes — planner fidelity, then verifier leaf proof.**
+Read-only design inspected `a6e2306`; refresh the affected seams against the
+integrated handle outcome before implementation. First share the narrow
+planner-used metadata/link-count predicate among core planning, preflight,
+executor plan admission and recorder plan acceptance. Preserve existence,
+kind, size, mtime tolerances, available identity, managed attributes and
+MOVE/MOVE_UPDATE link eligibility. Retain full observations for publication,
+UPDATE backup/live witnesses, MOVE_UPDATE old/trash recovery, optimistic DB
+concurrency, integrity and replay. Pure rename compares its post-effect subject
+with the full admitted observation, not incidental reviewed metadata.
+UPDATE backup repair and failed-replacement restoration likewise use the full
+admitted live-target observation; their strict version checks remain unchanged.
+Failed readonly-delete restoration uses its already-admitted target observation.
+The finite test population is core planning, planner eligibility/casing,
+preflight drift, executor runtime/settlement/cancellation, recorder sync/move
+and workflow composition. Update those component owners and this register,
+PERFORMANCE, CHANGELOG and HANDOFF in that atomic commit.
+
+Then consolidate verifier ordinary-leaf reparse proof into its existing opened
+handle check. Keep placeholder inspection before opening and ancestor reparse
+refusal before the next descendant lookup: these prevent reaching uninspected
+placeholder directories before final-path proof. Keep root admission/holds,
+opened-volume corroboration, share/cache behavior and read-stability checks.
+Native verifier and its focused tests plus VERIFIER and the delivery/evidence
+documents are the finite population. Each outcome uses the verification below
+and independent review; no source-freshness API, persisted-shape change,
+continuation merger, target-check consolidation or direct-write work is included.
 
 **Equivalence against the starting commit.**
 - *Must match:* effects, final managed trees, owned artifacts, recorder commands

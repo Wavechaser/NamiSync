@@ -545,6 +545,60 @@ The task's `scripts/five_band.ps1` and `five_band_receipt.py` adapt the existing
 full-corpus driver to bind an exact precommit candidate; historical references
 and all failed correctness receipts remain intact.
 
+### Copied-file handle continuity — 2026-09-29
+
+Measured the frozen precommit candidate on `a6e23064`, with exact dirty-source
+hashes recorded, after 5,633 ordinary tests and the reviewed native lifecycle,
+ACL and fallback-control migration. The same five F:→G: bands ran serially with
+five samples each, normal rig metrics and readback. All 25 executions/readbacks
+passed with recording OK and zero remaining reservations. Source identity and
+the original 1,587-entry manifest stayed unchanged; product/rig/test/driver
+dependencies stayed fixed, and manifest-owned cleanup removed all targets and
+sidecars.
+
+| Workload | Candidate median [min–max], s | MiB/s | Time versus source-consolidation result |
+| --- | ---: | ---: | ---: |
+| 1,000 × 4 KiB | 5.298 [4.705–5.661] | 0.737 | +57.8% |
+| 512 × 128 KiB | 2.720 [2.045–2.855] | 23.530 | +53.2% |
+| 64 × 4 MiB | 0.526 [0.396–0.589] | 486.584 | +50.6% |
+| 4 × 128 MiB | 0.365 [0.345–0.424] | 1,401.369 | +15.4% |
+| 1 × 4 GiB | 2.232 [1.963–2.312] | 1,834.736 | +4.6% |
+
+These sequential endpoint measurements show slower medians, not a throughput
+lift. The 4 KiB and 128 MiB ranges do not overlap the preceding run; the other
+three do. The small-file goal remains unmet. Its backend median is 0.696 s and
+time outside the backend is 4.616 s; the 4 GiB split is 1.820 s and 0.403 s.
+Separate medians need not sum to the median total. These buffered repeated-source
+results do not establish cold-cache/device ceilings or isolate the cause of the
+change. No samples were discarded.
+
+Receipts are under `build/executor-simplification-20260929/measurements/`, prefix
+`result2-a6e23064-20260929-163929-812e188a`, including the immediate-predecessor
+comparison against `result1-dadc1fef-20260929-153840-0bb41f93` and accepted
+predecessor `a6e2306`. That comparison preserves the earlier precommit identity
+instead of relabeling its recorded HEAD.
+
+To discriminate handle-selection cost from the historical endpoint difference,
+a bounded diagnostic ran four fresh processes in retained/fallback/fallback/
+retained order on 1,000 × 4 KiB, five samples each. The fallback only overrides
+`NativeFileSystem._copied_files` to return `None` inside that process; it uses
+the current candidate's existing path-finishing branch, not the whole old
+commit. Rig flags, readback and cleanup remain unchanged. All 20 samples passed
+with matching dependency/source manifests and owned-target teardown.
+
+The ten retained-handle samples have median 5.679 s [4.672–6.127], versus 5.909 s
+[5.009–6.100] for fallback: −3.9% pooled time, with paired process differences
+of −5.1% and −0.2%. Overlapping ranges and uncontrolled host variation prevent
+a throughput-lift claim. The comparison does not support attributing the
+historical +57.8% small-file delta to handle selection. It adds no gate and
+discards no sample. Prefix `handle-abba-20260929-164758-75598d0c` retains the
+four reports, mode/import receipts, driver hashes and summary. The preceding
+`handle-abba-20260929-164651-840e44f6` failed before any sample or target creation
+because the child lacked the repository import path; its exact driver and
+failure receipts remain. The corrected child puts this checkout first before
+product and rig imports; a supplemental read-only origin check records both
+module paths against unchanged driver/source bytes.
+
 ### Full executor corpus after narrow runtime admission — 2026-09-29
 
 Measured clean implementation `23589bd39a620ef4e5b31ddf8a9940a6628cadbf`

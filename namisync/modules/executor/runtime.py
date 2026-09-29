@@ -77,6 +77,7 @@ from .native import (
     _UpdateBackupDrift,
     _can_delegate_held_resolution,
     _invocation_root,
+    _release_copied_files,
     _root_invocation_scope,
 )
 from .pipeline import _allocation_size, _copy_chunk_size
@@ -1538,6 +1539,7 @@ def _backstop_operation(
             )
         state.effects.settle(operation.op_id)
         state.effects.retire(operation.op_id)
+        _release_copied_files()
     except Exception as settlement_error:
         escaped.add_note(
             "executor exception backstop also failed: "
@@ -3370,6 +3372,7 @@ def _settle(
     progress.settled(operation, settled.outcome)
     state.effects.settle(operation.op_id)
     state.effects.retire(operation.op_id)
+    _release_copied_files()
 
 
 def _settle_failure(

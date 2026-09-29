@@ -1114,6 +1114,7 @@ class FlushTempSubstitutionRecorder(FakeRecorder):
 
 def test_update_revalidates_prepared_temp_after_recorder_flush(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     source, target = _roots(tmp_path)
     source_name = "file.bin"
@@ -1121,6 +1122,8 @@ def test_update_revalidates_prepared_temp_after_recorder_flush(
     published = target / source_name
     published.write_bytes(b"OLD!-CONTENT")
     fs = NativeFileSystem()
+    # Exercise successful substitution on the path-finishing fallback.
+    monkeypatch.setattr(fs, "_copied_files", lambda: None)
     source_stat = fs.stat(source, source_name)
     target_stat = fs.stat(target, source_name)
     assert source_stat is not None and target_stat is not None
@@ -1194,6 +1197,7 @@ class PostPublishSubstitutionFileSystem(NativeFileSystem):
 )
 def test_byte_operation_refuses_substituted_postpublish_identity_before_record(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
     kind: OperationKind,
 ) -> None:
     source, target = _roots(tmp_path)
@@ -1202,6 +1206,8 @@ def test_byte_operation_refuses_substituted_postpublish_identity_before_record(
     (source / source_name).write_bytes(b"GOOD-CONTENT")
     published = target / published_name
     fs = PostPublishSubstitutionFileSystem(published)
+    # Retained native handles block this pathname replacement control.
+    monkeypatch.setattr(fs, "_copied_files", lambda: None)
     source_stat = fs.stat(source, source_name)
     assert source_stat is not None
     target_expected = None
@@ -1248,6 +1254,70 @@ def test_byte_operation_refuses_substituted_postpublish_identity_before_record(
     assert xset.published_evidence == {}
     if kind is OperationKind.MOVE_UPDATE:
         assert (target / "old.bin").read_bytes() == b"OLD!-CONTENT"
+
+
+@pytest.mark.skipif(os.name != "nt", reason="requires retained native handles")
+@pytest.mark.parametrize("seam", ("prepared-temp", "postpublish"))
+def test_native_held_copy_reports_blocked_substitution_truthfully(
+    tmp_path: Path,
+    seam: str,
+) -> None:
+    source, target = _roots(tmp_path)
+    (source / "file.bin").write_bytes(b"GOOD-CONTENT")
+    published = target / "file.bin"
+    prepared = seam == "prepared-temp"
+    if prepared:
+        published.write_bytes(b"OLD!-CONTENT")
+
+    class HeldFileSystem(PostPublishSubstitutionFileSystem):
+        descriptor: int | None = None
+
+        def create_temp(self, path: Path, *, allocation_size: int | None):
+            stream = super().create_temp(path, allocation_size=allocation_size)
+            self.descriptor = stream.fileno()
+            return stream
+
+    fs = HeldFileSystem(published)
+    source_stat = fs.stat(source, "file.bin")
+    assert source_stat is not None
+    operation = _operation(
+        1, OperationKind.UPDATE if prepared else OperationKind.COPY,
+        source_rel_path="file.bin", target_rel_path="file.bin",
+        source_expected=source_stat, target_expected=fs.stat(target, "file.bin"),
+        intended=source_stat,
+    )
+    temp = target / f"file.bin.synctmp-{RUN_ID}-{operation.op_id}"
+    recorder = FlushTempSubstitutionRecorder(temp) if prepared else FakeRecorder()
+    xset = _xset(_plan(source, target, (operation,), trash_on_update=False))
+
+    result, events, _ = _run(xset, fs=fs, recorder=recorder)
+
+    item = _item_outcome(events)
+    assert result.status is SessionState.FAILED
+    assert result.recording is RecordingStatus.DEGRADED
+    assert fs.substitutions == 0
+    if prepared:
+        assert not recorder.substituted
+        assert item.reason == "recorder-failed"
+        assert item.recording_reason is ItemRecordingReason.RECORDING_PREREQUISITE_FAILED
+        assert "[WinError 5]" in item.recording_detail
+        assert published.read_bytes() == b"OLD!-CONTENT"
+        replacement = temp.with_name(f"{temp.name}.replacement")
+    else:
+        assert item.reason == "io-error"
+        assert item.recording_reason is ItemRecordingReason.UNRECORDED_MUTATION
+        assert "[WinError 5]" in item.detail["message"]
+        assert item.detail["publish_state"] == "published"
+        assert item.detail["durable_state"] == "target-published"
+        assert published.read_bytes() == b"GOOD-CONTENT"
+        replacement = published.with_name(f"{published.name}.replacement")
+    assert replacement.read_bytes() == b"EVIL-CONTENT"
+    assert not temp.exists()
+    assert recorder.calls == []
+    assert xset.published_evidence == {}
+    assert fs.descriptor is not None
+    with pytest.raises(OSError):
+        os.fstat(fs.descriptor)
 
 
 @pytest.mark.parametrize(
@@ -2068,6 +2138,7 @@ class RootSwapAfterCopyBackend(NativeCopyBackend):
 @pytest.mark.usefixtures("fallback_root_holds")
 def test_copy_prepare_revalidates_root_after_blocking_boundaries(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
     swap_boundary: str,
 ) -> None:
     source, target = _roots(tmp_path)
@@ -2095,6 +2166,9 @@ def test_copy_prepare_revalidates_root_after_blocking_boundaries(
         temp_name=temp_name,
         swap_on_source_enter=swap_boundary == "source-open",
     )
+    if swap_boundary == "after-copy":
+        # The decoy setup reads the temp by pathname before swapping the root.
+        monkeypatch.setattr(fs, "_copied_files", lambda: None)
     policies = (
         _policies()
         if swap_boundary == "source-open"
@@ -2175,6 +2249,7 @@ class TargetRootSwappingRecorder(FakeRecorder):
 @pytest.mark.usefixtures("fallback_root_holds")
 def test_update_rejects_target_root_swap_after_recorder_barrier(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     source, target = _roots(tmp_path)
     redirected = tmp_path / "redirected-target"
@@ -2184,6 +2259,8 @@ def test_update_rejects_target_root_swap_after_recorder_barrier(
     (source / source_name).write_bytes(b"new-version")
     (target / source_name).write_bytes(b"old-version")
     fs = TargetRootReadGuardFileSystem(target)
+    # Keep the real root swap on the path-finishing fallback.
+    monkeypatch.setattr(fs, "_copied_files", lambda: None)
     source_stat = fs.stat(source, source_name)
     target_stat = fs.stat(target, source_name)
     assert source_stat is not None and target_stat is not None
@@ -2261,6 +2338,7 @@ class PublishedBackoffRootSwapFileSystem(TargetRootReadGuardFileSystem):
 @pytest.mark.usefixtures("fallback_root_holds")
 def test_published_retry_rejects_matching_decoy_after_target_root_swap(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
     failure_point: str,
 ) -> None:
     source, target = _roots(tmp_path)
@@ -2270,6 +2348,8 @@ def test_published_retry_rejects_matching_decoy_after_target_root_swap(
     source_name = "file.bin"
     (source / source_name).write_bytes(b"new-version")
     fs = PublishedBackoffRootSwapFileSystem(target, failure_point)
+    # Both injections precede the successful observation that releases the file.
+    monkeypatch.setattr(fs, "_copied_files", lambda: None)
     source_stat = fs.stat(source, source_name)
     assert source_stat is not None
     operation = _operation(

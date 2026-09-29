@@ -3,8 +3,9 @@
 Status: the native executor covers every reviewed operation kind on local
 Windows filesystems. Normal copies use one bounded
 reader/hasher/writer pipeline at a time, fixed adaptive chunks, XXH3-128
-evidence, measured conditional preallocation, and single-handle native
-finalization. Successful byte-producing operations now publish exact
+evidence, measured conditional preallocation, and one native owned-temp handle
+through writing, finalization, publication and the successful published
+observation. Successful byte-producing operations now publish exact
 continuation evidence for optional in-session readback. External writers remain
 outside NamiSync's volume-lock contract; the residual races are documented
 below rather than presented as closed.
@@ -281,6 +282,11 @@ and-swap guarantee.
 
 1. Validate expected source and destination states.
 2. Create an exclusive exact-name temp in the final target parent and volume.
+   An active Windows native invocation uses `CREATE_NEW` with data, attribute
+   and delete access and read/write/delete sharing. The invocation owns the
+   descriptor; the pipeline receives an unbuffered writer view whose close does
+   not close that descriptor. Direct native calls outside an invocation and
+   non-Windows adapters retain their existing path-based behavior.
    At or above the measured private 8 MiB threshold, request exactly the
    reviewed allocation without advancing logical EOF. Only explicitly
    unsupported allocation falls back; disk-full, quota, permission, and
@@ -293,7 +299,7 @@ and-swap guarantee.
    and writer are the only workers; the caller admits reads, checkpoints, and
    reports progress only after hash and full write complete in FIFO order.
    Every file size, including empty and 4 KiB, uses this same pipeline.
-5. Close the content writer without flushing it. Open one finalization handle
+5. Close the content writer view without flushing it. Reuse its retained handle
    before any opted-in ACL is copied, apply normalized creation/mtime/access and
    managed attributes while withholding readonly, issue exactly one
    `FlushFileBuffers` on that held handle, and retain its normalized stat.
@@ -303,14 +309,22 @@ and-swap guarantee.
    is recorded.
 7. Re-check destination expected absence/state at publish and use a conditional
    atomic primitive appropriate to the planned before-state.
-8. Atomically publish with the Windows/local-filesystem primitive.
-9. Compare one post-publish target stat with the normalized temp baseline.
+8. Atomically publish using the retained handle's `FileRenameInfo`, with
+   replacement disabled for COPY/MOVE_UPDATE and enabled for UPDATE. Registry
+   ownership moves from the temp name to the target only after the syscall
+   succeeds; a refused rename leaves the original handle and temp available.
+9. Compare one post-publish handle stat with the normalized temp baseline.
    Before attestation, require matching kind and size plus stable identity when
    the target profile supplies it. Repair and flush only fields publication
    changed, including name-tunneled creation time or deferred readonly;
    otherwise perform no target metadata write, target reopen, or second file
    flush. The same observed stat is reused for this binding, the size guard,
-   and attestation, so the check adds no filesystem call.
+   and attestation, so the check adds no filesystem call. Close the retained
+   descriptor after successful observation/repair, before parent-directory
+   flushing and recording. The returned metadata must remain stable after that
+   final close. Copied or inherited ACLs may deny a fresh reopen or pathname
+   publication while the retained handle still has its previously granted
+   access; the user-approved exception in M1_PLAN permits that handle to finish.
 10. Require the published target size to equal the hashed byte count before any
     operation-specific destructive completion step. MOVE_UPDATE builds the
     attestation at this point, so an attestation-construction failure cannot
@@ -347,6 +361,23 @@ removes exact-grammar regular files whose embedded run id differs from the
 current run; current-run temps remain under per-operation retry/cancel cleanup.
 Recovery never recurses, enters `.synctrash`, or deletes a substring lookalike.
 
+Copied-file descriptors belong only to the native invocation, never to the
+adapter or a continuation. Successful published observation releases each file;
+copied-backup publication releases its own file before returning. Exact temp
+cleanup releases its descriptor before the existing guarded deletion. Accepted
+operation retirement releases remaining copied files before the next serial
+operation; scope exit releases every leftover on pause, cancellation or escape.
+Retry and uncertain-publication classification retain their namespace probes.
+Real substitution and root-swap controls use the path-finishing fallback where
+their setup otherwise reads or replaces a retained copied file by pathname,
+so matching decoys and same-size/same-mtime identity changes reach the original
+refusal assertions. Controls before temp creation or after successful published
+observation retain the native path.
+Separate native controls retain the copied-file descriptor and require the
+blocked pathname read/substitution plus truthful prerequisite or
+published-failure settlement; they do not add a namespace observation to the
+successful path.
+
 `NativeCopyBackend` accepts keyword-only `queue_items=32` and
 `poll_seconds=0.01` for focused pipeline scheduling tests. Queue capacity is a
 strict non-Boolean integer from 1 through 32. Poll intervals are non-Boolean,
@@ -376,7 +407,8 @@ target. With trash-on-update enabled it:
    prepared-temp, source, and live-target guards; a hardlink defers metadata
    repair because it still shares the live inode;
 5. clears readonly on the live target if Windows requires it for replacement;
-6. atomically publishes the prepared temp over the live path with `os.replace`;
+6. atomically publishes the prepared temp over the live path with replacement
+   enabled on the retained handle, or `os.replace` on the existing fallback;
 7. applies the new file's readonly bit and remaining post-publish metadata;
 8. validates and completes hardlink-backup metadata after the replacement, then
    performs the best-effort parent flushes, constructs the attestation, and

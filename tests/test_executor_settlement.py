@@ -507,8 +507,17 @@ def test_unexpected_base_exception_cleans_owned_temp_before_propagating(
 class SharingOnceFileSystem(NativeFileSystem):
     def __init__(self) -> None:
         self.attempts = 0
+        self.copied_descriptor: int | None = None
+
+    def create_temp(self, path: Path, *, allocation_size: int | None):
+        stream = super().create_temp(path, allocation_size=allocation_size)
+        self.copied_descriptor = stream.fileno()
+        return stream
 
     def publish_new(self, temp: Path, target: Path) -> None:
+        if os.name == "nt":
+            assert self.copied_descriptor is not None
+            assert os.fstat(self.copied_descriptor).st_size > 0
         self.attempts += 1
         if self.attempts == 1:
             raise _sharing_violation("sharing violation")
@@ -1058,6 +1067,9 @@ def test_transient_sharing_violation_retries_within_bound(tmp_path: Path) -> Non
     assert result.status is SessionState.COMPLETED
     assert fs.attempts == 2
     assert (target / "file.bin").read_bytes() == b"retry"
+    assert fs.copied_descriptor is not None
+    with pytest.raises(OSError):
+        os.fstat(fs.copied_descriptor)
 
 
 class CopyMetadataSharingOnceFileSystem(NativeFileSystem):
@@ -1142,6 +1154,7 @@ def _replace_published_target(path: Path, fs: NativeFileSystem) -> None:
 )
 def test_retry_rejects_replaced_published_target(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
     kind: OperationKind,
     before_stat_cache: bool,
 ) -> None:
@@ -1153,6 +1166,9 @@ def test_retry_rejects_replaced_published_target(
         published_target,
         before_stat_cache=before_stat_cache,
     )
+    if before_stat_cache:
+        # The native descriptor is still retained at this injection point.
+        monkeypatch.setattr(fs, "_copied_files", lambda: None)
     operation, published_target = _reviewed_byte_operation(
         kind, source, target, fs
     )
@@ -1189,6 +1205,7 @@ def test_retry_rejects_replaced_published_target(
 )
 def test_cancel_after_published_target_changes_reports_changed_durable_state(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
     kind: OperationKind,
 ) -> None:
     source, target = _roots(tmp_path)
@@ -1199,6 +1216,8 @@ def test_cancel_after_published_target_changes_reports_changed_durable_state(
         published_target,
         before_stat_cache=True,
     )
+    # The control must replace the file before requesting cancellation.
+    monkeypatch.setattr(fs, "_copied_files", lambda: None)
     operation, published_target = _reviewed_byte_operation(
         kind, source, target, fs
     )
