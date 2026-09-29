@@ -33,7 +33,6 @@ from namisync.core.root_authority import (
     RootHold,
     admit_root_chain,
     hold_root,
-    is_placeholder_stat,
     is_reparse_stat,
 )
 
@@ -213,7 +212,7 @@ def _reject_reparse_components(
     for component in PureWindowsPath(normalized_path).parts:
         current = current / component
         observed = _verification_lstat(str(current))
-        if is_placeholder_stat(observed) or is_reparse_stat(observed):
+        if is_reparse_stat(observed):
             raise UnsupportedVerification(
                 f"verification refuses reparse component: {component}"
             )

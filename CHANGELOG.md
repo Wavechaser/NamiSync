@@ -1037,33 +1037,37 @@ claims explicit, independently reviewable, and regression-backed.
 - Re-pin the settlement oracle with independently reviewed deletion-only source
   probe traces: 27 changed and 43 unchanged rows, with settlement facts unchanged.
   The 67-group differential against `b1b58476` has no compared-result differences.
-- Pass 5,611 ordinary tests (four unavailable symlink-privilege skips), all 12
-  import contracts and all 25 five-band executions/readbacks. Small-file median
-  is 3.358 s / 1.163 MiB/s; the 1.6 MiB/s goal remains unmet and historical
-  timing ranges overlap. Retain exact provenance and raw samples in PERFORMANCE.
 - Carry the native owned-temp handle through writing, metadata, flush,
   conditional publication and post-publication observation; close it before
   recording and on operation/invocation exit. Preserve retry namespace proofs
   and UPDATE recovery order. Native lifecycle, ACL and exFAT rename witnesses
   cover the approved retained-handle permission behavior.
-- Pass 5,633 ordinary tests for handle continuity, the unchanged 30×3 oracle
-  and all 25 five-band executions/readbacks. The new small-file median is
-  5.298 s / 0.737 MiB/s: slower than the preceding run, with no throughput lift
-  claimed. Preserve fallback fault-control assertions and native blocked-access
-  witnesses; PERFORMANCE retains samples and diagnostic limits.
+- Preserve fallback fault-control assertions and native blocked-access
+  witnesses under the retained-handle behavior.
 - Share planner-used metadata/link-count comparison across preflight, executor
   and recorder admission. Ignore creation time, unmanaged attributes and
   non-move link counts while retaining full observations and existing identity
   semantics. Bind rename/recovery witnesses and failed-operation restoration
   to admitted target metadata; retain strict publication, backup, concurrency
   and integrity checks.
-- Pass 5,702 ordinary tests for planner-fidelity, 904 focused checks, all 12
-  import contracts, the unchanged oracle/differential and 25 five-band samples.
-  Small-file throughput is 0.602 MiB/s; no throughput lift is established.
+- Pass 5,611 / 5,633 / 5,702 ordinary tests for the three executor outcomes,
+  all 12 import contracts and each outcome's oracle/differential and 25 five-band
+  samples. Small-file medians are 1.163 / 0.737 / 0.602 MiB/s; the goal remains
+  unmet and no throughput lift is established. PERFORMANCE retains full samples,
+  provenance and the bounded handle/fallback diagnostic.
 - Record the pre-existing native NORMAL→ARCHIVE rename/hardlink mismatch as
   open and deferred, with matching starting-baseline and candidate witnesses.
-  Approve the smaller verifier cleanup: preserve its walk/results and remove
-  only the duplicate placeholder classifier.
+- Remove only the verifier's duplicate placeholder classifier and unused
+  import, preserving the complete pre-open walk, filesystem calls and result
+  classes. Keep the disposition table in DEFENSE §2.5.3 and clarify README's
+  plan-admission policy.
+- Verify the final classifier cleanup with 239 focused, 1,465 neighborhood and
+  5,702 ordinary tests, 12 import contracts, unchanged oracle/differential and
+  85 package-consumer checks after the README review correction.
+- Pass all 25 final measurement/readback samples. Small-file throughput is
+  0.628 MiB/s and the 4 GiB band is 1,765.673 MiB/s; goals remain unmet and
+  overlapping ranges establish no lift. Archive only the clean task-created
+  baseline checkout; preserve original fixtures and all evidence.
 - Direct writes remain deferred; target-fidelity consolidation remains
   unapplied after automatic approval review rejected it.
 

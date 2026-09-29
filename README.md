@@ -9,7 +9,7 @@ or an unattended deletion engine.
 Every sync scans both sides, builds a deterministic dry-run plan, and requires
 explicit human review and exact confirmation. The plan captures deletion,
 filter, preservation, and casing policy; execution then rechecks roots, volume
-identity, capacity, file types, metadata, and dependencies immediately before
+identity, capacity, file types, planner-relevant metadata, and dependencies before
 touching files. Copies use a bounded pipeline and atomic target-volume
 publication, and completed mutations reach the local WAL-backed ledger only
 after the corresponding filesystem operation succeeds.
@@ -32,8 +32,9 @@ optional scan-warning detail is omitted without losing the warning or valid
 observations; required text is refused rather than silently rewritten.
 
 The full data-preservation guarantee assumes managed roots are not being
-changed by other software while NamiSync is mutating them. Observable drift is
-refused or reported, but a writer that wins after a final path-based guard is a
+changed by other software while NamiSync is mutating them. Drift in the facts
+used to plan an action is refused or reported; incidental metadata changes do
+not veto plan-fidelity admission. A writer that wins after a final path-based guard is a
 documented external-writer boundary. The supported assumptions, tolerance
 classes, and exact residual dispositions live in the defense model.
 

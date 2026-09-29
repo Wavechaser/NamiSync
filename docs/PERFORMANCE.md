@@ -627,6 +627,35 @@ Receipts under `build/executor-simplification-20260929/measurements/` use prefix
 the raw `result2-a6e23064-20260929-163929-812e188a` identity and its accepted
 commit `0d7dd6b`; candidate source hashes distinguish this later precommit tree.
 
+### Equivalent verifier classifier cleanup — 2026-09-29
+
+Measured the frozen precommit candidate on `84ce0fb2` after 5,702 ordinary
+tests and 85 fresh package-consumer checks for the final README correction.
+The verifier change removes a redundant Boolean classifier; it preserves the
+component walk, filesystem queries and results. The same five serial F:→G:
+bands passed all 25 executions/readbacks with recording OK and zero reservations.
+Source/dependency manifests stayed fixed and all owned targets/sidecars were
+removed by the existing teardown.
+
+| Workload | Candidate median [min–max], s | MiB/s | Time versus planner-fidelity result |
+| --- | ---: | ---: | ---: |
+| 1,000 × 4 KiB | 6.218 [5.018–6.526] | 0.628 | −4.2% |
+| 512 × 128 KiB | 3.452 [1.854–3.518] | 18.540 | −1.5% |
+| 64 × 4 MiB | 0.489 [0.457–0.732] | 523.690 | −31.0% |
+| 4 × 128 MiB | 0.329 [0.317–0.431] | 1,556.501 | −7.2% |
+| 1 × 4 GiB | 2.320 [1.930–2.391] | 1,765.673 | −6.5% |
+
+All ranges overlap the preceding run. These sequential endpoints establish
+neither a causal throughput lift nor cold-cache/device ceilings; no sample was
+discarded. Both performance goals remain unmet. Small-file backend/outside
+medians are 0.764/5.463 s, and the 4 GiB split is 1.905/0.415 s. Separate medians
+need not sum to the total median. The classifier cleanup saves no filesystem call.
+
+The evidence prefix is `build/executor-simplification-20260929/measurements/`
+`result3b-84ce0fb2-20260929-175649-85162057`. Its predecessor comparison preserves
+the raw `result3a-0d7dd6bf-20260929-173343-1dcc369e` identity and accepted commit
+`84ce0fb`; exact candidate hashes distinguish these two precommit trees.
+
 ### Full executor corpus after narrow runtime admission — 2026-09-29
 
 Measured clean implementation `23589bd39a620ef4e5b31ddf8a9940a6628cadbf`

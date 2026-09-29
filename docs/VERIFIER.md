@@ -136,8 +136,12 @@ and derives its native root from `authority.logical_root`, so it cannot validate
 one root and open another. The native reader then performs its distinct
 chain-only final-touch check without another volume probe; a confirmed held root
 replaces only that root-prefix walk with the current-attribute guard. Its
-root-relative no-follow walk retains raw missing/access behavior while using
-the shared reparse/placeholder classifiers. The default native reader requires
+root-relative no-follow walk retains raw missing/access behavior and applies
+one shared reparse classifier to each component snapshot. The shared placeholder
+predicate requires reparse evidence, so this check also refuses placeholders.
+The complete walk, including the leaf, remains a prerequisite to opening;
+component/stat call order and refusal result classes remain unchanged. The
+default native reader requires
 bound authority, while an unbound context remains only an explicit fake/custom-
 reader test seam. Engine checks opened-handle volume identity from the stream's
 first stat; native final-path-by-handle containment remains independent. A

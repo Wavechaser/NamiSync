@@ -97,7 +97,7 @@ identity/refusal assertions remain; native witnesses separately prove blocked
 pathname access and truthful settlement. Source-open and post-close controls
 retain native behavior. No new namespace/race guard was introduced.
 
-**Third outcome verified — planner-used drift facts.** Core planning now owns
+**Third outcome delivered — `84ce0fb`, planner-used drift facts.** Core planning now owns
 the narrow metadata/link-count predicate shared by preflight, executor plan
 admission and recorder NOOP/MOVE/RECASE/TRASH acceptance. Creation time,
 unmanaged attributes and non-move link counts no longer veto plan admission.
@@ -131,7 +131,7 @@ Raw baseline/candidate vectors are under the evidence root's `differential/`
 `result3a-archive-*.json`. Planner-fidelity success witnesses use stable unmanaged
 attributes; they do not claim to fix the separate native own-effect limitation.
 
-**Next atomic outcome — equivalent verifier classifier cleanup.**
+**Final outcome delivered — equivalent verifier classifier cleanup.**
 The user approved the smaller verifier outcome on 2026-09-29: remove the
 duplicate placeholder classifier from the pre-open reparse condition, preserving
 the walk and result classes. Core placeholder classification already requires
@@ -146,6 +146,18 @@ test family is required for the equivalent condition. The probe receipt is
 unavailable file-symlink cases are explicitly retained. Each outcome uses the verification below
 and independent review; no source-freshness API, persisted-shape change,
 continuation merger, target-check consolidation or direct-write work is included.
+
+The implementation removes only the unused import and redundant classifier call.
+Existing focused tests pass 239; verifier/database/workflow tests pass 1,465.
+The unchanged oracle, 67-group differential, admission scan, imports and
+ordinary suite (5,702 passed, four skips) pass. A README review correction is
+bounded to plan admission; all 85 checks in its five ordinary package-consumer
+modules pass against the final text. All 25 five-band executions/readbacks pass;
+small-file throughput is 0.628 MiB/s and the 4 GiB band is 1,765.673 MiB/s.
+Both goals remain unmet; overlapping ranges establish no throughput lift.
+Independent closeout review passed; no tests are added or retired. Results 1–3
+are closed with the recorded target-consolidation block and approved narrower
+verifier disposition. Direct writes remain deferred.
 
 **Equivalence against the starting commit.**
 - *Must match:* effects, final managed trees, owned artifacts, recorder commands

@@ -1,4 +1,4 @@
-# Latest session — policy-driven executor simplification
+# Latest session — policy-driven executor and verifier simplification
 
 2026-09-29, `milestone1-adelbert`, starting clean at `9b694e0a`.
 The equivalence baseline remains `b1b58476`. The user authorized results 1–3
@@ -23,7 +23,7 @@ Automatic approval review rejected target-fidelity consolidation even after
 explicit user approval; that portion remains unapplied. No rejection was
 bypassed. The smaller source-only outcome passed its gate and review.
 
-## Current planner-fidelity outcome
+## Planner-fidelity outcome — `84ce0fb`
 
 The shared planning predicate now bounds admission metadata to managed attributes
 and MOVE/MOVE_UPDATE link eligibility. Full observations still own publication,
@@ -45,65 +45,50 @@ All 25 five-band executions/readbacks passed under prefix
 throughput is 0.602 MiB/s; no throughput lift is established. PERFORMANCE owns
 the comparison and exact evidence limits.
 
-## Retained handle-outcome evidence
+Evidence root: `build/executor-simplification-20260929/`. Earlier outcome gates,
+measurements and review dispositions remain in M1_PLAN, PERFORMANCE and its
+README. The 70-row oracle pin remains the one accepted in `a6e2306`.
+Retained-handle external-mutation controls use seven narrowly scoped fallback
+sites with their original assertions; native blocked-attempt witnesses remain.
+The exFAT witness proves low-level rename/close stability, not full executor
+acceptance. Preserve failed test/diagnostic receipts alongside successful runs.
 
-Evidence root: `build/executor-simplification-20260929/`.
+## Final verifier outcome
 
-- Native/ACL/retry focused run: 168 passed; final migrated control family:
-  21 passed. Executor/workflow neighborhood: 1,479 passed in
-  `handle-control-final-neighborhood.log`.
-- Ordinary final: 5,633 passed, four unavailable symlink-privilege skips,
-  34 deselected; `differential/result2-ordinary-final.log`. Imports: all 12 kept.
-- Oracle unchanged: 30 scenarios × three, `differential/result2-oracle-initial.log`.
-  Its baseline/pin remain those accepted in `a6e2306`.
-- Differential: 67 groups, zero differences or oracle errors; capture
-  `differential/runs/candidate-result2-handles-790e67a4c7e44f9bb3af36c594f6cfb9/`.
-  Independent dependency audit matches current product/helper/adapter bytes.
-  Guard scan: 70 rows, 391 effects, zero missing admissions.
-- Native NTFS continuity, metadata-after-close, restrictive ACL, conditional
-  rename and lifecycle witnesses pass. `handle-exfat-witness.json` proves
-  K: exFAT rename/collision/replacement and close stability only; it avoids the
-  separately excluded FileIdInfo defect and is not full executor acceptance.
-- Retain failed ordinary/neighborhood and diagnostic receipts. Held-file
-  pathname replacement/read blocked external mutation controls before their
-  intended mutations. Seven narrowly scoped test sites exercise real fallback
-  substitution/root-swap guards with all original assertions retained; native
-  witnesses cover blocked attempts, truthful settlement and descriptor close.
-  Source-open and after-close controls retain native behavior. No production
-  changes were needed for this test migration.
+The first three code outcomes are integrated and independently reviewed.
+The final verifier outcome removes only the duplicate placeholder classifier and
+its unused import. The user chose preserving the walk/result classes: moving
+the leaf check saved no query and changed native junction results. Existing
+verifier/core seams were unchanged between design and integrated `84ce0fb`.
+Focused tests passed 239; the verifier/database/workflow neighborhood passed
+1,465. The initial unknown-department selection error ran no tests and its
+receipt is retained. The final ordinary suite passed 5,702 with four skips and
+34 deselected; imports, unchanged oracle, admission scan and all 67 differential
+groups pass. A README review correction limits the incidental-metadata claim
+to plan admission; all 85 checks in the five ordinary package-consumer modules
+pass after that correction. All 25 final measurement/readback samples pass;
+prefix `measurements/result3b-84ce0fb2-20260929-175649-85162057` retains exact
+provenance and owned cleanup. Small-file throughput is 0.628 MiB/s and the
+4 GiB band is 1,765.673 MiB/s. Both goals remain unmet; no lift is established.
+Independent final review passed. No tests or safeguards were added
+or removed by this verifier outcome. Final receipts use `differential/result3b-*`;
+the 67-group capture is
+`differential/runs/candidate-result3b-verifier-05d1c814c4754f52a91799bd755e0d9a/`.
+The authorized results 1–3 are closed with the target-consolidation block and
+approved verifier disposition recorded above. No direct-write work was started.
 
-Five-band measurement passed all 25 executions/readbacks; prefix
-`measurements/result2-a6e23064-20260929-163929-812e188a`. Small-file median is
-5.298 s / 0.737 MiB/s, slower than the preceding run; no throughput lift is
-claimed. The bounded 20-sample ABBA diagnostic has pooled retained-handle
-median 5.679 s versus fallback 5.909 s, with overlapping ranges. It does not
-attribute the historical slowdown to handle selection. Prefix
-`measurements/handle-abba-20260929-164758-75598d0c` retains all samples and
-provenance; the earlier zero-sample driver failure is preserved.
-Source/outcome, final test-migration and delivery-document independent reviews
-have no findings. Supplemental import-origin and complete measurement audits
-are retained beside the measurement receipts.
+## Deferred findings and preservation
 
-## Immediate continuation
-
-The handle outcome is integrated and planner-fidelity correctness, measurement
-and independent closeout review are complete. A separate verifier
-classifier cleanup follows it. The user approved
-preserving the verifier walk/result classes and removing only the duplicate
-placeholder classifier. Its leaf probe found no query saving and changed native
-junction result classes; M1_PLAN records the narrowed outcome. Read-only design's
-native/runtime blobs match integrated `0d7dd6b`. UPDATE backup repair/restoration and
-failed DELETE restoration must use the full admitted target observation while
-retaining strict recovery comparisons. M1_PLAN owns the finite population.
 Native NORMAL→ARCHIVE own-effect failures reproduce in starting `b1b58476` and
 the candidate across five rename/hardlink cases. This pre-existing mechanism is
 deferred in BUGS/M1_PLAN; its `differential/result3a-archive-*.json` receipts
 preserve actual effects and settlement. Do not mask strict recovery comparisons
 to make these cases pass as part of planner-fidelity work.
 
-Keep the task-created baseline checkout at
+The clean task-created baseline checkout at
 `C:/Users/Spectrum/.codex/worktrees/executor-simplification-baseline/NamiSync`
-through task closeout. Preserve the pre-existing `b8baf42d` root-admission
+was verified at `b1b58476` and archived through the app after the final capture
+and measurement. The archive attachment is recoverable. Preserve the pre-existing `b8baf42d` root-admission
 baseline, original F: benchmark source, historical evidence and recovery bundle.
 All new evidence is ignored under the task evidence root. Native ACL gates use
 the actual Windows user and standard external pytest temp; sandbox identity and
