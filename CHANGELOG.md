@@ -1047,6 +1047,10 @@ claims explicit, independently reviewable, and regression-backed.
 
 #### Optimize root admission with invocation-scoped holds (2026-09-28 – 2026-09-29)
 
+- Account for all four recovery drafts against integrated replacements or the
+  explicit oracle-v2 retirement, preserve their exact commits in a verified
+  local bundle, and prune the four WIP branches. Retain the baseline worktree
+  and raw evidence.
 - Run the five-band executor corpus after the narrow runtime commit: all 25
   executions/readbacks pass with unchanged source and complete rig cleanup. Current
   4 KiB median is 3.627 seconds / 1.077 MiB/s, versus 7.992 seconds in the

@@ -1,38 +1,39 @@
-# Latest session — proportional defense and executor run registration
+# Latest session — root-admission WIP cleanup
 
-2026-09-29, `milestone1-adelbert`, documentation only, after `23589bd` and
-`8159905`.
+2026-09-29, `milestone1-adelbert`, starting clean at `b1b58476`.
 
-## Delivered
+## Cleanup
 
-- `103f3e48` adopted DEFENSE §2.5: demonstrably plausible triggers, proportional
-  scale, the content/structure author split, the plan-fidelity bound, closed
-  catastrophe backstops and guard-family dispositions (§2.5.3).
-- This commit revises §2.5 so the backend executes what the user reviewed and
-  refuses only when the actual effect would differ from the reviewed one;
-  judging what users want belongs to the interface layers. It consolidates the
-  delivered root-admission and incident rounds in M1_PLAN, registers the active
-  executor simplification and throughput run with its declared oracle changes,
-  records device ceilings in PERFORMANCE, and proposes directory-flush batching
-  for M2.
-- Review of `23589bd`: correct and equivalent on held roots; its gain is below
-  run-to-run noise, and its error-precedence fallback is now optional under
-  §2.5.1.
+Accounted for the sole unique commit on each of the four WIP branches, then
+pruned their local refs. None was checked out; no recovery commit was merged.
 
-## Next
+- `c833bb99`: partial oracle-v2 tool draft retired by `3c8b4b41`; finding and
+  probe evidence retained. No product, test or baseline change was in this WIP.
+- `cfcc6ef`: core hold code/tests/docs rebuilt in `6536c041`, replacing identity
+  comparison with strict final-path confirmation; `8cdd669` added live attributes.
+- `0a04921`: docs-only blocked executor proposal superseded by `90b57646`.
+- `7eb8c19d`: preflight code/tests/docs rebuilt in `4263b12` with the held-attribute
+  correction and its native refusal regressions.
 
-The implementer starts M1_PLAN's executor simplification run from this commit:
-one admission per effect, one handle per copied file, planner-used drift facts
-with the verifier walk trimmed, then direct large writes. The section grants
-in-bound decision authority; its equivalence list and "needs a decision" items
-bound it. M1-9 follows the run.
+Exact branch names, tips, unique histories, changed-path populations and
+successor ancestry checks are retained in
+`build/root-admission-optimization-20260928/resume/wip_cleanup_20260929_accounting.json`.
+The neighboring verified `.bundle` preserves all four recovery commits; its
+prerequisite commits remain in the integration branch. Product/tests were not
+changed, so no product test rerun was needed. Documentation links/diff and an
+independent accounting review cover this cleanup.
 
-## Evidence and preservation
+## Next work remains unchanged
 
-Device ceiling scripts and raw results: `build/executor-simplification-20260929/ceilings/`
-(G: scratch removed; F: corpus only read). Earlier review probes:
-`build/executor-review-20260928-30b0c2c8/`. Prior round evidence:
-`build/root-admission-optimization-20260928/`, including the full-corpus
-receipts `executor-runtime-full-23589bd3-20260929-000521-7fea29aa`. Preserve
-`F:\NamiSyncExecutorBenchSource`, the `b8baf42d` baseline worktree, raw/failed
-receipts and recovery refs `cfcc6ef`, `0a04921`, `7eb8c19d`.
+`b1b58476` registered M1_PLAN's executor simplification run after `103f3e48`
+adopted proportional defense. Follow that active register: one admission per
+effect, one handle per copied file, planner-used drift facts with the verifier
+walk trimmed, then direct large writes. Its equivalence list, authorized oracle
+changes and decision boundaries remain binding. This cleanup does not start
+implementation or change the run's scope; M1-9 follows it.
+
+## Preservation
+
+Keep `F:\NamiSyncExecutorBenchSource`, the detached `b8baf42d` baseline worktree,
+raw/failed root-admission and full-corpus receipts, review probes and device
+ceiling evidence. No other branches, worktrees, stashes or remotes were changed.

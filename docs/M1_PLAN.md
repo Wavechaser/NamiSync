@@ -165,7 +165,11 @@ Still binding from this round:
 - **Preservation.** Baseline worktree
   `C:\Users\Spectrum\.codex\worktrees\root-admission-baseline\NamiSync` at
   `b8baf42d` and the 67-group differential (producer `e7ba9b8d`) remain.
-  Recovery refs `cfcc6ef`, `0a04921` and `7eb8c19d` were rebuilt, never merged.
+  Recovery drafts `cfcc6ef`, `0a04921` and `7eb8c19d` were rebuilt, never merged;
+  `c833bb99`'s partial oracle-v2 migration was retired by `3c8b4b41`.
+  All four WIP branches were accounted for and pruned on 2026-09-29. Exact tips,
+  path dispositions and a verified recovery bundle remain under the evidence
+  root's `resume/wip_cleanup_20260929*` receipts.
   The superseded nine-row RO register is in Git at `c05eea25`.
 
 ### Incident repairs and closeout — 2026-09-27
