@@ -599,6 +599,34 @@ failure receipts remain. The corrected child puts this checkout first before
 product and rig imports; a supplemental read-only origin check records both
 module paths against unchanged driver/source bytes.
 
+### Planner-used drift facts — 2026-09-29
+
+The frozen precommit candidate on `0d7dd6bf` passed 5,702 ordinary tests,
+the unchanged oracle and differential before measurement. The same serial
+five-band F:→G: procedure passed all 25 executions/readbacks with recording OK,
+zero remaining reservations, unchanged 1,587-entry source and dependency
+manifests, and complete manifest-owned target/sidecar cleanup.
+
+| Workload | Candidate median [min–max], s | MiB/s | Time versus handle-continuity result |
+| --- | ---: | ---: | ---: |
+| 1,000 × 4 KiB | 6.489 [5.338–6.617] | 0.602 | +22.5% |
+| 512 × 128 KiB | 3.503 [3.188–5.160] | 18.268 | +28.8% |
+| 64 × 4 MiB | 0.708 [0.470–0.734] | 361.539 | +34.6% |
+| 4 × 128 MiB | 0.354 [0.327–0.436] | 1,445.077 | −3.0% |
+| 1 × 4 GiB | 2.482 [1.996–2.520] | 1,650.365 | +11.2% |
+
+No throughput lift is established; four medians are slower and the small-file
+goal remains unmet. Only the 128 KiB ranges do not overlap the preceding run.
+The small-file backend/outside-backend medians are 0.776/5.720 s; the 4 GiB
+split is 2.025/0.341 s. Separate medians need not sum to the total median.
+These sequential, buffered repeated-source measurements do not isolate a code
+cause or establish cold-cache/device ceilings. No samples were discarded.
+
+Receipts under `build/executor-simplification-20260929/measurements/` use prefix
+`result3a-0d7dd6bf-20260929-173343-1dcc369e`. The predecessor comparison retains
+the raw `result2-a6e23064-20260929-163929-812e188a` identity and its accepted
+commit `0d7dd6b`; candidate source hashes distinguish this later precommit tree.
+
 ### Full executor corpus after narrow runtime admission — 2026-09-29
 
 Measured clean implementation `23589bd39a620ef4e5b31ddf8a9940a6628cadbf`

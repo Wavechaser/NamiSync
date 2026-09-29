@@ -16,6 +16,7 @@ from .models import (
     FileRecord,
     FileStat,
     MetadataSnapshot,
+    MANAGED_FILE_ATTRIBUTE_MASK,
     Root,
     ScanResult,
     VolumeEvidence,
@@ -74,6 +75,21 @@ class OperationKind(StrEnum):
     TRASH = "trash"
     DELETE = "delete"
     NOOP = "noop"
+
+
+def planned_metadata_matches(
+    actual: FileStat, expected: FileStat, kind: OperationKind
+) -> bool:
+    """Compare managed attributes and move eligibility, not incidental metadata."""
+
+    return (
+        actual.metadata.attributes & MANAGED_FILE_ATTRIBUTE_MASK
+        == expected.metadata.attributes & MANAGED_FILE_ATTRIBUTE_MASK
+        and (
+            kind not in (OperationKind.MOVE, OperationKind.MOVE_UPDATE)
+            or actual.nlink == expected.nlink
+        )
+    )
 
 
 class OperationReason(StrEnum):

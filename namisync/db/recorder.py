@@ -56,6 +56,7 @@ from namisync.core.planning import (
     canonical_json_bytes,
     operation_projection,
     plan_projection,
+    planned_metadata_matches,
 )
 from namisync.core.scalars import file_index_128_to_text
 from namisync.core.recording import (
@@ -1544,7 +1545,18 @@ class SyncRunRecorder:
 
     def record_noop(self, op: OpId, source: FileStat, target: FileStat) -> None:
         def apply(connection: sqlite3.Connection, plan_op: PlanOperation, at: str) -> None:
-            if source != plan_op.source_expected or target != plan_op.target_expected:
+            if (
+                plan_op.source_expected is None
+                or plan_op.target_expected is None
+                or source.file_identity != plan_op.source_expected.file_identity
+                or target.file_identity != plan_op.target_expected.file_identity
+                or not self._matches_reviewed_stat(
+                    source, plan_op.source_expected, plan_op.kind
+                )
+                or not self._matches_reviewed_stat(
+                    target, plan_op.target_expected, plan_op.kind
+                )
+            ):
                 raise StaleRecordingError("no-op live snapshots differ from the reviewed plan")
             if plan_op.source_rel_path is None:
                 raise StaleRecordingError("no-op reviewed operation has no source path")
@@ -1724,7 +1736,7 @@ class SyncRunRecorder:
             if (
                 operation.prior_target_expected is None
                 or not self._matches_reviewed_stat(
-                    target, operation.prior_target_expected
+                    target, operation.prior_target_expected, operation.kind
                 )
             ):
                 raise StaleRecordingError(
@@ -1845,13 +1857,14 @@ class SyncRunRecorder:
         )
 
     @staticmethod
-    def _matches_reviewed_stat(actual: FileStat, expected: FileStat) -> bool:
+    def _matches_reviewed_stat(
+        actual: FileStat, expected: FileStat, kind: OperationKind
+    ) -> bool:
         return (
             actual.kind is expected.kind
             and actual.size == expected.size
             and actual.mtime_ns == expected.mtime_ns
-            and actual.nlink == expected.nlink
-            and actual.metadata == expected.metadata
+            and planned_metadata_matches(actual, expected, kind)
             and (
                 expected.file_identity is None
                 or actual.file_identity == expected.file_identity
@@ -1865,8 +1878,17 @@ class SyncRunRecorder:
         prior: FileStat,
         at: str,
     ) -> None:
-        if operation.target_expected is not None and prior != operation.target_expected:
-            raise StaleRecordingError("destructive result differs from reviewed target evidence")
+        if operation.target_expected is not None:
+            matches = (
+                self._matches_reviewed_stat(
+                    prior, operation.target_expected, operation.kind
+                )
+                and prior.file_identity == operation.target_expected.file_identity
+                if operation.kind is OperationKind.TRASH
+                else prior == operation.target_expected
+            )
+            if not matches:
+                raise StaleRecordingError("destructive result differs from reviewed target evidence")
         row_id = self._owner._upsert_observation(
             connection,
             self._command.target_location_id,

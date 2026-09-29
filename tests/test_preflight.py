@@ -1455,6 +1455,50 @@ def test_root_swap_and_clone_are_typed() -> None:
     } <= _codes(xset, drifted)
 
 
+@pytest.mark.parametrize("kind", (OperationKind.NOOP, OperationKind.RECASE, OperationKind.MOVE, OperationKind.MOVE_UPDATE))
+@pytest.mark.parametrize("source_subject", (True, False), ids=("source", "target"))
+@pytest.mark.parametrize("mutation", ("created", "unmanaged", "nlink", "managed"))
+def test_preflight_metadata_drift_uses_action_facts(kind, source_subject, mutation) -> None:
+    review = _xset(
+        source_files=(_file("same.bin"),),
+        target_files=(_file("same.bin", volume="DST", index=2),),
+    )
+    original = review.remaining()[0]
+    moving = kind in (OperationKind.MOVE, OperationKind.MOVE_UPDATE)
+    operation = replace(
+        original, kind=kind,
+        target_expected=None if moving else original.target_expected,
+        prior_target_rel_path="old.bin" if moving else None,
+        prior_target_expected=original.target_expected if moving else None,
+    )
+    review = replace(review, plan=replace(review.plan, operations=(operation,)))
+    world = _world(review)
+    subject = Subject(
+        review.plan.source_root.root_id if source_subject else review.plan.target_root.root_id,
+        "SAME.BIN" if source_subject or not moving else "OLD.BIN",
+    )
+    expected = world.stats[subject].stat
+    assert expected is not None
+    if mutation == "nlink":
+        changed = replace(expected, nlink=2)
+    else:
+        changed = replace(expected, metadata=replace(
+            expected.metadata,
+            created_ns=200 if mutation == "created" else expected.metadata.created_ns,
+            attributes=expected.metadata.attributes ^ (
+                0x20 if mutation == "unmanaged" else 2 if mutation == "managed" else 0
+            ),
+        ))
+    stats = dict(world.stats)
+    stats[subject] = StatObservation(changed)
+    codes = _codes(review, replace(world, stats=stats))
+    expected_codes = (
+        {RefusalCode.METADATA_CHANGED}
+        if mutation == "managed" or mutation == "nlink" and moving else set()
+    )
+    assert codes == expected_codes
+
+
 @pytest.mark.parametrize(
     ("issue", "expected"),
     (

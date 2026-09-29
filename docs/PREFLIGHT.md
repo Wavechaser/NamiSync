@@ -176,6 +176,8 @@ the run. It verifies:
   or depends on blocked, failed, canceled, or deferred work;
 - current source/target/type/identity/size/mtime evidence matches each planned
   before-state within capability granularity;
+- managed attribute bits match; link count matches for MOVE and MOVE_UPDATE
+  eligibility, while creation time and other attribute bits are not drift facts;
 - expected absence is still absence and expected destination occupancy/type is
   unchanged;
 - current required bytes for remaining operations fit free space plus safely
@@ -188,6 +190,9 @@ the run. It verifies:
 Unrelated tree changes do not matter. Observation and judgment receive no
 mutable `ExecutionSet`; a refusal never changes its immutable `ExecutionReview`,
 silently removes an operation, or changes an operation to a safer-looking kind.
+The shared `core.planning.planned_metadata_matches` predicate owns only the
+metadata/link-count portion of these comparisons. Observations retain complete
+stats, and placeholder/reparse refusal remains at the observation boundary.
 
 Commitment validation is not preflight judgment: review uses preflight before a
 commitment exists. `run_execution` must refuse a missing plan fingerprint or

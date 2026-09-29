@@ -1634,7 +1634,7 @@ def _write_all(target: BinaryIO, chunk: bytes, owner: str) -> None:
 
 
 def _matches_backup_source(actual: FileStat, expected: FileStat) -> bool:
-    """Match the reviewed target facts against its one opened handle."""
+    """Match the full admitted live-target version against its opened handle."""
 
     return (
         actual.kind is expected.kind

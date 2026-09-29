@@ -232,6 +232,18 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- MODERATE - OPEN (2026-09-29). Own-effect metadata mismatch. On native Windows,
+  a reviewed NORMAL-only file can gain ARCHIVE during rename or hardlink
+  creation. MOVE/RECASE then refuse after rename with degraded recording;
+  hardlink UPDATE refuses before replacement while preserving live and backup
+  files. MOVE_UPDATE succeeds normally but a committed-trash retry can fail
+  to recognize its intact new/trash state. Cause: strict retained-version
+  comparisons span the filesystem's own attribute change without modeling it.
+  Identity, size, mtime and creation remain stable; hardlink count changes as
+  expected. Starting `b1b58476` and the planner-fidelity candidate reproduce
+  the same five cases. Deferred outside that migration; strict recovery checks
+  remain. Evidence: `build/executor-simplification-20260929/differential/`
+  `result3a-archive-baseline.json` and `result3a-archive-candidate.json`.
 - SEVERE - FIXED (2026-09-28). Unreadable descendant admitted as absence.
   The native descendant walk treated every `OSError` as a missing component.
   A preplaced junction with ACL-denied no-follow attributes could therefore

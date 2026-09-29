@@ -33,10 +33,10 @@ large copies run closer to device speed.
    removing the reopen and path lookups around finishing. It covers COPY and the
    UPDATE/MOVE_UPDATE publication paths; how far it reaches into backup and
    replacement mechanics is the implementer's call.
-3. **Planner-used drift facts; one verifier subject mechanism.** Drift checks
+3. **Planner-used drift facts; verifier classifier cleanup.** Drift checks
    compare only facts the planner used to choose the action (§2.5.1). The
-   verifier keeps its post-open final-path check and trims the pre-open walk to
-   what that check cannot cover, such as placeholder components.
+   user-approved verifier outcome below preserves the pre-open walk and
+   post-open final-path check while removing its duplicate placeholder classifier.
 4. **Direct writes for large files.** Above a measured threshold, target data is
    written unbuffered, with buffered fallback where that is unavailable. The
    file flush remains.
@@ -80,7 +80,7 @@ Automatic approval review rejected target-fidelity consolidation even after the
 user explicitly approved the bounded proposal. That portion remains unapplied;
 the first outcome uses the smaller source-only consolidation instead.
 
-**Second outcome verified — native copied-file handle continuity.** One
+**Second outcome delivered — `0d7dd6b`.** One
 invocation-owned descriptor now covers writing, metadata, flush, conditional
 publication and successful observation, with release before recording and on
 operation/invocation exit. Public APIs, retry namespace proofs and UPDATE
@@ -97,31 +97,53 @@ identity/refusal assertions remain; native witnesses separately prove blocked
 pathname access and truthful settlement. Source-open and post-close controls
 retain native behavior. No new namespace/race guard was introduced.
 
-**Following atomic outcomes — planner fidelity, then verifier leaf proof.**
-Read-only design inspected `a6e2306`; refresh the affected seams against the
-integrated handle outcome before implementation. First share the narrow
-planner-used metadata/link-count predicate among core planning, preflight,
-executor plan admission and recorder plan acceptance. Preserve existence,
-kind, size, mtime tolerances, available identity, managed attributes and
-MOVE/MOVE_UPDATE link eligibility. Retain full observations for publication,
-UPDATE backup/live witnesses, MOVE_UPDATE old/trash recovery, optimistic DB
-concurrency, integrity and replay. Pure rename compares its post-effect subject
-with the full admitted observation, not incidental reviewed metadata.
-UPDATE backup repair and failed-replacement restoration likewise use the full
-admitted live-target observation; their strict version checks remain unchanged.
-Failed readonly-delete restoration uses its already-admitted target observation.
-The finite test population is core planning, planner eligibility/casing,
-preflight drift, executor runtime/settlement/cancellation, recorder sync/move
-and workflow composition. Update those component owners and this register,
-PERFORMANCE, CHANGELOG and HANDOFF in that atomic commit.
+**Third outcome verified — planner-used drift facts.** Core planning now owns
+the narrow metadata/link-count predicate shared by preflight, executor plan
+admission and recorder NOOP/MOVE/RECASE/TRASH acceptance. Creation time,
+unmanaged attributes and non-move link counts no longer veto plan admission.
+Existence, kind, size, mtime tolerances, identity semantics, managed attributes
+and MOVE/MOVE_UPDATE link eligibility remain. Complete observations are retained;
+pure rename and MOVE_UPDATE recovery bind the full admitted, profile-normalized
+old version. UPDATE backup repair/restoration and failed DELETE restoration use
+the admitted target metadata. Prepared/publication/backup/recovery checks, DB
+concurrency, integrity and replay remain strict. The introduced weak-profile
+witness mismatch was corrected and covered by a valid native RECASE case.
+Direct-consumer tests passed 904 with one existing skip; ordinary tests passed
+5,702 with four symlink-privilege skips. Imports, unchanged 30×3 oracle,
+67-group differential and the admission scan pass. All 25 five-band executions
+and readbacks pass; small-file throughput is 0.602 MiB/s and no lift is
+established. PERFORMANCE retains the breakdown and comparison. Independent
+final review accompanies this atomic outcome.
 
-Then consolidate verifier ordinary-leaf reparse proof into its existing opened
-handle check. Keep placeholder inspection before opening and ancestor reparse
-refusal before the next descendant lookup: these prevent reaching uninspected
-placeholder directories before final-path proof. Keep root admission/holds,
-opened-volume corroboration, share/cache behavior and read-stability checks.
-Native verifier and its focused tests plus VERIFIER and the delivery/evidence
-documents are the finite population. Each outcome uses the verification below
+The finite native migration witnesses also reproduce a pre-existing own-effect
+NORMAL→ARCHIVE mismatch in starting `b1b58476` and the candidate. It is deferred,
+not repaired by weakening retained-version checks; BUGS owns the open defect.
+The common mechanism is a strict full-version comparison spanning native
+rename/hardlink attribute changes. No data loss or false success was observed.
+
+| Executor seam | Verified consequence and owner |
+| --- | --- |
+| MOVE / RECASE | Runtime post-rename version proof refuses; renamed bytes remain, no success is recorded. |
+| Hardlink UPDATE | Runtime live/backup proof refuses before replacement; old live and backup remain. |
+| MOVE_UPDATE | Normal completion succeeds; committed-trash retry cannot recognize its intact new/trash state. |
+
+Raw baseline/candidate vectors are under the evidence root's `differential/`
+`result3a-archive-*.json`. Planner-fidelity success witnesses use stable unmanaged
+attributes; they do not claim to fix the separate native own-effect limitation.
+
+**Next atomic outcome — equivalent verifier classifier cleanup.**
+The user approved the smaller verifier outcome on 2026-09-29: remove the
+duplicate placeholder classifier from the pre-open reparse condition, preserving
+the walk and result classes. Core placeholder classification already requires
+reparse state. Moving ordinary-leaf refusal after open saves no filesystem
+query while placeholder inspection remains; the finite native junction probe
+changed Unsupported to Error. No result-class change is authorized. Keep root
+admission/holds, opened-volume corroboration, share/cache behavior and
+read-stability checks. Native verifier, its existing reparse/placeholder tests,
+VERIFIER and the delivery/evidence documents are the finite population; no new
+test family is required for the equivalent condition. The probe receipt is
+`build/executor-simplification-20260929/verifier-leaf-design-probe.json`;
+unavailable file-symlink cases are explicitly retained. Each outcome uses the verification below
 and independent review; no source-freshness API, persisted-shape change,
 continuation merger, target-check consolidation or direct-write work is included.
 
@@ -385,7 +407,7 @@ scope changes, stops and recovery.
 
 | ID | Accepted outcome | Named verification | Status |
 | --- | --- | --- | --- |
-| Executor simplification and throughput | Consolidated admission per effect, one handle per copied file, planner-used drift facts with one verifier subject mechanism, and deferred direct large writes, per the section above. Goal (not gate): 4 KiB at or above 1.6 MiB/s; 4 GiB toward device ceilings. | Equivalence against the starting commit with the declared changes, per-result oracle re-pin receipts, guard scan, differential, native witnesses, five-band measurements and independent review per commit. | Results 1–3 active; result 4 deferred. |
+| Executor simplification and throughput | Consolidated admission per effect, one handle per copied file, planner-used drift facts and the approved equivalent verifier classifier cleanup, and deferred direct large writes, per the section above. Goal (not gate): 4 KiB at or above 1.6 MiB/s; 4 GiB toward device ceilings. | Equivalence against the starting commit with the declared changes, per-result oracle re-pin receipts, guard scan, differential, native witnesses, five-band measurements and independent review per commit. | Results 1–3 active; result 4 deferred. |
 | M1-9 | Bounded inventory projections, current evidence and the full inventory consumer for sibling sorting. | Complete or prior-complete publication; warnings outside action scope; raw evidence provenance; search/filter/collapse/window/detail, replacement/race and production sort/reset paths; headed witnesses. | Pending. Missing-row acknowledge/restore UI must be explicitly allocated at activation; this row does not silently claim it. |
 | M1-10 | Baseline, verify and rebaseline controls plus first same-task manual post-copy verification, without persistent operation-time hashes. Eligible null-evidence files enter rebaseline; every admitted rebaseline hashes and replaces/creates evidence, and a match is not verified. | Confirm acknowledgement admission before claim/native work; all-null/mixed workflow, service/CLI and desktop paths; conditional recording and supersession races; atomic handoff classification; live pause/resume/cancel and unchanged automatic failed-read retries; overlay/result identity. Independently review operation matrix and conditional recording. Terminal Verify-remaining/subset retry remains deferred. | Pending. Rebaseline confirmation is distinct from missing-row acknowledgement. |
 | M1-12 | Close integrated lifecycle/retention across activated task surfaces, then complete adversarial, documentation, ordinary and headed verification. This absorbs former M1-11. | Plan-only, execution-only, linked/manual verification, inventory, refused/canceled/degraded/failed tasks across same-document navigation, contained unsupported reload, explicit close and shutdown; admission bounds, stale-response suppression, exact resource release and retained truth. Applicable settlement oracle, ordinary/headed, installed-wheel/product, imports, diff/active-link checks and independent cross-component review. No aggregate-artifact or whole-owner-graph criterion. | Pending. |

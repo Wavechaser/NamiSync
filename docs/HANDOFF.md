@@ -11,7 +11,7 @@ Policy refinements are committed as `dadc1fe`; source-only consolidation is
 retry and all target checks, removes source admissions with no later source
 access, and retires retained-target refusal precedence.
 
-The current native handle outcome carries an invocation-owned descriptor
+Handle outcome `0d7dd6b` carries an invocation-owned descriptor
 through writing, metadata, flush, conditional publication and successful
 post-publication observation. It releases before recording and on backup,
 cleanup, operation retirement and invocation exit. Public contracts,
@@ -23,7 +23,29 @@ Automatic approval review rejected target-fidelity consolidation even after
 explicit user approval; that portion remains unapplied. No rejection was
 bypassed. The smaller source-only outcome passed its gate and review.
 
-## Verification
+## Current planner-fidelity outcome
+
+The shared planning predicate now bounds admission metadata to managed attributes
+and MOVE/MOVE_UPDATE link eligibility. Full observations still own publication,
+backup, recovery, restoration, optimistic DB concurrency and integrity checks.
+Identity semantics and wire shapes remain unchanged. Native weak-profile RECASE
+and admitted-metadata restoration witnesses cover the consumer migration.
+
+Current verification: 904 focused tests (one existing skip), 5,702 ordinary
+tests (four existing symlink-privilege skips, 34 deselected), all 12 import
+contracts, unchanged 30×3 oracle, 67 differential groups with zero differences,
+and 70-row/391-effect admission scan with zero missing admissions. Receipts are
+`differential/result3a-*.log`; the differential capture is
+`differential/runs/candidate-result3a-fidelity-563226ff78a748799e044bd17741fb48/`.
+The optional AST audit failed and is not gate evidence; its attempts are retained.
+
+All 25 five-band executions/readbacks passed under prefix
+`measurements/result3a-0d7dd6bf-20260929-173343-1dcc369e`. Medians are
+6.489/3.503/0.708/0.354/2.482 s from smallest to largest band. Small-file
+throughput is 0.602 MiB/s; no throughput lift is established. PERFORMANCE owns
+the comparison and exact evidence limits.
+
+## Retained handle-outcome evidence
 
 Evidence root: `build/executor-simplification-20260929/`.
 
@@ -64,12 +86,20 @@ are retained beside the measurement receipts.
 
 ## Immediate continuation
 
-The handle outcome is verified. Continue with the recorded planner-fidelity
-outcome and independent verifier-leaf outcome after its atomic integration.
-Read-only design refreshed native/runtime handle seams; bind it to the
-integrated commit before implementation. UPDATE backup repair/restoration and
+The handle outcome is integrated and planner-fidelity correctness, measurement
+and independent closeout review are complete. A separate verifier
+classifier cleanup follows it. The user approved
+preserving the verifier walk/result classes and removing only the duplicate
+placeholder classifier. Its leaf probe found no query saving and changed native
+junction result classes; M1_PLAN records the narrowed outcome. Read-only design's
+native/runtime blobs match integrated `0d7dd6b`. UPDATE backup repair/restoration and
 failed DELETE restoration must use the full admitted target observation while
 retaining strict recovery comparisons. M1_PLAN owns the finite population.
+Native NORMAL→ARCHIVE own-effect failures reproduce in starting `b1b58476` and
+the candidate across five rename/hardlink cases. This pre-existing mechanism is
+deferred in BUGS/M1_PLAN; its `differential/result3a-archive-*.json` receipts
+preserve actual effects and settlement. Do not mask strict recovery comparisons
+to make these cases pass as part of planner-fidelity work.
 
 Keep the task-created baseline checkout at
 `C:/Users/Spectrum/.codex/worktrees/executor-simplification-baseline/NamiSync`

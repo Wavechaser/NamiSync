@@ -198,6 +198,17 @@ their refusals. This consolidates leaf observations that were not compared while
 preserving root second-directory checks, containment, volume checks and
 all later operation guards.
 
+Reviewed-subject admission compares kind, existence, size, exact mtime,
+available identity and managed attributes. Link count remains a fidelity fact
+for MOVE/MOVE_UPDATE source and prior-target eligibility; RECASE does not use
+that eligibility. Creation time and unmanaged attribute bits do not refuse
+admission. The shared core planning predicate covers only metadata/link-count
+facts; full observed stats still bind prepared copies, backups, mutation
+witnesses and recovery. Path, placeholder and reparse checks precede admission.
+The deferred Windows NORMAL-to-ARCHIVE limitation in [BUGS.md](BUGS.md) can
+still cause a full-version refusal after a native effect; admission relaxation
+does not normalize that effect.
+
 On the default Windows probe path, a valid nonnegative integer `st_dev` from that
 checked snapshot selects the admitted held root's `VolumeId` when its low 32 bits
 match the root's native serial. This reuse first checks current held attributes.
@@ -394,8 +405,8 @@ target. With trash-on-update enabled it:
 1. validates/reserves `.synctrash/<run-id>/<relative-path>` on the target volume;
 2. preserves the old live file there using a same-volume hardlink when
    `CapabilityProfile.supports_hardlinks`; otherwise writes a trash-local exact
-   temp from one open source handle. The handle stat must match the reviewed
-   live-target snapshot before copying; the copied byte count and a second stat
+   temp from one open source handle. The handle stat must match the
+   admitted live-target snapshot before copying; the copied byte count and a second stat
    of that same handle must still match before metadata is finalized from the
    bound snapshot and the backup publishes atomically. Growth, truncation, or
    visible same-size drift fails as `target-drift`; a failed prepublication copy
@@ -455,8 +466,11 @@ accepted trash-location information belongs to execution review: it may include
 an exact completed count only when supported by outcome evidence, otherwise
 location alone. It does not require a new trash walk or claim a complete count
 of preserved update backups from ordinary trash-operation records.
-Readonly ordering/recovery restores the old version's planned attributes after
+Readonly ordering/recovery restores the old version's admitted metadata after
 replacement so the hardlinked trash inode is not left silently degraded.
+Backup metadata repair and failed readonly UPDATE/DELETE restoration use the
+full pre-effect observation, including its creation time, rather than replacing
+accepted incidental drift with the older reviewed values.
 
 Backup creation never redefines the accepted live target version. UPDATE keeps
 the pre-backup stat across retries, permits only its own hardlink's expected
@@ -492,9 +506,9 @@ ordinary case-insensitive NTFS the destination aliases the source object and the
 updates only its directory-entry spelling. On a case-sensitive target a
 distinct occupied destination makes the primitive fail without overwrite. The
 executor flushes the parent, re-stats the same file, and records the new target
-spelling and correspondence only when the post-rename stat still identifies the
-reviewed old target version. The recorder repeats that version check
-defensively. It transfers zero bytes, preserves file identity and metadata,
+spelling and correspondence only when the post-rename stat still matches the
+full admitted old target version. The recorder checks the reviewed planner
+facts. It transfers zero bytes, preserves file identity and metadata,
 creates no trash entry, and never recases parent directories.
 
 ### Move
@@ -503,9 +517,9 @@ Flush pending recorder state, then revalidate the reviewed source-tree subject,
 old target, and new destination; refuse occupancy; and perform a same-volume
 non-replacing atomic rename whose
 primitive itself fails if the destination appeared. After best-effort
-parent-directory flushes, stat the result and require it to remain the reviewed
-old target version before recording correspondence. The recorder repeats that
-version check defensively; it does not replace it with exact comparison against
+parent-directory flushes, stat the result and require it to remain the full
+admitted old target version before recording correspondence. The recorder checks
+the reviewed planner facts; it does not replace them with exact comparison against
 source metadata that planning intentionally treats as equal within target
 timestamp granularity. A vanished or drifted source subject, or a vanished or
 swapped old target, yields a typed failed outcome and must not create a stale
@@ -521,6 +535,10 @@ already-completed retry needs no second pre-mutation flush. One plan
 operation may have internal prepare/publish/trash stages, but only one
 final outcome and ledger transition. A crash after any internal stage may leave
 both old and new versions, never neither, and leaves no completed mapping claim.
+Each pre-effect old-target check compares the original reviewed facts and
+retains its full admitted stat as the old/trash recovery witness. Committed
+trash retries and settlement compare that full witness; they do not apply the
+weaker plan predicate to an already-mutated subject.
 
 ### Mkdir
 
@@ -549,7 +567,7 @@ before deletion, after flushing prior recorder evidence, and use the strongest
 available handle-conditional delete.
 Only a dependency-complete `directory_cleanup` delete may ignore mtime and link
 count churn caused by removing its own planned children; it still requires exact
-kind, size, attributes, and creation time. A stable identity binds exactly when
+kind, size and managed attributes. A stable identity binds exactly when
 the reviewed scan supplied one; absent identity is absent evidence, not a veto.
 Directories must be empty at deletion time and `RemoveDirectory` enforces that
 condition atomically. Never recursively delete an unplanned subtree.
@@ -557,8 +575,10 @@ condition atomically. Never recursively delete an unplanned subtree.
 ### No-op
 
 Perform no user-data mutation. Any correspondence/last-seen recording is
-conditional on both sides still matching the plan snapshot, including identity;
+conditional on both sides still matching the planner facts, including identity;
 otherwise record a stale/skipped outcome rather than refreshing false evidence.
+Accepted live observations retain their full metadata and link counts in the
+recorder payload.
 
 ## Cancellation, Pause, And Failure
 

@@ -1027,7 +1027,7 @@ repeated machinery while preserving operational safety and boundary contracts.
 Safety, settlement, authority, and measurement work made high-risk release
 claims explicit, independently reviewable, and regression-backed.
 
-#### Simplify executor checks and copied-file finishing (2026-09-29)
+#### Apply policy-driven executor and verifier simplifications (2026-09-29)
 
 - Reuse fresh COPY/MOVE_UPDATE preparation's source observation at publication;
   retained retries still recheck source fidelity. Remove final source admissions
@@ -1051,6 +1051,19 @@ claims explicit, independently reviewable, and regression-backed.
   5.298 s / 0.737 MiB/s: slower than the preceding run, with no throughput lift
   claimed. Preserve fallback fault-control assertions and native blocked-access
   witnesses; PERFORMANCE retains samples and diagnostic limits.
+- Share planner-used metadata/link-count comparison across preflight, executor
+  and recorder admission. Ignore creation time, unmanaged attributes and
+  non-move link counts while retaining full observations and existing identity
+  semantics. Bind rename/recovery witnesses and failed-operation restoration
+  to admitted target metadata; retain strict publication, backup, concurrency
+  and integrity checks.
+- Pass 5,702 ordinary tests for planner-fidelity, 904 focused checks, all 12
+  import contracts, the unchanged oracle/differential and 25 five-band samples.
+  Small-file throughput is 0.602 MiB/s; no throughput lift is established.
+- Record the pre-existing native NORMAL→ARCHIVE rename/hardlink mismatch as
+  open and deferred, with matching starting-baseline and candidate witnesses.
+  Approve the smaller verifier cleanup: preserve its walk/results and remove
+  only the duplicate placeholder classifier.
 - Direct writes remain deferred; target-fidelity consolidation remains
   unapplied after automatic approval review rejected it.
 

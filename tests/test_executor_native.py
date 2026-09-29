@@ -70,6 +70,7 @@ from _executor_fixtures import (
     _require_directory_reparse,
     _roots,
     _run,
+    _sharing_violation,
     _xset,
 )
 
@@ -3071,6 +3072,254 @@ class CopiedBackupPublicationSpyFileSystem(NativeFileSystem):
     def replace(self, temp: Path, target: Path) -> None:
         self.replace_calls += 1
         super().replace(temp, target)
+
+
+def _change_incidental_target_metadata(fs: NativeFileSystem, target: Path, expected: FileStat) -> FileStat:
+    assert expected.metadata.created_ns is not None
+    changed = replace(expected, metadata=replace(
+        expected.metadata, created_ns=expected.metadata.created_ns + 2_000_000_000
+    ))
+    fs.apply_metadata(target, changed, preserve_created=True, apply_readonly=True)
+    fs._set_attributes(target, fs._get_attributes(target) ^ 0x100)
+    observed = fs.stat_path(target)
+    assert observed is not None
+    assert observed.metadata.created_ns == changed.metadata.created_ns
+    assert observed.metadata.attributes != expected.metadata.attributes
+    assert observed.mtime_ns == expected.mtime_ns
+    return observed
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows creation-time preservation")
+@pytest.mark.parametrize("hardlinks", (True, False), ids=("hardlink", "copy"))
+def test_update_backup_preserves_full_admitted_target_after_incidental_drift(tmp_path: Path, hardlinks: bool) -> None:
+    source, target = _roots(tmp_path)
+    (source / "file.bin").write_bytes(b"new")
+    live = target / "file.bin"
+    live.write_bytes(b"old")
+    fs = NativeFileSystem()
+    source_stat = fs.stat(source, "file.bin")
+    expected = fs.stat(target, "file.bin")
+    assert source_stat is not None and expected is not None
+    op = _operation(
+        1, OperationKind.UPDATE, source_rel_path="file.bin", target_rel_path="file.bin",
+        source_expected=source_stat, target_expected=expected, intended=source_stat,
+    )
+    admitted = _change_incidental_target_metadata(fs, live, expected)
+    result, events, recorder = _run(_xset(_plan(source, target, (op,), hardlinks=hardlinks)), fs=fs)
+    backup = target / ".synctrash" / str(RUN_ID) / "file.bin"
+    backup_stat = fs.stat_path(backup)
+    assert result.status is SessionState.COMPLETED, (
+        dict(_item_outcome(events).detail), admitted.metadata,
+        fs.stat_path(live).metadata, admitted.nlink, fs.stat_path(live).nlink,
+    )
+    assert backup.read_bytes() == b"old" and live.read_bytes() == b"new"
+    assert backup_stat is not None
+    assert backup_stat.metadata.created_ns == admitted.metadata.created_ns
+    assert backup_stat.mtime_ns == admitted.mtime_ns
+    assert _recorder_names(recorder) == ["updated"]
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows creation-time preservation")
+@pytest.mark.parametrize("kind", (OperationKind.UPDATE, OperationKind.DELETE))
+def test_failed_readonly_effect_restores_full_admitted_creation_time(tmp_path: Path, kind) -> None:
+    source, target = _roots(tmp_path)
+    (source / "file.bin").write_bytes(b"new")
+    live = target / "file.bin"
+    live.write_bytes(b"old")
+
+    class RefusingFileSystem(NativeFileSystem):
+        def replace(self, temp, target):
+            raise PermissionError("controlled replace refusal")
+
+        def remove_file(self, path):
+            raise PermissionError("controlled delete refusal")
+
+    fs = RefusingFileSystem()
+    source_stat = fs.stat(source, "file.bin")
+    initial = fs.stat(target, "file.bin")
+    assert source_stat is not None and initial is not None
+    fs.apply_metadata(live, replace(initial, metadata=replace(initial.metadata, attributes=initial.metadata.attributes | 1)), preserve_created=True, apply_readonly=True)
+    expected = fs.stat(target, "file.bin")
+    assert expected is not None
+    op = _operation(
+        1, kind, source_rel_path="file.bin" if kind is OperationKind.UPDATE else None,
+        target_rel_path="file.bin", source_expected=source_stat if kind is OperationKind.UPDATE else None,
+        target_expected=expected, intended=source_stat if kind is OperationKind.UPDATE else None,
+    )
+    admitted = _change_incidental_target_metadata(fs, live, expected)
+    try:
+        result, _, recorder = _run(_xset(_plan(source, target, (op,))), fs=fs)
+        restored = fs.stat(target, "file.bin")
+        assert result.status is SessionState.FAILED and recorder.calls == []
+        assert restored is not None and restored.metadata.attributes & 1
+        assert restored.metadata.created_ns == admitted.metadata.created_ns
+        assert live.read_bytes() == b"old"
+    finally:
+        fs.clear_readonly(live)
+        for backup in target.rglob("file.bin"):
+            fs.clear_readonly(backup)
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows creation-time preservation")
+@pytest.mark.parametrize("kind", (OperationKind.MOVE, OperationKind.RECASE))
+@pytest.mark.parametrize("alter_after_rename", (False, True))
+def test_pure_rename_binds_post_effect_to_full_admitted_stat(tmp_path: Path, kind, alter_after_rename) -> None:
+    source, target = _roots(tmp_path)
+    new_name = "KEEP.bin" if kind is OperationKind.RECASE else "new.bin"
+    old_name = "keep.bin" if kind is OperationKind.RECASE else "old.bin"
+    (source / new_name).write_bytes(b"same")
+    old = target / old_name
+    old.write_bytes(b"same")
+
+    class RenameFileSystem(NativeFileSystem):
+        def rename_new(self, source, destination):
+            super().rename_new(source, destination)
+            if alter_after_rename:
+                current = self.stat_path(destination)
+                assert current is not None
+                _change_incidental_target_metadata(self, destination, current)
+
+    fs = RenameFileSystem()
+    expected = fs.stat(target, old_name)
+    source_stat = fs.stat(source, new_name)
+    assert expected is not None and source_stat is not None
+    op = _operation(
+        1, kind, source_rel_path=new_name, target_rel_path=new_name,
+        source_expected=source_stat, target_expected=expected if kind is OperationKind.RECASE else None,
+        intended=expected, prior_target_rel_path=old_name, prior_target_expected=expected,
+    )
+    _change_incidental_target_metadata(fs, old, expected)
+    if kind is OperationKind.RECASE:
+        os.link(old, target / "alias.bin")
+    admitted = fs.stat(target, old_name)
+    assert admitted is not None
+    result, events, recorder = _run(_xset(_plan(source, target, (op,))), fs=fs)
+    if alter_after_rename:
+        assert result.status is SessionState.FAILED and recorder.calls == []
+    else:
+        assert result.status is SessionState.COMPLETED, (
+            dict(_item_outcome(events).detail), admitted.metadata,
+            fs.stat_path(target / new_name).metadata,
+        )
+        assert recorder.calls[0][2] == admitted
+    assert (target / new_name).read_bytes() == b"same"
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows creation-time preservation")
+@pytest.mark.parametrize("alter_trash_after_commit", (False, True))
+def test_move_update_refreshes_old_witness_and_keeps_strict_committed_trash_recovery(tmp_path: Path, alter_trash_after_commit) -> None:
+    source, target = _roots(tmp_path)
+    (source / "new.bin").write_bytes(b"new")
+    old = target / "old.bin"
+    old.write_bytes(b"old")
+
+    class MoveUpdateFileSystem(NativeFileSystem):
+        admitted_old: FileStat | None = None
+        trash_attempts = 0
+
+        def ensure_published_metadata(self, path, *args, **kwargs):
+            result = super().ensure_published_metadata(path, *args, **kwargs)
+            if path == target / "new.bin":
+                current = self.stat_path(old)
+                assert current is not None
+                self.admitted_old = _change_incidental_target_metadata(self, old, current)
+            return result
+
+        def rename_new(self, source, destination):
+            super().rename_new(source, destination)
+            if ".synctrash" in destination.parts:
+                self.trash_attempts += 1
+                if alter_trash_after_commit:
+                    current = self.stat_path(destination)
+                    assert current is not None
+                    _change_incidental_target_metadata(self, destination, current)
+                raise _sharing_violation("controlled committed-trash retry")
+
+    fs = MoveUpdateFileSystem()
+    expected = fs.stat(target, "old.bin")
+    source_stat = fs.stat(source, "new.bin")
+    assert expected is not None and source_stat is not None
+    op = _operation(
+        1, OperationKind.MOVE_UPDATE, source_rel_path="new.bin", target_rel_path="new.bin",
+        source_expected=source_stat, target_expected=None, intended=source_stat,
+        prior_target_rel_path="old.bin", prior_target_expected=expected,
+    )
+    _change_incidental_target_metadata(fs, old, expected)
+    result, _, recorder = _run(_xset(_plan(source, target, (op,))), fs=fs)
+    assert fs.trash_attempts == 1 and fs.admitted_old is not None
+    trash = target / ".synctrash" / str(RUN_ID) / "old.bin"
+    assert trash.read_bytes() == b"old" and (target / "new.bin").read_bytes() == b"new"
+    if alter_trash_after_commit:
+        assert result.status is SessionState.FAILED and recorder.calls == []
+    else:
+        assert result.status is SessionState.COMPLETED
+        assert fs.stat_path(trash) == fs.admitted_old
+        assert _recorder_names(recorder) == ["move_updated"]
+
+
+@pytest.mark.parametrize("kind,subject", (
+    (OperationKind.COPY, "source"),
+    (OperationKind.MOVE, "source"),
+    (OperationKind.MOVE, "prior_target"),
+    (OperationKind.MOVE_UPDATE, "source"),
+    (OperationKind.MOVE_UPDATE, "prior_target"),
+))
+def test_executor_link_drift_is_only_a_move_eligibility_fact(tmp_path: Path, kind, subject) -> None:
+    source, target = _roots(tmp_path)
+    source_file = source / "new.bin"
+    source_file.write_bytes(b"new")
+    old = target / "old.bin"
+    old.write_bytes(b"old")
+    fs = NativeFileSystem()
+    source_stat = fs.stat(source, "new.bin")
+    old_stat = fs.stat(target, "old.bin")
+    assert source_stat is not None and old_stat is not None
+    op = _operation(
+        1, kind, source_rel_path="new.bin", target_rel_path="new.bin",
+        source_expected=source_stat, target_expected=None, intended=source_stat,
+        prior_target_rel_path="old.bin" if kind is not OperationKind.COPY else None,
+        prior_target_expected=old_stat if kind is not OperationKind.COPY else None,
+    )
+    selected = source_file if subject == "source" else old
+    os.link(selected, selected.with_name("alias.bin"))
+    result, events, recorder = _run(_xset(_plan(source, target, (op,))), fs=fs)
+    if kind is OperationKind.COPY:
+        assert result.status is SessionState.COMPLETED
+        assert (target / "new.bin").read_bytes() == b"new"
+        assert _recorder_names(recorder) == ["copied"]
+    else:
+        assert result.status is SessionState.FAILED and recorder.calls == []
+        assert _item_outcome(events).reason == ("source-drift" if subject == "source" else "target-drift")
+        assert old.read_bytes() == b"old" and not (target / "new.bin").exists()
+
+
+def test_recase_profiles_the_full_admitted_version_on_identity_weak_plan(tmp_path: Path) -> None:
+    source, target = _roots(tmp_path)
+    (source / "KEEP.bin").write_bytes(b"same")
+    (target / "keep.bin").write_bytes(b"same")
+    fs = NativeFileSystem()
+    source_stat = fs.stat(source, "KEEP.bin")
+    target_stat = fs.stat(target, "keep.bin")
+    assert source_stat is not None and target_stat is not None
+    assert target_stat.file_identity is not None
+    op = _operation(
+        1, OperationKind.RECASE, source_rel_path="KEEP.bin", target_rel_path="KEEP.bin",
+        source_expected=replace(source_stat, file_identity=None),
+        target_expected=replace(target_stat, file_identity=None),
+        intended=replace(target_stat, file_identity=None), prior_target_rel_path="keep.bin",
+        prior_target_expected=replace(target_stat, file_identity=None),
+    )
+    built = _plan(source, target, (op,))
+    built = replace(built,
+        source_profile=replace(built.source_profile, stable_file_identity=False),
+        target_profile=replace(built.target_profile, stable_file_identity=False),
+    )
+    result, _, recorder = _run(_xset(built), fs=fs)
+    assert result.status is SessionState.COMPLETED
+    recorded = recorder.calls[0][2]
+    assert recorded.file_identity is None
+    assert recorded.metadata == target_stat.metadata
+    assert (target / "KEEP.bin").read_bytes() == b"same"
 
 
 def test_copied_backup_does_not_adopt_target_drift_after_reviewed_guard(

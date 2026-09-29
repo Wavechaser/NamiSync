@@ -42,6 +42,30 @@ from _identity_hash_fixtures import (
 )
 
 
+@pytest.mark.parametrize("kind", tuple(planning_contracts.OperationKind))
+def test_planned_metadata_keeps_managed_attributes_and_move_link_eligibility(kind) -> None:
+    expected = model_contracts.FileStat(
+        model_contracts.EntryKind.FILE, 7, 11, None, 1,
+        model_contracts.MetadataSnapshot(2, 100),
+    )
+    incidental = replace(
+        expected, metadata=model_contracts.MetadataSnapshot(2 | 0x20, 200)
+    )
+    assert planning_contracts.planned_metadata_matches(incidental, expected, kind)
+    assert not planning_contracts.planned_metadata_matches(
+        replace(incidental, metadata=replace(incidental.metadata, attributes=0x20)),
+        expected, kind,
+    )
+    assert planning_contracts.planned_metadata_matches(
+        replace(incidental, nlink=2), expected, kind
+    ) is (kind not in (
+        planning_contracts.OperationKind.MOVE, planning_contracts.OperationKind.MOVE_UPDATE
+    ))
+    assert model_contracts.file_stat_projection(incidental)["metadata"] != (
+        model_contracts.file_stat_projection(expected)["metadata"]
+    )
+
+
 @pytest.mark.parametrize(
     "value",
     [

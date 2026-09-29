@@ -43,6 +43,7 @@ from namisync.core.planning import (
     PlanOperation,
     calculate_required_bytes,
     quarantined_operation_ids,
+    planned_metadata_matches,
 )
 from namisync.core.preflight import (
     ObservedWorld,
@@ -1102,7 +1103,7 @@ def _add_stat_refusals(
         refusals.append(Refusal(RefusalCode.SIZE_CHANGED, operation.op_id, subject))
     if abs(actual.mtime_ns - expected.mtime_ns) > granularity_ns:
         refusals.append(Refusal(RefusalCode.MTIME_CHANGED, operation.op_id, subject))
-    if actual.metadata != expected.metadata or actual.nlink != expected.nlink:
+    if not planned_metadata_matches(actual, expected, operation.kind):
         refusals.append(Refusal(RefusalCode.METADATA_CHANGED, operation.op_id, subject))
 
 
