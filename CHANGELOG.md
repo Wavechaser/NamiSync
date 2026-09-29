@@ -1029,6 +1029,12 @@ claims explicit, independently reviewable, and regression-backed.
 
 #### Apply policy-driven executor and verifier simplifications (2026-09-29)
 
+- Correct the measurement context: F: was occupied during the finishing runs;
+  they do not establish a regression. Record the user's separate rerun table,
+  including 3.150 s / 1.24 MiB/s for 4 KiB and 1.956 s / 2,095 MiB/s for 4 GiB.
+- Restore inherited ACLs and remove the inaccessible task-created witness and
+  pytest fixtures. Preserve three original witness receipts with verified hashes
+  and the original/restored ACL manifests; keep all logs and benchmark evidence.
 - Reuse fresh COPY/MOVE_UPDATE preparation's source observation at publication;
   retained retries still recheck source fidelity. Remove final source admissions
   from these publishes and MOVE/RECASE rename, where no source access remains.

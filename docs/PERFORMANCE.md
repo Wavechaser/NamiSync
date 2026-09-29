@@ -512,6 +512,26 @@ These finite call assertions detect lost shortcut selection; they are not a
 throughput gate. Collect throughput separately without instrumentation. The
 historical timings above remain bound to their recorded inputs and drivers.
 
+### User rerun after clearing source-drive contention — 2026-09-29
+
+The user reported that F: was occupied during the finishing measurements below.
+Those contended historical endpoints do not establish a performance regression.
+The user's subsequent rerun supplied the medians below. HEAD is the user's
+label; sample counts and ranges were not supplied with this table.
+
+| Band | HEAD median (user label) | `23589bd` median | `db05e317` |
+| --- | ---: | ---: | ---: |
+| 1,000 × 4 KiB | 3.150 s (1.24 MiB/s) | 3.627 s | 7.99 s |
+| 512 × 128 KiB | 1.640 s | 1.958 s | 4.25 s |
+| 64 × 4 MiB | 0.373 s | 0.372 s | 0.64 s |
+| 4 × 128 MiB | 0.297 s | 0.304 s | 0.31 s |
+| 1 × 4 GiB | 1.956 s (2,095 MiB/s) | 2.004 s | 1.96 s |
+
+The raw earlier runs remain below for chronology and correctness/readback
+evidence. Their throughput-goal observations describe those runs, not a stable
+regression attributable to the changes. The target-check follow-up is measured
+separately after correctness verification.
+
 ### Source-check consolidation — 2026-09-29
 
 The first executor-simplification candidate on `dadc1fe` reuses fresh-copy

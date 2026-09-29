@@ -80,6 +80,23 @@ Automatic approval review rejected target-fidelity consolidation even after the
 user explicitly approved the bounded proposal. That portion remains unapplied;
 the first outcome uses the smaller source-only consolidation instead.
 
+**Reopened target consolidation — user-authorized 2026-09-29.** After cleaning
+the ACL-witness leftovers, retry the bounded remainder on `d444a6a`. Fresh COPY
+and MOVE_UPDATE reuse `_prepare_copy`'s final target-fidelity check for that same
+publication effect. Only their immediately repeated target check is conditional
+on retained continuation state; retries still recheck. Final target-root admission,
+held-attribute/fallback checks, prepared-temp proof, MOVE_UPDATE old-target and
+trash proofs, conditional publication, durability, recording and UPDATE stay
+unchanged. No check is reused across pause, retry or another mutating effect.
+Runtime owns the change; executor runtime/native/ACL/settlement tests and the
+existing oracle producer/baseline, EXECUTOR and delivery/evidence documents are
+the finite population. Run existing native/retained-retry seams first, then
+executor/workflow and ordinary/import gates, classified oracle trace changes
+and its three-run check, guard scan, fixed baseline differential, five-band
+measurement and fresh independent review. One small atomic commit closes this
+remainder; direct writes and the recorded native own-effect defect remain out
+of scope. The earlier refusal is retained as history, not a new approval request.
+
 **Second outcome delivered — `0d7dd6b`.** One
 invocation-owned descriptor now covers writing, metadata, flush, conditional
 publication and successful observation, with release before recording and on
@@ -181,7 +198,9 @@ verifier disposition. Direct writes remain deferred.
     may turn the former finishing refusal into successful publication or
     metadata completion. Containment, atomicity, durability and truthful
     settlement remain required. The finite native witnesses and restored-ACL
-    receipt are under `build/executor-simplification-20260929/handle-acl-witness/`.
+    receipts are preserved under `build/executor-simplification-20260929/differential/`
+    as `handle-acl-<original-id>-receipt.json`; `acl-fixture-cleanup.json` records
+    their original paths and hashes after user-requested fixture removal.
   - **Oracle traces and counts.** Filesystem traces, per-method counts and
     guard-scan admission counts shrink. The guard scan still requires an
     admission and a fidelity check before every mutating effect.
