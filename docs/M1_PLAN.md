@@ -80,8 +80,8 @@ Automatic approval review initially rejected target-fidelity consolidation even
 after explicit user approval. The first outcome therefore contains only the
 source-side portion; the user-reopened remainder is recorded below.
 
-**Reopened target consolidation — user-authorized 2026-09-29.** After cleaning
-the ACL-witness leftovers, retry the bounded remainder on `d444a6a`. Fresh COPY
+**Target consolidation delivered — `eb18611`, user-authorized 2026-09-29.** After
+cleaning the ACL-witness leftovers, the bounded remainder shipped from `d444a6a`. Fresh COPY
 and MOVE_UPDATE reuse `_prepare_copy`'s final target-fidelity check for that same
 publication effect. Only their immediately repeated target check is conditional
 on retained continuation state; retries still recheck. Final target-root admission,
@@ -109,7 +109,10 @@ starting-baseline differential and the 70-row/391-effect admission scan pass.
 All 25 five-band executions/readbacks pass; medians are 3.134 / 1.641 / 0.351 /
 0.303 / 2.011 seconds, close to the user's rerun. PERFORMANCE records source-drive
 contention in the earlier finishing runs; those runs do not establish a regression.
-Final independent review precedes the atomic commit and official pinned check.
+Final independent review passed. The official clean-HEAD pinned check passed
+30 scenarios × three runs on `eb18611`; `differential/target-official-oracle.log`
+under the task evidence root retains the terminal result. This closes the
+previously blocked target remainder; no direct-write work was started.
 
 **Second outcome delivered — `0d7dd6b`.** One
 invocation-owned descriptor now covers writing, metadata, flush, conditional
@@ -186,9 +189,10 @@ bounded to plan admission; all 85 checks in its five ordinary package-consumer
 modules pass against the final text. All 25 five-band executions/readbacks pass;
 small-file throughput is 0.628 MiB/s and the 4 GiB band is 1,765.673 MiB/s.
 Both goals remain unmet; overlapping ranges establish no throughput lift.
-Independent closeout review passed; no tests are added or retired. Results 1–3
-are closed with the recorded target-consolidation block and approved narrower
-verifier disposition. Direct writes remain deferred.
+Independent closeout review passed; no tests are added or retired. The initial
+results 1–3 delivery retained the target-consolidation block, subsequently closed
+by `eb18611` above, and the approved narrower verifier disposition. Direct writes
+remain deferred.
 
 **Equivalence against the starting commit.**
 - *Must match:* effects, final managed trees, owned artifacts, recorder commands

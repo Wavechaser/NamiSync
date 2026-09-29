@@ -1044,6 +1044,9 @@ claims explicit, independently reviewable, and regression-backed.
   25 fresh five-band samples for the target remainder. The 4 KiB median is
   3.134 s (1.247 MiB/s), and the 4 GiB median is 2.011 s (2,036.859 MiB/s),
   close to the user's rerun; no isolated gain from the two checks is claimed.
+- Commit the target remainder as `eb18611`, then pass the official clean-HEAD
+  pinned oracle (30 scenarios × three runs). Independent review and fixture
+  cleanup are complete; direct writes remain deferred.
 - Reuse fresh COPY/MOVE_UPDATE preparation's source observation at publication;
   retained retries still recheck source fidelity. Remove final source admissions
   from these publishes and MOVE/RECASE rename, where no source access remains.

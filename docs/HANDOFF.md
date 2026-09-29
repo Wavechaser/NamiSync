@@ -47,8 +47,10 @@ The candidate three-run diagnostic, imports and fixed 67-group differential pass
 The admission scan reports 70 rows, 391 effects and zero missing admissions;
 separate source review/tests verify fidelity. All 25 measurement/readback samples
 passed with fixed source/dependency manifests and owned target cleanup. Final
-review is pending. The default pinned oracle requires a clean committed baseline and runs
-immediately after the atomic code commit.
+independent review passed, and the target remainder is committed as `eb18611`.
+The official clean-HEAD pinned oracle then passed 30 scenarios × three runs;
+`differential/target-official-oracle.log` retains the result. The follow-up is
+complete, with direct writes and the recorded native own-effect issue deferred.
 
 Measurement prefix: `measurements/target-9c96893b-20260929-191353-d421178a`.
 Five-band medians are 3.134 / 1.641 / 0.351 / 0.303 / 2.011 seconds; small-file
