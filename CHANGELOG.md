@@ -1029,6 +1029,11 @@ claims explicit, independently reviewable, and regression-backed.
 
 #### Adopt proportional defense policy (2026-09-29)
 
+- Clarify per-effect fidelity versus retained per-access root fallback and
+  held-attribute checks; refusal selection may change without changing
+  publication, recovery or recording truth. Keep dispositions in DEFENSE §2.5.3.
+- Activate execution of simplification results 1–3 in small reviewed atomic
+  commits; defer direct writes from this execution scope.
 - Require a demonstrably plausible trigger for every built defense and scale
   each defense to plausibility and damage, without outsmarting user choices.
 - Split the preplaced-input threat: content authors stay adversarial at

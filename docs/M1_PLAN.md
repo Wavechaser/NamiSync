@@ -20,10 +20,14 @@ large copies run closer to device speed.
 
 **Results, in order.**
 
-1. **One admission per effect.** Each mutating effect, and each read that feeds
-   one, performs at most one root admission and one plan-fidelity comparison and
-   reuses that observation for the whole effect. Work kept only to preserve
-   which refusal reason wins is removed.
+1. **Consolidated admission per effect.** Each mutating effect reuses one
+   plan-fidelity observation across the reads and checks that feed that effect.
+   Remove duplicate root admissions within that effect where the approved hold
+   contract permits reuse; retain held-attribute checks before each access that
+   reuses admission and per-access admission for fallback roots. An item may
+   contain several effects; the fidelity observation does not carry across
+   later effects.
+   Work kept only to preserve which accurate refusal reason wins is removed.
 2. **One handle per copied file.** The temp handle carries a copied file through
    writing, metadata, flush, publication and the post-publication observation,
    removing the reopen and path lookups around finishing. It covers COPY and the
@@ -55,6 +59,31 @@ for it, recording the choice in the commit and HANDOFF. Commits stay atomic.
 Acting on a §2.5.3 consolidate, freeze or relax disposition needs no further
 approval when its differences fall in the declared list below; removing a
 backstop or a family marked keep does.
+
+The 2026-09-29 execution scope covers results 1–3. Direct writes (result 4)
+remain deferred and are not authorized by this execution. Start with admission
+consolidation and refusal-reason relaxation together, then handle continuity;
+use small atomic commits with their own verification and independent review.
+Refusal selection may change; publication, recovery-artifact and recording
+facts and their settlement meaning may not.
+
+**First atomic outcome — fresh-copy publication checks.** Runtime owns the
+change; native adapters and executor fixtures/oracle are direct consumers.
+Reuse the post-checkpoint preparation fidelity observations for fresh COPY and
+MOVE_UPDATE publication, retaining retry observations, temp identity, the
+MOVE_UPDATE old-path check and final target admission. Remove repeated final
+source admission only where no further source access occurs (these publication
+paths and MOVE/RECASE rename). Simplify retained-target malformed-path refusal
+ordering. Preserve dispatch admission, UPDATE backup sequencing, fallback and
+held-attribute obligations, all effects, settlement and recovery facts.
+The finite population is executor runtime, its runtime/native/settlement tests,
+the existing settlement oracle/baseline if traces change, and EXECUTOR,
+PERFORMANCE, CHANGELOG and HANDOFF. Existing differential and guard-scan helpers
+provide evidence, with any needed checker correction reviewed explicitly.
+Acceptance is the verification below, including per-row trace disposition and
+fresh independent review, in one atomic production commit. No handle-lifecycle,
+drift-fact or direct-write edits belong to this outcome. The run's decision and
+mandatory-stop rules apply unchanged.
 
 **Equivalence against the starting commit.**
 - *Must match:* effects, final managed trees, owned artifacts, recorder commands
@@ -308,7 +337,7 @@ scope changes, stops and recovery.
 
 | ID | Accepted outcome | Named verification | Status |
 | --- | --- | --- | --- |
-| Executor simplification and throughput | One admission per effect, one handle per copied file, planner-used drift facts with one verifier subject mechanism, and direct large writes, per the section above. Goal (not gate): 4 KiB at or above 1.6 MiB/s; 4 GiB toward device ceilings. | Equivalence against the starting commit with the declared changes, per-result oracle re-pin receipts, guard scan, differential, native witnesses, five-band measurements and independent review per commit. | Active. |
+| Executor simplification and throughput | Consolidated admission per effect, one handle per copied file, planner-used drift facts with one verifier subject mechanism, and deferred direct large writes, per the section above. Goal (not gate): 4 KiB at or above 1.6 MiB/s; 4 GiB toward device ceilings. | Equivalence against the starting commit with the declared changes, per-result oracle re-pin receipts, guard scan, differential, native witnesses, five-band measurements and independent review per commit. | Results 1–3 active; result 4 deferred. |
 | M1-9 | Bounded inventory projections, current evidence and the full inventory consumer for sibling sorting. | Complete or prior-complete publication; warnings outside action scope; raw evidence provenance; search/filter/collapse/window/detail, replacement/race and production sort/reset paths; headed witnesses. | Pending. Missing-row acknowledge/restore UI must be explicitly allocated at activation; this row does not silently claim it. |
 | M1-10 | Baseline, verify and rebaseline controls plus first same-task manual post-copy verification, without persistent operation-time hashes. Eligible null-evidence files enter rebaseline; every admitted rebaseline hashes and replaces/creates evidence, and a match is not verified. | Confirm acknowledgement admission before claim/native work; all-null/mixed workflow, service/CLI and desktop paths; conditional recording and supersession races; atomic handoff classification; live pause/resume/cancel and unchanged automatic failed-read retries; overlay/result identity. Independently review operation matrix and conditional recording. Terminal Verify-remaining/subset retry remains deferred. | Pending. Rebaseline confirmation is distinct from missing-row acknowledgement. |
 | M1-12 | Close integrated lifecycle/retention across activated task surfaces, then complete adversarial, documentation, ordinary and headed verification. This absorbs former M1-11. | Plan-only, execution-only, linked/manual verification, inventory, refused/canceled/degraded/failed tasks across same-document navigation, contained unsupported reload, explicit close and shutdown; admission bounds, stale-response suppression, exact resource release and retained truth. Applicable settlement oracle, ordinary/headed, installed-wheel/product, imports, diff/active-link checks and independent cross-component review. No aggregate-artifact or whole-owner-graph criterion. | Pending. |

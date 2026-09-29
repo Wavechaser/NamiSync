@@ -1,39 +1,28 @@
-# Latest session — root-admission WIP cleanup
+# Latest session — policy-driven executor simplification
 
-2026-09-29, `milestone1-adelbert`, starting clean at `b1b58476`.
+2026-09-29, `milestone1-adelbert`, starting clean at `9b694e0a`.
+The equivalence baseline remains the directive's registering commit `b1b58476`.
 
-## Cleanup
+## Scope and current work
 
-Accounted for the sole unique commit on each of the four WIP branches, then
-pruned their local refs. None was checked out; no recovery commit was merged.
+The user authorized M1_PLAN results 1–3, small atomic commits, and the
+execute-task builder/independent-review workflow. Direct writes are explicitly
+deferred. DEFENSE §2.5.3 remains the guard-disposition owner.
 
-- `c833bb99`: partial oracle-v2 tool draft retired by `3c8b4b41`; finding and
-  probe evidence retained. No product, test or baseline change was in this WIP.
-- `cfcc6ef`: core hold code/tests/docs rebuilt in `6536c041`, replacing identity
-  comparison with strict final-path confirmation; `8cdd669` added live attributes.
-- `0a04921`: docs-only blocked executor proposal superseded by `90b57646`.
-- `7eb8c19d`: preflight code/tests/docs rebuilt in `4263b12` with the held-attribute
-  correction and its native refusal regressions.
+Policy wording now distinguishes per-effect fidelity from per-access root
+fallback and held-attribute checks. Relaxing accurate refusal selection does
+not relax publication, recovery-artifact or recording settlement truth.
+Read-only investigation is mapping the first consolidation outcome and existing
+verification drivers before product edits. No product change has landed yet.
 
-Exact branch names, tips, unique histories, changed-path populations and
-successor ancestry checks are retained in
-`build/root-admission-optimization-20260928/resume/wip_cleanup_20260929_accounting.json`.
-The neighboring verified `.bundle` preserves all four recovery commits; its
-prerequisite commits remain in the integration branch. Product/tests were not
-changed, so no product test rerun was needed. Documentation links/diff and an
-independent accounting review cover this cleanup.
+## Verification and preservation
 
-## Next work remains unchanged
+Policy clarification requires link, consistency and diff checks plus independent
+review. Product outcomes retain M1_PLAN's focused/department/ordinary, import,
+oracle, guard-scan, differential, native and five-band evidence requirements.
+Evidence belongs under `build/executor-simplification-20260929/`.
 
-`b1b58476` registered M1_PLAN's executor simplification run after `103f3e48`
-adopted proportional defense. Follow that active register: one admission per
-effect, one handle per copied file, planner-used drift facts with the verifier
-walk trimmed, then direct large writes. Its equivalence list, authorized oracle
-changes and decision boundaries remain binding. This cleanup does not start
-implementation or change the run's scope; M1-9 follows it.
-
-## Preservation
-
-Keep `F:\NamiSyncExecutorBenchSource`, the detached `b8baf42d` baseline worktree,
-raw/failed root-admission and full-corpus receipts, review probes and device
-ceiling evidence. No other branches, worktrees, stashes or remotes were changed.
+Keep the existing `F:\NamiSyncExecutorBenchSource`, detached `b8baf42d` baseline
+worktree, historical raw/failed receipts, root-admission review probes and device
+ceiling evidence. Prior WIP cleanup accounting and the recovery bundle remain
+under `build/root-admission-optimization-20260928/resume/`.

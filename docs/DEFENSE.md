@@ -459,13 +459,18 @@ that decision here, which is a scope decision for the user.
    Observed facts the planner did not use are not fidelity facts.
 2. **Once per effect.** One comparison immediately before each mutating effect,
    whose observation serves everything that effect needs. Non-mutating steps
-   and repeated accesses within one effect do not re-prove it.
+   and repeated accesses within one effect do not re-prove it. An item may
+   contain several effects; later effects take their own observation. This
+   fidelity bound does not remove held-attribute checks before admission reuse
+   or per-access root admission where the approved hold cannot be reused.
 3. **Detection, not climbing.** A mismatch refuses or fails the item. Fidelity
    alone never justifies handle-bound or handle-relative machinery.
 
 Any accurate refusal reason is acceptable. When several apply, NamiSync need
 not preserve which one wins; repeated work kept only to preserve refusal-reason
 precedence is not a defense.
+This relaxes refusal selection, not facts about publication, recovery artifacts,
+or recording, nor their settlement meaning.
 
 #### 2.5.2 Catastrophe backstops
 
@@ -498,7 +503,7 @@ This table applies §2.5 to existing guard families. It sets target posture;
 | Guard family | Owners | Disposition |
 | --- | --- | --- |
 | Overlap, wrong root/volume, placeholder, link, unreadable-as-unknown | preflight, scanner, planner, root authority, executor, verifier | **Keep** as §2.5.2 backstops at observation and at the mutating effect. |
-| Root identity during an invocation | root authority, executor, verifier, preflight | **Keep** the hold; **consolidate** repeated root admission to at most one per effect. |
+| Root identity during an invocation | root authority, executor, verifier, preflight | **Keep** the hold; **consolidate** duplicate admission within an effect where the hold permits reuse, retaining per-access held-attribute checks and fallback admission. |
 | Name representability and collisions | pathing core, scanner, planner | **Keep** at observation; **consolidate** repeated full-spelling revalidation of already-validated descendants. |
 | Hard links and duplicate identity | scanner, planner | **Keep** as warnings and move-detection eligibility; elsewhere link count is not a fidelity fact under §2.5.1. |
 | Review-to-execution drift | preflight, executor | **Keep once** per mutating effect under §2.5.1. |
