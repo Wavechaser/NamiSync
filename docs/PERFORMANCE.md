@@ -494,18 +494,19 @@ final-path queries and 37,998 handle-information queries. Receipts use
 matching input manifests. These are sequential same-fixture observations;
 instrumented runs remain separate from timing authority.
 
-**Executor instrumentation and fast-path eligibility.** Method-wrapping stage
-timers can change the path being measured. Replacing methods checked by the
+**Historical instrumentation and fast-path eligibility.** Before result 7,
+method-wrapping stage timers could change the path being measured. Replacing methods checked by the
 resolve or stat-derived leaf-volume selectors, even through `functools.wraps`,
-makes the corresponding selector use its custom-method fallback as described
-in EXECUTOR. Such timings characterize that
+made the corresponding selector use its custom-method fallback. Such timings characterize that
 wrapped adapter, not the default production shortcuts. Root diagnostics showing
 `held=true` attest the root hold; they do not prove that both resolve and leaf
-volume shortcuts ran.
+volume shortcuts ran. Result 7 removes method-identity selection; instrumentation
+must still be kept separate from uninstrumented timing, and historical receipts
+remain bound to their original code and drivers.
 
-To inspect default dispatch, use a profiler such as `cProfile.runcall` that does
-not replace these methods, or count below their dispatch boundary at the module
-physical resolver and native volume bindings. A combined native regression
+For current diagnostics, use a sampling/call profiler or count the module
+physical resolver and native volume bindings. Method wrappers no longer select
+another admission sequence, but their timing overhead still matters. A combined native regression
 checks the normal production stat/resolve composition after held admission:
 correct file evidence, zero physical resolutions and zero leaf-volume probes.
 These finite call assertions detect lost shortcut selection; they are not a
@@ -531,6 +532,30 @@ The raw earlier runs remain below for chronology and correctness/readback
 evidence. Their throughput-goal observations describe those runs, not a stable
 regression attributable to the changes. The target-check follow-up is measured
 separately after correctness verification.
+
+### Single held-root dispatch — 2026-09-30
+
+Result 7's frozen candidate on `6157226` passed 331 native/runtime and 5,699
+ordinary tests, imports, unchanged three-run oracle and the fixed 67-group
+differential before measurement. All 25 serial executions/readbacks passed,
+with recording OK, zero reservations, stable source/dependencies and exact
+owned-target/sidecar cleanup.
+
+| Band | Median [min–max], s | MiB/s | Result 6 median, s |
+| --- | ---: | ---: | ---: |
+| 1,000 × 4 KiB | 3.341 [3.242–3.873] | 1.169 | 3.211 |
+| 512 × 128 KiB | 1.740 [1.710–3.611] | 36.774 | 1.682 |
+| 64 × 4 MiB | 0.356 [0.332–0.614] | 719.644 | 0.348 |
+| 4 × 128 MiB | 0.290 [0.286–0.319] | 1,763.455 | 0.302 |
+| 1 × 4 GiB | 1.924 [1.883–2.294] | 2,128.908 | 1.999 |
+
+Every predecessor range overlaps; this establishes no throughput gain or
+regression. All samples remain, including the slow 128 KiB tail. Small-file
+backend/outside medians are 0.413/2.928 s; the 4 GiB split is 1.428/0.646 s.
+Separate medians need not sum to the total. These repeated-source buffered
+runs are neither cold-cache/device ceilings nor direct-write threshold probes.
+Evidence prefix: `build/executor-simplification-20260929/measurements/`
+`result7-6157226f-20260930-170339-3d6968b5`; predecessor receipts identify result 6.
 
 ### Held-root path composition — 2026-09-30
 

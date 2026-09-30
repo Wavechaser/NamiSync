@@ -1032,7 +1032,8 @@ claims explicit, independently reviewable, and regression-backed.
 - Refine and activate results 5–7: recognize admitted file versions after own
   effects, compose validated descendant paths and remove method-identity dispatch.
   Keep metadata completion, database concurrency and integrity criteria separate;
-  direct writes remain outside this execution.
+  production direct writes remain outside this execution; threshold probing
+  across the five specified devices follows consolidation review.
 - Fix own-effect ARCHIVE refusals using shared version recognition in executor
   recovery and pure rename recording; retain metadata-restoration and SQL
   concurrency checks. Five native cases and changed-version controls pass.
@@ -1045,7 +1046,15 @@ claims explicit, independently reviewable, and regression-backed.
   per-access guards. Verification passes 343 native/runtime and 5,711 ordinary
   tests, imports, unchanged oracle and differential. All 25 five-band readbacks
   pass; medians are 3.211 / 1.682 / 0.348 / 0.302 / 1.999 s with overlapping
-  predecessor ranges. Dispatch simplification remains next.
+  predecessor ranges.
+- Remove native method-identity dispatch from root admission, resolution,
+  leaf-volume observation and runtime delegation. Preserve native guards and
+  fallback admission; migrate override-only tests to primitive fault controls.
+  Native/runtime verification passes 331 tests; the 12-case reduction removes
+  obsolete dispatch variants while retaining refusal and no-effect coverage.
+  Ordinary tests pass 5,699, imports/oracle/guard scan/differential pass, and
+  fresh independent review passes. All 25 consolidation readbacks pass; medians
+  are 3.341 / 1.740 / 0.356 / 0.290 / 1.924 s with overlapping predecessor ranges.
 
 - Correct the measurement context: F: was occupied during the finishing runs;
   they do not establish a regression. Record the user's separate rerun table,

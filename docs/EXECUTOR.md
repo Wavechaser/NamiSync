@@ -145,10 +145,10 @@ the supplied filesystem, including overrides. Adapters without native activation
 retain their existing behavior. The tracing adapter explicitly forwards activation
 without adding a filesystem effect to its protected trace.
 
-On Windows, the default volume observation uses the anchor just admitted at that
+On Windows, reviewed volume observation uses the anchor just admitted at that
 guard, so the shared anchor comparison checks echoed evidence rather than a second
-freshness observation. An overridden volume probe still has to return matching
-anchor evidence, and a mismatch remains an admission error.
+freshness observation. Native volume serial and filesystem mismatches remain
+admission errors.
 
 Confirmed holds replace repeated root-prefix admission until
 the call finishes all settlement and cleanup. Each reuse first reads current
@@ -158,28 +158,29 @@ descendant walk, exact-root volume reuse, and stat-derived leaf volume reuse.
 Query failure retains the existing
 consumer error policy and cannot authorize access. Diagnostic mode reporting
 does not perform an additional attribute query. A `held` diagnostic confirms
-the root hold, not eligibility for the `resolve` and stat-derived leaf-volume
-shortcuts. Those shortcuts also require default method identities, so
-method-wrapping profilers select the safe fallback while the root remains held.
+the root hold; target-resolution delegation also requires active native ownership
+and the exact reviewed authority, while stat-derived leaf-volume reuse requires
+a matching serial from the checked leaf snapshot.
 The hold's write sharing remains
 compatible with root flushes and ordinary descendant changes; DEFENSE's
 quiescent-root assumption still covers the attribute-check-to-use interval.
 Pause, cancellation and every error
 release them; resume creates a fresh invocation. UNC, mapped network, unavailable
 or mismatching final paths retain per-access admission. Descendant physical
-containment for unheld or custom-validated roots, reparse checks, second directory
+containment for unheld roots, reparse checks, second directory
 observations, leaf volume classification and per-item stat behavior remain. For
-an exact confirmed hold under the default native validators, `resolve` retains
+an exact confirmed native hold, `resolve` retains
 lexical identity and the no-follow descendant walk but skips repeated physical
 root and candidate resolution. Required-leaf checks still run. The shared hold contract is owned by
 [CORE.md](CORE.md) and [DEFENSE.md](DEFENSE.md).
 
 For a valid retained target-relative path, runtime's shared target resolver may
-delegate its root revalidation to the immediately following default native
-`resolve`. Eligibility requires the concrete default native adapter, the exact
-reviewed authority in its active confirmed hold and default resolver/guard
-methods. The resolver still queries current held attributes before descending. Custom and unheld
-adapters retain the original runtime-then-native admission sequence. Retained
+delegate its root revalidation to the immediately following native `resolve`.
+Eligibility requires native ownership and the exact reviewed authority in its
+active confirmed hold. The resolver still queries current held attributes before
+descending. Non-native and unheld adapters retain the runtime-then-native
+admission sequence. Native method overrides no longer select a separate legacy
+sequence. Retained
 paths are converted to root-relative spelling once; native resolution owns
 descendant-spelling validation. Malformed paths may refuse before root admission;
 any accurate refusal reason is sufficient. Other runtime source, paired and
@@ -210,10 +211,10 @@ recording; post-effect and recovery version recognition compares kind, size,
 mtime and available identity, ignoring attributes, creation time and link count.
 Path, placeholder and reparse checks precede admission.
 
-On the default Windows probe path, a valid nonnegative integer `st_dev` from that
+On the Windows probe path, a valid nonnegative integer `st_dev` from that
 checked snapshot selects the admitted held root's `VolumeId` when its low 32 bits
 match the root's native serial. This reuse first checks current held attributes.
-Mismatch, unavailable/invalid stat evidence, unheld roots and custom volume probes
+Mismatch, unavailable/invalid stat evidence and unheld roots
 retain the fresh leaf-volume probe and its errors. Stored identity adaptation is
 unchanged; the stat serial comparison does not expand filesystem support.
 
@@ -249,7 +250,7 @@ events or recorder values. No mutable last-run state lives on a filesystem adapt
   preconditions against live filesystem evidence: expected identity/type/stat,
   required absence/occupancy, root containment, and directory emptiness where
   relevant. Drift fails that operation without guessing.
-- Validate paths lexically and by resolved handle for unheld or custom-validated
+- Validate paths lexically and by resolved handle for unheld
   roots; an exact confirmed native hold may replace repeated physical resolution
   after current held attributes and no-follow descendant checks. Use long-path-safe APIs.
 - Keep plan, continuation, recorder, diagnostic, and returned `Path` values in

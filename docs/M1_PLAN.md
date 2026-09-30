@@ -69,7 +69,7 @@ leads; direct writes follow on the simplified base.
    this makes unnecessary, and conversions kept only to preserve refusal
    precedence (§2.5.1). Descendant checks and held-root attribute checks remain.
    Unheld and fallback roots keep full validation.
-7. **One production path per held-root operation.** Replace method-identity
+7. **One production path per held-root operation — delivered.** Replace method-identity
    gating (`__func__ is _DEFAULT_*` and its eligibility helpers) with a single
    held-root path; tests intercept native primitives rather than overridden
    methods. Custom overrides no longer select the legacy sequence.
@@ -103,9 +103,14 @@ target check) may be removed inside whichever result touches those lines.
 
 **Execution scope (user, 2026-09-30).** Refine and commit this directive first,
 then deliver results 5–7 in the smallest coherent atomic commits with their
-required verification and measurements. Result 8 remains pending and is not
-authorized in this execution. Unbuffered source reads remain optional in that
-future result; device-class selection machinery requires measurement justification.
+required verification. The user's clarification authorizes result 8's threshold
+probing after consolidation and independent review: sweep 2–32 MiB across
+G/H/E/J/L with F as source and record where direct writes benefit each device.
+The earlier five-band runs describe consolidation only, not this threshold.
+Production direct-write refactoring remains pending until consolidation is
+reviewed and the threshold determined; it is not part of this execution.
+Unbuffered source reads remain optional in that future result; device-class
+selection machinery requires measurement justification.
 
 **Result 5 delivered — `d43f832` (2026-09-30).** Core version recognition is shared by
 executor post-effect/recovery and pure MOVE/RECASE recording; plan predicates
@@ -119,9 +124,9 @@ existing capability skips. Imports, unchanged 30×3 oracle, guard scan and fixed
 67-group differential pass. All 25 five-band executions/readbacks pass; PERFORMANCE
 records the medians and overlapping ranges. Fresh independent review covers source
 and evidence. Receipts are `differential/result5-final-*` and measurement prefix
-`result5-8b2b00e4-20260930-130559-e544fed6`. Results 6–7 remain next; result 8 is excluded.
+`result5-8b2b00e4-20260930-130559-e544fed6`.
 
-**Result 6 delivered (2026-09-30).** Native path composition retains an admitted
+**Result 6 delivered — `6157226` (2026-09-30).** Native path composition retains an admitted
 prefix instead of conversion caches, and removes duplicate conversion-only probes.
 Path parity/refusal/lifetime/fallback tests replace cache mechanics; trailing
 separator and ASCII-drive eligibility corrections were reviewed before acceptance.
@@ -132,7 +137,40 @@ fixed 67-group differential. All 25 five-band executions/readbacks pass; ranges
 overlap result 5. Independent source/evidence review accompanies the commit.
 Receipts use `differential/result6-*` and measurement prefix
 `result6-d43f8324-20260930-133019-7ae09623`; PERFORMANCE owns the table.
-Result 7 dispatch remains next; pipeline/direct writes are excluded.
+Production pipeline/direct writes remain excluded.
+
+**Result 7 delivered (2026-09-30).** Native admission, resolve, leaf-volume
+observation and runtime delegation select one path from actual invocation/hold
+state, without method-identity constants. Fresh attributes, descendant checks,
+full fallback and exact reviewed authority remain. Native primitive controls
+replace obsolete override-dispatch variants; no-effect and source-swap coverage
+remain. Verification passes 331 native/runtime and 5,699 ordinary tests (four
+existing skips), 12 imports, unchanged 30x3 oracle, 70-row/391-effect guard scan
+and fixed 67-group differential with zero differences. Fresh independent review
+passes. All 25 five-band executions/readbacks pass with unchanged dependencies
+and owned cleanup; every predecessor range overlaps. Receipts use
+`differential/result7-*`, candidate `candidate-result7-dispatch-47f0f4e2d7da4a2b85df35211397dce1`,
+and measurement prefix `result7-6157226f-20260930-170339-3d6968b5`.
+The user explicitly approved the custom-override compatibility change;
+recovery `259aee0` was restored uncommitted on `milestone1-adelbert`, never merged.
+No source-freshness API, effect, persistence or pipeline behavior changed.
+
+**Threshold probe boundary (user clarification, 2026-09-30).** After result 7
+passes review, use a standalone ignored helper under the existing evidence
+`ceilings/` directory, with F's existing source read-only and unique owned
+scratch on G/H/E/J/L. Compare buffered and unbuffered synchronous QD1 writes
+at 2/4/8/16/32 MiB, six balanced-order pairs per size/device, retaining every
+sample and checking flush, exact length and readback. Query native alignment;
+hold allocation/chunk/hash/source policy equal. Include an unaligned-tail
+witness, source/driver provenance and exact owned cleanup. Use paired total
+through flush for a per-device crossover: at least five of six pairs faster,
+median paired saving at least 5%, sustained at larger sampled sizes. Refine
+only an observed crossover bracket with 6/12/24 MiB as applicable; no stable
+benefit means buffered. A win at 2 MiB establishes only a boundary at or below
+the sweep minimum. PERFORMANCE owns raw evidence, method limits and the
+decision. This measures a standalone writer, not integrated pipeline speed;
+changed production buffering/concurrency must revalidate the recommendation.
+No product/test/pipeline changes or shipping threshold belong to this probe.
 
 **Goal, not gate.** 1,000 × 4 KiB F:→G: at or above the pre-pathing
 1.6 MiB/s, and the 4 GiB band well above today's 2.0 GiB/s toward the device
@@ -425,7 +463,7 @@ scope changes, stops and recovery.
 
 | ID | Accepted outcome | Named verification | Status |
 | --- | --- | --- | --- |
-| Executor simplification and throughput | Admission, handle, drift-fact and verifier simplification (delivered); then own-effect version checks, composed native paths, one held-root production path and direct large writes, per the section above. Goal (not gate): 4 KiB at or above 1.6 MiB/s; 4 GiB toward device ceilings. | Equivalence against the starting commit with the declared changes, per-result oracle re-pin receipts, guard scan, differential, native witnesses, five-band and direct-write device-sweep measurements and independent review per commit. | Earlier simplifications and results 5–6 delivered; result 7 next, result 8 deferred. |
+| Executor simplification and throughput | Admission, handle, drift-fact and verifier simplification; own-effect version checks, composed native paths and one held-root production path delivered. Direct large writes remain future work. Goal (not gate): 4 KiB at or above 1.6 MiB/s; 4 GiB toward device ceilings. | Equivalence against the starting commit with the declared changes, per-result oracle re-pin receipts, guard scan, differential, native witnesses, five-band and direct-write device-sweep measurements and independent review per commit. | Results 5–7 delivered; result 8 threshold probing next, production refactor deferred. |
 | M1-9 | Bounded inventory projections, current evidence and the full inventory consumer for sibling sorting. | Complete or prior-complete publication; warnings outside action scope; raw evidence provenance; search/filter/collapse/window/detail, replacement/race and production sort/reset paths; headed witnesses. | Pending. Missing-row acknowledge/restore UI must be explicitly allocated at activation; this row does not silently claim it. |
 | M1-10 | Baseline, verify and rebaseline controls plus first same-task manual post-copy verification, without persistent operation-time hashes. Eligible null-evidence files enter rebaseline; every admitted rebaseline hashes and replaces/creates evidence, and a match is not verified. | Confirm acknowledgement admission before claim/native work; all-null/mixed workflow, service/CLI and desktop paths; conditional recording and supersession races; atomic handoff classification; live pause/resume/cancel and unchanged automatic failed-read retries; overlay/result identity. Independently review operation matrix and conditional recording. Terminal Verify-remaining/subset retry remains deferred. | Pending. Rebaseline confirmation is distinct from missing-row acknowledgement. |
 | M1-12 | Close integrated lifecycle/retention across activated task surfaces, then complete adversarial, documentation, ordinary and headed verification. This absorbs former M1-11. | Plan-only, execution-only, linked/manual verification, inventory, refused/canceled/degraded/failed tasks across same-document navigation, contained unsupported reload, explicit close and shutdown; admission bounds, stale-response suppression, exact resource release and retained truth. Applicable settlement oracle, ordinary/headed, installed-wheel/product, imports, diff/active-link checks and independent cross-component review. No aggregate-artifact or whole-owner-graph criterion. | Pending. |

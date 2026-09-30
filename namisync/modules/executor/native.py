@@ -498,13 +498,6 @@ class NativeFileSystem:
 
     def _admit_reviewed_root(self, authority: RootAuthority) -> NativeVolumeInfo:
         volume_probe = self._observe_root_volume
-        if getattr(volume_probe, "__func__", None) is not _DEFAULT_ROOT_VOLUME_PROBE:
-            return admit_root(
-                authority,
-                lstat=self._observe_root_component,
-                anchor_probe=self._observe_root_anchor,
-                volume_probe=volume_probe,
-            )
         observed_anchor: str | None = None
 
         def anchor_probe(path: str) -> str:
@@ -514,8 +507,6 @@ class NativeFileSystem:
 
         def anchored_volume(_path: str) -> NativeVolumeInfo:
             assert observed_anchor is not None
-            # The default Windows volume observation echoes this admitted anchor;
-            # overridden probes still return independently checked anchor evidence.
             return self._observe_root_volume_at_anchor(observed_anchor)
 
         return admit_root(
@@ -589,22 +580,8 @@ class NativeFileSystem:
         canonical = validate_relative_path(relative_path)
         root_path = _lexical_logical_path(root)
         self.revalidate_root(root_path)
-        held_root = (
-            getattr(self.revalidate_root, "__func__", None)
-            is _DEFAULT_ROOT_REVALIDATION
-            and getattr(self._require_held_root, "__func__", None)
-            is _DEFAULT_REQUIRE_HELD_ROOT
-            and getattr(self._scoped_root, "__func__", None)
-            is _DEFAULT_SCOPED_ROOT
-            and getattr(self._validate_existing_chain, "__func__", None)
-            is _DEFAULT_VALIDATE_EXISTING_CHAIN
-            and getattr(self._reject_reparse, "__func__", None)
-            is _DEFAULT_REJECT_REPARSE
-        )
-        scoped = (
-            _DEFAULT_SCOPED_ROOT(self, root_path) if held_root else None
-        )
-        held_root = held_root and scoped is not None and scoped.held
+        scoped = self._scoped_root(root_path)
+        held_root = scoped is not None and scoped.held
         resolved_root = (
             None
             if held_root
@@ -654,11 +631,7 @@ class NativeFileSystem:
             raise UnsafeExecutionPath(f"unsupported filesystem entry: {path}")
         volume = None
         volume_probe = self._volume_id
-        if (
-            os.name == "nt"
-            and getattr(volume_probe, "__func__", None) is _DEFAULT_VOLUME_ID_PROBE
-            and getattr(self._observe_root_volume, "__func__", None) is _DEFAULT_ROOT_VOLUME_PROBE
-        ):
+        if os.name == "nt":
             scoped = self._scoped_root(path, descendants=True)
             device = getattr(info, "st_dev", None)
             if (
@@ -1593,35 +1566,19 @@ class NativeFileSystem:
         return None if value is None else int(value)
 
 
-_DEFAULT_ROOT_VOLUME_PROBE = NativeFileSystem._observe_root_volume
-_DEFAULT_VOLUME_ID_PROBE = NativeFileSystem._volume_id
-_DEFAULT_ROOT_REVALIDATION = NativeFileSystem.revalidate_root
-_DEFAULT_RESOLVE = NativeFileSystem.resolve
-_DEFAULT_REQUIRE_HELD_ROOT = NativeFileSystem._require_held_root
-_DEFAULT_SCOPED_ROOT = NativeFileSystem._scoped_root
-_DEFAULT_VALIDATE_EXISTING_CHAIN = NativeFileSystem._validate_existing_chain
-_DEFAULT_REJECT_REPARSE = NativeFileSystem._reject_reparse
-
-
 def _can_delegate_held_resolution(
     fs: object, root: Path, authority: RootAuthority
 ) -> bool:
-    """Select an already admitted default resolver without querying attributes."""
-    if type(fs) is not NativeFileSystem:
+    """Select an active native held root without querying attributes."""
+    if not isinstance(fs, NativeFileSystem):
         return False
     invocation = _ROOT_INVOCATION.get()
     if (
         invocation is None or not invocation.active
         or invocation.native_owner is not fs
-        or getattr(fs.resolve, "__func__", None) is not _DEFAULT_RESOLVE
-        or getattr(fs.revalidate_root, "__func__", None) is not _DEFAULT_ROOT_REVALIDATION
-        or getattr(fs._require_held_root, "__func__", None) is not _DEFAULT_REQUIRE_HELD_ROOT
-        or getattr(fs._scoped_root, "__func__", None) is not _DEFAULT_SCOPED_ROOT
-        or getattr(fs._validate_existing_chain, "__func__", None) is not _DEFAULT_VALIDATE_EXISTING_CHAIN
-        or getattr(fs._reject_reparse, "__func__", None) is not _DEFAULT_REJECT_REPARSE
     ):
         return False
-    scoped = _DEFAULT_SCOPED_ROOT(fs, root)
+    scoped = NativeFileSystem._scoped_root(fs, root)
     return scoped is not None and scoped.authority == authority and scoped.held
 
 
