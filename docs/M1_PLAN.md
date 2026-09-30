@@ -11,76 +11,115 @@ retains investigation, rejected proposals and superseded execution recipes;
 the decisions still governing delivery are below. Historical observations
 certify their recorded build and dependencies only.
 
-## Incident repairs and closeout — 2026-09-27
+## Delivered backend optimizations
 
-### Authorized cold-admission follow-up
+### Executor simplification and throughput — 2026-09-29
 
-From `0e4595e4`, the user authorized two separate commits on `milestone1`:
+Closed 2026-09-30 on `milestone1-adelbert`, from equivalence baseline `b1b58476`
+through `7f36a2a4`. The full execution register remains in Git at `7f36a2a4`;
+this compact record preserves shipped outcomes and decisions. [DEFENSE](DEFENSE.md)
+owns proportional defense, [EXECUTOR](EXECUTOR.md) and [VERIFIER](VERIFIER.md)
+own current behavior, and [PERFORMANCE](PERFORMANCE.md) owns measurements.
 
-| ID | Outcome and finite population | Preserved guarantees / verification | Status |
-| --- | --- | --- | --- |
-| CLI-DRIFT | Distinguish observed cold-file drift from stable incompatibility and unavailable artifacts; bound validation-only retries and give persistent drift non-destructive retry guidance. Owners: db contracts, workflow pair admission, CLI and their direct repository/history/initializer consumers; focused database/CLI tests and DATABASE behavior documentation. | Cold source nonmutation, fresh-pair creation/rollback, live-owner checks, existing CLI refusal exit, no mutex or task replay. Deterministic transient/persistent drift, stable mismatch, I/O/journal controls, CLI pair/history paths, ordinary suite, import law and independent review. One fix commit. | Complete: `5e4bf87`; 5,410 ordinary passes, 4 privilege skips, 34 headed deselections; 571 focused passes, 27 exact-count controls, 12 import contracts, 151 documentation links; independent review approved. |
-| DOC-PRECISION | Correct TESTS' unverified already-visible-notice rationale and scope DATABASE's own-snapshot statement to owner-opened connections. No new internal history-reader validation. | Source comparison, documentation links/diff checks and independent review. One separate documentation commit after the fix. | Complete in this documentation commit; source comparison, links/diff checks and independent review. |
+| Delivered outcome | Commit / evidence |
+| --- | --- |
+| Reuse fresh source/target fidelity before COPY/MOVE_UPDATE publication; remove duplicate admissions and refusal-precedence probes. Retry checks remain. | `a6e2306`, `eb18611`; classified per-row oracle re-pins. |
+| Carry one invocation-owned copied-file handle through writing, metadata, flush, publication and observation. Already-granted access may finish where copied/inherited ACLs would deny a reopen. | `0d7dd6b`; native handle/ACL witnesses and restored-fixture receipts. |
+| Use planner facts for plan drift; remove duplicate verifier placeholder classification. Publication, backup, recovery, DB concurrency and integrity retain their separate criteria. | `84ce0fb`, `d444a6a`; core/executor/recorder and verifier coverage. |
+| Recognize the same file version after own effects and recovery using kind, size, mtime and available identity. Native ARCHIVE/link-count reactions no longer cause false refusals; record actual resulting metadata. | `d43f832`; five native cases, changed-version controls and ordinary coverage. |
+| Compose native paths from admitted root prefixes and select one held-root production path without method-identity gates. Concrete NativeFileSystem alone delegates admission to resolve; subclasses keep runtime admission. | `6157226`, `878f15e`, `b9c4ad3`; native guard/fallback/override witnesses. |
+| Write targets directly at a blanket 8 MiB across device types, using aligned buffers within the 32 MiB pool, exact tail EOF and retained-handle publication. Keep buffered capability fallback/source reads, create-new-first temp recovery and synchronous eligible small-file copies. | `6b116a58`; native failure/ownership controls, real ledger/verifier integration, classified oracle re-pin. `7f36a2a4` pins the aligned bulk path and documents private-view ownership. |
 
-Desktop Setup refusal mapping, cross-process exclusion and unrelated CLI tooling
-changes remain excluded. Existing safety/recurrence stops apply. Evidence lives
-in `build/cold-admission-followup-20260927/`; root serializes shared delivery
-documents. Admission retries must not retry task submission or effects, and
-inconclusive observations must never acquire reset advice merely by exhausting
-the retry policy.
+**Accepted policy.** Planner fidelity and post-effect version recognition answer
+different questions. Consolidation may change read-only probe counts/order and
+choose another accurate refusal when several apply; effects, final trees,
+owned artifacts and recorder evidence must match except the explicitly accepted
+own-effect and retained-handle ACL outcomes above. Root holds, fresh held
+attributes, descendant guards, per-access fallback, atomic publication, per-file
+file/directory flushes before recording, stable wire values and persistence
+contracts remain. The completed run's oracle re-pin exception is closed.
 
-Implementation boundary: schema owns a shared admission-error base with the
-existing mismatch exception as a subtype; contracts owns typed observed drift
-and a single three-attempt validation policy. Pair admission retries a complete
-single-attempt ledger/history/recheck operation, while standalone consumers
-apply the same policy to one role. Cleanup failure or control interruption must
-not disappear into retries. Schema errors remain provisional until source
-stability is rechecked. Three attempts bound repeated work, not total elapsed
-time for reading arbitrarily large files.
+**Verification.** Each outcome received independent review and its affected
+focused/department/ordinary, import, oracle, guard, differential and five-band
+checks. Final direct-write ordinary evidence has 5,720 passes/four capability
+skips and one stale cleanup-count assertion; its corrected audit module passes
+95 tests, with unaffected passes reused by dependency. The official committed
+oracle passes 30 scenarios × 3; the guard scan covers 70 rows/344 effects with
+no missing admission; all 12 imports pass. The 67-group fixed differential's
+four changed groups contain only seven obsolete cleanup-count diagnostics;
+all effect/tree/settlement facts match. Follow-up coverage passes 640 executor
+tests. Failed receipts remain; no aggregate all-green invocation is invented.
 
-Workflow-owned non-destructive guidance passes through DatabaseContractView to
-CLI and the existing host startup display. Direct facade/view consumers and
-their witnesses are in the finite migration. Typed history admission refusals
-use the existing CLI refused exit (3); other history read failures retain exit
-4. Stable incompatibility alone retains reset advice. No fresh publication,
-reservation, task submission or filesystem effect enters a retry body.
+Evidence root: `build/executor-simplification-20260929/`, especially
+`differential/result8-*` and measurement prefix
+`measurements/result8-b9c4ad3e-20260930-201114-989e90d9`. All 25 final production
+copies/readbacks pass with stable inputs, expected write modes and owned cleanup.
+Latest diagnostic medians: 1,000 × 4 KiB **2.789 s / 1.40 MiB/s**; 1 × 4 GiB
+**0.909 s / 4,505 MiB/s**. The small-file 1.6 MiB/s goal remains unmet and is not
+a gate. Comparisons are sequential repeated-source observations, not cold-cache
+or universal-device claims. The 336-copy/16-tail threshold study remains
+historical evidence; the user's blanket 8 MiB decision supersedes its per-device
+candidates. No volume/model classifier ships.
 
-The user authorized four separate reviewed outcomes from `a0205c08`.
-Implementation boundaries and the original finite populations are retained in
-Git history; component documents own the resulting behavior. Evidence is under
-`build/admission-bridge-closeout-20260927/`.
+**Closeout and exclusions.** No in-scope optimization or bug remains open.
+Directory-flush batching and unbuffered source reads belong to
+[M2_PROPOSAL](M2_PROPOSAL.md); the latter requires evidence of integrated benefit.
+The exFAT FileIdInfo defect, pre-invocation replacement findings below, internal
+re-certification/interface audits and future M1 product rows were not part of
+this run. Earlier recovery changes were rebuilt into reviewed commits rather
+than merged as WIP; Git and retained evidence preserve that accounting.
 
-| ID | Delivered outcome | Verification | Commit / status |
-| --- | --- | --- | --- |
-| IR-DB | Separate strict cold file admission from runtime-owned live SQLite validation. Preserve exact schema/pair/journal/placement refusal, independent role reads, fresh noncreating Plan and truthful effects. DATABASE/DEFENSE own the contract. | Deterministic reader/WAL activity and refusal/lifetime controls; 5,379 ordinary passes, 4 privilege skips, 34 headed deselections; installed Setup passed; 12 import contracts; 87 documentation links; independent review. | Complete: `639b2ea`; `db-review.md`, `db-implementation.md`, `db-ordinary-final.xml`, `db-installed-setup.xml`. |
-| IR-BRIDGE | Migrate the optional diagnostic to current scalar/terminal shapes, retain exact reliable-item witnesses, preserve the first report failure and raw incomplete streams, and settle synthetic cancellation through normal host cleanup. BRIDGE/PERFORMANCE own behavior and observations. | 35 focused passes and CRLF page probe; 5,380 ordinary passes, 4 privilege skips, 34 headed deselections; complete installed observation on `639b2ea`; injected rejection retains raw evidence and exits normally. | Complete; independent review approved. The commit carrying this row delivers IR-BRIDGE. `bridge-review.md`, `bridge-ordinary-final.xml`, `bridge-full-final.json`, `bridge-injected-report-failure.json`. |
-| IR-CLOSE | Remove AB-7 focus loss from BUGS and retain environmental troubleshooting in TESTS. Retain the enabled-button wait for independent asynchronous-filter sequencing. Retire the unrealized DWM sentinel obligation; no new focus/compositor detector. | Source/evidence review, 86 documentation links and diff checks; independent approval. Product/helper unchanged. | Complete: `e8d3613`; `closeout-review.md`, `closeout-docs-check.json`. |
-| IR-DEFER | Shelve AB-8 stack/wrap; retain the unconfirmed renderer/check race, historical limitations and recurrence inspection points in TESTS. | Documentation consistency, 84 links, evidence references and diff checks; independent approval. No CSS/helper/assertion change. | Complete: `8f75f75`; `defer-review.md`, `defer-docs-check.json`. |
+### Root admission optimization — 2026-09-28
 
-The database runtime retains two lazy role connections. Later pair checks and
-consumer opens validate current SQL, main identity and journal absence; public
-standalone constructors retain cold byte-preserving preflight. Reader retirement,
-writer placement and retryable runtime shutdown remain intact.
+Delivered 2026-09-28–29, `6536c04` through `8159905`. Executor, preflight and
+verifier now admit and hold confirmed local roots per invocation; remote,
+unholdable or uncorroborated roots keep per-access admission. Native observation
+and path-probe consolidation accompanied the holds; later simplification above
+supersedes intermediate conversion caches. [CORE](CORE.md),
+[EXECUTOR](EXECUTOR.md), [PREFLIGHT](PREFLIGHT.md), [VERIFIER](VERIFIER.md) and
+[DEFENSE](DEFENSE.md) own the retained contract.
 
-The bridge driver decodes only its finite 1–1,500 byte coordinates, consumes
-item-free terminal facts and independently checks 150 ordered reliable outcomes
-per task. Reporting stops on the first rejection, queued counters unwind, and
-failure metadata is captured before cleanup. Failure/final milestones and
-unfinished timing streams survive clean incomplete exits. The current source
-population is the bridge diagnostic package, its focused test module and page
-probe; production host/transport and frozen custody JSON are unchanged.
+| Delivered outcome | Commit / evidence |
+| --- | --- |
+| Shared full admission and exact held final-path confirmation; directory access without delete sharing, with fresh attributes before reuse and release on pause/exit. | `6536c04`, `8cdd669`; native NTFS/exFAT root/ancestor rename and in-place junction witnesses. |
+| Invocation ownership in executor, preflight and verifier; geometry from opened verifier handles. | `90b57646`, `4263b12`, `0b85d88`, `e189b48`; consumer gates and fallback cases. |
+| Reuse native leaf observations, simplify descendant checks and delegate adjacent concrete-native admission. Unreadable descendants refuse instead of appearing absent. | `7e60a47` through `23589bd`; `db03926` defect fix and `eaf62d7` fast-path controls. |
 
-Historical advisory `passed`/`event_passed` remain false in the final native
-observation; `status=complete` and `measurement_valid=true` establish the
-diagnostic endpoint only. No new timing/custody acceptance is claimed.
-Original AB-7 Setup and AB-2/AB-10 causal attribution remains qualified.
-All original and intermediate failure receipts are retained.
+Each outcome passed its independent review and named gates. The post-round
+five-band corpus reduced 1,000 × 4 KiB from 28.2 s to 3.63 s (1.08 MiB/s);
+PERFORMANCE owns the diagnostic limits and later results. Evidence remains in
+`build/root-admission-optimization-20260928/`; the immutable 67-group differential
+producer is `e7ba9b8d`. The prior nine-row register is in Git at `c05eea25`.
 
-AB-8 implementation, environment monitoring, GUI changes, automatic mutation
-replay, broad schema migration and unrelated M1 work remain excluded. A
-pre-existing performance-CLI error suggests an unsupported replacement flag;
-BUGS records that separate guidance defect, and reruns use fresh report paths.
-No CLI change was included.
+Still binding: rename/move/Safely Remove may report “in use” during a hold; failed
+confirmation cannot authorize reuse. Holds do not fix pre-invocation same-volume
+root replacement or metadata-matching identity-less DELETE/TRASH replacement.
+Those findings remain logged in the retained differential evidence and prior
+register; the exFAT FileIdInfo defect remains open in [BUGS](BUGS.md), outside
+this completed work. Recovery tips were accounted and
+pruned with a verified bundle (`resume/wip_cleanup_20260929*`). The detached
+`b8baf42d` baseline worktree was removed at closeout after confirming integrated
+ancestry, no tracked/untracked changes and only 59 regenerable Python caches;
+inventory and removal receipts live in
+`build/executor-simplification-20260929/closeout/worktree-*.json`.
+
+### Incident repairs and closeout — 2026-09-27
+
+| ID | Delivered outcome | Commit / evidence |
+| --- | --- | --- |
+| CLI-DRIFT | Cold-file drift distinguished from stable incompatibility and unavailable artifacts; bounded validation-only retries and non-destructive guidance. [DATABASE](DATABASE.md). | `5e4bf87`; `build/cold-admission-followup-20260927/` |
+| DOC-PRECISION | TESTS notice rationale and DATABASE snapshot scope corrected. | `6de6d1c` |
+| IR-DB | Strict cold file admission separated from runtime-owned SQLite validation. [DATABASE](DATABASE.md), [DEFENSE](DEFENSE.md). | `639b2ea`; `build/admission-bridge-closeout-20260927/` |
+| IR-BRIDGE | Bridge diagnostic migrated to current scalar/terminal shapes with first-failure and raw-stream retention. [BRIDGE](BRIDGE.md), [PERFORMANCE](PERFORMANCE.md). | `0e4595e`; same evidence root |
+| IR-CLOSE | AB-7 focus loss moved from BUGS to TESTS troubleshooting; DWM sentinel obligation retired. | `e8d3613` |
+| IR-DEFER | AB-8 stack/wrap shelved with its inspection points in TESTS. | `8f75f75` |
+
+Admission retries never retry task submission or effects, and inconclusive
+observations never gain reset advice by exhausting retries. AB-8
+implementation, environment monitoring, GUI changes, automatic replay and broad
+schema migration stayed excluded. The unsupported CLI replacement-flag guidance
+defect is in BUGS. Implementation detail and failed receipts remain in Git and
+the evidence roots.
 
 ## Post-M1-8 reduction plan
 
@@ -192,9 +231,10 @@ commits were not merge units.
 
 ## Remaining checkpoints
 
-Pending rows record accepted future outcomes; implementation still needs user
-authorization, active scope and finite verification. A finding does not enlarge a
-row; [AGENTS](../AGENTS.md) governs scope changes, stops and recovery.
+Pending rows record accepted future outcomes. Backend optimization is closed;
+pending rows still need user authorization, active scope and finite verification.
+A finding does not enlarge a row; [AGENTS](../AGENTS.md) governs scope changes,
+stops and recovery.
 
 | ID | Accepted outcome | Named verification | Status |
 | --- | --- | --- | --- |

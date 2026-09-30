@@ -42,6 +42,55 @@ from _identity_hash_fixtures import (
 )
 
 
+@pytest.mark.parametrize("kind", tuple(planning_contracts.OperationKind))
+def test_planned_metadata_keeps_managed_attributes_and_move_link_eligibility(kind) -> None:
+    expected = model_contracts.FileStat(
+        model_contracts.EntryKind.FILE, 7, 11, None, 1,
+        model_contracts.MetadataSnapshot(2, 100),
+    )
+    incidental = replace(
+        expected, metadata=model_contracts.MetadataSnapshot(2 | 0x20, 200)
+    )
+    assert planning_contracts.planned_metadata_matches(incidental, expected, kind)
+    assert not planning_contracts.planned_metadata_matches(
+        replace(incidental, metadata=replace(incidental.metadata, attributes=0x20)),
+        expected, kind,
+    )
+    assert planning_contracts.planned_metadata_matches(
+        replace(incidental, nlink=2), expected, kind
+    ) is (kind not in (
+        planning_contracts.OperationKind.MOVE, planning_contracts.OperationKind.MOVE_UPDATE
+    ))
+    assert model_contracts.file_stat_projection(incidental)["metadata"] != (
+        model_contracts.file_stat_projection(expected)["metadata"]
+    )
+
+
+def test_same_file_version_ignores_metadata_and_link_churn_only() -> None:
+    expected = model_contracts.FileStat(
+        model_contracts.EntryKind.FILE, 7, 11,
+        model_contracts.FileIdentity("serial", 1), 1,
+        model_contracts.MetadataSnapshot(0x80, 100),
+    )
+    changed = replace(
+        expected, nlink=2,
+        metadata=model_contracts.MetadataSnapshot(0x21, 200),
+    )
+    assert planning_contracts.same_file_version(changed, expected)
+    for drift in (
+        replace(changed, kind=model_contracts.EntryKind.DIRECTORY),
+        replace(changed, size=8),
+        replace(changed, mtime_ns=12),
+        replace(changed, file_identity=model_contracts.FileIdentity("serial", 2)),
+        replace(changed, file_identity=None),
+    ):
+        assert not planning_contracts.same_file_version(drift, expected)
+    assert planning_contracts.same_file_version(
+        replace(changed, file_identity=None),
+        replace(expected, file_identity=None),
+    )
+
+
 @pytest.mark.parametrize(
     "value",
     [

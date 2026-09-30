@@ -623,9 +623,13 @@ extended-length prefix only to the operand passed to Windows I/O, no-follow
 validate every lexical-root component below a trusted drive/share or reviewed
 volume mount before physical resolution, and strip native spelling from
 returned paths. Physical root resolution is separate observation evidence for
-overlap/containment and never replaces the lexical domain identity. The inverse
-conversion accepts only drive and complete UNC filesystem namespaces that
-round-trip to a stable ordinary spelling. Device/NT namespaces, malformed
+overlap/containment and never replaces the lexical domain identity. Executor
+resolution may use a confirmed invocation-held exact root, its current
+attributes, and the lexical no-follow descendant walk instead of repeating
+physical root/candidate resolution; setup and overlap observations still use
+physical resolution. The inverse conversion accepts only drive and complete
+UNC filesystem namespaces that round-trip to a stable ordinary spelling.
+Device/NT namespaces, malformed
 extended UNC anchors, trailing-dot/space or reserved DOS components, and other
 ordinary-ambiguous absolute names are refused rather than normalized onto
 another tree. Reserved DOS aliases include `CONIN$`, `CONOUT$`, and the
@@ -638,10 +642,49 @@ entering warnings, durable detail, or user-facing diagnostics.
 reviewed native anchor and `VolumeId`. `admit_root_chain()` observes the current
 anchor through its supplied/native probe and no-follow checks each root
 component below it without observing volume identity; it returns the admitted
-anchor. `admit_root()` performs that exact chain admission once, then requires
-the volume probe's own anchor evidence to match before accepting its identity.
-Authority is never cached or persisted. Non-Windows probe branches are
+anchor. `admit_root()` performs that chain admission once. Its default Windows
+path queries volume information directly at the admitted anchor through
+`observe_native_volume_at_anchor()`, without a second anchor discovery. An
+injected volume probe still receives the logical root and must return matching
+anchor evidence before its identity is accepted. For the default Windows path,
+that comparison checks the admitted anchor echoed by the volume observation; it
+is not an independent freshness check. Native function bindings are reused;
+filesystem observations are not cached. Non-Windows probe branches are
 development/test fallbacks only, not production mount-boundary authority.
+
+`hold_root()` supplies an invocation-local `RootHold` opened with directory
+access and no delete sharing. Entering does not admit or confirm the root.
+Consumers perform their existing full admission inside the context, then call
+`RootHold.confirm()` before suppressing repeated root probes. Confirmation
+queries the held handle's normalized DOS final path once, with
+`GetFinalPathNameByHandleW` flags zero. After removing extended-path spelling,
+only the drive letter may differ in case; every other character must match the
+logical root exactly. Other case, short-name, mount or junction aliases select
+fallback. Failed, incomplete or invalid final-path results and mismatches close
+the hold and return false, selecting fresh per-access admission. UNC, mapped
+network and unholdable roots also use that fallback. There is no second handle
+or identity comparison, and no stored-identity or filesystem-support change.
+The live scope remembers successful confirmation; repeated confirmation adds
+no native calls. Before each access that reuses admitted facts, consumers call
+`RootHold.require_ordinary()`. It freshly reads current `FileBasicInfo`
+attributes through the same held handle, with no pathname probe, final-path
+repeat, comparison handle or identity query. Reparse and placeholder state is
+refused with the existing typed root issues; unavailable attributes never grant
+access or silently select fallback. Read/write sharing permits in-place reparse
+metadata changes even while deletion is blocked. This guard restores the
+point-of-use observation within DEFENSE's existing quiescent-root assumption;
+it does not make the observation-to-use interval atomic.
+Read-only `fallback_reason` records the observed fallback
+class without extra discovery calls. Case-only disagreement, a different drive,
+and a possible short-name component receive explanatory classifications;
+ambiguous same-drive alias disagreement remains a namespace mismatch. These
+classifications do not authorize access: case folding and short-name patterns
+are used only to explain a refused match. Context exit
+closes the remaining hold, including admission failure, pause, cancellation and
+return. A confirmation attempt after closure returns false. Descendant checks
+remain required. The hold is never stored in shared adapters, plans,
+continuations or persistence. Consumer integration is tracked in
+[M1_PLAN](M1_PLAN.md#root-admission-optimization--2026-09-28).
 
 `rel_path_key` follows Windows/NTFS one-codepoint case mapping, not
 `str.casefold()` and not unrestricted Python `upper()` when it expands a code

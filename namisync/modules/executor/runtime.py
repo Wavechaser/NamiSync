@@ -51,6 +51,8 @@ from namisync.core.planning import (
     OperationKind,
     OperationReason,
     PlanOperation,
+    planned_metadata_matches,
+    same_file_version as _same_file_version,
 )
 from namisync.core.root_authority import RootAuthority
 from namisync.core.scalars import (
@@ -68,11 +70,17 @@ from namisync.core.session import (
 )
 
 from .native import (
+    RootAdmissionDiagnostic,
     UnsafeExecutionPath,
+    _InvocationRoot,
     _READONLY,
     _SecurityCopyFailure,
     _UpdateBackupBeforeCopyDrift,
     _UpdateBackupDrift,
+    _can_delegate_held_resolution,
+    _invocation_root,
+    _release_copied_files,
+    _root_invocation_scope,
 )
 from .pipeline import _allocation_size, _copy_chunk_size
 
@@ -449,7 +457,7 @@ class _MoveUpdateContinuation:
     prepared: _PreparedCopy
     prepared_stat: FileStat
     old_relative_path: str
-    old_expected: FileStat
+    old_stat: FileStat
     published: bool = False
     published_stat: FileStat | None = None
     trash: Path | None = None
@@ -877,6 +885,8 @@ def execute(
     recorder: Recorder,
     policies: ExecutorPolicies,
     fs: ExecutorFileSystem,
+    *,
+    root_diagnostics: list[RootAdmissionDiagnostic] | None = None,
 ) -> OperationResult:
     """Apply remaining selected operations without emitting a terminal event.
 
@@ -885,6 +895,27 @@ def execute(
     guards that remain necessary at every point of touch.
     """
 
+    roots: list[_InvocationRoot] = []
+    for role, factory in (
+        ("source", _source_root_authority),
+        ("target", _target_root_authority),
+    ):
+        try:
+            roots.append(_InvocationRoot(role, factory(xset)))
+        except Exception as error:
+            # Preserve the original operation guard's failure/settlement timing.
+            roots.append(_InvocationRoot(role, None, error))
+    with _root_invocation_scope(fs, xset, tuple(roots), root_diagnostics):
+        return _execute(xset, ctx, recorder, policies, fs)
+
+
+def _execute(
+    xset: ExecutionSet,
+    ctx: RunContext,
+    recorder: Recorder,
+    policies: ExecutorPolicies,
+    fs: ExecutorFileSystem,
+) -> OperationResult:
     source_root = Path(xset.plan.source_root.path)
     target_root = Path(xset.plan.target_root.path)
     state = _ExecutionState(
@@ -1510,6 +1541,7 @@ def _backstop_operation(
             )
         state.effects.settle(operation.op_id)
         state.effects.retire(operation.op_id)
+        _release_copied_files()
     except Exception as settlement_error:
         escaped.add_note(
             "executor exception backstop also failed: "
@@ -1623,6 +1655,7 @@ def _prepare_copy(
         source_root,
         operation.source_rel_path,
         operation.source_expected,
+        kind=operation.kind,
         missing=ExecutionReason.SOURCE_MISSING,
         drift=ExecutionReason.SOURCE_DRIFT,
     )
@@ -1630,21 +1663,6 @@ def _prepare_copy(
     source = fs.resolve(source_root, operation.source_rel_path, must_exist=True)
     target = fs.resolve(target_root, operation.target_rel_path, must_exist=False)
     temp = fs.owned_temp(target, xset.run_id, operation.op_id)
-    try:
-        _resolve_target_path(
-            fs,
-            xset,
-            target_root,
-            temp,
-            must_exist=False,
-        )
-        fs.remove_owned_temp(temp)
-    except Exception as error:
-        raise OperationFailure(
-            ExecutionReason.CLEANUP_FAILED,
-            f"cannot recover owned temp: {temp}",
-            cause=error,
-        ) from error
     state.effects.claim_temporary_path(operation.op_id, temp)
     reviewed_size = operation.source_expected.size
     chunk_size = _copy_chunk_size(reviewed_size, policies.max_chunk_size)
@@ -1657,9 +1675,29 @@ def _prepare_copy(
             temp,
             must_exist=False,
         )
-        with fs.create_temp(
-            temp, allocation_size=_allocation_size(reviewed_size)
-        ) as writer:
+        try:
+            writer_view = fs.create_temp(
+                temp, allocation_size=_allocation_size(reviewed_size)
+            )
+        except FileExistsError:
+            try:
+                _resolve_target_path(
+                    fs, xset, target_root, temp, must_exist=False,
+                )
+                fs.remove_owned_temp(temp)
+            except Exception as error:
+                raise OperationFailure(
+                    ExecutionReason.CLEANUP_FAILED,
+                    f"cannot recover owned temp: {temp}",
+                    cause=error,
+                ) from error
+            _resolve_target_path(
+                fs, xset, target_root, temp, must_exist=False,
+            )
+            writer_view = fs.create_temp(
+                temp, allocation_size=_allocation_size(reviewed_size)
+            )
+        with writer_view as writer:
             progress.begin_byte_stream(operation)
             digest = policies.copy_backend.copy(
                 reader,
@@ -1702,6 +1740,7 @@ def _prepare_copy(
         source_root,
         operation.source_rel_path,
         operation.source_expected,
+        kind=operation.kind,
         missing=ExecutionReason.SOURCE_MISSING,
         drift=ExecutionReason.SOURCE_DRIFT,
     )
@@ -1918,19 +1957,10 @@ def _observe_update_backup_creation(
         backup.created_stat = _require_stat_path(fs, backup.path)
 
 
-def _expected_update_live(continuation: _UpdateContinuation) -> FileStat:
-    backup = continuation.backup
-    if backup is None or backup.kind != "hardlink":
-        return continuation.live_stat
-    return replace(
-        continuation.live_stat,
-        nlink=continuation.live_stat.nlink + 1,
-    )
-
-
 def _repair_update_backup_metadata(
     backup: _UpdateBackup,
     operation: PlanOperation,
+    expected: FileStat,
     xset: ExecutionSet,
     fs: ExecutorFileSystem,
     target_root: Path,
@@ -1947,9 +1977,6 @@ def _repair_update_backup_metadata(
         _guard_update_backup(backup, xset, fs)
     if backup.published_stat is not None:
         return
-    expected = operation.target_expected
-    if expected is None:
-        raise RuntimeError("update backup requires displaced target evidence")
     repaired = fs.ensure_published_metadata(
         backup.path,
         expected,
@@ -1979,6 +2006,7 @@ def _finish_update_filesystem(
         _repair_update_backup_metadata(
             backup,
             operation,
+            continuation.live_stat,
             xset,
             fs,
             target_root,
@@ -2061,24 +2089,26 @@ def _copy(
                 expected=prepared.temp,
             )
         else:
-            _revalidate_source_root(fs, xset, source_root)
-            _guard_present(
-                fs,
-                source_root,
-                operation.source_rel_path,
-                operation.source_expected,
-                missing=ExecutionReason.SOURCE_MISSING,
-                drift=ExecutionReason.SOURCE_DRIFT,
-            )
+            if existing is not None:
+                _revalidate_source_root(fs, xset, source_root)
+                _guard_present(
+                    fs,
+                    source_root,
+                    operation.source_rel_path,
+                    operation.source_expected,
+                    kind=operation.kind,
+                    missing=ExecutionReason.SOURCE_MISSING,
+                    drift=ExecutionReason.SOURCE_DRIFT,
+                )
             _guard_path_stat(
                 temp_stat,
                 continuation.prepared_stat,
                 ExecutionReason.TARGET_DRIFT,
                 "prepared copy temp drifted before retry",
             )
-            _guard_expected_target(fs, target_root, operation)
+            if existing is not None:
+                _guard_expected_target(fs, target_root, operation)
             try:
-                _revalidate_source_root(fs, xset, source_root)
                 _revalidate_target_root(fs, xset, target_root)
                 fs.publish_new(prepared.temp, prepared.target)
             except FileExistsError as error:
@@ -2143,6 +2173,7 @@ def _update(
             target_root,
             operation.target_rel_path,
             operation.target_expected,
+            kind=operation.kind,
             missing=ExecutionReason.TARGET_MISSING,
             drift=ExecutionReason.TARGET_DRIFT,
         )
@@ -2299,13 +2330,15 @@ def _update(
         )
         _guard_path_stat(
             live,
-            _expected_update_live(continuation),
+            continuation.live_stat,
             ExecutionReason.TARGET_DRIFT,
             "live update target drifted before backup metadata repair",
+            kind=operation.kind,
         )
         _repair_update_backup_metadata(
             continuation.backup,
             operation,
+            continuation.live_stat,
             xset,
             fs,
             target_root,
@@ -2345,6 +2378,7 @@ def _update(
                 source_root,
                 operation.source_rel_path,
                 operation.source_expected,
+                kind=operation.kind,
                 missing=ExecutionReason.SOURCE_MISSING,
                 drift=ExecutionReason.SOURCE_DRIFT,
             )
@@ -2362,9 +2396,10 @@ def _update(
             )
             _guard_path_stat(
                 live,
-                _expected_update_live(continuation),
+                continuation.live_stat,
                 ExecutionReason.TARGET_DRIFT,
                 "live update target drifted after its backup was created",
+                kind=operation.kind,
             )
             if continuation.backup is not None:
                 fs.revalidate_trash_destination(
@@ -2411,7 +2446,7 @@ def _update(
                 ):
                     fs.apply_metadata(
                         prepared.target,
-                        operation.target_expected,
+                        continuation.live_stat,
                         preserve_created=xset.plan.preservation.preserve_created,
                         apply_readonly=True,
                     )
@@ -2485,6 +2520,7 @@ def _guarded_reviewed_target_rename(
         source_root,
         operation.source_rel_path,
         operation.source_expected,
+        kind=operation.kind,
         missing=ExecutionReason.SOURCE_MISSING,
         drift=ExecutionReason.SOURCE_DRIFT,
     )
@@ -2493,6 +2529,7 @@ def _guarded_reviewed_target_rename(
         target_root,
         old_rel,
         old_expected,
+        kind=operation.kind,
         missing=ExecutionReason.TARGET_MISSING,
         drift=ExecutionReason.TARGET_DRIFT,
     )
@@ -2500,7 +2537,6 @@ def _guarded_reviewed_target_rename(
         _guard_absent(fs, target_root, operation.target_rel_path)
     old = fs.resolve(target_root, old_rel, must_exist=True)
     new = fs.resolve(target_root, operation.target_rel_path, must_exist=False)
-    _revalidate_source_root(fs, xset, source_root)
     _revalidate_target_root(fs, xset, target_root)
     mutation = _retain_mutation_attempt(
         state,
@@ -2529,7 +2565,7 @@ def _guarded_reviewed_target_rename(
     )
     _guard_path_stat(
         renamed,
-        old_expected,
+        _profiled_stat(old_actual, xset.plan.target_profile.stable_file_identity),
         ExecutionReason.TARGET_DRIFT,
         (
             "moved target is not the reviewed target version"
@@ -2591,7 +2627,7 @@ def _recase(
 
 def _finish_move_update_filesystem(
     continuation: _MoveUpdateContinuation,
-    op_id: OpId,
+    operation: PlanOperation,
     xset: ExecutionSet,
     recorder: Recorder,
     fs: ExecutorFileSystem,
@@ -2621,7 +2657,7 @@ def _finish_move_update_filesystem(
     )
     trash_actual = _stat_target_path(fs, xset, target_root, trash)
     if old_actual is not None:
-        _flush_before_destructive(recorder, state, op_id)
+        _flush_before_destructive(recorder, state, operation.op_id)
         _revalidate_target_root(fs, xset, target_root)
         old_actual = fs.stat(target_root, continuation.old_relative_path)
         fs.revalidate_trash_destination(
@@ -2632,20 +2668,25 @@ def _finish_move_update_filesystem(
         )
         trash_actual = _stat_target_path(fs, xset, target_root, trash)
     if old_actual is None:
-        if trash_actual is None or not _matches_expected(
+        if trash_actual is None or not _same_file_version(
             trash_actual,
-            continuation.old_expected,
+            continuation.old_stat,
         ):
             raise OperationFailure(
                 ExecutionReason.TARGET_MISSING,
                 "move-update old path vanished without reaching owned trash",
             )
     else:
-        _guard_path_stat(
-            old_actual,
-            continuation.old_expected,
-            ExecutionReason.TARGET_DRIFT,
-            "move-update old path drifted before trash",
+        expected = _prior_target(operation)[1]
+        if not _matches_planned(old_actual, expected, operation.kind):
+            raise OperationFailure(
+                ExecutionReason.WRONG_TYPE
+                if old_actual.kind is not expected.kind
+                else ExecutionReason.TARGET_DRIFT,
+                "move-update old path drifted before trash",
+            )
+        continuation.old_stat = _profiled_stat(
+            old_actual, xset.plan.target_profile.stable_file_identity
         )
         if trash_actual is not None:
             raise OperationFailure(
@@ -2680,11 +2721,12 @@ def _move_update(
     resumed_published = existing is not None and existing.published
     if existing is None:
         old_rel, old_expected = _prior_target(operation)
-        _guard_present(
+        old_actual = _guard_present(
             fs,
             target_root,
             old_rel,
             old_expected,
+            kind=operation.kind,
             missing=ExecutionReason.TARGET_MISSING,
             drift=ExecutionReason.TARGET_DRIFT,
         )
@@ -2703,7 +2745,9 @@ def _move_update(
             prepared=prepared,
             prepared_stat=_require_stat_path(fs, prepared.temp),
             old_relative_path=old_rel,
-            old_expected=old_expected,
+            old_stat=_profiled_stat(
+                old_actual, xset.plan.target_profile.stable_file_identity
+            ),
         )
         state.effects.install_byte(operation.op_id, continuation)
     elif isinstance(existing, _MoveUpdateContinuation):
@@ -2740,32 +2784,38 @@ def _move_update(
                 expected=prepared.temp,
             )
         else:
-            _revalidate_source_root(fs, xset, source_root)
-            _guard_present(
-                fs,
-                source_root,
-                operation.source_rel_path,
-                operation.source_expected,
-                missing=ExecutionReason.SOURCE_MISSING,
-                drift=ExecutionReason.SOURCE_DRIFT,
-            )
+            if existing is not None:
+                _revalidate_source_root(fs, xset, source_root)
+                _guard_present(
+                    fs,
+                    source_root,
+                    operation.source_rel_path,
+                    operation.source_expected,
+                    kind=operation.kind,
+                    missing=ExecutionReason.SOURCE_MISSING,
+                    drift=ExecutionReason.SOURCE_DRIFT,
+                )
             _guard_path_stat(
                 temp_stat,
                 continuation.prepared_stat,
                 ExecutionReason.TARGET_DRIFT,
                 "prepared move-update temp drifted before retry",
             )
-            _guard_present(
+            old_actual = _guard_present(
                 fs,
                 target_root,
                 continuation.old_relative_path,
-                continuation.old_expected,
+                _prior_target(operation)[1],
+                kind=operation.kind,
                 missing=ExecutionReason.TARGET_MISSING,
                 drift=ExecutionReason.TARGET_DRIFT,
             )
-            _guard_expected_target(fs, target_root, operation)
+            continuation.old_stat = _profiled_stat(
+                old_actual, xset.plan.target_profile.stable_file_identity
+            )
+            if existing is not None:
+                _guard_expected_target(fs, target_root, operation)
             try:
-                _revalidate_source_root(fs, xset, source_root)
                 _revalidate_target_root(fs, xset, target_root)
                 fs.publish_new(prepared.temp, prepared.target)
             except FileExistsError as error:
@@ -2789,7 +2839,7 @@ def _move_update(
         resumed_published=resumed_published,
         finish_filesystem=lambda: _finish_move_update_filesystem(
             continuation,
-            operation.op_id,
+            operation,
             xset,
             recorder,
             fs,
@@ -2827,6 +2877,7 @@ def _trash(
         target_root,
         operation.target_rel_path,
         operation.target_expected,
+        kind=operation.kind,
         missing=ExecutionReason.TARGET_MISSING,
         drift=ExecutionReason.TARGET_DRIFT,
     )
@@ -2906,6 +2957,7 @@ def _delete(
         target_root,
         operation.target_rel_path,
         operation.target_expected,
+        kind=operation.kind,
         missing=ExecutionReason.TARGET_MISSING,
         drift=ExecutionReason.TARGET_DRIFT,
         matcher=_matches_directory_cleanup if directory_cleanup else None,
@@ -2944,7 +2996,7 @@ def _delete(
                 )
                 fs.apply_metadata(
                     guarded_target,
-                    operation.target_expected,
+                    target_actual,
                     preserve_created=True,
                     apply_readonly=True,
                 )
@@ -2980,6 +3032,7 @@ def _noop(
         source_root,
         operation.source_rel_path,
         operation.source_expected,
+        kind=operation.kind,
         missing=ExecutionReason.SOURCE_MISSING,
         drift=ExecutionReason.SOURCE_DRIFT,
     )
@@ -2988,6 +3041,7 @@ def _noop(
         target_root,
         operation.target_rel_path,
         operation.target_expected,
+        kind=operation.kind,
         missing=ExecutionReason.TARGET_MISSING,
         drift=ExecutionReason.TARGET_DRIFT,
     )
@@ -3027,6 +3081,7 @@ def _start_directory(
         source_root,
         operation.source_rel_path,
         operation.source_expected,
+        kind=operation.kind,
         missing=ExecutionReason.SOURCE_MISSING,
         drift=ExecutionReason.SOURCE_DRIFT,
     )
@@ -3343,6 +3398,7 @@ def _settle(
     progress.settled(operation, settled.outcome)
     state.effects.settle(operation.op_id)
     state.effects.retire(operation.op_id)
+    _release_copied_files()
 
 
 def _settle_failure(
@@ -3664,7 +3720,7 @@ def _observe_move_update(
             durable_state=(
                 _DurableState.NEW_AND_OLD
                 if old is not None
-                and _matches_expected(old, continuation.old_expected)
+                and _same_file_version(old, continuation.old_stat)
                 else _DurableState.NEW_AND_OLD_UNVERIFIED
             ),
         )
@@ -3699,15 +3755,15 @@ def _observe_move_update(
             durable_state=_DurableState.NEW_AND_OLD_UNVERIFIED,
             trash_state_error=_probe_diagnostic(error),
         )
-    if old is not None and _matches_expected(old, continuation.old_expected):
+    if old is not None and _same_file_version(old, continuation.old_stat):
         durable_state = (
             _DurableState.NEW_AND_OLD
             if trash is None
             else _DurableState.NEW_OLD_AND_TRASH_UNVERIFIED
         )
-    elif old is None and trash is not None and _matches_expected(
+    elif old is None and trash is not None and _same_file_version(
         trash,
-        continuation.old_expected,
+        continuation.old_stat,
     ):
         durable_state = _DurableState.NEW_AND_TRASH
     else:
@@ -4273,7 +4329,7 @@ def _observed_entry_state(
         return _EntryState.ABSENT
     return (
         _EntryState.REVIEWED
-        if _matches_expected(actual, expected)
+        if _same_file_version(actual, expected)
         else _EntryState.CHANGED
     )
 
@@ -4606,6 +4662,8 @@ def _require_reviewed_runtime_root(
     *,
     role: str,
 ) -> None:
+    if str(root) == authority.logical_root:
+        return
     try:
         logical_root = lexical_absolute_path(root)
     except PathValidationError as error:
@@ -4623,6 +4681,9 @@ def _require_reviewed_runtime_root(
 def _target_root_authority(
     xset: ExecutionSet,
 ) -> RootAuthority:
+    root = _invocation_root(xset, "target")
+    if root is not None:
+        return root.require_authority()
     evidence = xset.plan.target_volume_evidence
     try:
         return RootAuthority(
@@ -4639,6 +4700,9 @@ def _target_root_authority(
 def _source_root_authority(
     xset: ExecutionSet,
 ) -> RootAuthority:
+    root = _invocation_root(xset, "source")
+    if root is not None:
+        return root.require_authority()
     evidence = xset.plan.source_volume_evidence
     try:
         return RootAuthority(
@@ -4676,8 +4740,11 @@ def _resolve_target_path(
     *,
     must_exist: bool,
 ) -> Path:
-    _revalidate_target_root(fs, xset, target_root)
+    authority = _target_root_authority(xset)
+    _require_reviewed_runtime_root(target_root, authority, role="target")
     relative = _target_relative_path(path, target_root)
+    if not _can_delegate_held_resolution(fs, target_root, authority):
+        _revalidate_target_root(fs, xset, target_root)
     guarded = fs.resolve(target_root, relative, must_exist=must_exist)
     if os.path.normcase(str(guarded)) != os.path.normcase(str(path)):
         raise UnsafeExecutionPath(
@@ -4704,6 +4771,7 @@ def _guard_present(
     relative_path: str,
     expected: FileStat,
     *,
+    kind: OperationKind,
     missing: ExecutionReason,
     drift: ExecutionReason,
     matcher: Callable[[FileStat, FileStat], bool] | None = None,
@@ -4720,14 +4788,19 @@ def _guard_present(
         raise
     if actual is None:
         raise OperationFailure(missing, f"planned path is missing: {relative_path}")
-    if not (matcher or _matches_expected)(actual, expected):
+    matches = (
+        matcher(actual, expected)
+        if matcher is not None
+        else _matches_planned(actual, expected, kind)
+    )
+    if not matches:
         reason = ExecutionReason.WRONG_TYPE if actual.kind is not expected.kind else drift
         raise OperationFailure(reason, f"planned evidence drifted: {relative_path}")
     return actual
 
 
 def _matches_expected(actual: FileStat, expected: FileStat) -> bool:
-    """Match every planned fact, without inventing absent identity evidence."""
+    """Match a retained full version without inventing absent identity evidence."""
 
     return (
         actual.kind is expected.kind
@@ -4742,6 +4815,15 @@ def _matches_expected(actual: FileStat, expected: FileStat) -> bool:
     )
 
 
+def _matches_planned(
+    actual: FileStat, expected: FileStat, kind: OperationKind
+) -> bool:
+    return (
+        _same_file_version(actual, expected)
+        and planned_metadata_matches(actual, expected, kind)
+    )
+
+
 def _matches_directory_cleanup(actual: FileStat, expected: FileStat) -> bool:
     """Match an emptied planned directory while ignoring child-induced churn."""
 
@@ -4749,7 +4831,7 @@ def _matches_directory_cleanup(actual: FileStat, expected: FileStat) -> bool:
         actual.kind is EntryKind.DIRECTORY
         and expected.kind is EntryKind.DIRECTORY
         and actual.size == expected.size
-        and actual.metadata == expected.metadata
+        and planned_metadata_matches(actual, expected, OperationKind.DELETE)
         and (
             expected.file_identity is None
             or actual.file_identity == expected.file_identity
@@ -4762,26 +4844,19 @@ def _guard_path_stat(
     expected: FileStat,
     reason: ExecutionReason,
     detail: str,
+    *,
+    kind: OperationKind | None = None,
 ) -> None:
-    if not _matches_expected(actual, expected):
+    matches = (
+        _matches_planned(actual, expected, kind)
+        if kind is not None
+        else _same_file_version(actual, expected)
+    )
+    if not matches:
         raise OperationFailure(
             ExecutionReason.WRONG_TYPE if actual.kind is not expected.kind else reason,
             detail,
         )
-
-
-def _same_file_version(actual: FileStat, expected: FileStat) -> bool:
-    """Recognize one prepared file across rename and partial metadata steps."""
-
-    return (
-        actual.kind is expected.kind
-        and actual.size == expected.size
-        and actual.mtime_ns == expected.mtime_ns
-        and (
-            expected.file_identity is None
-            or actual.file_identity == expected.file_identity
-        )
-    )
 
 
 def _guard_absent(
@@ -4807,6 +4882,7 @@ def _guard_expected_target(
             target_root,
             operation.target_rel_path,
             operation.target_expected,
+            kind=operation.kind,
             missing=ExecutionReason.TARGET_MISSING,
             drift=ExecutionReason.TARGET_DRIFT,
         )

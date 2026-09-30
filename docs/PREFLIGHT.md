@@ -111,13 +111,33 @@ executor's non-replacing rename is the final occupancy guard: an ordinary
 case-insensitive target aliases the same object, while a distinct case-sensitive
 destination cannot be overwritten. Preflight never normalizes NFC/NFD spelling.
 
-Every root-dependent backend call derives an ephemeral `RootAuthority` from the
-plan's logical root, optional reviewed volume anchor, and expected `VolumeId`.
-Root, subject, free-space, reclaimable-temp, and trash calls each freshly admit
-that authority; no earlier success is cached as permission. Admission no-follow
-checks every configured-root component below the reviewed/current mount before
-physical resolution, and typed anchor or volume changes remain observation
-evidence for pure judgment to map to `root_changed`.
+`observe()` derives one ephemeral `RootAuthority` per root from the plan's
+logical root, optional reviewed volume anchor, and expected `VolumeId`. Its
+native filesystem enters one invocation-owned `root_scope()`; the first native
+root admission acquires a core root hold before fully admitting that authority.
+Only successful admission followed by the hold's strict final-path confirmation
+permits matching root facts to be reused for later calls in that invocation.
+Before each reuse, the backend requires current ordinary-directory attributes
+from that same held handle. This guard runs at the root-admission boundary of
+root, subject, free-space, reclaimable-temp and trash observations, without
+pathname probing or another final-path query. Reparse/placeholder evidence and
+attribute-query failure retain the existing typed root-refusal policy; neither
+can silently select the per-access fallback. The hold does not prevent in-place
+attribute changes or make check/use atomic; [DEFENSE.md](DEFENSE.md)'s quiescent
+root precondition remains required.
+An unavailable or unconfirmed hold retains per-access admission. Direct native
+backend calls outside that scope and supplied filesystems without activation
+retain their existing policy. Every supplied backend method still dispatches
+at its existing observation boundary.
+
+The native invocation owns its holds and admitted facts separately from the
+reusable filesystem adapter and returned world. Nested and later invocations
+admit again; return or any exception closes every hold and resets the scope.
+Admission no-follow checks every configured-root component below the
+reviewed/current mount before physical resolution, and typed anchor or volume
+changes remain observation evidence for pure judgment to map to `root_changed`.
+Root and candidate physical resolution, final no-follow leaf stat, and fresh
+temp-parent/trash volume observations remain required on the held path.
 
 Every existing relative component of a subject, temp parent, or `.synctrash`
 path is likewise no-follow admitted before physical resolution, volume probing,
@@ -156,6 +176,8 @@ the run. It verifies:
   or depends on blocked, failed, canceled, or deferred work;
 - current source/target/type/identity/size/mtime evidence matches each planned
   before-state within capability granularity;
+- managed attribute bits match; link count matches for MOVE and MOVE_UPDATE
+  eligibility, while creation time and other attribute bits are not drift facts;
 - expected absence is still absence and expected destination occupancy/type is
   unchanged;
 - current required bytes for remaining operations fit free space plus safely
@@ -168,6 +190,9 @@ the run. It verifies:
 Unrelated tree changes do not matter. Observation and judgment receive no
 mutable `ExecutionSet`; a refusal never changes its immutable `ExecutionReview`,
 silently removes an operation, or changes an operation to a safer-looking kind.
+The shared `core.planning.planned_metadata_matches` predicate owns only the
+metadata/link-count portion of these comparisons. Observations retain complete
+stats, and placeholder/reparse refusal remains at the observation boundary.
 
 Commitment validation is not preflight judgment: review uses preflight before a
 commitment exists. `run_execution` must refuse a missing plan fingerprint or
@@ -208,8 +233,8 @@ fails closed; it is not relabeled as ordinary insufficient capacity.
 
 - Planner embeds every before-state and policy snapshot needed for judgment.
 - Core supplies path/volume/evidence types and the shared capacity function.
-- Dispatcher holds/acquires required volume custody around execution; preflight
-  verifies identity but does not own locks.
+- Dispatcher holds/acquires required volume custody around execution; native
+  preflight's invocation root handles do not replace that custody.
 - Workflow alone invokes fresh observe/preflight immediately before executor
   mutation under the same custody. Executor imports no preflight sibling and
   retains live per-operation guards as the final TOCTOU defense.
@@ -227,13 +252,13 @@ status cases, not new safety logic. Queue wakeup calls the same functions.
 Network roots require a distinct weaker observation/custody profile and remain
 refused until that profile exists.
 
-Native subject observation currently repeats root and volume evidence reads for
-present selected subjects. This is conservative and can be expensive on very
-large plans, but it is not a correctness failure. Any optimization must cache
-only inside one `observe()` invocation, retain a final root/full-volume
-revalidation, and prove reduced native call counts under a large-plan benchmark;
-a process-lifetime volume cache would make remount evidence stale and is not an
-acceptable shortcut.
+Native held-root admission is bounded to one `observe()` invocation as described
+above; its fallback retains per-access root/full-volume observation. Each new
+observation, including resume and queue wakeup, admits again. A process-lifetime
+volume cache would make remount evidence stale and remains unacceptable. Further
+subject-stat or path-check consolidation is a separate outcome: it must preserve
+the existing observations or receive an explicit decision for changed concurrent
+refusal behavior under [M1_PLAN.md](M1_PLAN.md)'s equivalence rules.
 
 ## PoC Hardening
 

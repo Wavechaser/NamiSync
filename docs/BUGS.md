@@ -232,6 +232,42 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- MODERATE - FIXED (2026-09-30). Own-effect metadata mismatch. On native Windows,
+  a reviewed NORMAL-only file can gain ARCHIVE during rename or hardlink
+  creation. MOVE/RECASE then refuse after rename with degraded recording;
+  hardlink UPDATE refuses before replacement while preserving live and backup
+  files. MOVE_UPDATE succeeds normally but a committed-trash retry can fail
+  to recognize its intact new/trash state. Cause: strict retained-version
+  comparisons span the filesystem's own attribute change without modeling it.
+  Identity, size, mtime and creation remain stable; hardlink count changes as
+  expected. Starting `b1b58476` and the planner-fidelity candidate reproduce
+  the same five cases. Shared version recognition now checks kind, size, mtime
+  and available identity after own effects and in pure rename recording;
+  metadata restoration and SQL concurrency checks remain separate. Five native
+  cases and changed-version controls pass. Evidence under
+  `build/executor-simplification-20260929/differential/`: `result3a-archive-*.json`
+  retains the reproductions; `result5-final-focused.log` records the regression gate.
+- SEVERE - FIXED (2026-09-28). Unreadable descendant admitted as absence.
+  The native descendant walk treated every `OSError` as a missing component.
+  A preplaced junction with ACL-denied no-follow attributes could therefore
+  be accepted by held and unheld resolve, permitting mutation outside the root.
+  Retained reports reproduce unsafe native admission in current and baseline
+  code and demonstrate a bounded write-through; no complete workflow trace is
+  claimed. Preflight observation refusal is mitigation, not an executor guarantee.
+  Fixed by ending the walk only on `FileNotFoundError`; all other observation
+  failures propagate through resolve and both owned-trash consumers. Native regressions
+  assert refusal without writing through the junction, check ACL restoration,
+  and remove the junction before fixture cleanup.
+- MODERATE - OPEN (2026-09-28). Native handle metadata on exFAT.
+  A K: exFAT copy witness reports truthful `io-error` / WinError 87 after
+  transferring eight bytes; the independent invocation-hold witness passes.
+  Read-only handle queries accept basic/size metadata but reject `FileIdInfo`.
+  `_stat_handle` unconditionally requests that identity in the baseline too,
+  before the identity-weak capability profile can discard it. This establishes
+  a pre-existing compatibility blocker, but the copy's first failing native
+  call has not been traced. Deferred outside the root-admission change; no
+  exFAT copy success is claimed. Raw evidence: `build/root-admission-optimization-20260928/`
+  `executor/exfat-handle-metadata.log` and `resume/executor-exfat-diagnostic.log`.
 - MODERATE - FIXED (2026-08-26). Cancellation settlement ownership gap.
   A reliable collaborator raising `Canceled` after outcome retention could
   replace cancellation with an invariant error despite publication and a
@@ -1976,6 +2012,16 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- MODERATE - FIXED (2026-09-28). Stale held-root attributes.
+  A confirmed empty NTFS directory could become a junction through an
+  attribute-only write handle while the admission hold stayed open. Cause:
+  delete-sharing denial prevents rename but does not freeze reparse attributes;
+  cached admission omitted the refusal made by baseline root checks. Core now
+  queries current basic attributes on the held handle before executor admission
+  reuse and rejects reparse/placeholder state or query failure. Native regression
+  covers all three reuse sites without mutating through the redirected root.
+  Sharing, root flushes, descendant writes and exFAT attribute queries remain
+  compatible; DEFENSE's existing quiescence rule governs the check/use interval.
 - MODERATE - FIXED (2026-08-30). Linear completion membership. Completing each
   linked or standalone integrity item scanned the immutable candidate tuple to
   confirm its id, making complete settlement quadratic even after workflow

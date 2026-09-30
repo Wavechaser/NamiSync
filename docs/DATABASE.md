@@ -597,6 +597,19 @@ for a run.
 
 ## Integrity Constraints
 
+Execution recorder acceptance uses the core planning metadata/link-count
+predicate for NOOP's live observations and TRASH's prior target. Pure
+MOVE/RECASE results use the core same-file-version comparison against the
+reviewed target: kind, size, mtime and available identity, without attributes,
+creation time or link count. Existing exact NOOP/TRASH identity equality remains.
+Supplied observations are persisted in full. COPY/UPDATE/MOVE_UPDATE and pure
+rename source rows retain the reviewed source snapshot; correspondence consumes
+its identity, while future move eligibility uses current scans.
+
+These acceptance rules do not relax optimistic inventory-row concurrency,
+integrity subjects, attestation consistency, operation replay hashes or token
+conflicts. DELETE still records its exact reviewed prior payload.
+
 - Canonical keys are computed in core, not SQLite `NOCASE`.
 - Digests and their stat/provenance unit are written atomically.
 - Retained content evidence may contradict current observation only with a

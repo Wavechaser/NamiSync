@@ -818,6 +818,7 @@ def _executor_run(kind: OperationKind = OperationKind.NOOP) -> SimpleNamespace:
         plan_seconds=0.0,
         preflight_seconds=0.0,
         execute_seconds=0.0,
+        root_diagnostics=(),
     )
 
 
@@ -1431,6 +1432,10 @@ def test_executor_report_separates_batch_preparation_samples_and_summary(
     assert document["samples"][0]["plan_seconds"] is None
     assert document["samples"][0]["preflight_seconds"] is None
     assert document["samples"][0]["plan_fingerprint"]
+    for sample in document["samples"]:
+        assert {item["role"] for item in sample["root_admission"]} == {"source", "target"}
+        assert all(set(item) == {"role", "logical_root", "held", "fallback_reason"}
+                   for item in sample["root_admission"])
     assert document["summary"]["n"] == 2
     assert not target.exists()
 

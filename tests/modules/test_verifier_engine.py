@@ -7,6 +7,7 @@ import inspect
 import os
 import stat as stat_module
 from contextlib import contextmanager
+from contextvars import copy_context
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -18,6 +19,7 @@ from xxhash import xxh3_128
 import namisync.modules.verifier as verifier_facade
 import namisync.modules.verifier.engine as verifier_engine
 import namisync.modules.verifier.native as verifier_native
+import namisync.core.root_authority as root_authority_module
 from namisync.core.evidence import (
     Attestation,
     HasherContractError,
@@ -70,6 +72,7 @@ from namisync.modules.verifier import (
     verify,
     verify_post_copy,
 )
+from tools.seams import AuthorityBoundTappedReader
 
 from _verifier_fixtures import (
     _Clock,
@@ -80,6 +83,7 @@ from _verifier_fixtures import (
     _context,
     _integrity_events,
     _item,
+    _native_context,
     _post_copy_candidate,
     _stat,
 )
@@ -718,7 +722,7 @@ def test_native_reader_keeps_full_and_final_touch_admissions_distinct(
         )
 
     api = SimpleNamespace(
-        sector_size=lambda _candidate: calls.append("sector") or 4096,
+        sector_size_from_handle=lambda _handle, _candidate: calls.append("sector") or 4096,
         open_file=lambda _candidate: calls.append("open") or 73,
         require_expected_final_path=(
             lambda _root, _relative, _handle: calls.append("final")
@@ -760,8 +764,8 @@ def test_native_reader_keeps_full_and_final_touch_admissions_distinct(
         "chain",
         "relative",
         "api",
-        "sector",
         "open",
+        "sector",
         "final",
         "stat",
         "close",
@@ -3051,3 +3055,243 @@ def test_verifier_error_detail_does_not_expose_native_prefix(
     assert detail.startswith("PermissionError:")
     assert "file.bin" in detail
     assert "\\\\?\\" not in detail
+
+
+def _native_invocation_fixture(root: Path, mode: str):
+    subjects = []
+    for number in (1, 2):
+        name = f"file-{number}.bin"
+        (root / name).write_bytes(b"abc")
+        with WindowsUnbufferedReader().open(root, name) as stream:
+            observed = stream.stat()
+        if mode == "post-copy":
+            subjects.append(_post_copy_candidate(root, number=number, path=name, expected_stat=observed))
+        else:
+            subjects.append(_item(root, number=number, path=name, expected_stat=observed,
+                                  baseline_evidence=None if mode == "baseline" else _attestation(b"abc", observed)))
+    if mode == "post-copy":
+        return verify_post_copy, PostCopySelection(tuple(subjects)), _native_context([], root)
+    return {"baseline": baseline, "verify": verify, "rebaseline": rebaseline}[mode], IntegritySelection(tuple(subjects)), _native_context([], root)
+
+
+@pytest.mark.skipif(os.name != "nt", reason="native Windows verifier invocation")
+@pytest.mark.parametrize("mode", ("baseline", "verify", "rebaseline", "post-copy"))
+@pytest.mark.parametrize("tap", (False, True))
+def test_native_verifier_holds_lazy_roots_preserves_checks_and_releases(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mode: str,
+    tap: bool,
+) -> None:
+    root = tmp_path / "root"
+    root.mkdir()
+    runner, selection, context = _native_invocation_fixture(root, mode)
+    admissions, relative_stats, final_paths, snapshots, geometry, pathname_geometry, held_guards = [], [], [], [], [], [], []
+    original_admit = verifier_engine.admit_root
+    original_lstat = verifier_native._verification_lstat
+    original_final = verifier_native._WindowsApi.require_expected_final_path
+    original_stat = verifier_native._WindowsApi.stat
+    original_sector = verifier_native._WindowsApi.sector_size_from_handle
+    original_pathname_sector = verifier_native._WindowsApi.sector_size
+    original_guard = root_authority_module.RootHold.require_ordinary
+
+    def admit(authority):
+        admissions.append(authority)
+        return original_admit(authority)
+
+    def lstat(path):
+        relative_stats.append(path)
+        return original_lstat(path)
+
+    def final(api, root, relative, handle):
+        final_paths.append(relative)
+        return original_final(api, root, relative, handle)
+
+    def snapshot(api, handle):
+        snapshots.append(handle)
+        return original_stat(api, handle)
+
+    def sector(api, handle, candidate):
+        geometry.append((handle, candidate))
+        return original_sector(api, handle, candidate)
+
+    def pathname_sector(api, candidate):
+        pathname_geometry.append(candidate)
+        return original_pathname_sector(api, candidate)
+
+    def guard(hold):
+        held_guards.append(hold)
+        return original_guard(hold)
+
+    first = True
+
+    def checkpoint():
+        nonlocal first
+        if first:
+            first = False
+            assert admissions == []
+            invocation = verifier_native._ROOT_INVOCATION.get()
+            assert invocation is not None and invocation.admitted is None
+            with pytest.raises(OSError) as refused:
+                root.rename(root.with_name(root.name + "-moved"))
+            assert refused.value.winerror == 32
+            child = root / "allowed-child"
+            child.mkdir()
+            child.rmdir()
+
+    def emit(event):
+        if isinstance(event, Progress) and verifier_native._ROOT_INVOCATION.get() is not None:
+            with pytest.raises(OSError) as refused:
+                root.rename(root.with_name(root.name + "-moved"))
+            assert refused.value.winerror == 32
+
+    context = replace(context, run=RunContext(emit, checkpoint))
+    monkeypatch.setattr(verifier_engine, "admit_root", admit)
+    monkeypatch.setattr(verifier_native, "_verification_lstat", lstat)
+    monkeypatch.setattr(verifier_native._WindowsApi, "require_expected_final_path", final)
+    monkeypatch.setattr(verifier_native._WindowsApi, "stat", snapshot)
+    monkeypatch.setattr(verifier_native._WindowsApi, "sector_size_from_handle", sector)
+    monkeypatch.setattr(verifier_native._WindowsApi, "sector_size", pathname_sector)
+    monkeypatch.setattr(root_authority_module.RootHold, "require_ordinary", guard)
+    reader = AuthorityBoundTappedReader(WindowsUnbufferedReader()) if tap else None
+    recorder = _Recorder()
+    result = runner(selection, context, recorder, reader)
+    expected = IntegrityResult.BASELINED if mode in {"baseline", "rebaseline"} else IntegrityResult.VERIFIED
+    assert [outcome.result for outcome in result.outcomes] == [expected, expected]
+    assert len(recorder.commands) == 2 and result.recording is RecordingStatus.OK
+    assert admissions == [context.root_authority]
+    assert relative_stats == [str(root / f"file-{number}.bin") for number in (1, 2)]
+    assert final_paths == [f"file-{number}.bin" for number in (1, 2)]
+    assert len(snapshots) == 8 and len(geometry) == 2 and len(held_guards) == 3
+    assert pathname_geometry == []
+    if tap:
+        assert [sample.bytes_read for sample in reader.samples] == [3, 3]
+    assert verifier_native._ROOT_INVOCATION.get() is None
+    root.rename(root.with_name(root.name + "-released"))
+
+
+@pytest.mark.skipif(os.name != "nt", reason="native Windows verifier fallback")
+def test_unholdable_native_verifier_keeps_admission_and_override_dispatch(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = tmp_path / "root"
+    root.mkdir()
+    runner, selection, context = _native_invocation_fixture(root, "verify")
+    admissions, opened = [], []
+    original_admit = verifier_engine.admit_root
+    moved = root.with_name(root.name + "-moved")
+
+    @contextmanager
+    def unholdable(authority):
+        yield SimpleNamespace(confirm=lambda: False)
+
+    def admit(authority):
+        admissions.append(authority)
+        return original_admit(authority)
+
+    class SwappingReader(WindowsUnbufferedReader):
+        @contextmanager
+        def open_with_authority(self, relative_path, authority):
+            opened.append(relative_path)
+            with super().open_with_authority(relative_path, authority) as stream:
+                yield stream
+            root.rename(moved)
+            assert moved.is_dir() and not root.exists()
+
+    monkeypatch.setattr(verifier_native, "hold_root", unholdable)
+    monkeypatch.setattr(verifier_engine, "admit_root", admit)
+    try:
+        recorder = _Recorder()
+        result = runner(selection, context, recorder, SwappingReader())
+        assert [outcome.result for outcome in result.outcomes] == [IntegrityResult.VERIFIED, IntegrityResult.UNSUPPORTED]
+        assert result.outcomes[1].reason is IntegrityReason.UNSUPPORTED_READ
+        assert admissions == [context.root_authority, context.root_authority]
+        assert opened == ["file-1.bin"] and len(recorder.commands) == 1
+    finally:
+        if moved.exists():
+            moved.rename(root)
+    assert verifier_native._ROOT_INVOCATION.get() is None
+
+
+@pytest.mark.skipif(os.name != "nt", reason="native Windows verifier scope lifetime")
+@pytest.mark.parametrize("mode", ("verify", "post-copy"))
+@pytest.mark.parametrize("failure", (PauseRequested, Canceled, RuntimeError))
+def test_native_verifier_releases_unadmitted_hold_after_control_exit(
+    tmp_path: Path,
+    mode: str,
+    failure,
+) -> None:
+    root = tmp_path / "root"
+    root.mkdir()
+    runner, selection, context = _native_invocation_fixture(root, mode)
+    invocations = []
+
+    def checkpoint():
+        invocation = verifier_native._ROOT_INVOCATION.get()
+        assert invocation is not None and invocation.admitted is None
+        invocations.append(invocation)
+        raise failure()
+
+    def emit(event):
+        if isinstance(event, Progress) and verifier_native._ROOT_INVOCATION.get() is not None:
+            with pytest.raises(OSError) as refused:
+                root.rename(root.with_name(root.name + "-moved"))
+            assert refused.value.winerror == 32
+
+    context = replace(context, run=RunContext(emit, checkpoint))
+    with pytest.raises(failure):
+        runner(selection, context, _Recorder())
+    assert len(invocations) == 1
+    assert not invocations[0].active and invocations[0].admitted is None
+    assert verifier_native._ROOT_INVOCATION.get() is None
+    root.rename(root.with_name(root.name + "-released"))
+
+
+@pytest.mark.skipif(os.name != "nt", reason="native Windows verifier owner isolation")
+def test_verifier_handoff_isolated_from_nested_foreign_and_retained_contexts(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = tmp_path / "root"
+    root.mkdir()
+    context = _native_context([], root)
+    authority = context.root_authority
+    reader, inner = WindowsUnbufferedReader(), WindowsUnbufferedReader()
+    acquisitions, admissions = [], []
+    original_hold, original_admit = verifier_native.hold_root, verifier_engine.admit_root
+
+    @contextmanager
+    def hold(observed):
+        acquisitions.append(observed)
+        with original_hold(observed) as held:
+            yield held
+
+    def admit(observed):
+        admissions.append(observed)
+        return original_admit(observed)
+
+    monkeypatch.setattr(verifier_native, "hold_root", hold)
+    monkeypatch.setattr(verifier_engine, "admit_root", admit)
+    with reader.root_scope(authority, invocation_owner=reader) as outer:
+        def reuse(actual_reader=reader, actual_context=context, invocation=outer):
+            verifier_engine._admit_verification_root(
+                root, actual_context, reader=actual_reader, root_invocation=invocation
+            )
+
+        reuse()
+        retained = copy_context()
+        with inner.root_scope(authority, invocation_owner=inner) as nested:
+            reuse(inner, context, nested)
+            reuse()  # outer proof is not the current invocation
+        reuse()  # restored outer proof is usable again
+        reuse(_FakeReader({}))
+        duplicate_authority = RootAuthority(authority.logical_root, authority.reviewed_anchor, authority.expected_volume_id)
+        reuse(reader, replace(context, root_authority=duplicate_authority))
+        assert len(admissions) == 5
+    retained.run(reuse)
+    assert len(admissions) == 6 and acquisitions == [authority, authority]
+    assert not outer.active and not nested.active
+    assert outer.admitted is None and nested.admitted is None
+    assert verifier_native._ROOT_INVOCATION.get() is None
+    root.rename(root.with_name(root.name + "-released"))

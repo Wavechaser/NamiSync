@@ -9,7 +9,7 @@ from enum import StrEnum
 from pathlib import Path
 import re
 from types import MappingProxyType
-from typing import BinaryIO, NewType, Protocol, TypeAlias
+from typing import BinaryIO, Literal, NewType, Protocol, TypeAlias, runtime_checkable
 
 from .clock import Clock
 from .evidence import (
@@ -1015,6 +1015,20 @@ class CopyBackend(Protocol):
         checkpoint: Callable[[], None],
         on_chunk: Callable[[int], None],
     ) -> CopyDigest: ...
+
+
+@runtime_checkable
+class CopyWriteCapabilities(Protocol):
+    """Optional private writer facts consumed by the executor byte pipeline."""
+
+    @property
+    def copy_alignment(self) -> int: ...
+
+    @property
+    def copy_fallback_reason(self) -> DirectWriteFallback | None: ...
+
+
+DirectWriteFallback: TypeAlias = Literal["remote", "unknown_geometry", "open_error"]
 
 class Recorder(Protocol):
     """Typed ledger commands consumed by the M0 executor."""

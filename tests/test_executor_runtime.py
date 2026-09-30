@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 import ast
+from contextlib import nullcontext
+import ctypes
 from dataclasses import replace
 import inspect
 import os
 from pathlib import Path
 import re
+import stat as stat_module
 from threading import Event, Lock
 import time
+from types import SimpleNamespace
 from typing import Callable
 
 import pytest
@@ -19,6 +23,9 @@ import namisync.modules.executor as executor_facade
 import namisync.modules.executor.native as executor_module
 import namisync.modules.executor.pipeline as executor_pipeline
 import namisync.modules.executor.runtime as executor_runtime
+import namisync.core.root_authority as root_authority_module
+from namisync.core.pathing import PathValidationError
+from namisync.core.root_authority import RootAuthority
 from namisync.core.evidence import Outcome, Provenance, RecordingStatus
 from namisync.core.events import ItemOutcome, Progress, Terminal
 from namisync.core.execution import (
@@ -44,6 +51,7 @@ from namisync.core.planning import (
     Plan,
     PlanOperation,
 )
+from namisync.core.root_authority import RootHold
 from namisync.core.session import (
     Canceled,
     PauseRequested,
@@ -83,6 +91,19 @@ from _executor_fixtures import (
     _sharing_violation,
     _xset,
 )
+
+
+@pytest.fixture
+def fallback_root_holds(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep actual root swaps covered on the original unholdable path.
+
+    The held counterpart independently proves blocked rename and unswapped
+    success; these tests still require the swap and the original refusal.
+    """
+    monkeypatch.setattr(
+        executor_module, "hold_root",
+        lambda authority: nullcontext(RootHold(authority, None, "acquisition_failed")),
+    )
 
 
 def test_executor_derives_root_authority_from_reviewed_plan_facts(
@@ -643,6 +664,12 @@ class FaultingPipelineStream:
             raise OSError("injected integrated reader failure")
         return self.stream.read(size)
 
+    def readinto(self, buffer) -> int:
+        self.calls += 1
+        if self.stage == "reader" and self.calls == 2:
+            raise OSError("injected integrated reader failure")
+        return self.stream.readinto(buffer)
+
     def write(self, data) -> int:
         self.calls += 1
         if self.stage == "writer" and self.calls == 2:
@@ -811,6 +838,92 @@ def test_source_drift_after_stream_removes_temp_and_records_nothing(tmp_path: Pa
     assert xset.recording_issues == ()
     outcome = _item_outcome(events)
     assert outcome.reason == "source-drift"
+
+
+@pytest.mark.parametrize("kind", (OperationKind.COPY, OperationKind.MOVE_UPDATE))
+@pytest.mark.parametrize(
+    "retry_drift",
+    (None, "source", "target"),
+    ids=("fresh", "retry-source-drift", "retry-target-drift"),
+)
+def test_copy_publication_reuses_fresh_fidelity_and_rechecks_retry(
+    tmp_path: Path,
+    kind: OperationKind,
+    retry_drift: str | None,
+) -> None:
+    source, target = _roots(tmp_path)
+    operation, published = _reviewed_byte_operation(
+        kind, source, target, NativeFileSystem()
+    )
+
+    class FidelityObservationFileSystem(NativeFileSystem):
+        def __init__(self) -> None:
+            self.source_observations = 0
+            self.target_observations = 0
+            self.publish_attempts = 0
+            self.last_access: tuple[str, Path] | None = None
+
+        def stat(self, root: Path, relative_path: str) -> FileStat | None:
+            if root == source:
+                self.source_observations += 1
+            elif root == target and relative_path == operation.target_rel_path:
+                self.target_observations += 1
+            result = super().stat(root, relative_path)
+            self.last_access = ("stat", root)
+            return result
+
+        def stat_path(self, path: Path) -> FileStat | None:
+            result = super().stat_path(path)
+            self.last_access = ("stat_path", path)
+            return result
+
+        def revalidate_root(self, root: Path, **kwargs) -> None:
+            super().revalidate_root(root, **kwargs)
+            self.last_access = ("root", root)
+
+        def publish_new(self, temp: Path, target: Path) -> None:
+            assert self.last_access == ("root", target.parent)
+            self.publish_attempts += 1
+            if retry_drift is not None and self.publish_attempts == 1:
+                raise _sharing_violation("sharing violation before publication")
+            super().publish_new(temp, target)
+
+    fs = FidelityObservationFileSystem()
+
+    def mutate_reviewed_subject(_delay: float) -> None:
+        if retry_drift == "source":
+            (source / operation.source_rel_path).write_bytes(b"source-drift")
+        else:
+            published.write_bytes(b"external")
+
+    result, events, recorder = _run(
+        _xset(_plan(source, target, (operation,))),
+        fs=fs,
+        policies=_policies(sleep=mutate_reviewed_subject),
+    )
+
+    assert fs.publish_attempts == 1
+    assert fs.source_observations == (3 if retry_drift is not None else 2)
+    assert fs.target_observations == (3 if retry_drift == "target" else 2)
+    assert not list(target.glob("*.synctmp-*"))
+    if retry_drift is not None:
+        assert result.status is SessionState.FAILED
+        assert _item_outcome(events).reason == (
+            "source-drift" if retry_drift == "source" else "destination-occupied"
+        )
+        if retry_drift == "source":
+            assert not published.exists()
+        else:
+            assert published.read_bytes() == b"external"
+        assert recorder.calls == []
+        if kind is OperationKind.MOVE_UPDATE:
+            assert (target / "old.bin").read_bytes() == b"old-version"
+    else:
+        assert result.status is SessionState.COMPLETED
+        assert published.read_bytes() == b"new-version"
+        assert _recorder_names(recorder) == [
+            "move_updated" if kind is OperationKind.MOVE_UPDATE else "copied"
+        ]
 
 
 class MidReadMutationStream:
@@ -1038,6 +1151,7 @@ class FlushTempSubstitutionRecorder(FakeRecorder):
 
 def test_update_revalidates_prepared_temp_after_recorder_flush(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     source, target = _roots(tmp_path)
     source_name = "file.bin"
@@ -1045,6 +1159,8 @@ def test_update_revalidates_prepared_temp_after_recorder_flush(
     published = target / source_name
     published.write_bytes(b"OLD!-CONTENT")
     fs = NativeFileSystem()
+    # Exercise successful substitution on the path-finishing fallback.
+    monkeypatch.setattr(fs, "_copied_files", lambda: None)
     source_stat = fs.stat(source, source_name)
     target_stat = fs.stat(target, source_name)
     assert source_stat is not None and target_stat is not None
@@ -1118,6 +1234,7 @@ class PostPublishSubstitutionFileSystem(NativeFileSystem):
 )
 def test_byte_operation_refuses_substituted_postpublish_identity_before_record(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
     kind: OperationKind,
 ) -> None:
     source, target = _roots(tmp_path)
@@ -1126,6 +1243,8 @@ def test_byte_operation_refuses_substituted_postpublish_identity_before_record(
     (source / source_name).write_bytes(b"GOOD-CONTENT")
     published = target / published_name
     fs = PostPublishSubstitutionFileSystem(published)
+    # Retained native handles block this pathname replacement control.
+    monkeypatch.setattr(fs, "_copied_files", lambda: None)
     source_stat = fs.stat(source, source_name)
     assert source_stat is not None
     target_expected = None
@@ -1172,6 +1291,70 @@ def test_byte_operation_refuses_substituted_postpublish_identity_before_record(
     assert xset.published_evidence == {}
     if kind is OperationKind.MOVE_UPDATE:
         assert (target / "old.bin").read_bytes() == b"OLD!-CONTENT"
+
+
+@pytest.mark.skipif(os.name != "nt", reason="requires retained native handles")
+@pytest.mark.parametrize("seam", ("prepared-temp", "postpublish"))
+def test_native_held_copy_reports_blocked_substitution_truthfully(
+    tmp_path: Path,
+    seam: str,
+) -> None:
+    source, target = _roots(tmp_path)
+    (source / "file.bin").write_bytes(b"GOOD-CONTENT")
+    published = target / "file.bin"
+    prepared = seam == "prepared-temp"
+    if prepared:
+        published.write_bytes(b"OLD!-CONTENT")
+
+    class HeldFileSystem(PostPublishSubstitutionFileSystem):
+        descriptor: int | None = None
+
+        def create_temp(self, path: Path, *, allocation_size: int | None):
+            stream = super().create_temp(path, allocation_size=allocation_size)
+            self.descriptor = stream.fileno()
+            return stream
+
+    fs = HeldFileSystem(published)
+    source_stat = fs.stat(source, "file.bin")
+    assert source_stat is not None
+    operation = _operation(
+        1, OperationKind.UPDATE if prepared else OperationKind.COPY,
+        source_rel_path="file.bin", target_rel_path="file.bin",
+        source_expected=source_stat, target_expected=fs.stat(target, "file.bin"),
+        intended=source_stat,
+    )
+    temp = target / f"file.bin.synctmp-{RUN_ID}-{operation.op_id}"
+    recorder = FlushTempSubstitutionRecorder(temp) if prepared else FakeRecorder()
+    xset = _xset(_plan(source, target, (operation,), trash_on_update=False))
+
+    result, events, _ = _run(xset, fs=fs, recorder=recorder)
+
+    item = _item_outcome(events)
+    assert result.status is SessionState.FAILED
+    assert result.recording is RecordingStatus.DEGRADED
+    assert fs.substitutions == 0
+    if prepared:
+        assert not recorder.substituted
+        assert item.reason == "recorder-failed"
+        assert item.recording_reason is ItemRecordingReason.RECORDING_PREREQUISITE_FAILED
+        assert "[WinError 5]" in item.recording_detail
+        assert published.read_bytes() == b"OLD!-CONTENT"
+        replacement = temp.with_name(f"{temp.name}.replacement")
+    else:
+        assert item.reason == "io-error"
+        assert item.recording_reason is ItemRecordingReason.UNRECORDED_MUTATION
+        assert "[WinError 5]" in item.detail["message"]
+        assert item.detail["publish_state"] == "published"
+        assert item.detail["durable_state"] == "target-published"
+        assert published.read_bytes() == b"GOOD-CONTENT"
+        replacement = published.with_name(f"{published.name}.replacement")
+    assert replacement.read_bytes() == b"EVIL-CONTENT"
+    assert not temp.exists()
+    assert recorder.calls == []
+    assert xset.published_evidence == {}
+    assert fs.descriptor is not None
+    with pytest.raises(OSError):
+        os.fstat(fs.descriptor)
 
 
 @pytest.mark.parametrize(
@@ -1989,8 +2172,10 @@ class RootSwapAfterCopyBackend(NativeCopyBackend):
     "swap_boundary",
     ("source-open", "after-copy"),
 )
+@pytest.mark.usefixtures("fallback_root_holds")
 def test_copy_prepare_revalidates_root_after_blocking_boundaries(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
     swap_boundary: str,
 ) -> None:
     source, target = _roots(tmp_path)
@@ -2018,6 +2203,9 @@ def test_copy_prepare_revalidates_root_after_blocking_boundaries(
         temp_name=temp_name,
         swap_on_source_enter=swap_boundary == "source-open",
     )
+    if swap_boundary == "after-copy":
+        # The decoy setup reads the temp by pathname before swapping the root.
+        monkeypatch.setattr(fs, "_copied_files", lambda: None)
     policies = (
         _policies()
         if swap_boundary == "source-open"
@@ -2095,8 +2283,10 @@ class TargetRootSwappingRecorder(FakeRecorder):
         self.swapped = True
 
 
+@pytest.mark.usefixtures("fallback_root_holds")
 def test_update_rejects_target_root_swap_after_recorder_barrier(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     source, target = _roots(tmp_path)
     redirected = tmp_path / "redirected-target"
@@ -2106,6 +2296,8 @@ def test_update_rejects_target_root_swap_after_recorder_barrier(
     (source / source_name).write_bytes(b"new-version")
     (target / source_name).write_bytes(b"old-version")
     fs = TargetRootReadGuardFileSystem(target)
+    # Keep the real root swap on the path-finishing fallback.
+    monkeypatch.setattr(fs, "_copied_files", lambda: None)
     source_stat = fs.stat(source, source_name)
     target_stat = fs.stat(target, source_name)
     assert source_stat is not None and target_stat is not None
@@ -2180,8 +2372,10 @@ class PublishedBackoffRootSwapFileSystem(TargetRootReadGuardFileSystem):
     "failure_point",
     ("published-metadata", "committed-publish"),
 )
+@pytest.mark.usefixtures("fallback_root_holds")
 def test_published_retry_rejects_matching_decoy_after_target_root_swap(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
     failure_point: str,
 ) -> None:
     source, target = _roots(tmp_path)
@@ -2191,6 +2385,8 @@ def test_published_retry_rejects_matching_decoy_after_target_root_swap(
     source_name = "file.bin"
     (source / source_name).write_bytes(b"new-version")
     fs = PublishedBackoffRootSwapFileSystem(target, failure_point)
+    # Both injections precede the successful observation that releases the file.
+    monkeypatch.setattr(fs, "_copied_files", lambda: None)
     source_stat = fs.stat(source, source_name)
     assert source_stat is not None
     operation = _operation(
@@ -3206,6 +3402,42 @@ class RootBindingCallSpyFileSystem(NativeFileSystem):
         return root / relative_path
 
 
+def test_runtime_root_exact_reviewed_spelling_skips_only_pure_normalization(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    authority = RootAuthority(str(tmp_path))
+    monkeypatch.setattr(
+        executor_runtime, "lexical_absolute_path",
+        lambda _path: pytest.fail("exact reviewed root was renormalized"),
+    )
+    executor_runtime._require_reviewed_runtime_root(tmp_path, authority, role="target")
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows reviewed root variants")
+@pytest.mark.parametrize("variant", ["case", "extended", "relative"])
+def test_runtime_root_variants_keep_existing_normalization(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    variant: str,
+) -> None:
+    authority = RootAuthority(str(tmp_path))
+    root = (
+        Path(str(tmp_path).upper()) if variant == "case" else
+        Path(executor_module.to_extended_length_path(str(tmp_path))) if variant == "extended"
+        else Path(tmp_path.name)
+    )
+    monkeypatch.chdir(tmp_path.parent)
+    calls = []
+    original = executor_runtime.lexical_absolute_path
+    monkeypatch.setattr(
+        executor_runtime, "lexical_absolute_path",
+        lambda path: calls.append(path) or original(path),
+    )
+    executor_runtime._require_reviewed_runtime_root(root, authority, role="source")
+    assert calls == [root]
+
+
 def test_target_root_guard_refuses_mismatched_runtime_root_before_touch(
     tmp_path: Path,
 ) -> None:
@@ -3227,6 +3459,291 @@ def test_target_root_guard_refuses_mismatched_runtime_root_before_touch(
 
     assert fs.revalidate_calls == []
     assert fs.resolve_calls == []
+
+
+@pytest.fixture
+def held_target_resolution(tmp_path: Path):
+    source, target = _roots(tmp_path)
+    volume = root_authority_module.observe_native_volume(target)
+    plan = replace(
+        _plan(source, target, ()),
+        target_volume_id=volume.volume_id,
+        target_volume_evidence=volume.evidence,
+    )
+    xset = _xset(plan)
+    scoped = executor_module._InvocationRoot(
+        "target", executor_runtime._target_root_authority(xset)
+    )
+    fs = NativeFileSystem()
+    with executor_module._root_invocation_scope(fs, xset, (scoped,), None):
+        executor_runtime._revalidate_target_root(fs, xset, target)
+        yield fs, xset, source, target, scoped
+
+
+@pytest.mark.skipif(os.name != "nt", reason="native Windows held target resolution")
+@pytest.mark.parametrize("surface", ["resolve-existing", "resolve-optional", "stat"])
+def test_runtime_target_resolution_delegates_only_duplicate_held_admission(
+    held_target_resolution,
+    monkeypatch: pytest.MonkeyPatch,
+    surface: str,
+) -> None:
+    fs, xset, _, target, scoped = held_target_resolution
+    assert scoped.held
+    parent = target / "nested"
+    parent.mkdir()
+    leaf = parent / "file.bin"
+    leaf.write_bytes(b"retained target")
+    assert root_authority_module._WINDOWS is not None
+    original_query = root_authority_module._WINDOWS.get_file_information_ex
+    queries = []
+
+    def query(handle, kind, output, size):
+        queries.append(kind)
+        return original_query(handle, kind, output, size)
+
+    monkeypatch.setattr(root_authority_module._WINDOWS, "get_file_information_ex", query)
+    if surface != "stat":
+        assert executor_runtime._resolve_target_path(
+            fs, xset, target, leaf, must_exist=surface == "resolve-existing"
+        ) == leaf
+        assert queries == [0]
+    else:
+        observed = executor_runtime._stat_target_path(fs, xset, target, leaf)
+        assert observed is not None and observed.size == len(b"retained target")
+        assert queries == [0, 0]  # resolution, then independent leaf-volume reuse
+
+
+@pytest.mark.skipif(os.name != "nt", reason="native Windows held target resolution")
+def test_runtime_target_resolution_held_root_skips_duplicate_volume_probe(
+    held_target_resolution,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fs, xset, _, target, scoped = held_target_resolution
+    assert scoped.held
+    leaf = target / "file.bin"
+    leaf.write_bytes(b"native resolver")
+    assert root_authority_module._WINDOWS is not None
+    assert executor_module._WINDOWS is not None
+    walked: list[Path] = []
+    original_guard = fs._reject_reparse
+
+    def guard(path):
+        walked.append(path)
+        return original_guard(path)
+
+    monkeypatch.setattr(fs, "_reject_reparse", guard)
+    monkeypatch.setattr(
+        executor_module,
+        "_resolved_logical_path",
+        lambda *_args, **_kwargs: pytest.fail("held target used physical resolution"),
+    )
+    original_query = root_authority_module._WINDOWS.get_file_information_ex
+    queries = []
+
+    def query(handle, kind, output, size):
+        queries.append(kind)
+        return original_query(handle, kind, output, size)
+
+    monkeypatch.setattr(root_authority_module._WINDOWS, "get_file_information_ex", query)
+    monkeypatch.setattr(
+        executor_module._WINDOWS,
+        "get_volume_path",
+        lambda *_args: pytest.fail("held target repeated volume admission"),
+    )
+    assert executor_runtime._resolve_target_path(
+        fs, xset, target, leaf, must_exist=True
+    ) == leaf
+    assert queries == [0]
+    assert walked == [leaf]
+    original_lstat = Path.lstat
+    native_leaf = executor_module.to_extended_length_path(str(leaf))
+
+    def lstat(path, *args, **kwargs):
+        if str(path) == native_leaf:
+            return SimpleNamespace(st_mode=stat_module.S_IFLNK, st_file_attributes=0)
+        return original_lstat(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "lstat", lstat)
+    with pytest.raises(UnsafeExecutionPath, match="reparse points"):
+        executor_runtime._resolve_target_path(
+            fs, xset, target, leaf, must_exist=True
+        )
+    assert queries == [0, 0]
+    assert walked == [leaf, leaf]
+
+
+def test_runtime_target_resolution_unheld_keeps_reviewed_then_chain_admission(
+    fallback_root_holds,
+    held_target_resolution,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fs, xset, _, target, scoped = held_target_resolution
+    assert not scoped.held
+    admissions = []
+    original_reviewed = executor_module.admit_root
+    original_chain = executor_module.admit_root_chain
+
+    def reviewed(authority, **kwargs):
+        admissions.append(("reviewed", authority))
+        return original_reviewed(authority, **kwargs)
+
+    def chain(authority, **kwargs):
+        admissions.append(("chain", authority))
+        return original_chain(authority, **kwargs)
+
+    monkeypatch.setattr(executor_module, "admit_root", reviewed)
+    monkeypatch.setattr(executor_module, "admit_root_chain", chain)
+    leaf = target / "missing.bin"
+    assert executor_runtime._resolve_target_path(
+        fs, xset, target, leaf, must_exist=False
+    ) == leaf
+    assert admissions == [
+        ("reviewed", scoped.authority), ("chain", scoped.chain_authority)
+    ]
+
+
+def test_runtime_target_resolution_unheld_keeps_physical_containment(
+    fallback_root_holds,
+    held_target_resolution,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fs, xset, _, target, scoped = held_target_resolution
+    assert not scoped.held
+    resolutions: list[Path] = []
+    original_resolve = executor_module._resolved_logical_path
+
+    def resolve(path, *, strict):
+        resolutions.append(Path(path))
+        return original_resolve(path, strict=strict)
+
+    monkeypatch.setattr(executor_module, "_resolved_logical_path", resolve)
+    leaf = target / "missing.bin"
+    assert executor_runtime._resolve_target_path(
+        fs, xset, target, leaf, must_exist=False
+    ) == leaf
+    assert resolutions == [target, leaf]
+
+
+@pytest.mark.skipif(os.name != "nt", reason="native Windows held target resolution")
+def test_runtime_target_resolution_subclass_keeps_reviewed_admission(
+    held_target_resolution,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _, xset, _, target, _ = held_target_resolution
+    resolved = []
+
+    class LexicalFileSystem(NativeFileSystem):
+        def resolve(self, root, relative_path, *, must_exist):
+            resolved.append(relative_path)
+            return root / relative_path
+
+    fs = LexicalFileSystem()
+    scoped = executor_module._InvocationRoot(
+        "target", executor_runtime._target_root_authority(xset)
+    )
+    with executor_module._root_invocation_scope(fs, xset, (scoped,), None):
+        executor_runtime._revalidate_target_root(fs, xset, target)
+        assert scoped.held
+        assert root_authority_module._WINDOWS is not None
+
+        def query(handle, kind, output, size):
+            info = ctypes.cast(
+                output, ctypes.POINTER(root_authority_module._FileBasicInfo)
+            ).contents
+            info.FileAttributes = 0x10 | 0x400
+            return True
+
+        monkeypatch.setattr(root_authority_module._WINDOWS, "get_file_information_ex", query)
+        with pytest.raises(UnsafeExecutionPath, match="reparse points"):
+            executor_runtime._resolve_target_path(
+                fs, xset, target, target / "missing.bin", must_exist=False
+            )
+        assert resolved == []
+
+
+@pytest.mark.skipif(os.name != "nt", reason="native Windows held target resolution")
+@pytest.mark.parametrize("state", ["reparse", "placeholder", "query-failure"])
+def test_runtime_target_resolution_refuses_unsafe_held_root_before_descent(
+    held_target_resolution,
+    monkeypatch: pytest.MonkeyPatch,
+    state: str,
+) -> None:
+    fs, xset, _, target, scoped = held_target_resolution
+    assert scoped.held
+    assert root_authority_module._WINDOWS is not None
+    queries = []
+
+    def query(handle, kind, output, size):
+        queries.append(kind)
+        if state == "query-failure":
+            ctypes.set_last_error(5)
+            return False
+        info = ctypes.cast(output, ctypes.POINTER(root_authority_module._FileBasicInfo)).contents
+        info.FileAttributes = 0x10 | 0x400 | (0x1000 if state == "placeholder" else 0)
+        return True
+
+    monkeypatch.setattr(root_authority_module._WINDOWS, "get_file_information_ex", query)
+    monkeypatch.setattr(Path, "lstat", lambda *args, **kwargs: pytest.fail("unsafe root reached descent"))
+    expected = PermissionError if state == "query-failure" else UnsafeExecutionPath
+    with pytest.raises(expected) as refused:
+        executor_runtime._resolve_target_path(
+            fs, xset, target, target / "untouched.bin", must_exist=False
+        )
+    if state == "query-failure":
+        assert refused.value.winerror == 5
+    else:
+        assert "reparse points are not executable" in str(refused.value)
+    assert queries == [0]
+
+
+@pytest.mark.skipif(os.name != "nt", reason="native Windows held target resolution")
+@pytest.mark.parametrize("malformed", ["outside", "device", "parent", "root"])
+def test_runtime_target_resolution_malformed_refuses_before_filesystem_access(
+    held_target_resolution,
+    monkeypatch: pytest.MonkeyPatch,
+    malformed: str,
+) -> None:
+    fs, xset, source, target, scoped = held_target_resolution
+    assert scoped.held
+    path = (
+        source / "file.bin" if malformed == "outside" else
+        target / "NUL" if malformed == "device" else
+        target / ".." / "file.bin" if malformed == "parent" else target
+    )
+    assert root_authority_module._WINDOWS is not None
+
+    def query(handle, kind, output, size):
+        pytest.fail("malformed path reached held-root attribute observation")
+
+    monkeypatch.setattr(root_authority_module._WINDOWS, "get_file_information_ex", query)
+    expected = ValueError if malformed == "outside" else PathValidationError
+    with pytest.raises(expected):
+        executor_runtime._resolve_target_path(fs, xset, target, path, must_exist=False)
+
+
+@pytest.mark.skipif(os.name != "nt", reason="native Windows held target resolution")
+@pytest.mark.parametrize("difference", ["root", "anchor", "volume", "inactive", "owner"])
+def test_runtime_target_resolution_requires_exact_active_reviewed_authority(
+    held_target_resolution,
+    monkeypatch: pytest.MonkeyPatch,
+    difference: str,
+) -> None:
+    fs, xset, source, target, scoped = held_target_resolution
+    assert scoped.held
+    authority = scoped.require_authority()
+    root = target
+    if difference == "root":
+        root = source
+    elif difference == "anchor":
+        authority = replace(authority, reviewed_anchor=str(target.parent))
+    elif difference == "volume":
+        authority = replace(authority, expected_volume_id=VolumeId("OTHER", "NTFS"))
+    else:
+        invocation = executor_module._ROOT_INVOCATION.get()
+        assert invocation is not None
+        monkeypatch.setattr(invocation, "active" if difference == "inactive" else "native_owner",
+                            False if difference == "inactive" else object())
+    assert not executor_module._can_delegate_held_resolution(fs, root, authority)
 
 
 def test_source_root_guard_refuses_mismatched_runtime_root_before_touch(
@@ -3251,33 +3768,10 @@ class ReviewedBindingSwapFileSystem(NativeFileSystem):
         self.target_root = target_root
         self.swap_during_resolve = swap_during_resolve
         self.swapped = False
-        self.reviewed_refusals = 0
+        self.root_refusals = 0
         self.rename_calls = 0
         self.remove_calls = 0
         self.mkdir_calls = 0
-
-    def revalidate_root(
-        self,
-        root: Path,
-        *,
-        trusted_anchor: Path | None = None,
-        expected_volume=None,
-    ) -> None:
-        if (
-            self.swapped
-            and root == self.target_root
-            and trusted_anchor is not None
-            and expected_volume is not None
-        ):
-            self.reviewed_refusals += 1
-            raise UnsafeExecutionPath(
-                "reviewed target anchor or volume changed"
-            )
-        super().revalidate_root(
-            root,
-            trusted_anchor=trusted_anchor,
-            expected_volume=expected_volume,
-        )
 
     def resolve(
         self,
@@ -3558,8 +4052,10 @@ def test_source_swap_during_recorder_barrier_cannot_authorize_mutation(
     ),
     ids=("move", "recase", "delete", "mkdir"),
 )
-def test_nonbyte_mutations_refuse_reviewed_target_binding_swap(
+@pytest.mark.skipif(os.name != "nt", reason="native Windows held target mutation")
+def test_nonbyte_mutations_refuse_target_held_attribute_swap(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
     kind: OperationKind,
 ) -> None:
     source, target = _roots(tmp_path)
@@ -3573,6 +4069,40 @@ def test_nonbyte_mutations_refuse_reviewed_target_binding_swap(
         target,
     )
     recorder = ReviewedBindingSwapRecorder(fs)
+    assert root_authority_module._WINDOWS is not None
+    original_query = root_authority_module._WINDOWS.get_file_information_ex
+
+    def query(handle, info_class, output, size):
+        invocation = executor_module._ROOT_INVOCATION.get()
+        target_state = None if invocation is None else next(
+            state for state in invocation.roots if state.role == "target"
+        )
+        if (
+            fs.swapped and target_state is not None
+            and target_state.hold is not None
+            and target_state.hold._handle == handle
+        ):
+            fs.root_refusals += 1
+            info = ctypes.cast(
+                output, ctypes.POINTER(root_authority_module._FileBasicInfo)
+            ).contents
+            info.FileAttributes = 0x10 | 0x400
+            return True
+        return original_query(handle, info_class, output, size)
+
+    monkeypatch.setattr(root_authority_module._WINDOWS, "get_file_information_ex", query)
+    native_target = executor_module.to_extended_length_path(str(target))
+    original_lstat = Path.lstat
+
+    def lstat(path, *args, **kwargs):
+        if fs.swapped and str(path) == native_target:
+            fs.root_refusals += 1
+            return SimpleNamespace(
+                st_mode=stat_module.S_IFLNK, st_file_attributes=0
+            )
+        return original_lstat(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "lstat", lstat)
 
     result, events, _ = _run(
         _xset(plan),
@@ -3582,16 +4112,16 @@ def test_nonbyte_mutations_refuse_reviewed_target_binding_swap(
 
     item = _item_outcome(events)
     assert fs.swapped
-    assert fs.reviewed_refusals >= 1
+    assert fs.root_refusals >= 1
     assert result.status is SessionState.FAILED
-    assert result.recording is RecordingStatus.OK
     assert item.outcome is Outcome.FAILED
-    assert "mutation_state" not in item.detail
-    assert "durable_state" not in item.detail
     assert fs.rename_calls == 0
     assert fs.remove_calls == 0
     assert fs.mkdir_calls == 0
     assert recorder.calls == []
+    assert "mutation_state" not in item.detail
+    assert "durable_state" not in item.detail
+    assert result.recording is RecordingStatus.OK
     if kind is OperationKind.MOVE:
         assert (target / "old.bin").read_bytes() == b"reviewed"
         assert not (target / "new.bin").exists()
@@ -5154,6 +5684,114 @@ def test_executor_imports_core_but_no_sibling_module() -> None:
     assert "WinDLL" not in inspect.getsource(NativeFileSystem)
 
 
+@pytest.mark.skipif(os.name != "nt", reason="native Windows root hold")
+def test_execute_held_root_blocks_swap_and_completes_original_copy(tmp_path: Path) -> None:
+    source, target = _roots(tmp_path)
+    source_file = source / "file.bin"
+    source_file.write_bytes(b"reviewed")
+    fs = NativeFileSystem()
+    intended = fs.stat(source, source_file.name)
+    assert intended is not None
+    operation = _operation(
+        1, OperationKind.COPY, source_rel_path=source_file.name,
+        target_rel_path=source_file.name, source_expected=intended,
+        target_expected=None, intended=intended,
+    )
+    attempted = []
+    invocations = []
+
+    def swap_after_copy() -> None:
+        invocations.append(executor_module._ROOT_INVOCATION.get())
+        for root in (source, target):
+            with pytest.raises(OSError) as refused:
+                root.rename(root.with_name(root.name + "-detached"))
+            assert refused.value.winerror == 32
+            attempted.append(root)
+
+    events = []
+    diagnostics = []
+    source_volume = fs._observe_root_volume(str(source))
+    target_volume = fs._observe_root_volume(str(target))
+    plan = replace(
+        _plan(source, target, (operation,)),
+        source_volume_id=source_volume.volume_id,
+        target_volume_id=target_volume.volume_id,
+        source_volume_evidence=source_volume.evidence,
+        target_volume_evidence=target_volume.evidence,
+    )
+    result = execute(
+        _xset(plan),
+        RunContext(events.append, lambda: None), FakeRecorder(),
+        _policies(copy_backend=RootSwapAfterCopyBackend(swap_after_copy)), fs,
+        root_diagnostics=diagnostics,
+    )
+    assert result.status is SessionState.COMPLETED
+    assert _item_outcome(events).outcome is Outcome.SUCCEEDED
+    assert attempted == [source, target]
+    assert (target / source_file.name).read_bytes() == b"reviewed"
+    assert {item.role for item in diagnostics} == {"source", "target"}
+    assert all(item.held and item.fallback_reason is None for item in diagnostics)
+    assert len(invocations) == 1 and not invocations[0].active
+    assert all(root.native_prefix is None for root in invocations[0].roots)
+    for root in (source, target):
+        root.rename(root.with_name(root.name + "-released"))
+
+
+@pytest.mark.skipif(os.name != "nt", reason="native Windows root hold")
+@pytest.mark.parametrize("boundary", ("checkpoint", "initial-emit"))
+@pytest.mark.parametrize("exception", (PauseRequested, Canceled, RuntimeError))
+def test_execute_releases_entry_holds_on_pause_cancel_and_exception(
+    tmp_path: Path,
+    boundary: str,
+    exception: type[Exception],
+) -> None:
+    source, target = _roots(tmp_path)
+    operation = _operation(
+        1, OperationKind.NOOP, source_rel_path=None, target_rel_path="unused.bin",
+        source_expected=None, target_expected=None, intended=None,
+    )
+    xset = _xset(_plan(source, target, (operation,)))
+    attempts = []
+    invocations = []
+
+    def fail_at_boundary() -> None:
+        invocation = executor_module._ROOT_INVOCATION.get()
+        invocations.append(invocation)
+        executor_module._win32_path(source)
+        executor_module._win32_path(source / "unused.bin")
+        assert invocation.active
+        assert all(root.native_prefix is None for root in invocation.roots)
+        for root in (source, target):
+            with pytest.raises(OSError) as refused:
+                root.rename(root.with_name(root.name + "-blocked"))
+            assert refused.value.winerror == 32
+            attempts.append(root)
+        raise exception()
+
+    def emit(_event) -> None:
+        if boundary == "initial-emit":
+            fail_at_boundary()
+
+    def checkpoint() -> None:
+        if boundary == "checkpoint":
+            fail_at_boundary()
+
+    fs = NativeFileSystem()
+    with pytest.raises(exception):
+        execute(xset, RunContext(emit, checkpoint), FakeRecorder(), _policies(), fs)
+    assert attempts == [source, target]
+    assert executor_module._ROOT_INVOCATION.get() is None
+    assert len(invocations) == 1 and not invocations[0].active
+    assert all(root.native_prefix is None for root in invocations[0].roots)
+    for root in (source, target):
+        renamed = root.rename(root.with_name(root.name + "-released"))
+        renamed.rename(root)
+    # Resume/new call on the same adapter reacquires fresh entry holds.
+    _run(xset, fs=fs)
+    for root in (source, target):
+        root.rename(root.with_name(root.name + "-after-resume"))
+
+
 def test_executor_public_facade_preserves_exact_exports_and_signatures() -> None:
     assert executor_facade.__all__ == [
         "BoundedFailurePolicy",
@@ -5162,6 +5800,7 @@ def test_executor_public_facade_preserves_exact_exports_and_signatures() -> None
         "NativeCopyBackend",
         "NativeFileSystem",
         "OperationFailure",
+        "RootAdmissionDiagnostic",
         "SystemClock",
         "UnsafeExecutionPath",
         "execute",
@@ -5202,7 +5841,8 @@ def test_executor_public_facade_preserves_exact_exports_and_signatures() -> None
     assert signatures == {
         "execute": (
             "(xset: 'ExecutionSet', ctx: 'RunContext', recorder: 'Recorder', "
-            "policies: 'ExecutorPolicies', fs: 'ExecutorFileSystem') -> "
+            "policies: 'ExecutorPolicies', fs: 'ExecutorFileSystem', *, "
+            "root_diagnostics: 'list[RootAdmissionDiagnostic] | None' = None) -> "
             "'OperationResult'"
         ),
         "BoundedFailurePolicy": (
@@ -5230,7 +5870,8 @@ def test_executor_public_facade_preserves_exact_exports_and_signatures() -> None
         "CopyPipelineMetrics": (
             "(reader_blocked_seconds: 'float' = 0.0, writer_starved_seconds: "
             "'float' = 0.0, payload_high_water: 'int' = 0, reserved_bytes: "
-            "'int' = 0) -> None"
+            "'int' = 0, write_mode: 'str' = 'buffered', fallback_reason: "
+            "'DirectWriteFallback | None' = None) -> None"
         ),
     }
 

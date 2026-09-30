@@ -41,7 +41,9 @@ class Provenance(StrEnum):
 class StreamingHasher(Protocol):
     """Standard-library-only streaming content-hasher seam."""
 
-    def update(self, data: bytes) -> None: ...
+    def update(self, data: bytes | memoryview) -> None:
+        """Consume the supplied bytes synchronously without retaining the view."""
+        ...
 
     def digest(self) -> bytes: ...
 
@@ -67,7 +69,7 @@ def new_content_hasher(factory: HasherFactory) -> StreamingHasher:
     return hasher
 
 
-def update_content_hasher(hasher: StreamingHasher, chunk: bytes) -> None:
+def update_content_hasher(hasher: StreamingHasher, chunk: bytes | memoryview) -> None:
     """Add one chunk while preserving the shared hasher error contract."""
 
     try:

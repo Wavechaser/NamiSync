@@ -260,6 +260,12 @@ domain operations real:
 | Integrity selection | ledger inventory rows | fresh scan plus explicit evidence source |
 | Filesystem, copy backend, reader | native | native inner, optionally instrumented |
 
+The authority-bound verifier tap forwards native invocation activation and its
+private admission handoff while retaining the original bound-open dispatch.
+Readers without that activation retain per-access admission. Root acquisition
+is included in total verifier time, outside individual subject-open timing; the
+tap does not retain handles or admission after invocation exit.
+
 Executor correspondence is intentionally empty. Executor measurements therefore
 represent a first run with no retained history: COPY, UPDATE, NOOP, directory,
 and deletion-policy operations are available, but MOVE and MOVE_UPDATE are not.
@@ -485,6 +491,19 @@ owns their measurement commands, fixtures, statistics, sidecars, cache
 interpretation, reports and rerun policy. Driver structure is under
 `tools/`; tests stay under `tests/`; generated output belongs in ignored
 `build/` or an explicitly owned external workspace.
+
+Executor metrics also collect invocation-local root admission diagnostics. Each
+used native source/target role reports held mode or its exact observed fallback
+reason once; unused roots do not claim admission. The rig snapshots these records
+per sample, renders them beside pipeline diagnostics and retains them in the
+`root_admission` report field. `--no-metrics` installs no collector and leaves
+that field empty. The observations explain which execution path was measured;
+they are not acceptance, operation outcomes or cached filesystem authorization.
+Core owns classification; possible short-name aliases remain tentative.
+
+The pipeline report also aggregates copy counts by `write_modes` and non-null
+`fallback_reasons`. These opt-in observations distinguish direct writes from
+buffered copies and capability fallback; they do not select a device policy.
 
 `tools/performance/` owns selected Plan, execution receipt/UI, bridge-event and
 history measurements. Assets live beside their driver; small fixture/runner

@@ -4,7 +4,11 @@ from __future__ import annotations
 
 import os
 import stat as stat_module
-from collections.abc import Callable
+import ctypes
+import re
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
+from ctypes import wintypes
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path, PureWindowsPath
@@ -31,6 +35,79 @@ FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS = 0x00400000
 _MAX_DWORD = (1 << 32) - 1
 _VOLUME_PATH_BUFFER_CHARS = 32_768
 _VOLUME_TEXT_BUFFER_CHARS = 261
+_FILE_LIST_DIRECTORY = 0x00000001
+_FILE_SHARE_READ = 0x00000001
+_FILE_SHARE_WRITE = 0x00000002
+_OPEN_EXISTING = 3
+_FILE_FLAG_BACKUP_SEMANTICS = 0x02000000
+_FILE_FLAG_OPEN_REPARSE_POINT = 0x00200000
+_DRIVE_REMOTE = 4
+_INVALID_HANDLE_VALUE = ctypes.c_void_p(-1).value
+_FILE_BASIC_INFO_CLASS = 0
+
+
+class _FileBasicInfo(ctypes.Structure):
+    _fields_ = [
+        ("CreationTime", ctypes.c_longlong),
+        ("LastAccessTime", ctypes.c_longlong),
+        ("LastWriteTime", ctypes.c_longlong),
+        ("ChangeTime", ctypes.c_longlong),
+        ("FileAttributes", wintypes.DWORD),
+    ]
+
+
+class _WindowsBindings:
+    """Process-lifetime bindings; filesystem evidence is never cached."""
+
+    def __init__(self) -> None:
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        self.get_volume_path = kernel32.GetVolumePathNameW
+        self.get_volume_path.argtypes = [
+            wintypes.LPCWSTR, wintypes.LPWSTR, wintypes.DWORD
+        ]
+        self.get_volume_path.restype = wintypes.BOOL
+        self.get_volume_information = kernel32.GetVolumeInformationW
+        self.get_volume_information.argtypes = [
+            wintypes.LPCWSTR,
+            wintypes.LPWSTR,
+            wintypes.DWORD,
+            ctypes.POINTER(wintypes.DWORD),
+            ctypes.POINTER(wintypes.DWORD),
+            ctypes.POINTER(wintypes.DWORD),
+            wintypes.LPWSTR,
+            wintypes.DWORD,
+        ]
+        self.get_volume_information.restype = wintypes.BOOL
+        self.get_drive_type = kernel32.GetDriveTypeW
+        self.get_drive_type.argtypes = [wintypes.LPCWSTR]
+        self.get_drive_type.restype = wintypes.UINT
+        self.create_file = kernel32.CreateFileW
+        self.create_file.argtypes = [
+            wintypes.LPCWSTR,
+            wintypes.DWORD,
+            wintypes.DWORD,
+            wintypes.LPVOID,
+            wintypes.DWORD,
+            wintypes.DWORD,
+            wintypes.HANDLE,
+        ]
+        self.create_file.restype = wintypes.HANDLE
+        self.close_handle = kernel32.CloseHandle
+        self.close_handle.argtypes = [wintypes.HANDLE]
+        self.close_handle.restype = wintypes.BOOL
+        self.get_final_path = kernel32.GetFinalPathNameByHandleW
+        self.get_final_path.argtypes = [
+            wintypes.HANDLE, wintypes.LPWSTR, wintypes.DWORD, wintypes.DWORD
+        ]
+        self.get_final_path.restype = wintypes.DWORD
+        self.get_file_information_ex = kernel32.GetFileInformationByHandleEx
+        self.get_file_information_ex.argtypes = [
+            wintypes.HANDLE, ctypes.c_int, wintypes.LPVOID, wintypes.DWORD
+        ]
+        self.get_file_information_ex.restype = wintypes.BOOL
+
+
+_WINDOWS = _WindowsBindings() if os.name == "nt" else None
 
 
 @dataclass(frozen=True, slots=True)
@@ -176,11 +253,9 @@ def current_volume_anchor(path: str | os.PathLike[str]) -> str:
             raise PathValidationError("absolute path lacks a volume anchor")
         return anchor
 
-    import ctypes
-
-    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    assert _WINDOWS is not None
     volume_path = ctypes.create_unicode_buffer(_VOLUME_PATH_BUFFER_CHARS)
-    if not kernel32.GetVolumePathNameW(
+    if not _WINDOWS.get_volume_path(
         to_extended_length_path(logical),
         volume_path,
         len(volume_path),
@@ -218,29 +293,33 @@ def observe_native_volume(path: str | os.PathLike[str]) -> NativeVolumeInfo:
             0,
         )
 
-    import ctypes
-    from ctypes import wintypes
+    return observe_native_volume_at_anchor(current_volume_anchor(logical))
 
-    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-    volume_path = ctypes.create_unicode_buffer(_VOLUME_PATH_BUFFER_CHARS)
-    if not kernel32.GetVolumePathNameW(
-        to_extended_length_path(logical),
-        volume_path,
-        len(volume_path),
-    ):
-        raise OSError(
-            ctypes.get_last_error(),
-            "GetVolumePathNameW failed",
-            logical,
-        )
+
+def observe_native_volume_at_anchor(
+    anchor: str | os.PathLike[str],
+) -> NativeVolumeInfo:
+    """Observe volume facts directly at an already admitted native anchor.
+
+    This does not discover or admit a path's current anchor. Callers own that
+    prior check and its lifetime.
+    """
+
+    logical = lexical_absolute_path(anchor)
+    if os.name != "nt":
+        return observe_native_volume(logical)
+    assert _WINDOWS is not None
+    native_anchor = to_extended_length_path(logical)
+    if not native_anchor.endswith("\\"):
+        native_anchor += "\\"
 
     label = ctypes.create_unicode_buffer(_VOLUME_TEXT_BUFFER_CHARS)
     filesystem = ctypes.create_unicode_buffer(_VOLUME_TEXT_BUFFER_CHARS)
     serial = wintypes.DWORD()
     max_component = wintypes.DWORD()
     flags = wintypes.DWORD()
-    if not kernel32.GetVolumeInformationW(
-        volume_path.value,
+    if not _WINDOWS.get_volume_information(
+        native_anchor,
         label,
         len(label),
         ctypes.byref(serial),
@@ -261,11 +340,169 @@ def observe_native_volume(path: str | os.PathLike[str]) -> NativeVolumeInfo:
         ),
         VolumeEvidence(
             label.value or None,
-            from_extended_length_path(volume_path.value),
+            from_extended_length_path(native_anchor),
         ),
         int(max_component.value),
         int(flags.value),
     )
+
+
+class RootHold:
+    """Invocation-local handle that must match the root after full admission."""
+
+    def __init__(
+        self,
+        authority: RootAuthority,
+        handle: int | None,
+        fallback_reason: str | None = None,
+    ) -> None:
+        self._authority = authority
+        self._handle = handle
+        self._confirmed = False
+        self._fallback_reason = fallback_reason
+
+    @property
+    def fallback_reason(self) -> str | None:
+        """Observed fallback class for invocation-local consumer diagnostics."""
+
+        return self._fallback_reason
+
+    def confirm(self) -> bool:
+        """Corroborate the held root after the caller's full root admission.
+
+        Only an exact normalized DOS namespace match, allowing drive-letter
+        case alone, confirms the hold. Failure releases it for per-access
+        admission. Successful confirmation lasts only while the handle lives.
+        """
+
+        if self._handle is None:
+            return False
+        if self._confirmed:
+            return True
+        assert _WINDOWS is not None
+        final_path = ctypes.create_unicode_buffer(_VOLUME_PATH_BUFFER_CHARS)
+        returned = _WINDOWS.get_final_path(
+            self._handle, final_path, len(final_path), 0
+        )
+        self._fallback_reason = "final_path_unavailable"
+        if 0 < returned < len(final_path):
+            try:
+                logical_final = from_extended_length_path(final_path.value)
+            except ValueError:
+                pass
+            else:
+                expected = self._authority.logical_root
+                if (
+                    logical_final[:1].upper() == expected[:1].upper()
+                    and logical_final[1:] == expected[1:]
+                ):
+                    self._confirmed = True
+                    self._fallback_reason = None
+                    return True
+                if logical_final.casefold() == expected.casefold():
+                    self._fallback_reason = "case_mismatch"
+                elif logical_final[:2].upper() != expected[:2].upper():
+                    self._fallback_reason = "mount_alias"
+                elif re.search(r"~[0-9]", expected):
+                    self._fallback_reason = "possible_short_name_alias"
+                else:
+                    self._fallback_reason = "namespace_mismatch"
+        self._close()
+        return False
+
+    def require_ordinary(self) -> None:
+        """Freshly require ordinary attributes before reusing root admission."""
+
+        root = self._authority.logical_root
+        if self._handle is None or not self._confirmed:
+            raise RootAuthorityError(
+                RootAuthorityIssue.COMPONENT_UNAVAILABLE,
+                root,
+                "root hold is not live and confirmed",
+            )
+        assert _WINDOWS is not None
+        info = _FileBasicInfo()
+        if not _WINDOWS.get_file_information_ex(
+            self._handle, _FILE_BASIC_INFO_CLASS, ctypes.byref(info), ctypes.sizeof(info)
+        ):
+            error = ctypes.WinError(ctypes.get_last_error())
+            raise RootAuthorityError(
+                RootAuthorityIssue.COMPONENT_UNAVAILABLE, root, logical_error_text(error)
+            ) from error
+        attributes = int(info.FileAttributes)
+        if attributes & FILE_ATTRIBUTE_REPARSE_POINT:
+            placeholder = attributes & (
+                FILE_ATTRIBUTE_OFFLINE
+                | FILE_ATTRIBUTE_RECALL_ON_OPEN
+                | FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS
+            )
+            raise RootAuthorityError(
+                (
+                    RootAuthorityIssue.PLACEHOLDER_COMPONENT
+                    if placeholder else RootAuthorityIssue.REPARSE_COMPONENT
+                ),
+                root,
+                "held root is a placeholder or reparse component",
+            )
+        if not attributes & FILE_ATTRIBUTE_DIRECTORY:
+            raise RootAuthorityError(
+                RootAuthorityIssue.NON_DIRECTORY_COMPONENT,
+                root,
+                "held root is not an ordinary directory",
+            )
+
+    def _close(self) -> None:
+        if self._handle is not None:
+            assert _WINDOWS is not None
+            _WINDOWS.close_handle(self._handle)
+            self._handle = None
+            self._confirmed = False
+
+
+def _open_root_handle(logical_root: str) -> int | None:
+    assert _WINDOWS is not None
+    handle = _WINDOWS.create_file(
+        to_extended_length_path(logical_root),
+        _FILE_LIST_DIRECTORY,
+        _FILE_SHARE_READ | _FILE_SHARE_WRITE,
+        None,
+        _OPEN_EXISTING,
+        _FILE_FLAG_BACKUP_SEMANTICS | _FILE_FLAG_OPEN_REPARSE_POINT,
+        None,
+    )
+    return None if handle == _INVALID_HANDLE_VALUE else handle
+
+
+@contextmanager
+def hold_root(authority: RootAuthority) -> Iterator[RootHold]:
+    """Acquire a scoped local root hold, initially unconfirmed.
+
+    The caller fully admits inside this scope, then calls ``confirm()`` before
+    relying on the hold. False confirmation selects per-access admission, also
+    used for UNC, mapped network, unholdable or final-path-unavailable roots.
+    Confirmed consumers require current ordinary attributes before each access
+    that reuses admission. Descendant guards remain necessary.
+    """
+
+    if os.name != "nt":
+        yield RootHold(authority, None, "non_windows")
+        return
+    if authority.logical_root.startswith("\\\\"):
+        yield RootHold(authority, None, "remote_root")
+        return
+    assert _WINDOWS is not None
+    drive_anchor = PureWindowsPath(authority.logical_root).anchor
+    if _WINDOWS.get_drive_type(drive_anchor) == _DRIVE_REMOTE:
+        yield RootHold(authority, None, "remote_root")
+        return
+    handle = _open_root_handle(authority.logical_root)
+    hold = RootHold(
+        authority, handle, "acquisition_failed" if handle is None else None
+    )
+    try:
+        yield hold
+    finally:
+        hold._close()
 
 
 def admit_root_chain(
@@ -281,6 +518,18 @@ def admit_root_chain(
     a later volume-bound admission in the same operation.
     """
 
+    admitted_anchor, _current_anchor = _admit_root_chain(
+        authority, lstat=lstat, anchor_probe=anchor_probe
+    )
+    return admitted_anchor
+
+
+def _admit_root_chain(
+    authority: RootAuthority,
+    *,
+    lstat: NoFollowStat | None,
+    anchor_probe: AnchorProbe | None,
+) -> tuple[str, str]:
     stat_path = _native_lstat if lstat is None else lstat
     find_anchor = current_volume_anchor if anchor_probe is None else anchor_probe
     try:
@@ -318,7 +567,7 @@ def admit_root_chain(
     for component in root_chain:
         observed = _observe_component(component, stat_path)
         _require_ordinary_directory(component, observed)
-    return admitted_anchor
+    return admitted_anchor, current_anchor
 
 
 def admit_root(
@@ -330,15 +579,20 @@ def admit_root(
 ) -> NativeVolumeInfo:
     """Freshly admit a configured root against its reviewed authority."""
 
-    admitted_anchor = admit_root_chain(
+    admitted_anchor, current_anchor = _admit_root_chain(
         authority,
         lstat=lstat,
         anchor_probe=anchor_probe,
     )
-    find_volume = observe_native_volume if volume_probe is None else volume_probe
-
     try:
-        volume = find_volume(authority.logical_root)
+        if volume_probe is not None:
+            volume = volume_probe(authority.logical_root)
+        elif os.name == "nt":
+            # This default observation uses the anchor just admitted above, so
+            # its later anchor comparison echoes that evidence, not a fresh probe.
+            volume = observe_native_volume_at_anchor(current_anchor)
+        else:
+            volume = observe_native_volume(authority.logical_root)
     except (OSError, ValueError) as error:
         raise RootAuthorityError(
             RootAuthorityIssue.VOLUME_UNAVAILABLE,

@@ -333,6 +333,46 @@ def test_move_records_reviewed_target_within_timestamp_granularity(
         setup.recorder.close()
 
 
+@pytest.mark.parametrize("kind", (OperationKind.MOVE, OperationKind.RECASE))
+@pytest.mark.parametrize("mutation", ("created", "unmanaged", "nlink", "managed"))
+def test_pure_rename_records_post_effect_metadata_drift(tmp_path: Path, kind, mutation) -> None:
+    source = file_stat(identity_index=20)
+    target = file_stat(identity_index=21, volume_serial="target-serial")
+    old_path = "new.txt" if kind is OperationKind.RECASE else "old.txt"
+    op = operation(
+        kind, source_path="NEW.txt", target_path="NEW.txt", source=source,
+        target=target, intended=target, prior_target_path=old_path,
+    )
+    sync_plan = plan((op,))
+    setup = setup_recorder(tmp_path / "ledger.db", sync_plan)
+    changed = (
+        replace(target, nlink=2) if mutation == "nlink" else
+        replace(target, metadata=replace(
+            target.metadata,
+            created_ns=50 if mutation == "created" else target.metadata.created_ns,
+            attributes=0x20 if mutation == "unmanaged" else 2 if mutation == "managed" else 0,
+        ))
+    )
+    try:
+        setup.recorder.record_inventory(InventoryCommand(
+            setup.target_location_id, setup.host_id,
+            _target_scan(sync_plan, (_record(old_path, target),)), "target-1", NOW,
+        ))
+        record = setup.run.record_moved if kind is OperationKind.MOVE else setup.run.record_recased
+        record(op.op_id, changed)
+        connection = connect_ledger_reader(setup.recorder.path)
+        try:
+            row = connection.execute(
+                "SELECT observed_nlink, observed_attributes, observed_created_ns FROM inventory WHERE location_id = ?",
+                (setup.target_location_id,),
+            ).fetchone()
+            assert tuple(row) == (changed.nlink, changed.metadata.attributes, changed.metadata.created_ns)
+        finally:
+            connection.close()
+    finally:
+        setup.recorder.close()
+
+
 def test_recase_updates_target_spelling_and_correspondence(tmp_path: Path) -> None:
     source = file_stat(identity_index=20)
     target = file_stat(identity_index=21, volume_serial="target-serial")

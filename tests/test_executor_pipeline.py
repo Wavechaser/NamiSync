@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+import ctypes
 from dataclasses import dataclass
 import gc
 import inspect
 import io
+import os
 from queue import Queue as ThreadQueue
 import threading
 import time
 from typing import BinaryIO
+import weakref
 
 import pytest
 from xxhash import xxh3_128
@@ -41,6 +44,231 @@ class InjectedHasherFailure(InjectedPipelineFailure):
 
 class InjectedWriterFailure(InjectedPipelineFailure):
     """Failure owned by the writer worker."""
+
+
+class _AlignedMemoryTarget:
+    copy_alignment = 4096
+    copy_fallback_reason = None
+
+    def __init__(self) -> None:
+        self.data = bytearray()
+
+    def write(self, data: memoryview) -> int:
+        assert isinstance(data, memoryview)
+        assert ctypes.addressof(ctypes.c_char.from_buffer(data)) % self.copy_alignment == 0
+        self.data.extend(data)
+        return len(data)
+
+
+def test_aligned_pool_waits_for_delayed_hash_and_write_and_reads_back_exactly() -> None:
+    chunk_size = 4 * 1024 * 1024
+    payload = b"".join(bytes([index]) * chunk_size for index in range(9))
+    hash_started = threading.Event()
+    release_hash = threading.Event()
+    write_started = threading.Event()
+    release_write = threading.Event()
+
+    class CountedSource(io.BytesIO):
+        reads = 0
+
+        def readinto(self, view: memoryview) -> int:
+            self.reads += 1
+            return super().readinto(view)
+
+    class DelayedHasher:
+        def __init__(self) -> None:
+            self.inner = xxh3_128()
+            self.updates = 0
+
+        def update(self, data: memoryview) -> None:
+            assert data.readonly
+            self.updates += 1
+            if self.updates == 1:
+                hash_started.set()
+                assert release_hash.wait(_WAIT_SECONDS)
+            self.inner.update(data)
+
+        def digest(self) -> bytes:
+            return self.inner.digest()
+
+    class DelayedTarget(_AlignedMemoryTarget):
+        def write(self, data: memoryview) -> int:
+            if not write_started.is_set():
+                write_started.set()
+                assert release_write.wait(_WAIT_SECONDS)
+            return super().write(data)
+
+    source = CountedSource(payload)
+    target = DelayedTarget()
+    backend = _backend(DelayedHasher, collect_metrics=True, queue_items=2)
+    call = _start_copy(backend, source, target, chunk_size=chunk_size)
+    try:
+        assert hash_started.wait(_WAIT_SECONDS)
+        assert _wait_until(lambda: source.reads >= 4)
+        assert source.reads <= 7
+        release_hash.set()
+        assert write_started.wait(_WAIT_SECONDS)
+        assert _wait_until(lambda: source.reads >= 7)
+        assert source.reads <= 7
+    finally:
+        release_hash.set()
+        release_write.set()
+    call.wait(timeout=10)
+    assert call.errors == []
+    assert call.results == [CopyDigest(_serial_digest(payload), len(payload))]
+    assert bytes(target.data) == payload
+    metrics = backend.last_metrics
+    assert metrics is not None
+    assert metrics.write_mode == "direct"
+    assert metrics.payload_high_water <= 32 * 1024 * 1024
+    assert metrics.reserved_bytes == 0
+
+
+@pytest.mark.parametrize("failure_stage", ["hasher", "writer"])
+def test_aligned_pool_releases_slots_with_retained_failure(
+    monkeypatch: pytest.MonkeyPatch, failure_stage: str,
+) -> None:
+    class TrackedBytearray(bytearray):
+        pass
+
+    monkeypatch.setattr(executor_module, "bytearray", TrackedBytearray, raising=False)
+    original = executor_module._allocate_borrowed_chunk
+    backings: list[weakref.ReferenceType[object]] = []
+
+    def tracked(size: int, alignment: int):
+        slot = original(size, alignment)
+        backings.append(weakref.ref(slot.backing))
+        return slot
+
+    monkeypatch.setattr(executor_module, "_allocate_borrowed_chunk", tracked)
+
+    class FailingHasher:
+        def update(self, _data: memoryview) -> None:
+            if failure_stage == "hasher":
+                raise InjectedHasherFailure("borrowed hash failed")
+
+        def digest(self) -> bytes:
+            return xxh3_128().digest()
+
+    class FailingTarget(_AlignedMemoryTarget):
+        def write(self, data: memoryview) -> int:
+            if failure_stage == "writer":
+                raise InjectedWriterFailure("borrowed write failed")
+            return super().write(data)
+
+    with pytest.raises((HasherContractError, InjectedWriterFailure)) as caught:
+        _backend(FailingHasher, collect_metrics=True).copy(
+            io.BytesIO(b"a" * 8192), FailingTarget(),  # type: ignore[arg-type]
+            chunk_size=4096, checkpoint=lambda: None,
+            on_chunk=lambda _size: None,
+        )
+    assert backings
+    retained = caught.value
+    gc.collect()
+    assert all(reference() is None for reference in backings)
+    assert retained is caught.value
+
+
+@pytest.mark.parametrize("control_type", [Canceled, PauseRequested])
+def test_aligned_pool_releases_on_control_while_writer_is_delayed(
+    monkeypatch: pytest.MonkeyPatch, control_type: type[Exception],
+) -> None:
+    class TrackedBytearray(bytearray):
+        pass
+
+    monkeypatch.setattr(executor_module, "bytearray", TrackedBytearray, raising=False)
+    original = executor_module._allocate_borrowed_chunk
+    backings: list[weakref.ReferenceType[object]] = []
+
+    def tracked(size: int, alignment: int):
+        slot = original(size, alignment)
+        backings.append(weakref.ref(slot.backing))
+        return slot
+
+    monkeypatch.setattr(executor_module, "_allocate_borrowed_chunk", tracked)
+    write_started = threading.Event()
+    release_write = threading.Event()
+    interrupt = threading.Event()
+    control = control_type()
+
+    class CountedSource(io.BytesIO):
+        reads = 0
+
+        def readinto(self, view: memoryview) -> int:
+            self.reads += 1
+            return super().readinto(view)
+
+    class DelayedTarget(_AlignedMemoryTarget):
+        def write(self, data: memoryview) -> int:
+            write_started.set()
+            assert release_write.wait(_WAIT_SECONDS)
+            return super().write(data)
+
+    source = CountedSource(b"".join(bytes([index]) * (4 * 1024 * 1024) for index in range(9)))
+    backend = _backend(collect_metrics=True)
+
+    def checkpoint() -> None:
+        if interrupt.is_set():
+            raise control
+
+    call = _start_copy(
+        backend, source, DelayedTarget(),
+        chunk_size=4 * 1024 * 1024, checkpoint=checkpoint,
+    )
+    try:
+        assert write_started.wait(_WAIT_SECONDS)
+        assert _wait_until(lambda: source.reads >= 7)
+        interrupt.set()
+    finally:
+        release_write.set()
+    call.wait(timeout=10)
+    assert call.results == []
+    assert call.errors == [control]
+    assert backend.last_metrics is not None
+    assert backend.last_metrics.reserved_bytes == 0
+    gc.collect()
+    assert backings and all(reference() is None for reference in backings)
+
+
+def test_aligned_pool_releases_on_readinto_error_with_retained_exception(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class TrackedBytearray(bytearray):
+        pass
+
+    monkeypatch.setattr(executor_module, "bytearray", TrackedBytearray, raising=False)
+    original = executor_module._allocate_borrowed_chunk
+    backings: list[weakref.ReferenceType[object]] = []
+
+    def tracked(size: int, alignment: int):
+        slot = original(size, alignment)
+        backings.append(weakref.ref(slot.backing))
+        return slot
+
+    monkeypatch.setattr(executor_module, "_allocate_borrowed_chunk", tracked)
+    failure = OSError("readinto failed after first chunk")
+
+    class FailingSource(io.BytesIO):
+        calls = 0
+
+        def readinto(self, view: memoryview) -> int:
+            self.calls += 1
+            if self.calls == 2:
+                raise failure
+            return super().readinto(view)
+
+    backend = _backend(collect_metrics=True)
+    with pytest.raises(OSError) as caught:
+        backend.copy(
+            FailingSource(b"r" * 8192), _AlignedMemoryTarget(),  # type: ignore[arg-type]
+            chunk_size=4096, checkpoint=lambda: None,
+            on_chunk=lambda _size: None,
+        )
+    assert caught.value is failure
+    assert backend.last_metrics is not None
+    assert backend.last_metrics.reserved_bytes == 0
+    gc.collect()
+    assert backings and all(reference() is None for reference in backings)
 
 
 def _wait_until(
@@ -105,6 +333,63 @@ def _assert_workers_joined(
     ]
     assert all(thread.ident is not None for thread in workers)
     assert all(not thread.is_alive() for thread in workers)
+
+
+def test_regular_single_chunk_copy_proves_eof_without_workers(
+    tmp_path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source_path = tmp_path / "single.bin"
+    source_path.write_bytes(b"single chunk")
+    workers = _capture_worker_threads(monkeypatch)
+    target = io.BytesIO()
+    with source_path.open("rb", buffering=0) as source:
+        copied = _backend().copy(
+            source, target, chunk_size=256 * 1024,
+            checkpoint=lambda: None, on_chunk=lambda _size: None,
+        )
+    assert workers == []
+    assert target.getvalue() == b"single chunk"
+    assert copied.digest == _serial_digest(b"single chunk")
+
+
+def test_regular_source_growth_during_single_chunk_lookahead_uses_pipeline(
+    tmp_path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source_path = tmp_path / "growing.bin"
+    source_path.write_bytes(b"first")
+    workers = _capture_worker_threads(monkeypatch)
+
+    class GrowingSource:
+        def __init__(self, stream: BinaryIO) -> None:
+            self.stream = stream
+            self.reads = 0
+
+        def fileno(self) -> int:
+            return self.stream.fileno()
+
+        def tell(self) -> int:
+            return self.stream.tell()
+
+        def read(self, size: int) -> bytes:
+            self.reads += 1
+            value = self.stream.read(size)
+            if self.reads == 1:
+                with source_path.open("ab") as append:
+                    append.write(b"-then-grown")
+            return value
+
+    target = io.BytesIO()
+    backend = _backend(collect_metrics=True)
+    with source_path.open("rb", buffering=0) as stream:
+        copied = backend.copy(
+            GrowingSource(stream), target, chunk_size=5,  # type: ignore[arg-type]
+            checkpoint=lambda: None, on_chunk=lambda _size: None,
+        )
+    assert target.getvalue() == b"first-then-grown"
+    assert copied.digest == _serial_digest(target.getvalue())
+    assert backend.last_metrics is not None
+    assert 10 <= backend.last_metrics.payload_high_water <= 32 * 1024 * 1024
+    _assert_workers_joined(workers)
 
 
 @dataclass

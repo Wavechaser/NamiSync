@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import ctypes
+from contextlib import nullcontext
+from dataclasses import replace
 from ctypes import wintypes
 import os
 from pathlib import Path
@@ -68,7 +70,7 @@ def _set_security_descriptor(path: Path, descriptor: bytes) -> None:
         raise ctypes.WinError(ctypes.get_last_error())
 
 
-def _set_restrictive_dacl(path: Path) -> None:
+def _set_restrictive_dacl(path: Path, sddl: str = _RESTRICTIVE_DACL) -> None:
     advapi32 = ctypes.WinDLL("advapi32", use_last_error=True)
     kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
     convert = advapi32.ConvertStringSecurityDescriptorToSecurityDescriptorW
@@ -85,7 +87,7 @@ def _set_restrictive_dacl(path: Path) -> None:
 
     descriptor = wintypes.LPVOID()
     if not convert(
-        _RESTRICTIVE_DACL,
+        sddl,
         _SDDL_REVISION_1,
         ctypes.byref(descriptor),
         None,
@@ -252,3 +254,76 @@ def test_restrictive_acl_cannot_block_held_finalization_handle(
         for path in (source, temp, target):
             if path.exists():
                 _set_security_descriptor(path, original_dacl)
+
+
+@pytest.mark.skipif(os.name != "nt", reason="requires Windows persistent ACLs")
+@pytest.mark.parametrize("denial", ("delete", "write-data", "write-attributes", "inherited-write"))
+@pytest.mark.parametrize("retained", (False, True), ids=("path-finish", "retained-finish"))
+def test_retained_copy_finishes_with_permissions_granted_before_acl_denial(
+    tmp_path: Path,
+    denial: str,
+    retained: bool,
+) -> None:
+    if not _supports_persistent_acls(tmp_path):
+        pytest.skip("temporary volume does not support persistent ACLs")
+    source = tmp_path / "source.bin"
+    parent = tmp_path / "target"
+    parent.mkdir()
+    temp = parent / "temp.bin"
+    target = parent / "target.bin"
+    source.write_bytes(b"payload")
+    original_dacl = _security_descriptor(source)
+    parent_dacl = _security_descriptor(parent)
+    fs = NativeFileSystem()
+    try:
+        if denial == "delete":
+            _set_restrictive_dacl(source, "D:P(D;;SD;;;WD)(A;;FA;;;WD)")
+            _set_restrictive_dacl(parent, "D:P(D;;0x40;;;WD)(A;OICI;FA;;;WD)")
+        elif denial == "write-data":
+            _set_restrictive_dacl(source, "D:P(D;;0x2;;;WD)(A;;FA;;;WD)")
+        elif denial == "write-attributes":
+            _set_restrictive_dacl(source)
+        else:
+            _set_restrictive_dacl(parent, "D:P(D;OIIO;0x2;;;WD)(A;OICI;FA;;;WD)")
+        intended = fs.stat_path(source)
+        assert intended is not None
+        if denial in {"write-data", "write-attributes"}:
+            intended = replace(
+                intended, metadata=replace(intended.metadata, attributes=1)
+            )
+        scope = (
+            executor_module._root_invocation_scope(fs, object(), (), None)
+            if retained else nullcontext()
+        )
+        with scope:
+            with fs.create_temp(temp, allocation_size=None) as writer:
+                descriptor = writer.fileno()
+                writer.write(b"payload")
+
+            def finish() -> None:
+                finalized = fs.finalize_temp(
+                    temp, intended, preserve_created=True,
+                    acl_source=None if denial == "inherited-write" else source,
+                )
+                fs.publish_new(temp, target)
+                published = fs.ensure_published_metadata(
+                    target, finalized, intended,
+                    preserve_created=True, apply_readonly=True,
+                )
+                assert published.size == len(b"payload")
+
+            if retained:
+                finish()
+                assert not temp.exists() and target.read_bytes() == b"payload"
+                with pytest.raises(OSError):
+                    os.fstat(descriptor)
+            else:
+                with pytest.raises(PermissionError) as refused:
+                    finish()
+                assert refused.value.winerror == _ERROR_ACCESS_DENIED
+    finally:
+        for path in (source, temp, target):
+            if path.exists():
+                _set_security_descriptor(path, original_dacl)
+                fs.clear_readonly(path)
+        _set_security_descriptor(parent, parent_dacl)

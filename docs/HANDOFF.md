@@ -1,36 +1,41 @@
-# Latest session — cold admission guidance
+# Latest session — backend optimization closeout
 
-2026-09-27, `milestone1`, starting revision `0e4595e4`. The user authorized
-two commits: CLI-DRIFT (`5e4bf87`), then DOC-PRECISION (this commit).
-M1_PLAN owns the delivery record;
-evidence lives in `build/cold-admission-followup-20260927/`.
+2026-09-30, `milestone1-adelbert`, housekeeping base `7f36a2a4`. The user closed
+backend optimization with no remaining in-scope actionable work. M1_PLAN now
+holds compact shipped-outcome records; detailed execution history remains in
+Git and the existing evidence roots. Future M1 delivery rows and accepted
+behavior remain intact.
 
-CLI-DRIFT distinguishes observed file changes from confirmed incompatibility
-and unavailable artifacts. One three-attempt policy retries validation only;
-persistent drift gives retry guidance without reset advice. Provisional schema
-errors recheck source stability, and failed cleanup prevents retry. Live-owner
-availability failures also retain non-destructive guidance. CLI history admission
-refusals use exit 3; unrelated later read failures retain exit 4. Creation,
-reservations, task submission and effects are outside the retry operation.
+## Closeout changes
 
-The six new regressions failed on the baseline and passed after implementation.
-Focused verification: 571 passed, plus 27 exact drift-count controls; all 12
-import contracts pass. The final ordinary suite passed 5,410 tests, with 4
-privilege-related skips and 34 headed deselections (`cli-ordinary.xml/log`).
-Independent source review found no blocking findings (`cli-review.md`).
-Retain `cli-red.xml`, the intermediate expectation-migration receipt,
-`cli-focused-progress.xml` and `cli-drift-counts.xml` alongside final evidence.
+- CHANGELOG adds M1 Performance, moves subtractive work into Consolidation,
+  and compacts delivered GUI/consolidation history. README mirrors phase
+  summaries. The original-to-compacted task mapping is retained for review.
+- EXECUTOR closes the completed run's special oracle re-pin permission.
+  M2_PROPOSAL carries unbuffered source reads as a measurement-dependent proposal;
+  M1 continues buffered reads. Directory-flush batching also remains deferred.
+- Removed the detached `b8baf42d` worktree after proving it was an integrated
+  ancestor with no tracked/untracked changes, no active command-line reference,
+  and only 59 regenerable Python cache files. Primary checkout, source fixtures,
+  original evidence, other refs and stashes were preserved.
 
-DOC-PRECISION replaces TESTS' unverified already-visible-notice rationale with
-the helper's actual readiness checks, and narrows DATABASE's per-connection
-snapshot statement to connections opened through DatabaseConnectionOwner.
-HistoryStore's two internal direct readers remain unchanged. Source comparison,
-documentation links/diff checks and independent review cover this documentation-only
-commit; the product/test evidence above remains valid.
+## Verification and publication
 
-Desktop Setup refusal mapping, cross-process exclusion and unrelated CLI
-tooling remain excluded. AB-8 stays deferred; AB-7 focus loss remains an
-environmental testing limitation, with no focus/DWM detector. Previous incident
-closeout evidence remains under `build/admission-bridge-closeout-20260927/`;
-historical failures and trace evidence must be retained. No task-created branch
-or worktree needs cleanup, and no remote update is part of this task.
+This closeout edits documentation only. Consistency, local links/anchors,
+compaction accounting, unchanged future requirements and independent review
+are the closeout checks. Prior product evidence retains its original dependency
+attribution: latest 640 executor passes; direct-write ordinary evidence of 5,720
+passes plus the corrected 95-test audit module; 12 imports; official 30×3
+oracle; classified fixed differential; and 25 production readbacks. M1_PLAN and
+PERFORMANCE retain the precise dispositions and measurement limits.
+
+Evidence root: `build/executor-simplification-20260929/closeout/`, including
+`worktree-before.json`, `worktree-removed.json`, changelog mapping and document
+validation. After publication, `pr.json` will record the pushed closeout commit
+and draft PR from `milestone1-adelbert` into `milestone1`.
+
+The pre-publication remote `milestone1` is `6de6d1c`; this branch has 41 existing
+commits above it before the closeout commit. No rebase, squash or history rewrite
+is part of this task. Future M1-9/10/12/release work, DOC-2 history work, the
+separately logged exFAT limitation and replacement findings remain outside this
+closed optimization scope.

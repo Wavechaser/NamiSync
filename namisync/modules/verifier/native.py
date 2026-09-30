@@ -7,6 +7,8 @@ import ntpath
 import os
 from ctypes import wintypes
 from contextlib import contextmanager
+from contextvars import ContextVar
+from dataclasses import dataclass
 from pathlib import Path, PureWindowsPath
 from typing import Iterator
 
@@ -24,11 +26,13 @@ from namisync.core.pathing import (
     validate_relative_path,
 )
 from namisync.core.root_authority import (
+    NativeVolumeInfo,
     RootAuthority,
     RootAuthorityError,
     RootAuthorityIssue,
+    RootHold,
     admit_root_chain,
-    is_placeholder_stat,
+    hold_root,
     is_reparse_stat,
 )
 
@@ -55,6 +59,34 @@ _ERROR_INVALID_PARAMETER = 87
 _WINDOWS_EPOCH_TICKS = 116_444_736_000_000_000
 _FILE_BASIC_INFO_CLASS = 0
 _FILE_STANDARD_INFO_CLASS = 1
+_FILE_STORAGE_INFO_CLASS = 16
+
+
+@dataclass(slots=True)
+class _VerificationInvocation:
+    native_reader: WindowsUnbufferedReader
+    dispatched_reader: object
+    authority: RootAuthority
+    hold: RootHold
+    active: bool = True
+    admitted: NativeVolumeInfo | None = None
+
+    def matches_engine(self, reader: object, authority: RootAuthority) -> bool:
+        return (
+            _ROOT_INVOCATION.get() is self and self.active
+            and self.dispatched_reader is reader and self.authority is authority
+        )
+
+    def matches_native(self, reader: object, authority: RootAuthority) -> bool:
+        return (
+            _ROOT_INVOCATION.get() is self and self.active
+            and self.native_reader is reader and self.authority is authority
+        )
+
+
+_ROOT_INVOCATION: ContextVar[_VerificationInvocation | None] = ContextVar(
+    "verifier_root_invocation", default=None
+)
 
 
 class WindowsUnbufferedReader:
@@ -67,6 +99,23 @@ class WindowsUnbufferedReader:
 
     def __init__(self, root_authority: RootAuthority | None = None) -> None:
         self._root_authority = root_authority
+
+    @contextmanager
+    def root_scope(
+        self,
+        authority: RootAuthority,
+        *,
+        invocation_owner: object,
+    ) -> Iterator[_VerificationInvocation]:
+        with hold_root(authority) as hold:
+            invocation = _VerificationInvocation(self, invocation_owner, authority, hold)
+            token = _ROOT_INVOCATION.set(invocation)
+            try:
+                yield invocation
+            finally:
+                invocation.active = False
+                invocation.admitted = None
+                _ROOT_INVOCATION.reset(token)
 
     @contextmanager
     def open(self, root: Path, relative_path: str) -> Iterator[_WindowsStream]:
@@ -115,12 +164,25 @@ class WindowsUnbufferedReader:
                 "verification selection root does not match its reviewed root"
             )
         candidate = root_path.joinpath(*PureWindowsPath(normalized).parts)
-        _reject_reparse_components(authority, normalized)
+        invocation = _ROOT_INVOCATION.get()
+        if (
+            type(invocation) is _VerificationInvocation
+            and invocation.matches_native(self, authority)
+            and invocation.admitted is not None
+            and invocation.hold.confirm()
+        ):
+            _reject_reparse_components(authority, normalized, root_hold=invocation.hold)
+        else:
+            _reject_reparse_components(authority, normalized)
 
         api = _WindowsApi()
-        sector_size = api.sector_size(candidate)
-        handle = api.open_file(candidate)
         try:
+            handle = api.open_file(candidate)
+        except OSError:
+            api.sector_size(candidate)  # preserve geometry-refusal precedence
+            raise
+        try:
+            sector_size = api.sector_size_from_handle(handle, candidate)
             api.require_expected_final_path(root_path, normalized, handle)
             stream = _WindowsStream(api, handle, sector_size)
             stream.stat()  # reject directories/reparse points before yielding
@@ -132,12 +194,17 @@ class WindowsUnbufferedReader:
 def _reject_reparse_components(
     authority: RootAuthority,
     normalized_path: str,
+    *,
+    root_hold: RootHold | None = None,
 ) -> None:
     try:
-        admit_root_chain(
-            authority,
-            lstat=_verification_lstat,
-        )
+        if root_hold is not None:
+            root_hold.require_ordinary()
+        else:
+            admit_root_chain(
+                authority,
+                lstat=_verification_lstat,
+            )
     except RootAuthorityError as error:
         _raise_verification_root_admission(error)
 
@@ -145,7 +212,7 @@ def _reject_reparse_components(
     for component in PureWindowsPath(normalized_path).parts:
         current = current / component
         observed = _verification_lstat(str(current))
-        if is_placeholder_stat(observed) or is_reparse_stat(observed):
+        if is_reparse_stat(observed):
             raise UnsupportedVerification(
                 f"verification refuses reparse component: {component}"
             )
@@ -197,6 +264,18 @@ class _FileStandardInfo(ctypes.Structure):
         ("NumberOfLinks", ctypes.c_uint32),
         ("DeletePending", ctypes.c_ubyte),
         ("Directory", ctypes.c_ubyte),
+    ]
+
+
+class _FileStorageInfo(ctypes.Structure):
+    _fields_ = [
+        ("LogicalBytesPerSector", ctypes.c_uint32),
+        ("PhysicalBytesPerSectorForAtomicity", ctypes.c_uint32),
+        ("PhysicalBytesPerSectorForPerformance", ctypes.c_uint32),
+        ("FileSystemEffectivePhysicalBytesPerSectorForAtomicity", ctypes.c_uint32),
+        ("Flags", ctypes.c_uint32),
+        ("ByteOffsetForSectorAlignment", ctypes.c_uint32),
+        ("ByteOffsetForPartitionAlignment", ctypes.c_uint32),
     ]
 
 
@@ -350,6 +429,14 @@ class _WindowsApi:
         ):
             error = ctypes.get_last_error()
             raise OSError(error, os.strerror(error))
+
+    def sector_size_from_handle(self, handle: int, path: Path) -> int:
+        storage = _FileStorageInfo()
+        try:
+            self._get_file_information(handle, _FILE_STORAGE_INFO_CLASS, storage)
+        except OSError:
+            return self.sector_size(path)
+        return storage.LogicalBytesPerSector or self.sector_size(path)
 
     def sector_size(self, path: Path) -> int:
         volume_buffer = ctypes.create_unicode_buffer(32768)

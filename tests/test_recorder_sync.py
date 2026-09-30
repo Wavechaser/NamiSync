@@ -1026,6 +1026,68 @@ def test_noop_requires_both_live_snapshots_and_persists_correspondence(tmp_path:
         setup.recorder.close()
 
 
+def test_noop_accepts_incidental_drift_and_records_full_live_observations(tmp_path: Path) -> None:
+    source = file_stat(identity_index=5)
+    target = file_stat(identity_index=6, volume_serial="target-serial")
+    noop = operation(OperationKind.NOOP, source=source, target=target, intended=target)
+    setup = setup_recorder(tmp_path / "ledger.db", plan((noop,)))
+    live_source = replace(source, nlink=2, metadata=replace(source.metadata, attributes=0x20, created_ns=40))
+    live_target = replace(target, nlink=3, metadata=replace(target.metadata, attributes=0x100, created_ns=50))
+    try:
+        setup.run.record_noop(noop.op_id, live_source, live_target)
+        connection = connect_ledger_reader(setup.recorder.path)
+        try:
+            rows = connection.execute(
+                "SELECT location_id, observed_nlink, observed_attributes, observed_created_ns FROM inventory ORDER BY location_id"
+            ).fetchall()
+            assert [tuple(row) for row in rows] == [
+                (setup.source_location_id, 2, 0x20, 40),
+                (setup.target_location_id, 3, 0x100, 50),
+            ]
+            assert connection.execute("SELECT count(*) FROM mapping_correspondence").fetchone()[0] == 1
+        finally:
+            connection.close()
+    finally:
+        setup.recorder.close()
+
+
+@pytest.mark.parametrize("kind", (OperationKind.NOOP, OperationKind.TRASH))
+def test_noop_and_trash_keep_exact_reviewed_identity_acceptance(tmp_path: Path, kind) -> None:
+    source = file_stat(identity_index=5)
+    target = file_stat(identity_index=6, volume_serial="target-serial")
+    reviewed = replace(target, file_identity=None)
+    op = operation(kind, source=source if kind is OperationKind.NOOP else None, target=reviewed, intended=reviewed)
+    setup = setup_recorder(tmp_path / "ledger.db", plan((op,)))
+    try:
+        with pytest.raises(StaleRecordingError):
+            if kind is OperationKind.NOOP:
+                setup.run.record_noop(op.op_id, source, target)
+            else:
+                setup.run.record_trashed(op.op_id, ".synctrash\\run\\a.txt", target)
+    finally:
+        setup.recorder.close()
+
+
+def test_trash_accepts_incidental_drift_and_retains_full_prior_observation(tmp_path: Path) -> None:
+    target = file_stat(identity_index=6, volume_serial="target-serial")
+    op = operation(OperationKind.TRASH, source_path=None, target=target)
+    setup = setup_recorder(tmp_path / "ledger.db", plan((op,)))
+    live = replace(target, nlink=2, metadata=replace(target.metadata, attributes=0x20, created_ns=50))
+    try:
+        setup.run.record_trashed(op.op_id, ".synctrash\\run\\a.txt", live)
+        connection = connect_ledger_reader(setup.recorder.path)
+        try:
+            row = connection.execute(
+                "SELECT presence, observed_nlink, observed_attributes, observed_created_ns FROM inventory WHERE location_id = ?",
+                (setup.target_location_id,),
+            ).fetchone()
+            assert tuple(row) == ("missing", 2, 0x20, 50)
+        finally:
+            connection.close()
+    finally:
+        setup.recorder.close()
+
+
 def test_noop_without_reviewed_source_path_is_typed_stale_recording(
     tmp_path: Path,
 ) -> None:

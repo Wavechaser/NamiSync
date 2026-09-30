@@ -1951,7 +1951,7 @@ def test_cleanup_matrix_covers_failed_pre_retry_cleanup() -> None:
     assert report["control"] == {"checkpoints": 2, "sleeps": []}
     assert report["copy_backend"]["calls"] == 1
     assert report["copy_backend"]["trace"][0]["error"] == "OSError"
-    assert report["filesystem"]["counts"]["remove_owned_temp"] == 2
+    assert report["filesystem"]["counts"]["remove_owned_temp"] == 1
     assert report["tree"][owned_temp]["text"] == "copy"
     assert "$TARGET/copy.bin" not in report["tree"]
 

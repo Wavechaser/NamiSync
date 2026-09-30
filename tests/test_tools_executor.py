@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from contextlib import nullcontext
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -8,8 +9,10 @@ import pytest
 
 from namisync.core.execution import validated_run_id
 from namisync.core.planning import OperationKind
+from namisync.core.root_authority import RootHold
 from namisync.core.session import SessionState
 from tools import corpus, executor_rig
+import namisync.modules.executor.native as executor_native
 
 
 def _record_outputs(
@@ -40,9 +43,37 @@ def test_executor_diagnostics_tap_is_removed_when_disabled(tmp_path: Path) -> No
 
     assert without_metrics.result.status is SessionState.COMPLETED
     assert without_metrics.copy_samples == ()
+    assert without_metrics.root_diagnostics == ()
     assert with_metrics.result.status is SessionState.COMPLETED
     assert len(with_metrics.copy_samples) == 1
     assert with_metrics.copy_samples[0].metrics is not None
+    summary = executor_rig.copy_metrics_summary(with_metrics.copy_samples)
+    assert summary["write_modes"] == {"buffered": 1}
+    assert summary["fallback_reasons"] == {}
+    assert {item.role for item in with_metrics.root_diagnostics} == {"source", "target"}
+    assert len(with_metrics.root_diagnostics) == 2
+
+
+def test_executor_rig_keeps_exact_fallback_reasons_in_sample_snapshot(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        executor_native, "hold_root",
+        lambda authority: nullcontext(RootHold(authority, None, "acquisition_failed")),
+    )
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "data.bin").write_bytes(b"payload")
+    with corpus.claim(tmp_path / "target") as workspace:
+        run = executor_rig.run_executor(source, workspace)
+        assert run.result.status is SessionState.COMPLETED
+        assert [(item.held, item.fallback_reason) for item in run.root_diagnostics] == [
+            (False, "acquisition_failed"), (False, "acquisition_failed")
+        ]
+        assert {item.role for item in run.root_diagnostics} == {"source", "target"}
+        _record_outputs(workspace, run)
+        corpus.teardown(workspace)
 
 
 def test_move_update_output_always_includes_the_prior_path_trash_copy() -> None:
@@ -107,6 +138,8 @@ def test_prepared_copy_plan_reuses_plan_with_fresh_execution_state(
     assert first.execution_set is not second.execution_set
     assert first.execution_set.run_id != second.execution_set.run_id
     assert first.result.status is second.result.status is SessionState.COMPLETED
+    assert first.root_diagnostics is not second.root_diagnostics
+    assert first.root_diagnostics == second.root_diagnostics
     executor_rig.require_stable_copy_evidence(first, second)
 
 

@@ -3,8 +3,9 @@
 Status: the native executor covers every reviewed operation kind on local
 Windows filesystems. Normal copies use one bounded
 reader/hasher/writer pipeline at a time, fixed adaptive chunks, XXH3-128
-evidence, measured conditional preallocation, and single-handle native
-finalization. Successful byte-producing operations now publish exact
+evidence, measured conditional preallocation, and one native owned-temp handle
+through writing, finalization, publication and the successful published
+observation. Successful byte-producing operations now publish exact
 continuation evidence for optional in-session readback. External writers remain
 outside NamiSync's volume-lock contract; the residual races are documented
 below rather than presented as closed.
@@ -115,7 +116,7 @@ contract remains in `test_executor_acl.py`.
 ## Entry Contract
 
 ```python
-execute(xset, ctx, recorder, policies, fs) -> OperationResult
+execute(xset, ctx, recorder, policies, fs, *, root_diagnostics=None) -> OperationResult
 ```
 
 The caller holds deterministic physical-volume custody and validates the exact
@@ -135,6 +136,114 @@ scalar, omission, and envelope rules are centralized in
 [BRIDGE.md](BRIDGE.md). `Canceled`/`PauseRequested` unwind to the runner
 after executor's own safe operation-boundary cleanup.
 
+Each call owns one root invocation record. Native adapters acquire directory
+holds before the first checkpoint, then fully admit each used root at its existing
+reviewed guard. Only successful admission followed by strict held-handle final-path
+confirmation enables reuse. Invalid reviewed authority is reported at that guard;
+blocked or unused roots acquire no admission. Runtime guards still dispatch through
+the supplied filesystem, including overrides. Adapters without native activation
+retain their existing behavior. The tracing adapter explicitly forwards activation
+without adding a filesystem effect to its protected trace.
+
+On Windows, reviewed volume observation uses the anchor just admitted at that
+guard, so the shared anchor comparison checks echoed evidence rather than a second
+freshness observation. Native volume serial and filesystem mismatches remain
+admission errors.
+
+Confirmed holds replace repeated root-prefix admission until
+the call finishes all settlement and cleanup. Each reuse first reads current
+attributes from that same held handle and refuses reparse or placeholder state.
+This applies to the root-revalidation shortcut, the held-root anchor for a
+descendant walk, exact-root volume reuse, and stat-derived leaf volume reuse.
+Query failure retains the existing
+consumer error policy and cannot authorize access. Diagnostic mode reporting
+does not perform an additional attribute query. A `held` diagnostic confirms
+the root hold; target-resolution delegation also requires active native ownership
+and the exact reviewed authority, while stat-derived leaf-volume reuse requires
+a matching serial from the checked leaf snapshot.
+The hold's write sharing remains
+compatible with root flushes and ordinary descendant changes; DEFENSE's
+quiescent-root assumption still covers the attribute-check-to-use interval.
+Pause, cancellation and every error
+release them; resume creates a fresh invocation. UNC, mapped network, unavailable
+or mismatching final paths retain per-access admission. Descendant physical
+containment for unheld roots, reparse checks, second directory
+observations, leaf volume classification and per-item stat behavior remain. For
+an exact confirmed native hold, `resolve` retains
+lexical identity and the no-follow descendant walk but skips repeated physical
+root and candidate resolution. Required-leaf checks still run. The shared hold contract is owned by
+[CORE.md](CORE.md) and [DEFENSE.md](DEFENSE.md).
+
+For a valid retained target-relative path, runtime's shared target resolver may
+delegate its root revalidation to the immediately following native `resolve`.
+Eligibility requires the concrete `NativeFileSystem`, native ownership and the exact reviewed authority in its
+active confirmed hold. The resolver still queries current held attributes before
+descending. Subclasses, non-native and unheld adapters retain runtime
+revalidation before resolver dispatch; the resolver protocol does not itself
+promise root admission.
+Native method-identity inspection does not select a separate legacy sequence. Retained
+paths are converted to root-relative spelling once; native resolution owns
+descendant-spelling validation. Malformed paths may refuse before root admission;
+any accurate refusal reason is sufficient. Other runtime source, paired and
+trash guards retain their admission policies. COPY and MOVE_UPDATE reuse the
+post-checkpoint source and destination fidelity observations from fresh
+preparation for publication; retained unpublished copies take fresh source and
+destination observations before retry. Prepared-temp identity and MOVE_UPDATE's
+old-path checks remain at publication. UPDATE retains its live-target checks
+after backup preparation and the recorder barrier. After the final source
+observation, publication and MOVE/RECASE rename do not repeat source admission
+because they make no further source access. Final target admission remains at
+the mutating effect.
+
+Each native leaf stat uses the single no-follow snapshot returned by its reparse
+guard for kind and all metadata. An unavailable initial observation still returns
+`None`; unsafe-entry, pure path-conversion and later volume/type failures retain
+their refusals. This consolidates leaf observations that were not compared while
+preserving root second-directory checks, containment, volume checks and
+all later operation guards.
+
+Reviewed-subject admission compares kind, existence, size, exact mtime,
+available identity and managed attributes. Link count remains a fidelity fact
+for MOVE/MOVE_UPDATE source and prior-target eligibility; RECASE does not use
+that eligibility. Creation time and unmanaged attribute bits do not refuse
+admission. The shared core planning predicate covers only metadata/link-count
+facts. Full admitted stats remain available for metadata completion and
+recording; post-effect and recovery version recognition compares kind, size,
+mtime and available identity, ignoring attributes, creation time and link count.
+Path, placeholder and reparse checks precede admission.
+
+On the Windows probe path, a valid nonnegative integer `st_dev` from that
+checked snapshot selects the admitted held root's `VolumeId` when its low 32 bits
+match the root's native serial. This reuse first checks current held attributes.
+Mismatch, unavailable/invalid stat evidence and unheld roots
+retain the fresh leaf-volume probe and its errors. Stored identity adaptation is
+unchanged; the stat serial comparison does not expand filesystem support.
+
+The existing descendant walk also checks each visited component, including the
+leaf, with one no-follow reparse observation. Only a missing component ends the
+walk. Permission, I/O, unsafe-entry and path-conversion failures propagate rather
+than admitting an unobserved path. This applies to resolve and both owned-trash
+consumers, which retain their independent directory and volume checks.
+
+After full reviewed admission and exact local hold confirmation, a native
+invocation retains the validated Windows root prefix. Descendant native paths
+compose that prefix with a validated relative suffix, preserving illegal
+component and complete UTF-16-length refusals without converting the full
+absolute path again. The admitted root also bypasses repeated lexical
+normalization. Conversion performs no filesystem query or admission; held-handle
+attribute checks and descendant guards still precede access. Unheld and
+fallback roots, paths outside the admitted root spelling apart from drive-letter
+case, and adapters without
+native activation use the full converters. Invocation exit clears the prefix
+before hold release, including copied contexts.
+
+The optional invocation collector receives one immutable diagnostic per used,
+volume-bound source/target role after successful admission. Plans lacking reviewed
+volume identity retain their existing chain-only, per-access policy. The collector
+reports held mode or the core's
+observed fallback classification; it neither authorizes access nor changes results,
+events or recorder values. No mutable last-run state lives on a filesystem adapter.
+
 ## Universal Operation Rules
 
 - Checkpoint before each operation and at operation-specific safe boundaries.
@@ -142,7 +251,9 @@ after executor's own safe operation-boundary cleanup.
   preconditions against live filesystem evidence: expected identity/type/stat,
   required absence/occupancy, root containment, and directory emptiness where
   relevant. Drift fails that operation without guessing.
-- Validate paths lexically and by resolved handle; use long-path-safe APIs.
+- Validate paths lexically and by resolved handle for unheld
+  roots; an exact confirmed native hold may replace repeated physical resolution
+  after current held attributes and no-follow descendant checks. Use long-path-safe APIs.
 - Keep plan, continuation, recorder, diagnostic, and returned `Path` values in
   ordinary absolute drive/UNC spelling. `NativeFileSystem` introduces the
   extended-length prefix only at Windows resolution, observation, stream,
@@ -181,20 +292,46 @@ and-swap guarantee.
 ## Copy State Machine
 
 1. Validate expected source and destination states.
-2. Create an exclusive exact-name temp in the final target parent and volume.
-   At or above the measured private 8 MiB threshold, request exactly the
-   reviewed allocation without advancing logical EOF. Only explicitly
-   unsupported allocation falls back; disk-full, quota, permission, and
-   unknown errors fail before streaming.
-3. Open the source through the cached `O_SEQUENTIAL` path. Select a fixed
+2. Open the source through the cached `O_SEQUENTIAL` path. Select a fixed
    256 KiB chunk below 8 MiB, 1 MiB below 32 MiB, or 4 MiB thereafter, capped
    by `ExecutorPolicies.max_chunk_size`.
-4. Stream immutable chunks through caller/reader → hasher → writer under one
-   combined 32 MiB payload budget and 32-item caps on both FIFOs. The hasher
-   and writer are the only workers; the caller admits reads, checkpoints, and
+3. Create an exclusive exact-name temp in the final target parent and volume.
+   An active Windows native invocation uses `CREATE_NEW` with data, attribute
+   and delete access and read/write/delete sharing. The invocation owns the
+   descriptor; the pipeline receives a content view whose close does not close
+   that descriptor. The first create is attempted before any exact-name cleanup;
+   only an existing temp triggers guarded removal and one create retry. Direct
+   native calls outside an invocation and non-Windows adapters retain their
+   existing path-based behavior.
+   At or above the private 8 MiB threshold on any local device, known logical
+   and physical sector geometry selects `FILE_FLAG_NO_BUFFERING` target writes.
+   Remote roots, unknown geometry, or a refused direct open use buffered writes
+   with an opt-in diagnostic; a later write failure fails the copy rather than
+   switching modes. The same size threshold requests exactly the reviewed
+   allocation without advancing logical EOF. Only explicitly
+   unsupported allocation falls back; disk-full, quota, permission, and
+   unknown errors fail before streaming.
+4. Stream chunks through caller/reader → hasher → writer under one combined
+   32 MiB payload budget and 32-item caps on both FIFOs. Buffered writes retain
+   immutable byte chunks. Direct writes read into aligned reusable buffers;
+   their actual allocations, including alignment slack, fit the 32 MiB pool.
+   Hashing borrows a read-only view of real bytes and consumes it synchronously;
+   the writer receives the same backing buffer and returns it to the pool only
+   after the full write completes. The caller admits reads, checkpoints, and
    reports progress only after hash and full write complete in FIFO order.
-   Every file size, including empty and 4 KiB, uses this same pipeline.
-5. Close the content writer without flushing it. Open one finalization handle
+   A buffered copy from a regular-file source whose remaining size fits one chunk
+   uses a synchronous path after an EOF lookahead; growth or a short read cannot
+   manufacture EOF.
+   Aligned bulk input at a sector boundary reaches native writes without staging.
+   Ordinary bytes and unaligned custom chunk sizes retain BinaryIO compatibility
+   through sector staging; this slower compatibility path must not replace
+   aligned pool writes.
+   Consumers receive derived views, never the pool-owned view released at exit.
+   A retained derived view can prolong backing storage, but does not export the
+   pool-owned view itself or make its release raise `BufferError`.
+5. Close the content writer view without flushing it. The direct writer pads
+   only a trailing sector and sets exact logical EOF on its retained handle
+   before metadata or publication. Reuse that handle
    before any opted-in ACL is copied, apply normalized creation/mtime/access and
    managed attributes while withholding readonly, issue exactly one
    `FlushFileBuffers` on that held handle, and retain its normalized stat.
@@ -204,14 +341,22 @@ and-swap guarantee.
    is recorded.
 7. Re-check destination expected absence/state at publish and use a conditional
    atomic primitive appropriate to the planned before-state.
-8. Atomically publish with the Windows/local-filesystem primitive.
-9. Compare one post-publish target stat with the normalized temp baseline.
+8. Atomically publish using the retained handle's `FileRenameInfo`, with
+   replacement disabled for COPY/MOVE_UPDATE and enabled for UPDATE. Registry
+   ownership moves from the temp name to the target only after the syscall
+   succeeds; a refused rename leaves the original handle and temp available.
+9. Compare one post-publish handle stat with the normalized temp baseline.
    Before attestation, require matching kind and size plus stable identity when
    the target profile supplies it. Repair and flush only fields publication
    changed, including name-tunneled creation time or deferred readonly;
    otherwise perform no target metadata write, target reopen, or second file
    flush. The same observed stat is reused for this binding, the size guard,
-   and attestation, so the check adds no filesystem call.
+   and attestation, so the check adds no filesystem call. Close the retained
+   descriptor after successful observation/repair, before parent-directory
+   flushing and recording. The returned metadata must remain stable after that
+   final close. Copied or inherited ACLs may deny a fresh reopen or pathname
+   publication while the retained handle still has its previously granted
+   access; the user-approved exception in M1_PLAN permits that handle to finish.
 10. Require the published target size to equal the hashed byte count before any
     operation-specific destructive completion step. MOVE_UPDATE builds the
     attestation at this point, so an attestation-construction failure cannot
@@ -248,6 +393,23 @@ removes exact-grammar regular files whose embedded run id differs from the
 current run; current-run temps remain under per-operation retry/cancel cleanup.
 Recovery never recurses, enters `.synctrash`, or deletes a substring lookalike.
 
+Copied-file descriptors belong only to the native invocation, never to the
+adapter or a continuation. Successful published observation releases each file;
+copied-backup publication releases its own file before returning. Exact temp
+cleanup releases its descriptor before the existing guarded deletion. Accepted
+operation retirement releases remaining copied files before the next serial
+operation; scope exit releases every leftover on pause, cancellation or escape.
+Retry and uncertain-publication classification retain their namespace probes.
+Real substitution and root-swap controls use the path-finishing fallback where
+their setup otherwise reads or replaces a retained copied file by pathname,
+so matching decoys and same-size/same-mtime identity changes reach the original
+refusal assertions. Controls before temp creation or after successful published
+observation retain the native path.
+Separate native controls retain the copied-file descriptor and require the
+blocked pathname read/substitution plus truthful prerequisite or
+published-failure settlement; they do not add a namespace observation to the
+successful path.
+
 `NativeCopyBackend` accepts keyword-only `queue_items=32` and
 `poll_seconds=0.01` for focused pipeline scheduling tests. Queue capacity is a
 strict non-Boolean integer from 1 through 32. Poll intervals are non-Boolean,
@@ -264,8 +426,8 @@ target. With trash-on-update enabled it:
 1. validates/reserves `.synctrash/<run-id>/<relative-path>` on the target volume;
 2. preserves the old live file there using a same-volume hardlink when
    `CapabilityProfile.supports_hardlinks`; otherwise writes a trash-local exact
-   temp from one open source handle. The handle stat must match the reviewed
-   live-target snapshot before copying; the copied byte count and a second stat
+   temp from one open source handle. The handle stat must match the
+   admitted live-target snapshot before copying; the copied byte count and a second stat
    of that same handle must still match before metadata is finalized from the
    bound snapshot and the backup publishes atomically. Growth, truncation, or
    visible same-size drift fails as `target-drift`; a failed prepublication copy
@@ -277,7 +439,8 @@ target. With trash-on-update enabled it:
    prepared-temp, source, and live-target guards; a hardlink defers metadata
    repair because it still shares the live inode;
 5. clears readonly on the live target if Windows requires it for replacement;
-6. atomically publishes the prepared temp over the live path with `os.replace`;
+6. atomically publishes the prepared temp over the live path with replacement
+   enabled on the retained handle, or `os.replace` on the existing fallback;
 7. applies the new file's readonly bit and remaining post-publish metadata;
 8. validates and completes hardlink-backup metadata after the replacement, then
    performs the best-effort parent flushes, constructs the attestation, and
@@ -324,8 +487,11 @@ accepted trash-location information belongs to execution review: it may include
 an exact completed count only when supported by outcome evidence, otherwise
 location alone. It does not require a new trash walk or claim a complete count
 of preserved update backups from ordinary trash-operation records.
-Readonly ordering/recovery restores the old version's planned attributes after
+Readonly ordering/recovery restores the old version's admitted metadata after
 replacement so the hardlinked trash inode is not left silently degraded.
+Backup metadata repair and failed readonly UPDATE/DELETE restoration use the
+full pre-effect observation, including its creation time, rather than replacing
+accepted incidental drift with the older reviewed values.
 
 Backup creation never redefines the accepted live target version. UPDATE keeps
 the pre-backup stat across retries, permits only its own hardlink's expected
@@ -361,10 +527,11 @@ ordinary case-insensitive NTFS the destination aliases the source object and the
 updates only its directory-entry spelling. On a case-sensitive target a
 distinct occupied destination makes the primitive fail without overwrite. The
 executor flushes the parent, re-stats the same file, and records the new target
-spelling and correspondence only when the post-rename stat still identifies the
-reviewed old target version. The recorder repeats that version check
-defensively. It transfers zero bytes, preserves file identity and metadata,
-creates no trash entry, and never recases parent directories.
+spelling and correspondence only when the post-rename stat remains the same
+admitted file version. The recorder checks the same version facts against the
+reviewed target and records actual resulting metadata. It transfers zero bytes,
+preserves file identity, makes no explicit metadata write, creates no trash entry,
+and never recases parent directories.
 
 ### Move
 
@@ -372,10 +539,10 @@ Flush pending recorder state, then revalidate the reviewed source-tree subject,
 old target, and new destination; refuse occupancy; and perform a same-volume
 non-replacing atomic rename whose
 primitive itself fails if the destination appeared. After best-effort
-parent-directory flushes, stat the result and require it to remain the reviewed
-old target version before recording correspondence. The recorder repeats that
-version check defensively; it does not replace it with exact comparison against
-source metadata that planning intentionally treats as equal within target
+parent-directory flushes, stat the result and require it to remain the same
+admitted file version before recording correspondence. The recorder checks
+the same version facts against the reviewed target and records actual resulting
+metadata; it does not compare exactly against source metadata within target
 timestamp granularity. A vanished or drifted source subject, or a vanished or
 swapped old target, yields a typed failed outcome and must not create a stale
 mapping claim.
@@ -390,6 +557,10 @@ already-completed retry needs no second pre-mutation flush. One plan
 operation may have internal prepare/publish/trash stages, but only one
 final outcome and ledger transition. A crash after any internal stage may leave
 both old and new versions, never neither, and leaves no completed mapping claim.
+Each pre-effect old-target check compares the original reviewed facts and
+retains its full admitted stat as the old/trash recovery witness. Committed
+trash retries and settlement compare its version facts; metadata preservation
+remains a separate obligation.
 
 ### Mkdir
 
@@ -418,7 +589,7 @@ before deletion, after flushing prior recorder evidence, and use the strongest
 available handle-conditional delete.
 Only a dependency-complete `directory_cleanup` delete may ignore mtime and link
 count churn caused by removing its own planned children; it still requires exact
-kind, size, attributes, and creation time. A stable identity binds exactly when
+kind, size and managed attributes. A stable identity binds exactly when
 the reviewed scan supplied one; absent identity is absent evidence, not a veto.
 Directories must be empty at deletion time and `RemoveDirectory` enforces that
 condition atomically. Never recursively delete an unplanned subtree.
@@ -426,8 +597,10 @@ condition atomically. Never recursively delete an unplanned subtree.
 ### No-op
 
 Perform no user-data mutation. Any correspondence/last-seen recording is
-conditional on both sides still matching the plan snapshot, including identity;
+conditional on both sides still matching the planner facts, including identity;
 otherwise record a stale/skipped outcome rather than refreshing false evidence.
+Accepted live observations retain their full metadata and link counts in the
+recorder payload.
 
 ## Cancellation, Pause, And Failure
 
@@ -587,6 +760,11 @@ published success evidence. A compact direct policy matrix owns those reduction
 axes while operation tests retain filesystem-probe and call-timing coverage.
 
 ## Settlement Stability Gate
+
+The completed [executor simplification run](M1_PLAN.md#executor-simplification-and-throughput--2026-09-29)
+used an explicit exception for its declared trace re-pins: each shipped in the
+same atomic commit as its cause, with per-row dispositions and a restarted
+three-run gate. That closed exception does not authorize future re-pins.
 
 Settlement refactoring is blocked on an independent retained oracle, not only
 on differential parity with the current implementation. Its scenario manifest
@@ -837,7 +1015,10 @@ The snapshot contains:
   copy; and
 - `reserved_bytes`: the reservation remaining after worker cleanup. A completed
   or aborted copy must return this to zero; a nonzero value is a pipeline
-  accounting defect.
+  accounting defect; and
+- `write_mode` and `fallback_reason`: `direct` or `buffered`, with a fixed
+  `remote`, `unknown_geometry`, or `open_error` reason when direct selection
+  falls back before streaming.
 
 These metrics describe pipeline backpressure, not user-facing throughput, ETA,
 or durable run telemetry. They are neither emitted as progress events nor

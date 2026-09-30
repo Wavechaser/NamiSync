@@ -863,6 +863,15 @@ def _run_executor_command(args: argparse.Namespace) -> int:
                     "recording": run.execution_set.recording.value,
                     "diagnostics": not args.no_metrics,
                     "pipeline": pipeline,
+                    "root_admission": [
+                        {
+                            "role": diagnostic.role,
+                            "logical_root": diagnostic.logical_root,
+                            "held": diagnostic.held,
+                            "fallback_reason": diagnostic.fallback_reason,
+                        }
+                        for diagnostic in run.root_diagnostics
+                    ],
                 }
                 readback = None
                 if args.verify_readback:
@@ -878,6 +887,15 @@ def _run_executor_command(args: argparse.Namespace) -> int:
                 )
                 if not args.no_metrics:
                     _print_executor_diagnostics(run.execute_seconds, pipeline)
+                    if run.root_diagnostics:
+                        print(
+                            "  roots: " + "; ".join(
+                                f"{diagnostic.role}=held"
+                                if diagnostic.held
+                                else f"{diagnostic.role}=fallback ({diagnostic.fallback_reason})"
+                                for diagnostic in run.root_diagnostics
+                            )
+                        )
                 if readback is not None:
                     print(
                         f"[{iteration}/{args.repeat}] readback: "

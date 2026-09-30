@@ -551,6 +551,7 @@ unrealized unless an entry says otherwise.
 - **User-Facing Execution Retry**. Retry a complete execution, an executor failure, or a reviewed safe subset.
 - **Terminal Verification Retry**. Retry terminal verification, including a standalone verification and a request to verify remaining files.
 - **User Session Cleanup**. Let users request cleanup of NamiSync-owned session temporary files and trash.
+- **Batched Small-File Durability**. Flush a directory once for a group of published small files, then record the group, keeping durability before recording.
 - **Richer I/O Failure Types**. Expose more specific typed filesystem I/O causes than the current generic `IO_ERROR` classification.
 - **Native Fluent Overlay Scrollbars**. Replace the CSS approximation through a coordinated WebView2/pywebview Windows startup integration.
 - **Verify-Only Batches**. Compose batches of standalone verification directories, beyond the current source/target pair runner.

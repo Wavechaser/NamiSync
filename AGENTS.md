@@ -25,9 +25,17 @@ with matching tests and documentation:
   modules meet; `dispatcher` is domain-blind; and `interfaces` adapt workflows
   and sessions. Dependencies follow the import law in `ARCHITECTURE.md`; UI code
   does not decide sync behavior or reach around workflows.
-- `RootAuthority` is point-of-use evidence, never lasting authorization. Consumers
-  re-probe under their own admission/outcome policies. Shared core code probes
-  and classifies; it does not cache freshness, persist bindings or decide policy.
+- `RootAuthority` is reviewed evidence, never lasting authorization. Consumers
+  admit under their own policies. A local root held open with directory access
+  and no delete sharing may replace repeated root admission only after full
+  admission inside that invocation-owned hold and a normalized DOS final path
+  matching the logical root exactly except drive-letter case. Before each access
+  that reuses admission, query the held handle's current attributes and refuse
+  reparse or placeholder state; a failed query cannot authorize access. Release it on
+  pause or exit. Remote,
+  unholdable or uncorroborated roots retain per-access admission, and descendant
+  guards remain. Shared core code probes, holds and classifies; it does not persist
+  bindings or decide consumer policy.
 - Bound complete external requests before constructing interface/presentation
   values. All external adapters follow [BRIDGE.md](docs/BRIDGE.md)'s ingress
   contract, including its equal-or-stricter bound for future adapters.
@@ -55,7 +63,8 @@ Use the relevant routes below, not a mandatory full-document reading sequence:
   import law and contract-to-source locator. Exact shared shapes are source-owned
   under core; prefer explicit dataclasses and typed functions.
 - Safety, bugfix boundaries, or quantitative claims: [DEFENSE.md](docs/DEFENSE.md), 
-  including §7 for evidence authority. Diagnostics, targets and drift guards are not
+  including §2.5 for proportional defense and §7 for evidence authority. New
+  defenses need a demonstrably plausible trigger. Diagnostics, targets and drift guards are not
   acceptance merely because they were measured. Classify consequence and enforceability
   before choosing the lowest sufficient tier; keep observations separate from
   contracts/validators. Component docs own their criteria; PERFORMANCE owns

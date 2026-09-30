@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from contextlib import contextmanager
+from contextvars import copy_context
+import ctypes
 from dataclasses import FrozenInstanceError, fields, replace
 from datetime import datetime, timezone
 import os
 import stat as stat_module
+import struct
 from pathlib import Path, PureWindowsPath
 import inspect
 from types import MappingProxyType, SimpleNamespace
@@ -15,6 +19,7 @@ from unittest.mock import patch
 import pytest
 
 import namisync.core.review as review_module
+import namisync.core.root_authority as root_authority_module
 import namisync.modules.preflight as preflight_module
 
 from namisync.core.evidence import Outcome
@@ -71,6 +76,7 @@ from namisync.core.root_authority import (
 from namisync.core.scalars import MAX_SIGNED_64, ScalarDomainError
 from namisync.modules.planner import plan
 from namisync.modules.preflight import LocalObservationFileSystem, observe, preflight
+from tests._executor_fixtures import _create_directory_reparse
 
 
 NOW = datetime(2026, 7, 18, tzinfo=timezone.utc)
@@ -245,6 +251,444 @@ def _local_authority(path: Path) -> RootAuthority:
         observed.evidence.device_id,
         observed.volume_id,
     )
+
+
+def _local_review(tmp_path: Path) -> ExecutionReview:
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+    source.mkdir()
+    target.mkdir()
+    (source / "copy.bin").write_bytes(b"abcdefghij")
+    source_authority = _local_authority(source)
+    target_authority = _local_authority(target)
+    actual = LocalObservationFileSystem().stat(
+        source_authority, "copy.bin", PROFILE
+    ).stat
+    assert actual is not None
+    review = _xset()
+    native_plan = replace(
+        review.plan,
+        source_root=Root(str(source), "source"),
+        target_root=Root(str(target), "target"),
+        source_volume_id=source_authority.expected_volume_id,
+        target_volume_id=target_authority.expected_volume_id,
+        source_volume_evidence=VolumeEvidence(
+            device_id=source_authority.reviewed_anchor
+        ),
+        target_volume_evidence=VolumeEvidence(
+            device_id=target_authority.reviewed_anchor
+        ),
+        operations=tuple(
+            replace(operation, source_expected=actual)
+            for operation in review.plan.operations
+        ),
+    )
+    return replace(review, plan=native_plan)
+
+
+@pytest.mark.skipif(os.name != "nt", reason="native Windows root holds")
+def test_observe_holds_roots_preserves_probes_and_releases(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    review = _local_review(tmp_path)
+    roots = tuple(
+        Path(root.path) for root in (review.plan.source_root, review.plan.target_root)
+    )
+    admissions: list[str] = []
+    held_guards: list[str] = []
+    resolves: list[str] = []
+    leaf_stats: list[str] = []
+    parent_volume_probes: list[str] = []
+    real_admit = preflight_module.admit_root
+    real_guard = root_authority_module.RootHold.require_ordinary
+    real_resolve = preflight_module._resolved_logical_path
+    real_stat = preflight_module.os.stat
+    real_volume = preflight_module.observe_native_volume
+
+    def admit(authority):
+        admissions.append(authority.logical_root)
+        return real_admit(authority)
+
+    def guard(hold):
+        held_guards.append(hold._authority.logical_root)
+        return real_guard(hold)
+
+    def resolve(path, *, strict):
+        resolves.append(str(path))
+        return real_resolve(path, strict=strict)
+
+    def stat(path, *args, **kwargs):
+        if kwargs.get("follow_symlinks") is False:
+            leaf_stats.append(str(path))
+        return real_stat(path, *args, **kwargs)
+
+    def volume(path):
+        parent_volume_probes.append(str(path))
+        return real_volume(path)
+
+    class HeldFileSystem(LocalObservationFileSystem):
+        checked = False
+
+        def stat(self, authority, rel_path, profile):
+            if not self.checked:
+                self.checked = True
+                for root in roots:
+                    with pytest.raises(OSError) as refused:
+                        root.rename(root.with_name(root.name + "-moved"))
+                    assert refused.value.winerror == 32
+                    child = root / "allowed-child"
+                    child.mkdir()
+                    child.rmdir()
+            return super().stat(authority, rel_path, profile)
+
+        def now_utc(self):
+            return NOW
+
+    monkeypatch.setattr(preflight_module, "admit_root", admit)
+    monkeypatch.setattr(root_authority_module.RootHold, "require_ordinary", guard)
+    monkeypatch.setattr(preflight_module, "_resolved_logical_path", resolve)
+    monkeypatch.setattr(preflight_module.os, "stat", stat)
+    monkeypatch.setattr(preflight_module, "observe_native_volume", volume)
+    world = observe(review, HeldFileSystem())
+    assert admissions == [str(root) for root in roots]
+    assert held_guards.count(str(roots[0])) == 1
+    assert held_guards.count(str(roots[1])) == 3
+    assert preflight(review, world).ok
+    for root in roots:
+        assert resolves.count(str(root)) >= 2
+        assert str(root / "copy.bin") in resolves
+    assert to_extended_length_path(str(roots[0] / "copy.bin")) in leaf_stats
+    assert str(roots[1]) in parent_volume_probes
+    for root in roots:
+        moved = root.with_name(root.name + "-released")
+        root.rename(moved)
+        moved.rename(root)
+
+
+@pytest.mark.skipif(os.name != "nt", reason="native Windows root holds")
+@pytest.mark.parametrize("swap_target", (False, True))
+def test_observe_mixed_hold_fallback_preserves_admission_and_refusal(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    swap_target: bool,
+) -> None:
+    review = _local_review(tmp_path)
+    source = Path(review.plan.source_root.path)
+    target = Path(review.plan.target_root.path)
+    moved = target.with_name("target-moved")
+    admissions: list[str] = []
+    real_hold = preflight_module.hold_root
+    real_admit = preflight_module.admit_root
+
+    @contextmanager
+    def mixed_hold(authority):
+        if authority.logical_root == str(target):
+            yield SimpleNamespace(confirm=lambda: False)
+        else:
+            with real_hold(authority) as hold:
+                yield hold
+
+    def admit(authority):
+        admissions.append(authority.logical_root)
+        return real_admit(authority)
+
+    class MixedFileSystem(LocalObservationFileSystem):
+        def stat(self, authority, rel_path, profile):
+            if swap_target and authority.logical_root == str(target):
+                target.rename(moved)
+                assert moved.is_dir() and not target.exists()
+            return super().stat(authority, rel_path, profile)
+
+    monkeypatch.setattr(preflight_module, "hold_root", mixed_hold)
+    monkeypatch.setattr(preflight_module, "admit_root", admit)
+    world = observe(review, MixedFileSystem())
+    assert admissions.count(str(source)) == 1
+    assert admissions.count(str(target)) == (2 if swap_target else 4)
+    if swap_target:
+        assert RefusalCode.ROOT_UNAVAILABLE in _codes(review, world)
+        moved.rename(target)
+    else:
+        assert preflight(review, world).ok
+    released = source.with_name("source-released")
+    source.rename(released)
+    released.rename(source)
+
+
+@pytest.mark.skipif(os.name != "nt", reason="native Windows root holds")
+def test_observe_nested_and_later_scopes_keep_adapter_isolation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    review = _local_review(tmp_path)
+    source = Path(review.plan.source_root.path)
+    admissions: list[str] = []
+    real_admit = preflight_module.admit_root
+
+    def admit(authority):
+        admissions.append(authority.logical_root)
+        return real_admit(authority)
+
+    class NestedFileSystem(LocalObservationFileSystem):
+        nested = False
+
+        def stat(self, authority, rel_path, profile):
+            if not self.nested:
+                self.nested = True
+                assert preflight(review, observe(review, self)).ok
+                with pytest.raises(OSError) as refused:
+                    source.rename(source.with_name("source-moved"))
+                assert refused.value.winerror == 32
+                other = LocalObservationFileSystem()
+                assert other.observe_root(authority).error is None
+                other.free_space(authority)
+            return super().stat(authority, rel_path, profile)
+
+    monkeypatch.setattr(preflight_module, "admit_root", admit)
+    filesystem = NestedFileSystem()
+    assert preflight(review, observe(review, filesystem)).ok
+    assert len(admissions) == 6  # two roots in each scope plus two other-adapter calls
+    assert preflight(review, observe(review, filesystem)).ok
+    assert len(admissions) == 8
+    # Direct calls on the reused adapter outside observe keep per-access admission.
+    authority = _local_authority(source)
+    filesystem.observe_root(authority)
+    filesystem.free_space(authority)
+    assert len(admissions) == 10
+    released = source.with_name("source-released")
+    source.rename(released)
+    released.rename(source)
+
+
+@pytest.mark.skipif(os.name != "nt", reason="native Windows root holds")
+def test_copied_observation_context_cannot_acquire_holds_after_exit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    first = tmp_path / "first"
+    second = tmp_path / "second"
+    first.mkdir()
+    second.mkdir()
+    first_authority = _local_authority(first)
+    second_authority = _local_authority(second)
+    acquisitions: list[str] = []
+    admissions: list[str] = []
+    real_hold = preflight_module.hold_root
+    real_admit = preflight_module.admit_root
+
+    def hold(authority):
+        acquisitions.append(authority.logical_root)
+        return real_hold(authority)
+
+    def admit(authority):
+        admissions.append(authority.logical_root)
+        return real_admit(authority)
+
+    monkeypatch.setattr(preflight_module, "hold_root", hold)
+    monkeypatch.setattr(preflight_module, "admit_root", admit)
+    filesystem = LocalObservationFileSystem()
+    with filesystem.root_scope():
+        assert filesystem.observe_root(first_authority).error is None
+        retained_context = copy_context()
+    assert retained_context.run(filesystem.observe_root, first_authority).error is None
+    assert retained_context.run(filesystem.observe_root, second_authority).error is None
+    assert retained_context.run(filesystem.observe_root, second_authority).error is None
+    assert acquisitions == [str(first)]
+    assert admissions == [str(first), str(first), str(second), str(second)]
+    for root in (first, second):
+        moved = root.with_name(root.name + "-released")
+        root.rename(moved)
+        moved.rename(root)
+
+
+@pytest.mark.skipif(os.name != "nt", reason="native Windows root holds")
+@pytest.mark.parametrize("failure", ("stat", "clock", "world"))
+def test_observe_releases_holds_on_observation_and_world_errors(
+    tmp_path: Path,
+    failure: str,
+) -> None:
+    review = _local_review(tmp_path)
+
+    class FailingFileSystem(LocalObservationFileSystem):
+        def stat(self, authority, rel_path, profile):
+            if failure == "stat":
+                raise RuntimeError("stat callback failed")
+            return super().stat(authority, rel_path, profile)
+
+        def now_utc(self):
+            if failure == "clock":
+                raise RuntimeError("clock callback failed")
+            return NOW.replace(tzinfo=None)
+
+    with pytest.raises((RuntimeError, ValueError)):
+        observe(review, FailingFileSystem())
+    for root in (review.plan.source_root, review.plan.target_root):
+        path = Path(root.path)
+        moved = path.with_name(path.name + "-released")
+        path.rename(moved)
+        moved.rename(path)
+    assert preflight(review, observe(review, LocalObservationFileSystem())).ok
+
+
+@pytest.mark.skipif(os.name != "nt", reason="native Windows directory reparse")
+def test_held_observation_still_rejects_descendant_reparse(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "root"
+    root.mkdir()
+    inside = root / "ordinary"
+    inside.mkdir()
+    (inside / "copy.bin").write_bytes(b"payload")
+    junction = root / "junction"
+    _create_directory_reparse(junction, inside)
+    authority = _local_authority(root)
+    filesystem = LocalObservationFileSystem()
+    try:
+        with filesystem.root_scope():
+            assert filesystem.observe_root(authority).error is None
+            with pytest.raises(OSError) as refused:
+                root.rename(tmp_path / "root-moved")
+            assert refused.value.winerror == 32
+            observed = filesystem.stat(authority, r"junction\copy.bin", PROFILE)
+            assert observed.stat is None
+            assert "reparse" in observed.error
+    finally:
+        junction.rmdir()
+
+
+def _reuse_observation_root(filesystem, authority, surface):
+    if surface == "root":
+        return filesystem.observe_root(authority)
+    if surface == "subject":
+        return filesystem.stat(authority, "copy.bin", PROFILE)
+    if surface == "free-space":
+        return filesystem.free_space(authority)
+    if surface == "temp":
+        return filesystem.reclaimable_temp_bytes(authority, frozenset({""}), "current")
+    return filesystem.observe_trash(authority)
+
+
+def _assert_held_observation_refusal(filesystem, authority, surface, issue):
+    if surface == "root":
+        observed = _reuse_observation_root(filesystem, authority, surface)
+        assert observed.resolved_path is None and observed.volume_id is None
+        assert observed.error is not None and observed.authority_issue is issue
+    else:
+        with pytest.raises(RootAuthorityError) as refused:
+            _reuse_observation_root(filesystem, authority, surface)
+        assert refused.value.issue is issue
+
+
+@pytest.mark.skipif(os.name != "nt", reason="native Windows current root attributes")
+@pytest.mark.parametrize("surface", ("root", "subject"))
+@pytest.mark.parametrize("state", ("placeholder", "query-failure"))
+def test_held_observation_refuses_attribute_failure_before_later_probes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    surface: str,
+    state: str,
+) -> None:
+    authority = _local_authority(tmp_path)
+    filesystem = LocalObservationFileSystem()
+    queries: list[int] = []
+    with filesystem.root_scope():
+        assert filesystem.observe_root(authority).error is None
+        assert root_authority_module._WINDOWS is not None
+
+        def query(handle, kind, output, size):
+            queries.append(kind)
+            assert kind == 0
+            if state == "query-failure":
+                ctypes.set_last_error(5)
+                return False
+            info = ctypes.cast(output, ctypes.POINTER(root_authority_module._FileBasicInfo)).contents
+            info.FileAttributes = 0x10 | 0x400 | 0x1000
+            return True
+
+        def later_probe(*args, **kwargs):
+            raise AssertionError("unsafe held root reached a later probe or fallback")
+
+        monkeypatch.setattr(root_authority_module._WINDOWS, "get_file_information_ex", query)
+        monkeypatch.setattr(preflight_module, "admit_root", later_probe)
+        monkeypatch.setattr(preflight_module, "_resolved_logical_path", later_probe)
+        monkeypatch.setattr(preflight_module, "admit_existing_relative_chain", later_probe)
+        issue = (
+            RootAuthorityIssue.PLACEHOLDER_COMPONENT if state == "placeholder"
+            else RootAuthorityIssue.COMPONENT_UNAVAILABLE
+        )
+        _assert_held_observation_refusal(filesystem, authority, surface, issue)
+        assert queries == [0]
+
+
+@pytest.mark.skipif(os.name != "nt", reason="native NTFS in-place root conversion")
+@pytest.mark.parametrize("surface", ("root", "subject", "free-space", "temp", "trash"))
+def test_held_observation_refuses_inplace_attribute_only_junction_conversion(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    surface: str,
+) -> None:
+    root = tmp_path / "root"
+    root.mkdir()
+    sibling = tmp_path / "owned-sibling"
+    sibling.mkdir()
+    marker = sibling / "untouched.bin"
+    marker.write_bytes(b"owned sibling unchanged")
+    authority = _local_authority(root)
+    if authority.expected_volume_id.fs_type != "NTFS":
+        pytest.skip("native junction conversion witness requires NTFS")
+    filesystem = LocalObservationFileSystem()
+    ioctl = ctypes.WinDLL("kernel32", use_last_error=True).DeviceIoControl
+    ioctl.argtypes = [ctypes.c_void_p, ctypes.c_uint32, ctypes.c_void_p, ctypes.c_uint32,
+                      ctypes.c_void_p, ctypes.c_uint32, ctypes.POINTER(ctypes.c_uint32),
+                      ctypes.c_void_p]
+    ioctl.restype = ctypes.c_int
+    substitute = ("\\??\\" + str(sibling)).encode("utf-16-le")
+    printed = str(sibling).encode("utf-16-le")
+    paths = substitute + b"\0\0" + printed + b"\0\0"
+    data = struct.pack("<LHHHHHH", 0xA0000003, 8 + len(paths), 0,
+                       0, len(substitute), len(substitute) + 2, len(printed)) + paths
+    with filesystem.root_scope():
+        assert filesystem.observe_root(authority).error is None
+        invocation = preflight_module._OBSERVATION_INVOCATION.get()
+        assert invocation.roots[authority].hold.confirm()
+        assert root_authority_module._WINDOWS is not None
+        handle = root_authority_module._WINDOWS.create_file(
+            to_extended_length_path(str(root)), 0x100, 7, None, 3, 0x02200000, None
+        )
+        assert handle != root_authority_module._INVALID_HANDLE_VALUE
+        converted = False
+        try:
+            buffer = ctypes.create_string_buffer(data)
+            returned = ctypes.c_uint32()
+            converted = bool(ioctl(handle, 0x900A4, buffer, len(data), None, 0,
+                                   ctypes.byref(returned), None))
+            assert converted, ctypes.get_last_error()
+            assert root.lstat().st_file_attributes & 0x400
+
+            def later_probe(*args, **kwargs):
+                raise AssertionError("converted held root reached a later probe or fallback")
+
+            monkeypatch.setattr(preflight_module, "admit_root", later_probe)
+            monkeypatch.setattr(preflight_module, "_resolved_logical_path", later_probe)
+            monkeypatch.setattr(preflight_module, "admit_existing_relative_chain", later_probe)
+            monkeypatch.setattr(preflight_module.shutil, "disk_usage", later_probe)
+            monkeypatch.setattr(preflight_module.os, "scandir", later_probe)
+            monkeypatch.setattr(preflight_module, "observe_native_volume", later_probe)
+            _assert_held_observation_refusal(
+                filesystem, authority, surface, RootAuthorityIssue.REPARSE_COMPONENT
+            )
+            assert marker.read_bytes() == b"owned sibling unchanged"
+        finally:
+            try:
+                if converted:
+                    delete = ctypes.create_string_buffer(struct.pack("<LHH", 0xA0000003, 0, 0))
+                    returned = ctypes.c_uint32()
+                    assert ioctl(handle, 0x900AC, delete, 8, None, 0,
+                                 ctypes.byref(returned), None), ctypes.get_last_error()
+            finally:
+                root_authority_module._WINDOWS.close_handle(handle)
+        assert not root.lstat().st_file_attributes & 0x400
+    root.rename(tmp_path / "released-root")
 
 
 def _raise(error: BaseException) -> None:
@@ -1009,6 +1453,50 @@ def test_root_swap_and_clone_are_typed() -> None:
         RefusalCode.ROOT_CHANGED,
         RefusalCode.VOLUME_CLONE_AMBIGUOUS,
     } <= _codes(xset, drifted)
+
+
+@pytest.mark.parametrize("kind", (OperationKind.NOOP, OperationKind.RECASE, OperationKind.MOVE, OperationKind.MOVE_UPDATE))
+@pytest.mark.parametrize("source_subject", (True, False), ids=("source", "target"))
+@pytest.mark.parametrize("mutation", ("created", "unmanaged", "nlink", "managed"))
+def test_preflight_metadata_drift_uses_action_facts(kind, source_subject, mutation) -> None:
+    review = _xset(
+        source_files=(_file("same.bin"),),
+        target_files=(_file("same.bin", volume="DST", index=2),),
+    )
+    original = review.remaining()[0]
+    moving = kind in (OperationKind.MOVE, OperationKind.MOVE_UPDATE)
+    operation = replace(
+        original, kind=kind,
+        target_expected=None if moving else original.target_expected,
+        prior_target_rel_path="old.bin" if moving else None,
+        prior_target_expected=original.target_expected if moving else None,
+    )
+    review = replace(review, plan=replace(review.plan, operations=(operation,)))
+    world = _world(review)
+    subject = Subject(
+        review.plan.source_root.root_id if source_subject else review.plan.target_root.root_id,
+        "SAME.BIN" if source_subject or not moving else "OLD.BIN",
+    )
+    expected = world.stats[subject].stat
+    assert expected is not None
+    if mutation == "nlink":
+        changed = replace(expected, nlink=2)
+    else:
+        changed = replace(expected, metadata=replace(
+            expected.metadata,
+            created_ns=200 if mutation == "created" else expected.metadata.created_ns,
+            attributes=expected.metadata.attributes ^ (
+                0x20 if mutation == "unmanaged" else 2 if mutation == "managed" else 0
+            ),
+        ))
+    stats = dict(world.stats)
+    stats[subject] = StatObservation(changed)
+    codes = _codes(review, replace(world, stats=stats))
+    expected_codes = (
+        {RefusalCode.METADATA_CHANGED}
+        if mutation == "managed" or mutation == "nlink" and moving else set()
+    )
+    assert codes == expected_codes
 
 
 @pytest.mark.parametrize(

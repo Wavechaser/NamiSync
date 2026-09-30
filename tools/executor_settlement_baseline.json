@@ -779,7 +779,7 @@
             "counts": {
               "rename_new": 1,
               "resolve": 4,
-              "revalidate_root": 8,
+              "revalidate_root": 7,
               "stat": 3,
               "stat_path": 2
             },
@@ -892,17 +892,6 @@
                   "must_exist": false
                 },
                 "result": "$TARGET/new.bin"
-              },
-              {
-                "args": [
-                  "$SOURCE"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
               },
               {
                 "args": [
@@ -1136,8 +1125,6 @@
             "fs:resolve:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:rename_new:begin",
             "fs:rename_new:error",
             "fs:revalidate_root:begin",
@@ -1226,9 +1213,9 @@
               "create_temp": 1,
               "open_source": 1,
               "owned_temp": 1,
-              "remove_owned_temp": 2,
-              "resolve": 4,
-              "revalidate_root": 7,
+              "remove_owned_temp": 1,
+              "resolve": 3,
+              "revalidate_root": 6,
               "stat": 2
             },
             "trace": [
@@ -1322,36 +1309,6 @@
                 "call": "owned_temp",
                 "kwargs": {},
                 "result": "$TARGET/copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "resolve",
-                "kwargs": {
-                  "must_exist": false
-                },
-                "result": "$TARGET/copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET/copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "remove_owned_temp",
-                "kwargs": {},
-                "result": null
               },
               {
                 "args": [
@@ -1530,12 +1487,6 @@
             "fs:owned_temp:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
-            "fs:resolve:begin",
-            "fs:resolve:end",
-            "fs:remove_owned_temp:begin",
-            "fs:remove_owned_temp:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:open_source:begin",
             "fs:open_source:end",
             "fs:revalidate_root:begin",
@@ -1621,10 +1572,10 @@
               "open_source": 1,
               "owned_temp": 1,
               "publish_new": 1,
-              "remove_owned_temp": 2,
-              "resolve": 8,
-              "revalidate_root": 16,
-              "stat": 6,
+              "remove_owned_temp": 1,
+              "resolve": 7,
+              "revalidate_root": 13,
+              "stat": 4,
               "stat_path": 4
             },
             "trace": [
@@ -1718,36 +1669,6 @@
                 "call": "owned_temp",
                 "kwargs": {},
                 "result": "$TARGET/copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "resolve",
-                "kwargs": {
-                  "must_exist": false
-                },
-                "result": "$TARGET/copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET/copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "remove_owned_temp",
-                "kwargs": {},
-                "result": null
               },
               {
                 "args": [
@@ -1951,54 +1872,6 @@
                   "nlink": 1,
                   "size": 12
                 }
-              },
-              {
-                "args": [
-                  "$SOURCE"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
-                  "$SOURCE",
-                  "copy.bin"
-                ],
-                "call": "stat",
-                "kwargs": {},
-                "result": {
-                  "attributes": 32,
-                  "created": "time-2",
-                  "identity": "identity-1",
-                  "kind": "file",
-                  "mtime": "time-1",
-                  "nlink": 1,
-                  "size": 12
-                }
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "copy.bin"
-                ],
-                "call": "stat",
-                "kwargs": {},
-                "result": null
-              },
-              {
-                "args": [
-                  "$SOURCE"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
               },
               {
                 "args": [
@@ -2230,12 +2103,6 @@
             "fs:owned_temp:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
-            "fs:resolve:begin",
-            "fs:resolve:end",
-            "fs:remove_owned_temp:begin",
-            "fs:remove_owned_temp:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:open_source:begin",
             "fs:open_source:end",
             "fs:revalidate_root:begin",
@@ -2277,14 +2144,6 @@
             "fs:resolve:end",
             "fs:stat_path:begin",
             "fs:stat_path:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
-            "fs:stat:begin",
-            "fs:stat:end",
-            "fs:stat:begin",
-            "fs:stat:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
             "fs:publish_new:begin",
@@ -2382,10 +2241,10 @@
               "open_source": 1,
               "owned_temp": 1,
               "publish_new": 1,
-              "remove_owned_temp": 2,
-              "resolve": 9,
-              "revalidate_root": 17,
-              "stat": 8,
+              "remove_owned_temp": 1,
+              "resolve": 8,
+              "revalidate_root": 14,
+              "stat": 6,
               "stat_path": 5
             },
             "trace": [
@@ -2496,36 +2355,6 @@
                 "call": "owned_temp",
                 "kwargs": {},
                 "result": "$TARGET/renamed.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "renamed.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "resolve",
-                "kwargs": {
-                  "must_exist": false
-                },
-                "result": "$TARGET/renamed.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET/renamed.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "remove_owned_temp",
-                "kwargs": {},
-                "result": null
               },
               {
                 "args": [
@@ -2732,34 +2561,6 @@
               },
               {
                 "args": [
-                  "$SOURCE"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
-                  "$SOURCE",
-                  "renamed.bin"
-                ],
-                "call": "stat",
-                "kwargs": {},
-                "result": {
-                  "attributes": 32,
-                  "created": "time-4",
-                  "identity": "identity-2",
-                  "kind": "file",
-                  "mtime": "time-3",
-                  "nlink": 1,
-                  "size": 15
-                }
-              },
-              {
-                "args": [
                   "$TARGET",
                   "old.bin"
                 ],
@@ -2774,26 +2575,6 @@
                   "nlink": 1,
                   "size": 11
                 }
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "renamed.bin"
-                ],
-                "call": "stat",
-                "kwargs": {},
-                "result": null
-              },
-              {
-                "args": [
-                  "$SOURCE"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
               },
               {
                 "args": [
@@ -3075,12 +2856,6 @@
             "fs:owned_temp:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
-            "fs:resolve:begin",
-            "fs:resolve:end",
-            "fs:remove_owned_temp:begin",
-            "fs:remove_owned_temp:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:open_source:begin",
             "fs:open_source:end",
             "fs:revalidate_root:begin",
@@ -3123,16 +2898,8 @@
             "fs:resolve:end",
             "fs:stat_path:begin",
             "fs:stat_path:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:stat:begin",
             "fs:stat:end",
-            "fs:stat:begin",
-            "fs:stat:end",
-            "fs:stat:begin",
-            "fs:stat:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
             "fs:publish_new:begin",
@@ -3257,10 +3024,10 @@
               "finalize_temp": 1,
               "open_source": 1,
               "owned_temp": 1,
-              "remove_owned_temp": 2,
+              "remove_owned_temp": 1,
               "replace": 1,
-              "resolve": 11,
-              "revalidate_root": 23,
+              "resolve": 10,
+              "revalidate_root": 22,
               "stat": 6,
               "stat_path": 7
             },
@@ -3363,36 +3130,6 @@
                 "call": "owned_temp",
                 "kwargs": {},
                 "result": "$TARGET/update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "resolve",
-                "kwargs": {
-                  "must_exist": false
-                },
-                "result": "$TARGET/update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET/update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "remove_owned_temp",
-                "kwargs": {},
-                "result": null
               },
               {
                 "args": [
@@ -4103,12 +3840,6 @@
             "fs:owned_temp:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
-            "fs:resolve:begin",
-            "fs:resolve:end",
-            "fs:remove_owned_temp:begin",
-            "fs:remove_owned_temp:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:open_source:begin",
             "fs:open_source:end",
             "fs:revalidate_root:begin",
@@ -4289,9 +4020,9 @@
               "create_temp": 1,
               "open_source": 1,
               "owned_temp": 1,
-              "remove_owned_temp": 2,
-              "resolve": 4,
-              "revalidate_root": 7,
+              "remove_owned_temp": 1,
+              "resolve": 3,
+              "revalidate_root": 6,
               "stat": 2
             },
             "trace": [
@@ -4385,36 +4116,6 @@
                 "call": "owned_temp",
                 "kwargs": {},
                 "result": "$TARGET/copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "resolve",
-                "kwargs": {
-                  "must_exist": false
-                },
-                "result": "$TARGET/copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET/copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "remove_owned_temp",
-                "kwargs": {},
-                "result": null
               },
               {
                 "args": [
@@ -4598,12 +4299,6 @@
             "fs:owned_temp:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
-            "fs:resolve:begin",
-            "fs:resolve:end",
-            "fs:remove_owned_temp:begin",
-            "fs:remove_owned_temp:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:open_source:begin",
             "fs:open_source:end",
             "fs:revalidate_root:begin",
@@ -4704,9 +4399,9 @@
               "create_temp": 1,
               "open_source": 1,
               "owned_temp": 1,
-              "remove_owned_temp": 2,
-              "resolve": 4,
-              "revalidate_root": 7,
+              "remove_owned_temp": 1,
+              "resolve": 3,
+              "revalidate_root": 6,
               "stat": 2
             },
             "trace": [
@@ -4800,36 +4495,6 @@
                 "call": "owned_temp",
                 "kwargs": {},
                 "result": "$TARGET/copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "resolve",
-                "kwargs": {
-                  "must_exist": false
-                },
-                "result": "$TARGET/copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET/copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "remove_owned_temp",
-                "kwargs": {},
-                "result": null
               },
               {
                 "args": [
@@ -5038,12 +4703,6 @@
             "fs:owned_temp:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
-            "fs:resolve:begin",
-            "fs:resolve:end",
-            "fs:remove_owned_temp:begin",
-            "fs:remove_owned_temp:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:open_source:begin",
             "fs:open_source:end",
             "fs:revalidate_root:begin",
@@ -5160,7 +4819,7 @@
           },
           "filesystem": {
             "counts": {
-              "create_temp": 1,
+              "create_temp": 2,
               "ensure_published_metadata": 1,
               "finalize_temp": 1,
               "flush_directory": 1,
@@ -5168,9 +4827,9 @@
               "owned_temp": 1,
               "publish_new": 1,
               "remove_owned_temp": 1,
-              "resolve": 7,
-              "revalidate_root": 14,
-              "stat": 6,
+              "resolve": 8,
+              "revalidate_root": 13,
+              "stat": 4,
               "stat_path": 2
             },
             "trace": [
@@ -5267,6 +4926,58 @@
               },
               {
                 "args": [
+                  "$SOURCE"
+                ],
+                "call": "revalidate_root",
+                "kwargs": {
+                  "expected_volume": null,
+                  "trusted_anchor": null
+                },
+                "result": null
+              },
+              {
+                "args": [
+                  "$SOURCE/copy.bin"
+                ],
+                "call": "open_source",
+                "kwargs": {},
+                "result": "<stream>"
+              },
+              {
+                "args": [
+                  "$TARGET"
+                ],
+                "call": "revalidate_root",
+                "kwargs": {
+                  "expected_volume": null,
+                  "trusted_anchor": null
+                },
+                "result": null
+              },
+              {
+                "args": [
+                  "$TARGET",
+                  "copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
+                ],
+                "call": "resolve",
+                "kwargs": {
+                  "must_exist": false
+                },
+                "result": "$TARGET/copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
+              },
+              {
+                "args": [
+                  "$TARGET/copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
+                ],
+                "call": "create_temp",
+                "error": "FileExistsError",
+                "kwargs": {
+                  "allocation_size": null
+                },
+                "message": "$TARGET/copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
+              },
+              {
+                "args": [
                   "$TARGET"
                 ],
                 "call": "revalidate_root",
@@ -5294,25 +5005,6 @@
                 "call": "remove_owned_temp",
                 "kwargs": {},
                 "result": null
-              },
-              {
-                "args": [
-                  "$SOURCE"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
-                  "$SOURCE/copy.bin"
-                ],
-                "call": "open_source",
-                "kwargs": {},
-                "result": "<stream>"
               },
               {
                 "args": [
@@ -5497,54 +5189,6 @@
                   "nlink": 1,
                   "size": 12
                 }
-              },
-              {
-                "args": [
-                  "$SOURCE"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
-                  "$SOURCE",
-                  "copy.bin"
-                ],
-                "call": "stat",
-                "kwargs": {},
-                "result": {
-                  "attributes": 32,
-                  "created": "time-2",
-                  "identity": "identity-1",
-                  "kind": "file",
-                  "mtime": "time-1",
-                  "nlink": 1,
-                  "size": 12
-                }
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "copy.bin"
-                ],
-                "call": "stat",
-                "kwargs": {},
-                "result": null
-              },
-              {
-                "args": [
-                  "$SOURCE"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
               },
               {
                 "args": [
@@ -5793,14 +5437,20 @@
             "fs:owned_temp:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
+            "fs:open_source:begin",
+            "fs:open_source:end",
+            "fs:revalidate_root:begin",
+            "fs:revalidate_root:end",
+            "fs:resolve:begin",
+            "fs:resolve:end",
+            "fs:create_temp:begin",
+            "fs:create_temp:error",
+            "fs:revalidate_root:begin",
+            "fs:revalidate_root:end",
             "fs:resolve:begin",
             "fs:resolve:end",
             "fs:remove_owned_temp:begin",
             "fs:remove_owned_temp:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
-            "fs:open_source:begin",
-            "fs:open_source:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
             "fs:resolve:begin",
@@ -5840,14 +5490,6 @@
             "fs:resolve:end",
             "fs:stat_path:begin",
             "fs:stat_path:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
-            "fs:stat:begin",
-            "fs:stat:end",
-            "fs:stat:begin",
-            "fs:stat:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
             "fs:publish_new:begin",
@@ -5982,10 +5624,10 @@
               "open_source": 2,
               "owned_temp": 2,
               "publish_new": 1,
-              "remove_owned_temp": 3,
-              "resolve": 12,
-              "revalidate_root": 23,
-              "stat": 8,
+              "remove_owned_temp": 1,
+              "resolve": 10,
+              "revalidate_root": 19,
+              "stat": 6,
               "stat_path": 2
             },
             "trace": [
@@ -6079,36 +5721,6 @@
                 "call": "owned_temp",
                 "kwargs": {},
                 "result": "$TARGET/copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "resolve",
-                "kwargs": {
-                  "must_exist": false
-                },
-                "result": "$TARGET/copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET/copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "remove_owned_temp",
-                "kwargs": {},
-                "result": null
               },
               {
                 "args": [
@@ -6327,36 +5939,6 @@
               },
               {
                 "args": [
-                  "$TARGET"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "resolve",
-                "kwargs": {
-                  "must_exist": false
-                },
-                "result": "$TARGET/copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET/copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "remove_owned_temp",
-                "kwargs": {},
-                "result": null
-              },
-              {
-                "args": [
                   "$SOURCE"
                 ],
                 "call": "revalidate_root",
@@ -6557,54 +6139,6 @@
                   "nlink": 1,
                   "size": 12
                 }
-              },
-              {
-                "args": [
-                  "$SOURCE"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
-                  "$SOURCE",
-                  "copy.bin"
-                ],
-                "call": "stat",
-                "kwargs": {},
-                "result": {
-                  "attributes": 32,
-                  "created": "time-2",
-                  "identity": "identity-1",
-                  "kind": "file",
-                  "mtime": "time-1",
-                  "nlink": 1,
-                  "size": 12
-                }
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "copy.bin"
-                ],
-                "call": "stat",
-                "kwargs": {},
-                "result": null
-              },
-              {
-                "args": [
-                  "$SOURCE"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
               },
               {
                 "args": [
@@ -6860,12 +6394,6 @@
             "fs:owned_temp:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
-            "fs:resolve:begin",
-            "fs:resolve:end",
-            "fs:remove_owned_temp:begin",
-            "fs:remove_owned_temp:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:open_source:begin",
             "fs:open_source:end",
             "fs:revalidate_root:begin",
@@ -6920,12 +6448,6 @@
             "fs:owned_temp:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
-            "fs:resolve:begin",
-            "fs:resolve:end",
-            "fs:remove_owned_temp:begin",
-            "fs:remove_owned_temp:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:open_source:begin",
             "fs:open_source:end",
             "fs:revalidate_root:begin",
@@ -6967,14 +6489,6 @@
             "fs:resolve:end",
             "fs:stat_path:begin",
             "fs:stat_path:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
-            "fs:stat:begin",
-            "fs:stat:end",
-            "fs:stat:begin",
-            "fs:stat:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
             "fs:publish_new:begin",
@@ -7067,9 +6581,9 @@
               "create_temp": 1,
               "open_source": 1,
               "owned_temp": 1,
-              "remove_owned_temp": 2,
-              "resolve": 4,
-              "revalidate_root": 7,
+              "remove_owned_temp": 1,
+              "resolve": 3,
+              "revalidate_root": 6,
               "stat": 2
             },
             "trace": [
@@ -7163,36 +6677,6 @@
                 "call": "owned_temp",
                 "kwargs": {},
                 "result": "$TARGET/copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "resolve",
-                "kwargs": {
-                  "must_exist": false
-                },
-                "result": "$TARGET/copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET/copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "remove_owned_temp",
-                "kwargs": {},
-                "result": null
               },
               {
                 "args": [
@@ -7401,12 +6885,6 @@
             "fs:owned_temp:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
-            "fs:resolve:begin",
-            "fs:resolve:end",
-            "fs:remove_owned_temp:begin",
-            "fs:remove_owned_temp:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:open_source:begin",
             "fs:open_source:end",
             "fs:revalidate_root:begin",
@@ -7508,10 +6986,10 @@
               "hardlink": 1,
               "open_source": 1,
               "owned_temp": 1,
-              "remove_owned_temp": 2,
+              "remove_owned_temp": 1,
               "replace": 1,
-              "resolve": 11,
-              "revalidate_root": 25,
+              "resolve": 10,
+              "revalidate_root": 24,
               "revalidate_trash_destination": 6,
               "stat": 6,
               "stat_path": 10,
@@ -7616,36 +7094,6 @@
                 "call": "owned_temp",
                 "kwargs": {},
                 "result": "$TARGET/update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "resolve",
-                "kwargs": {
-                  "must_exist": false
-                },
-                "result": "$TARGET/update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET/update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "remove_owned_temp",
-                "kwargs": {},
-                "result": null
               },
               {
                 "args": [
@@ -8506,12 +7954,6 @@
             "fs:owned_temp:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
-            "fs:resolve:begin",
-            "fs:resolve:end",
-            "fs:remove_owned_temp:begin",
-            "fs:remove_owned_temp:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:open_source:begin",
             "fs:open_source:end",
             "fs:revalidate_root:begin",
@@ -8753,10 +8195,10 @@
               "open_source": 1,
               "owned_temp": 1,
               "publish_new": 1,
-              "remove_owned_temp": 2,
-              "resolve": 8,
-              "revalidate_root": 16,
-              "stat": 6,
+              "remove_owned_temp": 1,
+              "resolve": 7,
+              "revalidate_root": 13,
+              "stat": 4,
               "stat_path": 4
             },
             "trace": [
@@ -8850,36 +8292,6 @@
                 "call": "owned_temp",
                 "kwargs": {},
                 "result": "$TARGET/copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "resolve",
-                "kwargs": {
-                  "must_exist": false
-                },
-                "result": "$TARGET/copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET/copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "remove_owned_temp",
-                "kwargs": {},
-                "result": null
               },
               {
                 "args": [
@@ -9083,54 +8495,6 @@
                   "nlink": 1,
                   "size": 12
                 }
-              },
-              {
-                "args": [
-                  "$SOURCE"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
-                  "$SOURCE",
-                  "copy.bin"
-                ],
-                "call": "stat",
-                "kwargs": {},
-                "result": {
-                  "attributes": 32,
-                  "created": "time-2",
-                  "identity": "identity-1",
-                  "kind": "file",
-                  "mtime": "time-1",
-                  "nlink": 1,
-                  "size": 12
-                }
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "copy.bin"
-                ],
-                "call": "stat",
-                "kwargs": {},
-                "result": null
-              },
-              {
-                "args": [
-                  "$SOURCE"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
               },
               {
                 "args": [
@@ -9395,12 +8759,6 @@
             "fs:owned_temp:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
-            "fs:resolve:begin",
-            "fs:resolve:end",
-            "fs:remove_owned_temp:begin",
-            "fs:remove_owned_temp:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:open_source:begin",
             "fs:open_source:end",
             "fs:revalidate_root:begin",
@@ -9442,14 +8800,6 @@
             "fs:resolve:end",
             "fs:stat_path:begin",
             "fs:stat_path:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
-            "fs:stat:begin",
-            "fs:stat:end",
-            "fs:stat:begin",
-            "fs:stat:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
             "fs:publish_new:begin",
@@ -9552,10 +8902,10 @@
               "hardlink": 1,
               "open_source": 1,
               "owned_temp": 1,
-              "remove_owned_temp": 2,
+              "remove_owned_temp": 1,
               "replace": 1,
-              "resolve": 11,
-              "revalidate_root": 25,
+              "resolve": 10,
+              "revalidate_root": 24,
               "revalidate_trash_destination": 6,
               "stat": 6,
               "stat_path": 10,
@@ -9660,36 +9010,6 @@
                 "call": "owned_temp",
                 "kwargs": {},
                 "result": "$TARGET/update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "resolve",
-                "kwargs": {
-                  "must_exist": false
-                },
-                "result": "$TARGET/update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET/update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "remove_owned_temp",
-                "kwargs": {},
-                "result": null
               },
               {
                 "args": [
@@ -10551,12 +9871,6 @@
             "fs:owned_temp:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
-            "fs:resolve:begin",
-            "fs:resolve:end",
-            "fs:remove_owned_temp:begin",
-            "fs:remove_owned_temp:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:open_source:begin",
             "fs:open_source:end",
             "fs:revalidate_root:begin",
@@ -10784,10 +10098,10 @@
               "open_source": 1,
               "owned_temp": 1,
               "publish_new": 1,
-              "remove_owned_temp": 2,
-              "resolve": 9,
-              "revalidate_root": 17,
-              "stat": 8,
+              "remove_owned_temp": 1,
+              "resolve": 8,
+              "revalidate_root": 14,
+              "stat": 6,
               "stat_path": 5
             },
             "trace": [
@@ -10898,36 +10212,6 @@
                 "call": "owned_temp",
                 "kwargs": {},
                 "result": "$TARGET/renamed.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "renamed.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "resolve",
-                "kwargs": {
-                  "must_exist": false
-                },
-                "result": "$TARGET/renamed.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET/renamed.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "remove_owned_temp",
-                "kwargs": {},
-                "result": null
               },
               {
                 "args": [
@@ -11134,34 +10418,6 @@
               },
               {
                 "args": [
-                  "$SOURCE"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
-                  "$SOURCE",
-                  "renamed.bin"
-                ],
-                "call": "stat",
-                "kwargs": {},
-                "result": {
-                  "attributes": 32,
-                  "created": "time-4",
-                  "identity": "identity-2",
-                  "kind": "file",
-                  "mtime": "time-3",
-                  "nlink": 1,
-                  "size": 15
-                }
-              },
-              {
-                "args": [
                   "$TARGET",
                   "old.bin"
                 ],
@@ -11176,26 +10432,6 @@
                   "nlink": 1,
                   "size": 11
                 }
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "renamed.bin"
-                ],
-                "call": "stat",
-                "kwargs": {},
-                "result": null
-              },
-              {
-                "args": [
-                  "$SOURCE"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
               },
               {
                 "args": [
@@ -11511,12 +10747,6 @@
             "fs:owned_temp:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
-            "fs:resolve:begin",
-            "fs:resolve:end",
-            "fs:remove_owned_temp:begin",
-            "fs:remove_owned_temp:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:open_source:begin",
             "fs:open_source:end",
             "fs:revalidate_root:begin",
@@ -11559,16 +10789,8 @@
             "fs:resolve:end",
             "fs:stat_path:begin",
             "fs:stat_path:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:stat:begin",
             "fs:stat:end",
-            "fs:stat:begin",
-            "fs:stat:end",
-            "fs:stat:begin",
-            "fs:stat:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
             "fs:publish_new:begin",
@@ -11689,10 +10911,9 @@
               "open_source": 1,
               "owned_temp": 1,
               "publish_new": 1,
-              "remove_owned_temp": 1,
-              "resolve": 8,
-              "revalidate_root": 15,
-              "stat": 6,
+              "resolve": 7,
+              "revalidate_root": 12,
+              "stat": 4,
               "stat_path": 3
             },
             "trace": [
@@ -11786,36 +11007,6 @@
                 "call": "owned_temp",
                 "kwargs": {},
                 "result": "$TARGET/copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "resolve",
-                "kwargs": {
-                  "must_exist": false
-                },
-                "result": "$TARGET/copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET/copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "remove_owned_temp",
-                "kwargs": {},
-                "result": null
               },
               {
                 "args": [
@@ -12019,54 +11210,6 @@
                   "nlink": 1,
                   "size": 12
                 }
-              },
-              {
-                "args": [
-                  "$SOURCE"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
-                  "$SOURCE",
-                  "copy.bin"
-                ],
-                "call": "stat",
-                "kwargs": {},
-                "result": {
-                  "attributes": 32,
-                  "created": "time-2",
-                  "identity": "identity-1",
-                  "kind": "file",
-                  "mtime": "time-1",
-                  "nlink": 1,
-                  "size": 12
-                }
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "copy.bin"
-                ],
-                "call": "stat",
-                "kwargs": {},
-                "result": null
-              },
-              {
-                "args": [
-                  "$SOURCE"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
               },
               {
                 "args": [
@@ -12348,12 +11491,6 @@
             "fs:owned_temp:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
-            "fs:resolve:begin",
-            "fs:resolve:end",
-            "fs:remove_owned_temp:begin",
-            "fs:remove_owned_temp:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:open_source:begin",
             "fs:open_source:end",
             "fs:revalidate_root:begin",
@@ -12395,14 +11532,6 @@
             "fs:resolve:end",
             "fs:stat_path:begin",
             "fs:stat_path:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
-            "fs:stat:begin",
-            "fs:stat:end",
-            "fs:stat:begin",
-            "fs:stat:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
             "fs:publish_new:begin",
@@ -12505,10 +11634,9 @@
               "open_source": 1,
               "owned_temp": 1,
               "publish_new": 1,
-              "remove_owned_temp": 1,
-              "resolve": 8,
-              "revalidate_root": 15,
-              "stat": 6,
+              "resolve": 7,
+              "revalidate_root": 12,
+              "stat": 4,
               "stat_path": 3
             },
             "trace": [
@@ -12602,36 +11730,6 @@
                 "call": "owned_temp",
                 "kwargs": {},
                 "result": "$TARGET/copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "resolve",
-                "kwargs": {
-                  "must_exist": false
-                },
-                "result": "$TARGET/copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET/copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "remove_owned_temp",
-                "kwargs": {},
-                "result": null
               },
               {
                 "args": [
@@ -12835,54 +11933,6 @@
                   "nlink": 1,
                   "size": 12
                 }
-              },
-              {
-                "args": [
-                  "$SOURCE"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
-                  "$SOURCE",
-                  "copy.bin"
-                ],
-                "call": "stat",
-                "kwargs": {},
-                "result": {
-                  "attributes": 32,
-                  "created": "time-2",
-                  "identity": "identity-1",
-                  "kind": "file",
-                  "mtime": "time-1",
-                  "nlink": 1,
-                  "size": 12
-                }
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "copy.bin"
-                ],
-                "call": "stat",
-                "kwargs": {},
-                "result": null
-              },
-              {
-                "args": [
-                  "$SOURCE"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
               },
               {
                 "args": [
@@ -13156,12 +12206,6 @@
             "fs:owned_temp:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
-            "fs:resolve:begin",
-            "fs:resolve:end",
-            "fs:remove_owned_temp:begin",
-            "fs:remove_owned_temp:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:open_source:begin",
             "fs:open_source:end",
             "fs:revalidate_root:begin",
@@ -13203,14 +12247,6 @@
             "fs:resolve:end",
             "fs:stat_path:begin",
             "fs:stat_path:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
-            "fs:stat:begin",
-            "fs:stat:end",
-            "fs:stat:begin",
-            "fs:stat:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
             "fs:publish_new:begin",
@@ -13303,10 +12339,9 @@
               "open_source": 1,
               "owned_temp": 1,
               "publish_new": 1,
-              "remove_owned_temp": 1,
-              "resolve": 8,
-              "revalidate_root": 15,
-              "stat": 6,
+              "resolve": 7,
+              "revalidate_root": 12,
+              "stat": 4,
               "stat_path": 3
             },
             "trace": [
@@ -13400,36 +12435,6 @@
                 "call": "owned_temp",
                 "kwargs": {},
                 "result": "$TARGET/copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "resolve",
-                "kwargs": {
-                  "must_exist": false
-                },
-                "result": "$TARGET/copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET/copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "remove_owned_temp",
-                "kwargs": {},
-                "result": null
               },
               {
                 "args": [
@@ -13633,54 +12638,6 @@
                   "nlink": 1,
                   "size": 12
                 }
-              },
-              {
-                "args": [
-                  "$SOURCE"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
-                  "$SOURCE",
-                  "copy.bin"
-                ],
-                "call": "stat",
-                "kwargs": {},
-                "result": {
-                  "attributes": 32,
-                  "created": "time-2",
-                  "identity": "identity-1",
-                  "kind": "file",
-                  "mtime": "time-1",
-                  "nlink": 1,
-                  "size": 12
-                }
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "copy.bin"
-                ],
-                "call": "stat",
-                "kwargs": {},
-                "result": null
-              },
-              {
-                "args": [
-                  "$SOURCE"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
               },
               {
                 "args": [
@@ -13958,12 +12915,6 @@
             "fs:owned_temp:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
-            "fs:resolve:begin",
-            "fs:resolve:end",
-            "fs:remove_owned_temp:begin",
-            "fs:remove_owned_temp:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:open_source:begin",
             "fs:open_source:end",
             "fs:revalidate_root:begin",
@@ -14005,14 +12956,6 @@
             "fs:resolve:end",
             "fs:stat_path:begin",
             "fs:stat_path:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
-            "fs:stat:begin",
-            "fs:stat:end",
-            "fs:stat:begin",
-            "fs:stat:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
             "fs:publish_new:begin",
@@ -14114,9 +13057,9 @@
               "create_temp": 1,
               "open_source": 1,
               "owned_temp": 1,
-              "remove_owned_temp": 2,
-              "resolve": 4,
-              "revalidate_root": 7,
+              "remove_owned_temp": 1,
+              "resolve": 3,
+              "revalidate_root": 6,
               "stat": 2
             },
             "trace": [
@@ -14210,36 +13153,6 @@
                 "call": "owned_temp",
                 "kwargs": {},
                 "result": "$TARGET/copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "resolve",
-                "kwargs": {
-                  "must_exist": false
-                },
-                "result": "$TARGET/copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET/copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "remove_owned_temp",
-                "kwargs": {},
-                "result": null
               },
               {
                 "args": [
@@ -14447,12 +13360,6 @@
             "fs:owned_temp:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
-            "fs:resolve:begin",
-            "fs:resolve:end",
-            "fs:remove_owned_temp:begin",
-            "fs:remove_owned_temp:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:open_source:begin",
             "fs:open_source:end",
             "fs:revalidate_root:begin",
@@ -14537,7 +13444,7 @@
             "counts": {
               "rename_new": 1,
               "resolve": 4,
-              "revalidate_root": 8,
+              "revalidate_root": 7,
               "stat": 3,
               "stat_path": 2
             },
@@ -14650,17 +13557,6 @@
                   "must_exist": false
                 },
                 "result": "$TARGET/new.bin"
-              },
-              {
-                "args": [
-                  "$SOURCE"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
               },
               {
                 "args": [
@@ -14904,8 +13800,6 @@
             "fs:resolve:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:rename_new:begin",
             "fs:rename_new:error",
             "failure-policy:00000000000000000000000000000001:attempt:1:decision:continue",
@@ -15007,12 +13901,11 @@
               "open_source": 1,
               "owned_temp": 1,
               "publish_new": 1,
-              "remove_owned_temp": 1,
               "rename_new": 1,
-              "resolve": 13,
-              "revalidate_root": 22,
+              "resolve": 12,
+              "revalidate_root": 19,
               "revalidate_trash_destination": 3,
-              "stat": 10,
+              "stat": 8,
               "stat_path": 7,
               "trash_destination": 1
             },
@@ -15124,36 +14017,6 @@
                 "call": "owned_temp",
                 "kwargs": {},
                 "result": "$TARGET/renamed.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "renamed.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "resolve",
-                "kwargs": {
-                  "must_exist": false
-                },
-                "result": "$TARGET/renamed.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET/renamed.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "remove_owned_temp",
-                "kwargs": {},
-                "result": null
               },
               {
                 "args": [
@@ -15360,34 +14223,6 @@
               },
               {
                 "args": [
-                  "$SOURCE"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
-                  "$SOURCE",
-                  "renamed.bin"
-                ],
-                "call": "stat",
-                "kwargs": {},
-                "result": {
-                  "attributes": 32,
-                  "created": "time-4",
-                  "identity": "identity-2",
-                  "kind": "file",
-                  "mtime": "time-3",
-                  "nlink": 1,
-                  "size": 15
-                }
-              },
-              {
-                "args": [
                   "$TARGET",
                   "old.bin"
                 ],
@@ -15402,26 +14237,6 @@
                   "nlink": 1,
                   "size": 11
                 }
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "renamed.bin"
-                ],
-                "call": "stat",
-                "kwargs": {},
-                "result": null
-              },
-              {
-                "args": [
-                  "$SOURCE"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
               },
               {
                 "args": [
@@ -15975,12 +14790,6 @@
             "fs:owned_temp:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
-            "fs:resolve:begin",
-            "fs:resolve:end",
-            "fs:remove_owned_temp:begin",
-            "fs:remove_owned_temp:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:open_source:begin",
             "fs:open_source:end",
             "fs:revalidate_root:begin",
@@ -16023,16 +14832,8 @@
             "fs:resolve:end",
             "fs:stat_path:begin",
             "fs:stat_path:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:stat:begin",
             "fs:stat:end",
-            "fs:stat:begin",
-            "fs:stat:end",
-            "fs:stat:begin",
-            "fs:stat:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
             "fs:publish_new:begin",
@@ -16195,7 +14996,7 @@
             "counts": {
               "rename_new": 1,
               "resolve": 4,
-              "revalidate_root": 8,
+              "revalidate_root": 7,
               "stat": 3,
               "stat_path": 2
             },
@@ -16308,17 +15109,6 @@
                   "must_exist": false
                 },
                 "result": "$TARGET/new.bin"
-              },
-              {
-                "args": [
-                  "$SOURCE"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
               },
               {
                 "args": [
@@ -16581,8 +15371,6 @@
             "fs:resolve:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:rename_new:begin",
             "fs:rename_new:error",
             "failure-policy:00000000000000000000000000000001:attempt:1:decision:continue",
@@ -16669,7 +15457,7 @@
             "counts": {
               "rename_new": 1,
               "resolve": 2,
-              "revalidate_root": 6,
+              "revalidate_root": 5,
               "stat": 2
             },
             "trace": [
@@ -16772,17 +15560,6 @@
                   "must_exist": false
                 },
                 "result": "$TARGET/KEEP.txt"
-              },
-              {
-                "args": [
-                  "$SOURCE"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
               },
               {
                 "args": [
@@ -16975,8 +15752,6 @@
             "fs:resolve:end",
             "fs:resolve:begin",
             "fs:resolve:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
             "fs:rename_new:begin",
@@ -18217,7 +16992,7 @@
               "flush_directory": 1,
               "rename_new": 1,
               "resolve": 4,
-              "revalidate_root": 8,
+              "revalidate_root": 7,
               "stat": 3,
               "stat_path": 2
             },
@@ -18330,17 +17105,6 @@
                   "must_exist": false
                 },
                 "result": "$TARGET/new.bin"
-              },
-              {
-                "args": [
-                  "$SOURCE"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
               },
               {
                 "args": [
@@ -18608,8 +17372,6 @@
             "fs:resolve:end",
             "fs:resolve:begin",
             "fs:resolve:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
             "fs:rename_new:begin",
@@ -20141,9 +18903,9 @@
               "create_temp": 1,
               "open_source": 1,
               "owned_temp": 1,
-              "remove_owned_temp": 2,
-              "resolve": 4,
-              "revalidate_root": 7,
+              "remove_owned_temp": 1,
+              "resolve": 3,
+              "revalidate_root": 6,
               "stat": 2
             },
             "trace": [
@@ -20237,36 +18999,6 @@
                 "call": "owned_temp",
                 "kwargs": {},
                 "result": "$TARGET/failing.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "failing.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "resolve",
-                "kwargs": {
-                  "must_exist": false
-                },
-                "result": "$TARGET/failing.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET/failing.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "remove_owned_temp",
-                "kwargs": {},
-                "result": null
               },
               {
                 "args": [
@@ -20578,12 +19310,6 @@
             "fs:owned_temp:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
-            "fs:resolve:begin",
-            "fs:resolve:end",
-            "fs:remove_owned_temp:begin",
-            "fs:remove_owned_temp:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:open_source:begin",
             "fs:open_source:end",
             "fs:revalidate_root:begin",
@@ -20705,10 +19431,10 @@
               "finalize_temp": 1,
               "open_source": 1,
               "owned_temp": 1,
-              "remove_owned_temp": 2,
+              "remove_owned_temp": 1,
               "replace": 1,
-              "resolve": 11,
-              "revalidate_root": 23,
+              "resolve": 10,
+              "revalidate_root": 22,
               "stat": 6,
               "stat_path": 7
             },
@@ -20811,36 +19537,6 @@
                 "call": "owned_temp",
                 "kwargs": {},
                 "result": "$TARGET/update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "resolve",
-                "kwargs": {
-                  "must_exist": false
-                },
-                "result": "$TARGET/update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET/update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "remove_owned_temp",
-                "kwargs": {},
-                "result": null
               },
               {
                 "args": [
@@ -21581,12 +20277,6 @@
             "fs:owned_temp:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
-            "fs:resolve:begin",
-            "fs:resolve:end",
-            "fs:remove_owned_temp:begin",
-            "fs:remove_owned_temp:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:open_source:begin",
             "fs:open_source:end",
             "fs:revalidate_root:begin",
@@ -21770,10 +20460,10 @@
               "finalize_temp": 1,
               "open_source": 1,
               "owned_temp": 1,
-              "remove_owned_temp": 2,
+              "remove_owned_temp": 1,
               "replace": 1,
-              "resolve": 10,
-              "revalidate_root": 22,
+              "resolve": 9,
+              "revalidate_root": 21,
               "stat": 6,
               "stat_path": 6
             },
@@ -21876,36 +20566,6 @@
                 "call": "owned_temp",
                 "kwargs": {},
                 "result": "$TARGET/update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "resolve",
-                "kwargs": {
-                  "must_exist": false
-                },
-                "result": "$TARGET/update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET/update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "remove_owned_temp",
-                "kwargs": {},
-                "result": null
               },
               {
                 "args": [
@@ -22578,12 +21238,6 @@
             "fs:owned_temp:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
-            "fs:resolve:begin",
-            "fs:resolve:end",
-            "fs:remove_owned_temp:begin",
-            "fs:remove_owned_temp:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:open_source:begin",
             "fs:open_source:end",
             "fs:revalidate_root:begin",
@@ -22760,10 +21414,10 @@
               "finalize_temp": 1,
               "open_source": 1,
               "owned_temp": 1,
-              "remove_owned_temp": 2,
+              "remove_owned_temp": 1,
               "replace": 1,
-              "resolve": 11,
-              "revalidate_root": 23,
+              "resolve": 10,
+              "revalidate_root": 22,
               "stat": 6,
               "stat_path": 7
             },
@@ -22866,36 +21520,6 @@
                 "call": "owned_temp",
                 "kwargs": {},
                 "result": "$TARGET/update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "resolve",
-                "kwargs": {
-                  "must_exist": false
-                },
-                "result": "$TARGET/update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET/update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "remove_owned_temp",
-                "kwargs": {},
-                "result": null
               },
               {
                 "args": [
@@ -23615,12 +22239,6 @@
             "fs:owned_temp:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
-            "fs:resolve:begin",
-            "fs:resolve:end",
-            "fs:remove_owned_temp:begin",
-            "fs:remove_owned_temp:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:open_source:begin",
             "fs:open_source:end",
             "fs:revalidate_root:begin",
@@ -23805,10 +22423,10 @@
               "finalize_temp": 1,
               "open_source": 1,
               "owned_temp": 1,
-              "remove_owned_temp": 2,
+              "remove_owned_temp": 1,
               "replace": 1,
-              "resolve": 11,
-              "revalidate_root": 23,
+              "resolve": 10,
+              "revalidate_root": 22,
               "stat": 6,
               "stat_path": 7
             },
@@ -23911,36 +22529,6 @@
                 "call": "owned_temp",
                 "kwargs": {},
                 "result": "$TARGET/update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "resolve",
-                "kwargs": {
-                  "must_exist": false
-                },
-                "result": "$TARGET/update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET/update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "remove_owned_temp",
-                "kwargs": {},
-                "result": null
               },
               {
                 "args": [
@@ -24670,12 +23258,6 @@
             "fs:resolve:end",
             "fs:owned_temp:begin",
             "fs:owned_temp:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
-            "fs:resolve:begin",
-            "fs:resolve:end",
-            "fs:remove_owned_temp:begin",
-            "fs:remove_owned_temp:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
             "fs:open_source:begin",
@@ -28226,9 +26808,9 @@
               "create_temp": 1,
               "open_source": 1,
               "owned_temp": 1,
-              "remove_owned_temp": 2,
-              "resolve": 4,
-              "revalidate_root": 7,
+              "remove_owned_temp": 1,
+              "resolve": 3,
+              "revalidate_root": 6,
               "stat": 2
             },
             "trace": [
@@ -28322,36 +26904,6 @@
                 "call": "owned_temp",
                 "kwargs": {},
                 "result": "$TARGET/copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "resolve",
-                "kwargs": {
-                  "must_exist": false
-                },
-                "result": "$TARGET/copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET/copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "remove_owned_temp",
-                "kwargs": {},
-                "result": null
               },
               {
                 "args": [
@@ -28519,12 +27071,6 @@
             "fs:owned_temp:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
-            "fs:resolve:begin",
-            "fs:resolve:end",
-            "fs:remove_owned_temp:begin",
-            "fs:remove_owned_temp:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:open_source:begin",
             "fs:open_source:end",
             "fs:revalidate_root:begin",
@@ -28635,10 +27181,9 @@
               "open_source": 1,
               "owned_temp": 1,
               "publish_new": 1,
-              "remove_owned_temp": 1,
-              "resolve": 7,
-              "revalidate_root": 14,
-              "stat": 6,
+              "resolve": 6,
+              "revalidate_root": 11,
+              "stat": 4,
               "stat_path": 2
             },
             "trace": [
@@ -28732,36 +27277,6 @@
                 "call": "owned_temp",
                 "kwargs": {},
                 "result": "$TARGET/copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "resolve",
-                "kwargs": {
-                  "must_exist": false
-                },
-                "result": "$TARGET/copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET/copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "remove_owned_temp",
-                "kwargs": {},
-                "result": null
               },
               {
                 "args": [
@@ -28965,54 +27480,6 @@
                   "nlink": 1,
                   "size": 12
                 }
-              },
-              {
-                "args": [
-                  "$SOURCE"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
-                  "$SOURCE",
-                  "copy.bin"
-                ],
-                "call": "stat",
-                "kwargs": {},
-                "result": {
-                  "attributes": 32,
-                  "created": "time-2",
-                  "identity": "identity-1",
-                  "kind": "file",
-                  "mtime": "time-1",
-                  "nlink": 1,
-                  "size": 12
-                }
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "copy.bin"
-                ],
-                "call": "stat",
-                "kwargs": {},
-                "result": null
-              },
-              {
-                "args": [
-                  "$SOURCE"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
               },
               {
                 "args": [
@@ -29267,12 +27734,6 @@
             "fs:owned_temp:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
-            "fs:resolve:begin",
-            "fs:resolve:end",
-            "fs:remove_owned_temp:begin",
-            "fs:remove_owned_temp:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:open_source:begin",
             "fs:open_source:end",
             "fs:revalidate_root:begin",
@@ -29314,14 +27775,6 @@
             "fs:resolve:end",
             "fs:stat_path:begin",
             "fs:stat_path:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
-            "fs:stat:begin",
-            "fs:stat:end",
-            "fs:stat:begin",
-            "fs:stat:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
             "fs:publish_new:begin",
@@ -29404,7 +27857,7 @@
               "flush_directory": 1,
               "rename_new": 1,
               "resolve": 3,
-              "revalidate_root": 7,
+              "revalidate_root": 6,
               "stat": 3,
               "stat_path": 1
             },
@@ -29517,17 +27970,6 @@
                   "must_exist": false
                 },
                 "result": "$TARGET/new.bin"
-              },
-              {
-                "args": [
-                  "$SOURCE"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
               },
               {
                 "args": [
@@ -29764,8 +28206,6 @@
             "fs:resolve:end",
             "fs:resolve:begin",
             "fs:resolve:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
             "fs:rename_new:begin",
@@ -30122,10 +28562,9 @@
               "open_source": 1,
               "owned_temp": 1,
               "publish_new": 1,
-              "remove_owned_temp": 1,
-              "resolve": 7,
-              "revalidate_root": 14,
-              "stat": 6,
+              "resolve": 6,
+              "revalidate_root": 11,
+              "stat": 4,
               "stat_path": 2
             },
             "trace": [
@@ -30219,36 +28658,6 @@
                 "call": "owned_temp",
                 "kwargs": {},
                 "result": "$TARGET/copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "resolve",
-                "kwargs": {
-                  "must_exist": false
-                },
-                "result": "$TARGET/copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET/copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "remove_owned_temp",
-                "kwargs": {},
-                "result": null
               },
               {
                 "args": [
@@ -30452,54 +28861,6 @@
                   "nlink": 1,
                   "size": 12
                 }
-              },
-              {
-                "args": [
-                  "$SOURCE"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
-                  "$SOURCE",
-                  "copy.bin"
-                ],
-                "call": "stat",
-                "kwargs": {},
-                "result": {
-                  "attributes": 32,
-                  "created": "time-2",
-                  "identity": "identity-1",
-                  "kind": "file",
-                  "mtime": "time-1",
-                  "nlink": 1,
-                  "size": 12
-                }
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "copy.bin"
-                ],
-                "call": "stat",
-                "kwargs": {},
-                "result": null
-              },
-              {
-                "args": [
-                  "$SOURCE"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
               },
               {
                 "args": [
@@ -30750,12 +29111,6 @@
             "fs:owned_temp:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
-            "fs:resolve:begin",
-            "fs:resolve:end",
-            "fs:remove_owned_temp:begin",
-            "fs:remove_owned_temp:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:open_source:begin",
             "fs:open_source:end",
             "fs:revalidate_root:begin",
@@ -30797,14 +29152,6 @@
             "fs:resolve:end",
             "fs:stat_path:begin",
             "fs:stat_path:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
-            "fs:stat:begin",
-            "fs:stat:end",
-            "fs:stat:begin",
-            "fs:stat:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
             "fs:publish_new:begin",
@@ -30961,10 +29308,9 @@
               "open_source": 2,
               "owned_temp": 2,
               "publish_new": 2,
-              "remove_owned_temp": 2,
-              "resolve": 14,
-              "revalidate_root": 28,
-              "stat": 12,
+              "resolve": 12,
+              "revalidate_root": 22,
+              "stat": 8,
               "stat_path": 4
             },
             "trace": [
@@ -31058,36 +29404,6 @@
                 "call": "owned_temp",
                 "kwargs": {},
                 "result": "$TARGET/first.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "first.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "resolve",
-                "kwargs": {
-                  "must_exist": false
-                },
-                "result": "$TARGET/first.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET/first.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "remove_owned_temp",
-                "kwargs": {},
-                "result": null
               },
               {
                 "args": [
@@ -31294,54 +29610,6 @@
               },
               {
                 "args": [
-                  "$SOURCE"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
-                  "$SOURCE",
-                  "first.bin"
-                ],
-                "call": "stat",
-                "kwargs": {},
-                "result": {
-                  "attributes": 32,
-                  "created": "time-2",
-                  "identity": "identity-1",
-                  "kind": "file",
-                  "mtime": "time-1",
-                  "nlink": 1,
-                  "size": 12
-                }
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "first.bin"
-                ],
-                "call": "stat",
-                "kwargs": {},
-                "result": null
-              },
-              {
-                "args": [
-                  "$SOURCE"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
                   "$TARGET"
                 ],
                 "call": "revalidate_root",
@@ -31517,36 +29785,6 @@
                 "call": "owned_temp",
                 "kwargs": {},
                 "result": "$TARGET/second.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000002"
-              },
-              {
-                "args": [
-                  "$TARGET"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "second.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000002"
-                ],
-                "call": "resolve",
-                "kwargs": {
-                  "must_exist": false
-                },
-                "result": "$TARGET/second.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000002"
-              },
-              {
-                "args": [
-                  "$TARGET/second.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000002"
-                ],
-                "call": "remove_owned_temp",
-                "kwargs": {},
-                "result": null
               },
               {
                 "args": [
@@ -31750,54 +29988,6 @@
                   "nlink": 1,
                   "size": 12
                 }
-              },
-              {
-                "args": [
-                  "$SOURCE"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
-                  "$SOURCE",
-                  "second.bin"
-                ],
-                "call": "stat",
-                "kwargs": {},
-                "result": {
-                  "attributes": 32,
-                  "created": "time-4",
-                  "identity": "identity-3",
-                  "kind": "file",
-                  "mtime": "time-3",
-                  "nlink": 1,
-                  "size": 12
-                }
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "second.bin"
-                ],
-                "call": "stat",
-                "kwargs": {},
-                "result": null
-              },
-              {
-                "args": [
-                  "$SOURCE"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
               },
               {
                 "args": [
@@ -32137,12 +30327,6 @@
             "fs:owned_temp:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
-            "fs:resolve:begin",
-            "fs:resolve:end",
-            "fs:remove_owned_temp:begin",
-            "fs:remove_owned_temp:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:open_source:begin",
             "fs:open_source:end",
             "fs:revalidate_root:begin",
@@ -32186,14 +30370,6 @@
             "fs:stat_path:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
-            "fs:stat:begin",
-            "fs:stat:end",
-            "fs:stat:begin",
-            "fs:stat:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:publish_new:begin",
             "fs:publish_new:end",
             "fs:revalidate_root:begin",
@@ -32225,12 +30401,6 @@
             "fs:resolve:end",
             "fs:owned_temp:begin",
             "fs:owned_temp:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
-            "fs:resolve:begin",
-            "fs:resolve:end",
-            "fs:remove_owned_temp:begin",
-            "fs:remove_owned_temp:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
             "fs:open_source:begin",
@@ -32274,14 +30444,6 @@
             "fs:resolve:end",
             "fs:stat_path:begin",
             "fs:stat_path:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
-            "fs:stat:begin",
-            "fs:stat:end",
-            "fs:stat:begin",
-            "fs:stat:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
             "fs:publish_new:begin",
@@ -32521,12 +30683,11 @@
               "open_source": 3,
               "owned_temp": 3,
               "publish_new": 2,
-              "remove_owned_temp": 3,
               "replace": 2,
-              "resolve": 26,
-              "revalidate_root": 62,
+              "resolve": 23,
+              "revalidate_root": 55,
               "revalidate_trash_destination": 8,
-              "stat": 19,
+              "stat": 15,
               "stat_path": 15,
               "trash_destination": 1
             },
@@ -32621,36 +30782,6 @@
                 "call": "owned_temp",
                 "kwargs": {},
                 "result": "$TARGET/first.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "first.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "resolve",
-                "kwargs": {
-                  "must_exist": false
-                },
-                "result": "$TARGET/first.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET/first.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "remove_owned_temp",
-                "kwargs": {},
-                "result": null
               },
               {
                 "args": [
@@ -32857,54 +30988,6 @@
               },
               {
                 "args": [
-                  "$SOURCE"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
-                  "$SOURCE",
-                  "first.bin"
-                ],
-                "call": "stat",
-                "kwargs": {},
-                "result": {
-                  "attributes": 32,
-                  "created": "time-2",
-                  "identity": "identity-1",
-                  "kind": "file",
-                  "mtime": "time-1",
-                  "nlink": 1,
-                  "size": 13
-                }
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "first.bin"
-                ],
-                "call": "stat",
-                "kwargs": {},
-                "result": null
-              },
-              {
-                "args": [
-                  "$SOURCE"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
                   "$TARGET"
                 ],
                 "call": "revalidate_root",
@@ -33088,36 +31171,6 @@
                 "call": "owned_temp",
                 "kwargs": {},
                 "result": "$TARGET/update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000002"
-              },
-              {
-                "args": [
-                  "$TARGET"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000002"
-                ],
-                "call": "resolve",
-                "kwargs": {
-                  "must_exist": false
-                },
-                "result": "$TARGET/update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000002"
-              },
-              {
-                "args": [
-                  "$TARGET/update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000002"
-                ],
-                "call": "remove_owned_temp",
-                "kwargs": {},
-                "result": null
               },
               {
                 "args": [
@@ -34156,36 +32209,6 @@
               },
               {
                 "args": [
-                  "$TARGET"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "third.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000003"
-                ],
-                "call": "resolve",
-                "kwargs": {
-                  "must_exist": false
-                },
-                "result": "$TARGET/third.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000003"
-              },
-              {
-                "args": [
-                  "$TARGET/third.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000003"
-                ],
-                "call": "remove_owned_temp",
-                "kwargs": {},
-                "result": null
-              },
-              {
-                "args": [
                   "$SOURCE"
                 ],
                 "call": "revalidate_root",
@@ -34386,54 +32409,6 @@
                   "nlink": 1,
                   "size": 13
                 }
-              },
-              {
-                "args": [
-                  "$SOURCE"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
-                  "$SOURCE",
-                  "third.bin"
-                ],
-                "call": "stat",
-                "kwargs": {},
-                "result": {
-                  "attributes": 32,
-                  "created": "time-8",
-                  "identity": "identity-6",
-                  "kind": "file",
-                  "mtime": "time-7",
-                  "nlink": 1,
-                  "size": 13
-                }
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "third.bin"
-                ],
-                "call": "stat",
-                "kwargs": {},
-                "result": null
-              },
-              {
-                "args": [
-                  "$SOURCE"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
               },
               {
                 "args": [
@@ -37127,12 +35102,6 @@
             "fs:owned_temp:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
-            "fs:resolve:begin",
-            "fs:resolve:end",
-            "fs:remove_owned_temp:begin",
-            "fs:remove_owned_temp:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:open_source:begin",
             "fs:open_source:end",
             "fs:revalidate_root:begin",
@@ -37177,14 +35146,6 @@
             "fs:stat_path:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
-            "fs:stat:begin",
-            "fs:stat:end",
-            "fs:stat:begin",
-            "fs:stat:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:publish_new:begin",
             "fs:publish_new:end",
             "fs:revalidate_root:begin",
@@ -37216,12 +35177,6 @@
             "fs:resolve:end",
             "fs:owned_temp:begin",
             "fs:owned_temp:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
-            "fs:resolve:begin",
-            "fs:resolve:end",
-            "fs:remove_owned_temp:begin",
-            "fs:remove_owned_temp:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
             "fs:open_source:begin",
@@ -37418,12 +35373,6 @@
             "fs:owned_temp:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
-            "fs:resolve:begin",
-            "fs:resolve:end",
-            "fs:remove_owned_temp:begin",
-            "fs:remove_owned_temp:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:open_source:begin",
             "fs:open_source:end",
             "fs:revalidate_root:begin",
@@ -37466,14 +35415,6 @@
             "fs:resolve:end",
             "fs:stat_path:begin",
             "fs:stat_path:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
-            "fs:stat:begin",
-            "fs:stat:end",
-            "fs:stat:begin",
-            "fs:stat:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
             "fs:publish_new:begin",
@@ -37637,7 +35578,7 @@
             "counts": {
               "rename_new": 1,
               "resolve": 4,
-              "revalidate_root": 12,
+              "revalidate_root": 11,
               "stat": 5,
               "stat_path": 2
             },
@@ -37750,17 +35691,6 @@
                   "must_exist": false
                 },
                 "result": "$TARGET/new.bin"
-              },
-              {
-                "args": [
-                  "$SOURCE"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
               },
               {
                 "args": [
@@ -38098,8 +36028,6 @@
             "fs:resolve:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:rename_new:begin",
             "fs:rename_new:error",
             "failure-policy:00000000000000000000000000000001:attempt:1:decision:retry",
@@ -38207,7 +36135,7 @@
             "counts": {
               "rename_new": 1,
               "resolve": 4,
-              "revalidate_root": 8,
+              "revalidate_root": 7,
               "stat": 3,
               "stat_path": 2
             },
@@ -38320,17 +36248,6 @@
                   "must_exist": false
                 },
                 "result": "$TARGET/new.bin"
-              },
-              {
-                "args": [
-                  "$SOURCE"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
               },
               {
                 "args": [
@@ -38564,8 +36481,6 @@
             "fs:resolve:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:rename_new:begin",
             "fs:rename_new:error",
             "failure-policy:00000000000000000000000000000001:attempt:1:raise:RuntimeError",
@@ -38654,7 +36569,7 @@
             "counts": {
               "rename_new": 1,
               "resolve": 4,
-              "revalidate_root": 8,
+              "revalidate_root": 7,
               "stat": 3,
               "stat_path": 2
             },
@@ -38767,17 +36682,6 @@
                   "must_exist": false
                 },
                 "result": "$TARGET/new.bin"
-              },
-              {
-                "args": [
-                  "$SOURCE"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
               },
               {
                 "args": [
@@ -39011,8 +36915,6 @@
             "fs:resolve:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:rename_new:begin",
             "fs:rename_new:error",
             "failure-policy:00000000000000000000000000000001:attempt:1:decision:retry",
@@ -39150,10 +37052,9 @@
               "hardlink": 1,
               "open_source": 1,
               "owned_temp": 1,
-              "remove_owned_temp": 1,
               "replace": 2,
-              "resolve": 12,
-              "revalidate_root": 34,
+              "resolve": 11,
+              "revalidate_root": 33,
               "revalidate_trash_destination": 8,
               "stat": 7,
               "stat_path": 11,
@@ -39258,36 +37159,6 @@
                 "call": "owned_temp",
                 "kwargs": {},
                 "result": "$TARGET/update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "resolve",
-                "kwargs": {
-                  "must_exist": false
-                },
-                "result": "$TARGET/update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET/update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "remove_owned_temp",
-                "kwargs": {},
-                "result": null
               },
               {
                 "args": [
@@ -40395,12 +38266,6 @@
             "fs:owned_temp:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
-            "fs:resolve:begin",
-            "fs:resolve:end",
-            "fs:remove_owned_temp:begin",
-            "fs:remove_owned_temp:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:open_source:begin",
             "fs:open_source:end",
             "fs:revalidate_root:begin",
@@ -40683,10 +38548,10 @@
               "hardlink": 1,
               "open_source": 1,
               "owned_temp": 1,
-              "remove_owned_temp": 2,
+              "remove_owned_temp": 1,
               "replace": 2,
-              "resolve": 14,
-              "revalidate_root": 37,
+              "resolve": 13,
+              "revalidate_root": 36,
               "revalidate_trash_destination": 8,
               "stat": 7,
               "stat_path": 14,
@@ -40791,36 +38656,6 @@
                 "call": "owned_temp",
                 "kwargs": {},
                 "result": "$TARGET/update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "resolve",
-                "kwargs": {
-                  "must_exist": false
-                },
-                "result": "$TARGET/update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET/update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "remove_owned_temp",
-                "kwargs": {},
-                "result": null
               },
               {
                 "args": [
@@ -41931,12 +39766,6 @@
             "fs:owned_temp:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
-            "fs:resolve:begin",
-            "fs:resolve:end",
-            "fs:remove_owned_temp:begin",
-            "fs:remove_owned_temp:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:open_source:begin",
             "fs:open_source:end",
             "fs:revalidate_root:begin",
@@ -42258,10 +40087,9 @@
               "open_source": 1,
               "owned_temp": 1,
               "publish_new": 2,
-              "remove_owned_temp": 1,
-              "resolve": 8,
-              "revalidate_root": 20,
-              "stat": 8,
+              "resolve": 7,
+              "revalidate_root": 16,
+              "stat": 6,
               "stat_path": 3
             },
             "trace": [
@@ -42355,36 +40183,6 @@
                 "call": "owned_temp",
                 "kwargs": {},
                 "result": "$TARGET/copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "resolve",
-                "kwargs": {
-                  "must_exist": false
-                },
-                "result": "$TARGET/copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET/copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "remove_owned_temp",
-                "kwargs": {},
-                "result": null
               },
               {
                 "args": [
@@ -42591,54 +40389,6 @@
               },
               {
                 "args": [
-                  "$SOURCE"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
-                  "$SOURCE",
-                  "copy.bin"
-                ],
-                "call": "stat",
-                "kwargs": {},
-                "result": {
-                  "attributes": 32,
-                  "created": "time-2",
-                  "identity": "identity-1",
-                  "kind": "file",
-                  "mtime": "time-1",
-                  "nlink": 1,
-                  "size": 12
-                }
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "copy.bin"
-                ],
-                "call": "stat",
-                "kwargs": {},
-                "result": null
-              },
-              {
-                "args": [
-                  "$SOURCE"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
                   "$TARGET"
                 ],
                 "call": "revalidate_root",
@@ -42753,17 +40503,6 @@
                 ],
                 "call": "stat",
                 "kwargs": {},
-                "result": null
-              },
-              {
-                "args": [
-                  "$SOURCE"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
                 "result": null
               },
               {
@@ -43013,12 +40752,6 @@
             "fs:owned_temp:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
-            "fs:resolve:begin",
-            "fs:resolve:end",
-            "fs:remove_owned_temp:begin",
-            "fs:remove_owned_temp:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:open_source:begin",
             "fs:open_source:end",
             "fs:revalidate_root:begin",
@@ -43062,14 +40795,6 @@
             "fs:stat_path:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
-            "fs:stat:begin",
-            "fs:stat:end",
-            "fs:stat:begin",
-            "fs:stat:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:publish_new:begin",
             "fs:publish_new:error",
             "failure-policy:00000000000000000000000000000001:attempt:1:decision:retry",
@@ -43095,8 +40820,6 @@
             "fs:stat:end",
             "fs:stat:begin",
             "fs:stat:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
             "fs:publish_new:begin",
@@ -43229,10 +40952,9 @@
               "open_source": 1,
               "owned_temp": 1,
               "publish_new": 1,
-              "remove_owned_temp": 1,
-              "resolve": 9,
-              "revalidate_root": 18,
-              "stat": 6,
+              "resolve": 8,
+              "revalidate_root": 15,
+              "stat": 4,
               "stat_path": 4
             },
             "trace": [
@@ -43326,36 +41048,6 @@
                 "call": "owned_temp",
                 "kwargs": {},
                 "result": "$TARGET/copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "resolve",
-                "kwargs": {
-                  "must_exist": false
-                },
-                "result": "$TARGET/copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET/copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "remove_owned_temp",
-                "kwargs": {},
-                "result": null
               },
               {
                 "args": [
@@ -43559,54 +41251,6 @@
                   "nlink": 1,
                   "size": 12
                 }
-              },
-              {
-                "args": [
-                  "$SOURCE"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
-                  "$SOURCE",
-                  "copy.bin"
-                ],
-                "call": "stat",
-                "kwargs": {},
-                "result": {
-                  "attributes": 32,
-                  "created": "time-2",
-                  "identity": "identity-1",
-                  "kind": "file",
-                  "mtime": "time-1",
-                  "nlink": 1,
-                  "size": 12
-                }
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "copy.bin"
-                ],
-                "call": "stat",
-                "kwargs": {},
-                "result": null
-              },
-              {
-                "args": [
-                  "$SOURCE"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
               },
               {
                 "args": [
@@ -43947,12 +41591,6 @@
             "fs:owned_temp:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
-            "fs:resolve:begin",
-            "fs:resolve:end",
-            "fs:remove_owned_temp:begin",
-            "fs:remove_owned_temp:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:open_source:begin",
             "fs:open_source:end",
             "fs:revalidate_root:begin",
@@ -43994,14 +41632,6 @@
             "fs:resolve:end",
             "fs:stat_path:begin",
             "fs:stat_path:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
-            "fs:stat:begin",
-            "fs:stat:end",
-            "fs:stat:begin",
-            "fs:stat:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
             "fs:publish_new:begin",
@@ -44157,12 +41787,11 @@
               "open_source": 1,
               "owned_temp": 1,
               "publish_new": 1,
-              "remove_owned_temp": 1,
               "rename_new": 2,
-              "resolve": 14,
-              "revalidate_root": 27,
+              "resolve": 13,
+              "revalidate_root": 24,
               "revalidate_trash_destination": 4,
-              "stat": 12,
+              "stat": 10,
               "stat_path": 7,
               "trash_destination": 1
             },
@@ -44274,36 +41903,6 @@
                 "call": "owned_temp",
                 "kwargs": {},
                 "result": "$TARGET/renamed.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "renamed.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "resolve",
-                "kwargs": {
-                  "must_exist": false
-                },
-                "result": "$TARGET/renamed.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET/renamed.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "remove_owned_temp",
-                "kwargs": {},
-                "result": null
               },
               {
                 "args": [
@@ -44510,34 +42109,6 @@
               },
               {
                 "args": [
-                  "$SOURCE"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
-                  "$SOURCE",
-                  "renamed.bin"
-                ],
-                "call": "stat",
-                "kwargs": {},
-                "result": {
-                  "attributes": 32,
-                  "created": "time-4",
-                  "identity": "identity-2",
-                  "kind": "file",
-                  "mtime": "time-3",
-                  "nlink": 1,
-                  "size": 15
-                }
-              },
-              {
-                "args": [
                   "$TARGET",
                   "old.bin"
                 ],
@@ -44552,26 +42123,6 @@
                   "nlink": 1,
                   "size": 11
                 }
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "renamed.bin"
-                ],
-                "call": "stat",
-                "kwargs": {},
-                "result": null
-              },
-              {
-                "args": [
-                  "$SOURCE"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
               },
               {
                 "args": [
@@ -45257,12 +42808,6 @@
             "fs:owned_temp:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
-            "fs:resolve:begin",
-            "fs:resolve:end",
-            "fs:remove_owned_temp:begin",
-            "fs:remove_owned_temp:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:open_source:begin",
             "fs:open_source:end",
             "fs:revalidate_root:begin",
@@ -45305,16 +42850,8 @@
             "fs:resolve:end",
             "fs:stat_path:begin",
             "fs:stat_path:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:stat:begin",
             "fs:stat:end",
-            "fs:stat:begin",
-            "fs:stat:end",
-            "fs:stat:begin",
-            "fs:stat:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
             "fs:publish_new:begin",
@@ -45554,10 +43091,9 @@
               "hardlink": 1,
               "open_source": 1,
               "owned_temp": 1,
-              "remove_owned_temp": 1,
               "replace": 2,
-              "resolve": 12,
-              "revalidate_root": 34,
+              "resolve": 11,
+              "revalidate_root": 33,
               "revalidate_trash_destination": 8,
               "stat": 7,
               "stat_path": 11,
@@ -45662,36 +43198,6 @@
                 "call": "owned_temp",
                 "kwargs": {},
                 "result": "$TARGET/update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "resolve",
-                "kwargs": {
-                  "must_exist": false
-                },
-                "result": "$TARGET/update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET/update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "remove_owned_temp",
-                "kwargs": {},
-                "result": null
               },
               {
                 "args": [
@@ -46821,12 +44327,6 @@
             "fs:owned_temp:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
-            "fs:resolve:begin",
-            "fs:resolve:end",
-            "fs:remove_owned_temp:begin",
-            "fs:remove_owned_temp:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:open_source:begin",
             "fs:open_source:end",
             "fs:revalidate_root:begin",
@@ -47271,13 +44771,12 @@
               "owned_temp": 3,
               "publish_new": 2,
               "remove_file": 1,
-              "remove_owned_temp": 3,
               "rename_new": 4,
               "replace": 1,
-              "resolve": 39,
-              "revalidate_root": 85,
+              "resolve": 36,
+              "revalidate_root": 76,
               "revalidate_trash_destination": 10,
-              "stat": 33,
+              "stat": 29,
               "stat_path": 18,
               "trash_destination": 3
             },
@@ -47372,36 +44871,6 @@
                 "call": "owned_temp",
                 "kwargs": {},
                 "result": "$TARGET/copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "resolve",
-                "kwargs": {
-                  "must_exist": false
-                },
-                "result": "$TARGET/copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET/copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "remove_owned_temp",
-                "kwargs": {},
-                "result": null
               },
               {
                 "args": [
@@ -47608,54 +45077,6 @@
               },
               {
                 "args": [
-                  "$SOURCE"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
-                  "$SOURCE",
-                  "copy.bin"
-                ],
-                "call": "stat",
-                "kwargs": {},
-                "result": {
-                  "attributes": 32,
-                  "created": "time-2",
-                  "identity": "identity-1",
-                  "kind": "file",
-                  "mtime": "time-1",
-                  "nlink": 1,
-                  "size": 12
-                }
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "copy.bin"
-                ],
-                "call": "stat",
-                "kwargs": {},
-                "result": null
-              },
-              {
-                "args": [
-                  "$SOURCE"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
                   "$TARGET"
                 ],
                 "call": "revalidate_root",
@@ -47839,36 +45260,6 @@
                 "call": "owned_temp",
                 "kwargs": {},
                 "result": "$TARGET/update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000002"
-              },
-              {
-                "args": [
-                  "$TARGET"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000002"
-                ],
-                "call": "resolve",
-                "kwargs": {
-                  "must_exist": false
-                },
-                "result": "$TARGET/update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000002"
-              },
-              {
-                "args": [
-                  "$TARGET/update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000002"
-                ],
-                "call": "remove_owned_temp",
-                "kwargs": {},
-                "result": null
               },
               {
                 "args": [
@@ -48647,17 +46038,6 @@
               },
               {
                 "args": [
-                  "$SOURCE"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
                   "$TARGET"
                 ],
                 "call": "revalidate_root",
@@ -48829,36 +46209,6 @@
                 "call": "owned_temp",
                 "kwargs": {},
                 "result": "$TARGET/renamed.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000004"
-              },
-              {
-                "args": [
-                  "$TARGET"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "renamed.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000004"
-                ],
-                "call": "resolve",
-                "kwargs": {
-                  "must_exist": false
-                },
-                "result": "$TARGET/renamed.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000004"
-              },
-              {
-                "args": [
-                  "$TARGET/renamed.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000004"
-                ],
-                "call": "remove_owned_temp",
-                "kwargs": {},
-                "result": null
               },
               {
                 "args": [
@@ -49065,34 +46415,6 @@
               },
               {
                 "args": [
-                  "$SOURCE"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
-                  "$SOURCE",
-                  "renamed.bin"
-                ],
-                "call": "stat",
-                "kwargs": {},
-                "result": {
-                  "attributes": 32,
-                  "created": "time-13",
-                  "identity": "identity-9",
-                  "kind": "file",
-                  "mtime": "time-12",
-                  "nlink": 1,
-                  "size": 15
-                }
-              },
-              {
-                "args": [
                   "$TARGET",
                   "old.bin"
                 ],
@@ -49107,26 +46429,6 @@
                   "nlink": 1,
                   "size": 11
                 }
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "renamed.bin"
-                ],
-                "call": "stat",
-                "kwargs": {},
-                "result": null
-              },
-              {
-                "args": [
-                  "$SOURCE"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
               },
               {
                 "args": [
@@ -49501,17 +46803,6 @@
                   "must_exist": false
                 },
                 "result": "$TARGET/KEEP.txt"
-              },
-              {
-                "args": [
-                  "$SOURCE"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
               },
               {
                 "args": [
@@ -50891,12 +48182,6 @@
             "fs:owned_temp:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
-            "fs:resolve:begin",
-            "fs:resolve:end",
-            "fs:remove_owned_temp:begin",
-            "fs:remove_owned_temp:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:open_source:begin",
             "fs:open_source:end",
             "fs:revalidate_root:begin",
@@ -50940,14 +48225,6 @@
             "fs:stat_path:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
-            "fs:stat:begin",
-            "fs:stat:end",
-            "fs:stat:begin",
-            "fs:stat:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:publish_new:begin",
             "fs:publish_new:end",
             "fs:revalidate_root:begin",
@@ -50979,12 +48256,6 @@
             "fs:resolve:end",
             "fs:owned_temp:begin",
             "fs:owned_temp:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
-            "fs:resolve:begin",
-            "fs:resolve:end",
-            "fs:remove_owned_temp:begin",
-            "fs:remove_owned_temp:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
             "fs:open_source:begin",
@@ -51127,8 +48398,6 @@
             "fs:resolve:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:rename_new:begin",
             "fs:rename_new:end",
             "fs:flush_directory:begin",
@@ -51162,12 +48431,6 @@
             "fs:resolve:end",
             "fs:owned_temp:begin",
             "fs:owned_temp:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
-            "fs:resolve:begin",
-            "fs:resolve:end",
-            "fs:remove_owned_temp:begin",
-            "fs:remove_owned_temp:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
             "fs:open_source:begin",
@@ -51212,16 +48475,8 @@
             "fs:resolve:end",
             "fs:stat_path:begin",
             "fs:stat_path:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:stat:begin",
             "fs:stat:end",
-            "fs:stat:begin",
-            "fs:stat:end",
-            "fs:stat:begin",
-            "fs:stat:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
             "fs:publish_new:begin",
@@ -51293,8 +48548,6 @@
             "fs:resolve:end",
             "fs:resolve:begin",
             "fs:resolve:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
             "fs:rename_new:begin",
@@ -51659,10 +48912,10 @@
               "finalize_temp": 1,
               "open_source": 1,
               "owned_temp": 2,
-              "remove_owned_temp": 3,
+              "remove_owned_temp": 2,
               "replace": 1,
-              "resolve": 12,
-              "revalidate_root": 31,
+              "resolve": 11,
+              "revalidate_root": 30,
               "revalidate_trash_destination": 11,
               "stat": 6,
               "stat_path": 11,
@@ -51767,36 +49020,6 @@
                 "call": "owned_temp",
                 "kwargs": {},
                 "result": "$TARGET/update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "resolve",
-                "kwargs": {
-                  "must_exist": false
-                },
-                "result": "$TARGET/update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET/update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "remove_owned_temp",
-                "kwargs": {},
-                "result": null
               },
               {
                 "args": [
@@ -52865,12 +50088,6 @@
             "fs:owned_temp:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
-            "fs:resolve:begin",
-            "fs:resolve:end",
-            "fs:remove_owned_temp:begin",
-            "fs:remove_owned_temp:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:open_source:begin",
             "fs:open_source:end",
             "fs:revalidate_root:begin",
@@ -53135,10 +50352,10 @@
               "finalize_temp": 1,
               "open_source": 1,
               "owned_temp": 2,
-              "remove_owned_temp": 3,
+              "remove_owned_temp": 2,
               "replace": 1,
-              "resolve": 12,
-              "revalidate_root": 31,
+              "resolve": 11,
+              "revalidate_root": 30,
               "revalidate_trash_destination": 11,
               "stat": 6,
               "stat_path": 11,
@@ -53243,36 +50460,6 @@
                 "call": "owned_temp",
                 "kwargs": {},
                 "result": "$TARGET/update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "resolve",
-                "kwargs": {
-                  "must_exist": false
-                },
-                "result": "$TARGET/update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET/update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "remove_owned_temp",
-                "kwargs": {},
-                "result": null
               },
               {
                 "args": [
@@ -54326,12 +51513,6 @@
             "fs:owned_temp:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
-            "fs:resolve:begin",
-            "fs:resolve:end",
-            "fs:remove_owned_temp:begin",
-            "fs:remove_owned_temp:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:open_source:begin",
             "fs:open_source:end",
             "fs:revalidate_root:begin",
@@ -54596,10 +51777,10 @@
               "finalize_temp": 1,
               "open_source": 1,
               "owned_temp": 2,
-              "remove_owned_temp": 3,
+              "remove_owned_temp": 2,
               "replace": 1,
-              "resolve": 12,
-              "revalidate_root": 31,
+              "resolve": 11,
+              "revalidate_root": 30,
               "revalidate_trash_destination": 11,
               "stat": 6,
               "stat_path": 11,
@@ -54704,36 +51885,6 @@
                 "call": "owned_temp",
                 "kwargs": {},
                 "result": "$TARGET/update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "resolve",
-                "kwargs": {
-                  "must_exist": false
-                },
-                "result": "$TARGET/update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET/update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "remove_owned_temp",
-                "kwargs": {},
-                "result": null
               },
               {
                 "args": [
@@ -55779,12 +52930,6 @@
             "fs:owned_temp:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
-            "fs:resolve:begin",
-            "fs:resolve:end",
-            "fs:remove_owned_temp:begin",
-            "fs:remove_owned_temp:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:open_source:begin",
             "fs:open_source:end",
             "fs:revalidate_root:begin",
@@ -56039,10 +53184,10 @@
               "finalize_temp": 1,
               "open_source": 1,
               "owned_temp": 2,
-              "remove_owned_temp": 3,
+              "remove_owned_temp": 2,
               "replace": 1,
-              "resolve": 12,
-              "revalidate_root": 31,
+              "resolve": 11,
+              "revalidate_root": 30,
               "revalidate_trash_destination": 11,
               "stat": 6,
               "stat_path": 11,
@@ -56147,36 +53292,6 @@
                 "call": "owned_temp",
                 "kwargs": {},
                 "result": "$TARGET/update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "resolve",
-                "kwargs": {
-                  "must_exist": false
-                },
-                "result": "$TARGET/update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET/update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "remove_owned_temp",
-                "kwargs": {},
-                "result": null
               },
               {
                 "args": [
@@ -57223,12 +54338,6 @@
             "fs:owned_temp:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
-            "fs:resolve:begin",
-            "fs:resolve:end",
-            "fs:remove_owned_temp:begin",
-            "fs:remove_owned_temp:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:open_source:begin",
             "fs:open_source:end",
             "fs:revalidate_root:begin",
@@ -57495,10 +54604,10 @@
               "finalize_temp": 1,
               "open_source": 1,
               "owned_temp": 2,
-              "remove_owned_temp": 3,
+              "remove_owned_temp": 2,
               "replace": 1,
-              "resolve": 12,
-              "revalidate_root": 31,
+              "resolve": 11,
+              "revalidate_root": 30,
               "revalidate_trash_destination": 11,
               "stat": 6,
               "stat_path": 11,
@@ -57603,36 +54712,6 @@
                 "call": "owned_temp",
                 "kwargs": {},
                 "result": "$TARGET/update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "resolve",
-                "kwargs": {
-                  "must_exist": false
-                },
-                "result": "$TARGET/update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET/update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "remove_owned_temp",
-                "kwargs": {},
-                "result": null
               },
               {
                 "args": [
@@ -58673,12 +55752,6 @@
             "fs:owned_temp:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
-            "fs:resolve:begin",
-            "fs:resolve:end",
-            "fs:remove_owned_temp:begin",
-            "fs:remove_owned_temp:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:open_source:begin",
             "fs:open_source:end",
             "fs:revalidate_root:begin",
@@ -58949,10 +56022,10 @@
               "finalize_temp": 1,
               "open_source": 1,
               "owned_temp": 2,
-              "remove_owned_temp": 3,
+              "remove_owned_temp": 2,
               "replace": 1,
-              "resolve": 12,
-              "revalidate_root": 31,
+              "resolve": 11,
+              "revalidate_root": 30,
               "revalidate_trash_destination": 11,
               "stat": 6,
               "stat_path": 11,
@@ -59057,36 +56130,6 @@
                 "call": "owned_temp",
                 "kwargs": {},
                 "result": "$TARGET/update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "resolve",
-                "kwargs": {
-                  "must_exist": false
-                },
-                "result": "$TARGET/update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET/update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "remove_owned_temp",
-                "kwargs": {},
-                "result": null
               },
               {
                 "args": [
@@ -60127,12 +57170,6 @@
             "fs:owned_temp:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
-            "fs:resolve:begin",
-            "fs:resolve:end",
-            "fs:remove_owned_temp:begin",
-            "fs:remove_owned_temp:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:open_source:begin",
             "fs:open_source:end",
             "fs:revalidate_root:begin",
@@ -60403,10 +57440,10 @@
               "finalize_temp": 1,
               "open_source": 1,
               "owned_temp": 2,
-              "remove_owned_temp": 3,
+              "remove_owned_temp": 2,
               "replace": 1,
-              "resolve": 12,
-              "revalidate_root": 31,
+              "resolve": 11,
+              "revalidate_root": 30,
               "revalidate_trash_destination": 11,
               "stat": 6,
               "stat_path": 11,
@@ -60511,36 +57548,6 @@
                 "call": "owned_temp",
                 "kwargs": {},
                 "result": "$TARGET/update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "resolve",
-                "kwargs": {
-                  "must_exist": false
-                },
-                "result": "$TARGET/update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET/update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "remove_owned_temp",
-                "kwargs": {},
-                "result": null
               },
               {
                 "args": [
@@ -61573,12 +58580,6 @@
             "fs:owned_temp:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
-            "fs:resolve:begin",
-            "fs:resolve:end",
-            "fs:remove_owned_temp:begin",
-            "fs:remove_owned_temp:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
             "fs:open_source:begin",
             "fs:open_source:end",
             "fs:revalidate_root:begin",
@@ -61839,10 +58840,10 @@
               "finalize_temp": 1,
               "open_source": 1,
               "owned_temp": 2,
-              "remove_owned_temp": 3,
+              "remove_owned_temp": 2,
               "replace": 1,
-              "resolve": 12,
-              "revalidate_root": 31,
+              "resolve": 11,
+              "revalidate_root": 30,
               "revalidate_trash_destination": 11,
               "stat": 6,
               "stat_path": 11,
@@ -61947,36 +58948,6 @@
                 "call": "owned_temp",
                 "kwargs": {},
                 "result": "$TARGET/update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET"
-                ],
-                "call": "revalidate_root",
-                "kwargs": {
-                  "expected_volume": null,
-                  "trusted_anchor": null
-                },
-                "result": null
-              },
-              {
-                "args": [
-                  "$TARGET",
-                  "update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "resolve",
-                "kwargs": {
-                  "must_exist": false
-                },
-                "result": "$TARGET/update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-              },
-              {
-                "args": [
-                  "$TARGET/update.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
-                ],
-                "call": "remove_owned_temp",
-                "kwargs": {},
-                "result": null
               },
               {
                 "args": [
@@ -63010,12 +59981,6 @@
             "fs:resolve:end",
             "fs:owned_temp:begin",
             "fs:owned_temp:end",
-            "fs:revalidate_root:begin",
-            "fs:revalidate_root:end",
-            "fs:resolve:begin",
-            "fs:resolve:end",
-            "fs:remove_owned_temp:begin",
-            "fs:remove_owned_temp:end",
             "fs:revalidate_root:begin",
             "fs:revalidate_root:end",
             "fs:open_source:begin",

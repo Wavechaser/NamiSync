@@ -7,6 +7,7 @@ first-run/no-history plan and does not produce MOVE or MOVE_UPDATE operations.
 
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass, replace
 from pathlib import Path
 from pathlib import PureWindowsPath
@@ -37,6 +38,7 @@ from namisync.modules.executor import (
     ExecutorPolicies,
     NativeCopyBackend,
     NativeFileSystem,
+    RootAdmissionDiagnostic,
     execute,
 )
 from namisync.modules.planner import plan as build_plan
@@ -68,6 +70,7 @@ class ExecutorRun:
     plan_seconds: float
     preflight_seconds: float
     execute_seconds: float
+    root_diagnostics: tuple[RootAdmissionDiagnostic, ...] = ()
 
     @property
     def bytes_done(self) -> int:
@@ -244,12 +247,16 @@ def execute_prepared(
     recorder = LedgerlessRecorder(prepared.plan, execution_set.run_id)
 
     started = perf_counter()
+    root_diagnostics: list[RootAdmissionDiagnostic] | None = (
+        [] if collect_metrics else None
+    )
     result = execute(
         execution_set,
         tape.context(),
         recorder,
         run_policies,
         filesystem or NativeFileSystem(),
+        root_diagnostics=root_diagnostics,
     )
     execute_seconds = perf_counter() - started
 
@@ -268,6 +275,7 @@ def execute_prepared(
         plan_seconds=prepared.plan_seconds,
         preflight_seconds=preflight_seconds,
         execute_seconds=execute_seconds,
+        root_diagnostics=tuple(root_diagnostics or ()),
     )
 
 
@@ -510,4 +518,11 @@ def copy_metrics_summary(samples: Sequence[CopySample]) -> dict[str, object]:
         summary["reserved_bytes"] = sum(
             sample.metrics.reserved_bytes for sample in collected
         )
+        summary["write_modes"] = dict(Counter(
+            sample.metrics.write_mode for sample in collected
+        ))
+        summary["fallback_reasons"] = dict(Counter(
+            sample.metrics.fallback_reason for sample in collected
+            if sample.metrics.fallback_reason is not None
+        ))
     return summary
