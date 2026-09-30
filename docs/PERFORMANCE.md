@@ -532,6 +532,30 @@ evidence. Their throughput-goal observations describe those runs, not a stable
 regression attributable to the changes. The target-check follow-up is measured
 separately after correctness verification.
 
+### Held-root path composition — 2026-09-30
+
+Result 6's frozen candidate on `d43f832` passed 343 native/runtime tests and
+5,711 ordinary tests, imports, unchanged three-run oracle and the fixed
+67-group differential before measurement. All 25 serial executions/readbacks
+passed with recording OK and zero reservations. Source and dependency manifests
+stayed fixed; the rig removed its owned targets and sidecars.
+
+| Band | Median [min–max], s | MiB/s | Result 5 median, s |
+| --- | ---: | ---: | ---: |
+| 1,000 × 4 KiB | 3.211 [3.144–3.274] | 1.217 | 3.222 |
+| 512 × 128 KiB | 1.682 [1.669–1.944] | 38.058 | 1.685 |
+| 64 × 4 MiB | 0.348 [0.340–0.397] | 735.772 | 0.341 |
+| 4 × 128 MiB | 0.302 [0.299–0.312] | 1,696.785 | 0.296 |
+| 1 × 4 GiB | 1.999 [1.791–2.060] | 2,048.743 | 1.981 |
+
+All predecessor ranges overlap; this establishes no throughput lift. Small-file
+backend/outside medians are 0.412/2.799 s; the 4 GiB split is 1.242/0.743 s.
+Separate medians need not sum to the total. Every sample is retained; buffered
+repeated-source measurements are not cold-cache/device-ceiling evidence.
+Evidence prefix: `build/executor-simplification-20260929/measurements/`
+`result6-d43f8324-20260930-133019-7ae09623`; its predecessor comparison points to
+result 5's physical candidate and accepted `d43f832` separately.
+
 ### Own-effect version recognition — 2026-09-30
 
 Result 5's frozen candidate on `8b2b00e` passed 5,714 ordinary tests, 27 focused

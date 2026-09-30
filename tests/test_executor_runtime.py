@@ -5653,7 +5653,7 @@ def test_execute_held_root_blocks_swap_and_completes_original_copy(tmp_path: Pat
     assert {item.role for item in diagnostics} == {"source", "target"}
     assert all(item.held and item.fallback_reason is None for item in diagnostics)
     assert len(invocations) == 1 and not invocations[0].active
-    assert invocations[0].root_paths == {} and invocations[0].last_win32_path is None
+    assert all(root.native_prefix is None for root in invocations[0].roots)
     for root in (source, target):
         root.rename(root.with_name(root.name + "-released"))
 
@@ -5680,7 +5680,8 @@ def test_execute_releases_entry_holds_on_pause_cancel_and_exception(
         invocations.append(invocation)
         executor_module._win32_path(source)
         executor_module._win32_path(source / "unused.bin")
-        assert invocation.active and invocation.root_paths and invocation.last_win32_path is not None
+        assert invocation.active
+        assert all(root.native_prefix is None for root in invocation.roots)
         for root in (source, target):
             with pytest.raises(OSError) as refused:
                 root.rename(root.with_name(root.name + "-blocked"))
@@ -5702,7 +5703,7 @@ def test_execute_releases_entry_holds_on_pause_cancel_and_exception(
     assert attempts == [source, target]
     assert executor_module._ROOT_INVOCATION.get() is None
     assert len(invocations) == 1 and not invocations[0].active
-    assert invocations[0].root_paths == {} and invocations[0].last_win32_path is None
+    assert all(root.native_prefix is None for root in invocations[0].roots)
     for root in (source, target):
         renamed = root.rename(root.with_name(root.name + "-released"))
         renamed.rename(root)

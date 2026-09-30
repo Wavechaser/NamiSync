@@ -63,7 +63,7 @@ leads; direct writes follow on the simplified base.
    and integrity retain their separate criteria. Native witnesses cover the four
    failing BUGS cases and ordinary MOVE_UPDATE's already-successful control;
    changed kind, size, mtime and available identity remain negative controls.
-6. **Compose descendant native paths.** Build descendant Windows paths from the
+6. **Compose descendant native paths — delivered.** Build descendant Windows paths from the
    held root's validated prefix and the validated relative path instead of
    re-validating each full absolute path. Remove the conversion cache machinery
    this makes unnecessary, and conversions kept only to preserve refusal
@@ -107,7 +107,7 @@ required verification and measurements. Result 8 remains pending and is not
 authorized in this execution. Unbuffered source reads remain optional in that
 future result; device-class selection machinery requires measurement justification.
 
-**Result 5 delivered (2026-09-30).** Core version recognition is shared by
+**Result 5 delivered — `d43f832` (2026-09-30).** Core version recognition is shared by
 executor post-effect/recovery and pure MOVE/RECASE recording; plan predicates
 compose it with planner metadata facts. Pre-effect fidelity, metadata restoration,
 profile normalization, actual observations, SQL concurrency, attestation,
@@ -120,6 +120,19 @@ existing capability skips. Imports, unchanged 30×3 oracle, guard scan and fixed
 records the medians and overlapping ranges. Fresh independent review covers source
 and evidence. Receipts are `differential/result5-final-*` and measurement prefix
 `result5-8b2b00e4-20260930-130559-e544fed6`. Results 6–7 remain next; result 8 is excluded.
+
+**Result 6 delivered (2026-09-30).** Native path composition retains an admitted
+prefix instead of conversion caches, and removes duplicate conversion-only probes.
+Path parity/refusal/lifetime/fallback tests replace cache mechanics; trailing
+separator and ASCII-drive eligibility corrections were reviewed before acceptance.
+Held-attribute checks, descendant guards, unheld/fallback validation, effects and
+volume semantics remain. Verification passes 343 native/runtime and 5,711 ordinary
+tests (four capability skips), imports, unchanged 30×3 oracle, guard scan and the
+fixed 67-group differential. All 25 five-band executions/readbacks pass; ranges
+overlap result 5. Independent source/evidence review accompanies the commit.
+Receipts use `differential/result6-*` and measurement prefix
+`result6-d43f8324-20260930-133019-7ae09623`; PERFORMANCE owns the table.
+Result 7 dispatch remains next; pipeline/direct writes are excluded.
 
 **Goal, not gate.** 1,000 × 4 KiB F:→G: at or above the pre-pathing
 1.6 MiB/s, and the 4 GiB band well above today's 2.0 GiB/s toward the device
@@ -412,7 +425,7 @@ scope changes, stops and recovery.
 
 | ID | Accepted outcome | Named verification | Status |
 | --- | --- | --- | --- |
-| Executor simplification and throughput | Admission, handle, drift-fact and verifier simplification (delivered); then own-effect version checks, composed native paths, one held-root production path and direct large writes, per the section above. Goal (not gate): 4 KiB at or above 1.6 MiB/s; 4 GiB toward device ceilings. | Equivalence against the starting commit with the declared changes, per-result oracle re-pin receipts, guard scan, differential, native witnesses, five-band and direct-write device-sweep measurements and independent review per commit. | Earlier simplifications and result 5 delivered; results 6–7 next, result 8 deferred. |
+| Executor simplification and throughput | Admission, handle, drift-fact and verifier simplification (delivered); then own-effect version checks, composed native paths, one held-root production path and direct large writes, per the section above. Goal (not gate): 4 KiB at or above 1.6 MiB/s; 4 GiB toward device ceilings. | Equivalence against the starting commit with the declared changes, per-result oracle re-pin receipts, guard scan, differential, native witnesses, five-band and direct-write device-sweep measurements and independent review per commit. | Earlier simplifications and results 5–6 delivered; result 7 next, result 8 deferred. |
 | M1-9 | Bounded inventory projections, current evidence and the full inventory consumer for sibling sorting. | Complete or prior-complete publication; warnings outside action scope; raw evidence provenance; search/filter/collapse/window/detail, replacement/race and production sort/reset paths; headed witnesses. | Pending. Missing-row acknowledge/restore UI must be explicitly allocated at activation; this row does not silently claim it. |
 | M1-10 | Baseline, verify and rebaseline controls plus first same-task manual post-copy verification, without persistent operation-time hashes. Eligible null-evidence files enter rebaseline; every admitted rebaseline hashes and replaces/creates evidence, and a match is not verified. | Confirm acknowledgement admission before claim/native work; all-null/mixed workflow, service/CLI and desktop paths; conditional recording and supersession races; atomic handoff classification; live pause/resume/cancel and unchanged automatic failed-read retries; overlay/result identity. Independently review operation matrix and conditional recording. Terminal Verify-remaining/subset retry remains deferred. | Pending. Rebaseline confirmation is distinct from missing-row acknowledgement. |
 | M1-12 | Close integrated lifecycle/retention across activated task surfaces, then complete adversarial, documentation, ordinary and headed verification. This absorbs former M1-11. | Plan-only, execution-only, linked/manual verification, inventory, refused/canceled/degraded/failed tasks across same-document navigation, contained unsupported reload, explicit close and shutdown; admission bounds, stale-response suppression, exact resource release and retained truth. Applicable settlement oracle, ordinary/headed, installed-wheel/product, imports, diff/active-link checks and independent cross-component review. No aggregate-artifact or whole-owner-graph criterion. | Pending. |

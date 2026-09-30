@@ -51,6 +51,7 @@ from namisync.core.root_authority import (
     admit_root_chain,
     hold_root,
 )
+from namisync.core.scalars import require_utf16_path
 
 
 _READONLY = 0x00000001
@@ -272,6 +273,7 @@ class _InvocationRoot:
     volume: NativeVolumeInfo | None = None
     chain_authority: RootAuthority | None = None
     reported: bool = False
+    native_prefix: str | None = None
 
     def require_authority(self) -> RootAuthority:
         if self.construction_error is not None:
@@ -302,8 +304,6 @@ class _RootInvocation:
     diagnostics: list[RootAdmissionDiagnostic] | None
     native_owner: object | None = None
     active: bool = True
-    root_paths: dict[str, tuple[Path | None, str | None]] = field(default_factory=dict)
-    last_win32_path: tuple[str, str] | None = None
     copied_files: dict[Path, _CopiedFile] = field(default_factory=dict)
 
 
@@ -347,8 +347,8 @@ def _root_invocation_scope(
                 yield
             finally:
                 invocation.active = False
-                invocation.root_paths.clear()
-                invocation.last_win32_path = None
+                for root in invocation.roots:
+                    root.native_prefix = None
     finally:
         _ROOT_INVOCATION.reset(token)
 
@@ -484,7 +484,10 @@ class NativeFileSystem:
                 if matching and scoped is not None and scoped.volume is None:
                     scoped.volume = volume
                     assert scoped.hold is not None
-                    scoped.hold.confirm()
+                    if scoped.hold.confirm():
+                        scoped.native_prefix = to_extended_length_path(
+                            scoped.require_authority().logical_root
+                        )
                     self._report_root(scoped)
         except PathValidationError as error:
             raise UnsafeExecutionPath(
@@ -635,7 +638,6 @@ class NativeFileSystem:
         return self._stat_path(path)
 
     def _stat_path(self, path: Path) -> FileStat | None:
-        _win32_path(path)  # preserve conversion refusals before leaf observation
         try:
             info = self._reject_reparse(path)
         except UnsafeExecutionPath:
@@ -1391,7 +1393,6 @@ class NativeFileSystem:
         current = root
         for part in relative.parts:
             current = current / part
-            _win32_path(current)  # preserve conversion refusals before observation
             try:
                 self._reject_reparse(current)
             except UnsafeExecutionPath:
@@ -1659,69 +1660,45 @@ def _matches_copied_backup_source(
     return copied_size == before.size and after == before
 
 
-def _conversion_invocation(raw: str) -> _RootInvocation | None:
-    invocation = _ROOT_INVOCATION.get()
-    if (
-        os.name != "nt" or invocation is None or not invocation.active
-        or invocation.native_owner is None
-        or not _is_absolute_windows_spelling(raw)
-    ):
+def _held_native_path(raw: str) -> str | None:
+    """Compose a pure native spelling from an admitted invocation root."""
+    if not raw or not ("A" <= raw[0] <= "Z" or "a" <= raw[0] <= "z"):
         return None
-    return invocation
-
-
-def _is_absolute_windows_spelling(raw: str) -> bool:
-    """Cheaply select rooted spellings eligible for invocation-local caching."""
-
-    if (
-        len(raw) >= 3
-        and ("A" <= raw[0] <= "Z" or "a" <= raw[0] <= "z")
-        and raw[1] == ":"
-        and raw[2] in "\\/"
-    ):
-        return True
-    if len(raw) < 5 or raw[0] not in "\\/" or raw[1] not in "\\/":
-        return False
-    backslash = raw.find("\\", 2)
-    slash = raw.find("/", 2)
-    if backslash < 0:
-        server_end = slash
-    elif slash < 0 or backslash < slash:
-        server_end = backslash
-    else:
-        server_end = slash
-    return (
-        server_end > 2
-        and server_end + 1 < len(raw)
-        and raw[server_end + 1] not in "\\/"
-    )
-
-
-def _is_root_spelling(invocation: _RootInvocation, raw: str) -> bool:
-    return any(
-        root.authority is not None
-        and raw in (root.authority.logical_root, root.authority.reviewed_anchor)
-        for root in invocation.roots
-    )
+    invocation = _ROOT_INVOCATION.get()
+    if os.name != "nt" or invocation is None or not invocation.active:
+        return None
+    if invocation.native_owner is None:
+        return None
+    for root in invocation.roots:
+        authority = root.authority
+        prefix = root.native_prefix
+        if authority is None or prefix is None:
+            continue
+        logical_root = authority.logical_root
+        if not _strict_root_prefix(raw, logical_root):
+            continue
+        # A confirmed local hold has an ordinary drive root; preserve the
+        # caller's drive-letter case in the native spelling.
+        prefix = prefix[:4] + raw[0] + prefix[5:]
+        if raw[1:] == logical_root[1:]:
+            return prefix
+        relative = raw[len(logical_root.rstrip("\\/")) + 1:]
+        if not relative or relative.endswith(("\\", "/")):
+            return None  # Let the full converter retain trailing-root spelling.
+        canonical = validate_relative_path(relative)
+        if any(character in '<>"|?*' for character in canonical):
+            raise PathValidationError("absolute path has an invalid Windows component")
+        try:
+            require_utf16_path(raw, "path")
+        except ValueError as error:
+            raise PathValidationError(str(error)) from error
+        return prefix.rstrip("\\") + "\\" + canonical
+    return None
 
 
 def _win32_path(path: Path | str) -> str:
     raw = str(path)
-    invocation = _conversion_invocation(raw)
-    cached = None if invocation is None else invocation.root_paths.get(raw)
-    if cached is not None and cached[1] is not None:
-        return cached[1]
-    if invocation is not None and invocation.last_win32_path is not None:
-        if invocation.last_win32_path[0] == raw:
-            return invocation.last_win32_path[1]
-    result = to_extended_length_path(raw)
-    if invocation is not None:
-        if _is_root_spelling(invocation, raw):
-            if cached is not None or len(invocation.root_paths) < 4:
-                invocation.root_paths[raw] = (None if cached is None else cached[0], result)
-        else:
-            invocation.last_win32_path = (raw, result)
-    return result
+    return _held_native_path(raw) or to_extended_length_path(raw)
 
 
 def _resolved_logical_path(path: Path | str, *, strict: bool) -> Path:
@@ -1731,15 +1708,9 @@ def _resolved_logical_path(path: Path | str, *, strict: bool) -> Path:
 
 def _lexical_logical_path(path: Path | str) -> Path:
     raw = str(path)
-    invocation = _conversion_invocation(raw)
-    cached = None if invocation is None else invocation.root_paths.get(raw)
-    if cached is not None and cached[0] is not None:
-        return cached[0]
-    result = Path(lexical_absolute_path(path))
-    if invocation is not None and _is_root_spelling(invocation, raw):
-        if cached is not None or len(invocation.root_paths) < 4:
-            invocation.root_paths[raw] = (result, None if cached is None else cached[1])
-    return result
+    if _held_native_path(raw) is not None:
+        return Path(raw)
+    return Path(lexical_absolute_path(path))
 
 
 def _windows_ticks(unix_ns: int) -> int:

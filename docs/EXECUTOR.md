@@ -223,20 +223,17 @@ walk. Permission, I/O, unsafe-entry and path-conversion failures propagate rathe
 than admitting an unobserved path. This applies to resolve and both owned-trash
 consumers, which retain their independent directory and volume checks.
 
-An active native invocation lazily retains successful pure path conversions for
-at most four exact absolute root/reviewed-anchor spellings, plus one last
-successful nonroot Win32 spelling. Root hits leave that last slot intact. Only
-root entries retain lexical `Path` values; other paths retain no lexical result.
-Eligibility uses a plain drive-prefix or UNC anchor/share check; it only selects
-spellings that may use the cache and does not validate them. Relative,
-drive-relative and rooted-without-drive inputs and failed conversions are not
-stored; the existing converters still reject malformed and device paths before
-storing success. Keys are exact input spellings, without case folding or alias
-matching. Exact reviewed runtime roots bypass repeated normalization; variants
-keep the existing comparison. Exit deactivates and clears these values before
-hold release, including copied contexts; nested calls restore the outer scope.
-Adapters without native activation keep the original conversion helpers. This
-stores no filesystem result and changes no physical resolution or guard.
+After full reviewed admission and exact local hold confirmation, a native
+invocation retains the validated Windows root prefix. Descendant native paths
+compose that prefix with a validated relative suffix, preserving illegal
+component and complete UTF-16-length refusals without converting the full
+absolute path again. The admitted root also bypasses repeated lexical
+normalization. Conversion performs no filesystem query or admission; held-handle
+attribute checks and descendant guards still precede access. Unheld and
+fallback roots, paths outside the admitted root spelling apart from drive-letter
+case, and adapters without
+native activation use the full converters. Invocation exit clears the prefix
+before hold release, including copied contexts.
 
 The optional invocation collector receives one immutable diagnostic per used,
 volume-bound source/target role after successful admission. Plans lacking reviewed

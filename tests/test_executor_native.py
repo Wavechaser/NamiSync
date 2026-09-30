@@ -625,207 +625,155 @@ def test_held_root_parent_guard_refuses_first_and_deeper_descendant_reparse(
 
 
 @contextmanager
-def _path_cache_scope(monkeypatch: pytest.MonkeyPatch, fs=None):
-    @contextmanager
-    def unavailable_hold(authority):
-        try:
-            yield RootHold(authority, None, "unavailable")
-        finally:
-            invocation = executor_module._ROOT_INVOCATION.get()
-            assert invocation is not None and not invocation.active
-            assert invocation.root_paths == {} and invocation.last_win32_path is None
-
-    monkeypatch.setattr(executor_module, "hold_root", unavailable_hold)
-    roots = tuple(
-        executor_module._InvocationRoot(role, RootAuthority(root, anchor))
-        for role, root, anchor in (
-            ("source", r"F:\Source", "F:\\"),
-            ("target", r"G:\Target", "G:\\"),
-        )
+def _held_path_scope(tmp_path: Path):
+    root = tmp_path / "managed"
+    root.mkdir()
+    fs = NativeFileSystem()
+    volume = fs._observe_root_volume(str(root))
+    state = executor_module._InvocationRoot(
+        "target", RootAuthority(str(root), volume.evidence.device_id, volume.volume_id)
     )
-    with executor_module._root_invocation_scope(
-        NativeFileSystem() if fs is None else fs, object(), roots, None
-    ):
-        yield executor_module._ROOT_INVOCATION.get()
+    with executor_module._root_invocation_scope(fs, object(), (state,), None):
+        fs.revalidate_root(root, expected_volume=volume.volume_id)
+        assert state.held and state.native_prefix is not None
+        yield fs, root, state
+    assert state.native_prefix is None
 
 
-@pytest.mark.skipif(os.name != "nt", reason="native Windows pure path cache")
-def test_native_path_cache_bounds_exact_spellings_and_keeps_last_nonroot(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    win32_calls, lexical_calls = [], []
-    original_win32 = executor_module.to_extended_length_path
-    original_lexical = executor_module.lexical_absolute_path
-
-    def win32(raw):
-        win32_calls.append(raw)
-        return original_win32(raw)
-
-    def lexical(raw):
-        lexical_calls.append(str(raw))
-        return original_lexical(raw)
-
-    monkeypatch.setattr(executor_module, "to_extended_length_path", win32)
-    monkeypatch.setattr(executor_module, "lexical_absolute_path", lexical)
-    pinned = (r"F:\Source", "F:\\", r"G:\Target", "G:\\")
-    with _path_cache_scope(monkeypatch) as invocation:
-        assert invocation.root_paths == {} and invocation.last_win32_path is None
-        for raw in pinned:
-            for _ in range(2):
-                assert executor_module._win32_path(raw) == original_win32(raw)
-                assert str(executor_module._lexical_logical_path(raw)) == original_lexical(raw)
-        assert win32_calls == list(pinned) and lexical_calls == list(pinned)
-        assert set(invocation.root_paths) == set(pinned)
-
-        leaves = (
-            r"\\server\share\leaf", r"\\?\F:\Source\leaf", r"f:\Source",
-            "F:/Source", "F:\\" + "\\".join(["long-component"] * 24),
-            *(f"F:\\Source\\leaf-{number}" for number in range(40)),
-        )
-        for raw in leaves:
-            before = len(win32_calls)
-            assert executor_module._win32_path(raw) == original_win32(raw)
-            for root in pinned:
-                executor_module._win32_path(root)
-                executor_module._lexical_logical_path(root)
-            assert executor_module._win32_path(raw) == original_win32(raw)
-            assert len(win32_calls) == before + 1
-            assert invocation.last_win32_path == (raw, original_win32(raw))
-            assert len(invocation.root_paths) == 4
-        raw = leaves[-1]
-        before = len(lexical_calls)
-        executor_module._lexical_logical_path(raw)
-        executor_module._lexical_logical_path(raw)
-        assert len(lexical_calls) == before + 2
-        assert invocation.last_win32_path[0] == raw
-
-
-def test_absolute_windows_cache_eligibility_is_a_plain_string_check(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(
-        executor_module,
-        "PureWindowsPath",
-        lambda *_args, **_kwargs: pytest.fail("eligibility parsed a Windows path"),
-    )
-    for spelling in (
-        r"F:\root", "F:/root", r"\\server\share", "//server/share",
-        r"\\?\F:\root", r"\\?\UNC\server\share\root",
-    ):
-        assert executor_module._is_absolute_windows_spelling(spelling)
-    for spelling in (
-        "leaf", r"F:leaf", "F:", r"\root", r"\\server", "\\\\server\\",
-    ):
-        assert not executor_module._is_absolute_windows_spelling(spelling)
-
-
-@pytest.mark.skipif(os.name != "nt", reason="Windows relative path/CWD policy")
-@pytest.mark.parametrize("raw", ["leaf", "F:leaf", "\\leaf"])
-def test_native_path_cache_bypasses_relative_forms_and_tracks_current_directory(
+@pytest.mark.skipif(os.name != "nt", reason="native Windows held path composition")
+def test_held_native_paths_match_full_conversion_without_revalidating_full_path(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    raw: str,
 ) -> None:
-    calls = []
-    original = executor_module.to_extended_length_path
-    monkeypatch.setattr(
-        executor_module, "to_extended_length_path",
-        lambda spelling: calls.append(spelling) or original(spelling),
-    )
-    with _path_cache_scope(monkeypatch) as invocation:
-        for name in ("first", "second"):
-            directory = tmp_path / name
-            directory.mkdir()
-            monkeypatch.chdir(directory)
-            expected = original(raw)
-            assert executor_module._win32_path(raw) == expected
-            assert executor_module._win32_path(raw) == expected
-        assert calls == [raw] * 4
-        assert invocation.root_paths == {} and invocation.last_win32_path is None
+    with _held_path_scope(tmp_path) as (_, root, state):
+        names = ("leaf.bin", r"nested\leaf.bin", "nested/leaf.bin")
+        paths = [str(root), *(str(root) + "\\" + name for name in names)]
+        paths.append(str(root).replace(str(root)[0], str(root)[0].swapcase(), 1) + r"\leaf.bin")
+        expected = [to_extended_length_path(path) for path in paths]
+        assert state.hold is not None
+        monkeypatch.setattr(
+            state.hold, "require_ordinary",
+            lambda: pytest.fail("pure conversion queried held attributes"),
+        )
+        monkeypatch.setattr(
+            executor_module, "to_extended_length_path",
+            lambda _path: pytest.fail("held path reached full absolute conversion"),
+        )
+        monkeypatch.setattr(
+            executor_module, "lexical_absolute_path",
+            lambda _path: pytest.fail("held path reached full lexical conversion"),
+        )
+        for raw, native in zip(paths, expected, strict=True):
+            assert executor_module._win32_path(raw) == native
+            assert executor_module._lexical_logical_path(raw) == Path(raw)
+        assert executor_module._lexical_logical_path(root) == root
 
 
-@pytest.mark.skipif(os.name != "nt", reason="Windows success-only path cache")
-def test_native_path_cache_does_not_store_failed_conversions(
-    monkeypatch: pytest.MonkeyPatch,
+@pytest.mark.skipif(os.name != "nt", reason="native Windows held path refusals")
+def test_held_native_path_preserves_invalid_and_complete_length_refusals(
+    tmp_path: Path,
 ) -> None:
-    original = executor_module.to_extended_length_path
-    calls = []
-    retry = r"F:\retry"
-
-    def convert(raw):
-        calls.append(raw)
-        if raw == retry and calls.count(retry) == 1:
-            raise PathValidationError("transient conversion fault")
-        return original(raw)
-
-    monkeypatch.setattr(executor_module, "to_extended_length_path", convert)
-    with _path_cache_scope(monkeypatch) as invocation:
-        previous = r"F:\previous"
-        executor_module._win32_path(previous)
-        stored = invocation.last_win32_path
-        for _ in range(2):
+    with _held_path_scope(tmp_path) as (_, root, _state):
+        prefix = str(root) + "\\"
+        maximum_leaf = "a" * (32_767 - len(prefix))
+        assert executor_module._win32_path(prefix + maximum_leaf) == to_extended_length_path(
+            prefix + maximum_leaf
+        )
+        for raw in (
+            *(prefix + character + "leaf" for character in '<>"|?*'),
+            prefix + "NUL", prefix + "bad. ", prefix + "a\\\\b",
+            prefix + "..\\outside", prefix + "bad\x00leaf",
+            prefix + maximum_leaf + "a",
+        ):
             with pytest.raises(PathValidationError):
-                executor_module._win32_path("F:\\bad\x00leaf")
-            assert invocation.last_win32_path == stored
-        with pytest.raises(PathValidationError, match="transient"):
-            executor_module._win32_path(retry)
-        assert invocation.last_win32_path == stored
-        assert executor_module._win32_path(retry) == original(retry)
-        assert executor_module._win32_path(retry) == original(retry)
-        assert calls.count(retry) == 2 and calls.count("F:\\bad\x00leaf") == 2
-        assert invocation.root_paths == {}
+                to_extended_length_path(raw)
+            with pytest.raises(PathValidationError):
+                executor_module._win32_path(raw)
 
 
-@pytest.mark.skipif(os.name != "nt", reason="native path cache lifetime")
-def test_native_path_cache_restores_nested_scope_and_bypasses_retained_context(
+@pytest.mark.skipif(os.name != "nt", reason="native Windows ASCII drive eligibility")
+def test_held_native_path_does_not_accept_unicode_drive_lookalikes() -> None:
+    root = r"S:\Root"
+    state = executor_module._InvocationRoot("target", RootAuthority(root))
+    state.native_prefix = to_extended_length_path(root)
+    invocation = executor_module._RootInvocation(
+        object(), (state,), None, native_owner=NativeFileSystem()
+    )
+    token = executor_module._ROOT_INVOCATION.set(invocation)
+    try:
+        raw = "\u017f" + root[1:] + r"\leaf"
+        with pytest.raises(PathValidationError):
+            to_extended_length_path(raw)
+        with pytest.raises(PathValidationError):
+            executor_module._win32_path(raw)
+    finally:
+        executor_module._ROOT_INVOCATION.reset(token)
+
+
+@pytest.mark.skipif(os.name != "nt", reason="native Windows path fallback")
+def test_held_native_path_uses_full_conversion_for_noncanonical_and_fallback_roots(
+    tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    calls = []
-    original = executor_module.to_extended_length_path
-    monkeypatch.setattr(
-        executor_module, "to_extended_length_path",
-        lambda raw: calls.append(raw) or original(raw),
+    with _held_path_scope(tmp_path) as (_, root, _state):
+        original = executor_module.to_extended_length_path
+        calls = []
+        monkeypatch.setattr(
+            executor_module, "to_extended_length_path",
+            lambda raw: calls.append(raw) or original(raw),
+        )
+        for raw in (str(root) + "\\", str(root / "child") + "/",
+                    str(root).replace("\\", "/"),
+                    str(root.parent / "outside"), "leaf"):
+            assert executor_module._win32_path(raw) == original(raw)
+        assert calls == [str(root) + "\\", str(root / "child") + "/",
+                         str(root).replace("\\", "/"),
+                         str(root.parent / "outside"), "leaf"]
+
+    @contextmanager
+    def unavailable_hold(authority):
+        yield RootHold(authority, None, "unavailable")
+
+    monkeypatch.setattr(executor_module, "hold_root", unavailable_hold)
+    fs = NativeFileSystem()
+    volume = fs._observe_root_volume(str(root))
+    state = executor_module._InvocationRoot(
+        "target", RootAuthority(str(root), volume.evidence.device_id, volume.volume_id)
     )
-    root, leaf = r"F:\Source", r"F:\Source\leaf"
-    with _path_cache_scope(monkeypatch) as outer:
-        outer_path = executor_module._lexical_logical_path(root)
-        executor_module._win32_path(root)
-        executor_module._win32_path(leaf)
+    calls.clear()
+    with executor_module._root_invocation_scope(fs, object(), (state,), None):
+        fs.revalidate_root(root, expected_volume=volume.volume_id)
+        assert state.native_prefix is None
+        calls.clear()
+        leaf = str(root / "leaf")
+        assert executor_module._win32_path(leaf) == original(leaf)
+        assert calls == [leaf]
+
+    state.native_prefix = original(str(root))
+    with executor_module._root_invocation_scope(object(), object(), (state,), None):
+        calls.clear()
+        assert executor_module._win32_path(leaf) == original(leaf)
+        assert calls == [leaf]
+
+
+@pytest.mark.skipif(os.name != "nt", reason="native Windows held path lifetime")
+def test_held_native_path_expires_with_invocation_even_in_retained_context(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original = executor_module.to_extended_length_path
+    with _held_path_scope(tmp_path) as (_, root, state):
+        leaf = str(root / "leaf")
         retained = copy_context()
-        with _path_cache_scope(monkeypatch) as inner:
-            assert inner is not outer and inner.root_paths == {}
-            executor_module._win32_path(root)
-            executor_module._win32_path(leaf)
-        assert not inner.active and inner.root_paths == {} and inner.last_win32_path is None
-        assert executor_module._ROOT_INVOCATION.get() is outer
-        assert executor_module._lexical_logical_path(root) is outer_path
-        before = len(calls)
-        executor_module._win32_path(leaf)
-        assert len(calls) == before
-    assert not outer.active and outer.root_paths == {} and outer.last_win32_path is None
-    before = len(calls)
-    assert retained.run(executor_module._win32_path, root) == original(root)
-    assert retained.run(executor_module._win32_path, root) == original(root)
-    assert len(calls) == before + 2
-    assert outer.root_paths == {} and outer.last_win32_path is None
-    assert executor_module._ROOT_INVOCATION.get() is None
-
-
-@pytest.mark.skipif(os.name != "nt", reason="native activation path cache")
-def test_custom_adapter_without_native_activation_keeps_original_conversions(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+        assert executor_module._win32_path(leaf) == original(leaf)
+        assert state.native_prefix is not None
     calls = []
-    original = executor_module.to_extended_length_path
     monkeypatch.setattr(
         executor_module, "to_extended_length_path",
         lambda raw: calls.append(raw) or original(raw),
     )
-    with _path_cache_scope(monkeypatch, fs=object()) as invocation:
-        for _ in range(2):
-            executor_module._win32_path(r"F:\Source")
-        assert calls == [r"F:\Source"] * 2
-        assert invocation.root_paths == {} and invocation.last_win32_path is None
+    assert retained.run(executor_module._win32_path, leaf) == original(leaf)
+    assert calls == [leaf]
 
 
 @pytest.mark.skipif(os.name != "nt", reason="native Windows root hold")
@@ -875,7 +823,8 @@ def test_native_invocation_mixes_held_and_fallback_without_sharing_adapter_state
         assert admissions == [str(source), str(target), str(target)]
         assert roots[0].held and not roots[1].held
         invocation = executor_module._ROOT_INVOCATION.get()
-        assert {str(source), str(target)} <= set(invocation.root_paths)
+        assert roots[0].native_prefix is not None
+        assert roots[1].native_prefix is None
         other = NativeFileSystem()
         # A different adapter still performs its own admission inside this scope.
         monkeypatch.setattr(other, "_admit_reviewed_root", admit)
@@ -2565,7 +2514,12 @@ def test_executor_descendant_walk_keeps_containment_conversion_and_error_order(
         visited.append(path)
         raise failure
 
-    monkeypatch.setattr(fs, "_reject_reparse", observe)
+    if boundary == "invalid-conversion":
+        monkeypatch.setattr(
+            Path, "lstat", lambda *_args, **_kwargs: pytest.fail("invalid path reached lstat")
+        )
+    else:
+        monkeypatch.setattr(fs, "_reject_reparse", observe)
     if boundary == "equal-root":
         monkeypatch.setattr(executor_module, "_win32_path", lambda _path: pytest.fail("root equality reached a descendant conversion"))
         fs._validate_existing_chain(tmp_path, tmp_path)
@@ -2666,7 +2620,9 @@ def test_executor_leaf_conversion_refuses_before_unavailable_policy(
     spelling: str,
 ) -> None:
     fs = NativeFileSystem()
-    monkeypatch.setattr(fs, "_reject_reparse", lambda _path: pytest.fail("conversion refusal reached leaf observation"))
+    monkeypatch.setattr(
+        Path, "lstat", lambda *_args, **_kwargs: pytest.fail("conversion refusal reached leaf observation")
+    )
     with pytest.raises(PathValidationError):
         fs.stat_path(Path(spelling))
 

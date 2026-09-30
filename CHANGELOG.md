@@ -1039,7 +1039,13 @@ claims explicit, independently reviewable, and regression-backed.
   Final verification passes 5,714 ordinary tests, 27 focused checks, imports,
   unchanged three-run oracle and the 67-group differential. All 25 five-band
   executions/readbacks pass; medians are 3.222 / 1.685 / 0.341 / 0.296 / 1.981 s,
-  with no established throughput lift. Path/dispatch simplifications remain next.
+  with no established throughput lift.
+- Compose held-root native paths from an admitted prefix, remove conversion
+  caches and duplicate conversion-only probes, and preserve path refusals and
+  per-access guards. Verification passes 343 native/runtime and 5,711 ordinary
+  tests, imports, unchanged oracle and differential. All 25 five-band readbacks
+  pass; medians are 3.211 / 1.682 / 0.348 / 0.302 / 1.999 s with overlapping
+  predecessor ranges. Dispatch simplification remains next.
 
 - Correct the measurement context: F: was occupied during the finishing runs;
   they do not establish a regression. Record the user's separate rerun table,

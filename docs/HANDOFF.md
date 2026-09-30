@@ -1,50 +1,52 @@
-# Latest session — own-effect version recognition
+# Latest session — held-root path composition
 
-2026-09-30, `milestone1-adelbert`, result-5 candidate based on `8b2b00e`.
-The explicit user authorization resolved the recorder approval block. Active
-scope remains results 5–7, with small atomic commits and measurements; result 8
-and direct writes are excluded.
+2026-09-30, `milestone1-adelbert`, result-6 candidate based on `d43f832`.
+Active scope is results 5–7 with small atomic commits and measurements; direct
+writes/result 8 remain excluded. Result 5 is committed as `d43f832` after the
+user's explicit recorder authorization; the directive commit is `8b2b00e`.
 
-## Delivered candidate
+## Current outcome
 
-Core version recognition now serves executor post-effect/recovery checks and
-pure MOVE/RECASE recording. Plan predicates reuse it with planner metadata facts.
-Readonly-restoration completion and SQL row concurrency remain strict; actual
-resulting metadata is recorded. Five native ARCHIVE cases and real version-change
-controls cover the fix. Source/test/component docs are frozen and independently
-reviewed; delivery docs record the final evidence before the atomic commit.
+Result 6 replaces native conversion caches with one validated prefix per admitted
+held root, composes descendant paths and removes conversion-only precedence
+probes. Per-access held attributes, descendant guards, fallback validation and
+volume semantics remain. ASCII-drive and trailing-separator parity corrections
+were made before final acceptance. Cache-mechanism tests were replaced with
+parity/refusal/lifetime/fallback tests; no required production guard was retired.
 
-Final verification: 27 focused checks; 5,714 ordinary tests passed, four existing
-capability skips, 34 deselected. The full ordinary suite covers the core,
-executor and database departments. Imports retain all 12 contracts. The unchanged
-settlement oracle passes 30 scenarios x three runs, admission scan reports
-70 rows/391 effects/zero missing admissions, and the fixed differential has
-67 groups with zero differences. Earlier receipts are retained but superseded
-by final predicates; the initial ordinary run overlapped the composition edit
-and is not acceptance for final bytes.
+Final verification: 343 native/runtime tests and 5,711 ordinary tests passed;
+four existing capability skips and 34 deselected. Ordinary coverage includes the
+executor department. All 12 imports, unchanged 30x3 settlement oracle and
+70-row/391-effect guard scan pass. The saved 67-group differential has zero
+differences, and current source/helper hashes match its receipt. Fresh independent
+review covers source, test migrations and evidence before the atomic commit.
 
-Evidence root: `build/executor-simplification-20260929/`. Final logs use
-`differential/result5-final-*`; differential capture is
-`runs/candidate-result5-final-ee4cb82faa6f427baec078c2bb6e1c36/` under that directory.
-Five-band prefix: `measurements/result5-8b2b00e4-20260930-130559-e544fed6`.
+Evidence root: `build/executor-simplification-20260929/`. Logs use
+`differential/result6-*`; final focused receipt is
+`result6-native-runtime-eligibility-final.log`. Differential capture:
+`runs/candidate-result6-paths-a541008d975c4abcb81e1c8d035c71ab/` under that directory.
+Measurement prefix: `measurements/result6-d43f8324-20260930-133019-7ae09623`.
 All 25 executions/readbacks passed with zero reservations, unchanged source and
-dependency manifests and owned-target cleanup. Medians: 3.222 / 1.685 / 0.341 /
-0.296 / 1.981 s. All predecessor ranges overlap; no throughput lift is claimed.
-PERFORMANCE owns the full table and limits.
+dependencies and owned-target cleanup. Medians: 3.211 / 1.682 / 0.348 / 0.302 /
+1.999 s; predecessor ranges overlap. PERFORMANCE owns the table and limits.
 
-## Next work and recovery accounting
+## Next and preservation
 
-Commit the verified coherent result 5, then results 6–7 follow. Result 6 stays
-in native path composition and its tests; no conversion-time filesystem query,
-weakened descendant guard or fallback admission is intended. Result 7 removes
-method-identity dispatch and migrates custom override controls to primitives.
-Revalidate read-only design against the integrated result 5 before edits.
+Commit result 6, then implement result 7: remove method-identity dispatch and
+migrate affected guard/volume-probe test overrides to native primitives. The
+read-only design inspected base `d43f832` and native SHA-256
+`c40c0bb00d5e9f8b2b144ac6dc8aab9df5e9dcdef535fb67e0bf086e8f886702`;
+refresh against integrated result 6 before editing. Saved differential driver
+and helper bytes stay unchanged; classify any declared custom-dispatch changes.
 
-`8b2b00e` committed the directive. `9f01bfd9` remains on
-`codex/wip-20260930-1246-executor-version` as recovery only. Its six saved paths
-were restored as uncommitted changes, reviewed and corrected; no WIP merge or
-cherry-pick occurred. Keep that ref until final integrated accounting, then
-remove it. No task worktree was created. Original F: source, old evidence and
-unrelated `b8baf42d` worktree remain protected. The saved fixed starting baseline
-is available without restoring its archived checkout. Native gates use actual
-user/default pytest temp. No direct-write implementation or sweep has started.
+The first sandbox setup failed on temp ACLs; actual-user/default-temp baseline
+passed. The exact task-owned sandbox fixture tree was restored to inherited ACLs
+and removed (39 entries), retaining `result6-fixture-*` receipts. A development
+spy failure log was accidentally overwritten by its retry; the reconstruction is
+explicitly labeled in `result6-development-note.txt`. Final distinct acceptance
+logs are intact. Future native tests must use actual user/default temp.
+
+Recovery `9f01bfd9` remains on `codex/wip-20260930-1246-executor-version` pending
+final integrated accounting; it was rebuilt into result 5, never merged. No
+worktree was created. Original F: source, old evidence and unrelated `b8baf42d`
+worktree remain protected. No direct-write implementation or device sweep began.
