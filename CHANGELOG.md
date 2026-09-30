@@ -1027,7 +1027,13 @@ repeated machinery while preserving operational safety and boundary contracts.
 Safety, settlement, authority, and measurement work made high-risk release
 claims explicit, independently reviewable, and regression-backed.
 
-#### Apply policy-driven executor and verifier simplifications (2026-09-29)
+#### Apply policy-driven executor and verifier simplifications (2026-09-29 – 2026-09-30)
+
+- Refine and activate results 5–7: recognize admitted file versions after own
+  effects, compose validated descendant paths and remove method-identity dispatch.
+  Keep metadata completion, database concurrency and integrity criteria separate;
+  direct writes remain outside this execution. Implementation and measurements
+  are pending.
 
 - Correct the measurement context: F: was occupied during the finishing runs;
   they do not establish a regression. Record the user's separate rerun table,

@@ -14,32 +14,98 @@ certify their recorded build and dependencies only.
 ## Executor simplification and throughput — 2026-09-29
 
 Activated by the user on 2026-09-29 on `milestone1-adelbert`, before M1-9, from
-the commit that registers this section. It applies the proportional-defense
-policy in [DEFENSE §2.5](DEFENSE.md) to the executor and verifier, then makes
-large copies run closer to device speed.
+`b1b58476`, the equivalence baseline. It applies the proportional-defense policy
+in [DEFENSE §2.5](DEFENSE.md) to the executor and verifier, then makes large
+copies run closer to device speed.
 
-**Results, in order.**
+**Delivered.** Each implementation outcome passed its focused/department/ordinary tests,
+imports, settlement oracle, guard scan, 67-group differential against the
+starting commit, five-band measurement and independent review. Evidence is
+under `build/executor-simplification-20260929/`; PERFORMANCE owns measurements.
 
-1. **Consolidated admission per effect.** Each mutating effect reuses one
-   plan-fidelity observation across the reads and checks that feed that effect.
-   Remove duplicate root admissions within that effect where the approved hold
-   contract permits reuse; retain held-attribute checks before each access that
-   reuses admission and per-access admission for fallback roots. An item may
-   contain several effects; the fidelity observation does not carry across
-   later effects.
-   Work kept only to preserve which accurate refusal reason wins is removed.
-2. **One handle per copied file.** The temp handle carries a copied file through
-   writing, metadata, flush, publication and the post-publication observation,
-   removing the reopen and path lookups around finishing. It covers COPY and the
-   UPDATE/MOVE_UPDATE publication paths; how far it reaches into backup and
-   replacement mechanics is the implementer's call.
-3. **Planner-used drift facts; verifier classifier cleanup.** Drift checks
-   compare only facts the planner used to choose the action (§2.5.1). The
-   user-approved verifier outcome below preserves the pre-open walk and
-   post-open final-path check while removing its duplicate placeholder classifier.
-4. **Direct writes for large files.** Above a measured threshold, target data is
-   written unbuffered, with buffered fallback where that is unavailable. The
-   file flush remains.
+| Commit | Shipped outcome |
+| --- | --- |
+| `dadc1fe` | Scope clarification: fidelity bounds refusal selection, not publication, recovery or recording facts; held-attribute and fallback admission checks stay. |
+| `a6e2306` | Fresh COPY/MOVE_UPDATE publication reuses preparation's source fidelity; source admissions with no later source access and target refusal-precedence scaffolding removed. One classified oracle re-pin. |
+| `0d7dd6b` | One invocation-owned handle carries a copied file through writing, metadata, flush, conditional publication and observation; released before recording and on operation/invocation exit. |
+| `84ce0fb` | Plan drift checks use planner facts through a shared core predicate in preflight, executor and recorder; strict checks remain on publication, backup, recovery, DB concurrency and integrity. |
+| `d444a6a` | Verifier's duplicate placeholder classifier removed; walk and result classes preserved. |
+| `eb18611` | Fresh COPY/MOVE_UPDATE publication reuses preparation's target fidelity; retries still recheck. One deletion-only oracle re-pin (21 stat removals across 18 rows). |
+
+Decisions recorded during delivery:
+- **Retained-handle permissions (user, 2026-09-29).** An already-granted owned
+  temp handle may finish the reviewed copy where copied or inherited ACLs would
+  deny a later reopen or path-based publication (declared change below).
+- **Verifier (user, 2026-09-29).** Moving ordinary-leaf refusal after open saved
+  no query and changed native junction results, so only the classifier cleanup
+  shipped.
+- **Measurements.** Earlier runs overlapped source-drive contention. On the
+  idle machine the five bands take 3.134 / 1.641 / 0.351 / 0.303 / 2.011 s
+  (`measurements/target-9c96893b-*`), about 1.25 MiB/s at 4 KiB. The 4 KiB and
+  128 KiB bands share a fixed per-file gap of about 0.7 ms against the
+  pre-pathing hash-refactor record; larger bands lead or match it.
+- **Own-effect ARCHIVE mismatch.** Found by `84ce0fb`'s native witnesses,
+  reproduced at the starting commit, recorded in BUGS and scheduled as result 5.
+
+**Pending results, in order (added by the user on 2026-09-30).** Simplification
+leads; direct writes follow on the simplified base.
+
+5. **Two comparison questions; own-effect ARCHIVE fix.** Before an effect,
+   checks ask whether the file still matches the plan (§2.5.1). After NamiSync's
+   own effect, and in recovery, they ask whether it is still the same file
+   version: kind, size, mtime and identity where the profile provides it.
+   Filesystem reactions to our own rename or hardlink, such as ARCHIVE or link
+   count, are not version changes. Reuse the existing same-file-version semantics
+   for executor and recorder version recognition, comparing against the immediately
+   admitted version or retained continuation evidence with profile normalization.
+   Record actual resulting metadata. These two questions govern fidelity and
+   version recognition only; metadata completion/preservation, database concurrency
+   and integrity retain their separate criteria. Native witnesses cover the four
+   failing BUGS cases and ordinary MOVE_UPDATE's already-successful control;
+   changed kind, size, mtime and available identity remain negative controls.
+6. **Compose descendant native paths.** Build descendant Windows paths from the
+   held root's validated prefix and the validated relative path instead of
+   re-validating each full absolute path. Remove the conversion cache machinery
+   this makes unnecessary, and conversions kept only to preserve refusal
+   precedence (§2.5.1). Descendant checks and held-root attribute checks remain.
+   Unheld and fallback roots keep full validation.
+7. **One production path per held-root operation.** Replace method-identity
+   gating (`__func__ is _DEFAULT_*` and its eligibility helpers) with a single
+   held-root path; tests intercept native primitives rather than overridden
+   methods. Custom overrides no longer select the legacy sequence.
+8. **Direct writes for large files.** Above a measured threshold, target data is
+   written unbuffered. Fold in creating the temp with create-new semantics
+   (recovering a leftover only when creation reports it exists) and a
+   synchronous path for single-chunk copies, since both rework the same code.
+   The implementer chooses the mechanism, including buffer pool, request depth,
+   unbuffered source reads and how the retained handle carries the flag, within
+   these results:
+   - *Buffer ownership.* A reused buffer is never refilled while the hasher or
+     writer still references it. A targeted test with delayed hashing/writing
+     and byte-exact readback covers this; benchmark readback alone does not.
+   - *Bounded memory.* The existing 32 MiB pipeline reservation bounds the pool,
+     and buffers return on pause, cancel, failure and the backstop.
+   - *Exact files.* Published length equals source length, a padded tail is
+     never visible at a live name, and the hash covers only real bytes.
+   - *Fallback, not failure.* Unknown sector geometry, remote roots or an
+     unbuffered-open error use the buffered path with a diagnostic. The file
+     flush remains.
+   - *No extra full-size copy* between read, hash and write (performance goal).
+   - *Threshold by measurement.* Start near 8 MiB, where chunking and
+     preallocation already change, and sweep 2–32 MiB across G: (SN850X, fast
+     NAND), H: (SN550, slower NAND), E: (Optane 905p), J: (HC550 HDD) and
+     L: (Samsung T7, USB), with F: as source. A device class may keep buffered
+     writes if it does not benefit. PERFORMANCE records the sweep.
+
+Opportunistic: the remaining fresh-copy duplicates (repeated prepared-temp stat,
+target resolution before the retained-handle observation, and the pre-copy
+target check) may be removed inside whichever result touches those lines.
+
+**Execution scope (user, 2026-09-30).** Refine and commit this directive first,
+then deliver results 5–7 in the smallest coherent atomic commits with their
+required verification and measurements. Result 8 remains pending and is not
+authorized in this execution. Unbuffered source reads remain optional in that
+future result; device-class selection machinery requires measurement justification.
 
 **Goal, not gate.** 1,000 × 4 KiB F:→G: at or above the pre-pathing
 1.6 MiB/s, and the 4 GiB band well above today's 2.0 GiB/s toward the device
@@ -59,140 +125,6 @@ for it, recording the choice in the commit and HANDOFF. Commits stay atomic.
 Acting on a §2.5.3 consolidate, freeze or relax disposition needs no further
 approval when its differences fall in the declared list below; removing a
 backstop or a family marked keep does.
-
-The 2026-09-29 execution scope covers results 1–3. Direct writes (result 4)
-remain deferred and are not authorized by this execution. Start with admission
-consolidation and refusal-reason relaxation together, then handle continuity;
-use small atomic commits with their own verification and independent review.
-Refusal selection may change; publication, recovery-artifact and recording
-facts and their settlement meaning may not.
-
-**First outcome delivered — `a6e2306`.** Fresh COPY/MOVE_UPDATE publication
-reuses preparation's source fidelity; retries still recheck it. Final source
-admissions with no later source access and retained-target refusal-precedence
-scaffolding are removed. Target checks, UPDATE, fallback admission, effects and
-settlement remain unchanged. Ordinary tests, imports, 67-group differential,
-guard scan, independently classified 70-row oracle re-pin and committed 30×3
-oracle passed. All 25 five-band executions/readbacks passed; the small-file
-median is 1.163 MiB/s, below the non-gating goal. PERFORMANCE and
-`build/executor-simplification-20260929/` retain measurements and exact evidence.
-Automatic approval review initially rejected target-fidelity consolidation even
-after explicit user approval. The first outcome therefore contains only the
-source-side portion; the user-reopened remainder is recorded below.
-
-**Target consolidation delivered — `eb18611`, user-authorized 2026-09-29.** After
-cleaning the ACL-witness leftovers, the bounded remainder shipped from `d444a6a`. Fresh COPY
-and MOVE_UPDATE reuse `_prepare_copy`'s final target-fidelity check for that same
-publication effect. Only their immediately repeated target check is conditional
-on retained continuation state; retries still recheck. Final target-root admission,
-held-attribute/fallback checks, prepared-temp proof, MOVE_UPDATE old-target and
-trash proofs, conditional publication, durability, recording and UPDATE stay
-unchanged. No check is reused across pause, retry or another mutating effect.
-Runtime owns the change; executor runtime/native/ACL/settlement tests and the
-existing oracle producer/baseline, EXECUTOR and delivery/evidence documents are
-the finite population. Run existing native/retained-retry seams first, then
-executor/workflow and ordinary/import gates, classified oracle trace changes
-and its three-run check, guard scan, fixed baseline differential, five-band
-measurement and fresh independent review. One small atomic commit closes this
-remainder; direct writes and the recorded native own-effect defect remain out
-of scope. The earlier refusal is retained as history, not a new approval request.
-The classified candidate's three-run diagnostic precedes the atomic commit;
-the official pinned three-run gate requires clean committed HEAD and follows
-that commit immediately. This reopened remainder has one deletion-only re-pin
-in that same commit: independent review classified 21 successful absent-target
-stat deletions across 18 of 70 rows, with the other 52 rows and every effect,
-tree, recorder and settlement fact unchanged.
-The bounded patch was accepted on retry. The full native ordinary suite passes
-5,704 tests with four skips, covering the development runs' executor/workflow
-population. Imports, the candidate three-run oracle diagnostic, the 67-group
-starting-baseline differential and the 70-row/391-effect admission scan pass.
-All 25 five-band executions/readbacks pass; medians are 3.134 / 1.641 / 0.351 /
-0.303 / 2.011 seconds, close to the user's rerun. PERFORMANCE records source-drive
-contention in the earlier finishing runs; those runs do not establish a regression.
-Final independent review passed. The official clean-HEAD pinned check passed
-30 scenarios × three runs on `eb18611`; `differential/target-official-oracle.log`
-under the task evidence root retains the terminal result. This closes the
-previously blocked target remainder; no direct-write work was started.
-
-**Second outcome delivered — `0d7dd6b`.** One
-invocation-owned descriptor now covers writing, metadata, flush, conditional
-publication and successful observation, with release before recording and on
-operation/invocation exit. Public APIs, retry namespace proofs and UPDATE
-recovery remain unchanged. Native continuity, ACL, timestamp, lifecycle and
-exFAT rename witnesses pass; the latter does not exercise the excluded FileIdInfo
-defect. The unchanged 30×3 oracle, 67-group differential, guard scan, all 12
-imports, 1,479 executor/workflow tests and 5,633 ordinary tests pass.
-All 25 five-band executions/readbacks pass, but medians are slower than result 1:
-small-file throughput is 0.737 MiB/s. PERFORMANCE retains the measured breakdown
-and bounded handle/fallback diagnostic; no throughput lift is claimed.
-Real external-mutation controls remain on narrowly scoped path-finishing
-fallbacks where native retained handles prevent their setup. All original
-identity/refusal assertions remain; native witnesses separately prove blocked
-pathname access and truthful settlement. Source-open and post-close controls
-retain native behavior. No new namespace/race guard was introduced.
-
-**Third outcome delivered — `84ce0fb`, planner-used drift facts.** Core planning now owns
-the narrow metadata/link-count predicate shared by preflight, executor plan
-admission and recorder NOOP/MOVE/RECASE/TRASH acceptance. Creation time,
-unmanaged attributes and non-move link counts no longer veto plan admission.
-Existence, kind, size, mtime tolerances, identity semantics, managed attributes
-and MOVE/MOVE_UPDATE link eligibility remain. Complete observations are retained;
-pure rename and MOVE_UPDATE recovery bind the full admitted, profile-normalized
-old version. UPDATE backup repair/restoration and failed DELETE restoration use
-the admitted target metadata. Prepared/publication/backup/recovery checks, DB
-concurrency, integrity and replay remain strict. The introduced weak-profile
-witness mismatch was corrected and covered by a valid native RECASE case.
-Direct-consumer tests passed 904 with one existing skip; ordinary tests passed
-5,702 with four symlink-privilege skips. Imports, unchanged 30×3 oracle,
-67-group differential and the admission scan pass. All 25 five-band executions
-and readbacks pass; small-file throughput is 0.602 MiB/s and no lift is
-established. PERFORMANCE retains the breakdown and comparison. Independent
-final review accompanies this atomic outcome.
-
-The finite native migration witnesses also reproduce a pre-existing own-effect
-NORMAL→ARCHIVE mismatch in starting `b1b58476` and the candidate. It is deferred,
-not repaired by weakening retained-version checks; BUGS owns the open defect.
-The common mechanism is a strict full-version comparison spanning native
-rename/hardlink attribute changes. No data loss or false success was observed.
-
-| Executor seam | Verified consequence and owner |
-| --- | --- |
-| MOVE / RECASE | Runtime post-rename version proof refuses; renamed bytes remain, no success is recorded. |
-| Hardlink UPDATE | Runtime live/backup proof refuses before replacement; old live and backup remain. |
-| MOVE_UPDATE | Normal completion succeeds; committed-trash retry cannot recognize its intact new/trash state. |
-
-Raw baseline/candidate vectors are under the evidence root's `differential/`
-`result3a-archive-*.json`. Planner-fidelity success witnesses use stable unmanaged
-attributes; they do not claim to fix the separate native own-effect limitation.
-
-**Final outcome delivered — equivalent verifier classifier cleanup.**
-The user approved the smaller verifier outcome on 2026-09-29: remove the
-duplicate placeholder classifier from the pre-open reparse condition, preserving
-the walk and result classes. Core placeholder classification already requires
-reparse state. Moving ordinary-leaf refusal after open saves no filesystem
-query while placeholder inspection remains; the finite native junction probe
-changed Unsupported to Error. No result-class change is authorized. Keep root
-admission/holds, opened-volume corroboration, share/cache behavior and
-read-stability checks. Native verifier, its existing reparse/placeholder tests,
-VERIFIER and the delivery/evidence documents are the finite population; no new
-test family is required for the equivalent condition. The probe receipt is
-`build/executor-simplification-20260929/verifier-leaf-design-probe.json`;
-unavailable file-symlink cases are explicitly retained. Each outcome uses the verification below
-and independent review; no source-freshness API, persisted-shape change,
-continuation merger, target-check consolidation or direct-write work is included.
-
-The implementation removes only the unused import and redundant classifier call.
-Existing focused tests pass 239; verifier/database/workflow tests pass 1,465.
-The unchanged oracle, 67-group differential, admission scan, imports and
-ordinary suite (5,702 passed, four skips) pass. A README review correction is
-bounded to plan admission; all 85 checks in its five ordinary package-consumer
-modules pass against the final text. All 25 five-band executions/readbacks pass;
-small-file throughput is 0.628 MiB/s and the 4 GiB band is 1,765.673 MiB/s.
-Both goals remain unmet; overlapping ranges establish no throughput lift.
-Independent closeout review passed; no tests are added or retired. The initial
-results 1–3 delivery retained the target-consolidation block, subsequently closed
-by `eb18611` above, and the approved narrower verifier disposition. Direct writes
-remain deferred.
 
 **Equivalence against the starting commit.**
 - *Must match:* effects, final managed trees, owned artifacts, recorder commands
@@ -223,6 +155,15 @@ remain deferred.
     guard-scan admission counts shrink. The guard scan requires root admission
     before each recognized effect; independent source review and focused tests
     verify the retained per-effect fidelity checks.
+  - **Own-effect version checks (result 5).** Items that failed only because
+    native rename or hardlink creation changed attributes or link count now
+    succeed, and committed MOVE_UPDATE recovery recognizes its intact state.
+    Version recognition ignores all attributes, creation time and link count;
+    metadata completion/preservation remains a separate obligation. Size, mtime,
+    kind and available identity still refuse.
+  - **Custom adapter dispatch (result 7).** Subclasses or overridden native
+    methods no longer select the legacy guard sequence. Production behavior is
+    unchanged; affected tests move to primitive-level interception.
   - **Direct writes.** Trace changes only; a padded or partial tail is never
     visible at a live name.
   - **Mid-invocation external mutation.** A change made by another process
@@ -233,8 +174,8 @@ remain deferred.
     not a decision.
 - *Needs a decision:* anything else, usually a one-line question. The candidate
   never performs an effect the starting commit refused on a filesystem left
-  unchanged during the invocation, except under the drift and retained-handle
-  permissions changes above.
+  unchanged during the invocation, except under the drift, retained-handle
+  permissions and own-effect version changes above.
 
 **Oracle.** Each result may re-pin the settlement baseline once, in the same
 atomic commit as its cause, with a receipt classifying every changed row and
@@ -457,7 +398,7 @@ scope changes, stops and recovery.
 
 | ID | Accepted outcome | Named verification | Status |
 | --- | --- | --- | --- |
-| Executor simplification and throughput | Consolidated admission per effect, one handle per copied file, planner-used drift facts and the approved equivalent verifier classifier cleanup, and deferred direct large writes, per the section above. Goal (not gate): 4 KiB at or above 1.6 MiB/s; 4 GiB toward device ceilings. | Equivalence against the starting commit with the declared changes, per-result oracle re-pin receipts, guard scan, differential, native witnesses, five-band measurements and independent review per commit. | Results 1–3 active; result 4 deferred. |
+| Executor simplification and throughput | Admission, handle, drift-fact and verifier simplification (delivered); then own-effect version checks, composed native paths, one held-root production path and direct large writes, per the section above. Goal (not gate): 4 KiB at or above 1.6 MiB/s; 4 GiB toward device ceilings. | Equivalence against the starting commit with the declared changes, per-result oracle re-pin receipts, guard scan, differential, native witnesses, five-band and direct-write device-sweep measurements and independent review per commit. | Delivered through `eb18611`; results 5–8 pending. |
 | M1-9 | Bounded inventory projections, current evidence and the full inventory consumer for sibling sorting. | Complete or prior-complete publication; warnings outside action scope; raw evidence provenance; search/filter/collapse/window/detail, replacement/race and production sort/reset paths; headed witnesses. | Pending. Missing-row acknowledge/restore UI must be explicitly allocated at activation; this row does not silently claim it. |
 | M1-10 | Baseline, verify and rebaseline controls plus first same-task manual post-copy verification, without persistent operation-time hashes. Eligible null-evidence files enter rebaseline; every admitted rebaseline hashes and replaces/creates evidence, and a match is not verified. | Confirm acknowledgement admission before claim/native work; all-null/mixed workflow, service/CLI and desktop paths; conditional recording and supersession races; atomic handoff classification; live pause/resume/cancel and unchanged automatic failed-read retries; overlay/result identity. Independently review operation matrix and conditional recording. Terminal Verify-remaining/subset retry remains deferred. | Pending. Rebaseline confirmation is distinct from missing-row acknowledgement. |
 | M1-12 | Close integrated lifecycle/retention across activated task surfaces, then complete adversarial, documentation, ordinary and headed verification. This absorbs former M1-11. | Plan-only, execution-only, linked/manual verification, inventory, refused/canceled/degraded/failed tasks across same-document navigation, contained unsupported reload, explicit close and shutdown; admission bounds, stale-response suppression, exact resource release and retained truth. Applicable settlement oracle, ordinary/headed, installed-wheel/product, imports, diff/active-link checks and independent cross-component review. No aggregate-artifact or whole-owner-graph criterion. | Pending. |

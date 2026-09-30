@@ -241,8 +241,8 @@ defect, and move implementation-level test choreography out of the log.
   comparisons span the filesystem's own attribute change without modeling it.
   Identity, size, mtime and creation remain stable; hardlink count changes as
   expected. Starting `b1b58476` and the planner-fidelity candidate reproduce
-  the same five cases. Deferred outside that migration; strict recovery checks
-  remain. Evidence: `build/executor-simplification-20260929/differential/`
+  the same five cases. Deferred outside that migration; scheduled as M1_PLAN
+  executor result 5 (same-version checks after own effects). Evidence: `build/executor-simplification-20260929/differential/`
   `result3a-archive-baseline.json` and `result3a-archive-candidate.json`.
 - SEVERE - FIXED (2026-09-28). Unreadable descendant admitted as absence.
   The native descendant walk treated every `OSError` as a missing component.
