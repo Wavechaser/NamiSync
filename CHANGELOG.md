@@ -1055,6 +1055,12 @@ claims explicit, independently reviewable, and regression-backed.
   Ordinary tests pass 5,699, imports/oracle/guard scan/differential pass, and
   fresh independent review passes. All 25 consolidation readbacks pass; medians
   are 3.341 / 1.740 / 0.356 / 0.290 / 1.924 s with overlapping predecessor ranges.
+- Complete the separate direct-write threshold probe after consolidation:
+  paired 2–32 MiB sweeps and bounded refinements recommend G: 6 MiB and E: 2 MiB;
+  retain buffered H/J/L under the predeclared consistency criterion. All 336
+  timed copies and 16 tail witnesses pass readback, provenance and cleanup.
+  These are device-specific standalone candidates requiring integrated
+  revalidation; no production direct-write refactor or shipping threshold added.
 
 - Correct the measurement context: F: was occupied during the finishing runs;
   they do not establish a regression. Record the user's separate rerun table,

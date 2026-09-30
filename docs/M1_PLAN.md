@@ -139,7 +139,7 @@ Receipts use `differential/result6-*` and measurement prefix
 `result6-d43f8324-20260930-133019-7ae09623`; PERFORMANCE owns the table.
 Production pipeline/direct writes remain excluded.
 
-**Result 7 delivered (2026-09-30).** Native admission, resolve, leaf-volume
+**Result 7 delivered — `878f15e` (2026-09-30).** Native admission, resolve, leaf-volume
 observation and runtime delegation select one path from actual invocation/hold
 state, without method-identity constants. Fresh attributes, descendant checks,
 full fallback and exact reviewed authority remain. Native primitive controls
@@ -155,22 +155,21 @@ The user explicitly approved the custom-override compatibility change;
 recovery `259aee0` was restored uncommitted on `milestone1-adelbert`, never merged.
 No source-freshness API, effect, persistence or pipeline behavior changed.
 
-**Threshold probe boundary (user clarification, 2026-09-30).** After result 7
-passes review, use a standalone ignored helper under the existing evidence
-`ceilings/` directory, with F's existing source read-only and unique owned
-scratch on G/H/E/J/L. Compare buffered and unbuffered synchronous QD1 writes
-at 2/4/8/16/32 MiB, six balanced-order pairs per size/device, retaining every
-sample and checking flush, exact length and readback. Query native alignment;
-hold allocation/chunk/hash/source policy equal. Include an unaligned-tail
-witness, source/driver provenance and exact owned cleanup. Use paired total
-through flush for a per-device crossover: at least five of six pairs faster,
-median paired saving at least 5%, sustained at larger sampled sizes. Refine
-only an observed crossover bracket with 6/12/24 MiB as applicable; no stable
-benefit means buffered. A win at 2 MiB establishes only a boundary at or below
-the sweep minimum. PERFORMANCE owns raw evidence, method limits and the
-decision. This measures a standalone writer, not integrated pipeline speed;
-changed production buffering/concurrency must revalidate the recommendation.
-No product/test/pipeline changes or shipping threshold belong to this probe.
+**Threshold probing completed (2026-09-30).** After `878f15e`, the standalone
+warm-source QD1 probe swept 2/4/8/16/32 MiB on G/H/E/J/L with six balanced-order
+pairs, then refined G at 6 MiB and L at 24 MiB. The predeclared criterion was
+at least five of six direct-faster pairs and median paired saving at least 5%,
+sustained at larger sampled sizes. Candidate boundaries are G: 6 MiB and
+E: 2 MiB (the sweep floor, not evidence below it). H/J/L retain buffered writes
+because this grid did not establish a sustained benefit. All 336 timed copies
+and 16 tail witnesses, including the separate pilot, passed exact readback,
+source/dependency stability and owned cleanup. No samples were discarded.
+[PERFORMANCE](PERFORMANCE.md#direct-write-threshold-probe--2026-09-30) owns
+raw receipts, decisions, device mappings and limits. These are measured-device
+candidates, not universal device classes or integrated pipeline evidence.
+Production buffering/concurrency must revalidate them; no product writer,
+pipeline or shipping threshold was changed. Result 8 implementation remains
+pending for a subsequent execution.
 
 **Goal, not gate.** 1,000 × 4 KiB F:→G: at or above the pre-pathing
 1.6 MiB/s, and the 4 GiB band well above today's 2.0 GiB/s toward the device
@@ -463,7 +462,7 @@ scope changes, stops and recovery.
 
 | ID | Accepted outcome | Named verification | Status |
 | --- | --- | --- | --- |
-| Executor simplification and throughput | Admission, handle, drift-fact and verifier simplification; own-effect version checks, composed native paths and one held-root production path delivered. Direct large writes remain future work. Goal (not gate): 4 KiB at or above 1.6 MiB/s; 4 GiB toward device ceilings. | Equivalence against the starting commit with the declared changes, per-result oracle re-pin receipts, guard scan, differential, native witnesses, five-band and direct-write device-sweep measurements and independent review per commit. | Results 5–7 delivered; result 8 threshold probing next, production refactor deferred. |
+| Executor simplification and throughput | Admission, handle, drift-fact and verifier simplification; own-effect version checks, composed native paths and one held-root production path delivered. Direct large writes remain future work. Goal (not gate): 4 KiB at or above 1.6 MiB/s; 4 GiB toward device ceilings. | Equivalence against the starting commit with the declared changes, per-result oracle re-pin receipts, guard scan, differential, native witnesses, five-band and direct-write device-sweep measurements and independent review per commit. | Results 5–7 and threshold probing delivered; result 8 production refactor deferred. |
 | M1-9 | Bounded inventory projections, current evidence and the full inventory consumer for sibling sorting. | Complete or prior-complete publication; warnings outside action scope; raw evidence provenance; search/filter/collapse/window/detail, replacement/race and production sort/reset paths; headed witnesses. | Pending. Missing-row acknowledge/restore UI must be explicitly allocated at activation; this row does not silently claim it. |
 | M1-10 | Baseline, verify and rebaseline controls plus first same-task manual post-copy verification, without persistent operation-time hashes. Eligible null-evidence files enter rebaseline; every admitted rebaseline hashes and replaces/creates evidence, and a match is not verified. | Confirm acknowledgement admission before claim/native work; all-null/mixed workflow, service/CLI and desktop paths; conditional recording and supersession races; atomic handoff classification; live pause/resume/cancel and unchanged automatic failed-read retries; overlay/result identity. Independently review operation matrix and conditional recording. Terminal Verify-remaining/subset retry remains deferred. | Pending. Rebaseline confirmation is distinct from missing-row acknowledgement. |
 | M1-12 | Close integrated lifecycle/retention across activated task surfaces, then complete adversarial, documentation, ordinary and headed verification. This absorbs former M1-11. | Plan-only, execution-only, linked/manual verification, inventory, refused/canceled/degraded/failed tasks across same-document navigation, contained unsupported reload, explicit close and shutdown; admission bounds, stale-response suppression, exact resource release and retained truth. Applicable settlement oracle, ordinary/headed, installed-wheel/product, imports, diff/active-link checks and independent cross-component review. No aggregate-artifact or whole-owner-graph criterion. | Pending. |

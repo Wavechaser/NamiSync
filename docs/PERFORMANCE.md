@@ -533,6 +533,82 @@ evidence. Their throughput-goal observations describe those runs, not a stable
 regression attributable to the changes. The target-check follow-up is measured
 separately after correctness verification.
 
+### Direct-write threshold probe — 2026-09-30
+
+After consolidation was reviewed and committed as `878f15e`, a standalone
+Win32 helper compared buffered and `FILE_FLAG_NO_BUFFERING` target writes.
+No production writer, pipeline or threshold was changed. These are Tier 0
+diagnostic recommendations for the measured devices, not class-wide rules or
+integrated executor throughput claims.
+
+**Method.** F: (a separate SN850X) supplied read-only prefixes of the existing
+4 GiB source. Each trial warmed that prefix, then timed target create/allocation,
+buffered sequential source read, `xxh3_128`, synchronous QD1 writes, exact EOF
+and file flush. Both modes used identical aligned buffers, chunk bands and the
+existing allocation policy from 8 MiB. Geometry came from native handle storage
+information; direct tails were padded privately and truncated on the same
+handle before flushing. Untimed unbuffered readback checked exact length and
+digest. This excludes metadata/publication/directory flush, recording, pipeline
+overlap and pool setup. It does not measure cold-source reads or sustained SLC
+cache exhaustion. Source and complete script/product dependency hashes matched
+before/after every run.
+
+The primary grid was 2/4/8/16/32 MiB on G/H/E/J/L, six balanced AB/BA pairs per
+cell. Device order rotated and size order reversed between rounds. The recorded
+criterion, set before measurement, was at least five of six direct-faster pairs
+and median paired elapsed-time saving at least 5%, sustained at larger sampled
+sizes. Single points at the upper edge do not establish a sustained boundary.
+Only observed crossover brackets were refined (G at 6 MiB, L at 24 MiB).
+
+| Target | 2 MiB | 4 MiB | 8 MiB | 16 MiB | 32 MiB |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| G: SN850X | +36.6% (6/6) | +14.6% (4/6) | +34.8% (6/6) | +30.0% (6/6) | +31.7% (6/6) |
+| H: SN550 | +18.7% (6/6) | +18.3% (4/6) | +30.5% (6/6) | +25.2% (5/6) | +6.4% (4/6) |
+| E: Optane 905p | +5.7% (6/6) | +12.6% (6/6) | +27.1% (6/6) | +19.3% (6/6) | +26.9% (6/6) |
+| J: HC550 HDD | −30.2% (0/6) | −2.4% (3/6) | −3.2% (3/6) | +2.8% (5/6) | −2.1% (3/6) |
+| L: Samsung T7 | +12.9% (5/6) | +3.2% (3/6) | +10.6% (5/6) | +8.9% (4/6) | +14.3% (6/6) |
+
+Cells show median **paired** saving and direct-faster pair count. They are not
+the percentage difference between independently computed mode medians. Positive
+values favor direct writes; meeting the percentage alone is insufficient.
+
+| Target | Recommendation for future integration | Evidence and bound |
+| --- | --- | --- |
+| G: SN850X | Direct from 6 MiB | Refinement: +35.8%, 6/6; buffered/direct median 5.780/3.813 ms. All 8–32 MiB cells qualify. This is the smallest sustained sampled candidate, not a precisely located physical crossover. |
+| E: Optane 905p | Direct from 2 MiB | Every primary cell qualifies; 2 MiB medians 2.167/2.008 ms. The crossover could be below 2 MiB; this sweep does not establish it, and the lowest-size margin is modest. |
+| H: SN550 | Keep buffered | No sustained qualifying suffix: the 32 MiB cell wins only 4/6 pairs. |
+| J: HC550 HDD | Keep buffered | No primary cell meets both criteria. |
+| L: Samsung T7 | Keep buffered | 24 MiB refinement wins 0/6, paired saving −18.7%. A qualifying 32 MiB endpoint alone does not establish a stable threshold. |
+
+L's 24 MiB timing is notably variable: buffered median 69.751 ms
+[48.985–340.994], direct 331.576 ms [49.983–378.840]. All observations remain;
+no favorable rerun or sample exclusion replaced them. The experiment does not
+isolate the cause. H/L may benefit under a different workload, but this finite
+probe does not justify enabling them. Do not infer a universal SSD threshold
+or add device classification machinery from these five physical devices alone.
+The future integrated implementation must validate its chosen buffering,
+concurrency and finishing costs; this probe determines candidates, not its
+speed or correctness acceptance.
+
+**Evidence.** The G-only pilot passed 12 timed copies and two tail witnesses;
+it validated the helper and is not pooled into the primary estimate. The primary
+sweep passed 300 copies and ten 8 MiB+123-byte tail witnesses. Two refinements
+passed 24 copies and four tail witnesses. All 336 copies and 16 tails had exact
+readback, unchanged source/dependencies and exact owned-file/directory cleanup.
+Raw samples, per-mode ranges and paired summaries remain under
+`build/executor-simplification-20260929/ceilings/`:
+
+- `threshold-baeeeab32bd6495ca4a5f75799619bbe/`: pilot.
+- `threshold-d230a636d6fc4f38b79e20d003c59b93/`: primary grid.
+- `threshold-0dfc0f6a45f1463a9ea6cf4feacd4fad/`: G 6 MiB refinement.
+- `threshold-09c326775f964b919f8e4eccac9ed1cf/`: L 24 MiB refinement.
+
+The immutable helper copy is `direct_write_threshold-reviewed-878f15e.py`
+(SHA-256 `58ce54f72d0b330734449a6a120d29541dde5990eb95ea4d0366360e5f63f63f`).
+`threshold-device-profile-20260930.json` records actual drive/model mappings;
+`summarize_threshold.py` reproduces `threshold-observations-878f15e.json` from
+raw receipts, checking pairs, allocation parity, hashes, readbacks and cleanup.
+
 ### Single held-root dispatch — 2026-09-30
 
 Result 7's frozen candidate on `6157226` passed 331 native/runtime and 5,699
