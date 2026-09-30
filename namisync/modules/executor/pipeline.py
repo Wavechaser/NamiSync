@@ -528,6 +528,7 @@ class NativeCopyBackend:
                         break
                 free_buffers.clear()
                 for slot in all_buffers:
+                    # Consumers receive derived views, never this pool-owned view.
                     slot.view.release()
                     slot.backing = bytearray()
                 all_buffers.clear()

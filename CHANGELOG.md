@@ -1029,6 +1029,12 @@ claims explicit, independently reviewable, and regression-backed.
 
 #### Apply policy-driven executor and verifier simplifications (2026-09-29 – 2026-09-30)
 
+- Validate the direct-writer follow-up: retain BinaryIO compatibility for custom
+  backends/chunks and pin aligned bulk writes to one native call at the original
+  buffer address. Clarify private-view release ownership after a native-export
+  probe; no supported error-masking path reproduced. Keep per-file geometry
+  queries and buffered source reads; no runtime behavior changes. Eight focused
+  checks, 640 executor tests and independent review pass.
 - Deliver direct target writes at or above 8 MiB across device types, using
   aligned buffers within the 32 MiB pipeline bound, exact tail EOF and retained
   handle publication. Keep buffered capability fallbacks, source reads and

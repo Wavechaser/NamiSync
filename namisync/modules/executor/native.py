@@ -358,7 +358,7 @@ class _TempWriterView:
 
 
 class _DirectTempWriter(_TempWriterView):
-    """Synchronous aligned writes; only a final sector uses staging storage."""
+    """Aligned writes with sector staging for ordinary BinaryIO inputs."""
 
     def __init__(self, stream: BinaryIO, handle: int, sector: int, alignment: int) -> None:
         super().__init__(stream, None)

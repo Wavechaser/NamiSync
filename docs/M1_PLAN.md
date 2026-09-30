@@ -177,6 +177,16 @@ Receipts: `differential/result8-*`, fixed candidate
 `result8-b9c4ad3e-20260930-201114-989e90d9`. The official committed-baseline oracle
 is rerun immediately after this atomic implementation/re-pin commit.
 
+**Result 8 follow-up review (2026-09-30).** Keep ordinary BinaryIO writes and
+arbitrary positive custom chunk sizes compatible; an alignment assertion in the
+writer would reject admitted callers. Pin the aligned bulk path's native-call
+count and original buffer address in the existing 512/4096-sector witness.
+Pool cleanup releases a private parent view; consumers receive derived views.
+A CPython native-export probe confirms only an export of the exact parent can
+make that release raise `BufferError`, so no speculative masking guard is added.
+Keep per-file geometry admission without a cache. This follow-up changes comments,
+documentation and regression assertions only; source reads remain buffered.
+
 **Result 5 delivered — `d43f832` (2026-09-30).** Core version recognition is shared by
 executor post-effect/recovery and pure MOVE/RECASE recording; plan predicates
 compose it with planner metadata facts. Pre-effect fidelity, metadata restoration,

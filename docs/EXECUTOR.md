@@ -322,6 +322,13 @@ and-swap guarantee.
    A buffered copy from a regular-file source whose remaining size fits one chunk
    uses a synchronous path after an EOF lookahead; growth or a short read cannot
    manufacture EOF.
+   Aligned bulk input at a sector boundary reaches native writes without staging.
+   Ordinary bytes and unaligned custom chunk sizes retain BinaryIO compatibility
+   through sector staging; this slower compatibility path must not replace
+   aligned pool writes.
+   Consumers receive derived views, never the pool-owned view released at exit.
+   A retained derived view can prolong backing storage, but does not export the
+   pool-owned view itself or make its release raise `BufferError`.
 5. Close the content writer view without flushing it. The direct writer pads
    only a trailing sector and sets exact logical EOF on its retained handle
    before metadata or publication. Reuse that handle

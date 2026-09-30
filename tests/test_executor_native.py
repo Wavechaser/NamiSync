@@ -1085,6 +1085,9 @@ def test_direct_writer_pads_tail_then_sets_exact_eof(
     second = b"b" * (sector // 2 + 3)
     with executor_module._DirectTempWriter(io.BytesIO(), 123, sector, alignment) as target:
         assert target.write(slot.view) == 2 * sector
+        # Aligned bulk input must reach one native write without sector staging.
+        assert written == [b"x" * (2 * sector)]
+        assert addresses == [ctypes.addressof(ctypes.c_char.from_buffer(slot.view))]
         assert target.write(first) == len(first)
         assert target.write(second) == len(second)
         assert target.write(b"-tail") == 5
