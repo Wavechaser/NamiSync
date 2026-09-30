@@ -1569,8 +1569,8 @@ class NativeFileSystem:
 def _can_delegate_held_resolution(
     fs: object, root: Path, authority: RootAuthority
 ) -> bool:
-    """Select an active native held root without querying attributes."""
-    if not isinstance(fs, NativeFileSystem):
+    """Delegate only to the concrete resolver that admits its own root."""
+    if type(fs) is not NativeFileSystem:
         return False
     invocation = _ROOT_INVOCATION.get()
     if (

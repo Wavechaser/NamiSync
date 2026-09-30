@@ -73,7 +73,7 @@ leads; direct writes follow on the simplified base.
    gating (`__func__ is _DEFAULT_*` and its eligibility helpers) with a single
    held-root path; tests intercept native primitives rather than overridden
    methods. Custom overrides no longer select the legacy sequence.
-8. **Direct writes for large files.** Above a measured threshold, target data is
+8. **Direct writes for large files (active).** At or above a blanket 8 MiB threshold, target data is
    written unbuffered. Fold in creating the temp with create-new semantics
    (recovering a leftover only when creation reports it exists) and a
    synchronous path for single-chunk copies, since both rework the same code.
@@ -91,11 +91,10 @@ leads; direct writes follow on the simplified base.
      unbuffered-open error use the buffered path with a diagnostic. The file
      flush remains.
    - *No extra full-size copy* between read, hash and write (performance goal).
-   - *Threshold by measurement.* Start near 8 MiB, where chunking and
-     preallocation already change, and sweep 2–32 MiB across G: (SN850X, fast
-     NAND), H: (SN550, slower NAND), E: (Optane 905p), J: (HC550 HDD) and
-     L: (Samsung T7, USB), with F: as source. A device class may keep buffered
-     writes if it does not benefit. PERFORMANCE records the sweep.
+   - *Threshold policy (user, 2026-09-30).* Use 8 MiB across all device types;
+     no volume/model classification or per-device threshold. The completed
+     2–32 MiB sweep remains diagnostic evidence, not dispatch policy. Unsupported
+     I/O capability still selects the buffered fallback above.
 
 Opportunistic: the remaining fresh-copy duplicates (repeated prepared-temp stat,
 target resolution before the retained-handle observation, and the pre-copy
@@ -107,10 +106,19 @@ required verification. The user's clarification authorizes result 8's threshold
 probing after consolidation and independent review: sweep 2–32 MiB across
 G/H/E/J/L with F as source and record where direct writes benefit each device.
 The earlier five-band runs describe consolidation only, not this threshold.
-Production direct-write refactoring remains pending until consolidation is
-reviewed and the threshold determined; it is not part of this execution.
-Unbuffered source reads remain optional in that future result; device-class
-selection machinery requires measurement justification.
+Consolidation and probing are complete. The user now authorizes result 8 after
+the delegation consistency fix, with a blanket 8 MiB threshold and no device
+discrimination. Unbuffered source reads remain optional. Small coherent commits,
+the preserved guarantees, evidence gates and independent review remain required.
+
+**Delegation correction boundary (2026-09-30).** Restrict the runtime's admission
+delegation to the concrete `NativeFileSystem`; subclasses may override `resolve`
+without admitting the root, so runtime retains its own reviewed admission for
+them. One native predicate, a native runtime refusal witness, EXECUTOR and
+delivery docs form a separate atomic correction. Verify the witness against the
+old predicate, run executor coverage and imports, and obtain fresh review.
+This does not restore method-identity dispatch or change the public resolve
+contract. Production native path behavior is unchanged.
 
 **Result 5 delivered — `d43f832` (2026-09-30).** Core version recognition is shared by
 executor post-effect/recovery and pure MOVE/RECASE recording; plan predicates
@@ -137,7 +145,7 @@ fixed 67-group differential. All 25 five-band executions/readbacks pass; ranges
 overlap result 5. Independent source/evidence review accompanies the commit.
 Receipts use `differential/result6-*` and measurement prefix
 `result6-d43f8324-20260930-133019-7ae09623`; PERFORMANCE owns the table.
-Production pipeline/direct writes remain excluded.
+Result 6 did not change the production pipeline or write mode.
 
 **Result 7 delivered — `878f15e` (2026-09-30).** Native admission, resolve, leaf-volume
 observation and runtime delegation select one path from actual invocation/hold
@@ -168,8 +176,9 @@ source/dependency stability and owned cleanup. No samples were discarded.
 raw receipts, decisions, device mappings and limits. These are measured-device
 candidates, not universal device classes or integrated pipeline evidence.
 Production buffering/concurrency must revalidate them; no product writer,
-pipeline or shipping threshold was changed. Result 8 implementation remains
-pending for a subsequent execution.
+pipeline or shipping threshold was changed by the probe. The user's subsequent
+decision selects 8 MiB for all devices, superseding these measured candidates
+as implementation policy while preserving the observations.
 
 **Goal, not gate.** 1,000 × 4 KiB F:→G: at or above the pre-pathing
 1.6 MiB/s, and the 4 GiB band well above today's 2.0 GiB/s toward the device
@@ -227,7 +236,10 @@ backstop or a family marked keep does.
     kind and available identity still refuse.
   - **Custom adapter dispatch (result 7).** Subclasses or overridden native
     methods no longer select the legacy guard sequence. Production behavior is
-    unchanged; affected tests move to primitive-level interception.
+    unchanged; affected tests move to primitive-level interception. The later
+    delegation correction retains runtime admission for subclasses, whose
+    resolver contract does not promise admission; native method-identity gates
+    remain removed.
   - **Direct writes.** Trace changes only; a padded or partial tail is never
     visible at a live name.
   - **Mid-invocation external mutation.** A change made by another process
@@ -462,7 +474,7 @@ scope changes, stops and recovery.
 
 | ID | Accepted outcome | Named verification | Status |
 | --- | --- | --- | --- |
-| Executor simplification and throughput | Admission, handle, drift-fact and verifier simplification; own-effect version checks, composed native paths and one held-root production path delivered. Direct large writes remain future work. Goal (not gate): 4 KiB at or above 1.6 MiB/s; 4 GiB toward device ceilings. | Equivalence against the starting commit with the declared changes, per-result oracle re-pin receipts, guard scan, differential, native witnesses, five-band and direct-write device-sweep measurements and independent review per commit. | Results 5–7 and threshold probing delivered; result 8 production refactor deferred. |
+| Executor simplification and throughput | Admission, handle, drift-fact and verifier simplification; own-effect version checks, composed native paths and one held-root production path delivered. Direct large writes at a blanket 8 MiB are active. Goal (not gate): 4 KiB at or above 1.6 MiB/s; 4 GiB toward device ceilings. | Equivalence against the starting commit with the declared changes, per-result oracle re-pin receipts, guard scan, differential, native witnesses, five-band and direct-write device-sweep measurements and independent review per commit. | Results 5–7 and threshold probing delivered; result 8 implementation authorized after delegation correction. |
 | M1-9 | Bounded inventory projections, current evidence and the full inventory consumer for sibling sorting. | Complete or prior-complete publication; warnings outside action scope; raw evidence provenance; search/filter/collapse/window/detail, replacement/race and production sort/reset paths; headed witnesses. | Pending. Missing-row acknowledge/restore UI must be explicitly allocated at activation; this row does not silently claim it. |
 | M1-10 | Baseline, verify and rebaseline controls plus first same-task manual post-copy verification, without persistent operation-time hashes. Eligible null-evidence files enter rebaseline; every admitted rebaseline hashes and replaces/creates evidence, and a match is not verified. | Confirm acknowledgement admission before claim/native work; all-null/mixed workflow, service/CLI and desktop paths; conditional recording and supersession races; atomic handoff classification; live pause/resume/cancel and unchanged automatic failed-read retries; overlay/result identity. Independently review operation matrix and conditional recording. Terminal Verify-remaining/subset retry remains deferred. | Pending. Rebaseline confirmation is distinct from missing-row acknowledgement. |
 | M1-12 | Close integrated lifecycle/retention across activated task surfaces, then complete adversarial, documentation, ordinary and headed verification. This absorbs former M1-11. | Plan-only, execution-only, linked/manual verification, inventory, refused/canceled/degraded/failed tasks across same-document navigation, contained unsupported reload, explicit close and shutdown; admission bounds, stale-response suppression, exact resource release and retained truth. Applicable settlement oracle, ordinary/headed, installed-wheel/product, imports, diff/active-link checks and independent cross-component review. No aggregate-artifact or whole-owner-graph criterion. | Pending. |

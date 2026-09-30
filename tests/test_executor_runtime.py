@@ -3619,6 +3619,43 @@ def test_runtime_target_resolution_unheld_keeps_physical_containment(
 
 
 @pytest.mark.skipif(os.name != "nt", reason="native Windows held target resolution")
+def test_runtime_target_resolution_subclass_keeps_reviewed_admission(
+    held_target_resolution,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _, xset, _, target, _ = held_target_resolution
+    resolved = []
+
+    class LexicalFileSystem(NativeFileSystem):
+        def resolve(self, root, relative_path, *, must_exist):
+            resolved.append(relative_path)
+            return root / relative_path
+
+    fs = LexicalFileSystem()
+    scoped = executor_module._InvocationRoot(
+        "target", executor_runtime._target_root_authority(xset)
+    )
+    with executor_module._root_invocation_scope(fs, xset, (scoped,), None):
+        executor_runtime._revalidate_target_root(fs, xset, target)
+        assert scoped.held
+        assert root_authority_module._WINDOWS is not None
+
+        def query(handle, kind, output, size):
+            info = ctypes.cast(
+                output, ctypes.POINTER(root_authority_module._FileBasicInfo)
+            ).contents
+            info.FileAttributes = 0x10 | 0x400
+            return True
+
+        monkeypatch.setattr(root_authority_module._WINDOWS, "get_file_information_ex", query)
+        with pytest.raises(UnsafeExecutionPath, match="reparse points"):
+            executor_runtime._resolve_target_path(
+                fs, xset, target, target / "missing.bin", must_exist=False
+            )
+        assert resolved == []
+
+
+@pytest.mark.skipif(os.name != "nt", reason="native Windows held target resolution")
 @pytest.mark.parametrize("state", ["reparse", "placeholder", "query-failure"])
 def test_runtime_target_resolution_refuses_unsafe_held_root_before_descent(
     held_target_resolution,

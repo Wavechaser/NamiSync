@@ -176,11 +176,12 @@ root and candidate resolution. Required-leaf checks still run. The shared hold c
 
 For a valid retained target-relative path, runtime's shared target resolver may
 delegate its root revalidation to the immediately following native `resolve`.
-Eligibility requires native ownership and the exact reviewed authority in its
+Eligibility requires the concrete `NativeFileSystem`, native ownership and the exact reviewed authority in its
 active confirmed hold. The resolver still queries current held attributes before
-descending. Non-native and unheld adapters retain the runtime-then-native
-admission sequence. Native method overrides no longer select a separate legacy
-sequence. Retained
+descending. Subclasses, non-native and unheld adapters retain runtime
+revalidation before resolver dispatch; the resolver protocol does not itself
+promise root admission.
+Native method-identity inspection does not select a separate legacy sequence. Retained
 paths are converted to root-relative spelling once; native resolution owns
 descendant-spelling validation. Malformed paths may refuse before root admission;
 any accurate refusal reason is sufficient. Other runtime source, paired and

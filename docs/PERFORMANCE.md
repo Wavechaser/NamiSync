@@ -535,6 +535,10 @@ separately after correctness verification.
 
 ### Direct-write threshold probe — 2026-09-30
 
+The user's subsequent implementation decision is a blanket 8 MiB threshold
+across device types, with no volume/model discrimination. The recommendations
+below remain the experiment's observations; M1_PLAN owns the chosen policy.
+
 After consolidation was reviewed and committed as `878f15e`, a standalone
 Win32 helper compared buffered and `FILE_FLAG_NO_BUFFERING` target writes.
 No production writer, pipeline or threshold was changed. These are Tier 0

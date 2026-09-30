@@ -1029,6 +1029,11 @@ claims explicit, independently reviewable, and regression-backed.
 
 #### Apply policy-driven executor and verifier simplifications (2026-09-29 – 2026-09-30)
 
+- Restrict held-root admission delegation to concrete `NativeFileSystem`, keeping
+  runtime admission for subclasses whose resolver need not admit the root.
+  A focused witness fails before the correction; all 620 executor tests and
+  12 import contracts pass afterward. Activate the user-selected blanket 8 MiB
+  direct-write policy, without volume/model discrimination.
 - Refine and activate results 5–7: recognize admitted file versions after own
   effects, compose validated descendant paths and remove method-identity dispatch.
   Keep metadata completion, database concurrency and integrity criteria separate;
