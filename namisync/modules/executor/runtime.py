@@ -1663,21 +1663,6 @@ def _prepare_copy(
     source = fs.resolve(source_root, operation.source_rel_path, must_exist=True)
     target = fs.resolve(target_root, operation.target_rel_path, must_exist=False)
     temp = fs.owned_temp(target, xset.run_id, operation.op_id)
-    try:
-        _resolve_target_path(
-            fs,
-            xset,
-            target_root,
-            temp,
-            must_exist=False,
-        )
-        fs.remove_owned_temp(temp)
-    except Exception as error:
-        raise OperationFailure(
-            ExecutionReason.CLEANUP_FAILED,
-            f"cannot recover owned temp: {temp}",
-            cause=error,
-        ) from error
     state.effects.claim_temporary_path(operation.op_id, temp)
     reviewed_size = operation.source_expected.size
     chunk_size = _copy_chunk_size(reviewed_size, policies.max_chunk_size)
@@ -1690,9 +1675,29 @@ def _prepare_copy(
             temp,
             must_exist=False,
         )
-        with fs.create_temp(
-            temp, allocation_size=_allocation_size(reviewed_size)
-        ) as writer:
+        try:
+            writer_view = fs.create_temp(
+                temp, allocation_size=_allocation_size(reviewed_size)
+            )
+        except FileExistsError:
+            try:
+                _resolve_target_path(
+                    fs, xset, target_root, temp, must_exist=False,
+                )
+                fs.remove_owned_temp(temp)
+            except Exception as error:
+                raise OperationFailure(
+                    ExecutionReason.CLEANUP_FAILED,
+                    f"cannot recover owned temp: {temp}",
+                    cause=error,
+                ) from error
+            _resolve_target_path(
+                fs, xset, target_root, temp, must_exist=False,
+            )
+            writer_view = fs.create_temp(
+                temp, allocation_size=_allocation_size(reviewed_size)
+            )
+        with writer_view as writer:
             progress.begin_byte_stream(operation)
             digest = policies.copy_backend.copy(
                 reader,

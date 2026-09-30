@@ -78,7 +78,7 @@ DEFAULT_BASELINE = Path(__file__).with_name("executor_settlement_baseline.json")
 _REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 _DEFAULT_BASELINE_GIT_PATH = "tools/executor_settlement_baseline.json"
 REVIEWED_BASELINE_SHA256 = (
-    "8e6749996b386e12092fd18d5d4889a94cc1cd82d3cb2cdcf79ff38849167fb4"
+    "555890ad4ac6ca69e5288b656c9fbe2ba09a0e8be99a3b2565510655cfb9ff52"
 )
 _BYTE_KINDS = frozenset(
     {OperationKind.COPY, OperationKind.UPDATE, OperationKind.MOVE_UPDATE}
@@ -5748,7 +5748,7 @@ _CLEANUP_ORDINARY_MATRIX = (
         tree_absent=("$TARGET/copy.bin",),
         backend_calls=1,
         policy_decisions=("continue",),
-        fs_counts=(("remove_owned_temp", 2),),
+        fs_counts=(("remove_owned_temp", 1),),
         row="cleanup.ordinary.no-durable-cleanup-failure",
     ),
     ExpectedSettlement(
@@ -5775,7 +5775,7 @@ _CLEANUP_ORDINARY_MATRIX = (
         tree_absent=(f"$TARGET/copy.bin.synctmp-{RUN_ID}-{1:032x}",),
         backend_calls=2,
         policy_decisions=("retry",),
-        fs_counts=(("remove_owned_temp", 3), ("finalize_temp", 2)),
+        fs_counts=(("remove_owned_temp", 1), ("finalize_temp", 2)),
         row="cleanup.ordinary.pre-retry-cleanup-succeeds",
     ),
     ExpectedSettlement(
@@ -5790,7 +5790,7 @@ _CLEANUP_ORDINARY_MATRIX = (
         tree_absent=("$TARGET/copy.bin",),
         backend_calls=1,
         policy_decisions=("retry",),
-        fs_counts=(("remove_owned_temp", 2),),
+        fs_counts=(("remove_owned_temp", 1),),
         row="cleanup.ordinary.pre-retry-cleanup-fails",
     ),
     ExpectedSettlement(
@@ -5819,7 +5819,7 @@ _CLEANUP_ORDINARY_MATRIX = (
         ),
         backend_calls=1,
         policy_decisions=("continue",),
-        fs_counts=(("remove_owned_temp", 2),),
+        fs_counts=(("remove_owned_temp", 1),),
         row="cleanup.ordinary.durable-verdict-plus-cleanup-failure",
     ),
 )
@@ -5836,7 +5836,7 @@ _PAUSE_COPY_PREPARED = ExpectedSettlement(
         f"$TARGET/copy.bin.synctmp-{RUN_ID}-{1:032x}",
     ),
     backend_calls=1,
-    fs_counts=(("remove_owned_temp", 2),),
+    fs_counts=(("remove_owned_temp", 1),),
     row="pause.copy-prepared",
 )
 
@@ -7192,7 +7192,7 @@ _RESUME_SAME_EXECUTION_SET = ExpectedSettlement(
         ("open_source", 3),
         ("create_temp", 3),
         ("finalize_temp", 3),
-        ("remove_owned_temp", 3),
+        ("remove_owned_temp", 0),
         ("replace", 2),
         ("publish_new", 2),
         ("hardlink", 1),
@@ -7231,7 +7231,7 @@ _FAILURE_POLICY_STOP = ExpectedSettlement(
     fs_counts=(
         ("open_source", 1),
         ("create_temp", 1),
-        ("remove_owned_temp", 2),
+        ("remove_owned_temp", 1),
         ("finalize_temp", 0),
         ("publish_new", 0),
     ),
@@ -7273,7 +7273,7 @@ SCENARIOS: tuple[Scenario, ...] = (
                 tree_absent=("$TARGET/copy.bin",),
                 backend_calls=1,
                 policy_decisions=("continue",),
-                fs_counts=(("remove_owned_temp", 2),),
+                fs_counts=(("remove_owned_temp", 1),),
                 row="failure.copy-prepublish-cleanup-ok",
             ),
         ),
@@ -7579,7 +7579,7 @@ SCENARIOS: tuple[Scenario, ...] = (
                 (),
                 tree_absent=("$TARGET/copy.bin",),
                 backend_calls=1,
-                fs_counts=(("remove_owned_temp", 2),),
+                fs_counts=(("remove_owned_temp", 1),),
                 row="cancel.copy-prepared",
             ),
         ),
@@ -7698,7 +7698,7 @@ SCENARIOS: tuple[Scenario, ...] = (
                 tree_files=((f"$TARGET/copy.bin.synctmp-{RUN_ID}-{1:032x}", ""),),
                 tree_absent=("$TARGET/copy.bin",),
                 backend_calls=1,
-                fs_counts=(("remove_owned_temp", 2),),
+                fs_counts=(("remove_owned_temp", 1),),
                 row="cleanup.canceled-failure",
             ),
         ),

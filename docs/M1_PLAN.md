@@ -73,7 +73,7 @@ leads; direct writes follow on the simplified base.
    gating (`__func__ is _DEFAULT_*` and its eligibility helpers) with a single
    held-root path; tests intercept native primitives rather than overridden
    methods. Custom overrides no longer select the legacy sequence.
-8. **Direct writes for large files (active).** At or above a blanket 8 MiB threshold, target data is
+8. **Direct writes for large files — delivered.** At or above a blanket 8 MiB threshold, target data is
    written unbuffered. Fold in creating the temp with create-new semantics
    (recovering a leftover only when creation reports it exists) and a
    synchronous path for single-chunk copies, since both rework the same code.
@@ -111,7 +111,7 @@ the delegation consistency fix, with a blanket 8 MiB threshold and no device
 discrimination. Unbuffered source reads remain optional. Small coherent commits,
 the preserved guarantees, evidence gates and independent review remain required.
 
-**Delegation correction boundary (2026-09-30).** Restrict the runtime's admission
+**Delegation correction delivered — `b9c4ad3` (2026-09-30).** Restrict the runtime's admission
 delegation to the concrete `NativeFileSystem`; subclasses may override `resolve`
 without admitting the root, so runtime retains its own reviewed admission for
 them. One native predicate, a native runtime refusal witness, EXECUTOR and
@@ -119,6 +119,63 @@ delivery docs form a separate atomic correction. Verify the witness against the
 old predicate, run executor coverage and imports, and obtain fresh review.
 This does not restore method-identity dispatch or change the public resolve
 contract. Production native path behavior is unchanged.
+
+**Result 8 implementation boundary (2026-09-30, base `b9c4ad3`).** One coherent
+native/pipeline/runtime change implements blanket 8 MiB direct target writes,
+create-new-first temp recovery and synchronous single-chunk copying. Owners are
+executor native, pipeline and runtime; core execution carries only the narrow
+writer-capability seam, and core evidence documents synchronous borrowed-buffer
+hash consumption. No native↔pipeline import is added. Native direct writes keep
+the owned handle, accept ordinary BinaryIO writes from injected backends, and
+set exact real EOF before metadata/flush/publication. Geometry is established
+before direct creation; remote/unknown geometry/open refusal falls back with
+a fixed-reason diagnostic in opt-in copy metrics, not a retained per-file list.
+Only `FileExistsError` triggers exact owned-temp recovery and one create retry.
+The aligned pool charges actual allocation, including alignment slack, to the
+32 MiB bound. Hashing sees a read-only borrowed view; reuse waits for the writer
+and all workers are joined before release. A regular-file size observation
+selects possible single-chunk copies; actual EOF, not a short read, confirms
+them. Other source streams retain the worker pipeline. Shared copy signatures
+and existing progress/error precedence remain. Source reads stay buffered; no
+device classifier, wire/ledger change, new durability policy or verifier refactor
+belongs here.
+
+Finite consumers are executor native/pipeline/runtime/settlement tests, shared
+hasher/session tests and native copy→recorder→verifier integration; inspect
+`tools/seams.py`, executor rig and settlement-audit adapters for compatibility.
+The rig aggregates opt-in write-mode/fallback counts for measurement; its existing
+diagnostic witness and TOOLS documentation cover that direct consumer.
+The settlement-audit test's cleanup count follows the same trace migration.
+Component docs, ARCHITECTURE's source locator if needed, M1_PLAN, PERFORMANCE,
+CHANGELOG and HANDOFF accompany the code. DEFENSE changes only if an owned bound
+meaning changes; README only if its phase synopsis changes. Gate: real native
+composition and delayed hash/write reuse controls first; 512/4096 alignment,
+unaligned tails, fallback and cleanup/cancel/pause witnesses; affected executor,
+core and verifier coverage plus ordinary suite; imports, settlement oracle with
+classified re-pin only if required, guard scan and fixed baseline differential;
+five-band production measurement and fresh independent review. Supported unsafe
+effects or undeclared differential effect changes trigger the existing stops.
+
+**Result 8 delivered (2026-09-30).** Direct targets use the retained handle and
+aligned reusable buffers; exact tail EOF precedes publication. Capability
+fallback, create-first recovery and synchronous small-file copies preserve
+durability and settlement. Native alignment/tail/late-write/EOF-failure controls,
+delayed buffer ownership and retained-error release controls, plus real
+copy→ledger→verifier integration pass. Ordinary verification records 5,720
+passes, four capability skips and one obsolete audit cleanup-count expectation;
+after its one-line migration all 95 audit tests pass. Unaffected ordinary passes
+are reused by dependency, not represented as a single all-green invocation.
+All 12 imports and the 70-row/344-effect guard scan pass. The classified oracle
+re-pin preserves every settlement/effect/tree/recorder fact: 43 rows change only
+declared traces and 27 remain identical. The custom candidate passes 30×3 runs.
+The immutable 67-group differential has four groups differing only in seven
+obsolete oracle count errors; all other fields match. Independent source and
+evidence review finds no unresolved issue. All 25 five-band executions/readbacks
+pass; PERFORMANCE owns mode checks, provenance, timings and limitations.
+Receipts: `differential/result8-*`, fixed candidate
+`candidate-result8-final-fbe298d6804b4820854370d7ef4d1b85`, and measurement prefix
+`result8-b9c4ad3e-20260930-201114-989e90d9`. The official committed-baseline oracle
+is rerun immediately after this atomic implementation/re-pin commit.
 
 **Result 5 delivered — `d43f832` (2026-09-30).** Core version recognition is shared by
 executor post-effect/recovery and pure MOVE/RECASE recording; plan predicates
@@ -240,8 +297,11 @@ backstop or a family marked keep does.
     delegation correction retains runtime admission for subclasses, whose
     resolver contract does not promise admission; native method-identity gates
     remain removed.
-  - **Direct writes.** Trace changes only; a padded or partial tail is never
-    visible at a live name.
+  - **Direct writes and create-first recovery.** Trace changes only; a padded
+    or partial tail is never visible at a live name. Fresh copies omit absent-temp
+    cleanup and its probes. A leftover adds the failed exclusive-create attempt
+    before guarded recovery and one retry; opening the source precedes that
+    recovery. Final trees, artifacts and settlement remain equivalent.
   - **Mid-invocation external mutation.** A change made by another process
     between checks that this run consolidates may be detected later, or only
     at the next effect's check. The last check before each mutating effect
@@ -474,7 +534,7 @@ scope changes, stops and recovery.
 
 | ID | Accepted outcome | Named verification | Status |
 | --- | --- | --- | --- |
-| Executor simplification and throughput | Admission, handle, drift-fact and verifier simplification; own-effect version checks, composed native paths and one held-root production path delivered. Direct large writes at a blanket 8 MiB are active. Goal (not gate): 4 KiB at or above 1.6 MiB/s; 4 GiB toward device ceilings. | Equivalence against the starting commit with the declared changes, per-result oracle re-pin receipts, guard scan, differential, native witnesses, five-band and direct-write device-sweep measurements and independent review per commit. | Results 5–7 and threshold probing delivered; result 8 implementation authorized after delegation correction. |
+| Executor simplification and throughput | Admission, handle, drift-fact and verifier simplification; own-effect version checks, composed native paths, one held-root production path and direct large writes at a blanket 8 MiB delivered. Goal (not gate): 4 KiB at or above 1.6 MiB/s; 4 GiB toward device ceilings. | Equivalence against the starting commit with the declared changes, per-result oracle re-pin receipts, guard scan, differential, native witnesses, five-band and direct-write device-sweep measurements and independent review per commit. | Results 5–8 and threshold probing delivered. Latest diagnostic: 4 KiB 1.40 MiB/s, 4 GiB 4,505 MiB/s; small-file goal remains unmet. |
 | M1-9 | Bounded inventory projections, current evidence and the full inventory consumer for sibling sorting. | Complete or prior-complete publication; warnings outside action scope; raw evidence provenance; search/filter/collapse/window/detail, replacement/race and production sort/reset paths; headed witnesses. | Pending. Missing-row acknowledge/restore UI must be explicitly allocated at activation; this row does not silently claim it. |
 | M1-10 | Baseline, verify and rebaseline controls plus first same-task manual post-copy verification, without persistent operation-time hashes. Eligible null-evidence files enter rebaseline; every admitted rebaseline hashes and replaces/creates evidence, and a match is not verified. | Confirm acknowledgement admission before claim/native work; all-null/mixed workflow, service/CLI and desktop paths; conditional recording and supersession races; atomic handoff classification; live pause/resume/cancel and unchanged automatic failed-read retries; overlay/result identity. Independently review operation matrix and conditional recording. Terminal Verify-remaining/subset retry remains deferred. | Pending. Rebaseline confirmation is distinct from missing-row acknowledgement. |
 | M1-12 | Close integrated lifecycle/retention across activated task surfaces, then complete adversarial, documentation, ordinary and headed verification. This absorbs former M1-11. | Plan-only, execution-only, linked/manual verification, inventory, refused/canceled/degraded/failed tasks across same-document navigation, contained unsupported reload, explicit close and shutdown; admission bounds, stale-response suppression, exact resource release and retained truth. Applicable settlement oracle, ordinary/headed, installed-wheel/product, imports, diff/active-link checks and independent cross-component review. No aggregate-artifact or whole-owner-graph criterion. | Pending. |

@@ -14,7 +14,7 @@ import shutil
 import stat as stat_module
 from typing import BinaryIO, cast
 
-from namisync.core.execution import RunId
+from namisync.core.execution import DirectWriteFallback, RunId
 from namisync.core.file_identity import (
     file_identity_from_stat,
     file_identity_from_windows_handle,
@@ -68,10 +68,15 @@ _OPEN_EXISTING = 3
 _CREATE_NEW = 1
 _FILE_ATTRIBUTE_NORMAL = 0x00000080
 _FILE_FLAG_BACKUP_SEMANTICS = 0x02000000
+_FILE_FLAG_NO_BUFFERING = 0x20000000
+_DRIVE_REMOTE = 4
 _FILE_BASIC_INFO_CLASS = 0
 _FILE_STANDARD_INFO_CLASS = 1
 _FILE_RENAME_INFO_CLASS = 3
 _FILE_ALLOCATION_INFO_CLASS = 5
+_FILE_END_OF_FILE_INFO_CLASS = 6
+_FILE_STORAGE_INFO_CLASS = 16
+_DIRECT_WRITE_THRESHOLD = 8 * 1024 * 1024
 _WINDOWS_EPOCH_TICKS = 116_444_736_000_000_000
 _INVALID_HANDLE_VALUE = ctypes.c_void_p(-1).value
 _ALLOCATION_UNSUPPORTED_ERRORS = frozenset({1, 50, 120})
@@ -99,6 +104,22 @@ class _FileStandardInfo(ctypes.Structure):
 
 class _FileAllocationInfo(ctypes.Structure):
     _fields_ = [("AllocationSize", ctypes.c_longlong)]
+
+
+class _FileEndOfFileInfo(ctypes.Structure):
+    _fields_ = [("EndOfFile", ctypes.c_longlong)]
+
+
+class _FileStorageInfo(ctypes.Structure):
+    _fields_ = [
+        ("LogicalBytesPerSector", wintypes.DWORD),
+        ("PhysicalBytesPerSectorForAtomicity", wintypes.DWORD),
+        ("PhysicalBytesPerSectorForPerformance", wintypes.DWORD),
+        ("FileSystemEffectivePhysicalBytesPerSectorForAtomicity", wintypes.DWORD),
+        ("Flags", wintypes.DWORD),
+        ("ByteOffsetForSectorAlignment", wintypes.DWORD),
+        ("ByteOffsetForPartitionAlignment", wintypes.DWORD),
+    ]
 
 
 class _FileRenameInfo(ctypes.Structure):
@@ -136,6 +157,16 @@ class _WindowsBindings:
         self.flush_file_buffers = kernel32.FlushFileBuffers
         self.flush_file_buffers.argtypes = [wintypes.HANDLE]
         self.flush_file_buffers.restype = wintypes.BOOL
+
+        self.write_file = kernel32.WriteFile
+        self.write_file.argtypes = [
+            wintypes.HANDLE,
+            wintypes.LPCVOID,
+            wintypes.DWORD,
+            ctypes.POINTER(wintypes.DWORD),
+            wintypes.LPVOID,
+        ]
+        self.write_file.restype = wintypes.BOOL
 
         self.get_file_information_ex = kernel32.GetFileInformationByHandleEx
         self.get_file_information_ex.argtypes = [
@@ -179,6 +210,10 @@ class _WindowsBindings:
             wintypes.DWORD,
         ]
         self.get_volume_path.restype = wintypes.BOOL
+
+        self.get_drive_type = kernel32.GetDriveTypeW
+        self.get_drive_type.argtypes = [wintypes.LPCWSTR]
+        self.get_drive_type.restype = wintypes.UINT
 
         self.get_volume_information = kernel32.GetVolumeInformationW
         self.get_volume_information.argtypes = [
@@ -295,6 +330,110 @@ class _InvocationRoot:
 class _CopiedFile:
     descriptor: int
     handle: int
+
+
+class _TempWriterView:
+    """Close a content view without retiring its invocation-owned descriptor."""
+
+    copy_alignment = 1
+
+    def __init__(self, stream: BinaryIO, fallback_reason: DirectWriteFallback | None) -> None:
+        self._stream = stream
+        self.copy_fallback_reason = fallback_reason
+
+    def __enter__(self) -> _TempWriterView:
+        return self
+
+    def __exit__(self, *_exc: object) -> None:
+        self.close()
+
+    def __getattr__(self, name: str) -> object:
+        return getattr(self._stream, name)
+
+    def write(self, data: bytes | memoryview) -> int:
+        return self._stream.write(data)
+
+    def close(self) -> None:
+        self._stream.close()
+
+
+class _DirectTempWriter(_TempWriterView):
+    """Synchronous aligned writes; only a final sector uses staging storage."""
+
+    def __init__(self, stream: BinaryIO, handle: int, sector: int, alignment: int) -> None:
+        super().__init__(stream, None)
+        self._handle = handle
+        self._sector = sector
+        self.copy_alignment = alignment
+        self._tail_backing = bytearray(sector + self.copy_alignment - 1)
+        address = ctypes.addressof(ctypes.c_char.from_buffer(self._tail_backing))
+        offset = -address % self.copy_alignment
+        self._tail = memoryview(self._tail_backing)[offset:offset + sector]
+        self._tail_size = 0
+        self._logical_size = 0
+
+    def write(self, data: bytes | memoryview) -> int:
+        view = memoryview(data).cast("B")
+        size = len(view)
+        while view:
+            if self._tail_size:
+                taken = min(self._sector - self._tail_size, len(view))
+                self._tail[self._tail_size:self._tail_size + taken] = view[:taken]
+                self._tail_size += taken
+                view = view[taken:]
+                if self._tail_size == self._sector:
+                    self._write_aligned(self._tail)
+                    self._tail_size = 0
+                continue
+            whole = len(view) // self._sector * self._sector
+            if whole:
+                direct = view[:whole]
+                try:
+                    address = ctypes.addressof(ctypes.c_char.from_buffer(direct))
+                except (TypeError, BufferError):
+                    address = 0
+                if address and address % self.copy_alignment == 0:
+                    self._write_aligned(direct)
+                    view = view[whole:]
+                    continue
+            taken = min(self._sector, len(view))
+            self._tail[:taken] = view[:taken]
+            self._tail_size = taken
+            view = view[taken:]
+        self._logical_size += size
+        return size
+
+    def _write_aligned(self, view: memoryview) -> None:
+        assert _WINDOWS is not None
+        offset = 0
+        while offset < len(view):
+            address = ctypes.addressof(ctypes.c_char.from_buffer(view, offset))
+            written = wintypes.DWORD()
+            count = min(len(view) - offset, 0xFFFFFFFF // self._sector * self._sector)
+            if not _WINDOWS.write_file(
+                self._handle, ctypes.c_void_p(address), count,
+                ctypes.byref(written), None,
+            ):
+                raise ctypes.WinError(ctypes.get_last_error())
+            if written.value != count:
+                raise OSError("direct write did not complete its aligned request")
+            offset += written.value
+
+    def __exit__(self, exc_type: object, *_exc: object) -> None:
+        try:
+            if exc_type is None:
+                if self._tail_size:
+                    self._tail[self._tail_size:] = b"\0" * (self._sector - self._tail_size)
+                    self._write_aligned(self._tail)
+                assert _WINDOWS is not None
+                end = _FileEndOfFileInfo(self._logical_size)
+                if not _WINDOWS.set_file_information(
+                    self._handle, _FILE_END_OF_FILE_INFO_CLASS,
+                    ctypes.byref(end), ctypes.sizeof(end),
+                ):
+                    raise ctypes.WinError(ctypes.get_last_error())
+        finally:
+            self.close()
 
 
 @dataclass(slots=True)
@@ -734,6 +873,53 @@ class NativeFileSystem:
             os.close(descriptor)
             raise
 
+    def _direct_geometry(
+        self, path: Path
+    ) -> tuple[tuple[int, int] | None, DirectWriteFallback | None]:
+        """Return logical I/O sector and physical buffer alignment for a local parent."""
+
+        assert _WINDOWS is not None
+        if str(path).startswith("\\\\"):
+            return None, "remote"
+        volume = ctypes.create_unicode_buffer(32768)
+        if not _WINDOWS.get_volume_path(
+            _win32_path(path.parent), volume, len(volume)
+        ):
+            return None, "unknown_geometry"
+        drive_type = _WINDOWS.get_drive_type(volume.value)
+        if drive_type == _DRIVE_REMOTE:
+            return None, "remote"
+        if drive_type in (0, 1):
+            return None, "unknown_geometry"
+        parent_handle = _WINDOWS.create_file(
+            _win32_path(path.parent), _FILE_READ_ATTRIBUTES,
+            _FILE_SHARE_READ | _FILE_SHARE_WRITE | _FILE_SHARE_DELETE,
+            None, _OPEN_EXISTING, _FILE_FLAG_BACKUP_SEMANTICS, None,
+        )
+        if parent_handle == _INVALID_HANDLE_VALUE:
+            return None, "unknown_geometry"
+        try:
+            storage = _FileStorageInfo()
+            if not _WINDOWS.get_file_information_ex(
+                parent_handle, _FILE_STORAGE_INFO_CLASS,
+                ctypes.byref(storage), ctypes.sizeof(storage),
+            ):
+                return None, "unknown_geometry"
+        finally:
+            self._close_handle(parent_handle)
+        logical = storage.LogicalBytesPerSector
+        physical = max(
+            storage.PhysicalBytesPerSectorForAtomicity,
+            storage.PhysicalBytesPerSectorForPerformance,
+            storage.FileSystemEffectivePhysicalBytesPerSectorForAtomicity,
+        )
+        if (
+            logical < 512 or physical < logical or physical > 65536
+            or logical & (logical - 1) or physical & (physical - 1)
+        ):
+            return None, "unknown_geometry"
+        return (logical, physical), None
+
     def create_temp(
         self, path: Path, *, allocation_size: int | None
     ) -> BinaryIO:
@@ -741,6 +927,8 @@ class NativeFileSystem:
             raise ValueError("allocation size cannot be negative")
         flags = os.O_CREAT | os.O_EXCL | os.O_RDWR
         files = self._copied_files() if os.name == "nt" else None
+        geometry: tuple[int, int] | None = None
+        fallback_reason: DirectWriteFallback | None = None
         if os.name == "nt":
             flags |= os.O_BINARY
         if files is None:
@@ -749,6 +937,8 @@ class NativeFileSystem:
             import msvcrt
 
             assert _WINDOWS is not None
+            if allocation_size is not None and allocation_size >= _DIRECT_WRITE_THRESHOLD:
+                geometry, fallback_reason = self._direct_geometry(path)
             handle = _WINDOWS.create_file(
                 _win32_path(path),
                 _GENERIC_READ | _GENERIC_WRITE | _FILE_READ_ATTRIBUTES
@@ -756,11 +946,29 @@ class NativeFileSystem:
                 _FILE_SHARE_READ | _FILE_SHARE_WRITE | _FILE_SHARE_DELETE,
                 None,
                 _CREATE_NEW,
-                _FILE_ATTRIBUTE_NORMAL,
+                _FILE_ATTRIBUTE_NORMAL | (
+                    _FILE_FLAG_NO_BUFFERING if geometry is not None else 0
+                ),
                 None,
             )
+            if handle == _INVALID_HANDLE_VALUE and geometry is not None:
+                error = ctypes.get_last_error()
+                if error in (80, 183):
+                    raise FileExistsError(path)
+                geometry = None
+                fallback_reason = "open_error"
+                handle = _WINDOWS.create_file(
+                    _win32_path(path),
+                    _GENERIC_READ | _GENERIC_WRITE | _FILE_READ_ATTRIBUTES
+                    | _FILE_WRITE_ATTRIBUTES | _DELETE,
+                    _FILE_SHARE_READ | _FILE_SHARE_WRITE | _FILE_SHARE_DELETE,
+                    None, _CREATE_NEW, _FILE_ATTRIBUTE_NORMAL, None,
+                )
             if handle == _INVALID_HANDLE_VALUE:
-                raise ctypes.WinError(ctypes.get_last_error())
+                error = ctypes.get_last_error()
+                if error in (80, 183):
+                    raise FileExistsError(path)
+                raise ctypes.WinError(error)
             try:
                 descriptor = msvcrt.open_osfhandle(handle, os.O_RDWR | os.O_BINARY)
             except BaseException:
@@ -776,8 +984,16 @@ class NativeFileSystem:
             raise
         if files is not None:
             files[path] = _CopiedFile(descriptor, handle)
+        if geometry is not None:
+            result: BinaryIO = cast(BinaryIO, _DirectTempWriter(
+                stream, handle, geometry[0], geometry[1]
+            ))
+        elif fallback_reason is not None:
+            result = cast(BinaryIO, _TempWriterView(stream, fallback_reason))
+        else:
+            result = stream
         if os.name != "nt" or not allocation_size:
-            return stream
+            return result
 
         import msvcrt
 
@@ -792,10 +1008,10 @@ class NativeFileSystem:
         ):
             error = ctypes.get_last_error()
             if error not in _ALLOCATION_UNSUPPORTED_ERRORS:
-                stream.close()
+                result.close()
                 self._release_copied_file(path)
                 raise ctypes.WinError(error)
-        return stream
+        return result
 
     def flush_file(self, stream: BinaryIO) -> None:
         stream.flush()

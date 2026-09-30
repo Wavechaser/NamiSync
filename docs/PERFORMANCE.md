@@ -533,6 +533,40 @@ evidence. Their throughput-goal observations describe those runs, not a stable
 regression attributable to the changes. The target-check follow-up is measured
 separately after correctness verification.
 
+### Integrated direct target writes — 2026-09-30
+
+Result 8 implements the user-selected blanket 8 MiB threshold across device
+types. Five serial samples per original F:→G: band use the production executor
+with buffered source reads. All 25 executions and readbacks pass, with recording
+OK, zero final reservations and stable source/product/tools/tests/driver hashes.
+The three smaller bands report only buffered writes; the two larger bands report
+only direct writes with no fallbacks. Aligned backing allocations remain within
+32 MiB. The rig removes every owned target and sidecar.
+
+| Band | Median [min–max], s | MiB/s | Result 7 median, s |
+| --- | ---: | ---: | ---: |
+| 1,000 × 4 KiB | 2.789 [2.557–2.902] | 1.401 | 3.341 |
+| 512 × 128 KiB | 1.474 [1.322–1.581] | 43.428 | 1.740 |
+| 64 × 4 MiB | 0.351 [0.328–0.385] | 728.517 | 0.356 |
+| 4 × 128 MiB | 0.129 [0.127–0.137] | 3,965.116 | 0.290 |
+| 1 × 4 GiB | 0.909 [0.778–1.135] | 4,504.627 | 1.924 |
+
+Only the 4 MiB band overlaps its predecessor's range. Small-file backend/outside
+medians are 0.106/2.683 s; the 4 GiB split is 0.904/0.006 s. Separate medians
+need not sum to the total. The 4 KiB goal of 1.6 MiB/s remains unmet; per-file
+work outside the copy backend dominates. The 4 GiB median is 52.7% shorter,
+but these sequential historical endpoints do not isolate causality. All five
+samples remain, including the 1.135 s large-file tail. Repeated-source results
+are not cold-cache ceilings, other-device throughput, SQLite or GUI measurements.
+
+Evidence prefix: `build/executor-simplification-20260929/measurements/`
+`result8-b9c4ad3e-20260930-201114-989e90d9`. Before/after physical hashes bind the
+uncommitted candidate on `b9c4ad3`; predecessor receipts separately identify
+accepted result 7 (`878f15e`). The task's `five_band_result8.ps1` and
+`five_band_result8_receipt.py` retain the original five-band procedure and add
+mode/fallback checks. The earlier threshold sweep below remains diagnostic;
+it does not select device-specific shipping policy.
+
 ### Direct-write threshold probe — 2026-09-30
 
 The user's subsequent implementation decision is a blanket 8 MiB threshold

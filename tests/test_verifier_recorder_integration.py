@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import nullcontext
 import os
 from datetime import UTC, datetime
 from pathlib import Path
@@ -89,9 +90,11 @@ def _row(path: Path, rel_path_key: str):
 
 
 @pytest.mark.skipif(os.name != "nt", reason="Windows copy/verify integration")
+@pytest.mark.parametrize("direct", [False, True])
 def test_copy_record_then_unbuffered_verify_round_trips_one_factory(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    direct: bool,
 ) -> None:
     source_root = tmp_path / "source"
     target_root = tmp_path / "target"
@@ -101,7 +104,10 @@ def test_copy_record_then_unbuffered_verify_round_trips_one_factory(
     source_path = source_root / relative_path
     target_path = target_root / relative_path
     temp_path = target_root / "payload.bin.roundtrip.tmp"
-    payload = b"NamiSync copy-to-verify XXH3 round trip"
+    payload = (
+        bytes(range(251)) * 33421 + b"verify-direct-tail"
+        if direct else b"NamiSync copy-to-verify XXH3 round trip"
+    )
     source_path.write_bytes(payload)
     source_open_flags: list[int] = []
     source_open_paths: list[str] = []
@@ -118,32 +124,40 @@ def test_copy_record_then_unbuffered_verify_round_trips_one_factory(
     source_stat = filesystem.stat_path(source_path)
     assert source_stat is not None
     factory = xxh3_128
-    backend = NativeCopyBackend(hasher_factory=factory)
-    with filesystem.open_source(source_path) as source, filesystem.create_temp(
-        temp_path, allocation_size=None
-    ) as target:
-        copied = backend.copy(
-            source,
-            target,
-            chunk_size=256 * 1024,
-            checkpoint=lambda: None,
-            on_chunk=lambda _size: None,
+    backend = NativeCopyBackend(hasher_factory=factory, collect_metrics=True)
+    scope = (
+        executor_module._root_invocation_scope(filesystem, object(), (), None)
+        if direct else nullcontext()
+    )
+    with scope:
+        with filesystem.open_source(source_path) as source, filesystem.create_temp(
+            temp_path, allocation_size=len(payload) if direct else None
+        ) as target:
+            copied = backend.copy(
+                source,
+                target,
+                chunk_size=4 * 1024 * 1024 if direct else 256 * 1024,
+                checkpoint=lambda: None,
+                on_chunk=lambda _size: None,
+            )
+        finalized = filesystem.finalize_temp(
+            temp_path,
+            source_stat,
+            preserve_created=True,
+            acl_source=None,
         )
-    finalized = filesystem.finalize_temp(
-        temp_path,
-        source_stat,
-        preserve_created=True,
-        acl_source=None,
-    )
-    filesystem.publish_new(temp_path, target_path)
-    published = filesystem.ensure_published_metadata(
-        target_path,
-        finalized,
-        source_stat,
-        preserve_created=True,
-        apply_readonly=True,
-    )
-    filesystem.flush_directory(target_root)
+        filesystem.publish_new(temp_path, target_path)
+        published = filesystem.ensure_published_metadata(
+            target_path,
+            finalized,
+            source_stat,
+            preserve_created=True,
+            apply_readonly=True,
+        )
+        filesystem.flush_directory(target_root)
+    assert backend.last_metrics is not None
+    assert backend.last_metrics.write_mode == ("direct" if direct else "buffered")
+    assert backend.last_metrics.fallback_reason is None
     assert source_open_flags and source_open_flags[0] & os.O_SEQUENTIAL
     assert source_open_paths == [to_extended_length_path(str(source_path))]
 

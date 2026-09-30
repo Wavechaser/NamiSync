@@ -718,7 +718,9 @@ See `PREFLIGHT.md`.
 Owns operation policy, dispatch, final-touch validation, retry, continuation,
 cancellation settlement, progress, and post-mutation recording. Its native leaf
 owns Windows handles and mutation primitives; its pipeline leaf owns bounded
-single-file read/hash/write flow. Publication, non-byte mutation, recovery
+single-file read/hash/write flow. The native writer exposes only the narrow
+`CopyWriteCapabilities` alignment and fallback facts from core to the pipeline;
+the leaves do not import each other. Publication, non-byte mutation, recovery
 state, and settlement are typed effects reduced through one policy path.
 
 Mutation follows reviewed operation order, atomic same-volume publication,

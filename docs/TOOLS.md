@@ -501,6 +501,10 @@ that field empty. The observations explain which execution path was measured;
 they are not acceptance, operation outcomes or cached filesystem authorization.
 Core owns classification; possible short-name aliases remain tentative.
 
+The pipeline report also aggregates copy counts by `write_modes` and non-null
+`fallback_reasons`. These opt-in observations distinguish direct writes from
+buffered copies and capability fallback; they do not select a device policy.
+
 `tools/performance/` owns selected Plan, execution receipt/UI, bridge-event and
 history measurements. Assets live beside their driver; small fixture/runner
 helpers are shared only where used. These drivers may compose the real

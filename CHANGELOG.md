@@ -1029,6 +1029,18 @@ claims explicit, independently reviewable, and regression-backed.
 
 #### Apply policy-driven executor and verifier simplifications (2026-09-29 – 2026-09-30)
 
+- Deliver direct target writes at or above 8 MiB across device types, using
+  aligned buffers within the 32 MiB pipeline bound, exact tail EOF and retained
+  handle publication. Keep buffered capability fallbacks, source reads and
+  durability; create the temp before leftover recovery and use a synchronous
+  path for eligible single-chunk buffered copies.
+- Verify native failure/ownership controls and real ledger/verifier integration,
+  5,720 ordinary passes plus 95 audit tests after correcting one obsolete count,
+  12 imports, guard scan and independently reviewed oracle/differential trace
+  classifications. All 25 production readbacks pass with expected write modes.
+  Five-band medians are 2.789 / 1.474 / 0.351 / 0.129 / 0.909 s; 4 KiB reaches
+  1.40 MiB/s (goal still unmet), and 4 GiB reaches 4,505 MiB/s. PERFORMANCE records
+  all samples, provenance and sequential-comparison limits.
 - Restrict held-root admission delegation to concrete `NativeFileSystem`, keeping
   runtime admission for subclasses whose resolver need not admit the root.
   A focused witness fails before the correction; all 620 executor tests and
@@ -1037,8 +1049,8 @@ claims explicit, independently reviewable, and regression-backed.
 - Refine and activate results 5–7: recognize admitted file versions after own
   effects, compose validated descendant paths and remove method-identity dispatch.
   Keep metadata completion, database concurrency and integrity criteria separate;
-  production direct writes remain outside this execution; threshold probing
-  across the five specified devices follows consolidation review.
+  threshold probing across the five specified devices followed consolidation
+  review before the user authorized production direct writes.
 - Fix own-effect ARCHIVE refusals using shared version recognition in executor
   recovery and pure rename recording; retain metadata-restoration and SQL
   concurrency checks. Five native cases and changed-version controls pass.
@@ -1065,7 +1077,7 @@ claims explicit, independently reviewable, and regression-backed.
   retain buffered H/J/L under the predeclared consistency criterion. All 336
   timed copies and 16 tail witnesses pass readback, provenance and cleanup.
   These are device-specific standalone candidates requiring integrated
-  revalidation; no production direct-write refactor or shipping threshold added.
+  revalidation; this standalone probe did not change the shipping threshold.
 
 - Correct the measurement context: F: was occupied during the finishing runs;
   they do not establish a regression. Record the user's separate rerun table,

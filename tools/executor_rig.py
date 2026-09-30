@@ -7,6 +7,7 @@ first-run/no-history plan and does not produce MOVE or MOVE_UPDATE operations.
 
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass, replace
 from pathlib import Path
 from pathlib import PureWindowsPath
@@ -517,4 +518,11 @@ def copy_metrics_summary(samples: Sequence[CopySample]) -> dict[str, object]:
         summary["reserved_bytes"] = sum(
             sample.metrics.reserved_bytes for sample in collected
         )
+        summary["write_modes"] = dict(Counter(
+            sample.metrics.write_mode for sample in collected
+        ))
+        summary["fallback_reasons"] = dict(Counter(
+            sample.metrics.fallback_reason for sample in collected
+            if sample.metrics.fallback_reason is not None
+        ))
     return summary

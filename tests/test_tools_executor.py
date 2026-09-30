@@ -47,6 +47,9 @@ def test_executor_diagnostics_tap_is_removed_when_disabled(tmp_path: Path) -> No
     assert with_metrics.result.status is SessionState.COMPLETED
     assert len(with_metrics.copy_samples) == 1
     assert with_metrics.copy_samples[0].metrics is not None
+    summary = executor_rig.copy_metrics_summary(with_metrics.copy_samples)
+    assert summary["write_modes"] == {"buffered": 1}
+    assert summary["fallback_reasons"] == {}
     assert {item.role for item in with_metrics.root_diagnostics} == {"source", "target"}
     assert len(with_metrics.root_diagnostics) == 2
 

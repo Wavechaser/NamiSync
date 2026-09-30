@@ -664,6 +664,12 @@ class FaultingPipelineStream:
             raise OSError("injected integrated reader failure")
         return self.stream.read(size)
 
+    def readinto(self, buffer) -> int:
+        self.calls += 1
+        if self.stage == "reader" and self.calls == 2:
+            raise OSError("injected integrated reader failure")
+        return self.stream.readinto(buffer)
+
     def write(self, data) -> int:
         self.calls += 1
         if self.stage == "writer" and self.calls == 2:
@@ -5864,7 +5870,8 @@ def test_executor_public_facade_preserves_exact_exports_and_signatures() -> None
         "CopyPipelineMetrics": (
             "(reader_blocked_seconds: 'float' = 0.0, writer_starved_seconds: "
             "'float' = 0.0, payload_high_water: 'int' = 0, reserved_bytes: "
-            "'int' = 0) -> None"
+            "'int' = 0, write_mode: 'str' = 'buffered', fallback_reason: "
+            "'DirectWriteFallback | None' = None) -> None"
         ),
     }
 

@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import ctypes
 from dataclasses import dataclass
+import os
 from queue import Empty, Full, Queue, ShutDown, SimpleQueue
+import stat
 from threading import TIMEOUT_MAX, Event, Lock, Thread
+import traceback
 import math
 import time
 from typing import BinaryIO, cast
@@ -15,7 +19,7 @@ from namisync.core.evidence import (
     new_content_hasher,
     update_content_hasher,
 )
-from namisync.core.execution import CopyDigest
+from namisync.core.execution import CopyDigest, CopyWriteCapabilities, DirectWriteFallback
 from namisync.core.scalars import checked_add_signed_64
 from namisync.core.session import Canceled, PauseRequested
 
@@ -40,6 +44,8 @@ class CopyPipelineMetrics:
     writer_starved_seconds: float = 0.0
     payload_high_water: int = 0
     reserved_bytes: int = 0
+    write_mode: str = "buffered"
+    fallback_reason: DirectWriteFallback | None = None
 
 
 @dataclass(slots=True)
@@ -52,6 +58,17 @@ class _PipelineDiagnostics:
 @dataclass(slots=True)
 class _PipelineAccounting:
     reserved_bytes: int = 0
+
+
+@dataclass(slots=True)
+class _BorrowedChunk:
+    backing: bytearray
+    view: memoryview
+    size: int
+
+    @property
+    def allocation_size(self) -> int:
+        return len(self.backing)
 
 
 class _FirstPipelineError:
@@ -119,20 +136,80 @@ class NativeCopyBackend:
     ) -> CopyDigest:
         if chunk_size <= 0:
             raise ValueError("copy chunk size must be positive")
+        if chunk_size > _PIPELINE_BYTE_BUDGET:
+            raise ValueError("copy chunk size exceeds the pipeline byte budget")
 
-        hash_queue: Queue[bytes | object] = Queue(maxsize=self._queue_items)
-        write_queue: Queue[bytes | object] = Queue(maxsize=self._queue_items)
-        completions: SimpleQueue[int] = SimpleQueue()
+        capabilities = target if isinstance(target, CopyWriteCapabilities) else None
+        alignment = 1 if capabilities is None else capabilities.copy_alignment
+        if alignment <= 0:
+            raise ValueError("copy writer alignment must be positive")
+        fallback_reason = (
+            None if capabilities is None else capabilities.copy_fallback_reason
+        )
+        direct = alignment > 1
+        write_mode = "direct" if direct else "buffered"
+        slot_cost = chunk_size + alignment - 1 if direct else chunk_size
+        if slot_cost > _PIPELINE_BYTE_BUDGET:
+            raise ValueError("aligned copy chunk exceeds the pipeline byte budget")
+
+        self._last_metrics = None
+        if self._collect_metrics:
+            self._last_metrics = CopyPipelineMetrics(
+                write_mode=write_mode, fallback_reason=fallback_reason,
+            )
+        prefetched: list[bytes] = []
+        if (
+            not direct and chunk_size <= _PIPELINE_BYTE_BUDGET // 2
+            and _single_chunk_candidate(source, chunk_size)
+        ):
+            checkpoint()
+            first = source.read(chunk_size)
+            if not isinstance(first, bytes) or len(first) > chunk_size:
+                raise TypeError("copy source read() must return bounded bytes")
+            if not first:
+                digest = finish_content_hasher(new_content_hasher(self._hasher_factory))
+                return CopyDigest(digest=digest, size=0)
+            checkpoint()
+            second = source.read(chunk_size)
+            if not isinstance(second, bytes) or len(second) > chunk_size:
+                raise TypeError("copy source read() must return bounded bytes")
+            if not second:
+                hasher = new_content_hasher(self._hasher_factory)
+                if self._collect_metrics:
+                    self._last_metrics = CopyPipelineMetrics(
+                        payload_high_water=len(first),
+                        write_mode=write_mode, fallback_reason=fallback_reason,
+                    )
+                update_content_hasher(hasher, first)
+                _write_all(target, first, "copy backend")
+                checkpoint()
+                on_chunk(len(first))
+                return CopyDigest(
+                    digest=finish_content_hasher(hasher), size=len(first)
+                )
+            prefetched = [first, second]
+            del first, second
+
+        hash_queue: Queue[bytes | _BorrowedChunk | object] = Queue(maxsize=self._queue_items)
+        write_queue: Queue[bytes | _BorrowedChunk | object] = Queue(maxsize=self._queue_items)
+        completions: SimpleQueue[tuple[int, _BorrowedChunk | None]] = SimpleQueue()
         abort = Event()
         first_error = _FirstPipelineError()
         writer_done = Event()
-        accounting = _PipelineAccounting()
+        accounting = _PipelineAccounting(
+            reserved_bytes=sum(len(part) for part in prefetched)
+        )
         diagnostics = (
             _PipelineDiagnostics() if self._collect_metrics else None
         )
-        self._last_metrics = None
+        if diagnostics is not None:
+            diagnostics.payload_high_water = accounting.reserved_bytes
         digest_result: list[bytes] = []
         total_read = 0
+        free_buffers: list[_BorrowedChunk] = []
+        all_buffers: list[_BorrowedChunk] = []
+        allocated_bytes = 0
+        coordinator_error: BaseException | None = None
 
         def shut_down() -> None:
             abort.set()
@@ -143,7 +220,10 @@ class NativeCopyBackend:
             first_error.store(error)
             shut_down()
 
-        def put_worker(queue: Queue[bytes | object], value: bytes | object) -> None:
+        def put_worker(
+            queue: Queue[bytes | _BorrowedChunk | object],
+            value: bytes | _BorrowedChunk | object,
+        ) -> None:
             while not abort.is_set():
                 try:
                     queue.put(value, timeout=self._poll_seconds)
@@ -167,8 +247,13 @@ class NativeCopyBackend:
                         digest_result.append(finish_content_hasher(hasher))
                         put_worker(write_queue, _PIPELINE_EOF)
                         return
-                    chunk = cast(bytes, item)
-                    update_content_hasher(hasher, chunk)
+                    chunk = cast(bytes | _BorrowedChunk, item)
+                    hash_bytes = (
+                        chunk.view[:chunk.size].toreadonly()
+                        if isinstance(chunk, _BorrowedChunk) else chunk
+                    )
+                    update_content_hasher(hasher, hash_bytes)
+                    del hash_bytes
                     if abort.is_set():
                         return
                     put_worker(write_queue, chunk)
@@ -202,14 +287,23 @@ class NativeCopyBackend:
                     if item is _PIPELINE_EOF:
                         writer_done.set()
                         return
-                    chunk = cast(bytes, item)
-                    _write_all(target, chunk, "copy backend")
+                    chunk = cast(bytes | _BorrowedChunk, item)
+                    write_bytes = (
+                        chunk.view[:chunk.size]
+                        if isinstance(chunk, _BorrowedChunk) else chunk
+                    )
+                    _write_all(target, write_bytes, "copy backend")
+                    del write_bytes
                     if abort.is_set():
                         return
-                    completed_size = len(chunk)
+                    completed_size = (
+                        chunk.size if isinstance(chunk, _BorrowedChunk) else len(chunk)
+                    )
+                    borrowed = chunk if isinstance(chunk, _BorrowedChunk) else None
                     del chunk
                     del item
-                    completions.put(completed_size)
+                    completions.put((completed_size, borrowed))
+                    del borrowed
             except BaseException as error:
                 fail(error)
 
@@ -248,12 +342,14 @@ class NativeCopyBackend:
                 if abort.is_set():
                     return
                 try:
-                    completed = completions.get_nowait()
+                    completed, borrowed = completions.get_nowait()
                 except Empty:
                     return
                 if abort.is_set():
                     return
-                accounting.reserved_bytes -= completed
+                accounting.reserved_bytes -= (
+                    borrowed.allocation_size if borrowed is not None else completed
+                )
                 if accounting.reserved_bytes < 0:
                     raise RuntimeError("pipeline payload accounting underflow")
                 if abort.is_set():
@@ -262,6 +358,8 @@ class NativeCopyBackend:
                 if abort.is_set():
                     return
                 on_chunk(completed)
+                if borrowed is not None:
+                    free_buffers.append(borrowed)
 
         def wait_for_capacity(reservation: int) -> None:
             wait_started: float | None = None
@@ -289,7 +387,8 @@ class NativeCopyBackend:
                 )
 
         def put_coordinator(
-            queue: Queue[bytes | object], value: bytes | object
+            queue: Queue[bytes | _BorrowedChunk | object],
+            value: bytes | _BorrowedChunk | object,
         ) -> None:
             wait_started: float | None = None
             while True:
@@ -330,36 +429,65 @@ class NativeCopyBackend:
                     raise_checkpoint_failure(error)
                 raise_worker_error()
                 drain_completions()
-                wait_for_capacity(chunk_size)
-                accounting.reserved_bytes += chunk_size
+                precharged = bool(prefetched)
+                reservation = 0 if precharged else slot_cost
+                if reservation:
+                    wait_for_capacity(reservation)
+                    accounting.reserved_bytes += reservation
                 if diagnostics is not None:
                     diagnostics.payload_high_water = max(
                         diagnostics.payload_high_water,
                         accounting.reserved_bytes,
                     )
                 try:
-                    chunk = source.read(chunk_size)
+                    if direct:
+                        if free_buffers:
+                            borrowed = free_buffers.pop()
+                        else:
+                            if allocated_bytes + slot_cost > _PIPELINE_BYTE_BUDGET:
+                                raise RuntimeError("aligned pool exceeded its byte budget")
+                            borrowed = _allocate_borrowed_chunk(chunk_size, alignment)
+                            allocated_bytes += borrowed.allocation_size
+                            all_buffers.append(borrowed)
+                        size = 0
+                        while size < chunk_size:
+                            count = source.readinto(borrowed.view[size:])
+                            if type(count) is not int or not 0 <= count <= chunk_size - size:
+                                raise OSError("copy source readinto() returned an invalid count")
+                            if count == 0:
+                                break
+                            size += count
+                        borrowed.size = size
+                        chunk: bytes | _BorrowedChunk = borrowed
+                    else:
+                        chunk = prefetched.pop(0) if precharged else source.read(chunk_size)
                 except BaseException:
-                    accounting.reserved_bytes -= chunk_size
+                    accounting.reserved_bytes -= reservation
                     raise
-                if not chunk:
-                    accounting.reserved_bytes -= chunk_size
+                if not isinstance(chunk, (bytes, _BorrowedChunk)):
+                    accounting.reserved_bytes -= reservation
+                    raise TypeError("copy source read() must return bytes")
+                actual_size = chunk.size if isinstance(chunk, _BorrowedChunk) else len(chunk)
+                if not actual_size:
+                    accounting.reserved_bytes -= reservation
+                    if isinstance(chunk, _BorrowedChunk):
+                        free_buffers.append(chunk)
                     put_coordinator(hash_queue, _PIPELINE_EOF)
                     break
-                if not isinstance(chunk, bytes):
-                    accounting.reserved_bytes -= chunk_size
-                    raise TypeError("copy source read() must return bytes")
-                if len(chunk) > chunk_size:
-                    accounting.reserved_bytes -= chunk_size
+                if actual_size > chunk_size:
+                    accounting.reserved_bytes -= reservation
                     raise OSError("copy source returned more bytes than requested")
-                accounting.reserved_bytes -= chunk_size - len(chunk)
+                if not direct and not precharged:
+                    accounting.reserved_bytes -= chunk_size - actual_size
                 total_read = checked_add_signed_64(
                     total_read,
-                    len(chunk),
+                    actual_size,
                     "copied bytes",
                 )
                 put_coordinator(hash_queue, chunk)
                 del chunk
+                if direct:
+                    del borrowed
 
             while not writer_done.is_set():
                 try:
@@ -376,7 +504,8 @@ class NativeCopyBackend:
             except BaseException as error:
                 raise_checkpoint_failure(error)
             raise_worker_error()
-        except BaseException:
+        except BaseException as error:
+            coordinator_error = error
             shut_down()
             raise
         finally:
@@ -384,6 +513,24 @@ class NativeCopyBackend:
                 shut_down()
             for thread in started:
                 thread.join()
+            if direct:
+                worker_error = first_error.get()
+                if worker_error is not None:
+                    _clear_inactive_error_frames(worker_error)
+                if coordinator_error is not None:
+                    _clear_inactive_error_frames(coordinator_error)
+                chunk = b""
+                borrowed = None
+                while True:
+                    try:
+                        completions.get_nowait()
+                    except Empty:
+                        break
+                free_buffers.clear()
+                for slot in all_buffers:
+                    slot.view.release()
+                    slot.backing = bytearray()
+                all_buffers.clear()
             if abort.is_set():
                 accounting.reserved_bytes = 0
             if diagnostics is not None:
@@ -392,6 +539,8 @@ class NativeCopyBackend:
                     writer_starved_seconds=diagnostics.writer_starved_seconds,
                     payload_high_water=diagnostics.payload_high_water,
                     reserved_bytes=accounting.reserved_bytes,
+                    write_mode=write_mode,
+                    fallback_reason=fallback_reason,
                 )
 
         if len(digest_result) != 1:
@@ -419,7 +568,45 @@ def _allocation_size(reviewed_size: int) -> int | None:
     return reviewed_size if reviewed_size >= _PREALLOCATION_THRESHOLD else None
 
 
-def _write_all(target: BinaryIO, chunk: bytes, owner: str) -> None:
+def _allocate_borrowed_chunk(size: int, alignment: int) -> _BorrowedChunk:
+    backing = bytearray(size + alignment - 1)
+    address = ctypes.addressof(ctypes.c_char.from_buffer(backing))
+    offset = -address % alignment
+    return _BorrowedChunk(backing, memoryview(backing)[offset:offset + size], 0)
+
+
+def _single_chunk_candidate(source: BinaryIO, chunk_size: int) -> bool:
+    """Use the synchronous shortcut only for a regular file currently this short."""
+
+    try:
+        info = os.fstat(source.fileno())
+        position = source.tell()
+    except (AttributeError, OSError, ValueError):
+        return False
+    return stat.S_ISREG(info.st_mode) and 0 <= info.st_size - position <= chunk_size
+
+
+def _clear_inactive_error_frames(error: BaseException) -> None:
+    """Keep error identity and causes while releasing borrowed worker views."""
+
+    pending = [error]
+    seen: set[int] = set()
+    while pending:
+        current = pending.pop()
+        if id(current) in seen:
+            continue
+        seen.add(id(current))
+        if current.__traceback__ is not None:
+            traceback.clear_frames(current.__traceback__)
+        if current.__cause__ is not None:
+            pending.append(current.__cause__)
+        if current.__context__ is not None:
+            pending.append(current.__context__)
+        if isinstance(current, BaseExceptionGroup):
+            pending.extend(current.exceptions)
+
+
+def _write_all(target: BinaryIO, chunk: bytes | memoryview, owner: str) -> None:
     view = memoryview(chunk)
     while view:
         written = target.write(view)

@@ -292,25 +292,39 @@ and-swap guarantee.
 ## Copy State Machine
 
 1. Validate expected source and destination states.
-2. Create an exclusive exact-name temp in the final target parent and volume.
-   An active Windows native invocation uses `CREATE_NEW` with data, attribute
-   and delete access and read/write/delete sharing. The invocation owns the
-   descriptor; the pipeline receives an unbuffered writer view whose close does
-   not close that descriptor. Direct native calls outside an invocation and
-   non-Windows adapters retain their existing path-based behavior.
-   At or above the measured private 8 MiB threshold, request exactly the
-   reviewed allocation without advancing logical EOF. Only explicitly
-   unsupported allocation falls back; disk-full, quota, permission, and
-   unknown errors fail before streaming.
-3. Open the source through the cached `O_SEQUENTIAL` path. Select a fixed
+2. Open the source through the cached `O_SEQUENTIAL` path. Select a fixed
    256 KiB chunk below 8 MiB, 1 MiB below 32 MiB, or 4 MiB thereafter, capped
    by `ExecutorPolicies.max_chunk_size`.
-4. Stream immutable chunks through caller/reader → hasher → writer under one
-   combined 32 MiB payload budget and 32-item caps on both FIFOs. The hasher
-   and writer are the only workers; the caller admits reads, checkpoints, and
+3. Create an exclusive exact-name temp in the final target parent and volume.
+   An active Windows native invocation uses `CREATE_NEW` with data, attribute
+   and delete access and read/write/delete sharing. The invocation owns the
+   descriptor; the pipeline receives a content view whose close does not close
+   that descriptor. The first create is attempted before any exact-name cleanup;
+   only an existing temp triggers guarded removal and one create retry. Direct
+   native calls outside an invocation and non-Windows adapters retain their
+   existing path-based behavior.
+   At or above the private 8 MiB threshold on any local device, known logical
+   and physical sector geometry selects `FILE_FLAG_NO_BUFFERING` target writes.
+   Remote roots, unknown geometry, or a refused direct open use buffered writes
+   with an opt-in diagnostic; a later write failure fails the copy rather than
+   switching modes. The same size threshold requests exactly the reviewed
+   allocation without advancing logical EOF. Only explicitly
+   unsupported allocation falls back; disk-full, quota, permission, and
+   unknown errors fail before streaming.
+4. Stream chunks through caller/reader → hasher → writer under one combined
+   32 MiB payload budget and 32-item caps on both FIFOs. Buffered writes retain
+   immutable byte chunks. Direct writes read into aligned reusable buffers;
+   their actual allocations, including alignment slack, fit the 32 MiB pool.
+   Hashing borrows a read-only view of real bytes and consumes it synchronously;
+   the writer receives the same backing buffer and returns it to the pool only
+   after the full write completes. The caller admits reads, checkpoints, and
    reports progress only after hash and full write complete in FIFO order.
-   Every file size, including empty and 4 KiB, uses this same pipeline.
-5. Close the content writer view without flushing it. Reuse its retained handle
+   A buffered copy from a regular-file source whose remaining size fits one chunk
+   uses a synchronous path after an EOF lookahead; growth or a short read cannot
+   manufacture EOF.
+5. Close the content writer view without flushing it. The direct writer pads
+   only a trailing sector and sets exact logical EOF on its retained handle
+   before metadata or publication. Reuse that handle
    before any opted-in ACL is copied, apply normalized creation/mtime/access and
    managed attributes while withholding readonly, issue exactly one
    `FlushFileBuffers` on that held handle, and retain its normalized stat.
@@ -994,7 +1008,10 @@ The snapshot contains:
   copy; and
 - `reserved_bytes`: the reservation remaining after worker cleanup. A completed
   or aborted copy must return this to zero; a nonzero value is a pipeline
-  accounting defect.
+  accounting defect; and
+- `write_mode` and `fallback_reason`: `direct` or `buffered`, with a fixed
+  `remote`, `unknown_geometry`, or `open_error` reason when direct selection
+  falls back before streaming.
 
 These metrics describe pipeline backpressure, not user-facing throughput, ETA,
 or durable run telemetry. They are neither emitted as progress events nor

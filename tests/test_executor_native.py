@@ -7,6 +7,7 @@ from contextvars import copy_context
 from dataclasses import replace
 import ctypes
 import getpass
+import io
 import os
 from pathlib import Path
 import stat as stat_module
@@ -972,6 +973,250 @@ def test_native_preallocation_keeps_logical_eof_and_exclusive_temp(
     assert path.read_bytes() == b"x"
     with pytest.raises(FileExistsError):
         fs.create_temp(path, allocation_size=None)
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows direct-write copy")
+def test_large_copy_uses_direct_writer_and_publishes_exact_tail(tmp_path: Path) -> None:
+    source, target = _roots(tmp_path)
+    payload = bytes(range(251)) * 33421 + b"direct-tail"
+    assert len(payload) >= 8 * 1024 * 1024
+    (source / "file.bin").write_bytes(payload)
+    fs = NativeFileSystem()
+    expected = fs.stat(source, "file.bin")
+    assert expected is not None
+    operation = _operation(
+        1, OperationKind.COPY, source_rel_path="file.bin",
+        target_rel_path="file.bin", source_expected=expected,
+        target_expected=None, intended=expected,
+    )
+    backend = NativeCopyBackend(hasher_factory=xxh3_128, collect_metrics=True)
+
+    result, _, recorder = _run(
+        _xset(_plan(source, target, (operation,))), fs=fs,
+        policies=_policies(copy_backend=backend, max_chunk_size=4 * 1024 * 1024),
+    )
+
+    assert result.status is SessionState.COMPLETED
+    assert (target / "file.bin").read_bytes() == payload
+    assert (target / "file.bin").stat().st_size == len(payload)
+    assert backend.last_metrics is not None
+    assert backend.last_metrics.write_mode == "direct"
+    assert backend.last_metrics.fallback_reason is None
+    assert backend.last_metrics.payload_high_water <= 32 * 1024 * 1024
+    assert backend.last_metrics.reserved_bytes == 0
+    assert recorder.calls
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows direct-write fallback")
+@pytest.mark.parametrize("reason", ["remote", "unknown_geometry", "open_error"])
+def test_large_copy_falls_back_before_stream_with_diagnostic(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, reason: str,
+) -> None:
+    source, target = _roots(tmp_path)
+    payload = b"f" * (8 * 1024 * 1024) + b"-tail"
+    (source / "file.bin").write_bytes(payload)
+    fs = NativeFileSystem()
+    if reason != "open_error":
+        monkeypatch.setattr(fs, "_direct_geometry", lambda _path: (None, reason))
+    else:
+        bindings = executor_module._WINDOWS
+        assert bindings is not None
+        original_create = bindings.create_file
+
+        def reject_direct(*args):
+            if args[5] & executor_module._FILE_FLAG_NO_BUFFERING:
+                ctypes.set_last_error(87)
+                return executor_module._INVALID_HANDLE_VALUE
+            return original_create(*args)
+
+        monkeypatch.setattr(bindings, "create_file", reject_direct)
+    expected = fs.stat(source, "file.bin")
+    assert expected is not None
+    operation = _operation(
+        1, OperationKind.COPY, source_rel_path="file.bin",
+        target_rel_path="file.bin", source_expected=expected,
+        target_expected=None, intended=expected,
+    )
+    backend = NativeCopyBackend(hasher_factory=xxh3_128, collect_metrics=True)
+
+    result, _, recorder = _run(
+        _xset(_plan(source, target, (operation,))), fs=fs,
+        policies=_policies(copy_backend=backend, max_chunk_size=4 * 1024 * 1024),
+    )
+
+    assert result.status is SessionState.COMPLETED
+    assert (target / "file.bin").read_bytes() == payload
+    assert backend.last_metrics is not None
+    assert backend.last_metrics.write_mode == "buffered"
+    assert backend.last_metrics.fallback_reason == reason
+    assert recorder.calls
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows direct writer primitives")
+@pytest.mark.parametrize("sector", [512, 4096])
+def test_direct_writer_pads_tail_then_sets_exact_eof(
+    monkeypatch: pytest.MonkeyPatch, sector: int,
+) -> None:
+    bindings = executor_module._WINDOWS
+    assert bindings is not None
+    written: list[bytes] = []
+    addresses: list[int] = []
+    exact_eof: list[int] = []
+
+    def write(_handle, address, count, completed, _overlapped):
+        addresses.append(address.value)
+        written.append(ctypes.string_at(address, count))
+        ctypes.cast(completed, ctypes.POINTER(executor_module.wintypes.DWORD)).contents.value = count
+        return 1
+
+    def set_eof(_handle, kind, info, _length):
+        assert kind == executor_module._FILE_END_OF_FILE_INFO_CLASS
+        exact_eof.append(ctypes.cast(
+            info, ctypes.POINTER(executor_module._FileEndOfFileInfo)
+        ).contents.EndOfFile)
+        return 1
+
+    monkeypatch.setattr(bindings, "write_file", write)
+    monkeypatch.setattr(bindings, "set_file_information", set_eof)
+    alignment = max(4096, sector)
+    slot = executor_pipeline._allocate_borrowed_chunk(2 * sector, alignment)
+    slot.view[:] = b"x" * (2 * sector)
+    first = b"a" * (sector // 2)
+    second = b"b" * (sector // 2 + 3)
+    with executor_module._DirectTempWriter(io.BytesIO(), 123, sector, alignment) as target:
+        assert target.write(slot.view) == 2 * sector
+        assert target.write(first) == len(first)
+        assert target.write(second) == len(second)
+        assert target.write(b"-tail") == 5
+    expected = b"x" * (2 * sector) + first + second + b"-tail"
+    assert exact_eof == [len(expected)]
+    assert all(address % alignment == 0 for address in addresses)
+    assert all(len(part) % sector == 0 for part in written)
+    assert b"".join(written)[:exact_eof[0]] == expected
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows direct-write threshold")
+@pytest.mark.parametrize(
+    ("size", "expected_mode"),
+    [(8 * 1024 * 1024 - 1, "buffered"), (8 * 1024 * 1024, "direct")],
+)
+def test_direct_write_threshold_is_eight_mib_on_local_target(
+    tmp_path: Path, size: int, expected_mode: str,
+) -> None:
+    source, target = _roots(tmp_path)
+    (source / "file.bin").write_bytes(b"t" * size)
+    fs = NativeFileSystem()
+    expected = fs.stat(source, "file.bin")
+    assert expected is not None
+    operation = _operation(
+        1, OperationKind.COPY, source_rel_path="file.bin",
+        target_rel_path="file.bin", source_expected=expected,
+        target_expected=None, intended=expected,
+    )
+    backend = NativeCopyBackend(hasher_factory=xxh3_128, collect_metrics=True)
+    result, _, _ = _run(
+        _xset(_plan(source, target, (operation,))), fs=fs,
+        policies=_policies(copy_backend=backend, max_chunk_size=4 * 1024 * 1024),
+    )
+    assert result.status is SessionState.COMPLETED
+    assert (target / "file.bin").stat().st_size == size
+    assert backend.last_metrics is not None
+    assert backend.last_metrics.write_mode == expected_mode
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows direct-write failure")
+@pytest.mark.parametrize("failure", ["second_write", "exact_eof"])
+def test_direct_write_or_eof_failure_never_restarts_buffered_or_publishes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: str,
+) -> None:
+    source, target = _roots(tmp_path)
+    (source / "file.bin").write_bytes(b"x" * (8 * 1024 * 1024))
+    fs = NativeFileSystem()
+    expected = fs.stat(source, "file.bin")
+    assert expected is not None
+    operation = _operation(
+        1, OperationKind.COPY, source_rel_path="file.bin",
+        target_rel_path="file.bin", source_expected=expected,
+        target_expected=None, intended=expected,
+    )
+    bindings = executor_module._WINDOWS
+    assert bindings is not None
+    original_create = bindings.create_file
+    original_write = bindings.write_file
+    original_set_information = bindings.set_file_information
+    temp_modes: list[bool] = []
+    writes = 0
+
+    def create(*args):
+        if ".synctmp-" in str(args[0]):
+            temp_modes.append(bool(args[5] & executor_module._FILE_FLAG_NO_BUFFERING))
+        return original_create(*args)
+
+    def fail_write(*args):
+        nonlocal writes
+        writes += 1
+        if failure == "second_write" and writes == 2:
+            ctypes.set_last_error(1117)
+            return 0
+        return original_write(*args)
+
+    def fail_eof(*args):
+        if failure == "exact_eof" and args[1] == executor_module._FILE_END_OF_FILE_INFO_CLASS:
+            ctypes.set_last_error(1117)
+            return 0
+        return original_set_information(*args)
+
+    monkeypatch.setattr(bindings, "create_file", create)
+    monkeypatch.setattr(bindings, "write_file", fail_write)
+    monkeypatch.setattr(bindings, "set_file_information", fail_eof)
+    backend = NativeCopyBackend(hasher_factory=xxh3_128, collect_metrics=True)
+    result, _, recorder = _run(
+        _xset(_plan(source, target, (operation,))), fs=fs,
+        policies=_policies(copy_backend=backend, max_chunk_size=4 * 1024 * 1024),
+    )
+    assert result.status is SessionState.FAILED
+    assert writes >= 2
+    assert temp_modes and all(temp_modes)
+    assert backend.last_metrics is not None
+    assert backend.last_metrics.write_mode == "direct"
+    assert not (target / "file.bin").exists()
+    assert not list(target.glob("*.synctmp-*"))
+    assert recorder.calls == []
+
+
+@pytest.mark.parametrize("leftover", [False, True])
+def test_copy_recovers_exact_temp_only_after_create_reports_exists(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, leftover: bool,
+) -> None:
+    source, target = _roots(tmp_path)
+    (source / "file.bin").write_bytes(b"one chunk")
+    fs = NativeFileSystem()
+    expected = fs.stat(source, "file.bin")
+    assert expected is not None
+    operation = _operation(
+        1, OperationKind.COPY, source_rel_path="file.bin",
+        target_rel_path="file.bin", source_expected=expected,
+        target_expected=None, intended=expected,
+    )
+    temp = fs.owned_temp(target / "file.bin", RUN_ID, operation.op_id)
+    if leftover:
+        temp.write_bytes(b"prior run attempt")
+    removed: list[Path] = []
+    original_remove = fs.remove_owned_temp
+
+    def remove(path: Path) -> None:
+        removed.append(path)
+        original_remove(path)
+
+    monkeypatch.setattr(fs, "remove_owned_temp", remove)
+    result, _, recorder = _run(
+        _xset(_plan(source, target, (operation,))), fs=fs,
+        policies=_policies(max_chunk_size=256 * 1024),
+    )
+    assert result.status is SessionState.COMPLETED
+    assert (target / "file.bin").read_bytes() == b"one chunk"
+    assert removed == ([temp] if leftover else [])
+    assert recorder.calls
 
 
 @pytest.mark.skipif(os.name != "nt", reason="requires FileAllocationInfo")
@@ -2798,6 +3043,10 @@ class ReadRecordingStream:
     def read(self, size: int) -> bytes:
         self.requests.append(size)
         return self.stream.read(size)
+
+    def readinto(self, buffer) -> int:
+        self.requests.append(len(buffer))
+        return self.stream.readinto(buffer)
 
     def __getattr__(self, name: str):
         return getattr(self.stream, name)
