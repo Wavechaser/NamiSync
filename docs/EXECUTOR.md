@@ -205,11 +205,10 @@ available identity and managed attributes. Link count remains a fidelity fact
 for MOVE/MOVE_UPDATE source and prior-target eligibility; RECASE does not use
 that eligibility. Creation time and unmanaged attribute bits do not refuse
 admission. The shared core planning predicate covers only metadata/link-count
-facts; full observed stats still bind prepared copies, backups, mutation
-witnesses and recovery. Path, placeholder and reparse checks precede admission.
-The deferred Windows NORMAL-to-ARCHIVE limitation in [BUGS.md](BUGS.md) can
-still cause a full-version refusal after a native effect; admission relaxation
-does not normalize that effect.
+facts. Full admitted stats remain available for metadata completion and
+recording; post-effect and recovery version recognition compares kind, size,
+mtime and available identity, ignoring attributes, creation time and link count.
+Path, placeholder and reparse checks precede admission.
 
 On the default Windows probe path, a valid nonnegative integer `st_dev` from that
 checked snapshot selects the admitted held root's `VolumeId` when its low 32 bits
@@ -508,10 +507,11 @@ ordinary case-insensitive NTFS the destination aliases the source object and the
 updates only its directory-entry spelling. On a case-sensitive target a
 distinct occupied destination makes the primitive fail without overwrite. The
 executor flushes the parent, re-stats the same file, and records the new target
-spelling and correspondence only when the post-rename stat still matches the
-full admitted old target version. The recorder checks the reviewed planner
-facts. It transfers zero bytes, preserves file identity and metadata,
-creates no trash entry, and never recases parent directories.
+spelling and correspondence only when the post-rename stat remains the same
+admitted file version. The recorder checks the same version facts against the
+reviewed target and records actual resulting metadata. It transfers zero bytes,
+preserves file identity, makes no explicit metadata write, creates no trash entry,
+and never recases parent directories.
 
 ### Move
 
@@ -519,10 +519,10 @@ Flush pending recorder state, then revalidate the reviewed source-tree subject,
 old target, and new destination; refuse occupancy; and perform a same-volume
 non-replacing atomic rename whose
 primitive itself fails if the destination appeared. After best-effort
-parent-directory flushes, stat the result and require it to remain the full
-admitted old target version before recording correspondence. The recorder checks
-the reviewed planner facts; it does not replace them with exact comparison against
-source metadata that planning intentionally treats as equal within target
+parent-directory flushes, stat the result and require it to remain the same
+admitted file version before recording correspondence. The recorder checks
+the same version facts against the reviewed target and records actual resulting
+metadata; it does not compare exactly against source metadata within target
 timestamp granularity. A vanished or drifted source subject, or a vanished or
 swapped old target, yields a typed failed outcome and must not create a stale
 mapping claim.
@@ -539,8 +539,8 @@ final outcome and ledger transition. A crash after any internal stage may leave
 both old and new versions, never neither, and leaves no completed mapping claim.
 Each pre-effect old-target check compares the original reviewed facts and
 retains its full admitted stat as the old/trash recovery witness. Committed
-trash retries and settlement compare that full witness; they do not apply the
-weaker plan predicate to an already-mutated subject.
+trash retries and settlement compare its version facts; metadata preservation
+remains a separate obligation.
 
 ### Mkdir
 

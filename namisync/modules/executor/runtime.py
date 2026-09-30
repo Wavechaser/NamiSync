@@ -52,6 +52,7 @@ from namisync.core.planning import (
     OperationReason,
     PlanOperation,
     planned_metadata_matches,
+    same_file_version as _same_file_version,
 )
 from namisync.core.root_authority import RootAuthority
 from namisync.core.scalars import (
@@ -1951,16 +1952,6 @@ def _observe_update_backup_creation(
         backup.created_stat = _require_stat_path(fs, backup.path)
 
 
-def _expected_update_live(continuation: _UpdateContinuation) -> FileStat:
-    backup = continuation.backup
-    if backup is None or backup.kind != "hardlink":
-        return continuation.live_stat
-    return replace(
-        continuation.live_stat,
-        nlink=continuation.live_stat.nlink + 1,
-    )
-
-
 def _repair_update_backup_metadata(
     backup: _UpdateBackup,
     operation: PlanOperation,
@@ -2334,9 +2325,10 @@ def _update(
         )
         _guard_path_stat(
             live,
-            _expected_update_live(continuation),
+            continuation.live_stat,
             ExecutionReason.TARGET_DRIFT,
             "live update target drifted before backup metadata repair",
+            kind=operation.kind,
         )
         _repair_update_backup_metadata(
             continuation.backup,
@@ -2399,9 +2391,10 @@ def _update(
             )
             _guard_path_stat(
                 live,
-                _expected_update_live(continuation),
+                continuation.live_stat,
                 ExecutionReason.TARGET_DRIFT,
                 "live update target drifted after its backup was created",
+                kind=operation.kind,
             )
             if continuation.backup is not None:
                 fs.revalidate_trash_destination(
@@ -2670,7 +2663,7 @@ def _finish_move_update_filesystem(
         )
         trash_actual = _stat_target_path(fs, xset, target_root, trash)
     if old_actual is None:
-        if trash_actual is None or not _matches_expected(
+        if trash_actual is None or not _same_file_version(
             trash_actual,
             continuation.old_stat,
         ):
@@ -3722,7 +3715,7 @@ def _observe_move_update(
             durable_state=(
                 _DurableState.NEW_AND_OLD
                 if old is not None
-                and _matches_expected(old, continuation.old_stat)
+                and _same_file_version(old, continuation.old_stat)
                 else _DurableState.NEW_AND_OLD_UNVERIFIED
             ),
         )
@@ -3757,13 +3750,13 @@ def _observe_move_update(
             durable_state=_DurableState.NEW_AND_OLD_UNVERIFIED,
             trash_state_error=_probe_diagnostic(error),
         )
-    if old is not None and _matches_expected(old, continuation.old_stat):
+    if old is not None and _same_file_version(old, continuation.old_stat):
         durable_state = (
             _DurableState.NEW_AND_OLD
             if trash is None
             else _DurableState.NEW_OLD_AND_TRASH_UNVERIFIED
         )
-    elif old is None and trash is not None and _matches_expected(
+    elif old is None and trash is not None and _same_file_version(
         trash,
         continuation.old_stat,
     ):
@@ -4331,7 +4324,7 @@ def _observed_entry_state(
         return _EntryState.ABSENT
     return (
         _EntryState.REVIEWED
-        if _matches_expected(actual, expected)
+        if _same_file_version(actual, expected)
         else _EntryState.CHANGED
     )
 
@@ -4821,14 +4814,8 @@ def _matches_planned(
     actual: FileStat, expected: FileStat, kind: OperationKind
 ) -> bool:
     return (
-        actual.kind is expected.kind
-        and actual.size == expected.size
-        and actual.mtime_ns == expected.mtime_ns
+        _same_file_version(actual, expected)
         and planned_metadata_matches(actual, expected, kind)
-        and (
-            expected.file_identity is None
-            or actual.file_identity == expected.file_identity
-        )
     )
 
 
@@ -4852,26 +4839,19 @@ def _guard_path_stat(
     expected: FileStat,
     reason: ExecutionReason,
     detail: str,
+    *,
+    kind: OperationKind | None = None,
 ) -> None:
-    if not _matches_expected(actual, expected):
+    matches = (
+        _matches_planned(actual, expected, kind)
+        if kind is not None
+        else _same_file_version(actual, expected)
+    )
+    if not matches:
         raise OperationFailure(
             ExecutionReason.WRONG_TYPE if actual.kind is not expected.kind else reason,
             detail,
         )
-
-
-def _same_file_version(actual: FileStat, expected: FileStat) -> bool:
-    """Recognize one prepared file across rename and partial metadata steps."""
-
-    return (
-        actual.kind is expected.kind
-        and actual.size == expected.size
-        and actual.mtime_ns == expected.mtime_ns
-        and (
-            expected.file_identity is None
-            or actual.file_identity == expected.file_identity
-        )
-    )
 
 
 def _guard_absent(

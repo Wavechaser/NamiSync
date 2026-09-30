@@ -57,6 +57,7 @@ from namisync.core.planning import (
     operation_projection,
     plan_projection,
     planned_metadata_matches,
+    same_file_version,
 )
 from namisync.core.scalars import file_index_128_to_text
 from namisync.core.recording import (
@@ -1735,8 +1736,8 @@ class SyncRunRecorder:
         if attestation is None:
             if (
                 operation.prior_target_expected is None
-                or not self._matches_reviewed_stat(
-                    target, operation.prior_target_expected, operation.kind
+                or not same_file_version(
+                    target, operation.prior_target_expected
                 )
             ):
                 raise StaleRecordingError(
@@ -1861,14 +1862,8 @@ class SyncRunRecorder:
         actual: FileStat, expected: FileStat, kind: OperationKind
     ) -> bool:
         return (
-            actual.kind is expected.kind
-            and actual.size == expected.size
-            and actual.mtime_ns == expected.mtime_ns
+            same_file_version(actual, expected)
             and planned_metadata_matches(actual, expected, kind)
-            and (
-                expected.file_identity is None
-                or actual.file_identity == expected.file_identity
-            )
         )
 
     def _record_absent(

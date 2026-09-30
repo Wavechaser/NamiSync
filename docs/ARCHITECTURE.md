@@ -390,7 +390,7 @@ such as the session states, outcome vocabulary, or observation/judgment split.
 | Safe integer, signed-64, canonical scalar/file-index codecs, shared population-measure/excess primitives, distinct retained-plan and counter-free producer admissions, admission-bound private exact plan-review signals, scanner population-admission protocol, exact immutable scan adoption, and final shallow-slot admission | `namisync/core/scalars.py`, `namisync/core/review.py` |
 | Relative-path validation, keys, hierarchy, containment, and Windows spelling | `namisync/core/pathing.py` |
 | Ephemeral root authority, native volume evidence, admission probes, and scoped root holds | `namisync/core/root_authority.py` |
-| Planning policy, operations, mappings, scopes, plans, fingerprints, selection digests, and planner-used metadata/link-count comparison | `namisync/core/planning.py` |
+| Planning policy, operations, mappings, scopes, plans, fingerprints, selection digests, planner-used metadata/link-count comparison, and same-file-version recognition | `namisync/core/planning.py` |
 | Deeply read-only preflight subjects, observations, refusals, and verdicts | `namisync/core/preflight.py` |
 | Outcomes, recording status, provenance, content evidence, attestation, and hashing protocols | `namisync/core/evidence.py` |
 | Clock protocol for injected wall time | `namisync/core/clock.py` |

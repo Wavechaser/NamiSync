@@ -47,10 +47,10 @@ Decisions recorded during delivery:
 - **Own-effect ARCHIVE mismatch.** Found by `84ce0fb`'s native witnesses,
   reproduced at the starting commit, recorded in BUGS and scheduled as result 5.
 
-**Pending results, in order (added by the user on 2026-09-30).** Simplification
+**Remaining results, in order (added by the user on 2026-09-30).** Simplification
 leads; direct writes follow on the simplified base.
 
-5. **Two comparison questions; own-effect ARCHIVE fix.** Before an effect,
+5. **Two comparison questions; own-effect ARCHIVE fix — delivered.** Before an effect,
    checks ask whether the file still matches the plan (§2.5.1). After NamiSync's
    own effect, and in recovery, they ask whether it is still the same file
    version: kind, size, mtime and identity where the profile provides it.
@@ -106,6 +106,20 @@ then deliver results 5–7 in the smallest coherent atomic commits with their
 required verification and measurements. Result 8 remains pending and is not
 authorized in this execution. Unbuffered source reads remain optional in that
 future result; device-class selection machinery requires measurement justification.
+
+**Result 5 delivered (2026-09-30).** Core version recognition is shared by
+executor post-effect/recovery and pure MOVE/RECASE recording; plan predicates
+compose it with planner metadata facts. Pre-effect fidelity, metadata restoration,
+profile normalization, actual observations, SQL concurrency, attestation,
+NOOP/TRASH admission and DELETE payload contracts remain. The user explicitly
+authorized the recorder replacement after automatic approval review blocked it;
+recovery `9f01bfd9` was rebuilt rather than merged. Final focused checks pass 27,
+ordinary coverage (including core/executor/database) passes 5,714 with four
+existing capability skips. Imports, unchanged 30×3 oracle, guard scan and fixed
+67-group differential pass. All 25 five-band executions/readbacks pass; PERFORMANCE
+records the medians and overlapping ranges. Fresh independent review covers source
+and evidence. Receipts are `differential/result5-final-*` and measurement prefix
+`result5-8b2b00e4-20260930-130559-e544fed6`. Results 6–7 remain next; result 8 is excluded.
 
 **Goal, not gate.** 1,000 × 4 KiB F:→G: at or above the pre-pathing
 1.6 MiB/s, and the 4 GiB band well above today's 2.0 GiB/s toward the device
@@ -398,7 +412,7 @@ scope changes, stops and recovery.
 
 | ID | Accepted outcome | Named verification | Status |
 | --- | --- | --- | --- |
-| Executor simplification and throughput | Admission, handle, drift-fact and verifier simplification (delivered); then own-effect version checks, composed native paths, one held-root production path and direct large writes, per the section above. Goal (not gate): 4 KiB at or above 1.6 MiB/s; 4 GiB toward device ceilings. | Equivalence against the starting commit with the declared changes, per-result oracle re-pin receipts, guard scan, differential, native witnesses, five-band and direct-write device-sweep measurements and independent review per commit. | Delivered through `eb18611`; results 5–8 pending. |
+| Executor simplification and throughput | Admission, handle, drift-fact and verifier simplification (delivered); then own-effect version checks, composed native paths, one held-root production path and direct large writes, per the section above. Goal (not gate): 4 KiB at or above 1.6 MiB/s; 4 GiB toward device ceilings. | Equivalence against the starting commit with the declared changes, per-result oracle re-pin receipts, guard scan, differential, native witnesses, five-band and direct-write device-sweep measurements and independent review per commit. | Earlier simplifications and result 5 delivered; results 6–7 next, result 8 deferred. |
 | M1-9 | Bounded inventory projections, current evidence and the full inventory consumer for sibling sorting. | Complete or prior-complete publication; warnings outside action scope; raw evidence provenance; search/filter/collapse/window/detail, replacement/race and production sort/reset paths; headed witnesses. | Pending. Missing-row acknowledge/restore UI must be explicitly allocated at activation; this row does not silently claim it. |
 | M1-10 | Baseline, verify and rebaseline controls plus first same-task manual post-copy verification, without persistent operation-time hashes. Eligible null-evidence files enter rebaseline; every admitted rebaseline hashes and replaces/creates evidence, and a match is not verified. | Confirm acknowledgement admission before claim/native work; all-null/mixed workflow, service/CLI and desktop paths; conditional recording and supersession races; atomic handoff classification; live pause/resume/cancel and unchanged automatic failed-read retries; overlay/result identity. Independently review operation matrix and conditional recording. Terminal Verify-remaining/subset retry remains deferred. | Pending. Rebaseline confirmation is distinct from missing-row acknowledgement. |
 | M1-12 | Close integrated lifecycle/retention across activated task surfaces, then complete adversarial, documentation, ordinary and headed verification. This absorbs former M1-11. | Plan-only, execution-only, linked/manual verification, inventory, refused/canceled/degraded/failed tasks across same-document navigation, contained unsupported reload, explicit close and shutdown; admission bounds, stale-response suppression, exact resource release and retained truth. Applicable settlement oracle, ordinary/headed, installed-wheel/product, imports, diff/active-link checks and independent cross-component review. No aggregate-artifact or whole-owner-graph criterion. | Pending. |

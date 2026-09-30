@@ -598,15 +598,15 @@ for a run.
 ## Integrity Constraints
 
 Execution recorder acceptance uses the core planning metadata/link-count
-predicate for NOOP's live observations, pure MOVE/RECASE results and TRASH's
-prior target. Incidental creation-time or unmanaged-attribute drift and link
-count outside MOVE eligibility do not reject those results. Existing identity
-acceptance is unchanged, including exact NOOP/TRASH identity equality. Supplied
-observations are persisted in full. COPY/UPDATE/MOVE_UPDATE and pure rename
-source rows retain the reviewed source snapshot; correspondence consumes its
-identity, while future move eligibility uses current scans.
+predicate for NOOP's live observations and TRASH's prior target. Pure
+MOVE/RECASE results use the core same-file-version comparison against the
+reviewed target: kind, size, mtime and available identity, without attributes,
+creation time or link count. Existing exact NOOP/TRASH identity equality remains.
+Supplied observations are persisted in full. COPY/UPDATE/MOVE_UPDATE and pure
+rename source rows retain the reviewed source snapshot; correspondence consumes
+its identity, while future move eligibility uses current scans.
 
-This plan acceptance does not relax optimistic inventory-row concurrency,
+These acceptance rules do not relax optimistic inventory-row concurrency,
 integrity subjects, attestation consistency, operation replay hashes or token
 conflicts. DELETE still records its exact reviewed prior payload.
 

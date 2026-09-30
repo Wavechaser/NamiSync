@@ -66,6 +66,31 @@ def test_planned_metadata_keeps_managed_attributes_and_move_link_eligibility(kin
     )
 
 
+def test_same_file_version_ignores_metadata_and_link_churn_only() -> None:
+    expected = model_contracts.FileStat(
+        model_contracts.EntryKind.FILE, 7, 11,
+        model_contracts.FileIdentity("serial", 1), 1,
+        model_contracts.MetadataSnapshot(0x80, 100),
+    )
+    changed = replace(
+        expected, nlink=2,
+        metadata=model_contracts.MetadataSnapshot(0x21, 200),
+    )
+    assert planning_contracts.same_file_version(changed, expected)
+    for drift in (
+        replace(changed, kind=model_contracts.EntryKind.DIRECTORY),
+        replace(changed, size=8),
+        replace(changed, mtime_ns=12),
+        replace(changed, file_identity=model_contracts.FileIdentity("serial", 2)),
+        replace(changed, file_identity=None),
+    ):
+        assert not planning_contracts.same_file_version(drift, expected)
+    assert planning_contracts.same_file_version(
+        replace(changed, file_identity=None),
+        replace(expected, file_identity=None),
+    )
+
+
 @pytest.mark.parametrize(
     "value",
     [

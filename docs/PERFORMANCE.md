@@ -532,6 +532,31 @@ evidence. Their throughput-goal observations describe those runs, not a stable
 regression attributable to the changes. The target-check follow-up is measured
 separately after correctness verification.
 
+### Own-effect version recognition — 2026-09-30
+
+Result 5's frozen candidate on `8b2b00e` passed 5,714 ordinary tests, 27 focused
+checks, imports, the unchanged three-run oracle and fixed 67-group differential
+before measurement. Five serial samples per original F:→G: band all completed
+with recording OK, exact readback and zero reservations. Source and dependency
+manifests stayed fixed; the rig removed its owned targets and sidecars.
+
+| Band | Median [min–max], s | MiB/s | Previous target-consolidation median, s |
+| --- | ---: | ---: | ---: |
+| 1,000 × 4 KiB | 3.222 [3.130–3.804] | 1.212 | 3.134 |
+| 512 × 128 KiB | 1.685 [1.629–3.619] | 37.993 | 1.641 |
+| 64 × 4 MiB | 0.341 [0.337–0.640] | 751.398 | 0.351 |
+| 4 × 128 MiB | 0.296 [0.293–0.321] | 1,730.414 | 0.303 |
+| 1 × 4 GiB | 1.981 [1.792–2.148] | 2,067.759 | 2.011 |
+
+All ranges overlap the predecessor; no causal throughput lift is established.
+Small-file backend/outside medians are 0.421/2.801 s; the 4 GiB split is
+1.293/0.758 s. Separate medians need not sum to the total. Every sample is
+retained; these buffered repeated-source observations do not establish cold-cache
+or device ceilings. Small-file and large-copy headroom goals remain open.
+Evidence prefix: `build/executor-simplification-20260929/measurements/`
+`result5-8b2b00e4-20260930-130559-e544fed6`; its predecessor comparison binds the
+earlier target-consolidation receipt separately to accepted `eb18611`.
+
 ### Target-check consolidation follow-up — 2026-09-29
 
 Measured the frozen candidate on documentation commit `9c96893` after the

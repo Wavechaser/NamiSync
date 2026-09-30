@@ -1032,8 +1032,14 @@ claims explicit, independently reviewable, and regression-backed.
 - Refine and activate results 5–7: recognize admitted file versions after own
   effects, compose validated descendant paths and remove method-identity dispatch.
   Keep metadata completion, database concurrency and integrity criteria separate;
-  direct writes remain outside this execution. Implementation and measurements
-  are pending.
+  direct writes remain outside this execution.
+- Fix own-effect ARCHIVE refusals using shared version recognition in executor
+  recovery and pure rename recording; retain metadata-restoration and SQL
+  concurrency checks. Five native cases and changed-version controls pass.
+  Final verification passes 5,714 ordinary tests, 27 focused checks, imports,
+  unchanged three-run oracle and the 67-group differential. All 25 five-band
+  executions/readbacks pass; medians are 3.222 / 1.685 / 0.341 / 0.296 / 1.981 s,
+  with no established throughput lift. Path/dispatch simplifications remain next.
 
 - Correct the measurement context: F: was occupied during the finishing runs;
   they do not establish a regression. Record the user's separate rerun table,

@@ -3163,7 +3163,7 @@ def test_failed_readonly_effect_restores_full_admitted_creation_time(tmp_path: P
 @pytest.mark.skipif(os.name != "nt", reason="Windows creation-time preservation")
 @pytest.mark.parametrize("kind", (OperationKind.MOVE, OperationKind.RECASE))
 @pytest.mark.parametrize("alter_after_rename", (False, True))
-def test_pure_rename_binds_post_effect_to_full_admitted_stat(tmp_path: Path, kind, alter_after_rename) -> None:
+def test_pure_rename_binds_post_effect_to_admitted_file_version(tmp_path: Path, kind, alter_after_rename) -> None:
     source, target = _roots(tmp_path)
     new_name = "KEEP.bin" if kind is OperationKind.RECASE else "new.bin"
     old_name = "keep.bin" if kind is OperationKind.RECASE else "old.bin"
@@ -3194,20 +3194,19 @@ def test_pure_rename_binds_post_effect_to_full_admitted_stat(tmp_path: Path, kin
     admitted = fs.stat(target, old_name)
     assert admitted is not None
     result, events, recorder = _run(_xset(_plan(source, target, (op,))), fs=fs)
-    if alter_after_rename:
-        assert result.status is SessionState.FAILED and recorder.calls == []
-    else:
-        assert result.status is SessionState.COMPLETED, (
-            dict(_item_outcome(events).detail), admitted.metadata,
-            fs.stat_path(target / new_name).metadata,
-        )
-        assert recorder.calls[0][2] == admitted
+    assert result.status is SessionState.COMPLETED, (
+        dict(_item_outcome(events).detail), admitted.metadata,
+        fs.stat_path(target / new_name).metadata,
+    )
+    resulting = fs.stat_path(target / new_name)
+    assert resulting is not None
+    assert recorder.calls[0][2] == resulting
     assert (target / new_name).read_bytes() == b"same"
 
 
 @pytest.mark.skipif(os.name != "nt", reason="Windows creation-time preservation")
 @pytest.mark.parametrize("alter_trash_after_commit", (False, True))
-def test_move_update_refreshes_old_witness_and_keeps_strict_committed_trash_recovery(tmp_path: Path, alter_trash_after_commit) -> None:
+def test_move_update_refreshes_old_witness_and_recovers_committed_trash_version(tmp_path: Path, alter_trash_after_commit) -> None:
     source, target = _roots(tmp_path)
     (source / "new.bin").write_bytes(b"new")
     old = target / "old.bin"
@@ -3249,12 +3248,139 @@ def test_move_update_refreshes_old_witness_and_keeps_strict_committed_trash_reco
     assert fs.trash_attempts == 1 and fs.admitted_old is not None
     trash = target / ".synctrash" / str(RUN_ID) / "old.bin"
     assert trash.read_bytes() == b"old" and (target / "new.bin").read_bytes() == b"new"
+    assert result.status is SessionState.COMPLETED
     if alter_trash_after_commit:
-        assert result.status is SessionState.FAILED and recorder.calls == []
+        assert fs.stat_path(trash) != fs.admitted_old
     else:
-        assert result.status is SessionState.COMPLETED
         assert fs.stat_path(trash) == fs.admitted_old
-        assert _recorder_names(recorder) == ["move_updated"]
+    assert _recorder_names(recorder) == ["move_updated"]
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows ARCHIVE changes on native effects")
+@pytest.mark.parametrize(
+    "kind,retry_trash",
+    (
+        (OperationKind.MOVE, False),
+        (OperationKind.RECASE, False),
+        (OperationKind.MOVE_UPDATE, False),
+        (OperationKind.MOVE_UPDATE, True),
+        (OperationKind.UPDATE, False),
+    ),
+)
+def test_native_archive_change_after_own_effect_keeps_same_file_version(
+    tmp_path: Path, kind: OperationKind, retry_trash: bool
+) -> None:
+    source, target = _roots(tmp_path)
+    new_name = (
+        "KEEP.bin" if kind is OperationKind.RECASE else
+        "file.bin" if kind is OperationKind.UPDATE else "new.bin"
+    )
+    old_name = (
+        "keep.bin" if kind is OperationKind.RECASE else
+        "file.bin" if kind is OperationKind.UPDATE else "old.bin"
+    )
+    (source / new_name).write_bytes(
+        b"same" if kind in (OperationKind.MOVE, OperationKind.RECASE) else b"new"
+    )
+    old = target / old_name
+    old.write_bytes(
+        b"same" if kind in (OperationKind.MOVE, OperationKind.RECASE) else b"old"
+    )
+
+    class ArchiveFileSystem(NativeFileSystem):
+        before: FileStat | None = None
+        after: FileStat | None = None
+
+        def rename_new(self, source_path: Path, destination: Path) -> None:
+            capture = source_path == old
+            if capture:
+                self.before = self.stat_path(source_path)
+            super().rename_new(source_path, destination)
+            if capture:
+                self.after = self.stat_path(destination)
+                if retry_trash:
+                    raise _sharing_violation("committed trash retry")
+
+        def hardlink(self, source_path: Path, destination: Path) -> None:
+            if source_path == old:
+                self.before = self.stat_path(source_path)
+            super().hardlink(source_path, destination)
+            if source_path == old:
+                self.after = self.stat_path(destination)
+
+    fs = ArchiveFileSystem()
+    fs._set_attributes(old, 0x80)
+    expected = fs.stat(target, old_name)
+    source_stat = fs.stat(source, new_name)
+    assert expected is not None and source_stat is not None
+    assert expected.metadata.attributes == 0x80
+    operation = _operation(
+        1, kind, source_rel_path=new_name, target_rel_path=new_name,
+        source_expected=source_stat,
+        target_expected=expected if kind in (OperationKind.RECASE, OperationKind.UPDATE) else None,
+        intended=expected if kind in (OperationKind.MOVE, OperationKind.RECASE) else source_stat,
+        prior_target_rel_path=old_name if kind in (OperationKind.MOVE, OperationKind.RECASE, OperationKind.MOVE_UPDATE) else None,
+        prior_target_expected=expected if kind in (OperationKind.MOVE, OperationKind.RECASE, OperationKind.MOVE_UPDATE) else None,
+    )
+    result, events, recorder = _run(
+        _xset(_plan(source, target, (operation,), hardlinks=True)), fs=fs
+    )
+    assert fs.before is not None and fs.after is not None
+    assert fs.before.metadata.attributes == 0x80
+    assert fs.after.metadata.attributes & 0x20
+    assert fs.after.kind is fs.before.kind
+    assert fs.after.size == fs.before.size
+    assert fs.after.mtime_ns == fs.before.mtime_ns
+    assert fs.after.file_identity == fs.before.file_identity
+    if kind is OperationKind.UPDATE:
+        assert fs.after.nlink == fs.before.nlink + 1
+    assert result.status is SessionState.COMPLETED, dict(_item_outcome(events).detail)
+    assert _recorder_names(recorder) == [{
+        OperationKind.MOVE: "moved",
+        OperationKind.RECASE: "recased",
+        OperationKind.MOVE_UPDATE: "move_updated",
+        OperationKind.UPDATE: "updated",
+    }[kind]]
+
+
+@pytest.mark.parametrize("drift", ("kind", "size", "mtime", "identity"))
+def test_pure_move_rejects_changed_file_version_after_native_rename(
+    tmp_path: Path, drift: str
+) -> None:
+    source, target = _roots(tmp_path)
+    (source / "new.bin").write_bytes(b"same")
+    old = target / "old.bin"
+    old.write_bytes(b"same")
+
+    class ChangedRenameFileSystem(NativeFileSystem):
+        def rename_new(self, source_path: Path, destination: Path) -> None:
+            super().rename_new(source_path, destination)
+            current = self.stat_path(destination)
+            assert current is not None
+            if drift == "kind":
+                destination.unlink()
+                destination.mkdir()
+            elif drift == "size":
+                destination.write_bytes(b"longer")
+            elif drift == "mtime":
+                os.utime(destination, ns=(current.mtime_ns + 2_000_000_000,) * 2)
+            else:
+                destination.rename(destination.with_name("detached.bin"))
+                destination.write_bytes(b"same")
+                os.utime(destination, ns=(current.mtime_ns,) * 2)
+
+    fs = ChangedRenameFileSystem()
+    source_stat = fs.stat(source, "new.bin")
+    old_stat = fs.stat(target, "old.bin")
+    assert source_stat is not None and old_stat is not None
+    operation = _operation(
+        1, OperationKind.MOVE, source_rel_path="new.bin", target_rel_path="new.bin",
+        source_expected=source_stat, target_expected=None, intended=old_stat,
+        prior_target_rel_path="old.bin", prior_target_expected=old_stat,
+    )
+    result, _, recorder = _run(_xset(_plan(source, target, (operation,))), fs=fs)
+    assert result.status is SessionState.FAILED
+    assert recorder.calls == []
 
 
 @pytest.mark.parametrize("kind,subject", (

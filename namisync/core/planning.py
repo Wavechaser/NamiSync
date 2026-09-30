@@ -92,6 +92,20 @@ def planned_metadata_matches(
     )
 
 
+def same_file_version(actual: FileStat, expected: FileStat) -> bool:
+    """Recognize a file after an effect using version facts, not metadata churn."""
+
+    return (
+        actual.kind is expected.kind
+        and actual.size == expected.size
+        and actual.mtime_ns == expected.mtime_ns
+        and (
+            expected.file_identity is None
+            or actual.file_identity == expected.file_identity
+        )
+    )
+
+
 class OperationReason(StrEnum):
     SOURCE_ONLY = "source_only"
     METADATA_CHANGED = "metadata_changed"

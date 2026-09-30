@@ -335,7 +335,7 @@ def test_move_records_reviewed_target_within_timestamp_granularity(
 
 @pytest.mark.parametrize("kind", (OperationKind.MOVE, OperationKind.RECASE))
 @pytest.mark.parametrize("mutation", ("created", "unmanaged", "nlink", "managed"))
-def test_pure_rename_records_only_planner_fidelity_drift(tmp_path: Path, kind, mutation) -> None:
+def test_pure_rename_records_post_effect_metadata_drift(tmp_path: Path, kind, mutation) -> None:
     source = file_stat(identity_index=20)
     target = file_stat(identity_index=21, volume_serial="target-serial")
     old_path = "new.txt" if kind is OperationKind.RECASE else "old.txt"
@@ -359,20 +359,16 @@ def test_pure_rename_records_only_planner_fidelity_drift(tmp_path: Path, kind, m
             _target_scan(sync_plan, (_record(old_path, target),)), "target-1", NOW,
         ))
         record = setup.run.record_moved if kind is OperationKind.MOVE else setup.run.record_recased
-        if mutation == "managed" or mutation == "nlink" and kind is OperationKind.MOVE:
-            with pytest.raises(StaleRecordingError):
-                record(op.op_id, changed)
-        else:
-            record(op.op_id, changed)
-            connection = connect_ledger_reader(setup.recorder.path)
-            try:
-                row = connection.execute(
-                    "SELECT observed_nlink, observed_attributes, observed_created_ns FROM inventory WHERE location_id = ?",
-                    (setup.target_location_id,),
-                ).fetchone()
-                assert tuple(row) == (changed.nlink, changed.metadata.attributes, changed.metadata.created_ns)
-            finally:
-                connection.close()
+        record(op.op_id, changed)
+        connection = connect_ledger_reader(setup.recorder.path)
+        try:
+            row = connection.execute(
+                "SELECT observed_nlink, observed_attributes, observed_created_ns FROM inventory WHERE location_id = ?",
+                (setup.target_location_id,),
+            ).fetchone()
+            assert tuple(row) == (changed.nlink, changed.metadata.attributes, changed.metadata.created_ns)
+        finally:
+            connection.close()
     finally:
         setup.recorder.close()
 
