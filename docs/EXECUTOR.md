@@ -761,10 +761,10 @@ axes while operation tests retain filesystem-probe and call-timing coverage.
 
 ## Settlement Stability Gate
 
-The active [executor simplification run](M1_PLAN.md#executor-simplification-and-throughput--2026-09-29)
-permits its declared trace re-pins in the same atomic commit as their cause,
-with a per-row disposition receipt and a restarted three-run gate. This is the
-run-specific exception to the dedicated replacement-commit rule below.
+The completed [executor simplification run](M1_PLAN.md#executor-simplification-and-throughput--2026-09-29)
+used an explicit exception for its declared trace re-pins: each shipped in the
+same atomic commit as its cause, with per-row dispositions and a restarted
+three-run gate. That closed exception does not authorize future re-pins.
 
 Settlement refactoring is blocked on an independent retained oracle, not only
 on differential parity with the current implementation. Its scenario manifest

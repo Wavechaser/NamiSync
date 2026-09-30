@@ -1,44 +1,41 @@
-# Latest session — direct-write follow-up review
+# Latest session — backend optimization closeout
 
-2026-09-30, `milestone1-adelbert`, base `6b116a58`. Validated the user's three
-minor observations. Runtime behavior is unchanged; the follow-up clarifies
-ownership/compatibility and strengthens an existing native regression witness.
+2026-09-30, `milestone1-adelbert`, housekeeping base `7f36a2a4`. The user closed
+backend optimization with no remaining in-scope actionable work. M1_PLAN now
+holds compact shipped-outcome records; detailed execution history remains in
+Git and the existing evidence roots. Future M1 delivery rows and accepted
+behavior remain intact.
 
-## Decisions and verification
+## Closeout changes
 
-- Preserve sector staging for ordinary BinaryIO inputs and unaligned custom
-  chunk sizes. A blanket alignment assertion would reject supported callers.
-  Existing 512/4096-sector tests now require aligned bulk input to make one
-  native write at its original address, preventing accidental staging.
-- Do not add a speculative `BufferError` catch. Consumers receive derived views;
-  a retained Python view or C export of a child does not prevent parent release.
-  A C export of the exact private parent does, but no supported consumer receives
-  it. The executable CPython probe preserves all three observations.
-- Keep per-file geometry queries. No cache or unbuffered source read was added.
+- CHANGELOG adds M1 Performance, moves subtractive work into Consolidation,
+  and compacts delivered GUI/consolidation history. README mirrors phase
+  summaries. The original-to-compacted task mapping is retained for review.
+- EXECUTOR closes the completed run's special oracle re-pin permission.
+  M2_PROPOSAL carries unbuffered source reads as a measurement-dependent proposal;
+  M1 continues buffered reads. Directory-flush batching also remains deferred.
+- Removed the detached `b8baf42d` worktree after proving it was an integrated
+  ancestor with no tracked/untracked changes, no active command-line reference,
+  and only 59 regenerable Python cache files. Primary checkout, source fixtures,
+  original evidence, other refs and stashes were preserved.
 
-Eight focused tests and all 640 executor tests pass as the actual user with
-default pytest temp. Independent source/evidence review found no blocker.
-Receipts are under `build/executor-simplification-20260929/differential/`:
-`result8-followup-focused.log`, `result8-followup-executor.log` and
-`result8-followup-release-probe.json`. The probe source is
-`scripts/probe_memoryview_release.py` in the same task evidence root.
+## Verification and publication
 
-## Immediate context
+This closeout edits documentation only. Consistency, local links/anchors,
+compaction accounting, unchanged future requirements and independent review
+are the closeout checks. Prior product evidence retains its original dependency
+attribution: latest 640 executor passes; direct-write ordinary evidence of 5,720
+passes plus the corrected 95-test audit module; 12 imports; official 30×3
+oracle; classified fixed differential; and 25 production readbacks. M1_PLAN and
+PERFORMANCE retain the precise dispositions and measurement limits.
 
-`b9c4ad3e` fixed subclass admission delegation; `6b116a58` delivered the blanket
-8 MiB direct-write policy. Its official committed-baseline oracle passed all
-30 scenarios three times (`result8-oracle-official.log`). M1_PLAN retains its
-ordinary-test and classified differential dispositions; PERFORMANCE owns all
-25 readbacks and measurements. The 4 GiB median was 0.909 s / 4,505 MiB/s;
-the small-file result was 1.40 MiB/s, below the 1.6 MiB/s goal. Those measurements
-remain attributed to their original product/driver hashes.
+Evidence root: `build/executor-simplification-20260929/closeout/`, including
+`worktree-before.json`, `worktree-removed.json`, changelog mapping and document
+validation. After publication, `pr.json` will record the pushed closeout commit
+and draft PR from `milestone1-adelbert` into `milestone1`.
 
-Recommend deferring unbuffered source reads pending a controlled cold-source
-comparison with integrated throughput and cache-pressure evidence. Historical
-standalone read probes suggest a lead, but are not directly comparable to the
-current repeated-source pipeline. No read refactor or new probe is active.
-
-Original F benchmark sources, retained failure receipts, and the unrelated
-detached `b8baf42d` worktree remain untouched. The earlier invalid workspace-temp
-fixture was already removed with exact hashes retained; no new fixture or
-recovery worktree was created in this follow-up.
+The pre-publication remote `milestone1` is `6de6d1c`; this branch has 41 existing
+commits above it before the closeout commit. No rebase, squash or history rewrite
+is part of this task. Future M1-9/10/12/release work, DOC-2 history work, the
+separately logged exFAT limitation and replacement findings remain outside this
+closed optimization scope.

@@ -276,55 +276,46 @@ README intentionally stops at milestone and phase summaries.
 M1 expands the reviewed-sync runtime into a complete headless integrity,
 history, and workflow product while building its secured headed WebView2 shell.
 
-### M1 GUI
+### M1 Performance
 
-Stage 6 delivered the secured desktop host, command/event transport, design
-foundation, bounded presentation core, dormant sync/integrity file-list row
-renderers, and a persisted native/page theme override over the refrozen
-cosmetic-state channel. Process-live blank tasks now support newest-first
-navigation, safe cancellation/closure, and retained terminal status. Small task
-commands have bounded asynchronous completion; shared location admission and
-run-derived remembered locations support frozen task Setup, serial pair and
-standalone inventory creation, and fresh-identity Plan again. A fixed local
-Fluent icon vocabulary, maintained from one offline source catalog, supports
-selective, accessible icon use. Setup separates compact path/options controls
-from recent pairs with fresh availability checks. Settings/About occupies the
-work area while preserving tasks; the rail scrolls independently. The exact
-event-v5/data-epoch-7 protocol cut is active. Plan review adds bounded hierarchy,
-search/filter/sort, authoritative selection, snapshot-bound destructive confirmation and
-same-task execution with live controls and bounded live/retained result review.
-Recognized capacity failures stop later executor work after current settlement;
-capacity guidance preserves independent failure and verification facts.
-Close fences new admission while keeping terminal release and retained review
-distinct. M1-7's fixed Plan-scale and interaction criteria pass on the reference
-profile. Inventory review and beta
-packaging remain open.
+Executor and verifier root holds, admitted path reuse and reduced duplicate
+observations lower measured overhead while retaining per-access fallback and
+effect checks. Local copies at or above 8 MiB use bounded aligned direct target
+writes with exact EOF and atomic publication; capability failures select buffered
+writes before streaming. All five final measurement bands passed readback. The
+4 KiB band reached 1.40 MiB/s but its stated goal remains unmet; the 4 GiB
+band reached 4,505 MiB/s. Plan review passed its 35 fixed scale criteria.
+[PERFORMANCE.md](docs/PERFORMANCE.md) owns samples, provenance and comparison
+limits. Unbuffered source reads remain deferred to M2.
 
 ### M1 Consolidation
 
-Redundant in-process transports, certification layers, and task-lifecycle
-authorities were removed while preserving public behavior, real boundary
-checks, and persisted contracts. Application state owns domain effects and
-settlement; dispatcher custody, observer lifetime, and adapter delivery remain
-separate.
-
-Sync finishing, event admission, shared contracts, and bounded query policies
-also consolidate repeated implementation. History schema reductions follow the
-explicit coordinated-reset contract; behavioral test witnesses retain safety,
-snapshot consistency, and bounded work.
-
-Shared root authority, stable executor/verifier package boundaries, an oracle-
-guarded typed settlement reducer, and layered test operations made internal
-ownership explicit. Consolidated documentation now scopes the remaining M1
-task surfaces, fresh Plan-again recovery, capacity/trash information, and
-integrity controls; terminal domain retries and user-invoked session cleanup
-are proposed for M2. Native overlay scrollbars, verify-only batches and
-persistent user-defined pair presets are also deferred to M2.
+Repeated executor checks, native dispatch variants, bridge recovery state,
+desktop snapshot reduction, visual test recipes and unused mapping readers were
+removed while preserving reviewed effects, settlement, source/target admission,
+command identity and behavioral witnesses. Earlier product, test and document
+consolidation aligned core contracts, stable component facades, the typed
+settlement reducer and layered test routes. M1_PLAN remains the sole active
+delivery register; historical plans and studies are archived.
 
 ### M1 Hardening
 
-Safety, settlement, authority, and measurement work made high-risk release
-claims explicit, independently reviewable, and regression-backed.
+Proportional defenses, current held-root attributes and fail-closed descendant
+observation protect mutation boundaries. Cold/live database admission separates
+normal WAL activity from reset-worthy incompatibility. Bounded task custody,
+original command-outcome recovery, durable settlement and exact event/scalar
+contracts keep failures and retries truthful. Named residual rendering and
+native compatibility issues remain in BUGS/TESTS and their component owners.
+
+### M1 GUI
+
+Stage 6 delivered the secured WebView2 host, exact bridge, process-live tasks,
+frozen Setup and shared location admission, bounded Plan review/selection and
+execution, and live/retained result review with independent verification and
+recording facts. Advanced Color flyouts suppress the reproduced dark shadow
+halo; the compositor behavior remains deferred. A fixed local Fluent icon
+vocabulary, accessible presentation and persisted cosmetic theme support the
+headed shell. Inventory review and beta packaging remain open.
 
 ### M1 Features
 
