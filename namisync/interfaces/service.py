@@ -569,6 +569,48 @@ class NamiSyncService:
                 self._lifecycle.abort_task_start(task_id)
                 raise
 
+    def start_task_inventory_refresh(
+        self, task_id: str, request_id: str, *, location_id: int,
+        selected_paths: tuple[str, ...], subtree_roots: tuple[str, ...],
+        command_id: str, signature: tuple[object, ...],
+        delivery_factory: TaskDeliveryFactory,
+    ) -> TaskStartView:
+        """Attach a fresh location-scoped scan to a released inventory task."""
+        with self._lifecycle.command_guard(command_id):
+            try:
+                claim = self._lifecycle.begin_task_inventory_refresh(
+                    task_id, request_id, command_id, signature,
+                )
+            except LifecycleReceiptConflictError:
+                raise TaskIntentConflictError("task command intent conflicts") from None
+            except LifecycleAssociationError as error:
+                raise TaskUnavailableError("inventory refresh is unavailable") from error
+            if claim.replay is not None:
+                return TaskStartView(task_id, claim.replay.request_id, claim.replay.session_id)
+            try:
+                with self._lock:
+                    captured = self._task_inventory_details.get(task_id)
+                if (captured is None or captured[1] is None
+                        or captured[1].location_id != location_id):
+                    raise TaskUnavailableError("inventory location is unavailable")
+                fresh_id = uuid4().hex
+                request = InventoryRequest(fresh_id, location_id=location_id,
+                    selected_paths=selected_paths, subtree_roots=subtree_roots,
+                    selected_mount=captured[1].resolution.selected_mount)
+                sink = delivery_factory(task_id)
+                if not callable(sink):
+                    raise TypeError("task delivery factory must return a sink")
+                session_id, receipt = self._submit_session(
+                    INVENTORY_KIND, request, effect_kind="task-inventory",
+                    command_id=command_id, signature=signature, request_id=fresh_id,
+                    observation_sink=sink, task_id=task_id,
+                    detail_owner=("inventory", fresh_id),
+                )
+                return TaskStartView(task_id, receipt.request_id, str(session_id))
+            except BaseException:
+                self._lifecycle.abort_task_start(task_id)
+                raise
+
     def read_plan_setup(self, request_id: str) -> TaskSetupSnapshotView:
         artifact = self._runtime.get_plan(request_id)
         request = artifact.request
@@ -1783,6 +1825,12 @@ class NamiSyncService:
         except KeyError:
             details = None
         with self._lock:
+            previous = self._task_inventory_details.get(task_id)
+            if ((details is None or details.location_id is None) and previous is not None
+                    and previous[1] is not None and previous[1].location_id is not None):
+                # Retain the last location/mount hint for fresh retry.
+                # Its original request id prevents publishing a refusal as current.
+                return
             self._task_inventory_details[task_id] = (request_id, details)
 
     def list_inventory(

@@ -393,6 +393,13 @@ class TaskLifecyclePort(Protocol):
         delivery_factory: TaskDeliveryFactory,
     ) -> TaskStartView | TaskStartOutcome: ...
 
+    def start_task_inventory_refresh(
+        self, task_id: str, request_id: str, *, location_id: int,
+        selected_paths: tuple[str, ...], subtree_roots: tuple[str, ...],
+        command_id: str, signature: tuple[object, ...],
+        delivery_factory: TaskDeliveryFactory,
+    ) -> TaskStartView: ...
+
     def start_task_plan_again(
         self,
         old_task_id: str,

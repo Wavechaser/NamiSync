@@ -286,6 +286,10 @@ class _Service:
         self.calls.append(("open-inventory-view", task_id))
         return {"disposition": "opened", "task_id": task_id}
 
+    def refresh_inventory(self, task_id, request_id, **kwargs):
+        self.calls.append(("refresh-inventory", task_id, request_id, kwargs))
+        return TaskStartView(task_id, "6" * 32, "7" * 32)
+
     def update_inventory_view(self, task_id, **kwargs):
         self.calls.append(("update-inventory-view", task_id, kwargs))
         return {"disposition": "current", "task_id": task_id}
@@ -532,6 +536,7 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
         "plan_again",
         "open_plan_view",
         "open_inventory_view",
+        "refresh_inventory",
         "update_inventory_view",
         "get_inventory_window",
         "get_inventory_detail",
@@ -553,6 +558,7 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
     )
     assert "test_report" not in commands
     async_commands = {
+        "refresh_inventory",
         "create_task",
         "start_plan",
         "start_inventory",
@@ -570,7 +576,7 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
         name for name, spec in commands.items()
         if spec.response_policy is CommandResponsePolicy.MUTATION_OBSERVED
     } == {
-        "create_task", "start_plan", "start_inventory",
+        "create_task", "start_plan", "start_inventory", "refresh_inventory",
         "plan_again", "mutate_plan_selection", "mutate_plan_scope",
         "mutate_plan_highlighted_selection", "start_execution",
         "control_execution", "release_terminal_session", "close_task",
@@ -602,6 +608,9 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
         (("update_inventory_view",), CommandAccess.READ_ONLY,
          FieldRequirement.FORBIDDEN, FieldRequirement.REQUIRED,
          CommandResponsePolicy.FEEDBACK_ONLY, CommandRetry.NONE),
+        (("refresh_inventory",), CommandAccess.MUTATING,
+         FieldRequirement.REQUIRED, FieldRequirement.REQUIRED,
+         CommandResponsePolicy.MUTATION_OBSERVED, CommandRetry.NONE),
         (("next_events",), CommandAccess.READ_ONLY, FieldRequirement.FORBIDDEN,
          FieldRequirement.FORBIDDEN, CommandResponsePolicy.DRAIN_30_SECONDS, CommandRetry.NONE),
         (("release_terminal_session", "close_task"), CommandAccess.MUTATING,
@@ -682,6 +691,24 @@ def test_inventory_read_commands_validate_before_reaching_task_authority() -> No
     with pytest.raises(CommandPayloadError):
         _invoke(commands["get_inventory_window"], {**payloads["get_inventory_window"], "limit": 257})
     assert len(authority.calls) == 4
+
+
+def test_inventory_refresh_command_has_exact_original_intent_and_bounded_node_ingress():
+    commands, _, authority = _commands()
+    request_id = "8" * 32
+    payload = {"task_id": TASK_ID, "request_id": request_id,
+               "command_id": COMMAND_ID, "expected_revision": 4, "node_id": None}
+    result = _invoke(commands["refresh_inventory"], payload)
+    assert result.task_id == TASK_ID
+    assert authority.calls[0][0] == "refresh-inventory"
+    assert authority.calls[0][3]["wire_intent"] == (
+        "inventory-refresh", TASK_ID, request_id, 4, None)
+    for patch in ({"node_id": "warning-" + "1" * 32}, {"request_id": "foreign"},
+                  {"expected_revision": True}, {"expected_revision": 1 << 53},
+                  {"command_id": None}, {"location_id": "1"}, {"selected_paths": ["injected"]}):
+        with pytest.raises(CommandPayloadError):
+            _invoke(commands["refresh_inventory"], {**payload, **patch})
+    assert len(authority.calls) == 1
 
 
 def test_m1_7_plan_commands_validate_and_reach_task_authority() -> None:

@@ -220,7 +220,8 @@ consumed here are active. Remembered-location readback and Setup widgets are
 implemented. A standalone inventory task freezes only its admitted root,
 without sync options or a fabricated source/target pair. Pure workflow inventory
 projection, sibling ordering and task-bound read publication/paging are
-implemented, including their desktop read renderer. Refresh/visibility actions remain pending.
+implemented, including their desktop read renderer and same-task
+full/exact/recursive Refresh. Visibility actions remain pending.
 
 `workflows/inventory_projection.py` builds a complete immutable generation from
 the repository's typed rows and an independent warning population. It retains
@@ -248,9 +249,22 @@ The desktop inventory projection is one canonical server-side view over a
 complete immutable inventory generation. Search, filters, collapse, visible
 order, action scope, and windows all derive from that projection; the browser
 does not reconstruct hierarchy or scope from paths or its current page.
-Projection eviction removes only rebuildable view state. A refused refresh
-stages no partial artifact and preserves the prior inventory generation and its
-view identity unchanged.
+Projection eviction removes only rebuildable view state. A refused refresh or
+failed projection construction stages no partial artifact and preserves the
+prior complete publication. A completed replacement advances its view revision,
+preserving search, facets, sort and collapsed folders that still exist. The
+published request can therefore differ from the current scan request; reads
+retain its truth without presenting it as evidence from a newer scan.
+
+Task Refresh requires exact current terminal delivery and release plus the
+retained complete view revision. Full scope uses its root; exact leaf and
+recursive folder scopes use only source-owned domain membership. Warning nodes
+refuse before workflow work. Every invocation creates a fresh request and freshly
+admits the location, with the prior selected mount only an admission hint. A
+location-less refusal retains the last location-bearing metadata so another
+explicit Refresh can recover after the root returns. That metadata cannot
+publish a falsely current projection. Original Refresh starts and failures are
+retained until task Close within the existing adapter capacity.
 
 `interfaces/web/inventory_review.py` retains one server-owned sort permutation
 and visible sequence per live task view. Literal case-folded display search,

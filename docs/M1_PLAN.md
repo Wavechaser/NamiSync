@@ -293,14 +293,16 @@ disposition. Read surface review and the corrected combined tools/workflows/
 interfaces neighborhood pass (3,109 tests, three skips); bounded reads shipped
 in `a84e816`. Twelve imports and 191
 local documentation links pass. The desktop read pane passes fresh independent
-review after stale-window adoption and nested-row indentation corrections;
+review after stale-window adoption and nested-row indentation corrections and
+ships in `687549a`;
 57 focused checks and installed SH-G-7 pass. The broader neighborhood reports
 2,765 passes and four direct Refresh test-helper mismatches. Migrating the exact
 bridge trace anchor and fixed error vocabulary passes all seven focused checks,
 including byte restoration and no partial mutation on anchor drift. These
-helpers join the Refresh population with unchanged guarantees. Unaffected
-department evidence is retained by dependency. Visibility, desktop actions and
-final integration remain open.
+helpers join the Refresh population with unchanged guarantees. The final frozen
+workflows/interfaces rerun passes all 2,769 tests; Refresh's independent review
+also approves those helper migrations. Visibility, desktop actions and final
+integration remain open.
 
 Retain current scan reconciliation, warning and ingress/population bounds,
 conditional ledger changes, exact task retirement and original-command recovery.

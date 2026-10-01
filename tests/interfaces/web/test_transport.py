@@ -126,6 +126,7 @@ ERRORS = {
         "and try again."
     ),
     "task_unavailable": "That desktop task is no longer available.",
+    "inventory_capacity": "Inventory command capacity is full. Close a task before refreshing.",
     "drain_busy": (
         "That desktop task already has an event request in progress."
     ),

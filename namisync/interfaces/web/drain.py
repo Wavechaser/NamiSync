@@ -81,6 +81,10 @@ class ObservationConflictError(RuntimeError):
     """A task observation is already changing generation."""
 
 
+class InventoryCommandCapacityError(RuntimeError):
+    """Inventory Refresh has no retained original-result capacity."""
+
+
 _START_FAILURE_OBSERVATION_CONFLICT = "observation_conflict"
 _START_FAILURE_TASK_UNAVAILABLE = "task_unavailable"
 _START_FAILURE_INTERRUPTED = "interrupted"
@@ -379,6 +383,7 @@ class _StartResponse:
     delivery_retiring: bool = False
     result: TaskStartView | None = None
     failure_code: str | None = None
+    retain_failure: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -908,8 +913,7 @@ class TaskRegistry:
 
     def _require_inventory_task_locked(self, task: _TaskState) -> None:
         if (self._closing or task.task_kind != "inventory" or task.request_id is None
-                or task.session_id is None or not task.session_released
-                or task.delivered_terminal_record is None or task.transition
+                or task.session_id is None or task.transition
                 or task.retiring):
             raise TaskUnavailableError("inventory task is unavailable")
 
@@ -922,12 +926,19 @@ class TaskRegistry:
             existing = self._inventory_views.get(task_id)
             if existing is not None and existing.request_id == task.request_id:
                 return existing.summary()
+            if not task.session_released or task.delivered_terminal_record is None:
+                if existing is not None:
+                    return existing.summary()
+                raise TaskUnavailableError("inventory terminal session is not released")
             identity = (task.session_id, task.request_id, task.generation)
+            prior_revision = None if existing is None else existing.view_revision
             task.inventory_view_loading = True
         try:
             projection, details = self._lifecycle.get_task_inventory_projection(task_id, identity[1])
-            view = InventoryReviewState(
-                task_id, identity[1], projection, details.resolution.root_path,
+            make_view = InventoryReviewState if existing is None else existing.replacement
+            args = (task_id, identity[1]) if existing is None else (identity[1],)
+            view = make_view(*args,
+                projection, details.resolution.root_path,
                 details.complete, details.observed_count, details.missing_count,
             )
         except BaseException:
@@ -944,9 +955,8 @@ class TaskRegistry:
                 self._require_inventory_task_locked(task)
                 if identity != (task.session_id, task.request_id, task.generation):
                     raise TaskUnavailableError("inventory task changed")
-                existing = self._inventory_views.get(task_id)
-                if existing is not None:
-                    return existing.summary()
+                if existing is not None and existing.view_revision != prior_revision:
+                    return existing.summary(disposition="conflict")
                 self._inventory_views[task_id] = view
                 return view.summary(disposition="opened")
 
@@ -954,7 +964,7 @@ class TaskRegistry:
         task = self._require_inventory_task(task_id)
         with task.condition:
             view = self._inventory_views.get(task_id)
-            if view is None or view.request_id != task.request_id:
+            if view is None:
                 raise TaskUnavailableError("inventory view is unavailable")
         return task, view
 
@@ -965,6 +975,115 @@ class TaskRegistry:
             if self._inventory_views.get(task_id) is not view:
                 raise TaskUnavailableError("inventory view is unavailable")
             return view.update(**gesture)
+
+    def refresh_inventory(
+        self, task_id: str, request_id: str, *, expected_revision: int,
+        node_id: str | None, command_id: str, wire_intent: tuple[object, ...],
+    ) -> TaskStartView:
+        _require_opaque_id(command_id, "task command id")
+        with self._condition:
+            if self._closing:
+                raise TaskUnavailableError("inventory task is unavailable")
+            retained = self._start_responses.get(command_id)
+            if retained is not None:
+                if retained.wire_intent != wire_intent:
+                    raise TaskIntentConflictError("task command intent conflicts")
+                retained.participants += 1
+            else:
+                task = self._tasks.get(task_id)
+                view = self._inventory_views.get(task_id)
+                if task is None or view is None:
+                    raise TaskUnavailableError("inventory view is unavailable")
+                with task.condition:
+                    self._require_inventory_task_locked(task)
+                    if (request_id != task.request_id
+                            or expected_revision != view.view_revision or not task.session_released
+                            or task.delivered_terminal_record is None or task.inventory_view_loading):
+                        raise TaskUnavailableError("inventory refresh requires the current released view")
+                    node = view.projection.nodes[0] if node_id is None else view.projection.node_for_id(node_id)
+                    if node.warning is not None:
+                        raise ValueError("inventory warnings cannot refresh")
+                    selected_paths = () if node.is_container else (node.rel_path,)
+                    subtree_roots = (node.rel_path,) if node.is_container and node.position != 0 else ()
+                    if len(self._start_responses) >= _START_RESPONSE_CAPACITY:
+                        raise InventoryCommandCapacityError("Inventory command capacity is full; close a task before refreshing")
+                    # Reserve retained original-result capacity before lifecycle claim or effect.
+                    response = _StartResponse(
+                        command_id, wire_intent, participants=1, retain_failure=True,
+                    )
+                    self._start_responses[command_id] = response
+                    task.start_response_ids.add(command_id)
+                    prior_request, prior_start = task.request_id, task.start_command_id
+                    task.transition = True
+                    task.condition.notify_all()
+        if retained is not None:
+            try:
+                return self._await_start_response(retained)
+            finally:
+                self._leave_start_response(retained)
+
+        def delivery_factory(delivered_task_id: str):
+            if delivered_task_id != task_id:
+                raise ObservationConflictError("inventory lifecycle changed its task")
+            with task.condition:
+                if self._closing or task.retiring or not task.transition:
+                    raise TaskUnavailableError("inventory task is unavailable")
+                task.prior_session_id = task.session_id
+                task.prior_delivery = (
+                    tuple(task.queue), task.progress_available_at, task.terminal_record,
+                    task.terminal_pending, task.delivered_terminal_event,
+                    task.delivered_terminal_record, task.session_released, task.closing,
+                    task.execution_revision, task.execution_session_id, task.execution_summary,
+                    dict(task.execution_operation_results), dict(task.execution_integrity_results),
+                    task.execution_gap_minimum, task.execution_gap_maximum,
+                    task.execution_membership, task.presentation_state, task.progress_sample_at,
+                )
+                task.generation += 1
+                task.session_id = None
+                task.queue.clear()
+                task.progress_available_at = task.progress_sample_at = None
+                task.terminal_record = task.delivered_terminal_record = None
+                task.delivered_terminal_event = None
+                task.terminal_pending = task.session_released = task.closing = False
+                task.active_drain = None
+                task.presentation_state = None
+                return task.sink(task.generation)
+
+        result = None
+        failure_code = None
+        try:
+            candidate = self._lifecycle.start_task_inventory_refresh(
+                task_id, request_id, location_id=view.projection.location_id,
+                selected_paths=selected_paths, subtree_roots=subtree_roots,
+                command_id=command_id, signature=wire_intent, delivery_factory=delivery_factory,
+            )
+            if type(candidate) is not TaskStartView or candidate.task_id != task_id:
+                raise RuntimeError("inventory lifecycle returned invalid start data")
+            candidate.__post_init__()
+            with task.condition:
+                if any(update.session_id != candidate.session_id for update in task.queue):
+                    raise ObservationConflictError("inventory observation names another session")
+                task.session_id, task.request_id = candidate.session_id, candidate.request_id
+                task.start_command_id = command_id
+                task.prior_session_id = task.prior_delivery = None
+                task.transition = False
+                task.condition.notify_all()
+            result = candidate
+        except BaseException as error:
+            failure_code = _classify_start_failure(error)
+            _retire_exception_graph(error)
+            self._restore_plan_delivery(task)
+            with task.condition:
+                task.request_id, task.start_command_id = prior_request, prior_start
+                task.transition = False
+                task.condition.notify_all()
+        with self._condition:
+            response.result, response.failure_code, response.complete = result, failure_code, True
+            self._condition.notify_all()
+        try:
+            return self._await_start_response(response)
+        finally:
+            self._leave_start_response(response)
 
     def get_inventory_window(self, task_id: str, *, expected_revision: int, offset: int, limit: int) -> dict[str, object]:
         task, view = self._require_inventory_view(task_id)
@@ -2078,7 +2197,7 @@ class TaskRegistry:
             if (
                 entry.complete
                 and entry.participants == 0
-                and (entry.result is None or self._closing)
+                and ((entry.result is None and not entry.retain_failure) or self._closing)
             ):
                 if self._start_responses.get(entry.command_id) is entry:
                     self._start_responses.pop(entry.command_id, None)

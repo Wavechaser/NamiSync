@@ -105,6 +105,7 @@ _ERROR_MESSAGES = {
         "and try again."
     ),
     "task_unavailable": "That desktop task is no longer available.",
+    "inventory_capacity": "Inventory command capacity is full. Close a task before refreshing.",
     "drain_busy": (
         "That desktop task already has an event request in progress."
     ),
@@ -1006,7 +1007,7 @@ class BridgeDispatcher:
             PickerUnavailableError,
             PlanningRefusedError,
         )
-        from .drain import DrainBusyError, ObservationConflictError
+        from .drain import DrainBusyError, InventoryCommandCapacityError, ObservationConflictError
         from .slots import SlotUnavailableError
 
         try:
@@ -1032,6 +1033,9 @@ class BridgeDispatcher:
         except TaskUnavailableError as error:
             retire_exception_graph(error)
             return self._failure(request_id, name, "task_unavailable")
+        except InventoryCommandCapacityError as error:
+            retire_exception_graph(error)
+            return self._failure(request_id, name, "inventory_capacity")
         except DrainBusyError as error:
             retire_exception_graph(error)
             return self._failure(request_id, name, "drain_busy")

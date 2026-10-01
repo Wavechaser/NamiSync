@@ -3033,6 +3033,295 @@ def test_inventory_open_serializes_construction_and_fences_close(close_during_bu
         assert sorted(result["disposition"] for result in results) == ["current", "opened"]
 
 
+@pytest.mark.parametrize("failure_phase", ["none", "pre-admission", "invocation"])
+def test_inventory_refresh_real_service_releases_replaces_and_replays_old_starts(tmp_path, failure_phase):
+    from namisync.interfaces.service import SessionObserver, _dispatcher
+    from namisync.workflows import LocationCandidate
+    from _inventory_fixtures import _Resolver, _Scanner, _file, _runtime
+    from _service_fixtures import make_service
+
+    mount = tmp_path / "mount"
+    (mount / "managed" / "folder").mkdir(parents=True)
+    scanner = _Scanner(mount, (_file(r"folder\one.bin", 1), _file("outside.bin", 2)))
+    class Resolver(_Resolver):
+        probe_calls = 0
+        refuse_probe = None
+        def probe_root(self, root_path):
+            self.probe_calls += 1
+            if self.probe_calls == self.refuse_probe:
+                raise PermissionError("root temporarily unavailable")
+            return super().probe_root(root_path)
+    resolver = Resolver(mount)
+    runtime, location_id = _runtime(tmp_path, resolver, scanner, {})
+    dispatcher = _dispatcher(runtime)
+    service = make_service(runtime=runtime, dispatcher=dispatcher,
+                           observer=SessionObserver(dispatcher))
+    registry = _make_registry(service, drain_wait=0.1)
+    def finish(start):
+        _wait_terminal(dispatcher, start.session_id)
+        for value in range(100, 150):
+            registry.drain(start.task_id, start.session_id, f"{value:032x}", replay_from=None)
+            if registry._tasks[start.task_id].delivered_terminal_record is not None:
+                break
+        registry.release_terminal_session(start.task_id, start.session_id)
+    try:
+        shell = registry.create_task_shell("1" * 32)
+        first = registry.start_setup_inventory(shell.task_id,
+            LocationCandidate.remembered(location_id, selected_mount=str(mount)),
+            command_id="2" * 32, wire_intent=("inventory", "root"))
+        finish(first)
+        summary = registry.open_inventory_view(first.task_id)
+        assert summary["rollup"]["domain_count"] == 2
+        offline = failure_phase == "invocation"
+        refresh_command = "3" * 32
+        if failure_phase != "none":
+            resolver.refuse_probe = resolver.probe_calls + (2 if offline else 1)
+        if failure_phase == "pre-admission":
+            with pytest.raises(RuntimeError):
+                registry.refresh_inventory(first.task_id, first.request_id,
+                    expected_revision=0, node_id=None, command_id=refresh_command,
+                    wire_intent=("refresh", first.request_id))
+            assert registry._tasks[first.task_id].session_id == first.session_id
+            assert registry._tasks[first.task_id].request_id == first.request_id
+            assert registry._tasks[first.task_id].session_released
+            assert len(scanner.calls) == 1
+            resolver.refuse_probe = None
+            with pytest.raises(RuntimeError):
+                registry.refresh_inventory(first.task_id, first.request_id,
+                    expected_revision=0, node_id=None, command_id=refresh_command,
+                    wire_intent=("refresh", first.request_id))
+            refresh_command = "d" * 32
+        second = registry.refresh_inventory(first.task_id, first.request_id,
+            expected_revision=0, node_id=None, command_id=refresh_command,
+            wire_intent=("refresh", first.request_id))
+        assert registry.open_inventory_view(first.task_id)["request_id"] == first.request_id
+        assert registry.get_inventory_window(first.task_id, expected_revision=0, offset=0, limit=1)["rows"]
+        finish(second)
+        if offline:
+            assert registry._tasks[first.task_id].delivered_terminal_record.state == "refused"
+            with pytest.raises(TaskUnavailableError):
+                registry.open_inventory_view(first.task_id)
+            assert service._task_inventory_details[first.task_id][0] == first.request_id
+            assert registry.get_inventory_window(first.task_id, expected_revision=0, offset=0, limit=1)["rows"]
+            with pytest.raises(TaskUnavailableError):
+                _refresh(registry, first, command_id="e" * 32)
+            resolver.refuse_probe = None
+        else:
+            replacement = registry.open_inventory_view(first.task_id)
+            assert replacement["request_id"] == second.request_id and replacement["view_revision"] == 1
+        third = registry.refresh_inventory(first.task_id, second.request_id,
+            expected_revision=0 if offline else 1, node_id=None, command_id="4" * 32,
+            wire_intent=("refresh", second.request_id))
+        finish(third)
+        assert registry.open_inventory_view(first.task_id)["view_revision"] == (1 if offline else 2)
+        assert service._task_inventory_details[first.task_id][1].resolution.selected_mount == str(mount)
+        assert registry.refresh_inventory(first.task_id, first.request_id,
+            expected_revision=0, node_id=None, command_id=refresh_command,
+            wire_intent=("refresh", first.request_id)) == second
+        assert service._lifecycle.replay_start(refresh_command, "task-inventory",
+            ("refresh", first.request_id)).session_id == second.session_id
+        assert set(service._lifecycle._sessions) == {third.session_id}
+        assert len(scanner.calls) == (2 if offline else 3)
+        registry.close_task(first.task_id, third.session_id)
+        assert registry._start_responses == {}
+        assert service._lifecycle._start_receipts == {}
+        assert service._task_inventory_details == {}
+    finally:
+        service.close()
+
+
+def _inventory_refresh_registry():
+    from namisync.core.models import EntryKind, ScanWarning, ScanWarningCode
+    from namisync.workflows import build_inventory_projection
+    registry, service, start, previous = _inventory_read_registry()
+    _, details = service.get_task_inventory_projection(start.task_id, start.request_id)
+    row = replace(previous.row_for_id("1"), rel_path=r"folder\one.txt", rel_path_key=r"FOLDER\ONE.TXT")
+    projection = build_inventory_projection(1, (row,), (
+        ScanWarning(ScanWarningCode.ACCESS_DENIED, "warning", "unreadable"),))
+    service.get_task_inventory_projection = lambda task_id, request_id: (
+        projection, replace(details, request_id=request_id))
+    service.refresh_calls = []
+    service.refresh_sinks = []
+    def refresh(task_id, request_id, **kwargs):
+        service.refresh_calls.append((task_id, request_id, kwargs))
+        sink = kwargs["delivery_factory"](task_id)
+        service.refresh_sinks.append(sink)
+        index = len(service.refresh_calls) + 1000
+        return TaskStartView(task_id, f"{index:032x}", f"{index + 1000:032x}")
+    service.start_task_inventory_refresh = refresh
+    registry.release_terminal_session(start.task_id, start.session_id)
+    registry.open_inventory_view(start.task_id)
+    return registry, service, start, projection
+
+
+def _refresh(registry, start, *, revision=0, node_id=None, command_id="5" * 32):
+    return registry.refresh_inventory(start.task_id, start.request_id,
+        expected_revision=revision, node_id=node_id, command_id=command_id,
+        wire_intent=("inventory-refresh", start.task_id, start.request_id, revision, node_id))
+
+
+@pytest.mark.parametrize("scope", ["full", "exact", "recursive", "warning"])
+def test_inventory_refresh_resolves_only_server_domain_scope(scope):
+    registry, service, start, projection = _inventory_refresh_registry()
+    node_id = (None if scope == "full" else projection.node_id_by_row_id["1"] if scope == "exact"
+        else projection.nodes[projection.position_by_path_key["FOLDER"]].node_id if scope == "recursive"
+        else next(node.node_id for node in projection.nodes if node.warning))
+    if scope == "warning":
+        with pytest.raises(ValueError, match="warnings"):
+            _refresh(registry, start, node_id=node_id)
+        assert service.refresh_calls == []
+        assert "5" * 32 not in registry._start_responses
+    else:
+        fresh = _refresh(registry, start, node_id=node_id)
+        request = service.refresh_calls[0][2]
+        assert request["selected_paths"] == ((r"folder\one.txt",) if scope == "exact" else ())
+        assert request["subtree_roots"] == (("folder",) if scope == "recursive" else ())
+        assert request["location_id"] == 1
+        assert registry.open_inventory_view(start.task_id)["request_id"] == start.request_id
+        assert registry._tasks[start.task_id].session_id == fresh.session_id
+
+
+@pytest.mark.parametrize("call_factory", [False, True])
+def test_inventory_refresh_failed_admission_restores_prior_delivery_and_retains_failure(call_factory):
+    registry, service, start, projection = _inventory_refresh_registry()
+    prior = registry._inventory_views[start.task_id]
+    calls = []
+    def refuse(task_id, request_id, **kwargs):
+        calls.append(request_id)
+        if call_factory:
+            kwargs["delivery_factory"](task_id)
+        raise ValueError("refresh admission refused")
+    service.start_task_inventory_refresh = refuse
+    for attempt in range(2):
+        with pytest.raises(Exception):
+            _refresh(registry, start)
+        task = registry._tasks[start.task_id]
+        assert task.request_id == start.request_id and task.session_id == start.session_id
+        assert task.session_released and task.delivered_terminal_record is not None
+        assert not task.transition and task.prior_delivery is None
+        assert registry._inventory_views[start.task_id] is prior
+    assert calls == [start.request_id]
+    registry.close_task(start.task_id, start.session_id)
+    assert registry._start_responses == {}
+
+
+def test_inventory_refresh_failed_originals_use_shared_capacity_and_close_prunes_them():
+    registry, service, start, projection = _inventory_refresh_registry()
+    calls = []
+    def refuse(task_id, request_id, **kwargs):
+        calls.append(request_id)
+        raise ValueError("refresh admission refused")
+    service.start_task_inventory_refresh = refuse
+    available = drain_module._START_RESPONSE_CAPACITY - len(registry._start_responses)
+    for index in range(available):
+        with pytest.raises(Exception):
+            _refresh(registry, start, command_id=f"{index + 4000:032x}")
+    assert len(calls) == available
+    assert len(registry._start_responses) == drain_module._START_RESPONSE_CAPACITY
+    with pytest.raises(RuntimeError, match="close a task"):
+        _refresh(registry, start, command_id="f" * 32)
+    assert len(calls) == available
+    registry.close_task(start.task_id, start.session_id)
+    assert registry._start_responses == {}
+
+
+def test_inventory_refresh_failed_replacement_keeps_readable_view_and_preserves_gestures():
+    registry, service, start, projection = _inventory_refresh_registry()
+    folder_id = projection.nodes[projection.position_by_path_key["FOLDER"]].node_id
+    registry.update_inventory_view(start.task_id, expected_revision=0, search_query="one",
+        filters=frozenset({"present"}), sort_column=PlanSortColumn.SIZE,
+        sort_direction=SortDirection.DESCENDING, collapse_node_id=folder_id, collapsed=True)
+    prior = registry._inventory_views[start.task_id]
+    fresh = _refresh(registry, start, revision=1)
+    _mark_terminal_drained(registry, fresh, replace(_record(kind="inventory", supports_pause=False), session_id=fresh.session_id))
+    registry.release_terminal_session(start.task_id, fresh.session_id)
+    original = service.get_task_inventory_projection
+    def refuse(*args):
+        raise ValueError("replacement refused")
+    service.get_task_inventory_projection = refuse
+    with pytest.raises(ValueError, match="refused"):
+        registry.open_inventory_view(start.task_id)
+    assert registry._inventory_views[start.task_id] is prior
+    assert registry.get_inventory_window(start.task_id, expected_revision=1, offset=0, limit=1)["rows"]
+    service.get_task_inventory_projection = original
+    current = registry.open_inventory_view(start.task_id)
+    assert current["view_revision"] == 2 and current["request_id"] == fresh.request_id
+    assert current["search_query"] == "one" and current["filters"] == ["present"]
+    assert current["sort_column"] == "size" and current["sort_direction"] == "descending"
+    assert registry._inventory_views[start.task_id].collapsed_node_ids == {folder_id}
+    assert registry.get_inventory_window(start.task_id, expected_revision=1, offset=0, limit=1)["disposition"] == "conflict"
+
+
+def test_inventory_refresh_shared_capacity_refuses_before_scan_and_close_prunes_originals():
+    registry, service, start, projection = _inventory_refresh_registry()
+    first = start
+    for index in range(drain_module._START_RESPONSE_CAPACITY - len(registry._start_responses)):
+        start = _refresh(registry, start, revision=index, command_id=f"{index + 3000:032x}")
+        _mark_terminal_drained(registry, start, replace(_record(kind="inventory", supports_pause=False), session_id=start.session_id))
+        registry.release_terminal_session(start.task_id, start.session_id)
+        registry.open_inventory_view(start.task_id)
+    assert len(registry._start_responses) == drain_module._START_RESPONSE_CAPACITY
+    calls = len(service.refresh_calls)
+    with pytest.raises(RuntimeError, match="close a task"):
+        _refresh(registry, start, revision=calls, command_id="f" * 32)
+    assert len(service.refresh_calls) == calls
+    registry.close_task(first.task_id, start.session_id)
+    assert registry._start_responses == {} and registry._inventory_views == {}
+
+
+def test_inventory_refresh_concurrent_identical_original_has_one_scan_and_late_sink_is_inert():
+    registry, service, start, projection = _inventory_refresh_registry()
+    original = service.start_task_inventory_refresh
+    entered, release = Event(), Event()
+    def blocked(*args, **kwargs):
+        entered.set()
+        assert release.wait(2)
+        return original(*args, **kwargs)
+    service.start_task_inventory_refresh = blocked
+    prior_generation = registry._tasks[start.task_id].generation
+    old_sink = registry._tasks[start.task_id].sink(prior_generation)
+    results, errors = [], []
+    def refresh():
+        try:
+            results.append(_refresh(registry, start))
+        except BaseException as error:
+            errors.append(error)
+    first, second = Thread(target=refresh), Thread(target=refresh)
+    first.start()
+    assert entered.wait(2)
+    second.start()
+    release.set()
+    first.join(2)
+    second.join(2)
+    assert not first.is_alive() and not second.is_alive()
+    assert errors == [] and len(results) == 2 and results[0] == results[1]
+    assert len(service.refresh_calls) == 1
+    old_sink(replace(_record(kind="inventory", supports_pause=False), session_id=start.session_id))
+    assert registry._tasks[start.task_id].queue == deque()
+    with pytest.raises(TaskIntentConflictError):
+        registry.refresh_inventory(start.task_id, start.request_id, expected_revision=0,
+            node_id=None, command_id="5" * 32, wire_intent=("different",))
+
+
+def test_inventory_refresh_replacement_does_not_lose_a_concurrent_view_gesture():
+    registry, service, start, projection = _inventory_refresh_registry()
+    fresh = _refresh(registry, start)
+    _mark_terminal_drained(registry, fresh, replace(_record(kind="inventory", supports_pause=False), session_id=fresh.session_id))
+    registry.release_terminal_session(start.task_id, fresh.session_id)
+    original = service.get_task_inventory_projection
+    def changing(*args):
+        registry.update_inventory_view(start.task_id, expected_revision=0, search_query="one",
+            filters=frozenset(), sort_column=PlanSortColumn.PATH,
+            sort_direction=SortDirection.ASCENDING, collapse_node_id=None, collapsed=None)
+        return original(*args)
+    service.get_task_inventory_projection = changing
+    assert registry.open_inventory_view(start.task_id)["disposition"] == "conflict"
+    assert registry._inventory_views[start.task_id].request_id == start.request_id
+    service.get_task_inventory_projection = original
+    summary = registry.open_inventory_view(start.task_id)
+    assert summary["view_revision"] == 2 and summary["search_query"] == "one"
+
+
 def test_terminal_session_release_refuses_before_record_delivery() -> None:
     registry, service = _registry()
     start = _start(registry)

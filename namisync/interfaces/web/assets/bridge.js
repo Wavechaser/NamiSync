@@ -39,6 +39,7 @@ const COMMAND_POLICY_JSON = `{
   "plan_again": {"response_policy": "mutation-observed", "retry": "none", "phase": "open"},
   "open_plan_view": {"response_policy": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
   "open_inventory_view": {"response_policy": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
+  "refresh_inventory": {"response_policy": "mutation-observed", "retry": "none", "phase": "open"},
   "update_inventory_view": {"response_policy": "feedback-only", "retry": "none", "phase": "open"},
   "get_inventory_window": {"response_policy": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
   "get_inventory_detail": {"response_policy": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
@@ -225,6 +226,7 @@ const ERROR_MESSAGES = Object.freeze({
   planning_refused:
     "NamiSync could not start a plan for those folders. Review both folders and try again.",
   task_unavailable: "That desktop task is no longer available.",
+  inventory_capacity: "Inventory command capacity is full. Close a task before refreshing.",
   drain_busy: "That desktop task already has an event request in progress.",
   observation_conflict:
     "That desktop task is already observing different work.",
@@ -681,6 +683,7 @@ export async function closeTask(taskId, sessionId = null, onDelayed = null) {
 function submitStart(payload, command, timeoutMs, onDelayed = null) {
   const validateResult = (value) => (
     validateStartPlanResult(value)
+    && (command !== "refresh_inventory" || value.request_id !== payload.request_id)
     && (command === "plan_again"
       ? value.task_id !== payload.task_id
       : value.task_id === payload.task_id)
@@ -705,6 +708,18 @@ export function openInventoryView(taskId) {
   requireTaskId(taskId, "openInventoryView");
   return inventoryRead("open_inventory_view", {task_id: taskId},
     (value) => validateInventorySummary(value) && value.task_id === taskId);
+}
+
+export function refreshInventory(taskId, requestId, commandId, expectedRevision, nodeId = null, onDelayed = null) {
+  requireTaskId(taskId, "refreshInventory");
+  if (typeof requestId !== "string" || !ID_PATTERN.test(requestId)
+      || typeof commandId !== "string" || !ID_PATTERN.test(commandId)
+      || !isNonnegativeInteger(expectedRevision) || !(nodeId === null || isNodeId(nodeId))) {
+    throw new TypeError("refreshInventory requires an exact current inventory gesture");
+  }
+  return submitStart(Object.freeze({task_id: taskId, request_id: requestId,
+    command_id: commandId, expected_revision: expectedRevision, node_id: nodeId}),
+  "refresh_inventory", INVENTORY_START_TIMEOUT_MS, onDelayed);
 }
 
 export function updateInventoryView(taskId, expectedRevision, view, onDelayed = null) {

@@ -320,6 +320,13 @@ Inventory review and beta packaging remain open.
   stay visibly distinct from newer scans. Independent review corrected stale
   viewport adoption and nested-row indentation. Focused browser checks and the
   installed tree/keyboard/reflow witness pass. Action controls remain next.
+- Add same-task inventory Refresh through the service and production bridge.
+  Full, exact-item and complete-folder scans admit the location afresh, preserve
+  prior complete reads during failure/replacement and retain original success
+  or failure until task Close. Repeated starts share the existing bounded
+  response capacity; no automatic resubmission occurs. Fresh review and composed
+  admission, replay, offline recovery and replacement checks pass; the final
+  workflows/interfaces neighborhood passes 2,769 cases.
 
 #### Mitigate the Advanced Color flyout halo (2026-09-24)
 

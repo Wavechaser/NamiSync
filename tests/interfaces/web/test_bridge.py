@@ -146,6 +146,24 @@ def _dispatcher(document, handlers) -> BridgeDispatcher:
     )
 
 
+def test_inventory_capacity_refusal_has_fixed_action_guidance():
+    from namisync.interfaces.web.drain import InventoryCommandCapacityError
+
+    def refused(_payload):
+        raise InventoryCommandCapacityError("untrusted diagnostic must not cross the wire")
+
+    bridge = _dispatcher(_trusted_document(), {"refresh_inventory": refused})
+    response = bridge.dispatch(json.dumps({
+        "schema_version": BRIDGE_SCHEMA_VERSION, "request_id": _REQUEST_ID,
+        "command": "refresh_inventory", "payload": {},
+    }))
+    assert response["ok"] is False
+    assert response["error"] == {
+        "code": "inventory_capacity",
+        "message": "Inventory command capacity is full. Close a task before refreshing.",
+    }
+
+
 class EventHook:
     def __init__(self) -> None:
         self.handlers = []

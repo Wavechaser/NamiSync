@@ -33,9 +33,12 @@ guard. The desktop read pane is independently approved after stale viewport
 adoption and nested-row indentation corrections: 57 focused cases and installed
 SH-G-7 pass. Same-task Refresh source review passes; its direct bridge
 trace/error-vocabulary helper migrations pass seven checks after the broader
-neighborhood reported 2,765 passes/four mismatches. Visibility actions wait for
-the Refresh commit; desktop actions and the inventory installed witness wait for
-both lanes. Twelve import contracts and 191 local document links pass.
+neighborhood reported 2,765 passes/four mismatches. The final frozen
+workflows/interfaces rerun passes all 2,769 cases and independent Refresh review
+approves the helper migrations. The read pane is committed as `687549a`.
+Visibility actions are next; desktop actions and the inventory installed witness
+wait for their reviewed backend. Twelve import contracts and 191 local document
+links pass.
 
 `12cae9b` commits independent acceptance tooling and its Windows venv-launch correction, which passed
 review, 23 focused checks and a real untimed native launch. Full untimed fixture

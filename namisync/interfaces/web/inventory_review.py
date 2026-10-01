@@ -94,6 +94,23 @@ class InventoryReviewState:
             "collapsed_count": len(self.collapsed_node_ids),
         }
 
+    def replacement(self, request_id: str, projection: InventoryProjection,
+                    root_path: str | None, scan_complete: bool,
+                    observed_count: int, missing_count: int) -> InventoryReviewState:
+        """Stage one complete replacement while preserving surviving gestures."""
+        if self.view_revision >= MAX_JAVASCRIPT_SAFE_INTEGER:
+            raise OverflowError("inventory view revision is exhausted")
+        collapsed = frozenset(
+            node_id for node_id in self.collapsed_node_ids
+            if node_id in projection.position_by_node_id
+            and projection.node_for_id(node_id).is_container
+        )
+        return InventoryReviewState(
+            self.task_id, request_id, projection, root_path, scan_complete,
+            observed_count, missing_count, self.view_revision + 1,
+            self.search_query, self.filters, self.sort_column, self.sort_direction, collapsed,
+        )
+
     def update(self, *, expected_revision: int, search_query: str, filters: frozenset[str],
                sort_column: PlanSortColumn, sort_direction: SortDirection,
                collapse_node_id: str | None, collapsed: bool | None) -> dict[str, object]:

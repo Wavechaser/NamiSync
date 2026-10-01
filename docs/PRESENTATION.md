@@ -161,9 +161,14 @@ Inventory read views retain one immutable workflow projection, its complete sort
 permutation and its derived `VisibleSequence` at task scope. Repeated windows
 reuse these values and serialize only the requested slice; current detail uses
 one exact ledger row read. View updates stage replacement sequence values before
-advancing their revision. Open, update, window and detail are available through
-the production bridge; the desktop read renderer is implemented. Refresh/visibility
-actions remain pending. History belongs to `HISTORY.md` and pages in the database.
+advancing their revision. Open, update, window, detail and same-task Refresh are
+available through the production bridge. The desktop read renderer is
+implemented; visibility actions remain pending. A new released scan stages a complete replacement, preserving
+search, facets, sort and surviving collapsed nodes while advancing the existing
+view revision. Failed construction preserves the prior publication, which stays
+readable during a new scan. Its request identity remains distinct from the
+task's current scan request. Incomplete scan evidence does not veto a complete
+ledger projection. History belongs to `HISTORY.md` and pages in the database.
 
 ## Search, filters, sorting, and follow
 

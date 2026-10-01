@@ -258,6 +258,8 @@ class TaskAuthority(Protocol):
 
     def open_inventory_view(self, *args, **kwargs) -> dict[str, object]: ...
 
+    def refresh_inventory(self, *args, **kwargs) -> TaskStartView: ...
+
     def update_inventory_view(self, *args, **kwargs) -> dict[str, object]: ...
 
     def get_inventory_window(self, *args, **kwargs) -> dict[str, object]: ...
@@ -509,6 +511,15 @@ class _InventoryDetailPayload:
     task_id: str
     expected_revision: int
     node_id: str
+
+
+@dataclass(frozen=True, slots=True)
+class _InventoryRefreshPayload:
+    task_id: str
+    request_id: str
+    command_id: str
+    expected_revision: int
+    node_id: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -955,6 +966,22 @@ def production_command_specs(
             raise TypeError("open_plan_view received an unvalidated payload")
         return registry.open_plan_view(payload.task_id)
 
+    def refresh_inventory(payload: object) -> object:
+        if type(payload) is not _InventoryRefreshPayload:
+            raise TypeError("refresh_inventory received an unvalidated payload")
+        intent = ("inventory-refresh", payload.task_id, payload.request_id,
+                  payload.expected_revision, payload.node_id)
+        try:
+            return registry.refresh_inventory(
+                payload.task_id, payload.request_id,
+                expected_revision=payload.expected_revision, node_id=payload.node_id,
+                command_id=payload.command_id, wire_intent=intent,
+            )
+        except (CommandIdConflictError, TaskIntentConflictError) as error:
+            raise CommandConflictError("inventory refresh command id conflicts") from error
+        except (KeyError, ValueError) as error:
+            raise PlanningRefusedError("inventory refresh scope was refused") from error
+
     def open_inventory_view(payload: object) -> object:
         if type(payload) is not _OpenPlanViewPayload:
             raise TypeError("open_inventory_view received an unvalidated payload")
@@ -1367,6 +1394,12 @@ def production_command_specs(
                 access=CommandAccess.READ_ONLY, command_id=FieldRequirement.FORBIDDEN,
                 revision=FieldRequirement.FORBIDDEN, response_policy=CommandResponsePolicy.LOCAL_5_SECONDS,
                 retry=CommandRetry.SAME_PAYLOAD_ONCE,
+            ),
+            "refresh_inventory": CommandSpec(
+                validate_payload=_validate_inventory_refresh, handler=refresh_inventory,
+                access=CommandAccess.MUTATING, command_id=FieldRequirement.REQUIRED,
+                revision=FieldRequirement.REQUIRED, response_policy=CommandResponsePolicy.MUTATION_OBSERVED,
+                retry=CommandRetry.NONE, work=CommandWork.ASYNC_SMALL,
             ),
             "update_inventory_view": CommandSpec(
                 validate_payload=_validate_update_inventory_view, handler=update_inventory_view,
@@ -1815,6 +1848,23 @@ def _validate_inventory_detail(value: object) -> _InventoryDetailPayload:
             or type(node_id) is not str or re.fullmatch(r"node-[0-9a-f]{32}", node_id) is None):
         raise CommandPayloadError("get_inventory_detail payload is invalid")
     return _InventoryDetailPayload(task_id, revision, node_id)
+
+
+def _validate_inventory_refresh(value: object) -> _InventoryRefreshPayload:
+    if type(value) is not dict or set(value) != {
+        "task_id", "request_id", "command_id", "expected_revision", "node_id",
+    }:
+        raise CommandPayloadError("refresh_inventory payload is invalid")
+    task_id, request_id, command_id = value["task_id"], value["request_id"], value["command_id"]
+    revision, node_id = value["expected_revision"], value["node_id"]
+    if (type(task_id) is not str or _TASK_ID.fullmatch(task_id) is None
+            or any(type(identifier) is not str or _OPAQUE_ID.fullmatch(identifier) is None
+                   for identifier in (request_id, command_id))
+            or not _is_javascript_safe_integer(revision) or revision < 0
+            or (node_id is not None and (type(node_id) is not str
+                or re.fullmatch(r"node-[0-9a-f]{32}", node_id) is None))):
+        raise CommandPayloadError("refresh_inventory payload is invalid")
+    return _InventoryRefreshPayload(task_id, request_id, command_id, revision, node_id)
 
 
 def _validate_execution_detail(value: object) -> _ExecutionDetailPayload:

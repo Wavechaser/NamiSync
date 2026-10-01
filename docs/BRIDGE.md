@@ -222,7 +222,7 @@ commands still use that native path for their admission return.
 
 ### Small asynchronous native commands
 
-Only `create_task`, `start_plan`, `start_inventory`, `plan_again`, `start_execution`,
+Only `create_task`, `start_plan`, `start_inventory`, `refresh_inventory`, `plan_again`, `start_execution`,
 `release_terminal_session`, `close_task` and `probe_recent_pairs`
 select the `CommandSpec` small asynchronous work class. Native dispatch
 validates the request and admitted context before starting one command worker.
@@ -283,7 +283,7 @@ mutation recovery, interactive wait or feedback-only behavior. It is metadata,
 not a new wire field or recovery protocol.
 
 Original-result retention applies to `create_task`, `start_plan`,
-`start_inventory`, `plan_again`, `start_execution`, `mutate_plan_selection`,
+`start_inventory`, `refresh_inventory`, `plan_again`, `start_execution`, `mutate_plan_selection`,
 `mutate_plan_scope`, `mutate_plan_highlighted_selection`, `control_execution`,
 `release_terminal_session` and `close_task`. Existing domain receipts do not
 provide a complete replacement: they can expire with retirement, replay a current
@@ -466,6 +466,7 @@ BOOTSTRAP rows, commands require OPEN.
 | `plan_again` | `{task_id:TaskId,command_id:HexId,source_mount:null\|string,target_mount:null\|string}` | `{task_id:TaskId,request_id:HexId,session_id:HexId}` | observed original result; 5 s feedback; no mutation replay |
 | `open_plan_view` | `{task_id:TaskId}` | `PlanViewSummary` | 5 s; one identical-payload retry |
 | `open_inventory_view` | `{task_id:TaskId}` | `InventoryViewSummary` | 5 s; one identical-payload retry |
+| `refresh_inventory` | `{task_id:TaskId,request_id:HexId,command_id:HexId,expected_revision:SafeInt,node_id:null\|NodeId}` | `{task_id:TaskId,request_id:HexId,session_id:HexId}` | observed original result; 5 s feedback; no mutation replay |
 | `update_inventory_view` | `{task_id:TaskId,expected_revision:SafeInt,search_query:string,filters:[InventoryFilter],sort_column:"path"\|"filename"\|"size"\|"mtime",sort_direction:"ascending"\|"descending",collapse_node_id:null\|NodeId,collapsed:null\|boolean}` | `InventoryViewSummary` | current-state recovery; 5 s feedback; no mutation replay |
 | `get_inventory_window` | `{task_id:TaskId,expected_revision:SafeInt,offset:SafeInt,limit:1..256}` | `{disposition:"current"\|"conflict",view_revision:SafeInt,offset:SafeInt,total:SafeInt,rows:[InventoryWindowRow]}` | 5 s; one identical-payload retry |
 | `get_inventory_detail` | `{task_id:TaskId,expected_revision:SafeInt,node_id:NodeId}` | `{disposition:"current"\|"conflict"\|"unavailable",view_revision:SafeInt,node_id:NodeId,detail:null\|InventoryCurrentDetail}` | 5 s; one identical-payload retry |
@@ -493,7 +494,9 @@ volatile slots: equal id/intent survives expiry; changed wire/resolved intent
 conflicts. Lifecycle release/close uses exact owner identity and idempotent
 recovery, not invented command receipts.
 
-Inventory reads require exact terminal delivery and successful session release.
+Initial inventory publication requires exact terminal delivery and successful
+session release. A prior complete view remains readable during a new scan or a
+failed replacement; its request identity continues to name that publication.
 `InventoryViewSummary` carries task/request/location identity, view revision,
 frozen scan metadata, complete-domain rollup and current search/filter/sort/collapse
 state. `InventoryWindowRow` supplies server-derived frames and domain status,
@@ -508,7 +511,20 @@ evidence. Signed-64 scalars and full native file indexes cross as decimal text;
 digest and provenance remain raw. Removed/renamed rows return unavailable.
 Task/session/request/generation and view revision fence adoption after the read;
 warnings and synthetic ancestors cannot trigger ledger detail reads. These four
-commands grant no Refresh, visibility mutation or integrity authority.
+commands grant no visibility mutation or integrity authority.
+
+`refresh_inventory` requires the exact current released task request and retained
+view revision. Its optional node is resolved server-side into full, exact-leaf or
+recursive-folder scope; warning nodes refuse before scan work. No client path or
+location enters this command. Each original success or failure is retained until
+task Close under the existing shared 48 start-response bound, reserved before
+effect. A fresh command can retry from a prior complete view after an unavailable
+root returns. Capacity refusal uses the fixed `inventory_capacity` message and
+directs the user to close a task before refreshing. Replacement publication
+advances the view revision and preserves
+search, facets, sort and surviving collapsed folders; failed construction leaves
+the old publication intact. Scan completeness remains separate from projection
+completeness.
 
 `PlanViewSummary` has exactly `disposition`, `task_id`, `request_id`,
 `view_revision`, `selection_revision`, `selection_state`, `source_path`,

@@ -92,6 +92,7 @@ _BRIDGE_PLAN_AGAIN_ORIGINAL = r'''export function planAgain(taskId, sourceMount 
 
 _BRIDGE_VALIDATE = r'''  const validateResult = (value) => (
     validateStartPlanResult(value)
+    && (command !== "refresh_inventory" || value.request_id !== payload.request_id)
     && (command === "plan_again"
       ? value.task_id !== payload.task_id
       : value.task_id === payload.task_id)
@@ -99,7 +100,9 @@ _BRIDGE_VALIDATE = r'''  const validateResult = (value) => (
 '''
 _BRIDGE_VALIDATE_TRACE = r'''  const validateResult = (value) => {
     const shapeValid = validateStartPlanResult(value);
-    const identityValid = shapeValid && (command === "plan_again"
+    const identityValid = shapeValid
+      && (command !== "refresh_inventory" || value.request_id !== payload.request_id)
+      && (command === "plan_again"
       ? value.task_id !== payload.task_id
       : value.task_id === payload.task_id);
     if (command === "plan_again") {

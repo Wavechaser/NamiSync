@@ -4,7 +4,7 @@ This document owns the implemented CLI and desktop adapters, service/task lifecy
 
 `BRIDGE.md` owns external desktop protocol, transport, retry/recovery, and its exact evidence. `PRESENTATION.md` owns tree/view/search/sort/selection behavior and visual scale evidence. The frozen v1 event-and-transport custody result is scoped to its bridge evidence and does not establish whole-runtime containment. The former BR-G-45 aggregate terminal-artifact model is retired. SH-G-15 remains an open, scoped release criterion defined below.
 
-The active service and CLI support sync, inventory, baseline, verify and rebaseline. The desktop exposes the bounded host/transport foundation and process-live tasks with frozen Setup, typed/picker/recent locations, plan and standalone inventory starts, Plan again, navigation, reconstruction, and explicit close. Plan review supplies bounded hierarchy, sibling sorting, server-owned selection, destructive confirmation and same-task execution with live controls and retained result review. Inventory read projections, their desktop renderer and production bridge are implemented; visibility/Refresh actions, manual post-copy verification, history and full settings remain accepted but unrealized outcomes. Their delivery register is [M1_PLAN.md](M1_PLAN.md).
+The active service and CLI support sync, inventory, baseline, verify and rebaseline. The desktop exposes the bounded host/transport foundation and process-live tasks with frozen Setup, typed/picker/recent locations, plan and standalone inventory starts, Plan again, navigation, reconstruction, and explicit close. Plan review supplies bounded hierarchy, sibling sorting, server-owned selection, destructive confirmation and same-task execution with live controls and retained result review. Inventory read projections, their desktop renderer and same-task Refresh with their production bridge are implemented; visibility actions, manual post-copy verification, history and full settings remain accepted but unrealized outcomes. Their delivery register is [M1_PLAN.md](M1_PLAN.md).
 
 
 ## Purpose
@@ -83,12 +83,25 @@ describes the paused-index lifetime.
 Inventory tasks additionally retain their exact `InventoryDetails` metadata at
 task scope before terminal release drops runtime request details. A legitimate
 initial refusal can have no details; that typed unavailability does not prevent
-custody release. Close retires the task metadata. Opening the read view lazily
+custody release. A later refused scan with no location retains the last
+location-bearing metadata for fresh Refresh admission, while its current terminal
+record retains the refusal. The metadata's original request identity prevents
+publication as a falsely current snapshot. Close retires the task metadata. Opening the read view lazily
 reads one complete ledger snapshot and builds its immutable projection, so
 projection construction failure cannot delay or undo terminal release. Repeated
 and concurrent opens reuse one published view. Windows perform no ledger read;
 current detail queries one location-scoped row id and refuses a removed or
 renamed subject. Task/session/request/generation and view revision fence adoption.
+Refresh follows the exact current request's terminal delivery and successful
+release. Its scope comes only from a node in the retained complete view: root
+means full scan, a leaf means exact path, and a folder means recursive subtree.
+Warnings refuse before submission. The service creates a fresh request and admits
+the location anew, retaining only the previously chosen mount as an admission
+hint. Successful starts replace the released session association; old exact
+start receipts remain task-owned until Close. Failed admission restores the
+prior request and delivery even when the delivery factory was never called.
+Fresh Refresh can recover from a location-less refusal using the current released
+request and prior complete view revision; it never reuses prior root authority.
 Current durable evidence retains observed and attested subjects, raw scalar
 values, full native identity and digest provenance separately from scan metadata.
 
@@ -493,13 +506,15 @@ an active direct close or full task close rather than replaying a closing
 session; task replay remains available during terminal-session release.
 
 The adapter may independently retain bounded transport-response replay for
-plan/inventory starts and Plan again. One entry contains only command id, wire intent, in-flight/result
+plan/inventory starts, Plan again and Inventory Refresh. One entry contains only command id, wire intent, in-flight/result
 delivery state, and an exact `TaskStartView`; it contains no resolved root,
 session association, compensation, observer resource, or cleanup authority. A
 retained successful response may therefore replay before resolving expired or
 evicted source/target slots. A fresh resolution refusal for which no response is
 retained creates no application receipt, association, observer, or dispatcher
-session; refusal replay is not cached.
+session. Inventory Refresh additionally retains its original failure result at
+the adapter until task Close, preventing the same command from becoming a new
+scan after admission conditions change. Other start refusals are not cached.
 
 `TaskLifecyclePort` exposes lifecycle-only shell create/close, task-bound start
 and cancellation, exact task/session reobservation, terminal-session release,
@@ -640,8 +655,8 @@ another interface consumer needs the operation.
 
 The application admits at most 48 active desktop task effects before invoking a
 delivery factory or lower application work. Independently, the adapter keeps at
-most 48 successful/in-flight start-response entries, retiring successful entries
-with their tasks, and one shared population of 48 shell/session close-response
+most 48 successful/in-flight start-response entries including task-owned Refresh
+failures, retiring task-associated entries with their tasks, and one shared population of 48 shell/session close-response
 tombstones with least-recently-used eviction. These are exact count bounds and
 make no retained-byte or whole-runtime memory claim. Terminal-session release
 closes observer and Dispatcher custody while retaining the task and its actual
@@ -650,6 +665,9 @@ task/plan ownership. Busy close is an exact task/session cancellation request,
 then a close after delivered settlement. A failed close leaves the task
 unavailable to new Plan actions once retirement is sealed; exact Close retry and
 the existing concurrent release/Close receipt convergence remain available.
+Refresh reserves this existing start-response capacity before claiming or scanning;
+capacity refusal directs the user to close a task. It adds no per-task scan cap
+and does not change Plan's single execution follow-up.
 
 Plan task records retain the workflow's exact `sync-plan` kind across the
 service and browser boundary; retained database history remains independent of
@@ -831,7 +849,7 @@ boundary and its race limitation. It also protects the small admission return
 for asynchronous commands; asynchronous completion does not remove that race.
 
 The native bridge separates admission from completion only for `create_task`,
-`start_plan`, `start_inventory`, `plan_again`, `start_execution`,
+`start_plan`, `start_inventory`, `refresh_inventory`, `plan_again`, `start_execution`,
 `probe_recent_pairs`, `release_terminal_session` and
 `close_task`. CommandSpec owns that
 classification; custom commands and ordinary Python dispatch retain synchronous

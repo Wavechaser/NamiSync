@@ -1218,6 +1218,7 @@ def test_task_lifecycle_port_surface_is_exact() -> None:
         "prepare_setup_options",
         "start_task_setup_plan",
         "start_task_setup_inventory",
+        "start_task_inventory_refresh",
         "start_task_plan_again",
         "start_task_execution",
         "recover_task_execution",
