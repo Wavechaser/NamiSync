@@ -6,7 +6,7 @@ typed/picker/recent plan and standalone inventory starts. Production Plan
 review, execution admission and live pause/resume/cancel controls are active;
 retained execution-result review is active in that Plan pane. Inventory has a
 separate bounded read pane with search, facets, sibling sorting and current
-evidence details. Inventory Refresh/visibility controls, hashing controls,
+evidence details, Refresh and missing-item visibility controls. Hashing controls,
 history and full settings remain pending. Current v5 item
 progress and detailed result rows are reduced by the bridge for bounded display.
 
@@ -1799,9 +1799,15 @@ folders show complete rollups; notices show their informational warning only.
 Task navigation, view changes and Close retire details before late replies can
 restore them. A failed read offers Reload inventory view, which reads current
 publication without starting another scan. The pane labels the current scan
-state separately from a displayed prior publication. Refresh and missing-row
-acknowledge/restore controls have their own pending M1-9 integration; Baseline,
-Verify, Rebaseline and live integrity overlays remain future controls.
+state separately from a displayed prior publication. Refresh acts on the whole
+location or a selected file/folder; folder scope includes hidden and off-window
+descendants. Acknowledge missing hides missing subjects from default matches,
+while Restore visibility reverses only that acknowledgement and does not restore files.
+The controls show confirmed applied/noop/stale/conflict counts and an unresolved
+suffix. An uncertain original action retains Check original outcome across task
+navigation. Visibility needs a confirmed current publication; Refresh can recover
+from a prior publication after a failed rebuild. Notices have no action controls.
+Baseline, Verify, Rebaseline and live integrity overlays remain future controls.
 
 The accepted but unrealized policy admits eligible selected files with or
 without evidence to rebaseline. It always hashes and conditionally replaces or

@@ -287,10 +287,19 @@ explicit, reviewable and regression-backed.
 
 Stage 6 delivered the secured desktop host, process-live tasks, frozen Setup,
 bounded Plan review/selection and execution, and live/retained result review.
-Inventory review and beta packaging remain open.
+Integrity controls, manual post-copy handoff and beta packaging remain open.
 
 #### Deliver M1-9 inventory review (2026-10-01 – 2026-10-02)
 
+- Complete the desktop inventory actions: same-task Refresh, exact item/folder
+  scope, acknowledge missing and restore visibility, with original-command
+  recovery and truthful partial-result feedback. Refresh adopts the shared
+  admitted identity immediately; prior complete results remain readable.
+  The installed witness proves real folder-command clicks, replacement results,
+  missing-row hide/return, screenshot and task/host Close. Final ordinary checks
+  pass 5,829 cases/four skips; all 35 headed cases pass across dependency-scoped
+  runs, with initial incomplete/failed receipts retained. Stop after M1-9 for
+  user recap and GUI tweaks; no next-checkpoint work is activated.
 - Correct the existing live host witness's local native-completion wait budget
   after diagnostics showed matching canceled events arriving beyond ten seconds.
   Preserve the whole-scenario limit and every cancellation, identity, ordering
@@ -317,7 +326,6 @@ Inventory review and beta packaging remain open.
   Corrected focused/workflow checks pass 160/894 cases; imports and independent
   correction review pass. Ordinary evidence and environment reruns are retained
   by dependency under `build/m1-9-20261001/`.
-  Desktop wiring and actions follow in separate reviewed commits.
 - Add a dedicated cold inventory projection collector and independent checker,
   including real Windows venv launch provenance and incomplete-evidence controls.
   Five fresh samples per fixture pass the retained reference-profile maxima:
@@ -336,7 +344,7 @@ Inventory review and beta packaging remain open.
   from current attestation; warnings stay informational and prior publications
   stay visibly distinct from newer scans. Independent review corrected stale
   viewport adoption and nested-row indentation. Focused browser checks and the
-  installed tree/keyboard/reflow witness pass. Action controls remain next.
+  installed tree/keyboard/reflow witness pass.
 - Add same-task inventory Refresh through the service and production bridge.
   Full, exact-item and complete-folder scans admit the location afresh, preserve
   prior complete reads during failure/replacement and retain original success

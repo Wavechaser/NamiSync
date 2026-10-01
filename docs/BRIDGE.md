@@ -546,6 +546,15 @@ replacement attempt; a failed build preserves prior reads but blocks another
 visibility effect until open publishes a whole replacement. Refresh may recover.
 Visibility and starts share the existing 48 retained entries, reserved before
 effects and pruned at exact task Close. No full per-row tuple crosses the wire.
+The desktop keeps each original Refresh or visibility recovery handle with its
+task across navigation and offers Check original outcome when delivery is
+uncertain, without resubmitting the mutation. A successful same-task Refresh
+hands observation to the fresh session before terminal release and view reload.
+The browser accepts result counts only from the observed original command,
+guards new actions by current task/request/view identity, and leaves warnings
+inert. A failed visibility rebuild blocks another visibility effect until whole
+reload confirms the publication; Refresh remains eligible from the retained
+prior revision. Capacity refusal gives the fixed Close-a-task guidance.
 
 `PlanViewSummary` has exactly `disposition`, `task_id`, `request_id`,
 `view_revision`, `selection_revision`, `selection_state`, `source_path`,

@@ -47,8 +47,12 @@ export function createInventoryReviewPanel(callbacks) {
   const scanState = element("p", "nami-shell__guidance");
   const message = element("p", "nami-shell__guidance");
   message.setAttribute("role", "status");
+  const actionStatus = element("p", "nami-shell__guidance");
+  actionStatus.setAttribute("role", "status");
+  const refresh = button("Refresh inventory", "inventory-refresh");
+  const check = button("Check original outcome", "inventory-check-outcome");
   const reload = button("Reload inventory view", "inventory-reload");
-  header.append(title, rootPath, scanState, facts, scanFacts, message, reload);
+  header.append(title, rootPath, scanState, facts, scanFacts, message, actionStatus, refresh, check, reload);
 
   const table = element("div", "nami-card nami-inventory-review__table");
   const toolbar = element("div", "nami-inventory-review__toolbar");
@@ -125,8 +129,14 @@ export function createInventoryReviewPanel(callbacks) {
   const detailTitle = element("h2", "", "Item details");
   const detailStatus = element("p", "nami-shell__guidance");
   detailStatus.setAttribute("role", "status");
+  const detailActions = element("div", "nami-inventory-review__actions");
+  const refreshSelected = button("Refresh selected", "inventory-refresh-selected");
+  const acknowledge = button("Acknowledge missing", "inventory-acknowledge");
+  const restore = button("Restore visibility", "inventory-restore");
+  detailActions.append(refreshSelected, acknowledge, restore);
+  const scopeHint = element("p", "nami-shell__guidance");
   const detailBody = element("dl", "nami-plan-review__detail-body");
-  detail.append(detailTitle, detailStatus, detailBody);
+  detail.append(detailTitle, detailStatus, detailActions, scopeHint, detailBody);
   const content = element("div", "nami-inventory-review__content");
   content.append(table, detail);
   pane.append(header, content);
@@ -138,7 +148,8 @@ export function createInventoryReviewPanel(callbacks) {
   let searchTimer = null;
   let searchDraft = false;
 
-  function blocked() { return task?.closePending || task?.inventoryLoading || current?.pending; }
+  function blocked() { return task?.closePending || task?.inventoryLoading || current?.pending
+    || task?.inventoryAction?.pending; }
   function submitSearch() {
     clearTimeout(searchTimer);
     searchTimer = null;
@@ -179,6 +190,24 @@ export function createInventoryReviewPanel(callbacks) {
     });
   });
   reload.addEventListener("click", () => { if (task !== null) callbacks.onReload(task); });
+  refresh.addEventListener("click", () => {
+    if (task !== null && current !== null && !blocked()) callbacks.onRefresh(current, null);
+  });
+  check.addEventListener("click", () => {
+    if (task !== null) callbacks.onCheckOutcome(task);
+  });
+  refreshSelected.addEventListener("click", () => {
+    const row = current?.detail?.row;
+    if (row !== undefined && row.warning === null && !blocked()) callbacks.onRefresh(current, row.node_id);
+  });
+  acknowledge.addEventListener("click", () => {
+    const row = current?.detail?.row;
+    if (row !== undefined && row.warning === null && !blocked()) callbacks.onVisibility(current, "acknowledge", row.node_id);
+  });
+  restore.addEventListener("click", () => {
+    const row = current?.detail?.row;
+    if (row !== undefined && row.warning === null && !blocked()) callbacks.onVisibility(current, "restore", row.node_id);
+  });
 
   function decorateRow(rowElement, row) {
     rowElement.classList.add("nami-inventory-row");
@@ -314,6 +343,13 @@ export function createInventoryReviewPanel(callbacks) {
     reload.disabled = value.inventoryLoading || value.closePending;
     renderText(message, value.inventoryError ?? review?.message ?? (value.inventoryLoading ? "Loading inventory…" : ""));
     message.hidden = message.textContent === "";
+    renderText(actionStatus, value.inventoryAction?.message ?? "");
+    actionStatus.hidden = actionStatus.textContent === "";
+    const actionBlocked = !available || blocked() || !value.sessionReleased || value.sessionState === "active";
+    refresh.disabled = actionBlocked;
+    refresh.hidden = !available;
+    check.hidden = value.inventoryAction?.recovery?.canCheck !== true;
+    check.disabled = value.inventoryAction?.recovery?.checking === true;
     renderFilesystemText(rootPath, review?.summary.root_path ?? value.form?.source?.text ?? "");
     renderText(title, value.sessionState === "active" ? "Inventory scan in progress" : "Inventory");
     renderText(scanState, `Current scan: ${value.sessionState === "active" ? "in progress" : value.sessionState}.`);
@@ -323,6 +359,23 @@ export function createInventoryReviewPanel(callbacks) {
     renderText(scanFacts, available
       ? `${review.summary.request_id === value.requestId ? "Displayed scan" : "Previous published scan"}: ${review.summary.scan_complete ? "complete" : "incomplete"} · ${review.summary.observed_count} observed · ${review.summary.missing_count} missing · ${review.summary.warning_count} notices` : "");
     if (!available) return;
+    const selected = review.detail?.row ?? null;
+    const domain = selected !== null && selected.warning === null;
+    const currentPublication = review.summary.request_id === value.requestId && !value.inventoryViewUnconfirmed;
+    const missingCount = selected?.is_container ? selected.rollup.missing
+      : selected?.presence === "missing" && !selected.acknowledged ? 1 : 0;
+    const acknowledgedCount = selected?.is_container ? selected.rollup.acknowledged
+      : selected?.presence === "missing" && selected.acknowledged ? 1 : 0;
+    detailActions.hidden = !domain;
+    refreshSelected.disabled = actionBlocked || !domain;
+    acknowledge.hidden = !domain || missingCount === 0;
+    acknowledge.disabled = actionBlocked || !currentPublication;
+    restore.hidden = !domain || acknowledgedCount === 0;
+    restore.disabled = actionBlocked || !currentPublication;
+    renderText(scopeHint, domain && selected.is_container
+      ? "Folder actions include all missing items below it, including hidden and off-window items. Restore visibility does not restore files."
+      : domain && acknowledgedCount > 0 ? "Restore visibility does not restore the missing file." : "");
+    scopeHint.hidden = scopeHint.textContent === "";
     all.ariaPressed = String(review.summary.filters.length === 0);
     all.disabled = Boolean(blocked());
     for (const [key, control] of facetButtons) {

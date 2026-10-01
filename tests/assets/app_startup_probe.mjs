@@ -139,6 +139,9 @@ const bridgeStub = moduleUrl(`
   export const updateInventoryView = () => Promise.reject(new Error("unused inventory read"));
   export const getInventoryWindow = () => Promise.reject(new Error("unused inventory read"));
   export const getInventoryDetail = () => Promise.reject(new Error("unused inventory read"));
+  export const refreshInventory = () => Promise.reject(new Error("unused inventory action"));
+  export const acknowledgeInventory = () => Promise.reject(new Error("unused inventory action"));
+  export const restoreInventory = () => Promise.reject(new Error("unused inventory action"));
   export const readSetup = () => Promise.resolve({
     task_id: null,
     snapshot: {
@@ -202,7 +205,7 @@ taskStatusSource = taskStatusSource.replace("./render.js", renderStub);
 const taskStatusStub = moduleUrl(taskStatusSource);
 source = source.replace(
   /import \{[\s\S]*?\} from "\.\/bridge\.js";/,
-  `import { acknowledgeShellReady, admitLocation, BridgeTransportError, closeTask, createTask, echoReadiness, getExecutionDetail, getInventoryDetail, getInventoryWindow, openInventoryView, updateInventoryView, listTasks, markBridgeOperational, OutcomeUnavailableError, pickFolder, planAgain, prepareSetup, probeRecentPairs, readSetup, StartPlanUncertainError, startInventory, startPlan, startTaskDrain, TaskCloseUncertainError, TaskCreateUncertainError, whenBridgeApiReady } from "${bridgeStub}";`,
+  `import { acknowledgeShellReady, acknowledgeInventory, admitLocation, BridgeTransportError, closeTask, createTask, echoReadiness, getExecutionDetail, getInventoryDetail, getInventoryWindow, openInventoryView, refreshInventory, restoreInventory, updateInventoryView, listTasks, markBridgeOperational, OutcomeUnavailableError, pickFolder, planAgain, prepareSetup, probeRecentPairs, readSetup, StartPlanUncertainError, startInventory, startPlan, startTaskDrain, TaskCloseUncertainError, TaskCreateUncertainError, whenBridgeApiReady } from "${bridgeStub}";`,
 );
 source = source
   .replace("./readiness.js", readinessStub)

@@ -97,7 +97,7 @@ Nodes retain the structural data needed by presentation—preorder position, dep
 
 ## Views, windows, and selection
 
-Plan views are server-side, opaque, immutable/revisioned projections. A response formed for a stale lifecycle, selection, result, view-state, or projection revision returns a typed conflict and does not combine old structure with new detail. The browser keeps at most its current 256-row window and treats DOM rows as disposable. Server selection remains authoritative across virtualized rows, collapse, filters, and windows. A Plan header bulk gesture applies to all selectable operations whose own rows match the current search and operation filters; a folder gesture applies to matching descendants only. Both include matches outside the loaded window and under collapsed folders. Sorting, collapse and scroll do not change gesture membership. View changes alone never alter selection, and Execute always uses the complete current selection, including hidden operations. Workflow dependency closure can reselect an operation outside the view when a chosen operation requires it; safety exclusions remain in force. Inventory read views and their separate complete-folder action bridge are implemented; desktop action controls remain pending.
+Plan views are server-side, opaque, immutable/revisioned projections. A response formed for a stale lifecycle, selection, result, view-state, or projection revision returns a typed conflict and does not combine old structure with new detail. The browser keeps at most its current 256-row window and treats DOM rows as disposable. Server selection remains authoritative across virtualized rows, collapse, filters, and windows. A Plan header bulk gesture applies to all selectable operations whose own rows match the current search and operation filters; a folder gesture applies to matching descendants only. Both include matches outside the loaded window and under collapsed folders. Sorting, collapse and scroll do not change gesture membership. View changes alone never alter selection, and Execute always uses the complete current selection, including hidden operations. Workflow dependency closure can reselect an operation outside the view when a chosen operation requires it; safety exclusions remain in force. Inventory read views and their separate complete-folder Refresh and visibility actions have desktop controls.
 
 The synthetic Plan root remains internal to the projection and its complete-plan
 rollups, but is not a table row or a second whole-plan checkbox. Plan window
@@ -163,8 +163,8 @@ reuse these values and serialize only the requested slice; current detail uses
 one exact ledger row read. View updates stage replacement sequence values before
 advancing their revision. Open, update, window, detail and same-task Refresh are
 available through the production bridge. The desktop read renderer is
-implemented; visibility bridge actions are available and desktop controls remain
-pending. A new released scan stages a complete replacement, preserving
+implemented, including whole/selected Refresh and missing-item visibility
+controls. A new released scan stages a complete replacement, preserving
 search, facets, sort and surviving collapsed nodes while advancing the existing
 view revision. Failed construction preserves the prior publication, which stays
 readable during a new scan. Its request identity remains distinct from the
@@ -230,7 +230,7 @@ Focused checks must catch the failures that small fixtures conceal: scope-qualif
 
 ## Implemented Plan and accepted future outcomes
 
-The implemented Plan review surface lets users inspect a complete stable view of immutable review facts, inert notices, current server-owned selection and destructive intent without letting stale UI actions acquire authority. It preserves prior-path ancestry and paired move annotations, while operation groups remain non-folder membership containers. Its renderer retains only the current `1..256` row window and uses exact 24 px rows and matching virtual spacers. The inventory read renderer retains the same bounded window over the generic `tree.js` foundation's separate exact 28 px row contract. Inventory visibility controls and follow mode remain accepted future outcomes.
+The implemented Plan review surface lets users inspect a complete stable view of immutable review facts, inert notices, current server-owned selection and destructive intent without letting stale UI actions acquire authority. It preserves prior-path ancestry and paired move annotations, while operation groups remain non-folder membership containers. Its renderer retains only the current `1..256` row window and uses exact 24 px rows and matching virtual spacers. The inventory renderer retains the same bounded window over the generic `tree.js` foundation's separate exact 28 px row contract. Its Refresh and visibility controls pass server-owned node identities, never visible-row or browser-derived path scope. Follow mode remains an accepted future outcome.
 
 The Plan summary displays workflow-derived selected/eligible counts, selected
 required bytes, and planning issues (preflight refusals plus scan notices).

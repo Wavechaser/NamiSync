@@ -220,9 +220,9 @@ consumed here are active. Remembered-location readback and Setup widgets are
 implemented. A standalone inventory task freezes only its admitted root,
 without sync options or a fabricated source/target pair. Pure workflow inventory
 projection, sibling ordering and task-bound read publication/paging are
-implemented, including their desktop read renderer and same-task
-full/exact/recursive Refresh and complete-scope acknowledge/restore bridge actions.
-Desktop action controls remain pending.
+implemented, including their desktop renderer, whole/selected Refresh and
+complete-scope acknowledge/Restore visibility controls. The controls use the
+same-task full/exact/recursive Refresh and acknowledge/restore bridge actions.
 
 `workflows/inventory_projection.py` builds a complete immutable generation from
 the repository's typed rows and an independent warning population. It retains
@@ -287,7 +287,10 @@ timestamp and retains bounded actual disposition counts, including an unresolved
 suffix on failure; the failed row may already have committed. A complete current
 publication is mandatory for a new effect. A failed post-write rebuild keeps prior
 reads but requires a successful whole reload before another visibility action.
-Original results remain task-owned through Refresh until exact Close.
+Original results remain task-owned through Refresh until exact Close. The desktop
+keeps the original Check handle across task navigation, reports only confirmed
+effect counts, and permits Refresh from a retained prior publication so a dirty
+view can recover. Restore visibility never restores file content.
 
 The pure projection supplies the shared server-owned sibling sorter required by
 [Bridge DR-BR-15](PRESENTATION.md#search-filters-sorting-and-follow).

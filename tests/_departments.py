@@ -113,6 +113,7 @@ DEPARTMENTS: dict[str, tuple[str, ...]] = {
         "tests/interfaces/web/test_transport.py",
         "tests/interfaces/web/test_transport_headed.py",
         "tests/interfaces/web/test_task_execution_review_headed.py",
+        "tests/interfaces/web/test_task_inventory_headed.py",
         "tests/interfaces/web/test_task_shell_headed.py",
         "tests/interfaces/web/test_visible_sequence.py",
         "tests/interfaces/web/test_wheel_assets.py",

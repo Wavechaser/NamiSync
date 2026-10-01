@@ -61,16 +61,19 @@ results distinct, with current stored evidence and on-demand operation detail.
 Canonical execution following has an explicit manual override and navigation
 controls; phase progress, observed throughput and ETA share the inline status
 card with folded global and operation Details.
-Inventory review, final packaging, and beta
-closure remain open, so the window is not yet the complete desktop product.
+Inventory tasks have their own bounded review with search, facets, sibling
+sorting, current evidence Details, same-task Refresh and missing-row
+acknowledge/restore visibility. Standalone integrity controls, manual post-copy
+verification, final packaging and beta closure remain open, so the window is
+not yet the complete desktop product.
 The [M1 delivery register](docs/M1_PLAN.md) records execution-review acceptance,
 affected performance verification, and any remaining recovery work.
 Desktop release also requires scoped cold-start resource budgets and repeated/
 long-workload leak checks under the [resource acceptance policy](docs/DEFENSE.md#7-quantitative-evidence-and-measurement-authority).
 These remain open and do not promise universal whole-runtime memory containment.
 
-Remaining desktop work covers inventory/integrity content within the active task
-shell. Accepted sorting and rebaseline
+Remaining desktop work includes integrity controls within the active task
+shell. Accepted rebaseline
 behavior lives in the [feature catalog](docs/FEATURES.md); the
 [M1 plan](docs/M1_PLAN.md) owns remaining delivery and verification.
 External requests and applicable populations are bounded at their owners;
@@ -315,7 +318,9 @@ execution, and live/retained result review with independent verification and
 recording facts. Advanced Color flyouts suppress the reproduced dark shadow
 halo; the compositor behavior remains deferred. A fixed local Fluent icon
 vocabulary, accessible presentation and persisted cosmetic theme support the
-headed shell. Inventory review and beta packaging remain open.
+headed shell. Inventory review adds bounded browsing, current evidence,
+same-task Refresh and conditional missing-row visibility actions. Integrity
+controls and beta packaging remain open.
 
 ### M1 Features
 

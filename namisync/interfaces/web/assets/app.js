@@ -1,5 +1,6 @@
 import {
   acknowledgeShellReady,
+  acknowledgeInventory,
   admitLocation,
   BridgeTransportError,
   closeTask,
@@ -26,6 +27,8 @@ import {
   prepareSetup,
   probeRecentPairs,
   readSetup,
+  refreshInventory,
+  restoreInventory,
   StartPlanUncertainError,
   startInventory,
   startExecution,
@@ -215,6 +218,9 @@ const panel = createWorkPanel({
   onWindow: loadInventoryWindow,
   onDetail: (review, nodeId) => { void readInventoryDetail(review, nodeId); },
   onReload: (task) => { void loadInventoryReview(task, true); },
+  onRefresh: (review, nodeId) => { void runInventoryAction(review, "refresh", nodeId); },
+  onVisibility: (review, action, nodeId) => { void runInventoryAction(review, action, nodeId); },
+  onCheckOutcome: (task) => { void checkInventoryOutcome(task); },
 });
 const rail = createTaskRail({
   onCreate: () => { void createBlankTask(); },
@@ -262,6 +268,11 @@ function taskCloseBlockReason(task) {
       || fixedOutcome(task.releaseRecovery)
       || task.executionAttempt?.state === "uncertain") return UNKNOWN_OUTCOME_GUIDANCE;
   if (task.executionAttempt !== null) return "Resolve the in-flight execution request before closing.";
+  if (task.inventoryAction?.pending) return fixedOutcome(task.inventoryAction.recovery)
+    ? UNKNOWN_OUTCOME_GUIDANCE
+    : checkableOutcome(task.inventoryAction.recovery)
+      ? "Check the original inventory outcome before closing this task."
+      : "Wait for the current inventory action before closing this task.";
   if (task.executionControlAttempt?.independent) {
     if (fixedOutcome(task.executionControlAttempt.recovery)) return UNKNOWN_OUTCOME_GUIDANCE;
     if (task.executionControlAttempt.pending) return checkableOutcome(task.executionControlAttempt.recovery)
@@ -504,6 +515,8 @@ function adoptTask(summary) {
       inventoryLoading: false,
       inventoryRevision: 0,
       inventoryError: null,
+      inventoryAction: null,
+      inventoryViewUnconfirmed: false,
       executionStarted: false,
       executionAttempt: null,
       executionControlState: "running",
@@ -1206,6 +1219,105 @@ function retireInventoryDetail(review) {
   review.detail = null;
 }
 
+function inventoryCommandId() {
+  const bytes = new Uint8Array(16);
+  globalThis.crypto.getRandomValues(bytes);
+  return Array.from(bytes, (value) => value.toString(16).padStart(2, "0")).join("");
+}
+
+function inventoryResultMessage(result) {
+  const label = result.action === "acknowledge" ? "Acknowledge missing" : "Restore visibility";
+  return `${label}: ${result.applied} applied, ${result.noop} already set, `
+    + `${result.stale} stale, ${result.conflict} conflicted, `
+    + `${result.unresolved_count} unresolved of ${result.total} missing items.`;
+}
+
+async function checkInventoryOutcome(task) {
+  const attempt = task.inventoryAction;
+  if (tasks.get(task.taskId) !== task || !attempt?.pending
+      || !checkableOutcome(attempt.recovery) || attempt.recovery.checking) return;
+  attempt.message = "Checking the original inventory outcome…";
+  renderTasks();
+  try {
+    await attempt.recovery.check();
+  } catch (_error) {
+    if (task.inventoryAction === attempt) attempt.message = attempt.recovery.message;
+  } finally {
+    if (task.inventoryAction === attempt) renderTasks();
+  }
+}
+
+async function runInventoryAction(review, kind, nodeId) {
+  const task = currentInventoryTask(review);
+  if (task === null || task.inventoryLoading || task.inventoryAction?.pending
+      || (kind !== "refresh" && task.inventoryViewUnconfirmed) || review.pending !== null
+      || !task.sessionReleased || task.sessionState === "active"
+      || checkableOutcome(task.closeRecovery) || fixedOutcome(task.closeRecovery)) return;
+  if (nodeId !== null && (review.detail?.row?.node_id !== nodeId
+      || review.detail.row.warning !== null)) return;
+  if (kind !== "refresh" && review.summary.request_id !== task.requestId) return;
+  const requestId = task.requestId;
+  const revision = review.summary.view_revision;
+  const attempt = {
+    kind, requestId, revision, nodeId, commandId: inventoryCommandId(),
+    pending: true, recovery: null,
+    message: kind === "refresh" ? "Starting inventory scan…" : "Updating missing-item visibility…",
+  };
+  task.inventoryAction = attempt;
+  review.windowRequestRevision += 1;
+  retireInventoryDetail(review);
+  renderTasks();
+  const stillOwned = () => tasks.get(task.taskId) === task && task.inventoryAction === attempt;
+  const onDelayed = (recovery) => {
+    if (!stillOwned()) return;
+    if (typeof recovery?.check === "function") attempt.recovery = recovery;
+    attempt.message = attempt.recovery?.message ?? "Waiting for the original inventory outcome…";
+    renderTasks();
+  };
+  try {
+    const result = kind === "refresh"
+      ? await refreshInventory(task.taskId, requestId, attempt.commandId, revision, nodeId, onDelayed)
+      : await (kind === "acknowledge" ? acknowledgeInventory : restoreInventory)(
+        task.taskId, requestId, attempt.commandId, revision, nodeId, onDelayed);
+    if (!stillOwned()) return;
+    attempt.pending = false;
+    attempt.recovery = null;
+    if (kind === "refresh") {
+      adoptTaskStart(result, "inventory");
+      attempt.message = "Inventory scan started. Its current result will appear when the scan finishes.";
+      renderTasks();
+      try { await refreshTasks(); } catch (_error) {
+        // The admitted identity and its live drain already own current task status.
+      }
+    } else {
+      attempt.message = inventoryResultMessage(result);
+      task.inventoryViewUnconfirmed = true;
+      if (selectedTaskId === task.taskId && !settingsVisible && task.requestId === requestId) {
+        await loadInventoryReview(task, true);
+        if (stillOwned() && task.inventoryViewUnconfirmed) {
+          attempt.message += " Reload inventory view to confirm current visibility before another action.";
+        }
+      }
+    }
+  } catch (error) {
+    if (!stillOwned()) return;
+    if (error instanceof StartPlanUncertainError || error instanceof OutcomeUnavailableError) {
+      attempt.pending = true;
+      attempt.message = attempt.recovery?.message ?? UNKNOWN_OUTCOME_GUIDANCE;
+    } else {
+      attempt.pending = false;
+      attempt.recovery = null;
+      attempt.message = error?.code === "inventory_capacity"
+        ? "Inventory command capacity is full. Close a task before trying again."
+        : kind === "refresh"
+          ? "Inventory refresh was refused. Review this task and try again."
+          : "Visibility change was refused. Reload inventory view before trying again.";
+    }
+  } finally {
+    if (stillOwned()) renderTasks();
+  }
+}
+
 function currentInventoryTask(review) {
   const task = currentTask();
   return task !== null && !settingsVisible && !task.closePending
@@ -1245,6 +1357,7 @@ async function loadInventoryReview(task, force = false) {
       summary, window, pending: null, message: null, queuedSearchQuery: null,
       actionRevision: 0, windowRequestRevision: 0, detailRevision: 0, detail: null, scrollTop: 0,
     };
+    task.inventoryViewUnconfirmed = false;
   } catch (_error) {
     if (stillCurrent()) task.inventoryError = "Inventory unavailable. Reload the inventory view to retry.";
   } finally {

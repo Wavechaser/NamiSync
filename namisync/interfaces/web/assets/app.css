@@ -410,6 +410,12 @@ body {
   scrollbar-gutter: stable;
 }
 
+.nami-inventory-review__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
 @container (max-width: 62rem) {
   .nami-inventory-review__content:has(.nami-inventory-review__detail:not([hidden])) {
     grid-template-columns: minmax(0, 1fr);

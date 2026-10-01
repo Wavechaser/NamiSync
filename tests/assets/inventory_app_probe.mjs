@@ -20,8 +20,9 @@ globalThis.document = {
 globalThis.window = { chrome: { webview: {} }, addEventListener() {} };
 const url = (source) => `data:text/javascript;base64,${Buffer.from(source).toString("base64")}`;
 const fixture = JSON.parse(await readFile(process.argv[3], "utf8"));
-const calls = [], renders = [], drains = [];
-let delayedDetail = null, delayedWindow = null, delayedView = null, delayedOpen = null;
+const calls = [], renders = [], drains = [], stoppedDrains = [];
+let delayedDetail = null, delayedWindow = null, delayedView = null, delayedOpen = null, delayedVisibility = null;
+let taskSnapshot = null, observedChecks = 0, refuseRefresh = false;
 let viewRevision = 0, query = "";
 const summary = () => ({ ...fixture.views.default.summary, view_revision: viewRevision, search_query: query });
 const windowResponse = (revision, offset) => ({ ...fixture.views.default.window, view_revision: revision, offset });
@@ -45,6 +46,30 @@ globalThis.inventoryHarness = {
   getInventoryDetail(...args) {
     calls.push(["detail", ...args]); return delayedDetail?.promise ?? Promise.resolve(fixture.detail);
   },
+  listTasks() { return Promise.resolve({ tasks: taskSnapshot === null ? [] : [taskSnapshot] }); },
+  refreshInventory(...args) {
+    calls.push(["refresh", ...args.slice(0, 5)]);
+    if (refuseRefresh) return Promise.reject(Object.assign(new Error("capacity"), { code: "inventory_capacity" }));
+    const [taskId] = args;
+    taskSnapshot = { task_id: taskId, session_id: "7".repeat(32), session_state: "active",
+      session_released: false, task_kind: "inventory", request_id: "8".repeat(32) };
+    return Promise.resolve({ task_id: taskId, session_id: taskSnapshot.session_id,
+      request_id: taskSnapshot.request_id });
+  },
+  restoreInventory(...args) {
+    calls.push(["restore", ...args.slice(0, 5)]);
+    args[5]?.({ canCheck: true, checking: false, message: "Original result pending",
+      check() { observedChecks += 1; return Promise.resolve(); } });
+    return delayedVisibility?.promise ?? Promise.resolve({ task_id: args[0], request_id: args[1],
+      action: "restore", expected_revision: args[3], total: 3, applied: 1, noop: 0,
+      stale: 1, conflict: 1, unresolved_count: 0, disposition: "completed" });
+  },
+  acknowledgeInventory(...args) {
+    calls.push(["acknowledge", ...args.slice(0, 5)]);
+    return Promise.resolve({ task_id: args[0], request_id: args[1], action: "acknowledge",
+      expected_revision: args[3], total: 3, applied: 1, noop: 0, stale: 1,
+      conflict: 0, unresolved_count: 1, disposition: "partial" });
+  },
 };
 const appPath = join(process.argv[2], "app.js");
 let source = await readFile(appPath, "utf8");
@@ -54,9 +79,10 @@ const implementations = {
   whenBridgeApiReady: "() => new Promise(() => {})",
   closeTask: "(taskId, sessionId) => Promise.resolve({ task_id: taskId, session_id: sessionId, disposition: 'closed' })",
   readSetup: "() => new Promise(() => {})",
-  startTaskDrain: "(...args) => { globalThis.inventoryDrains.push(args); return () => {}; }",
+  startTaskDrain: "(...args) => { globalThis.inventoryDrains.push(args); return () => globalThis.inventoryStoppedDrains.push(args[1]); }",
 };
 globalThis.inventoryDrains = drains;
+globalThis.inventoryStoppedDrains = stoppedDrains;
 const bridgeUrl = url(bridgeNames.map((name) => /^[A-Z]/.test(name)
   ? `export class ${name} extends Error {}`
   : `export const ${name} = ${implementations[name] ?? (name in globalThis.inventoryHarness
@@ -79,12 +105,14 @@ const replacements = {
 };
 globalThis.inventoryRenders = renders;
 for (const [key, value] of Object.entries(replacements)) source = source.replace(key, value);
-source += "\nexport { adoptTask, selectTask, acceptTaskRelease, loadInventoryReview, changeInventoryView, loadInventoryWindow, readInventoryDetail, closeRetainedTask, showSettings, tasks };";
+source += "\nexport { adoptTask, selectTask, acceptTaskRelease, loadInventoryReview, changeInventoryView, loadInventoryWindow, readInventoryDetail, runInventoryAction, checkInventoryOutcome, closeRetainedTask, showSettings, refreshTasks, tasks };";
 const app = await import(url(source));
 const taskId = fixture.views.default.summary.task_id;
 const sessionId = "3".repeat(32);
 const task = app.adoptTask({ task_id: taskId, session_id: sessionId, session_state: "active",
   session_released: false, task_kind: "inventory", request_id: fixture.views.default.summary.request_id });
+taskSnapshot = { task_id: taskId, session_id: sessionId, session_state: "active",
+  session_released: false, task_kind: "inventory", request_id: task.requestId };
 const tick = async () => { for (let i = 0; i < 8; i += 1) await Promise.resolve(); };
 app.selectTask(taskId); await tick();
 assert.equal(calls.length, 0, "active inventory must not open terminal review");
@@ -166,6 +194,106 @@ assert.equal(task.executionStarted, false);
 retainedDetail.resolve({ ...fixture.detail, view_revision: review.summary.view_revision });
 await sessionDetail;
 assert.equal(review.detail, null, "changed session invalidates old details");
+task.sessionState = "completed";
+task.sessionReleased = true;
+task.requestId = review.summary.request_id;
+const acknowledgedRow = fixture.views.acknowledged.window.rows.find((row) => row.row_id === "2");
+review.detail = { row: acknowledgedRow, state: "current", response: null };
+delayedVisibility = defer();
+const restoreOriginal = app.runInventoryAction(review, "restore", acknowledgedRow.node_id);
+const restoreCall = calls.findLast(([name]) => name === "restore");
+assert.deepEqual(restoreCall.slice(1, 3), [taskId, task.requestId]);
+assert.equal(restoreCall[4], review.summary.view_revision);
+assert.equal(restoreCall[5], acknowledgedRow.node_id);
+assert.equal(task.inventoryAction.pending, true);
+await app.checkInventoryOutcome(task);
+assert.equal(observedChecks, 1);
+assert.equal(calls.filter(([name]) => name === "restore").length, 1, "Check cannot submit again");
+app.showSettings();
+const restoreResult = { task_id: taskId, request_id: task.requestId, action: "restore",
+  expected_revision: review.summary.view_revision, total: 3, applied: 1, noop: 0,
+  stale: 1, conflict: 1, unresolved_count: 0, disposition: "completed" };
+delayedVisibility.resolve(restoreResult);
+await restoreOriginal;
+delayedVisibility = null;
+assert.equal(task.inventoryAction.pending, false);
+assert.match(task.inventoryAction.message, /1 stale, 1 conflicted, 0 unresolved/);
+assert.equal(task.inventoryViewUnconfirmed, true, "navigation retains result before view recovery");
+delayedOpen = defer();
+const failedVisibilityReload = delayedOpen;
+app.selectTask(taskId); await tick();
+failedVisibilityReload.resolve(Promise.reject(new Error("projection unavailable")));
+await tick();
+assert.equal(task.inventoryReview, review, "failed post-effect rebuild keeps prior publication");
+assert.equal(task.inventoryViewUnconfirmed, true);
+delayedOpen = null;
+await app.loadInventoryReview(task, true);
+review = task.inventoryReview;
+assert.equal(task.inventoryViewUnconfirmed, false);
+review.detail = { row: acknowledgedRow, state: "current", response: null };
+await app.runInventoryAction(review, "acknowledge", acknowledgedRow.node_id);
+assert.match(task.inventoryAction.message, /1 applied, 0 already set, 1 stale, 0 conflicted, 1 unresolved/);
+review = task.inventoryReview;
+task.requestId = "5".repeat(32);
+task.inventoryViewUnconfirmed = true;
+review.detail = { row: acknowledgedRow, state: "current", response: null };
+const priorRestoreCount = calls.filter(([name]) => name === "restore").length;
+await app.runInventoryAction(review, "restore", acknowledgedRow.node_id);
+assert.equal(calls.filter(([name]) => name === "restore").length, priorRestoreCount,
+  "dirty prior publication cannot admit fresh visibility");
+refuseRefresh = true;
+await app.runInventoryAction(review, "refresh", null);
+assert.match(task.inventoryAction.message, /Close a task before trying again/);
+refuseRefresh = false;
+const previousDrainCount = drains.length;
+await app.runInventoryAction(task.inventoryReview, "refresh", null);
+const refreshCall = calls.findLast(([name]) => name === "refresh");
+assert.equal(refreshCall[2], "5".repeat(32), "Refresh uses current request with prior publication");
+assert.equal(task.requestId, "8".repeat(32));
+assert.equal(drains.length, previousDrainCount + 1, "new same-task session attaches its own drain");
+assert.equal(task.inventoryReview.summary.request_id, review.summary.request_id,
+  "Refresh retains prior complete publication while scanning");
+const originalListTasks = globalThis.inventoryHarness.listTasks;
+for (const observation of ["failed", "stale"]) {
+  const oldSnapshot = { task_id: taskId, session_id: (observation === "failed" ? "9" : "a").repeat(32),
+    session_state: "completed", session_released: true, task_kind: "inventory",
+    request_id: fixture.views.default.summary.request_id };
+  app.adoptTask(oldSnapshot);
+  taskSnapshot = oldSnapshot;
+  await tick();
+  const retainedPublication = task.inventoryReview;
+  const oldList = defer();
+  let olderRead;
+  if (observation === "failed") {
+    globalThis.inventoryHarness.listTasks = () => Promise.reject(new Error("list transport unavailable"));
+  } else {
+    let reads = 0;
+    globalThis.inventoryHarness.listTasks = () => ++reads === 1 ? oldList.promise : originalListTasks();
+    olderRead = app.refreshTasks();
+  }
+  const beforeDrains = drains.length;
+  const beforeStarts = calls.filter(([name]) => name === "refresh").length;
+  await app.runInventoryAction(retainedPublication, "refresh", null);
+  if (olderRead !== undefined) {
+    oldList.resolve({ tasks: [oldSnapshot] });
+    await olderRead;
+    await tick();
+  }
+  assert.equal(task.sessionId, "7".repeat(32), `Refresh retains admitted identity after ${observation} task-list observation`);
+  assert.equal(task.requestId, "8".repeat(32));
+  assert.equal(task.sessionState, "active");
+  assert.equal(task.sessionReleased, false);
+  assert.equal(drains.length, beforeDrains + 1, "Refresh attaches only its admitted drain");
+  assert.equal(drains.at(-1)[1], task.sessionId);
+  assert.ok(stoppedDrains.includes(oldSnapshot.session_id), "the prior session drain is retired");
+  assert.equal(task.inventoryReview, retainedPublication, "observation failure retains the prior complete publication");
+  assert.equal(task.inventoryAction.pending, false);
+  assert.match(task.inventoryAction.message, /Inventory scan started/);
+  assert.doesNotMatch(task.inventoryAction.message, /Retry updates/);
+  assert.equal(calls.filter(([name]) => name === "refresh").length, beforeStarts + 1, "task-list recovery cannot repeat Refresh");
+  globalThis.inventoryHarness.listTasks = originalListTasks;
+}
+
 delayedDetail = defer();
 const closeDetail = app.readInventoryDetail(review, real.node_id);
 const retainedCloseDetail = delayedDetail;

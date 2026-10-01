@@ -4,7 +4,7 @@ This document owns the implemented CLI and desktop adapters, service/task lifecy
 
 `BRIDGE.md` owns external desktop protocol, transport, retry/recovery, and its exact evidence. `PRESENTATION.md` owns tree/view/search/sort/selection behavior and visual scale evidence. The frozen v1 event-and-transport custody result is scoped to its bridge evidence and does not establish whole-runtime containment. The former BR-G-45 aggregate terminal-artifact model is retired. SH-G-15 remains an open, scoped release criterion defined below.
 
-The active service and CLI support sync, inventory, baseline, verify and rebaseline. The desktop exposes the bounded host/transport foundation and process-live tasks with frozen Setup, typed/picker/recent locations, plan and standalone inventory starts, Plan again, navigation, reconstruction, and explicit close. Plan review supplies bounded hierarchy, sibling sorting, server-owned selection, destructive confirmation and same-task execution with live controls and retained result review. Inventory read projections, their desktop renderer and same-task Refresh/visibility bridge actions are implemented; desktop action controls, manual post-copy verification, history and full settings remain accepted but unrealized outcomes. Their delivery register is [M1_PLAN.md](M1_PLAN.md).
+The active service and CLI support sync, inventory, baseline, verify and rebaseline. The desktop exposes the bounded host/transport foundation and process-live tasks with frozen Setup, typed/picker/recent locations, plan and standalone inventory starts, Plan again, navigation, reconstruction, and explicit close. Plan review supplies bounded hierarchy, sibling sorting, server-owned selection, destructive confirmation and same-task execution with live controls and retained result review. Inventory read projections and desktop whole/selected Refresh and missing-item visibility controls use the same-task bridge actions. Manual post-copy verification, history and full settings remain accepted but unrealized outcomes. Their delivery register is [M1_PLAN.md](M1_PLAN.md).
 
 
 ## Purpose
@@ -102,6 +102,8 @@ start receipts remain task-owned until Close. Failed admission restores the
 prior request and delivery even when the delivery factory was never called.
 Fresh Refresh can recover from a location-less refusal using the current released
 request and prior complete view revision; it never reuses prior root authority.
+The desktop retires its prior session drain when Refresh changes that task's
+session identity, then observes and releases the fresh terminal session.
 Current durable evidence retains observed and attested subjects, raw scalar
 values, full native identity and digest provenance separately from scan metadata.
 

@@ -74,18 +74,22 @@ const source = (await readFile(join(assetRoot, "inventory_review.js"), "utf8"))
   .replace("./render.js", renderUrl).replace("./tree.js", treeUrl).replace("./icons.js", iconsUrl);
 const { createInventoryReviewPanel } = await import(moduleUrl(source));
 const fixture = JSON.parse(await readFile(process.argv[3], "utf8"));
-const viewChanges = [], details = [], pages = [], reloads = [];
+const viewChanges = [], details = [], pages = [], reloads = [], refreshes = [], visibility = [], checks = [];
 let pendingPage;
 const pane = createInventoryReviewPanel({
   onViewChange: (...args) => viewChanges.push(args),
   onDetail: (...args) => details.push(args),
   onWindow: (...args) => { pages.push(args); return new Promise((resolve) => { pendingPage = resolve; }); },
   onReload: (task) => reloads.push(task),
+  onRefresh: (...args) => refreshes.push(args),
+  onVisibility: (...args) => visibility.push(args),
+  onCheckOutcome: (task) => checks.push(task),
 });
 const review = { ...fixture.views.default, pending: null, message: null, detail: null, queuedSearchQuery: null, scrollTop: 0 };
 const task = { taskId: "inventory", taskKind: "inventory", sessionState: "completed", inventoryReview: review,
   requestId: fixture.views.default.summary.request_id,
-  inventoryLoading: false, closePending: false, inventoryError: null };
+  inventoryLoading: false, closePending: false, inventoryError: null, sessionReleased: true,
+  inventoryViewUnconfirmed: false, inventoryAction: null };
 const walk = (root) => [root, ...root.children.flatMap(walk)];
 const find = (predicate) => walk(pane.element).find(predicate);
 const action = (key) => find((value) => value.dataset.action === key);
@@ -93,6 +97,8 @@ const rowElements = () => walk(pane.element).filter((value) => value.getAttribut
 const text = (root) => [root.textContent, ...root.children.map(text)].join(" ");
 const tick = async () => { await Promise.resolve(); await Promise.resolve(); };
 pane.render(task);
+action("inventory-refresh").click();
+assert.deepEqual(refreshes.at(-1), [review, null]);
 assert.equal(rowElements().length, fixture.views.default.window.rows.length);
 assert.equal(find((value) => value.getAttribute("role") === "tree").tabIndex, 0);
 assert.equal(find((value) => value.tagName === "INPUT" && value.type === "checkbox"), undefined);
@@ -135,6 +141,8 @@ action("inventory-sort-reset").click();
 assert.deepEqual(viewChanges.at(-1)[1], { sortColumn: "path", sortDirection: "ascending" });
 review.detail = { row: real, state: "current", response: fixture.detail };
 pane.render(task);
+action("inventory-refresh-selected").click();
+assert.deepEqual(refreshes.at(-1), [review, real.node_id]);
 const detail = find((value) => value.ariaLabel === "Inventory item details");
 assert.match(text(detail), new RegExp(fixture.detail.detail.attestation.content.digest));
 assert.match(text(detail), new RegExp(`Provenance ${fixture.detail.detail.attestation.content.provenance}`));
@@ -151,6 +159,9 @@ review.detail = { row: notice, state: "current", response: null };
 pane.render(task);
 assert.match(text(detail), /read failed/);
 assert.doesNotMatch(text(detail), /Stored digest/);
+assert.equal(action("inventory-refresh-selected").disabled, true);
+assert.equal(action("inventory-acknowledge").hidden, true);
+assert.equal(action("inventory-restore").hidden, true);
 Object.assign(review, fixture.views.acknowledged, { detail: null });
 pane.render(task);
 assert.ok(rowElements().some((value) => text(value).includes("hidden")), "server ancestor context survives");
@@ -181,7 +192,13 @@ pane.render(task); action("inventory-reload").click();
 assert.match(text(pane.element), /Current scan: refused/);
 assert.match(text(pane.element), /Previous published scan/);
 assert.equal(reloads.at(-1), task);
-assert.equal(find((value) => value.dataset.action === "inventory-refresh"), undefined);
+assert.equal(action("inventory-refresh").disabled, false, "prior publication may refresh current task");
+assert.equal(action("inventory-acknowledge").disabled, true, "prior publication cannot mutate visibility");
+task.inventoryAction = { pending: true, recovery: { canCheck: true, checking: false }, message: "Original pending" };
+pane.render(task);
+action("inventory-check-outcome").click();
+assert.equal(checks.at(-1), task);
+assert.equal(action("inventory-refresh").disabled, true);
 pane.dispose();
 const setupUrl = moduleUrl("export const createSetupPanel = () => ({ element: document.createElement('div'), render() {} });");
 const planUrl = moduleUrl("export const createPlanReviewPanel = () => ({ element: document.createElement('div'), render() {}, dispose() {} });");
