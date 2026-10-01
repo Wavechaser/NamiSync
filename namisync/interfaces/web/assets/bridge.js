@@ -38,6 +38,10 @@ const COMMAND_POLICY_JSON = `{
   "start_inventory": {"response_policy": "mutation-observed", "retry": "none", "phase": "open"},
   "plan_again": {"response_policy": "mutation-observed", "retry": "none", "phase": "open"},
   "open_plan_view": {"response_policy": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
+  "open_inventory_view": {"response_policy": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
+  "update_inventory_view": {"response_policy": "feedback-only", "retry": "none", "phase": "open"},
+  "get_inventory_window": {"response_policy": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
+  "get_inventory_detail": {"response_policy": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
   "update_plan_view": {"response_policy": "feedback-only", "retry": "none", "phase": "open"},
   "get_plan_window": {"response_policy": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
   "get_execution_detail": {"response_policy": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
@@ -687,6 +691,54 @@ function submitStart(payload, command, timeoutMs, onDelayed = null) {
     if (error instanceof OutcomeUnavailableError) throw new StartPlanUncertainError();
     throw error;
   });
+}
+
+async function inventoryRead(command, payload, validate) {
+  const submit = () => dispatchAttempt(command, Object.freeze(payload), validate, PLAN_VIEW_TIMEOUT_MS);
+  try { return await submit(); } catch (error) {
+    if (!(error instanceof BridgeTransportError)) throw error;
+  }
+  return submit();
+}
+
+export function openInventoryView(taskId) {
+  requireTaskId(taskId, "openInventoryView");
+  return inventoryRead("open_inventory_view", {task_id: taskId},
+    (value) => validateInventorySummary(value) && value.task_id === taskId);
+}
+
+export function updateInventoryView(taskId, expectedRevision, view, onDelayed = null) {
+  requireTaskId(taskId, "updateInventoryView");
+  if (!isNonnegativeInteger(expectedRevision) || !isTreeViewGesture(view, INVENTORY_FILTERS)) {
+    throw new TypeError("updateInventoryView requires an exact revision and gesture");
+  }
+  return dispatchAttempt("update_inventory_view", Object.freeze({
+    task_id: taskId, expected_revision: expectedRevision, search_query: view.searchQuery,
+    filters: Object.freeze([...view.filters]), sort_column: view.sortColumn,
+    sort_direction: view.sortDirection, collapse_node_id: view.collapseNodeId, collapsed: view.collapsed,
+  }), (value) => validateInventorySummary(value) && value.task_id === taskId,
+  PLAN_VIEW_TIMEOUT_MS, false, onDelayed);
+}
+
+export function getInventoryWindow(taskId, expectedRevision, offset, limit) {
+  requireTaskId(taskId, "getInventoryWindow");
+  if (!isNonnegativeInteger(expectedRevision) || !isNonnegativeInteger(offset)
+      || !Number.isInteger(limit) || limit < 1 || limit > 256) {
+    throw new TypeError("getInventoryWindow requires a bounded exact window");
+  }
+  return inventoryRead("get_inventory_window", {task_id: taskId, expected_revision: expectedRevision, offset, limit},
+    (value) => validateInventoryWindow(value) && value.offset === offset
+      && value.rows.length <= limit && (value.disposition === "conflict" || value.view_revision === expectedRevision));
+}
+
+export function getInventoryDetail(taskId, expectedRevision, nodeId) {
+  requireTaskId(taskId, "getInventoryDetail");
+  if (!isNonnegativeInteger(expectedRevision) || !isNodeId(nodeId)) {
+    throw new TypeError("getInventoryDetail requires an exact revision and node");
+  }
+  return inventoryRead("get_inventory_detail", {task_id: taskId, expected_revision: expectedRevision, node_id: nodeId},
+    (value) => validateInventoryDetail(value) && value.node_id === nodeId
+      && (value.disposition === "conflict" || value.view_revision === expectedRevision));
 }
 
 export async function openPlanView(taskId) {
@@ -2667,11 +2719,20 @@ function isNodeId(value) {
   return typeof value === "string" && /^node-[0-9a-f]{32}$/.test(value);
 }
 
+const INVENTORY_FILTERS = new Set([
+  "present", "unverified", "verified", "modified", "reappeared", "unsupported",
+  "missing", "mismatched", "acknowledged", "notice",
+]);
+
 function isPlanViewGesture(value) {
   const filters = new Set([
     "copy", "mkdir", "move", "recase", "update", "move_update",
     "trash", "delete", "noop", "blocked", "error", "unsupported", "notice",
   ]);
+  return isTreeViewGesture(value, filters);
+}
+
+function isTreeViewGesture(value, filters) {
   return isExactObject(value, [
     "searchQuery", "filters", "sortColumn", "sortDirection",
     "collapseNodeId", "collapsed",
@@ -2686,6 +2747,110 @@ function isPlanViewGesture(value) {
     && (value.collapseNodeId === null || isNodeId(value.collapseNodeId))
     && (value.collapsed === null || typeof value.collapsed === "boolean")
     && ((value.collapseNodeId === null) === (value.collapsed === null));
+}
+
+function validateInventoryRollup(value) {
+  const counts = ["domain_count", "file_count", "present", "unverified", "verified", "modified",
+    "reappeared", "unsupported", "missing", "mismatched", "acknowledged"];
+  return isExactObject(value, [...counts, "size", "size_overflow", "size_partial"])
+    && counts.every((key) => isNonnegativeInteger(value[key]))
+    && (value.size === null || isScalar64(value.size))
+    && typeof value.size_overflow === "boolean" && typeof value.size_partial === "boolean"
+    && (value.size_overflow === (value.size === null));
+}
+
+function validateInventorySummary(value) {
+  return isExactObject(value, ["disposition", "task_id", "request_id", "location_id", "view_revision",
+    "root_path", "scan_complete", "observed_count", "missing_count", "warning_count", "rollup",
+    "visible_row_count", "search_query", "filters", "sort_column", "sort_direction", "collapsed_count"])
+    && ["opened", "current", "conflict", "noop"].includes(value.disposition)
+    && typeof value.task_id === "string" && TASK_PATTERN.test(value.task_id)
+    && typeof value.request_id === "string" && ID_PATTERN.test(value.request_id)
+    && isScalar64(value.location_id) && value.location_id !== "0"
+    && ["view_revision", "observed_count", "missing_count", "warning_count", "visible_row_count", "collapsed_count"]
+      .every((key) => isNonnegativeInteger(value[key]))
+    && (value.root_path === null || isBoundedPath(value.root_path))
+    && typeof value.scan_complete === "boolean" && validateInventoryRollup(value.rollup)
+    && isTreeViewGesture({searchQuery: value.search_query, filters: value.filters,
+      sortColumn: value.sort_column, sortDirection: value.sort_direction,
+      collapseNodeId: null, collapsed: null}, INVENTORY_FILTERS);
+}
+
+function validateInventoryWindow(value) {
+  return isExactObject(value, ["disposition", "view_revision", "offset", "total", "rows"])
+    && ["current", "conflict"].includes(value.disposition)
+    && [value.view_revision, value.offset, value.total].every(isNonnegativeInteger)
+    && Array.isArray(value.rows) && value.rows.length <= 256
+    && (value.disposition !== "conflict" || (value.rows.length === 0 && value.total === 0))
+    && value.rows.every((row, index) => validateInventoryRow(row)
+      && row.visible_index === value.offset + index && row.visible_index < value.total)
+    && new Set(value.rows.map((row) => row.node_id)).size === value.rows.length;
+}
+
+function validateInventoryRow(value) {
+  return isExactObject(value, ["node_id", "display", "depth", "is_container", "visible_index",
+    "parent_visible_index", "first_child_visible_index", "position_in_set", "set_size", "expanded",
+    "row_kind", "row_id", "presence", "verification_state", "has_baseline", "acknowledged",
+    "reappeared", "size", "mtime_ns", "rollup", "warning"])
+    && isNodeId(value.node_id) && isValidUnicode(value.display)
+    && [value.depth, value.visible_index, value.position_in_set, value.set_size].every(isNonnegativeInteger)
+    && value.position_in_set > 0 && value.position_in_set <= value.set_size
+    && [value.parent_visible_index, value.first_child_visible_index].every(isNullableNonnegativeInteger)
+    && (value.parent_visible_index === null || value.parent_visible_index < value.visible_index)
+    && (value.first_child_visible_index === null || value.first_child_visible_index > value.visible_index)
+    && typeof value.is_container === "boolean" && (value.expanded === null || typeof value.expanded === "boolean")
+    && ["folder", "subject", "notice"].includes(value.row_kind)
+    && (value.row_id === null || (isScalar64(value.row_id) && value.row_id !== "0"))
+    && (value.presence === null || ["present", "missing", "unsupported"].includes(value.presence))
+    && (value.verification_state === null || ["unverified", "verified", "modified", "mismatched"].includes(value.verification_state))
+    && ((value.row_id === null) === (value.presence === null))
+    && ((value.row_id === null) === (value.verification_state === null))
+    && [value.has_baseline, value.acknowledged, value.reappeared].every((item) => typeof item === "boolean")
+    && [value.size, value.mtime_ns].every((item) => item === null || isScalar64(item))
+    && validateInventoryRollup(value.rollup)
+    && (value.warning === null || (isExactObject(value.warning, ["code", "path", "detail"])
+      && isBoundedV5Text(value.warning.code, true)
+      && (value.warning.path === null || value.warning.path === "" || isBoundedPath(value.warning.path)) && isValidUnicode(value.warning.detail)))
+    && ((value.row_kind === "notice") === (value.warning !== null))
+    && (value.warning === null || (value.row_id === null && !value.is_container));
+}
+
+function validateInventorySubject(value) {
+  return isExactObject(value, ["kind", "size", "mtime_ns", "file_identity"])
+    && ["file", "directory"].includes(value.kind) && isScalar64(value.size) && isScalar64(value.mtime_ns)
+    && (value.file_identity === null || (isExactObject(value.file_identity, ["volume_serial", "file_index"])
+      && isValidUnicode(value.file_identity.volume_serial) && value.file_identity.volume_serial.length > 0
+      && typeof value.file_identity.file_index === "string" && /^(?:0|[1-9][0-9]*)$/.test(value.file_identity.file_index)
+      && BigInt(value.file_identity.file_index) <= 340282366920938463463374607431768211455n));
+}
+
+function validateInventoryDetail(value) {
+  if (!isExactObject(value, ["disposition", "view_revision", "node_id", "detail"])
+      || !["current", "conflict", "unavailable"].includes(value.disposition)
+      || !isNonnegativeInteger(value.view_revision) || !isNodeId(value.node_id)) return false;
+  if (value.disposition !== "current") return value.detail === null;
+  const detail = value.detail;
+  if (!isExactObject(detail, ["row", "observed", "attestation"])) return false;
+  const row = detail.row;
+  const times = ["last_observed_at", "last_verified_at", "missing_since", "acknowledged_at", "reappeared_at", "verification_invalidated_at"];
+  if (!isExactObject(row, ["row_id", "location_id", "path", "path_key", "entry_kind", "presence",
+    "size", "mtime_ns", "has_baseline", ...times, "unsupported_reason", "verification_state", "verification_invalidated_reason"])
+    || !isScalar64(row.row_id) || row.row_id === "0" || !isScalar64(row.location_id) || row.location_id === "0"
+    || !isBoundedPath(row.path) || !isValidUnicode(row.path_key)
+    || ![null, "file", "directory"].includes(row.entry_kind) || !["present", "missing", "unsupported"].includes(row.presence)
+    || !["unverified", "verified", "modified", "mismatched"].includes(row.verification_state)
+    || ![row.size, row.mtime_ns].every((item) => item === null || isScalar64(item))
+    || typeof row.has_baseline !== "boolean" || !times.every((key) => row[key] === null || isUtcTimestamp(row[key]))
+    || ![row.unsupported_reason, row.verification_invalidated_reason].every((item) => item === null || isValidUnicode(item))
+    || (detail.observed !== null && !validateInventorySubject(detail.observed))
+    || row.has_baseline !== (detail.attestation !== null)) return false;
+  if (detail.attestation === null) return true;
+  if (!isExactObject(detail.attestation, ["content", "subject"]) || !validateInventorySubject(detail.attestation.subject)) return false;
+  const content = detail.attestation.content;
+  return isExactObject(content, ["algorithm", "digest", "size", "provenance", "observed_at"])
+    && content.algorithm === "xxh3_128" && typeof content.digest === "string" && /^[0-9a-f]{32}$/.test(content.digest)
+    && isScalar64(content.size) && content.size === detail.attestation.subject.size
+    && ["copy", "readback", "verify"].includes(content.provenance) && isUtcTimestamp(content.observed_at);
 }
 
 function validatePlanViewSummary(value) {

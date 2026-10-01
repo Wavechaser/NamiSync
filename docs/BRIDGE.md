@@ -465,6 +465,10 @@ BOOTSTRAP rows, commands require OPEN.
 | `start_inventory` | `{task_id:TaskId,command_id:HexId,root_id:SlotId}` | `{task_id:TaskId,request_id:HexId,session_id:HexId}` | observed original result; 5 s feedback; no mutation replay |
 | `plan_again` | `{task_id:TaskId,command_id:HexId,source_mount:null\|string,target_mount:null\|string}` | `{task_id:TaskId,request_id:HexId,session_id:HexId}` | observed original result; 5 s feedback; no mutation replay |
 | `open_plan_view` | `{task_id:TaskId}` | `PlanViewSummary` | 5 s; one identical-payload retry |
+| `open_inventory_view` | `{task_id:TaskId}` | `InventoryViewSummary` | 5 s; one identical-payload retry |
+| `update_inventory_view` | `{task_id:TaskId,expected_revision:SafeInt,search_query:string,filters:[InventoryFilter],sort_column:"path"\|"filename"\|"size"\|"mtime",sort_direction:"ascending"\|"descending",collapse_node_id:null\|NodeId,collapsed:null\|boolean}` | `InventoryViewSummary` | current-state recovery; 5 s feedback; no mutation replay |
+| `get_inventory_window` | `{task_id:TaskId,expected_revision:SafeInt,offset:SafeInt,limit:1..256}` | `{disposition:"current"\|"conflict",view_revision:SafeInt,offset:SafeInt,total:SafeInt,rows:[InventoryWindowRow]}` | 5 s; one identical-payload retry |
+| `get_inventory_detail` | `{task_id:TaskId,expected_revision:SafeInt,node_id:NodeId}` | `{disposition:"current"\|"conflict"\|"unavailable",view_revision:SafeInt,node_id:NodeId,detail:null\|InventoryCurrentDetail}` | 5 s; one identical-payload retry |
 | `update_plan_view` | `{task_id:TaskId,expected_revision:SafeInt,search_query:string,filters:[PlanFilter],sort_column:"path"\|"filename"\|"size"\|"mtime",sort_direction:"ascending"\|"descending",collapse_node_id:null\|NodeId,collapsed:null\|boolean}` | `PlanViewSummary` | current-state recovery; 5 s feedback; no mutation replay |
 | `get_plan_window` | `{task_id:TaskId,expected_revision:SafeInt,offset:SafeInt,limit:1..256}` | `{disposition:"current"\|"conflict",view_revision:SafeInt,offset:SafeInt,total:SafeInt,execution:ExecutionSummary,rows:[PlanWindowRow]}` | 5 s; one identical-payload retry |
 | `get_execution_detail` | `{task_id:TaskId,operation_id:HexId,expected_execution_revision:SafeInt}` | `{disposition:"current"\|"conflict"\|"not-retained",execution_revision:SafeInt,operation_id:HexId,operation:null\|OperationItemView,automatic_verification:null\|IntegrityOutcomeView,evidence:null\|ExecutionEvidence}` | 5 s; one identical-payload retry |
@@ -488,6 +492,23 @@ an admitted Python handler. Start replay resolves retained wire intent before
 volatile slots: equal id/intent survives expiry; changed wire/resolved intent
 conflicts. Lifecycle release/close uses exact owner identity and idempotent
 recovery, not invented command receipts.
+
+Inventory reads require exact terminal delivery and successful session release.
+`InventoryViewSummary` carries task/request/location identity, view revision,
+frozen scan metadata, complete-domain rollup and current search/filter/sort/collapse
+state. `InventoryWindowRow` supplies server-derived frames and domain status,
+raw size/mtime and rollup, or an informational warning. The source-owned exact
+shapes are serialized by `inventory_review.py` and validated by `bridge.js`.
+`InventoryFilter` admits present, unverified, verified, modified, reappeared,
+unsupported, missing, mismatched, acknowledged and notice. Path sort is ascending
+only; reset is an explicit path/ascending gesture. Windows contain at most 256
+rows and conflict replies contain no rows. Current detail returns a fresh
+location-scoped ledger row, observed stat and optional attested subject/content
+evidence. Signed-64 scalars and full native file indexes cross as decimal text;
+digest and provenance remain raw. Removed/renamed rows return unavailable.
+Task/session/request/generation and view revision fence adoption after the read;
+warnings and synthetic ancestors cannot trigger ledger detail reads. These four
+commands grant no Refresh, visibility mutation or integrity authority.
 
 `PlanViewSummary` has exactly `disposition`, `task_id`, `request_id`,
 `view_revision`, `selection_revision`, `selection_state`, `source_path`,

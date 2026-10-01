@@ -122,6 +122,21 @@ def test_plan_location_inputs_are_bounded_before_either_native_admission() -> No
     assert calls == []
 
 
+def test_runtime_current_inventory_detail_reads_exact_location_owned_row(tmp_path: Path, monkeypatch):
+    runtime, location_id, scanner = _mixed_integrity_runtime(tmp_path, {})
+    row = runtime.list_inventory(location_id)[0]
+    def no_full_inventory(*args, **kwargs):
+        pytest.fail("exact detail performed a full location read")
+    monkeypatch.setattr(LedgerRepository, "get_inventory", no_full_inventory)
+    try:
+        current = runtime.read_inventory_row(location_id, row.row_id)
+        assert current == row
+        assert runtime.read_inventory_row(location_id + 1, row.row_id) is None
+        assert runtime.read_inventory_row(location_id, "999999") is None
+    finally:
+        runtime.close()
+
+
 def test_plan_pair_overlap_is_checked_after_both_candidate_admissions() -> None:
     calls: list[LocationCandidate] = []
     volume = VolumeId("pair-volume", "NTFS")

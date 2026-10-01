@@ -31,7 +31,7 @@ composition probe. Failed development receipts remain
 in the evidence root, including the corrected release-versus-delivery-closing
 guard. Refresh/visibility actions and desktop implementation have not begun.
 
-Independent acceptance tooling and its Windows venv-launch correction passed
+`12cae9b` commits independent acceptance tooling and its Windows venv-launch correction, which passed
 review, 23 focused checks and a real untimed native launch. Full untimed fixture
 checks confirm 120,000/240,000 displayed rows. The tools department passes
 353 tests/three skips with its required external fixture root; earlier

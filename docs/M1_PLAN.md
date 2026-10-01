@@ -284,11 +284,12 @@ those three pass outside the sandbox. Retain its unaffected evidence alongside
 the corrected projection neighborhood rather than claiming one all-green run.
 The raw-basename regression failed before correction and passed afterward.
 Raw receipts and independent review are in `build/m1-9-20261001/`.
-Cold construction timing now passes the coordinated reference-profile gate:
+Cold construction tooling/evidence shipped in `12cae9b` and passes the coordinated reference-profile gate:
 five samples each, maxima 1.9712401 s base and 2.8123806 s information-heavy.
 PERFORMANCE owns the committed raw/validation pointers and failed-launch
 disposition. Read surface review and the corrected combined tools/workflows/
-interfaces neighborhood pass (3,109 tests, three skips); 12 imports and 191
+interfaces neighborhood pass (3,109 tests, three skips); bounded reads are ready
+for their separate commit. Twelve imports and 191
 local documentation links pass. Actions, desktop, headed and integrated
 verification remain open.
 

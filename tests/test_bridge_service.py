@@ -46,7 +46,7 @@ from namisync.workflows.node_tree import (
     build_node_tree,
 )
 from namisync.workflows import (
-    InventoryRequest,
+    InventoryRequest, InventoryDetails,
     LocationBinding, LocationCandidate, LocationCandidateResult,
     LocationCandidateState, PlanRequest, VolumeResolution,
     VolumeResolutionState,
@@ -1596,7 +1596,8 @@ def test_m1_6_plan_again_preserves_frozen_setup_and_resets_selection() -> None:
     assert runtime.default_reads == 1
 
 
-def test_m1_6_task_inventory_has_no_plan_and_retires_exact_details() -> None:
+@pytest.mark.parametrize("has_details", [False, True])
+def test_m1_6_task_inventory_has_no_plan_and_retires_exact_details(has_details) -> None:
     root = r"C:\inventory"
     binding = LocationBinding(
         VolumeId("inventory", "NTFS"), "inventory", "C:\\", ("C:\\",), False
@@ -1605,6 +1606,7 @@ def test_m1_6_task_inventory_has_no_plan_and_retires_exact_details() -> None:
     class Runtime:
         def __init__(self):
             self.dropped = []
+            self.inventory_reads = []
 
         def admit_location_candidate(self, candidate):
             return LocationCandidateResult(
@@ -1613,6 +1615,17 @@ def test_m1_6_task_inventory_has_no_plan_and_retires_exact_details() -> None:
 
         def drop_inventory_details(self, request_id):
             self.dropped.append(request_id)
+
+        def get_inventory_details(self, request_id):
+            if not has_details:
+                raise KeyError(request_id)
+            return InventoryDetails(request_id, VolumeResolution(
+                VolumeResolutionState.RESOLVED, binding, root, "C:\\",
+            ), location_id=1, observed_count=1, complete=False)
+
+        def list_inventory(self, location_id):
+            self.inventory_reads.append(location_id)
+            return ()
 
         def drop_execution_details(self, run_id):
             pytest.fail(f"inventory must not own execution details: {run_id}")
@@ -1686,6 +1699,17 @@ def test_m1_6_task_inventory_has_no_plan_and_retires_exact_details() -> None:
     )
     assert runtime.dropped == [started.start.request_id]
     assert dispatcher.closed == [started.start.session_id]
+    assert runtime.inventory_reads == []  # release captures metadata, never a projection
+    if has_details:
+        projection, details = service.get_task_inventory_projection(shell.task_id, started.start.request_id)
+        assert projection.location_id == 1 and not details.complete
+        assert runtime.inventory_reads == [1]
+    else:
+        with pytest.raises(service_module.TaskUnavailableError):
+            service.get_task_inventory_projection(shell.task_id, started.start.request_id)
+    service.close_task(shell.task_id, started.start.session_id,
+                       TaskTerminalDelivery(session_record_view(dispatcher.record)))
+    assert service._task_inventory_details == {}
 
 def test_br_g_16_shutdown_does_not_repopulate_a_late_session_receipt() -> None:
     entered = Event()

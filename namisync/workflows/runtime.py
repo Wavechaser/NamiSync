@@ -1089,6 +1089,12 @@ class LocalWorkflowRuntime:
                 None if not selected_paths else selected_paths,
             )
 
+    def read_inventory_row(self, location_id: int, row_id: str) -> InventorySnapshot | None:
+        """Read exactly one location-owned current subject and its evidence."""
+        with self._ledger_read() as repository:
+            rows = repository.get_inventory_by_row_ids(location_id, (row_id,))
+        return rows[0] if rows else None
+
     def mapping_ids_for_location(self, location_id: int) -> tuple[int, ...]:
         with self._ledger_read() as repository:
             return repository.mapping_ids_for_location(location_id)

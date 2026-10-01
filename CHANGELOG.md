@@ -306,6 +306,14 @@ Inventory review and beta packaging remain open.
   Five fresh samples per fixture pass the retained reference-profile maxima:
   1.97 s base and 2.81 s information-heavy. Commit the raw samples and validation;
   keep the failed first launch receipt and detailed logs in the task evidence.
+- Add task-bound inventory review reads: retain scan metadata through release,
+  lazily publish a whole ledger projection, cache revisioned search/filter/
+  collapse/sort windows, and query fresh exact-row evidence for Details.
+  Warning rows remain outside domain scope; acknowledged folders may remain
+  as ancestor context for visible descendants. Native/browser validation and
+  stale task/view/Close guards are covered. Independent review and real composed
+  scan-to-Details checks pass; the combined affected departments pass 3,109 tests
+  with three skips. Refresh, visibility actions and desktop wiring remain next.
 
 #### Mitigate the Advanced Color flyout halo (2026-09-24)
 

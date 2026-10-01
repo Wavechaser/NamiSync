@@ -18,6 +18,8 @@ from namisync.workflows import (
     RetainedExecutionSummary,
     RetainedIntegrityItemWindow,
     PlanProjection,
+    InventoryProjection,
+    InventoryDetails,
 )
 from namisync.workflows.inventory import LocationCandidate
 from namisync.workflows.views import (
@@ -435,6 +437,10 @@ class TaskLifecyclePort(Protocol):
         request_id: str,
         expected_revision: int,
     ) -> frozenset[str]: ...
+
+    def get_task_inventory_projection(self, task_id: str, request_id: str) -> tuple[InventoryProjection, InventoryDetails]: ...
+
+    def read_inventory_detail(self, location_id: int, row_id: str) -> dict[str, object] | None: ...
 
     def reobserve_task(
         self,

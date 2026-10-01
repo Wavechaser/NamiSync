@@ -40,6 +40,9 @@ from namisync.workflows import (
     REBASELINE_KIND,
     VERIFY_KIND,
     InventoryRequest,
+    InventoryDetails,
+    InventoryProjection,
+    build_inventory_projection,
     LocationCandidate,
     LocationCandidateResult,
     LocationCandidateState,
@@ -84,6 +87,7 @@ from namisync.workflows.views import (
     SessionEventView,
     SessionRecordView,
     inventory_row_view,
+    inventory_current_detail,
     session_event_view,
     session_record_view,
     terminal_result_event_data,
@@ -342,6 +346,7 @@ class NamiSyncService:
         self._lifecycle = TaskLifecycle()
         self._plan_selections: dict[str, _PlanSelectionState] = {}
         self._visibility_receipts: dict[str, tuple[object, ...]] = {}
+        self._task_inventory_details: dict[str, tuple[str, InventoryDetails | None]] = {}
         self._closed = False
         self._shutdown: ShutdownView | None = None
         self._runtime_closed = False
@@ -1743,32 +1748,42 @@ class NamiSyncService:
     def get_inventory_details(self, request_id: str) -> InventoryDetailsView:
         self._require_open()
         details = self._runtime.get_inventory_details(request_id)
-        resolution = _location_resolution_view(details.resolution)
-        return InventoryDetailsView(
-            request_id=details.request_id,
-            state=resolution.state,
-            root_path=resolution.root_path,
-            location_id=(
-                resolution.location_id
-                if details.location_id is None
-                else details.location_id
-            ),
-            selected_mount=resolution.selected_mount,
-            candidates=resolution.candidates,
-            detail=resolution.detail,
-            selected_paths=details.selected_paths,
-            observed_count=details.observed_count,
-            missing_count=details.missing_count,
-            complete=details.complete,
-            warnings=tuple(
-                ScanWarningView(
-                    warning.code.value,
-                    warning.rel_path,
-                    warning.detail,
-                )
-                for warning in details.warnings
-            ),
-        )
+        return _inventory_details_view(details)
+
+    def get_task_inventory_projection(
+        self, task_id: str, request_id: str,
+    ) -> tuple[InventoryProjection, InventoryDetails]:
+        self._require_open()
+        with self._lock:
+            captured = self._task_inventory_details.get(task_id)
+        if captured is None or captured[0] != request_id or captured[1] is None:
+            raise TaskUnavailableError("inventory details are unavailable")
+        details = captured[1]
+        if details.location_id is None:
+            raise TaskUnavailableError("inventory location is unavailable")
+        rows = self._runtime.list_inventory(details.location_id)
+        return build_inventory_projection(details.location_id, rows, details.warnings), details
+
+    def read_inventory_detail(self, location_id: int, row_id: str) -> dict[str, object] | None:
+        self._require_open()
+        row = self._runtime.read_inventory_row(location_id, row_id)
+        return None if row is None else inventory_current_detail(row)
+
+    def _capture_task_inventory_details(self, work, task_id: str | None) -> None:
+        if task_id is None or work.detail_owner is None:
+            return
+        if self._lifecycle.settlement_binding(work).kind != "task-inventory":
+            return
+        request_id = work.detail_owner[1]
+        with self._lock:
+            if self._task_inventory_details.get(task_id, (None,))[0] == request_id:
+                return
+        try:
+            details = self._runtime.get_inventory_details(request_id)
+        except KeyError:
+            details = None
+        with self._lock:
+            self._task_inventory_details[task_id] = (request_id, details)
 
     def list_inventory(
         self,
@@ -1943,6 +1958,8 @@ class NamiSyncService:
                 with self._lock:
                     self._runtime_closed = True
                 self._lifecycle.retire_all()
+                with self._lock:
+                    self._task_inventory_details.clear()
         if observer_failure_interrupted is not None:
             _raise_service_observer_failure(
                 interrupted=observer_failure_interrupted,
@@ -2201,6 +2218,8 @@ class NamiSyncService:
                 task_id,
                 terminal_result,
             )
+            if not retire_plan:
+                self._capture_task_inventory_details(work, task_id)
             if not work.replay:
                 self._observer.release(work.session_id)
                 try:
@@ -2221,6 +2240,9 @@ class NamiSyncService:
                         self._lifecycle.complete_plan_retirement(retirement)
                         retirement = None
             self._lifecycle.complete_settlement(work)
+            if retire_plan and task_id is not None:
+                with self._lock:
+                    self._task_inventory_details.pop(task_id, None)
             if retire_plan and review_binding is not None:
                 self._runtime.retire_captured_execution_review(
                     review_binding.task_id
@@ -2727,6 +2749,19 @@ class NamiSyncService:
             )
             for row_id in canonical_rows
         )
+
+
+def _inventory_details_view(details: InventoryDetails) -> InventoryDetailsView:
+    resolution = _location_resolution_view(details.resolution)
+    return InventoryDetailsView(
+        request_id=details.request_id, state=resolution.state, root_path=resolution.root_path,
+        location_id=resolution.location_id if details.location_id is None else details.location_id,
+        selected_mount=resolution.selected_mount, candidates=resolution.candidates,
+        detail=resolution.detail, selected_paths=details.selected_paths,
+        observed_count=details.observed_count, missing_count=details.missing_count,
+        complete=details.complete,
+        warnings=tuple(ScanWarningView(w.code.value, w.rel_path, w.detail) for w in details.warnings),
+    )
 
 
 def _dispatcher(runtime: LocalWorkflowRuntime) -> Dispatcher:

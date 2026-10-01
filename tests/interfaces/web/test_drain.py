@@ -2892,6 +2892,147 @@ def test_br_g_33_close_task_delegates_terminal_fact_and_retires_delivery() -> No
         registry.drain(start.task_id, SESSION, DRAIN, replay_from=None)
 
 
+def _inventory_read_registry():
+    from namisync.core.models import EntryKind, VolumeId, ScanWarning, ScanWarningCode
+    from namisync.db.repositories import InventoryPresence, InventorySnapshot
+    from namisync.workflows import (InventoryDetails, LocationBinding, VolumeResolution,
+        VolumeResolutionState, build_inventory_projection)
+    from namisync.workflows.views import inventory_current_detail
+    from _db_fixtures import NOW, file_stat, attestation
+
+    stat = file_stat(identity_index=1)
+    row = InventorySnapshot("1", 1, "one.txt", "ONE.TXT", EntryKind.FILE, InventoryPresence.PRESENT,
+        stat, attestation(stat), NOW, NOW, "scope", None, None, None, None, None)
+    projection = build_inventory_projection(1, (row,), (
+        ScanWarning(ScanWarningCode.ACCESS_DENIED, "warning", "unreadable"),))
+    binding = LocationBinding(VolumeId("test", "NTFS"), "", "C:\\", ("C:\\",), False, location_id=1)
+    details = InventoryDetails(REQUEST, VolumeResolution(VolumeResolutionState.RESOLVED,
+        binding, r"C:\root", "C:\\"), location_id=1, observed_count=1, complete=False)
+    class Service(_Service):
+        def __init__(self):
+            super().__init__()
+            self.detail = inventory_current_detail(row)
+            self.detail_calls = []
+            self.before_detail = lambda: None
+        def get_task_inventory_projection(self, task_id, request_id):
+            self.projection_calls += 1
+            assert request_id == REQUEST
+            return projection, details
+        def read_inventory_detail(self, location_id, row_id):
+            self.detail_calls.append((location_id, row_id))
+            self.before_detail()
+            return self.detail
+    registry, service = _registry(Service())
+    start = _start(registry)
+    registry._tasks[start.task_id].task_kind = "inventory"
+    _mark_terminal_drained(registry, start, replace(_record(kind="inventory", supports_pause=False), session_id=start.session_id))
+    return registry, service, start, projection
+
+
+def test_inventory_read_open_waits_for_release_then_windows_need_no_full_reread():
+    registry, service, start, projection = _inventory_read_registry()
+    with pytest.raises(TaskUnavailableError):
+        registry.open_inventory_view(start.task_id)
+    assert service.projection_calls == 0
+    registry.release_terminal_session(start.task_id, start.session_id)
+    summary = registry.open_inventory_view(start.task_id)
+    assert not summary["scan_complete"] and summary["warning_count"] == 1
+    assert registry.open_inventory_view(start.task_id) == {**summary, "disposition": "current"}
+    for offset in range(3):
+        assert len(registry.get_inventory_window(start.task_id, expected_revision=0, offset=offset, limit=1)["rows"]) <= 1
+    node = projection.node_id_by_row_id["1"]
+    detail = registry.get_inventory_detail(start.task_id, expected_revision=0, node_id=node)
+    assert detail["detail"]["attestation"]["content"]["provenance"] == "copy"
+    assert service.detail_calls == [(1, "1")] and service.projection_calls == 1
+    warning = next(node for node in projection.nodes if node.warning)
+    with pytest.raises(ValueError, match="domain row"):
+        registry.get_inventory_detail(start.task_id, expected_revision=0, node_id=warning.node_id)
+    assert service.detail_calls == [(1, "1")]
+    registry.close_task(start.task_id, start.session_id)
+    assert registry._inventory_views == {}
+
+
+@pytest.mark.parametrize("change", ["removed", "renamed", "generation", "view", "close"])
+def test_inventory_current_detail_refuses_stale_location_path_and_view(change):
+    registry, service, start, projection = _inventory_read_registry()
+    registry.release_terminal_session(start.task_id, start.session_id)
+    registry.open_inventory_view(start.task_id)
+    node_id = projection.node_id_by_row_id["1"]
+    if change == "removed":
+        service.detail = None
+    elif change == "renamed":
+        service.detail["row"]["path_key"] = "MOVED.TXT"
+    elif change == "generation":
+        service.before_detail = lambda: setattr(registry._tasks[start.task_id], "generation", 10)
+    elif change == "view":
+        service.before_detail = lambda: registry.update_inventory_view(start.task_id,
+            expected_revision=0, search_query="one", filters=frozenset(),
+            sort_column=PlanSortColumn.PATH, sort_direction=SortDirection.ASCENDING,
+            collapse_node_id=None, collapsed=None)
+    else:
+        service.before_detail = lambda: registry.close_task(start.task_id, start.session_id)
+    if change == "close":
+        with pytest.raises(TaskUnavailableError):
+            registry.get_inventory_detail(start.task_id, expected_revision=0, node_id=node_id)
+    else:
+        result = registry.get_inventory_detail(start.task_id, expected_revision=0, node_id=node_id)
+        assert result["detail"] is None
+        assert result["disposition"] == ("unavailable" if change in {"removed", "renamed"} else "conflict")
+
+
+def test_inventory_projection_failure_leaves_released_task_and_no_partial_view():
+    registry, service, start, projection = _inventory_read_registry()
+    registry.release_terminal_session(start.task_id, start.session_id)
+    def refuse(*args):
+        raise ValueError("projection refused")
+    service.get_task_inventory_projection = refuse
+    with pytest.raises(ValueError, match="refused"):
+        registry.open_inventory_view(start.task_id)
+    assert registry._tasks[start.task_id].session_released
+    assert registry._inventory_views == {}
+    registry.close_task(start.task_id, start.session_id)
+
+
+@pytest.mark.parametrize("close_during_build", [False, True])
+def test_inventory_open_serializes_construction_and_fences_close(close_during_build):
+    registry, service, start, projection = _inventory_read_registry()
+    registry.release_terminal_session(start.task_id, start.session_id)
+    entered, release = Event(), Event()
+    original = service.get_task_inventory_projection
+    def blocked(*args):
+        entered.set()
+        assert release.wait(2)
+        return original(*args)
+    service.get_task_inventory_projection = blocked
+    results, errors = [], []
+    def open_view():
+        try:
+            results.append(registry.open_inventory_view(start.task_id))
+        except BaseException as error:
+            errors.append(error)
+    first = Thread(target=open_view)
+    first.start()
+    assert entered.wait(2)
+    second = Thread(target=open_view)
+    second.start()
+    try:
+        if close_during_build:
+            registry.close_task(start.task_id, start.session_id)
+    finally:
+        release.set()
+        first.join(2)
+        second.join(2)
+    assert not first.is_alive() and not second.is_alive()
+    assert service.projection_calls == 1
+    if close_during_build:
+        assert results == [] and len(errors) == 2
+        assert all(isinstance(error, TaskUnavailableError) for error in errors)
+        assert registry._inventory_views == {}
+    else:
+        assert errors == [] and len(results) == 2
+        assert sorted(result["disposition"] for result in results) == ["current", "opened"]
+
+
 def test_terminal_session_release_refuses_before_record_delivery() -> None:
     registry, service = _registry()
     start = _start(registry)

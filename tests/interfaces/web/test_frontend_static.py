@@ -463,6 +463,35 @@ def test_plan_review_component_keeps_actions_bounded_and_generation_safe() -> No
     assert completed.stdout == "ok"
 
 
+def test_inventory_reads_validate_production_windows_and_current_evidence(tmp_path: Path) -> None:
+    from namisync.core.models import EntryKind, ScanWarning, ScanWarningCode
+    from namisync.db.repositories import InventoryPresence, InventorySnapshot
+    from namisync.interfaces.web.inventory_review import InventoryReviewState
+    from namisync.workflows import build_inventory_projection
+    from namisync.workflows.views import inventory_current_detail
+    from _db_fixtures import NOW, file_stat, attestation
+
+    node = _node_executable()
+    assert node is not None, "Node.js is required for the inventory bridge witness"
+    stat = file_stat(size=9223372036854775807, mtime_ns=9223372036854775807,
+                     identity_index=(1 << 100) + 1)
+    row = InventorySnapshot("1", 1, "subject.txt", "SUBJECT.TXT", EntryKind.FILE,
+        InventoryPresence.PRESENT, stat, attestation(stat), NOW, NOW, "scope",
+        None, None, None, None, None)
+    projection = build_inventory_projection(1, (row,), (
+        ScanWarning(ScanWarningCode.ACCESS_DENIED, "", "root warning"),))
+    view = InventoryReviewState("task-" + "1" * 32, "2" * 32, projection, r"C:\root", False, 1, 0)
+    detail = {"disposition": "current", "view_revision": 0,
+              "node_id": projection.node_id_by_row_id["1"], "detail": inventory_current_detail(row)}
+    fixture = tmp_path / "inventory-window.json"
+    fixture.write_text(json.dumps({"summary": view.summary(),
+        "window": view.window(expected_revision=0, offset=0, limit=256), "detail": detail}), encoding="utf-8")
+    completed = run_node_probe([str(node), str(PROJECT_ROOT / "tests/assets/inventory_window_bridge_probe.mjs"),
+        str(Path(ASSET_ROOT) / "bridge.js"), str(fixture)], timeout=10)
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert completed.stdout == "ok\n"
+
+
 @pytest.mark.parametrize(
     ("probe_name", "asset_names"),
     (

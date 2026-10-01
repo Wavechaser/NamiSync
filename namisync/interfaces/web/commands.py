@@ -84,6 +84,7 @@ from namisync.workflows.views import (
 )
 from namisync.workflows import PlanSortColumn, SortDirection
 from .plan_review import PLAN_FILTERS
+from .inventory_review import INVENTORY_FILTERS
 from namisync.workflows.inventory import (
     LocationCandidate,
     LocationCandidateResult,
@@ -254,6 +255,14 @@ class TaskAuthority(Protocol):
     def start_plan_again(self, *args, **kwargs) -> TaskStartView: ...
 
     def open_plan_view(self, *args, **kwargs) -> dict[str, object]: ...
+
+    def open_inventory_view(self, *args, **kwargs) -> dict[str, object]: ...
+
+    def update_inventory_view(self, *args, **kwargs) -> dict[str, object]: ...
+
+    def get_inventory_window(self, *args, **kwargs) -> dict[str, object]: ...
+
+    def get_inventory_detail(self, *args, **kwargs) -> dict[str, object]: ...
 
     def update_plan_view(self, *args, **kwargs) -> dict[str, object]: ...
 
@@ -493,6 +502,13 @@ class _PlanWindowPayload:
     expected_revision: int
     offset: int
     limit: int
+
+
+@dataclass(frozen=True, slots=True)
+class _InventoryDetailPayload:
+    task_id: str
+    expected_revision: int
+    node_id: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -939,6 +955,36 @@ def production_command_specs(
             raise TypeError("open_plan_view received an unvalidated payload")
         return registry.open_plan_view(payload.task_id)
 
+    def open_inventory_view(payload: object) -> object:
+        if type(payload) is not _OpenPlanViewPayload:
+            raise TypeError("open_inventory_view received an unvalidated payload")
+        return registry.open_inventory_view(payload.task_id)
+
+    def update_inventory_view(payload: object) -> object:
+        if type(payload) is not _UpdatePlanViewPayload:
+            raise TypeError("update_inventory_view received an unvalidated payload")
+        return registry.update_inventory_view(
+            payload.task_id, expected_revision=payload.expected_revision,
+            search_query=payload.search_query, filters=payload.filters,
+            sort_column=payload.sort_column, sort_direction=payload.sort_direction,
+            collapse_node_id=payload.collapse_node_id, collapsed=payload.collapsed,
+        )
+
+    def get_inventory_window(payload: object) -> object:
+        if type(payload) is not _PlanWindowPayload:
+            raise TypeError("get_inventory_window received an unvalidated payload")
+        return registry.get_inventory_window(
+            payload.task_id, expected_revision=payload.expected_revision,
+            offset=payload.offset, limit=payload.limit,
+        )
+
+    def get_inventory_detail(payload: object) -> object:
+        if type(payload) is not _InventoryDetailPayload:
+            raise TypeError("get_inventory_detail received an unvalidated payload")
+        return registry.get_inventory_detail(
+            payload.task_id, expected_revision=payload.expected_revision, node_id=payload.node_id,
+        )
+
     def update_plan_view(payload: object) -> object:
         if type(payload) is not _UpdatePlanViewPayload:
             raise TypeError("update_plan_view received an unvalidated payload")
@@ -1316,6 +1362,30 @@ def production_command_specs(
                 response_policy=CommandResponsePolicy.LOCAL_5_SECONDS,
                 retry=CommandRetry.SAME_PAYLOAD_ONCE,
             ),
+            "open_inventory_view": CommandSpec(
+                validate_payload=_validate_open_plan_view, handler=open_inventory_view,
+                access=CommandAccess.READ_ONLY, command_id=FieldRequirement.FORBIDDEN,
+                revision=FieldRequirement.FORBIDDEN, response_policy=CommandResponsePolicy.LOCAL_5_SECONDS,
+                retry=CommandRetry.SAME_PAYLOAD_ONCE,
+            ),
+            "update_inventory_view": CommandSpec(
+                validate_payload=_validate_update_inventory_view, handler=update_inventory_view,
+                access=CommandAccess.READ_ONLY, command_id=FieldRequirement.FORBIDDEN,
+                revision=FieldRequirement.REQUIRED, response_policy=CommandResponsePolicy.FEEDBACK_ONLY,
+                retry=CommandRetry.NONE,
+            ),
+            "get_inventory_window": CommandSpec(
+                validate_payload=_validate_plan_window, handler=get_inventory_window,
+                access=CommandAccess.READ_ONLY, command_id=FieldRequirement.FORBIDDEN,
+                revision=FieldRequirement.REQUIRED, response_policy=CommandResponsePolicy.LOCAL_5_SECONDS,
+                retry=CommandRetry.SAME_PAYLOAD_ONCE,
+            ),
+            "get_inventory_detail": CommandSpec(
+                validate_payload=_validate_inventory_detail, handler=get_inventory_detail,
+                access=CommandAccess.READ_ONLY, command_id=FieldRequirement.FORBIDDEN,
+                revision=FieldRequirement.REQUIRED, response_policy=CommandResponsePolicy.LOCAL_5_SECONDS,
+                retry=CommandRetry.SAME_PAYLOAD_ONCE,
+            ),
             "update_plan_view": CommandSpec(
                 validate_payload=_validate_update_plan_view,
                 handler=update_plan_view,
@@ -1646,7 +1716,15 @@ def _validate_open_plan_view(value: object) -> _OpenPlanViewPayload:
     return _OpenPlanViewPayload(task_id)
 
 
+def _validate_update_inventory_view(value: object) -> _UpdatePlanViewPayload:
+    return _validate_update_tree_view(value, INVENTORY_FILTERS, "update_inventory_view")
+
+
 def _validate_update_plan_view(value: object) -> _UpdatePlanViewPayload:
+    return _validate_update_tree_view(value, PLAN_FILTERS, "update_plan_view")
+
+
+def _validate_update_tree_view(value: object, allowed_filters: frozenset[str], command: str) -> _UpdatePlanViewPayload:
     expected_keys = {
         "task_id",
         "expected_revision",
@@ -1658,7 +1736,7 @@ def _validate_update_plan_view(value: object) -> _UpdatePlanViewPayload:
         "collapsed",
     }
     if type(value) is not dict or set(value) != expected_keys:
-        raise CommandPayloadError("update_plan_view payload is invalid")
+        raise CommandPayloadError(f"{command} payload is invalid")
     task_id = value["task_id"]
     expected_revision = value["expected_revision"]
     search_query = value["search_query"]
@@ -1672,8 +1750,8 @@ def _validate_update_plan_view(value: object) -> _UpdatePlanViewPayload:
         or expected_revision < 0
         or type(search_query) is not str
         or type(filters) is not list
-        or len(filters) > len(PLAN_FILTERS)
-        or any(type(item) is not str or item not in PLAN_FILTERS for item in filters)
+        or len(filters) > len(allowed_filters)
+        or any(type(item) is not str or item not in allowed_filters for item in filters)
         or len(filters) != len(set(filters))
         or collapse_node_id is not None
         and (
@@ -1683,7 +1761,7 @@ def _validate_update_plan_view(value: object) -> _UpdatePlanViewPayload:
         or collapsed is not None and type(collapsed) is not bool
         or (collapse_node_id is None) != (collapsed is None)
     ):
-        raise CommandPayloadError("update_plan_view payload is invalid")
+        raise CommandPayloadError(f"{command} payload is invalid")
     try:
         if len(search_query.encode("utf-8")) > 65_536:
             raise ValueError
@@ -1692,7 +1770,7 @@ def _validate_update_plan_view(value: object) -> _UpdatePlanViewPayload:
         if sort_column is PlanSortColumn.PATH and sort_direction is not SortDirection.ASCENDING:
             raise ValueError
     except (TypeError, ValueError, UnicodeError) as error:
-        raise CommandPayloadError("update_plan_view payload is invalid") from error
+        raise CommandPayloadError(f"{command} payload is invalid") from error
     return _UpdatePlanViewPayload(
         task_id,
         expected_revision,
@@ -1726,6 +1804,17 @@ def _validate_plan_window(value: object) -> _PlanWindowPayload:
     ):
         raise CommandPayloadError("get_plan_window payload is invalid")
     return _PlanWindowPayload(task_id, expected_revision, offset, limit)
+
+
+def _validate_inventory_detail(value: object) -> _InventoryDetailPayload:
+    if type(value) is not dict or set(value) != {"task_id", "expected_revision", "node_id"}:
+        raise CommandPayloadError("get_inventory_detail payload is invalid")
+    task_id, revision, node_id = value["task_id"], value["expected_revision"], value["node_id"]
+    if (type(task_id) is not str or _TASK_ID.fullmatch(task_id) is None
+            or not _is_javascript_safe_integer(revision) or revision < 0
+            or type(node_id) is not str or re.fullmatch(r"node-[0-9a-f]{32}", node_id) is None):
+        raise CommandPayloadError("get_inventory_detail payload is invalid")
+    return _InventoryDetailPayload(task_id, revision, node_id)
 
 
 def _validate_execution_detail(value: object) -> _ExecutionDetailPayload:

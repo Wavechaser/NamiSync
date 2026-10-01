@@ -4,7 +4,7 @@ This document owns the implemented CLI and desktop adapters, service/task lifecy
 
 `BRIDGE.md` owns external desktop protocol, transport, retry/recovery, and its exact evidence. `PRESENTATION.md` owns tree/view/search/sort/selection behavior and visual scale evidence. The frozen v1 event-and-transport custody result is scoped to its bridge evidence and does not establish whole-runtime containment. The former BR-G-45 aggregate terminal-artifact model is retired. SH-G-15 remains an open, scoped release criterion defined below.
 
-The active service and CLI support sync, inventory, baseline, verify and rebaseline. The desktop exposes the bounded host/transport foundation and process-live tasks with frozen Setup, typed/picker/recent locations, plan and standalone inventory starts, Plan again, navigation, reconstruction, and explicit close. Plan review supplies bounded hierarchy, sibling sorting, server-owned selection, destructive confirmation and same-task execution with live controls and retained result review. Inventory projections, manual post-copy verification, history and full settings remain accepted but unrealized outcomes. Their delivery register is [M1_PLAN.md](M1_PLAN.md).
+The active service and CLI support sync, inventory, baseline, verify and rebaseline. The desktop exposes the bounded host/transport foundation and process-live tasks with frozen Setup, typed/picker/recent locations, plan and standalone inventory starts, Plan again, navigation, reconstruction, and explicit close. Plan review supplies bounded hierarchy, sibling sorting, server-owned selection, destructive confirmation and same-task execution with live controls and retained result review. Inventory read projections and their production bridge are implemented; their renderer and visibility/Refresh actions, manual post-copy verification, history and full settings remain accepted but unrealized outcomes. Their delivery register is [M1_PLAN.md](M1_PLAN.md).
 
 
 ## Purpose
@@ -79,6 +79,18 @@ index through the core execution snapshot while reopening detached mutable state
 This changes neither service admission nor receipt timing guarantees; the
 [architecture retention account](ARCHITECTURE.md#35-plan-and-execution-types)
 describes the paused-index lifetime.
+
+Inventory tasks additionally retain their exact `InventoryDetails` metadata at
+task scope before terminal release drops runtime request details. A legitimate
+initial refusal can have no details; that typed unavailability does not prevent
+custody release. Close retires the task metadata. Opening the read view lazily
+reads one complete ledger snapshot and builds its immutable projection, so
+projection construction failure cannot delay or undo terminal release. Repeated
+and concurrent opens reuse one published view. Windows perform no ledger read;
+current detail queries one location-scoped row id and refuses a removed or
+renamed subject. Task/session/request/generation and view revision fence adoption.
+Current durable evidence retains observed and attested subjects, raw scalar
+values, full native identity and digest provenance separately from scan metadata.
 
 Every admitted execution, inventory, baseline, verify, or rebaseline session
 also receives one exact process-local detail owner: the dispatcher session id

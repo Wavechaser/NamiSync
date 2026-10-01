@@ -282,6 +282,22 @@ class _Service:
         self.calls.append(("open-plan-view", task_id))
         return {"disposition": "opened", "task_id": task_id}
 
+    def open_inventory_view(self, task_id):
+        self.calls.append(("open-inventory-view", task_id))
+        return {"disposition": "opened", "task_id": task_id}
+
+    def update_inventory_view(self, task_id, **kwargs):
+        self.calls.append(("update-inventory-view", task_id, kwargs))
+        return {"disposition": "current", "task_id": task_id}
+
+    def get_inventory_window(self, task_id, **kwargs):
+        self.calls.append(("get-inventory-window", task_id, kwargs))
+        return {"disposition": "current", "rows": []}
+
+    def get_inventory_detail(self, task_id, **kwargs):
+        self.calls.append(("get-inventory-detail", task_id, kwargs))
+        return {"disposition": "current", "detail": None}
+
     def update_plan_view(self, task_id, **kwargs):
         self.calls.append(("update-plan-view", task_id, kwargs))
         return {"disposition": "applied", "task_id": task_id}
@@ -515,6 +531,10 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
         "start_inventory",
         "plan_again",
         "open_plan_view",
+        "open_inventory_view",
+        "update_inventory_view",
+        "get_inventory_window",
+        "get_inventory_detail",
         "update_plan_view",
         "get_plan_window",
         "get_execution_detail",
@@ -560,7 +580,7 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
         if spec.response_policy is CommandResponsePolicy.FEEDBACK_ONLY
     } == {
         "admit_location", "update_plan_view", "mutate_plan_highlight",
-        "replace_cosmetic_section",
+        "replace_cosmetic_section", "update_inventory_view",
     }
     # Each group shares one policy; the browser mirror is checked separately.
     groups = (
@@ -573,9 +593,15 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
         (("create_task", "start_plan", "start_inventory", "plan_again"),
          CommandAccess.MUTATING, FieldRequirement.REQUIRED, FieldRequirement.FORBIDDEN,
          CommandResponsePolicy.MUTATION_OBSERVED, CommandRetry.NONE),
-        (("list_tasks", "read_cosmetic_section"), CommandAccess.READ_ONLY,
+        (("list_tasks", "read_cosmetic_section", "open_inventory_view"), CommandAccess.READ_ONLY,
          FieldRequirement.FORBIDDEN, FieldRequirement.FORBIDDEN,
          CommandResponsePolicy.LOCAL_5_SECONDS, CommandRetry.SAME_PAYLOAD_ONCE),
+        (("get_inventory_window", "get_inventory_detail"), CommandAccess.READ_ONLY,
+         FieldRequirement.FORBIDDEN, FieldRequirement.REQUIRED,
+         CommandResponsePolicy.LOCAL_5_SECONDS, CommandRetry.SAME_PAYLOAD_ONCE),
+        (("update_inventory_view",), CommandAccess.READ_ONLY,
+         FieldRequirement.FORBIDDEN, FieldRequirement.REQUIRED,
+         CommandResponsePolicy.FEEDBACK_ONLY, CommandRetry.NONE),
         (("next_events",), CommandAccess.READ_ONLY, FieldRequirement.FORBIDDEN,
          FieldRequirement.FORBIDDEN, CommandResponsePolicy.DRAIN_30_SECONDS, CommandRetry.NONE),
         (("release_terminal_session", "close_task"), CommandAccess.MUTATING,
@@ -629,6 +655,33 @@ def test_operation_anchor_request_is_exact_read_only_and_session_bound() -> None
         with pytest.raises(CommandPayloadError):
             _invoke(spec, value)
     assert len(service.calls) == 1
+
+
+def test_inventory_read_commands_validate_before_reaching_task_authority() -> None:
+    commands, _, authority = _commands()
+    node_id = "node-" + "9" * 32
+    payloads = {
+        "open_inventory_view": {"task_id": TASK_ID},
+        "update_inventory_view": {"task_id": TASK_ID, "expected_revision": 0,
+            "search_query": "literal ß", "filters": ["missing", "acknowledged"],
+            "sort_column": "mtime", "sort_direction": "descending",
+            "collapse_node_id": None, "collapsed": None},
+        "get_inventory_window": {"task_id": TASK_ID, "expected_revision": 0, "offset": 0, "limit": 256},
+        "get_inventory_detail": {"task_id": TASK_ID, "expected_revision": 0, "node_id": node_id},
+    }
+    for command, payload in payloads.items():
+        _invoke(commands[command], payload)
+        with pytest.raises(CommandPayloadError):
+            _invoke(commands[command], {**payload, "command_id": COMMAND_ID})
+    assert len(authority.calls) == 4
+    for patch in ({"filters": ["copy"]}, {"filters": ["missing", "missing"]},
+                  {"search_query": "x" * 65_537}, {"sort_column": "path", "sort_direction": "descending"},
+                  {"expected_revision": True}, {"collapse_node_id": node_id}):
+        with pytest.raises(CommandPayloadError):
+            _invoke(commands["update_inventory_view"], {**payloads["update_inventory_view"], **patch})
+    with pytest.raises(CommandPayloadError):
+        _invoke(commands["get_inventory_window"], {**payloads["get_inventory_window"], "limit": 257})
+    assert len(authority.calls) == 4
 
 
 def test_m1_7_plan_commands_validate_and_reach_task_authority() -> None:

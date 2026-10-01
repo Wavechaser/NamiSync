@@ -266,6 +266,7 @@ def test_runtime_close_retires_populated_execution_review(tmp_path: Path) -> Non
     service._close_lock = Lock()
     service._plan_selections = {}
     service._visibility_receipts = {}
+    service._task_inventory_details = {}
     service._closed = False
     service._shutdown = None
     service._runtime_closed = False

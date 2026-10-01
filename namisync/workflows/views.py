@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from enum import StrEnum
 from typing import Mapping, cast
 
@@ -526,6 +526,32 @@ def session_record_view(record: SessionRecord) -> SessionRecordView:
         ended_at=None if record.ended_at is None else record.ended_at.isoformat(),
         result=None if record.result is None else operation_result_view(record.result),
     )
+
+
+def inventory_current_detail(row: InventorySnapshot) -> dict[str, object]:
+    """Primitive current ledger facts, never a claim about an older view path."""
+    def subject(stat):
+        if stat is None:
+            return None
+        identity = stat.file_identity
+        return {
+            "kind": stat.kind.value, "size": str(stat.size), "mtime_ns": str(stat.mtime_ns),
+            "file_identity": None if identity is None else {
+                "volume_serial": identity.volume_serial, "file_index": str(identity.file_index),
+            },
+        }
+    attestation = row.attestation
+    content = None if attestation is None else attestation.content
+    return {
+        "row": asdict(inventory_row_view(row)), "observed": subject(row.observed),
+        "attestation": None if content is None else {
+            "content": {
+                "algorithm": content.algorithm, "digest": content.digest.hex(), "size": str(content.size),
+                "provenance": content.provenance.value, "observed_at": content.observed_at.isoformat(),
+            },
+            "subject": subject(attestation.subject),
+        },
+    }
 
 
 def inventory_row_view(row: InventorySnapshot) -> InventoryRowView:

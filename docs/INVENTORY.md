@@ -219,8 +219,8 @@ The signed-64 scalar, full-width native identity, and event/persistence epoch
 consumed here are active. Remembered-location readback and Setup widgets are
 implemented. A standalone inventory task freezes only its admitted root,
 without sync options or a fabricated source/target pair. Pure workflow inventory
-projection and sibling ordering are implemented; desktop publication, paging and
-retention remain accepted but unrealized.
+projection, sibling ordering and task-bound read publication/paging are
+implemented. The desktop renderer and Refresh/visibility actions remain pending.
 
 `workflows/inventory_projection.py` builds a complete immutable generation from
 the repository's typed rows and an independent warning population. It retains
@@ -251,6 +251,19 @@ does not reconstruct hierarchy or scope from paths or its current page.
 Projection eviction removes only rebuildable view state. A refused refresh
 stages no partial artifact and preserves the prior inventory generation and its
 view identity unchanged.
+
+`interfaces/web/inventory_review.py` retains one server-owned sort permutation
+and visible sequence per live task view. Literal case-folded display search,
+OR-combined facets and collapse derive the sequence before bounded `1..256`
+windows. Acknowledged missing subjects are excluded as direct matches unless
+the acknowledged facet is explicitly requested; an acknowledged folder can
+remain as structural context for matching descendants. Complete-domain rollups
+stay unchanged. View changes stage
+their new sequence before publication, and repeated windows serialize only
+their requested slice. The production bridge exposes open, update, window and
+current-detail reads; no visibility effect or integrity overlay is activated.
+An incomplete scan may still supply a complete projection of reconciled ledger
+facts, with the original scan completeness disclosed separately.
 
 The pure projection supplies the shared server-owned sibling sorter required by
 [Bridge DR-BR-15](PRESENTATION.md#search-filters-sorting-and-follow).
