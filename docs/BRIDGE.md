@@ -222,7 +222,8 @@ commands still use that native path for their admission return.
 
 ### Small asynchronous native commands
 
-Only `create_task`, `start_plan`, `start_inventory`, `refresh_inventory`, `plan_again`, `start_execution`,
+Only `create_task`, `start_plan`, `start_inventory`, `refresh_inventory`,
+`acknowledge_inventory`, `restore_inventory`, `plan_again`, `start_execution`,
 `release_terminal_session`, `close_task` and `probe_recent_pairs`
 select the `CommandSpec` small asynchronous work class. Native dispatch
 validates the request and admitted context before starting one command worker.
@@ -283,7 +284,8 @@ mutation recovery, interactive wait or feedback-only behavior. It is metadata,
 not a new wire field or recovery protocol.
 
 Original-result retention applies to `create_task`, `start_plan`,
-`start_inventory`, `refresh_inventory`, `plan_again`, `start_execution`, `mutate_plan_selection`,
+`start_inventory`, `refresh_inventory`, `acknowledge_inventory`, `restore_inventory`,
+`plan_again`, `start_execution`, `mutate_plan_selection`,
 `mutate_plan_scope`, `mutate_plan_highlighted_selection`, `control_execution`,
 `release_terminal_session` and `close_task`. Existing domain receipts do not
 provide a complete replacement: they can expire with retirement, replay a current
@@ -467,6 +469,7 @@ BOOTSTRAP rows, commands require OPEN.
 | `open_plan_view` | `{task_id:TaskId}` | `PlanViewSummary` | 5 s; one identical-payload retry |
 | `open_inventory_view` | `{task_id:TaskId}` | `InventoryViewSummary` | 5 s; one identical-payload retry |
 | `refresh_inventory` | `{task_id:TaskId,request_id:HexId,command_id:HexId,expected_revision:SafeInt,node_id:null\|NodeId}` | `{task_id:TaskId,request_id:HexId,session_id:HexId}` | observed original result; 5 s feedback; no mutation replay |
+| `acknowledge_inventory`, `restore_inventory` | `{task_id:TaskId,request_id:HexId,command_id:HexId,expected_revision:SafeInt,node_id:null\|NodeId}` | `InventoryVisibilityResult` | observed original result; 5 s feedback; no mutation replay |
 | `update_inventory_view` | `{task_id:TaskId,expected_revision:SafeInt,search_query:string,filters:[InventoryFilter],sort_column:"path"\|"filename"\|"size"\|"mtime",sort_direction:"ascending"\|"descending",collapse_node_id:null\|NodeId,collapsed:null\|boolean}` | `InventoryViewSummary` | current-state recovery; 5 s feedback; no mutation replay |
 | `get_inventory_window` | `{task_id:TaskId,expected_revision:SafeInt,offset:SafeInt,limit:1..256}` | `{disposition:"current"\|"conflict",view_revision:SafeInt,offset:SafeInt,total:SafeInt,rows:[InventoryWindowRow]}` | 5 s; one identical-payload retry |
 | `get_inventory_detail` | `{task_id:TaskId,expected_revision:SafeInt,node_id:NodeId}` | `{disposition:"current"\|"conflict"\|"unavailable",view_revision:SafeInt,node_id:NodeId,detail:null\|InventoryCurrentDetail}` | 5 s; one identical-payload retry |
@@ -511,7 +514,7 @@ evidence. Signed-64 scalars and full native file indexes cross as decimal text;
 digest and provenance remain raw. Removed/renamed rows return unavailable.
 Task/session/request/generation and view revision fence adoption after the read;
 warnings and synthetic ancestors cannot trigger ledger detail reads. These four
-commands grant no visibility mutation or integrity authority.
+commands grant no visibility mutation or integrity authority themselves.
 
 `refresh_inventory` requires the exact current released task request and retained
 view revision. Its optional node is resolved server-side into full, exact-leaf or
@@ -525,6 +528,24 @@ advances the view revision and preserves
 search, facets, sort and surviving collapsed folders; failed construction leaves
 the old publication intact. Scan completeness remains separate from projection
 completeness.
+
+Visibility requires the current released request, a matching complete publication
+and its exact revision. Full/root, folder and leaf membership comes from the
+server projection; only its missing rows participate, including acknowledged
+rows and subjects outside the visible window or current search/facets/collapse.
+Warnings refuse before ledger work. Each row uses the existing conditional write,
+so a reappeared or removed subject is stale rather than changed.
+`InventoryVisibilityResult` has task/request/action identity, `expected_revision`,
+`total`, `applied`, `noop`, `stale`, `conflict`, `unresolved_count`, and
+`disposition:"completed"|"partial"`. Counts describe confirmed outcomes and sum
+to total; a failed row may have committed and joins the unresolved suffix.
+Completed means all row dispositions are known, not that all rows were changed.
+The server freezes the original UTC timestamp and retains this bounded aggregate
+before rebuilding the view. Original-result delivery settles after the complete
+replacement attempt; a failed build preserves prior reads but blocks another
+visibility effect until open publishes a whole replacement. Refresh may recover.
+Visibility and starts share the existing 48 retained entries, reserved before
+effects and pruned at exact task Close. No full per-row tuple crosses the wire.
 
 `PlanViewSummary` has exactly `disposition`, `task_id`, `request_id`,
 `view_revision`, `selection_revision`, `selection_state`, `source_path`,

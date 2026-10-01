@@ -260,6 +260,8 @@ class TaskAuthority(Protocol):
 
     def refresh_inventory(self, *args, **kwargs) -> TaskStartView: ...
 
+    def change_inventory_visibility(self, *args, **kwargs) -> dict[str, object]: ...
+
     def update_inventory_view(self, *args, **kwargs) -> dict[str, object]: ...
 
     def get_inventory_window(self, *args, **kwargs) -> dict[str, object]: ...
@@ -982,6 +984,22 @@ def production_command_specs(
         except (KeyError, ValueError) as error:
             raise PlanningRefusedError("inventory refresh scope was refused") from error
 
+    def inventory_visibility(payload: object, action: str) -> object:
+        if type(payload) is not _InventoryRefreshPayload:
+            raise TypeError("inventory visibility received an unvalidated payload")
+        intent = ("inventory-visibility", action, payload.task_id, payload.request_id,
+                  payload.expected_revision, payload.node_id)
+        try:
+            return registry.change_inventory_visibility(
+                payload.task_id, payload.request_id, action=action,
+                expected_revision=payload.expected_revision, node_id=payload.node_id,
+                command_id=payload.command_id, wire_intent=intent,
+            )
+        except (CommandIdConflictError, TaskIntentConflictError) as error:
+            raise CommandConflictError("inventory visibility command id conflicts") from error
+        except (KeyError, ValueError) as error:
+            raise PlanningRefusedError("inventory visibility scope was refused") from error
+
     def open_inventory_view(payload: object) -> object:
         if type(payload) is not _OpenPlanViewPayload:
             raise TypeError("open_inventory_view received an unvalidated payload")
@@ -1397,6 +1415,20 @@ def production_command_specs(
             ),
             "refresh_inventory": CommandSpec(
                 validate_payload=_validate_inventory_refresh, handler=refresh_inventory,
+                access=CommandAccess.MUTATING, command_id=FieldRequirement.REQUIRED,
+                revision=FieldRequirement.REQUIRED, response_policy=CommandResponsePolicy.MUTATION_OBSERVED,
+                retry=CommandRetry.NONE, work=CommandWork.ASYNC_SMALL,
+            ),
+            "acknowledge_inventory": CommandSpec(
+                validate_payload=_validate_inventory_refresh,
+                handler=lambda payload: inventory_visibility(payload, "acknowledge"),
+                access=CommandAccess.MUTATING, command_id=FieldRequirement.REQUIRED,
+                revision=FieldRequirement.REQUIRED, response_policy=CommandResponsePolicy.MUTATION_OBSERVED,
+                retry=CommandRetry.NONE, work=CommandWork.ASYNC_SMALL,
+            ),
+            "restore_inventory": CommandSpec(
+                validate_payload=_validate_inventory_refresh,
+                handler=lambda payload: inventory_visibility(payload, "restore"),
                 access=CommandAccess.MUTATING, command_id=FieldRequirement.REQUIRED,
                 revision=FieldRequirement.REQUIRED, response_policy=CommandResponsePolicy.MUTATION_OBSERVED,
                 retry=CommandRetry.NONE, work=CommandWork.ASYNC_SMALL,

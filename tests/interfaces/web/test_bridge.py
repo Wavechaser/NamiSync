@@ -160,7 +160,7 @@ def test_inventory_capacity_refusal_has_fixed_action_guidance():
     assert response["ok"] is False
     assert response["error"] == {
         "code": "inventory_capacity",
-        "message": "Inventory command capacity is full. Close a task before refreshing.",
+        "message": "Inventory command capacity is full. Close a task before trying again.",
     }
 
 

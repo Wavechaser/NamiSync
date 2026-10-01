@@ -222,6 +222,8 @@ class _TaskState:
     execution_membership: Mapping[str, str] | None = None
     presentation_state: TaskPresentationState | None = None
     inventory_view_loading: bool = False
+    inventory_visibility_pending: bool = False
+    inventory_view_dirty: bool = False
 
     def sink(self, generation: int) -> Callable[[TaskDeliveryUpdate], None]:
         def accept(update: TaskDeliveryUpdate) -> None:
@@ -381,7 +383,7 @@ class _StartResponse:
     participants: int = 0
     complete: bool = False
     delivery_retiring: bool = False
-    result: TaskStartView | None = None
+    result: TaskStartView | dict[str, object] | None = None
     failure_code: str | None = None
     retain_failure: bool = False
 
@@ -913,18 +915,20 @@ class TaskRegistry:
 
     def _require_inventory_task_locked(self, task: _TaskState) -> None:
         if (self._closing or task.task_kind != "inventory" or task.request_id is None
-                or task.session_id is None or task.transition
+                or task.session_id is None or (task.transition and not task.inventory_visibility_pending)
                 or task.retiring):
             raise TaskUnavailableError("inventory task is unavailable")
 
     def open_inventory_view(self, task_id: str) -> dict[str, object]:
         task = self._require_inventory_task(task_id)
         with task.condition:
+            if task.inventory_visibility_pending:
+                return self._inventory_views[task_id].summary()
             while task.inventory_view_loading:
                 task.condition.wait()
                 self._require_inventory_task_locked(task)
             existing = self._inventory_views.get(task_id)
-            if existing is not None and existing.request_id == task.request_id:
+            if existing is not None and existing.request_id == task.request_id and not task.inventory_view_dirty:
                 return existing.summary()
             if not task.session_released or task.delivered_terminal_record is None:
                 if existing is not None:
@@ -958,6 +962,7 @@ class TaskRegistry:
                 if existing is not None and existing.view_revision != prior_revision:
                     return existing.summary(disposition="conflict")
                 self._inventory_views[task_id] = view
+                task.inventory_view_dirty = False
                 return view.summary(disposition="opened")
 
     def _require_inventory_view(self, task_id: str) -> tuple[_TaskState, InventoryReviewState]:
@@ -998,7 +1003,8 @@ class TaskRegistry:
                     self._require_inventory_task_locked(task)
                     if (request_id != task.request_id
                             or expected_revision != view.view_revision or not task.session_released
-                            or task.delivered_terminal_record is None or task.inventory_view_loading):
+                            or task.delivered_terminal_record is None or task.inventory_view_loading
+                            or task.transition):
                         raise TaskUnavailableError("inventory refresh requires the current released view")
                     node = view.projection.nodes[0] if node_id is None else view.projection.node_for_id(node_id)
                     if node.warning is not None:
@@ -1082,6 +1088,81 @@ class TaskRegistry:
             self._condition.notify_all()
         try:
             return self._await_start_response(response)
+        finally:
+            self._leave_start_response(response)
+
+    def change_inventory_visibility(
+        self, task_id: str, request_id: str, *, action: str, expected_revision: int,
+        node_id: str | None, command_id: str, wire_intent: tuple[object, ...],
+    ) -> dict[str, object]:
+        _require_opaque_id(command_id, "inventory command id")
+        with self._condition:
+            if self._closing:
+                raise TaskUnavailableError("inventory task is unavailable")
+            response = self._start_responses.get(command_id)
+            retained = response is not None
+            if retained:
+                if response.wire_intent != wire_intent:
+                    raise TaskIntentConflictError("inventory command intent conflicts")
+                response.participants += 1
+            else:
+                task = self._tasks.get(task_id)
+                view = self._inventory_views.get(task_id)
+                if task is None or view is None:
+                    raise TaskUnavailableError("inventory view is unavailable")
+                with task.condition:
+                    self._require_inventory_task_locked(task)
+                    if (task.transition or request_id != task.request_id or view.request_id != request_id
+                            or expected_revision != view.view_revision or not task.session_released
+                            or task.delivered_terminal_record is None or task.inventory_view_loading
+                            or task.inventory_view_dirty):
+                        raise TaskUnavailableError("inventory visibility requires the current released publication")
+                    node = view.projection.nodes[0] if node_id is None else view.projection.node_for_id(node_id)
+                    if node.warning is not None:
+                        raise ValueError("inventory warnings cannot change visibility")
+                    row_ids = tuple(row_id for row_id in view.projection.domain_row_ids(node.node_id)
+                        if view.projection.node_for_id(view.projection.node_id_by_row_id[row_id]).row.presence.value == "missing")
+                    if len(self._start_responses) >= _START_RESPONSE_CAPACITY:
+                        raise InventoryCommandCapacityError("Inventory command capacity is full; close a task")
+                    response = _StartResponse(command_id, wire_intent, participants=1, retain_failure=True)
+                    self._start_responses[command_id] = response
+                    task.start_response_ids.add(command_id)
+                    task.transition = task.inventory_visibility_pending = True
+        if not retained:
+            try:
+                result = self._lifecycle.change_task_inventory_visibility(
+                    task_id, request_id, action=action, location_id=view.projection.location_id,
+                    row_ids=row_ids, expected_revision=expected_revision, command_id=command_id,
+                    signature=wire_intent,
+                )
+                with self._condition:
+                    # Retain the original outcome before any rebuild or delivery can fail.
+                    response.result = dict(result)
+                with task.condition:
+                    task.inventory_view_dirty = True
+            except BaseException as error:
+                failure_code = _classify_start_failure(error)
+                _retire_exception_graph(error)
+                with self._condition:
+                    response.failure_code = failure_code
+            finally:
+                with task.condition:
+                    task.transition = task.inventory_visibility_pending = False
+                    task.condition.notify_all()
+            if response.result is not None:
+                try:
+                    self.open_inventory_view(task_id)
+                except BaseException as error:
+                    # A failed complete replacement preserves the prior readable publication.
+                    _retire_exception_graph(error)
+            with self._condition:
+                response.complete = True
+                self._condition.notify_all()
+        try:
+            result = self._await_start_response(response)
+            if type(result) is not dict:
+                raise RuntimeError("inventory visibility returned an invalid result")
+            return dict(result)
         finally:
             self._leave_start_response(response)
 
@@ -2182,7 +2263,7 @@ class TaskRegistry:
             task.condition.notify_all()
         return result
 
-    def _await_start_response(self, entry: _StartResponse) -> TaskStartView:
+    def _await_start_response(self, entry: _StartResponse) -> TaskStartView | dict[str, object]:
         with self._condition:
             while not entry.complete:
                 self._condition.wait()

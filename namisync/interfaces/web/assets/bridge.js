@@ -40,6 +40,8 @@ const COMMAND_POLICY_JSON = `{
   "open_plan_view": {"response_policy": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
   "open_inventory_view": {"response_policy": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
   "refresh_inventory": {"response_policy": "mutation-observed", "retry": "none", "phase": "open"},
+  "acknowledge_inventory": {"response_policy": "mutation-observed", "retry": "none", "phase": "open"},
+  "restore_inventory": {"response_policy": "mutation-observed", "retry": "none", "phase": "open"},
   "update_inventory_view": {"response_policy": "feedback-only", "retry": "none", "phase": "open"},
   "get_inventory_window": {"response_policy": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
   "get_inventory_detail": {"response_policy": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
@@ -226,7 +228,7 @@ const ERROR_MESSAGES = Object.freeze({
   planning_refused:
     "NamiSync could not start a plan for those folders. Review both folders and try again.",
   task_unavailable: "That desktop task is no longer available.",
-  inventory_capacity: "Inventory command capacity is full. Close a task before refreshing.",
+  inventory_capacity: "Inventory command capacity is full. Close a task before trying again.",
   drain_busy: "That desktop task already has an event request in progress.",
   observation_conflict:
     "That desktop task is already observing different work.",
@@ -720,6 +722,37 @@ export function refreshInventory(taskId, requestId, commandId, expectedRevision,
   return submitStart(Object.freeze({task_id: taskId, request_id: requestId,
     command_id: commandId, expected_revision: expectedRevision, node_id: nodeId}),
   "refresh_inventory", INVENTORY_START_TIMEOUT_MS, onDelayed);
+}
+
+function changeInventoryVisibility(action, taskId, requestId, commandId, expectedRevision, nodeId, onDelayed) {
+  requireTaskId(taskId, "inventory visibility");
+  if (typeof requestId !== "string" || !ID_PATTERN.test(requestId)
+      || typeof commandId !== "string" || !ID_PATTERN.test(commandId)
+      || !isNonnegativeInteger(expectedRevision) || !(nodeId === null || isNodeId(nodeId))) {
+    throw new TypeError("inventory visibility requires an exact current inventory gesture");
+  }
+  const validate = (value) => {
+    if (!isExactObject(value, ["task_id", "request_id", "action", "expected_revision", "total",
+      "applied", "noop", "stale", "conflict", "unresolved_count", "disposition"])
+        || value.task_id !== taskId || value.request_id !== requestId
+        || value.action !== action || value.expected_revision !== expectedRevision
+        || ![value.total, value.applied, value.noop, value.stale, value.conflict,
+          value.unresolved_count].every(isNonnegativeInteger)) return false;
+    return value.applied + value.noop + value.stale + value.conflict + value.unresolved_count === value.total
+      && value.disposition === (value.unresolved_count > 0 ? "partial" : "completed");
+  };
+  return dispatchAttempt(`${action === "acknowledge" ? "acknowledge" : "restore"}_inventory`,
+    Object.freeze({task_id: taskId, request_id: requestId, command_id: commandId,
+      expected_revision: expectedRevision, node_id: nodeId}), validate,
+    INVENTORY_START_TIMEOUT_MS, true, onDelayed);
+}
+
+export function acknowledgeInventory(taskId, requestId, commandId, expectedRevision, nodeId = null, onDelayed = null) {
+  return changeInventoryVisibility("acknowledge", taskId, requestId, commandId, expectedRevision, nodeId, onDelayed);
+}
+
+export function restoreInventory(taskId, requestId, commandId, expectedRevision, nodeId = null, onDelayed = null) {
+  return changeInventoryVisibility("restore", taskId, requestId, commandId, expectedRevision, nodeId, onDelayed);
 }
 
 export function updateInventoryView(taskId, expectedRevision, view, onDelayed = null) {

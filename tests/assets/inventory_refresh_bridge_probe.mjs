@@ -25,7 +25,7 @@ window.pywebview.api = {async dispatch(raw) {
   if (mode === "lost") throw new Error("post-effect direct delivery lost");
   if (mode === "capacity") return {transport_version: 1, response_token: null,
     response: {schema_version: 1, request_id: original.request_id, ok: false,
-      error: {code: "inventory_capacity", message: "Inventory command capacity is full. Close a task before refreshing."}}};
+      error: {code: "inventory_capacity", message: "Inventory command capacity is full. Close a task before trying again."}}};
   return {transport_version: 1, response_token: null, response: {
     schema_version: 1, request_id: original.request_id, ok: true,
     result: {...result, request_id: priorRequest},

@@ -456,6 +456,7 @@ class TaskLifecycle:
             if (task is None or prior is None or prior.kind != "task-inventory"
                     or prior.request_id != request_id or not prior.session_released
                     or prior.terminal_digest is None or prior.settlement_claim is not None
+                    or prior.observation_claim is not None
                     or task.plan_token is not None or task.retiring
                     or task.retirement_claim_id is not None or task.admission_identity is not None
                     or (task.start_command_id is not None
@@ -468,6 +469,23 @@ class TaskLifecycle:
             task.start_kind = "task-inventory"
             task.start_failed = False
             return TaskStartClaim(task_id, None, False)
+
+    def begin_inventory_visibility(self, task_id: str, request_id: str) -> ObservationClaim:
+        """Hold a released inventory association until its visibility work settles."""
+        with self._condition:
+            task = self._tasks.get(task_id)
+            association = None if task is None else self._sessions.get(task.session_id)
+            if (self._closed or task is None or association is None
+                    or association.kind != "task-inventory" or association.request_id != request_id
+                    or not association.session_released or association.terminal_digest is None
+                    or association.settlement_claim is not None or association.observation_claim is not None
+                    or task.admission_identity is not None or task.retiring
+                    or task.retirement_claim_id is not None
+                    or (task.start_command_id is not None and task.start_command_id not in self._start_receipts)):
+                raise LifecycleAssociationError("inventory visibility is unavailable")
+            claim = ObservationClaim(self._association_token(association), self._mint_claim_id_locked())
+            association.observation_claim = claim
+            return claim
 
     def begin_task_shell(self, command_id: str) -> TaskShellClaim:
         """Reserve or replay one process-live task without domain work."""

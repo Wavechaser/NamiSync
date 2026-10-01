@@ -301,8 +301,10 @@ bridge trace anchor and fixed error vocabulary passes all seven focused checks,
 including byte restoration and no partial mutation on anchor drift. These
 helpers join the Refresh population with unchanged guarantees. The final frozen
 workflows/interfaces rerun passes all 2,769 tests; Refresh's independent review
-also approves those helper migrations. Visibility, desktop actions and final
-integration remain open.
+also approves those helper migrations. Refresh ships in `9266845`. Visibility's
+final focused gate passes 795 cases and its frozen workflow/interface gate
+passes 2,785. Fresh independent source/evidence review approves it, including
+13 independent focused checks. Desktop actions and final integration remain open.
 
 Retain current scan reconciliation, warning and ingress/population bounds,
 conditional ledger changes, exact task retirement and original-command recovery.
@@ -335,6 +337,20 @@ or unpublished scan. Preserve the last location-bearing Details as a location/
 mount hint in that case, while exact request matching prevents falsely publishing
 it as the new scan. Fresh workflow admission remains mandatory. Visibility
 effects additionally require a publication matching the current request.
+Visibility's task-bound service entry point retains frozen command facts and a
+bounded aggregate of actual per-row dispositions; existing CLI tuple behavior
+stays intact. A partial exception counts the failed row and unattempted suffix
+as unresolved, because the failing write's durability can be unknown. Retain
+that result before rebuilding the projection. A failed post-write rebuild marks
+the old publication dirty for further visibility effects while leaving it
+readable; a successful complete rebuild advances the revision and clears that
+fence. Existing task transitions serialize Refresh/visibility/Close, and a
+concurrent view gesture fences replacement. No generic receipt framework or
+database batch-atomicity promise is introduced.
+The existing observation-claim lifetime guards the task-bound visibility call;
+Close already waits for those claims and Refresh refuses while a visibility
+claim is active. A dedicated `tests/assets/inventory_visibility_bridge_probe.mjs`
+joins the existing frontend test owner for exact aggregate/recovery validation.
 Capture inventory review facts before terminal release
 drops the workflow request details, and preserve them until exact task retirement.
 Archived representation/cache/DTO recipes confer no authority: use current

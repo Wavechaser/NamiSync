@@ -3130,6 +3130,256 @@ def test_inventory_refresh_real_service_releases_replaces_and_replays_old_starts
         service.close()
 
 
+@pytest.mark.parametrize("failure_phase", ["none", "before", "after", "reappeared", "close"])
+def test_inventory_visibility_real_service_retains_actual_partial_prefix_and_close_cleanup(tmp_path, failure_phase):
+    from datetime import timedelta
+    from namisync.interfaces.service import SessionObserver, _dispatcher
+    from namisync.workflows import LocationCandidate
+    from _inventory_fixtures import _Resolver, _Scanner, _file, _runtime
+    from _service_fixtures import make_service
+    mount = tmp_path / "mount"
+    (mount / "managed" / "folder").mkdir(parents=True)
+    scanner = _Scanner(mount, (_file(r"folder\one.bin", 1), _file(r"folder\two.bin", 2), _file("outside.bin", 3)))
+    runtime, location_id = _runtime(tmp_path, _Resolver(mount), scanner, {})
+    dispatcher = _dispatcher(runtime)
+    service = make_service(runtime=runtime, dispatcher=dispatcher, observer=SessionObserver(dispatcher))
+    registry = _make_registry(service, drain_wait=0.1)
+    def finish(start):
+        _wait_terminal(dispatcher, start.session_id)
+        for value in range(100, 150):
+            registry.drain(start.task_id, start.session_id, f"{value:032x}", replay_from=None)
+            if registry._tasks[start.task_id].delivered_terminal_record is not None:
+                break
+        registry.release_terminal_session(start.task_id, start.session_id)
+        registry.open_inventory_view(start.task_id)
+    try:
+        shell = registry.create_task_shell("1" * 32)
+        first = registry.start_setup_inventory(shell.task_id,
+            LocationCandidate.remembered(location_id, selected_mount=str(mount)),
+            command_id="2" * 32, wire_intent=("inventory", "root"))
+        finish(first)
+        scanner.records = ()
+        current = _refresh(registry, first)
+        finish(current)
+        view = registry._inventory_views[first.task_id]
+        folder = view.projection.nodes[view.projection.position_by_path_key["FOLDER"]].node_id
+        if failure_phase == "reappeared":
+            scanner.records = (_file(r"folder\one.bin", 1),)
+            independent = service.start_inventory(location_id=location_id)
+            _wait_terminal(dispatcher, independent.session_id)
+            service.close_session(independent.session_id)
+        calls = []
+        closers = []
+        closed = Event()
+        original = runtime.acknowledge_inventory
+        def change(command_id, location_id, row_id, *, changed_at):
+            calls.append((command_id, row_id, changed_at))
+            runtime.clock.value += timedelta(days=1)
+            if len(calls) == 1 and failure_phase == "close":
+                task = registry._tasks[current.task_id]
+                with task.condition:
+                    delivery = registry._terminal_delivery_locked(task)
+                def close():
+                    service.close_task(current.task_id, current.session_id, delivery)
+                    closed.set()
+                closer = Thread(target=close)
+                closers.append(closer)
+                closer.start()
+                deadline = monotonic() + 1
+                while service._lifecycle._sessions[current.session_id].settlement_claim is None and monotonic() < deadline:
+                    sleep(0.001)
+                assert service._lifecycle._sessions[current.session_id].settlement_claim is not None
+                assert not closed.is_set(), "Close waits for the invocation-owned visibility claim"
+            if len(calls) == 2 and failure_phase == "before":
+                raise RuntimeError("write refused before commit")
+            result = original(command_id, location_id, row_id, changed_at=changed_at)
+            if len(calls) == 2 and failure_phase == "after":
+                raise RuntimeError("write response lost after commit")
+            return result
+        runtime.acknowledge_inventory = change
+        result = _visibility(registry, current, revision=1, node_id=folder)
+        assert result["total"] == 2
+        partial = failure_phase in {"before", "after"}
+        assert result["applied"] == (1 if partial or failure_phase == "reappeared" else 2)
+        assert result["stale"] == (1 if failure_phase == "reappeared" else 0)
+        assert result["unresolved_count"] == (1 if partial else 0)
+        assert result["disposition"] == ("partial" if partial else "completed")
+        assert calls[0][2] == calls[1][2]
+        if failure_phase == "close":
+            closers[0].join(2)
+            assert closed.is_set() and not closers[0].is_alive()
+            assert service._visibility_receipts == {}
+            assert _visibility(registry, current, revision=1, node_id=folder) == result
+            assert current.task_id not in service._lifecycle._tasks
+            return
+        assert _visibility(registry, current, revision=1, node_id=folder) == result
+        assert len(calls) == 2
+        rows = runtime.list_inventory(location_id)
+        assert sum(row.acknowledged_at is not None for row in rows) == (1 if failure_phase in {"before", "reappeared"} else 2)
+        assert registry._inventory_views[current.task_id].view_revision == 2
+        restored = _visibility(registry, current, action="restore", revision=2, node_id=folder, command_id="7" * 32)
+        assert restored["applied"] == (1 if failure_phase in {"before", "reappeared"} else 2)
+        assert restored["noop"] == (1 if failure_phase == "before" else 0)
+        assert restored["unresolved_count"] == 0
+        assert all(row.acknowledged_at is None for row in runtime.list_inventory(location_id))
+        newer = _refresh(registry, current, revision=3, command_id="8" * 32)
+        finish(newer)
+        assert _visibility(registry, current, revision=1, node_id=folder) == result
+        receipt = service._visibility_receipts["6" * 32]
+        assert service.change_task_inventory_visibility(current.task_id, current.request_id,
+            action="acknowledge", location_id=location_id, row_ids=tuple(item[1] for item in calls),
+            expected_revision=1, command_id="6" * 32, signature=receipt.signature[-1]) == result
+        service._visibility_receipts["independent-cli"] = ("retained",)
+        registry.close_task(current.task_id, newer.session_id)
+        assert registry._start_responses == {}
+        assert service._visibility_receipts == {"independent-cli": ("retained",)}
+    finally:
+        service.close()
+
+
+def _visibility(registry, start, *, action="acknowledge", revision=0, node_id=None, command_id="6" * 32):
+    return registry.change_inventory_visibility(start.task_id, start.request_id,
+        action=action, expected_revision=revision, node_id=node_id, command_id=command_id,
+        wire_intent=("inventory-visibility", action, start.task_id, start.request_id, revision, node_id))
+
+
+def _inventory_visibility_registry(count=3):
+    from namisync.db.repositories import InventoryPresence
+    from namisync.workflows import build_inventory_projection
+    from _db_fixtures import NOW
+    registry, service, start, previous = _inventory_refresh_registry()
+    _, details = service.get_task_inventory_projection(start.task_id, start.request_id)
+    template = previous.row_for_id("1")
+    rows = tuple(replace(template, row_id=str(index + 1), presence=InventoryPresence.MISSING,
+        rel_path=f"folder\\member{index}.txt", rel_path_key=f"FOLDER\\MEMBER{index}.TXT", missing_since=NOW)
+        for index in range(count)) + (replace(template, row_id=str(count + 1),
+        presence=InventoryPresence.MISSING, rel_path="outside.txt", rel_path_key="OUTSIDE.TXT", missing_since=NOW),)
+    projection = build_inventory_projection(1, rows, tuple(node.warning for node in previous.nodes if node.warning))
+    service.get_task_inventory_projection = lambda task_id, request_id: (projection, replace(details, request_id=request_id))
+    registry._inventory_views.pop(start.task_id)
+    registry.open_inventory_view(start.task_id)
+    service.visibility_calls = []
+    def change(task_id, request_id, **kwargs):
+        service.visibility_calls.append((task_id, request_id, kwargs))
+        return {"task_id": task_id, "request_id": request_id, "action": kwargs["action"],
+            "expected_revision": kwargs["expected_revision"], "total": len(kwargs["row_ids"]),
+            "applied": len(kwargs["row_ids"]), "noop": 0, "stale": 0, "conflict": 0,
+            "unresolved_count": 0, "disposition": "completed"}
+    service.change_task_inventory_visibility = change
+    return registry, service, start, projection
+
+
+@pytest.mark.parametrize("scope", ["full", "folder", "leaf", "warning"])
+def test_inventory_visibility_complete_scope_is_independent_of_filter_collapse_and_window(scope):
+    registry, service, start, projection = _inventory_visibility_registry(300)
+    folder = projection.nodes[projection.position_by_path_key["FOLDER"]].node_id
+    registry.update_inventory_view(start.task_id, expected_revision=0, search_query="outside",
+        filters=frozenset({"missing"}), sort_column=PlanSortColumn.PATH,
+        sort_direction=SortDirection.ASCENDING, collapse_node_id=folder, collapsed=True)
+    assert registry.get_inventory_window(start.task_id, expected_revision=1, offset=0, limit=256)["total"] < 256
+    node = (None if scope == "full" else folder if scope == "folder"
+        else projection.node_id_by_row_id["1"] if scope == "leaf" else projection.nodes[-1].node_id)
+    if scope == "warning":
+        with pytest.raises(ValueError, match="warnings"):
+            _visibility(registry, start, revision=1, node_id=node)
+        assert service.visibility_calls == []
+        return
+    result = _visibility(registry, start, revision=1, node_id=node)
+    assert result["total"] == {"full": 301, "folder": 300, "leaf": 1}[scope]
+    assert len(service.visibility_calls[0][2]["row_ids"]) == result["total"]
+    assert registry._inventory_views[start.task_id].view_revision == 2
+
+
+def test_inventory_visibility_failed_rebuild_keeps_reads_but_blocks_effect_until_whole_reload():
+    registry, service, start, projection = _inventory_visibility_registry()
+    original = service.get_task_inventory_projection
+    def refused(*args):
+        assert registry._start_responses["6" * 32].result["applied"] == 4
+        raise ValueError("post-effect rebuild refused")
+    service.get_task_inventory_projection = refused
+    result = _visibility(registry, start)
+    assert result["applied"] == 4 and result["disposition"] == "completed"
+    assert registry.get_inventory_window(start.task_id, expected_revision=0, offset=0, limit=1)["rows"]
+    with pytest.raises(TaskUnavailableError):
+        _visibility(registry, start, command_id="7" * 32)
+    assert _visibility(registry, start) == result and len(service.visibility_calls) == 1
+    service.get_task_inventory_projection = original
+    assert registry.open_inventory_view(start.task_id)["view_revision"] == 1
+    assert not registry._tasks[start.task_id].inventory_view_dirty
+    _visibility(registry, start, revision=1, command_id="7" * 32)
+    assert len(service.visibility_calls) == 2
+
+
+def test_inventory_visibility_replay_waits_for_rebuild_and_preserves_concurrent_view_gesture():
+    registry, service, start, projection = _inventory_visibility_registry()
+    entered, release, rebuilding, publish = Event(), Event(), Event(), Event()
+    original_change, original_projection = service.change_task_inventory_visibility, service.get_task_inventory_projection
+    def change(*args, **kwargs):
+        entered.set()
+        assert release.wait(2)
+        return original_change(*args, **kwargs)
+    def build(*args):
+        rebuilding.set()
+        assert publish.wait(2)
+        return original_projection(*args)
+    service.change_task_inventory_visibility = change
+    service.get_task_inventory_projection = build
+    results = []
+    first = Thread(target=lambda: results.append(_visibility(registry, start)))
+    first.start()
+    assert entered.wait(1)
+    assert registry.get_inventory_window(start.task_id, expected_revision=0, offset=0, limit=1)["rows"]
+    registry.update_inventory_view(start.task_id, expected_revision=0, search_query="outside",
+        filters=frozenset(), sort_column=PlanSortColumn.PATH, sort_direction=SortDirection.ASCENDING,
+        collapse_node_id=None, collapsed=None)
+    with pytest.raises(TaskUnavailableError):
+        _refresh(registry, start, revision=1, command_id="7" * 32)
+    with pytest.raises(TaskUnavailableError):
+        _visibility(registry, start, revision=1, command_id="8" * 32)
+    replay = Thread(target=lambda: results.append(_visibility(registry, start)))
+    replay.start()
+    release.set()
+    assert rebuilding.wait(1)
+    assert registry._start_responses["6" * 32].result is not None
+    assert results == [] and not registry._start_responses["6" * 32].complete
+    publish.set()
+    first.join(2)
+    replay.join(2)
+    assert not first.is_alive() and not replay.is_alive()
+    assert len(results) == 2 and results[0] == results[1]
+    assert len(service.visibility_calls) == 1
+    assert registry._inventory_views[start.task_id].search_query == "outside"
+    assert registry._inventory_views[start.task_id].view_revision == 2
+
+
+def test_inventory_visibility_uses_shared_capacity_and_close_prunes_original_results():
+    registry, service, start, projection = _inventory_visibility_registry()
+    available = drain_module._START_RESPONSE_CAPACITY - len(registry._start_responses)
+    for index in range(available):
+        _visibility(registry, start, revision=index, command_id=f"{index + 6000:032x}")
+    assert len(registry._start_responses) == drain_module._START_RESPONSE_CAPACITY
+    with pytest.raises(drain_module.InventoryCommandCapacityError):
+        _visibility(registry, start, revision=available, command_id="f" * 32)
+    with pytest.raises(drain_module.InventoryCommandCapacityError):
+        _refresh(registry, start, revision=available, command_id="e" * 32)
+    assert len(service.visibility_calls) == available
+    registry.close_task(start.task_id, start.session_id)
+    assert registry._start_responses == {}
+
+
+def test_inventory_visibility_refuses_prior_publication_for_new_scan_even_after_release():
+    registry, service, start, projection = _inventory_visibility_registry()
+    current = _refresh(registry, start)
+    _mark_terminal_drained(registry, current, replace(_record(kind="inventory", supports_pause=False), session_id=current.session_id))
+    registry.release_terminal_session(start.task_id, current.session_id)
+    with pytest.raises(TaskUnavailableError):
+        _visibility(registry, current)
+    assert service.visibility_calls == []
+    registry.open_inventory_view(start.task_id)
+    _visibility(registry, current, revision=1)
+    assert len(service.visibility_calls) == 1
+
+
 def _inventory_refresh_registry():
     from namisync.core.models import EntryKind, ScanWarning, ScanWarningCode
     from namisync.workflows import build_inventory_projection

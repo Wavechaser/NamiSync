@@ -221,7 +221,8 @@ implemented. A standalone inventory task freezes only its admitted root,
 without sync options or a fabricated source/target pair. Pure workflow inventory
 projection, sibling ordering and task-bound read publication/paging are
 implemented, including their desktop read renderer and same-task
-full/exact/recursive Refresh. Visibility actions remain pending.
+full/exact/recursive Refresh and complete-scope acknowledge/restore bridge actions.
+Desktop action controls remain pending.
 
 `workflows/inventory_projection.py` builds a complete immutable generation from
 the repository's typed rows and an independent warning population. It retains
@@ -275,9 +276,18 @@ remain as structural context for matching descendants. Complete-domain rollups
 stay unchanged. View changes stage
 their new sequence before publication, and repeated windows serialize only
 their requested slice. The production bridge exposes open, update, window and
-current-detail reads; no visibility effect or integrity overlay is activated.
+current-detail reads and missing-row acknowledge/restore; no integrity overlay is activated.
 An incomplete scan may still supply a complete projection of reconciled ledger
 facts, with the original scan completeness disclosed separately.
+
+Visibility scope includes complete missing-row membership, never only search
+matches or loaded rows. Conditional writes preserve removed/reappeared subjects,
+and acknowledgment changes only visibility. The task service freezes an original
+timestamp and retains bounded actual disposition counts, including an unresolved
+suffix on failure; the failed row may already have committed. A complete current
+publication is mandatory for a new effect. A failed post-write rebuild keeps prior
+reads but requires a successful whole reload before another visibility action.
+Original results remain task-owned through Refresh until exact Close.
 
 The pure projection supplies the shared server-owned sibling sorter required by
 [Bridge DR-BR-15](PRESENTATION.md#search-filters-sorting-and-follow).

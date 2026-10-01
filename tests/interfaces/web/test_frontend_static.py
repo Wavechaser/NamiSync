@@ -475,6 +475,17 @@ def test_inventory_refresh_observes_original_after_delivery_loss_without_resubmi
     assert completed.stdout == "ok\n"
 
 
+def test_inventory_visibility_bridge_admits_bounded_actual_results_and_observes_original() -> None:
+    node = _node_executable()
+    assert node is not None, "Node.js is required for the inventory visibility bridge witness"
+    completed = run_node_probe([
+        str(node), str(PROJECT_ROOT / "tests/assets/inventory_visibility_bridge_probe.mjs"),
+        str(Path(ASSET_ROOT) / "bridge.js"),
+    ], timeout=10)
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert completed.stdout == "ok\n"
+
+
 def test_inventory_reads_validate_production_windows_and_current_evidence(tmp_path: Path) -> None:
     from namisync.core.models import EntryKind, ScanWarning, ScanWarningCode
     from namisync.db.repositories import InventoryPresence, InventorySnapshot

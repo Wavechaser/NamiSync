@@ -167,6 +167,14 @@ class CommandIdConflictError(ValueError):
     """A receipted command id was reused for different admitted intent."""
 
 
+@dataclass(slots=True)
+class _TaskInventoryVisibilityReceipt:
+    task_id: str
+    signature: tuple[object, ...]
+    changed_at: datetime
+    result: dict[str, object] | None = None
+
+
 @dataclass(frozen=True, slots=True)
 class PlanSession:
     request_id: str
@@ -345,7 +353,7 @@ class NamiSyncService:
         self._close_lock = Lock()
         self._lifecycle = TaskLifecycle()
         self._plan_selections: dict[str, _PlanSelectionState] = {}
-        self._visibility_receipts: dict[str, tuple[object, ...]] = {}
+        self._visibility_receipts: dict[str, tuple[object, ...] | _TaskInventoryVisibilityReceipt] = {}
         self._task_inventory_details: dict[str, tuple[str, InventoryDetails | None]] = {}
         self._closed = False
         self._shutdown: ShutdownView | None = None
@@ -610,6 +618,58 @@ class NamiSyncService:
             except BaseException:
                 self._lifecycle.abort_task_start(task_id)
                 raise
+
+    def change_task_inventory_visibility(
+        self, task_id: str, request_id: str, *, action: str, location_id: int,
+        row_ids: tuple[str, ...], expected_revision: int, command_id: str,
+        signature: tuple[object, ...],
+    ) -> dict[str, object]:
+        """Retain actual conditional outcomes without returning a per-row population."""
+        if action not in {"acknowledge", "restore"}:
+            raise ValueError("inventory visibility action is invalid")
+        canonical_rows = tuple(sorted(set(row_ids)))
+        intent = (task_id, request_id, action, location_id, canonical_rows, expected_revision, signature)
+        with self._lifecycle.command_guard(command_id):
+            with self._lock:
+                prior = self._visibility_receipts.get(command_id)
+                if prior is not None:
+                    if type(prior) is not _TaskInventoryVisibilityReceipt or prior.signature != intent:
+                        raise CommandIdConflictError("inventory visibility command intent conflicts")
+                    assert prior.result is not None
+                    return dict(prior.result)
+                captured = self._task_inventory_details.get(task_id)
+                if (captured is None or captured[0] != request_id or captured[1] is None
+                        or captured[1].location_id != location_id):
+                    raise TaskUnavailableError("inventory publication is not current")
+            try:
+                claim = self._lifecycle.begin_inventory_visibility(task_id, request_id)
+            except LifecycleAssociationError as error:
+                raise TaskUnavailableError("inventory visibility is unavailable") from error
+            try:
+                receipt = _TaskInventoryVisibilityReceipt(task_id, intent, self._runtime.clock.now())
+                with self._lock:
+                    self._visibility_receipts[command_id] = receipt
+                counts = dict.fromkeys(("applied", "noop", "stale", "conflict"), 0)
+                change = self._runtime.acknowledge_inventory if action == "acknowledge" else self._runtime.restore_inventory
+                for row_id in canonical_rows:
+                    try:
+                        disposition = change(_row_command_id(command_id, row_id), location_id,
+                                             row_id, changed_at=receipt.changed_at).value
+                        counts[disposition] += 1
+                    except BaseException as error:
+                        # The failed row may have committed; only the confirmed prefix is known.
+                        retire_exception_graph(error)
+                        break
+                unresolved = len(canonical_rows) - sum(counts.values())
+                result = {"task_id": task_id, "request_id": request_id, "action": action,
+                          "expected_revision": expected_revision, "total": len(canonical_rows),
+                          **counts, "unresolved_count": unresolved,
+                          "disposition": "partial" if unresolved else "completed"}
+                with self._lock:
+                    receipt.result = result
+                return dict(result)
+            finally:
+                self._lifecycle.end_observation(claim)
 
     def read_plan_setup(self, request_id: str) -> TaskSetupSnapshotView:
         artifact = self._runtime.get_plan(request_id)
@@ -2291,6 +2351,9 @@ class NamiSyncService:
             if retire_plan and task_id is not None:
                 with self._lock:
                     self._task_inventory_details.pop(task_id, None)
+                    for command_id, receipt in tuple(self._visibility_receipts.items()):
+                        if type(receipt) is _TaskInventoryVisibilityReceipt and receipt.task_id == task_id:
+                            self._visibility_receipts.pop(command_id, None)
             if retire_plan and review_binding is not None:
                 self._runtime.retire_captured_execution_review(
                     review_binding.task_id

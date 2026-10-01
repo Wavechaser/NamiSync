@@ -36,9 +36,14 @@ trace/error-vocabulary helper migrations pass seven checks after the broader
 neighborhood reported 2,765 passes/four mismatches. The final frozen
 workflows/interfaces rerun passes all 2,769 cases and independent Refresh review
 approves the helper migrations. The read pane is committed as `687549a`.
-Visibility actions are next; desktop actions and the inventory installed witness
-wait for their reviewed backend. Twelve import contracts and 191 local document
-links pass.
+Refresh is committed as `9266845`. Visibility source/tests/docs are frozen on
+that base; 795 focused checks and 2,785 workflow/interface checks pass, with
+fresh independent review approved (13 additional focused passes). The implementation retains actual bounded
+conditional outcomes, frozen timestamps and uncertain suffixes after partial
+failure. Dirty prior publications remain readable but cannot authorize more
+visibility writes until a complete replacement succeeds. Desktop actions and
+the installed inventory witness wait for this reviewed backend. Twelve import
+contracts and 191 local document links pass.
 
 `12cae9b` commits independent acceptance tooling and its Windows venv-launch correction, which passed
 review, 23 focused checks and a real untimed native launch. Full untimed fixture

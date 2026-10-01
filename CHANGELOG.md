@@ -327,6 +327,14 @@ Inventory review and beta packaging remain open.
   response capacity; no automatic resubmission occurs. Fresh review and composed
   admission, replay, offline recovery and replacement checks pass; the final
   workflows/interfaces neighborhood passes 2,769 cases.
+- Add task-bound missing-row acknowledge/restore through the production bridge.
+  Complete server-owned folder scope includes hidden and off-window subjects;
+  conditional writes preserve reappeared rows. Frozen command facts and bounded
+  actual disposition counts survive response loss and failed view replacement,
+  including explicit unresolved rows after a partial failure. A dirty prior view
+  remains readable but cannot authorize another visibility change until rebuilt.
+  Task Close waits for active writes and retires the task's receipts.
+  Fresh review, 795 focused and 2,785 workflow/interface checks pass.
 
 #### Mitigate the Advanced Color flyout halo (2026-09-24)
 

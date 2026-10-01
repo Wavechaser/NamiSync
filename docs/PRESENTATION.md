@@ -97,7 +97,7 @@ Nodes retain the structural data needed by presentation—preorder position, dep
 
 ## Views, windows, and selection
 
-Plan views are server-side, opaque, immutable/revisioned projections. A response formed for a stale lifecycle, selection, result, view-state, or projection revision returns a typed conflict and does not combine old structure with new detail. The browser keeps at most its current 256-row window and treats DOM rows as disposable. Server selection remains authoritative across virtualized rows, collapse, filters, and windows. A Plan header bulk gesture applies to all selectable operations whose own rows match the current search and operation filters; a folder gesture applies to matching descendants only. Both include matches outside the loaded window and under collapsed folders. Sorting, collapse and scroll do not change gesture membership. View changes alone never alter selection, and Execute always uses the complete current selection, including hidden operations. Workflow dependency closure can reselect an operation outside the view when a chosen operation requires it; safety exclusions remain in force. Inventory read views are implemented; their separate complete-folder action contract remains pending.
+Plan views are server-side, opaque, immutable/revisioned projections. A response formed for a stale lifecycle, selection, result, view-state, or projection revision returns a typed conflict and does not combine old structure with new detail. The browser keeps at most its current 256-row window and treats DOM rows as disposable. Server selection remains authoritative across virtualized rows, collapse, filters, and windows. A Plan header bulk gesture applies to all selectable operations whose own rows match the current search and operation filters; a folder gesture applies to matching descendants only. Both include matches outside the loaded window and under collapsed folders. Sorting, collapse and scroll do not change gesture membership. View changes alone never alter selection, and Execute always uses the complete current selection, including hidden operations. Workflow dependency closure can reselect an operation outside the view when a chosen operation requires it; safety exclusions remain in force. Inventory read views and their separate complete-folder action bridge are implemented; desktop action controls remain pending.
 
 The synthetic Plan root remains internal to the projection and its complete-plan
 rollups, but is not a table row or a second whole-plan checkbox. Plan window
@@ -163,12 +163,21 @@ reuse these values and serialize only the requested slice; current detail uses
 one exact ledger row read. View updates stage replacement sequence values before
 advancing their revision. Open, update, window, detail and same-task Refresh are
 available through the production bridge. The desktop read renderer is
-implemented; visibility actions remain pending. A new released scan stages a complete replacement, preserving
+implemented; visibility bridge actions are available and desktop controls remain
+pending. A new released scan stages a complete replacement, preserving
 search, facets, sort and surviving collapsed nodes while advancing the existing
 view revision. Failed construction preserves the prior publication, which stays
 readable during a new scan. Its request identity remains distinct from the
 task's current scan request. Incomplete scan evidence does not veto a complete
 ledger projection. History belongs to `HISTORY.md` and pages in the database.
+
+Visibility gestures act on complete missing-row domain membership, regardless of
+search, facets, collapse or the loaded window. A current released publication
+and exact revision are required. The response retains bounded actual conditional
+outcomes before rebuilding; failure leaves prior reads available but marks their
+publication dirty, excluding another visibility effect until whole replacement
+succeeds. Rebuilds preserve concurrent view gestures and advance the view revision.
+No ordinary-integrity overlay or selection mechanism is introduced.
 
 ## Search, filters, sorting, and follow
 

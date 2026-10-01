@@ -4,7 +4,7 @@ This document owns the implemented CLI and desktop adapters, service/task lifecy
 
 `BRIDGE.md` owns external desktop protocol, transport, retry/recovery, and its exact evidence. `PRESENTATION.md` owns tree/view/search/sort/selection behavior and visual scale evidence. The frozen v1 event-and-transport custody result is scoped to its bridge evidence and does not establish whole-runtime containment. The former BR-G-45 aggregate terminal-artifact model is retired. SH-G-15 remains an open, scoped release criterion defined below.
 
-The active service and CLI support sync, inventory, baseline, verify and rebaseline. The desktop exposes the bounded host/transport foundation and process-live tasks with frozen Setup, typed/picker/recent locations, plan and standalone inventory starts, Plan again, navigation, reconstruction, and explicit close. Plan review supplies bounded hierarchy, sibling sorting, server-owned selection, destructive confirmation and same-task execution with live controls and retained result review. Inventory read projections, their desktop renderer and same-task Refresh with their production bridge are implemented; visibility actions, manual post-copy verification, history and full settings remain accepted but unrealized outcomes. Their delivery register is [M1_PLAN.md](M1_PLAN.md).
+The active service and CLI support sync, inventory, baseline, verify and rebaseline. The desktop exposes the bounded host/transport foundation and process-live tasks with frozen Setup, typed/picker/recent locations, plan and standalone inventory starts, Plan again, navigation, reconstruction, and explicit close. Plan review supplies bounded hierarchy, sibling sorting, server-owned selection, destructive confirmation and same-task execution with live controls and retained result review. Inventory read projections, their desktop renderer and same-task Refresh/visibility bridge actions are implemented; desktop action controls, manual post-copy verification, history and full settings remain accepted but unrealized outcomes. Their delivery register is [M1_PLAN.md](M1_PLAN.md).
 
 
 ## Purpose
@@ -104,6 +104,21 @@ Fresh Refresh can recover from a location-less refusal using the current release
 request and prior complete view revision; it never reuses prior root authority.
 Current durable evidence retains observed and attested subjects, raw scalar
 values, full native identity and digest provenance separately from scan metadata.
+
+Task-bound acknowledge/restore additionally require a current complete
+publication. The registry resolves complete missing-row membership independently
+of visible filtering, windows and collapse, then reserves an original-result
+entry in the same 48-entry population as starts. The service freezes one UTC
+timestamp, retains task-owned aggregate receipts and invokes existing conditional
+row writers; direct CLI visibility signatures and tuple results are unchanged.
+Known applied/noop/stale/conflict counts and an unresolved suffix disclose actual
+partial success. A failed row may have committed and is never reported untouched.
+The existing association claim holds Close until the invocation settles and
+excludes Refresh; exact successful Close retires only that task's visibility
+receipts. Registry read gestures remain available during the effect. The original
+aggregate is retained before complete replacement construction; failed construction
+preserves reads and marks the publication dirty, refusing another visibility
+effect until a complete reload. Original replay does not repeat writes or rebuilds.
 
 Every admitted execution, inventory, baseline, verify, or rebaseline session
 also receives one exact process-local detail owner: the dispatcher session id
@@ -655,8 +670,8 @@ another interface consumer needs the operation.
 
 The application admits at most 48 active desktop task effects before invoking a
 delivery factory or lower application work. Independently, the adapter keeps at
-most 48 successful/in-flight start-response entries including task-owned Refresh
-failures, retiring task-associated entries with their tasks, and one shared population of 48 shell/session close-response
+most 48 successful/in-flight start/visibility-response entries including task-owned Refresh
+and visibility failures, retiring task-associated entries with their tasks, and one shared population of 48 shell/session close-response
 tombstones with least-recently-used eviction. These are exact count bounds and
 make no retained-byte or whole-runtime memory claim. Terminal-session release
 closes observer and Dispatcher custody while retaining the task and its actual
@@ -849,7 +864,8 @@ boundary and its race limitation. It also protects the small admission return
 for asynchronous commands; asynchronous completion does not remove that race.
 
 The native bridge separates admission from completion only for `create_task`,
-`start_plan`, `start_inventory`, `refresh_inventory`, `plan_again`, `start_execution`,
+`start_plan`, `start_inventory`, `refresh_inventory`, `acknowledge_inventory`,
+`restore_inventory`, `plan_again`, `start_execution`,
 `probe_recent_pairs`, `release_terminal_session` and
 `close_task`. CommandSpec owns that
 classification; custom commands and ordinary Python dispatch retain synchronous

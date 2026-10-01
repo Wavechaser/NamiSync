@@ -400,6 +400,12 @@ class TaskLifecyclePort(Protocol):
         delivery_factory: TaskDeliveryFactory,
     ) -> TaskStartView: ...
 
+    def change_task_inventory_visibility(
+        self, task_id: str, request_id: str, *, action: str, location_id: int,
+        row_ids: tuple[str, ...], expected_revision: int, command_id: str,
+        signature: tuple[object, ...],
+    ) -> dict[str, object]: ...
+
     def start_task_plan_again(
         self,
         old_task_id: str,
