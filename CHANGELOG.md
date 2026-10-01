@@ -313,7 +313,13 @@ Inventory review and beta packaging remain open.
   as ancestor context for visible descendants. Native/browser validation and
   stale task/view/Close guards are covered. Independent review and real composed
   scan-to-Details checks pass; the combined affected departments pass 3,109 tests
-  with three skips. Refresh, visibility actions and desktop wiring remain next.
+  with three skips.
+- Add the desktop inventory read pane with server-owned search, facets,
+  collapse, paging and sibling sort/reset. Details distinguish observed facts
+  from current attestation; warnings stay informational and prior publications
+  stay visibly distinct from newer scans. Independent review corrected stale
+  viewport adoption and nested-row indentation. Focused browser checks and the
+  installed tree/keyboard/reflow witness pass. Action controls remain next.
 
 #### Mitigate the Advanced Color flyout halo (2026-09-24)
 

@@ -7,6 +7,8 @@ import {
   createTask,
   echoReadiness,
   getExecutionDetail,
+  getInventoryDetail,
+  getInventoryWindow,
   getPlanAnchor,
   getPlanOperationAnchor,
   getPlanWindow,
@@ -18,6 +20,7 @@ import {
   mutatePlanHighlightedSelection,
   OutcomeUnavailableError,
   openPlanView,
+  openInventoryView,
   pickFolder,
   planAgain,
   prepareSetup,
@@ -34,6 +37,7 @@ import {
   TerminalSessionReleaseError,
   whenBridgeApiReady,
   updatePlanView,
+  updateInventoryView,
 } from "./bridge.js";
 import { installReadinessReceiver } from "./readiness.js";
 import { installAppearanceReceiver } from "./appearance.js";
@@ -206,7 +210,12 @@ const panel = createWorkPanel({
   onExecutionDetail: (review, row) => { void readExecutionDetail(review, row); },
   onFollowOverride: disablePlanFollow,
   onNavigateCurrent: (review, enableFollow) => { queuePlanFollow(review, enableFollow, true); },
-}, settingsView);
+}, settingsView, {
+  onViewChange: (review, patch) => { void changeInventoryView(review, patch); },
+  onWindow: loadInventoryWindow,
+  onDetail: (review, nodeId) => { void readInventoryDetail(review, nodeId); },
+  onReload: (task) => { void loadInventoryReview(task, true); },
+});
 const rail = createTaskRail({
   onCreate: () => { void createBlankTask(); },
   onSelect: selectTask,
@@ -312,6 +321,7 @@ function showSettings() {
   if (settingsVisible) return;
   const task = currentTask();
   if (task?.review != null) retireExecutionDetail(task.review);
+  if (task?.inventoryReview != null) retireInventoryDetail(task.inventoryReview);
   navigationRevision += 1;
   settingsVisible = true;
   renderTasks();
@@ -442,6 +452,7 @@ function selectTask(taskId) {
   navigationRevision += 1;
   const previous = selectedTaskId === null ? null : tasks.get(selectedTaskId) ?? null;
   if (previous?.review != null) retireExecutionDetail(previous.review);
+  if (previous?.inventoryReview != null) retireInventoryDetail(previous.inventoryReview);
   selectedTaskId = taskId;
   settingsVisible = false;
   renderTasks();
@@ -453,6 +464,7 @@ function selectTask(taskId) {
     void loadPlanReview(task);
   }
   if (task.executionWindowDirty) void refreshExecutionWindow(task);
+  if (task.taskKind === "inventory" && task.sessionReleased) void loadInventoryReview(task, true);
 }
 
 function adoptTask(summary) {
@@ -488,6 +500,10 @@ function adoptTask(summary) {
       reviewLoading: false,
       reviewRevision: 0,
       reviewSessionId: null,
+      inventoryReview: null,
+      inventoryLoading: false,
+      inventoryRevision: 0,
+      inventoryError: null,
       executionStarted: false,
       executionAttempt: null,
       executionControlState: "running",
@@ -503,6 +519,9 @@ function adoptTask(summary) {
     tasks.set(task.taskId, task);
   } else {
     if (task.sessionId !== summary.session_id) {
+      if (task.inventoryReview !== null) retireInventoryDetail(task.inventoryReview);
+      task.inventoryRevision += 1;
+      task.inventoryLoading = false;
       task.recoveryRetry = null;
       task.recoverySessionId = null;
       task.recoveryRunning = false;
@@ -546,6 +565,7 @@ function adoptTask(summary) {
   ) {
     void loadPlanReview(task);
   }
+  if (task.taskKind === "inventory" && task.sessionReleased) void loadInventoryReview(task);
   return task;
 }
 
@@ -730,6 +750,7 @@ async function refreshTasks() {
   }
   renderTasks();
   if (selectedTaskId !== null) void loadTaskSetup(tasks.get(selectedTaskId));
+  if (selectedTaskId !== null) void loadInventoryReview(tasks.get(selectedTaskId));
 }
 
 async function createBlankTask() {
@@ -820,6 +841,13 @@ async function closeRetainedTask(taskId) {
   task.closeFailed = false;
   task.closeMessage = null;
   task.error = null;
+  task.inventoryRevision += 1;
+  task.inventoryLoading = false;
+  if (task.inventoryReview !== null) {
+    task.inventoryReview.actionRevision += 1;
+    task.inventoryReview.pending = "close";
+    retireInventoryDetail(task.inventoryReview);
+  }
   if (task.review !== null) {
     task.review.actionRevision += 1;
     task.review.pending = "close";
@@ -872,6 +900,8 @@ async function closeRetainedTask(taskId) {
         ? null : "Close was refused. Retry close.";
       if (!checkableOutcome(task.closeRecovery) && !fixedOutcome(task.closeRecovery)
           && task.review?.pending === "close") task.review.pending = null;
+      if (!checkableOutcome(task.closeRecovery) && !fixedOutcome(task.closeRecovery)
+          && task.inventoryReview?.pending === "close") task.inventoryReview.pending = null;
     }
   } finally {
     if (
@@ -881,6 +911,8 @@ async function closeRetainedTask(taskId) {
       task.closePending = false;
       if (!checkableOutcome(task.closeRecovery) && !fixedOutcome(task.closeRecovery)
           && task.review?.pending === "close") task.review.pending = null;
+      if (!checkableOutcome(task.closeRecovery) && !fixedOutcome(task.closeRecovery)
+          && task.inventoryReview?.pending === "close") task.inventoryReview.pending = null;
     }
     renderTasks();
   }
@@ -1137,6 +1169,7 @@ function acceptTaskRelease(task, sessionId) {
   task.executionWindowDirtyRevision += 1;
   renderTasks();
   if (task.taskKind === "sync-plan") void loadPlanReview(task, true);
+  if (task.taskKind === "inventory") void loadInventoryReview(task, true);
 }
 
 function acceptTaskReleaseDelay(task, sessionId, recovery) {
@@ -1150,6 +1183,189 @@ function retireExecutionDetail(review) {
   if (review === null || review === undefined) return;
   review.detailRevision = (review.detailRevision ?? 0) + 1;
   review.executionDetail = null;
+}
+
+function retireInventoryDetail(review) {
+  review.detailRevision += 1;
+  review.detail = null;
+}
+
+function currentInventoryTask(review) {
+  const task = currentTask();
+  return task !== null && !settingsVisible && !task.closePending
+    && task.inventoryReview === review ? task : null;
+}
+
+async function loadInventoryReview(task, force = false) {
+  if (task === undefined || tasks.get(task.taskId) !== task || selectedTaskId !== task.taskId
+      || settingsVisible || task.closePending || task.taskKind !== "inventory"
+      || !task.sessionReleased || task.sessionId === null
+      || (!force && (task.inventoryLoading || task.inventoryReview !== null))) return;
+  const request = ++task.inventoryRevision;
+  const sessionId = task.sessionId;
+  const navigation = navigationRevision;
+  if (task.inventoryReview !== null) {
+    task.inventoryReview.actionRevision += 1;
+    task.inventoryReview.pending = null;
+    task.inventoryReview.queuedSearchQuery = null;
+    retireInventoryDetail(task.inventoryReview);
+  }
+  task.inventoryLoading = true;
+  task.inventoryError = null;
+  renderTasks();
+  const stillCurrent = () => tasks.get(task.taskId) === task && task.inventoryRevision === request
+    && task.sessionId === sessionId && selectedTaskId === task.taskId
+    && navigationRevision === navigation && !settingsVisible && !task.closePending;
+  try {
+    const summary = await openInventoryView(task.taskId);
+    if (!stillCurrent()) return;
+    const window = await getInventoryWindow(task.taskId, summary.view_revision, 0, 256);
+    if (!stillCurrent()) return;
+    if (window.disposition !== "current" || window.view_revision !== summary.view_revision) {
+      task.inventoryError = "Inventory changed. Reload the inventory view to continue.";
+      return;
+    }
+    task.inventoryReview = {
+      summary, window, pending: null, message: null, queuedSearchQuery: null,
+      actionRevision: 0, windowRequestRevision: 0, detailRevision: 0, detail: null, scrollTop: 0,
+    };
+  } catch (_error) {
+    if (stillCurrent()) task.inventoryError = "Inventory unavailable. Reload the inventory view to retry.";
+  } finally {
+    if (tasks.get(task.taskId) === task && task.inventoryRevision === request) {
+      task.inventoryLoading = false;
+      renderTasks();
+    }
+  }
+}
+
+async function changeInventoryView(review, patch) {
+  const task = currentInventoryTask(review);
+  if (task === null || task.inventoryLoading) return;
+  if (review.pending !== null) {
+    if (review.pending === "view" && Object.keys(patch).length === 1
+        && typeof patch.searchQuery === "string") review.queuedSearchQuery = patch.searchQuery;
+    return;
+  }
+  const action = ++review.actionRevision;
+  const sessionId = task.sessionId;
+  const publication = review.summary.request_id;
+  const navigation = navigationRevision;
+  const gesture = {
+    searchQuery: patch.searchQuery ?? review.summary.search_query,
+    filters: [...(patch.filters ?? review.summary.filters)],
+    sortColumn: patch.sortColumn ?? review.summary.sort_column,
+    sortDirection: (patch.sortColumn ?? review.summary.sort_column) === "path"
+      ? "ascending" : patch.sortDirection ?? review.summary.sort_direction,
+    collapseNodeId: patch.collapseNodeId ?? null,
+    collapsed: patch.collapseNodeId === undefined ? null : patch.collapsed,
+  };
+  review.windowRequestRevision += 1;
+  retireInventoryDetail(review);
+  review.pending = "view";
+  review.message = "Updating inventory view…";
+  renderTasks();
+  const stillCurrent = () => currentInventoryTask(review) === task && review.actionRevision === action
+    && task.sessionId === sessionId && review.summary.request_id === publication
+    && navigationRevision === navigation;
+  try {
+    const summary = await updateInventoryView(task.taskId, review.summary.view_revision, gesture, () => {
+      if (stillCurrent()) {
+        review.message = "View response delayed. Reload the inventory view to read its current state.";
+        renderTasks();
+      }
+    });
+    if (!stillCurrent()) return;
+    const window = await getInventoryWindow(task.taskId, summary.view_revision, 0, 256);
+    if (!stillCurrent()) return;
+    if (window.disposition !== "current" || window.view_revision !== summary.view_revision) {
+      review.message = "Inventory changed. Reload the inventory view to continue.";
+      return;
+    }
+    review.summary = summary;
+    review.window = window;
+    review.scrollTop = 0;
+    review.message = summary.disposition === "conflict" ? "View changed. Current inventory view shown." : null;
+  } catch (_error) {
+    if (stillCurrent()) review.message = "View response unavailable. Reload the inventory view to retry.";
+  } finally {
+    if (tasks.get(task.taskId) === task && task.inventoryReview === review && review.actionRevision === action) {
+      review.pending = null;
+      renderTasks();
+      const queued = review.queuedSearchQuery;
+      review.queuedSearchQuery = null;
+      if (currentInventoryTask(review) === task && queued !== null
+          && queued !== review.summary.search_query) void changeInventoryView(review, { searchQuery: queued });
+    }
+  }
+}
+
+async function loadInventoryWindow(review, offset) {
+  const task = currentInventoryTask(review);
+  if (task === null || task.inventoryLoading || review.pending !== null) return null;
+  const request = ++review.windowRequestRevision;
+  const action = review.actionRevision;
+  const sessionId = task.sessionId;
+  const publication = review.summary.request_id;
+  const revision = review.summary.view_revision;
+  const navigation = navigationRevision;
+  const stillCurrent = () => currentInventoryTask(review) === task
+    && review.windowRequestRevision === request && review.actionRevision === action
+    && task.sessionId === sessionId && review.summary.request_id === publication
+    && review.summary.view_revision === revision && navigationRevision === navigation;
+  try {
+    const window = await getInventoryWindow(task.taskId, revision, offset, 256);
+    if (!stillCurrent()) return null;
+    if (window.disposition !== "current") {
+      review.message = "Inventory changed. Reload the inventory view to continue.";
+      renderTasks();
+      return null;
+    }
+    return window;
+  } catch (_error) {
+    if (stillCurrent()) {
+      review.message = "Inventory rows unavailable. Reload the inventory view to retry.";
+      renderTasks();
+    }
+    return null;
+  }
+}
+
+async function readInventoryDetail(review, nodeId) {
+  const task = currentInventoryTask(review);
+  if (task === null || task.inventoryLoading || review.pending !== null) return;
+  const row = review.window.rows.find((value) => value.node_id === nodeId);
+  if (row === undefined) return;
+  const request = ++review.detailRevision;
+  const action = review.actionRevision;
+  const sessionId = task.sessionId;
+  const publication = review.summary.request_id;
+  const revision = review.summary.view_revision;
+  const navigation = navigationRevision;
+  const detail = { row, state: row.row_id === null ? "current" : "loading", response: null };
+  review.detail = detail;
+  renderTasks();
+  if (row.row_id === null) return;
+  const stillCurrent = () => currentInventoryTask(review) === task && review.detailRevision === request
+    && review.detail === detail && review.actionRevision === action && task.sessionId === sessionId
+    && review.summary.request_id === publication && review.summary.view_revision === revision
+    && navigationRevision === navigation;
+  try {
+    const response = await getInventoryDetail(task.taskId, revision, nodeId);
+    if (!stillCurrent()) return;
+    if (response.disposition === "conflict") {
+      retireInventoryDetail(review);
+      review.message = "Inventory changed. Reload the inventory view to read current details.";
+    } else {
+      detail.state = response.disposition;
+      detail.response = response;
+    }
+  } catch (_error) {
+    if (stillCurrent()) detail.state = "error";
+  } finally {
+    if (currentInventoryTask(review) === task && review.detailRevision === request
+        && navigationRevision === navigation) renderTasks();
+  }
 }
 
 function adoptExecutionWindow(review, window) {

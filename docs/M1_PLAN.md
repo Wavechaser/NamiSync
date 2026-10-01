@@ -265,8 +265,10 @@ fixtures after their evidence is retained. No parallel delivery register is adde
 | --- | --- | --- |
 | Inventory facts and sibling ordering | Workflow inventory projection, existing node tree and Plan projection sorter, workflow facade, focused projection tests and department assignment; INVENTORY/PRESENTATION/ARCHITECTURE. Build complete immutable domain/warning populations, independent warning identity, checked domain rollups, raw own-object sort facts and evidence provenance. Share sibling ordering without changing Plan identity, selection or execution order. | Projection fixtures for hierarchy, warnings, evidence, overflow, sort directions/reset and base/information-heavy scale (120,000/240,000 displayed rows, including structural rows); existing independent source bounds and Plan sorter/workflow regressions. |
 | Bounded inventory reads | Workflow/runtime and service projection/evidence entry points, task port, web inventory review, registry and command adapters, browser bridge wrappers; direct workflow/service/registry/command/bridge tests and owning docs. Capture task-bound scan details before release, without making release construct a projection. Lazy view construction reads one whole ledger snapshot; exact Details uses a fresh bounded row read. One task-owned complete view, exact revisions and bounded windows/details keep current durable evidence distinct from session truth. | Real composition first, then publication/refusal/replacement/close races, stale revisions, request limits, unchanged-window counted work and current-evidence provenance. |
-| Inventory refresh and visibility actions | Service/task port/lifecycle, existing inventory review/registry/command/bridge owners; direct lifecycle/service/registry/command tests and owning docs. Complete-folder scope, same-task Refresh and acknowledge/restore use exact original-command receipts. Failed projection replacement retains prior complete publication; warnings never acquire action authority; bounded result counts report actual conditional row dispositions rather than an all-or-none claim. | Fresh/replayed/refused admissions, warning rejection, exact scope, replacement races, post-effect result recovery, per-row visibility dispositions, bounded retained starts and Close retirement. |
-| Inventory desktop consumer | Separate inventory pane using existing shell/row/tree assets, panels/app integration and styles; ordinary browser probes and installed headed inventory harness with shared fixtures; DESKTOP_UI/BRIDGE/PRESENTATION/INTERFACES. Search, facets, collapse, windowing, sibling sorting/reset, evidence detail, refresh, acknowledged hiding/counts and acknowledge/restore. Browser owns no path/action policy. | Ordinary browser interaction and stale-response probes; installed native inventory journey and affected existing shell journeys; independent final review. |
+| Inventory Refresh | Service/task port/lifecycle, existing inventory review/registry/command/bridge owners; direct lifecycle/service/registry/command tests and owning docs. Full/exact/complete-folder same-task Refresh uses exact original-command receipts. Failed projection replacement retains prior complete publication and view preferences; warnings never acquire action authority. | Fresh/replayed/refused admissions, warning rejection, exact scope, replacement races, original-result recovery, bounded retained starts and Close retirement. |
+| Missing-row visibility actions | The same service/task port/review/registry/command/bridge owners and direct tests/docs, after Refresh publication is integrated. Acknowledge/restore use frozen original-command facts, complete-folder scope and conditional writes; bounded result counts report actual row dispositions rather than an all-or-none claim. | Hidden/off-window scope, stale/reappeared conditions, post-effect result recovery, shared retained capacity and exact Close cleanup. |
+| Inventory desktop reads | Separate `assets/inventory_review.js`, shell/panels integration, narrow optional tree decoration and styles, dedicated inventory frontend probes/test module and DESKTOP_UI. Search, facets, collapse, windowing, sibling sorting/reset, current evidence detail and acknowledged hiding/counts. Depends only on committed bounded reads; may proceed independently of backend Refresh with disjoint file ownership. Four read shapes remain stable; publication request identity may differ from an active scan. | Ordinary production browser interaction, accessibility/tree regression and stale-response probes; existing installed SH-G-7 for the shared tree seam, affected interfaces gate and independent review. |
+| Inventory desktop actions and installed witness | Existing inventory pane/app plus reviewed action bridge wrappers; ordinary probes and installed headed inventory harness with shared fixtures; DESKTOP_UI/BRIDGE/PRESENTATION/INTERFACES. Refresh and acknowledge/restore use original-command recovery and server-owned complete-folder scope. Depends on both desktop reads and backend actions. | Installed native inventory journey and affected existing shell journeys; final ordinary/headed integration and independent review. |
 | Reproducible projection acceptance | Dedicated `tools/performance/inventory.py` collector and `validate_inventory.py` checker, focused tools tests, PERFORMANCE/TOOLS methods, and compact raw/validation JSON under the existing `tests/interfaces/web/` evidence convention. This verification-only outcome depends on the committed pure projection, so its preparation may proceed independently of the read/action/UI code. | Untimed exact fixture checks; checker controls for over-budget, incomplete, wrong-population and changed-source evidence; tools checks and fresh review. Timing collection waits for coordinated reference conditions and the final measured source/driver/checker dependencies. No general CLI framework or new budget. |
 
 The acceptance gate combines those focused checks, affected departments, the
@@ -288,10 +290,17 @@ Cold construction tooling/evidence shipped in `12cae9b` and passes the coordinat
 five samples each, maxima 1.9712401 s base and 2.8123806 s information-heavy.
 PERFORMANCE owns the committed raw/validation pointers and failed-launch
 disposition. Read surface review and the corrected combined tools/workflows/
-interfaces neighborhood pass (3,109 tests, three skips); bounded reads are ready
-for their separate commit. Twelve imports and 191
-local documentation links pass. Actions, desktop, headed and integrated
-verification remain open.
+interfaces neighborhood pass (3,109 tests, three skips); bounded reads shipped
+in `a84e816`. Twelve imports and 191
+local documentation links pass. The desktop read pane passes fresh independent
+review after stale-window adoption and nested-row indentation corrections;
+57 focused checks and installed SH-G-7 pass. The broader neighborhood reports
+2,765 passes and four direct Refresh test-helper mismatches. Migrating the exact
+bridge trace anchor and fixed error vocabulary passes all seven focused checks,
+including byte restoration and no partial mutation on anchor drift. These
+helpers join the Refresh population with unchanged guarantees. Unaffected
+department evidence is retained by dependency. Visibility, desktop actions and
+final integration remain open.
 
 Retain current scan reconciliation, warning and ingress/population bounds,
 conditional ledger changes, exact task retirement and original-command recovery.
@@ -306,10 +315,25 @@ observations may appear in a complete ledger projection. The task lifecycle's ex
 admission needs a narrow inventory follow-up path, with original-command receipt,
 attachment/rollback and old-detail retirement tests; this does not authorize a
 generic lifecycle rewrite. Close retains its existing pending-cancel semantics.
-Repeated Refresh uses the registry's existing 48-entry start-response capacity,
-with admission before effects and truthful refusal when it is exhausted.
-Receipts remain attached until explicit task Close; Plan's existing one-follow-up
-rule remains unchanged. Capture inventory review facts before terminal release
+Repeated Refresh and inventory visibility receipts share the registry's existing
+48-entry retained start-response capacity, with admission before effects and
+truthful refusal when it is exhausted. Visibility freezes the original command's
+timestamp and returns bounded counts of actual conditional dispositions. Receipts
+remain task-owned until explicit Close, including starts whose released inventory
+session association was superseded and reserved Refresh failures. An initial
+pre-admission failure made no scan/effect, but inherited failed-start cleanup
+discarded its receipt and let a later direct replay admit its first scan. Correct
+that original-result retention gap only for task-owned Refresh entries; evidence
+does not establish duplicate durable mutation or false terminal success.
+Plan's existing one-follow-up rule remains
+unchanged. Keep prior complete inventory reads available during a fresh scan.
+Fresh Refresh requires the current released task request plus the retained
+complete view revision; it may rescan that prior domain scope after an offline
+or unpublished scan. Preserve the last location-bearing Details as a location/
+mount hint in that case, while exact request matching prevents falsely publishing
+it as the new scan. Fresh workflow admission remains mandatory. Visibility
+effects additionally require a publication matching the current request.
+Capture inventory review facts before terminal release
 drops the workflow request details, and preserve them until exact task retirement.
 Archived representation/cache/DTO recipes confer no authority: use current
 subject criteria and the smallest implementation that meets them. New hashing,

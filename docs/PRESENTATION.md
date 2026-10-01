@@ -162,8 +162,8 @@ permutation and its derived `VisibleSequence` at task scope. Repeated windows
 reuse these values and serialize only the requested slice; current detail uses
 one exact ledger row read. View updates stage replacement sequence values before
 advancing their revision. Open, update, window and detail are available through
-the production bridge; the renderer and Refresh/visibility actions remain
-pending. History belongs to `HISTORY.md` and pages in the database.
+the production bridge; the desktop read renderer is implemented. Refresh/visibility
+actions remain pending. History belongs to `HISTORY.md` and pages in the database.
 
 ## Search, filters, sorting, and follow
 
@@ -188,7 +188,7 @@ console output includes fixture construction and is diagnostic only, not a
 latency gate. Rerun on changes to fact precedence, grouping, aggregation or
 selection overlays; prior benchmark receipts do not certify the new totals.
 
-Sort is process-live view state, never durable preference; it preserves tree identity, selection, recursive action scope, execution order, rollups, and domain truth. A rebuild derives the retained chosen sort from the new immutable projection and publishes its permutation, indexes, and revisions atomically; a failed rebuild preserves the previous complete view, and window reads perform no I/O to discover sort keys. Pure inventory projection sorting is implemented; its desktop consumer remains unrealized. Inventory raw own-object sort keys remain distinct from complete folder byte rollups. Synthetic ancestors have no own size or mtime; real directories use only their observed values. Warnings retain an attachment-order tail and never affect domain rollups or scope.
+Sort is process-live view state, never durable preference; it preserves tree identity, selection, recursive action scope, execution order, rollups, and domain truth. A rebuild derives the retained chosen sort from the new immutable projection and publishes its permutation, indexes, and revisions atomically; a failed rebuild preserves the previous complete view, and window reads perform no I/O to discover sort keys. Inventory projection sorting and its desktop read consumer are implemented. Inventory raw own-object sort keys remain distinct from complete folder byte rollups. Synthetic ancestors have no own size or mtime; real directories use only their observed values. Warnings retain an attachment-order tail and never affect domain rollups or scope.
 
 **M1-8-R0 surface.** Follow resolves the active operation to the nearest
 visible ancestor-or-self under the current collapse, filter, search, sort and
@@ -216,7 +216,7 @@ Focused checks must catch the failures that small fixtures conceal: scope-qualif
 
 ## Implemented Plan and accepted future outcomes
 
-The implemented Plan review surface lets users inspect a complete stable view of immutable review facts, inert notices, current server-owned selection and destructive intent without letting stale UI actions acquire authority. It preserves prior-path ancestry and paired move annotations, while operation groups remain non-folder membership containers. Its renderer retains only the current `1..256` row window and uses exact 24 px rows and matching virtual spacers. The generic `tree.js` inventory foundation retains its separate exact 28 px row contract. Inventory review and follow mode remain accepted future outcomes; their DTO layout, caching topology and intermediate delivery sequence remain open until implementation.
+The implemented Plan review surface lets users inspect a complete stable view of immutable review facts, inert notices, current server-owned selection and destructive intent without letting stale UI actions acquire authority. It preserves prior-path ancestry and paired move annotations, while operation groups remain non-folder membership containers. Its renderer retains only the current `1..256` row window and uses exact 24 px rows and matching virtual spacers. The inventory read renderer retains the same bounded window over the generic `tree.js` foundation's separate exact 28 px row contract. Inventory visibility controls and follow mode remain accepted future outcomes.
 
 The Plan summary displays workflow-derived selected/eligible counts, selected
 required bytes, and planning issues (preflight refusals plus scan notices).

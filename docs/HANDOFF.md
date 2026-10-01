@@ -21,7 +21,7 @@ directory sort error; the corrected key uses the real row's raw basename while
 synthetic ancestors keep their tree spelling. Independent correction review
 approved the first outcome.
 
-Bounded reads are implemented and independently reviewed: lazy
+`a84e816` commits independently reviewed bounded reads: lazy
 task-bound projection, cached revisioned windows and fresh exact-row evidence
 details, with native/browser ingress and stale-response checks. Focused checks
 pass 529 tests (10 supplemental deselected); 12 import contracts pass. The
@@ -29,7 +29,13 @@ corrected tools/workflow/interfaces neighborhood passes 3,109 tests/three skips.
 The fresh review includes a real native scan-to-release-to-current-Details
 composition probe. Failed development receipts remain
 in the evidence root, including the corrected release-versus-delivery-closing
-guard. Refresh/visibility actions and desktop implementation have not begun.
+guard. The desktop read pane is independently approved after stale viewport
+adoption and nested-row indentation corrections: 57 focused cases and installed
+SH-G-7 pass. Same-task Refresh source review passes; its direct bridge
+trace/error-vocabulary helper migrations pass seven checks after the broader
+neighborhood reported 2,765 passes/four mismatches. Visibility actions wait for
+the Refresh commit; desktop actions and the inventory installed witness wait for
+both lanes. Twelve import contracts and 191 local document links pass.
 
 `12cae9b` commits independent acceptance tooling and its Windows venv-launch correction, which passed
 review, 23 focused checks and a real untimed native launch. Full untimed fixture

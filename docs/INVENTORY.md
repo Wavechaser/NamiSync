@@ -220,7 +220,7 @@ consumed here are active. Remembered-location readback and Setup widgets are
 implemented. A standalone inventory task freezes only its admitted root,
 without sync options or a fabricated source/target pair. Pure workflow inventory
 projection, sibling ordering and task-bound read publication/paging are
-implemented. The desktop renderer and Refresh/visibility actions remain pending.
+implemented, including their desktop read renderer. Refresh/visibility actions remain pending.
 
 `workflows/inventory_projection.py` builds a complete immutable generation from
 the repository's typed rows and an independent warning population. It retains

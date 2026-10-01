@@ -270,6 +270,153 @@ body {
   overflow: hidden;
 }
 
+.nami-work-panel:has(.nami-inventory-review) {
+  overflow: hidden;
+}
+
+.nami-inventory-review {
+  block-size: 100%;
+  display: grid;
+  gap: var(--space-4);
+  grid-template-rows: auto minmax(0, 1fr);
+  min-block-size: 0;
+  min-inline-size: 0;
+}
+
+.nami-inventory-review [hidden] {
+  display: none;
+}
+
+.nami-inventory-review__header,
+.nami-inventory-review__table {
+  display: grid;
+  gap: var(--space-3);
+  min-block-size: 0;
+  min-inline-size: 0;
+}
+
+.nami-inventory-review__header > :is(h2, p),
+.nami-inventory-review__detail > :is(h2, p) {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.nami-inventory-review__header > h2,
+.nami-inventory-review__detail > h2 {
+  font-size: var(--font-size-body);
+}
+
+.nami-inventory-review__header > .nami-button {
+  justify-self: start;
+}
+
+.nami-inventory-review__content {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: minmax(0, 1fr);
+  min-block-size: 0;
+  min-inline-size: 0;
+}
+
+.nami-inventory-review__content:has(.nami-inventory-review__detail:not([hidden])) {
+  grid-template-columns: minmax(0, 3fr) minmax(16rem, 2fr);
+}
+
+.nami-inventory-review__table {
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+}
+
+.nami-inventory-review__toolbar {
+  align-items: start;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.nami-inventory-review__filters {
+  display: flex;
+  flex: 1 1 20rem;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.nami-inventory-review__sort {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.nami-inventory-review__sort > label {
+  align-items: center;
+  display: flex;
+  gap: var(--space-2);
+  font-size: var(--font-size-caption);
+}
+
+.nami-inventory-review__columns,
+.nami-inventory-row {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.8fr) minmax(0, 0.45fr) minmax(0, 0.8fr);
+  min-inline-size: 0;
+}
+
+.nami-inventory-review__columns {
+  color: var(--color-neutral-foreground-secondary);
+  font-size: var(--font-size-caption);
+  padding-inline: var(--space-3);
+}
+
+.nami-inventory-review__rows {
+  min-block-size: 0;
+  min-inline-size: 0;
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+
+.nami-tree-row.nami-inventory-row {
+  padding-block: 0;
+  padding-inline-start: var(--space-3);
+  font-size: var(--font-size-caption);
+}
+
+.nami-inventory-row__name {
+  align-items: center;
+  display: flex;
+  gap: var(--space-3);
+  min-inline-size: 0;
+  padding-inline-start: calc(var(--nami-tree-depth) * var(--space-3));
+}
+
+.nami-inventory-row > span {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nami-inventory-row__size,
+.nami-inventory-row__modified {
+  color: var(--color-neutral-foreground-tertiary);
+}
+
+.nami-inventory-review__detail {
+  display: grid;
+  align-content: start;
+  gap: var(--space-3);
+  min-block-size: 0;
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+
+@container (max-width: 62rem) {
+  .nami-inventory-review__content:has(.nami-inventory-review__detail:not([hidden])) {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 3fr) minmax(0, 2fr);
+  }
+}
+
 .nami-settings {
   display: grid;
   gap: var(--space-5);

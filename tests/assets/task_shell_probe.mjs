@@ -373,7 +373,12 @@ const planReviewUrl = moduleUrl(`
 `);
 const preparedPanelSource = panelSource
   .replace("./setup.js", setupUrl)
-  .replace("./plan_review.js", planReviewUrl);
+  .replace("./plan_review.js", planReviewUrl)
+  .replace("./inventory_review.js", moduleUrl(`
+    export function createInventoryReviewPanel() {
+      return { element: new HTMLElement("div"), render() {}, dispose() {} };
+    }
+  `));
 const executionConfirmationUrl = moduleUrl(`
   export function createExecutionConfirmation(roots) {
     globalThis.executionConfirmationHarness.roots = roots;
@@ -411,6 +416,10 @@ const bridgeUrl = moduleUrl(`
   export const getPlanOperationAnchor = (...args) => globalThis.taskHarness.getPlanOperationAnchor(...args);
   export const getPlanWindow = (...args) => globalThis.taskHarness.getPlanWindow(...args);
   export const getExecutionDetail = (...args) => globalThis.taskHarness.getExecutionDetail(...args);
+  export const openInventoryView = () => Promise.reject(new Error("unused inventory read"));
+  export const updateInventoryView = () => Promise.reject(new Error("unused inventory read"));
+  export const getInventoryWindow = () => Promise.reject(new Error("unused inventory read"));
+  export const getInventoryDetail = () => Promise.reject(new Error("unused inventory read"));
   export const mutatePlanSelection = (...args) => globalThis.taskHarness.mutatePlanSelection(...args);
   export const openPlanView = (...args) => globalThis.taskHarness.openPlanView(...args);
   export const readSetup = (...args) => globalThis.taskHarness.readSetup(...args);
@@ -443,7 +452,7 @@ const themeUrl = moduleUrl(`
 let appSource = await readFile(process.argv[2], "utf8");
 appSource = appSource.replace(
   /import \{[\s\S]*?\} from "\.\/bridge\.js";/,
-  `import { acknowledgeShellReady, admitLocation, BridgeTransportError, closeTask, controlExecution, createTask, echoReadiness, getExecutionDetail, getPlanAnchor, getPlanOperationAnchor, getPlanWindow, listTasks, markBridgeOperational, mutatePlanHighlight, mutatePlanSelection, openPlanView, OutcomeUnavailableError, pickFolder, planAgain, prepareSetup, readSetup, StartPlanUncertainError, startExecution, startInventory, startPlan, startTaskDrain, TaskCloseUncertainError, TaskCreateUncertainError, TerminalPresentationError, TerminalSessionReleaseError, updatePlanView, whenBridgeApiReady } from "${bridgeUrl}";`,
+  `import { acknowledgeShellReady, admitLocation, BridgeTransportError, closeTask, controlExecution, createTask, echoReadiness, getExecutionDetail, getInventoryDetail, getInventoryWindow, openInventoryView, updateInventoryView, getPlanAnchor, getPlanOperationAnchor, getPlanWindow, listTasks, markBridgeOperational, mutatePlanHighlight, mutatePlanSelection, openPlanView, OutcomeUnavailableError, pickFolder, planAgain, prepareSetup, readSetup, StartPlanUncertainError, startExecution, startInventory, startPlan, startTaskDrain, TaskCloseUncertainError, TaskCreateUncertainError, TerminalPresentationError, TerminalSessionReleaseError, updatePlanView, whenBridgeApiReady } from "${bridgeUrl}";`,
 );
 appSource = appSource
   .replace("./readiness.js", readinessUrl)

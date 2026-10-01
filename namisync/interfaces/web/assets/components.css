@@ -1165,6 +1165,11 @@ body {
   font-weight: var(--font-weight-medium);
 }
 
+.nami-inventory-review__filters .nami-button[aria-pressed="true"] {
+  background: var(--color-neutral-surface-selected);
+  border-color: var(--color-accent-fill);
+}
+
 .nami-tree {
   background: var(--color-neutral-surface);
   border: 1px solid var(--color-neutral-border-subtle);

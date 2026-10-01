@@ -135,6 +135,10 @@ const bridgeStub = moduleUrl(`
   export const closeTask = () => Promise.reject(new Error("unused"));
   export const listTasks = () => Promise.resolve({ tasks: [] });
   export const getExecutionDetail = () => Promise.reject(new Error("unused"));
+  export const openInventoryView = () => Promise.reject(new Error("unused inventory read"));
+  export const updateInventoryView = () => Promise.reject(new Error("unused inventory read"));
+  export const getInventoryWindow = () => Promise.reject(new Error("unused inventory read"));
+  export const getInventoryDetail = () => Promise.reject(new Error("unused inventory read"));
   export const readSetup = () => Promise.resolve({
     task_id: null,
     snapshot: {
@@ -198,7 +202,7 @@ taskStatusSource = taskStatusSource.replace("./render.js", renderStub);
 const taskStatusStub = moduleUrl(taskStatusSource);
 source = source.replace(
   /import \{[\s\S]*?\} from "\.\/bridge\.js";/,
-  `import { acknowledgeShellReady, admitLocation, BridgeTransportError, closeTask, createTask, echoReadiness, getExecutionDetail, listTasks, markBridgeOperational, OutcomeUnavailableError, pickFolder, planAgain, prepareSetup, probeRecentPairs, readSetup, StartPlanUncertainError, startInventory, startPlan, startTaskDrain, TaskCloseUncertainError, TaskCreateUncertainError, whenBridgeApiReady } from "${bridgeStub}";`,
+  `import { acknowledgeShellReady, admitLocation, BridgeTransportError, closeTask, createTask, echoReadiness, getExecutionDetail, getInventoryDetail, getInventoryWindow, openInventoryView, updateInventoryView, listTasks, markBridgeOperational, OutcomeUnavailableError, pickFolder, planAgain, prepareSetup, probeRecentPairs, readSetup, StartPlanUncertainError, startInventory, startPlan, startTaskDrain, TaskCloseUncertainError, TaskCreateUncertainError, whenBridgeApiReady } from "${bridgeStub}";`,
 );
 source = source
   .replace("./readiness.js", readinessStub)

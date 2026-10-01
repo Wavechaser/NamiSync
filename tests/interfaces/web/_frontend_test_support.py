@@ -42,6 +42,7 @@ INITIAL_ASSETS = {
     *(f"icons/{filename}" for filename in ICON_FILES),
     "index.html",
     "integrity.js",
+    "inventory_review.js",
     "panels.js",
     "plan.js",
     "plan_review.js",

@@ -4,8 +4,10 @@ The secured host, theme/accessibility foundation, generic tree renderer and
 file-row gallery are implemented. Process-live tasks expose frozen Setup and
 typed/picker/recent plan and standalone inventory starts. Production Plan
 review, execution admission and live pause/resume/cancel controls are active;
-retained execution-result review is active in that Plan pane, while inventory,
-integrity, history and global settings pages remain deferred. Current v5 item
+retained execution-result review is active in that Plan pane. Inventory has a
+separate bounded read pane with search, facets, sibling sorting and current
+evidence details. Inventory Refresh/visibility controls, hashing controls,
+history and full settings remain pending. Current v5 item
 progress and detailed result rows are reduced by the bridge for bounded display.
 
 This document owns visual/user interaction behavior. BRIDGE owns exact transport,
@@ -1260,8 +1262,8 @@ structural/search/filter/window/anchor contract and installed shell/tree
 contract live in `PRESENTATION.md`; the installed shell/tree witness is SH-G-7 in
 `INTERFACES.md`.
 
-The Plan view adds server-owned sibling sorting; inventory retains the accepted
-contract for later implementation. New Plan views start in canonical path-key order; users can choose filename, size,
+Plan and Inventory views use server-owned sibling sorting.
+New views start in canonical path-key order; users can choose filename, size,
 or mtime with explicit direction, and reset restores path-key order. The server
 sorts complete sibling sets before windowing, with deterministic ties and
 unavailable values last. Size/time use raw numeric facts, including only a
@@ -1778,12 +1780,28 @@ a mixture or old fallback, while settled membership remains stable until
 terminal publication. View behavior, grouping, evidence classes, overlays,
 and anchor behavior are defined here and in [PRESENTATION.md](PRESENTATION.md); future exact DTOs remain open.
 
-Inventory remains distinct from plan review. The pane supports literal search,
-server facets, collapse, default acknowledged-row hiding, and shared Refresh,
-Baseline, Verify, and Rebaseline actions. Rebaseline alone asks the user to
-confirm replacing current evidence; the receipted native command enforces that
-intent. Context actions require a valid domain row; warning rows are
-informational and never actionable.
+Inventory remains distinct from plan review. Released terminal inventory tasks
+open their own read pane, including when selected again. It supports backend
+literal search, counted server facets, collapse, bounded windows and explicit
+sibling filename/own-size/own-mtime sorting in both directions. Reset returns to
+canonical path order. The Default facet view hides acknowledged direct matches;
+their complete count and Acknowledged facet remain available, and necessary
+folder ancestors remain visible. Neither browsing nor hidden rows changes
+complete folder rollups. The browser retains at most 256 rows and reuses the
+28 px tree controller's keyboard, scroll and stale-generation behavior; it adds
+state, size and modified cells without selection checkboxes. Folder Size shows
+complete file bytes while its tooltip and Details distinguish own object facts.
+
+Activate a row with click or Enter for Details. Domain subjects load fresh exact
+ledger evidence with observed and attested facts, full digest, provenance,
+evidence observation time, verification freshness and invalidation. Synthetic
+folders show complete rollups; notices show their informational warning only.
+Task navigation, view changes and Close retire details before late replies can
+restore them. A failed read offers Reload inventory view, which reads current
+publication without starting another scan. The pane labels the current scan
+state separately from a displayed prior publication. Refresh and missing-row
+acknowledge/restore controls have their own pending M1-9 integration; Baseline,
+Verify, Rebaseline and live integrity overlays remain future controls.
 
 The accepted but unrealized policy admits eligible selected files with or
 without evidence to rebaseline. It always hashes and conditionally replaces or
@@ -1796,9 +1814,9 @@ initial baseline without claiming a verification. The
 owns the outcomes and deferred compare-and-accept behavior. This is accepted,
 not current desktop functionality.
 
-Each inventory subject presents ledger-derived verification state separately
-from the latest ordinary-integrity overlay. Manual post-copy results never enter
-that field. Folder rollups exclude warnings and do not change when acknowledged
+The accepted future integrity surface presents ledger-derived verification state
+separately from its latest ordinary-integrity overlay. Manual post-copy results
+never enter that field. Folder rollups exclude warnings and do not change when acknowledged
 rows are hidden. Overflow is displayed as unavailable, never a clamped total.
 Details label current digest provenance/currentness/invalidation and render
 times without floating-point authority. Exact inventory view, filter, overlay,

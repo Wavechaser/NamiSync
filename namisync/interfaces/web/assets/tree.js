@@ -15,6 +15,7 @@ export function createTree(root, callbacks = {}) {
   const requestIndex = optionalCallback(callbacks, "requestIndex");
   const toggle = optionalCallback(callbacks, "toggle");
   const activate = optionalCallback(callbacks, "activate");
+  const decorateRow = optionalCallback(callbacks, "decorateRow");
   const requestFrame = document.defaultView.requestAnimationFrame.bind(
     document.defaultView,
   );
@@ -110,6 +111,7 @@ export function createTree(root, callbacks = {}) {
         root.focus();
         toggle(row.node_id, !row.expanded);
       });
+      decorateRow(element, sourceRow);
       entry = Object.freeze({element, row});
       element.addEventListener("click", () => {
         acceptRenderedIntent(entry);
