@@ -26,6 +26,15 @@ from namisync.workflows.inventory import (
     resolve_reviewed_binding,
 )
 from namisync.workflows.database_pair import DatabaseAdmissionError, DatabasePairContract
+from namisync.workflows.inventory_projection import (
+    InventoryProjection,
+    InventoryProjectionNode,
+    InventoryProjectionOrder,
+    InventoryProjectionPopulationLimitError,
+    InventoryRollup,
+    build_inventory_projection,
+    sort_inventory_projection,
+)
 from namisync.workflows.models import (
     ExecutionDetails,
     ExecutionEvidenceResult,
@@ -128,6 +137,11 @@ __all__ = [
     "IntegrityRequest",
     "InventoryDetails",
     "InventoryRequest",
+    "InventoryProjection",
+    "InventoryProjectionNode",
+    "InventoryProjectionOrder",
+    "InventoryProjectionPopulationLimitError",
+    "InventoryRollup",
     "LocationCandidate",
     "LocationCandidateKind",
     "LocationCandidateResult",
@@ -158,10 +172,12 @@ __all__ = [
     "default_database_paths",
     "apply_plan_projection_selection",
     "build_plan_projection",
+    "build_inventory_projection",
     "integrity_request",
     "run_execution",
     "run_plan",
     "sort_plan_projection",
+    "sort_inventory_projection",
     "sync_options",
     "validate_sync_paths",
 ]

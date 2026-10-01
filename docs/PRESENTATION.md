@@ -182,7 +182,7 @@ console output includes fixture construction and is diagnostic only, not a
 latency gate. Rerun on changes to fact precedence, grouping, aggregation or
 selection overlays; prior benchmark receipts do not certify the new totals.
 
-Sort is process-live view state, never durable preference; it preserves tree identity, selection, recursive action scope, execution order, rollups, and domain truth. A rebuild derives the retained chosen sort from the new immutable projection and publishes its permutation, indexes, and revisions atomically; a failed rebuild preserves the previous complete view, and window reads perform no I/O to discover sort keys. Inventory sorting retains its accepted contract but remains unrealized.
+Sort is process-live view state, never durable preference; it preserves tree identity, selection, recursive action scope, execution order, rollups, and domain truth. A rebuild derives the retained chosen sort from the new immutable projection and publishes its permutation, indexes, and revisions atomically; a failed rebuild preserves the previous complete view, and window reads perform no I/O to discover sort keys. Pure inventory projection sorting is implemented; its desktop consumer remains unrealized. Inventory raw own-object sort keys remain distinct from complete folder byte rollups. Synthetic ancestors have no own size or mtime; real directories use only their observed values. Warnings retain an attachment-order tail and never affect domain rollups or scope.
 
 **M1-8-R0 surface.** Follow resolves the active operation to the nearest
 visible ancestor-or-self under the current collapse, filter, search, sort and

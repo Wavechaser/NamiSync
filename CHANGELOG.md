@@ -289,6 +289,19 @@ Stage 6 delivered the secured desktop host, process-live tasks, frozen Setup,
 bounded Plan review/selection and execution, and live/retained result review.
 Inventory review and beta packaging remain open.
 
+#### Deliver M1-9 inventory review (2026-10-01)
+
+- Add the immutable workflow inventory projection with independent domain and
+  warning populations, complete-folder membership, raw evidence provenance,
+  checked rollups and explicit partial byte totals. Share canonical sibling
+  ordering with Plan while preserving its existing sort and selection behavior.
+  Real rows use their raw basename even when mixed-case descendants choose a
+  different tree spelling; independent review supplied that regression witness.
+  Corrected focused/workflow checks pass 160/894 cases; imports and independent
+  correction review pass. Ordinary evidence and environment reruns are retained
+  by dependency under `build/m1-9-20261001/`.
+  Desktop wiring and actions follow in separate reviewed commits.
+
 #### Mitigate the Advanced Color flyout halo (2026-09-24)
 
 - The dark translucent flyout shadow halo was reproduced in DWM Advanced Color

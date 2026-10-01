@@ -175,8 +175,8 @@ performance measurements without new hard speed targets (D3/E1/D7); unchanged
 highlight/focus and range/navigation behavior separate from execution checkboxes
 (D4); native Advanced Color mitigation (D5); and the user-owned small-change
 classification in [AGENTS](../AGENTS.md) (D7). D6's missing-row
-acknowledge/restore desktop capability is accepted and still needs an explicit
-delivery allocation when M1-9/10 activates. M1-10's rebaseline confirmation
+acknowledge/restore desktop capability is allocated to active M1-9 below.
+M1-10's rebaseline confirmation
 accepts replacement of content evidence and is a different action. Existing
 [FEATURES](FEATURES.md), [INVENTORY](INVENTORY.md),
 [PRESENTATION](PRESENTATION.md) and [DESKTOP_UI](DESKTOP_UI.md) own the D6 behavior;
@@ -248,6 +248,70 @@ commits were not merge units.
 
 ## Remaining checkpoints
 
+### Active M1-9 — 2026-10-01
+
+Authorized on `milestone1` from `937af54`. Missing-row acknowledge/restore
+is explicitly allocated here by the user. Stop after M1-9 for a recap and GUI
+tweaks; M1-10, M1-12, release and DOC-2 are not activated.
+
+Implementation proceeds in dependency order with independently reviewed atomic
+commits. Existing package conventions apply; new projection/review modules live
+beside their Plan counterparts, focused tests follow their owning package, and
+temporary fixtures and receipts live only under ignored `build/m1-9-20261001/`.
+Keep raw command logs and review receipts there; remove only task-owned disposable
+fixtures after their evidence is retained. No parallel delivery register is added.
+
+| Outcome / commit boundary | Finite population and preserved guarantees | Verification |
+| --- | --- | --- |
+| Inventory facts and sibling ordering | Workflow inventory projection, existing node tree and Plan projection sorter, workflow facade, focused projection tests and department assignment; INVENTORY/PRESENTATION/ARCHITECTURE. Build complete immutable domain/warning populations, independent warning identity, checked domain rollups, raw own-object sort facts and evidence provenance. Share sibling ordering without changing Plan identity, selection or execution order. | Projection fixtures for hierarchy, warnings, evidence, overflow, sort directions/reset and base/information-heavy scale (120,000/240,000 displayed rows, including structural rows); existing independent source bounds and Plan sorter/workflow regressions. |
+| Bounded inventory reads | Workflow/runtime and service projection/evidence entry points, task port, web inventory review, registry and command adapters, browser bridge wrappers; direct workflow/service/registry/command/bridge tests and owning docs. Capture task-bound scan details before release, without making release construct a projection. Lazy view construction reads one whole ledger snapshot; exact Details uses a fresh bounded row read. One task-owned complete view, exact revisions and bounded windows/details keep current durable evidence distinct from session truth. | Real composition first, then publication/refusal/replacement/close races, stale revisions, request limits, unchanged-window counted work and current-evidence provenance. |
+| Inventory refresh and visibility actions | Service/task port/lifecycle, existing inventory review/registry/command/bridge owners; direct lifecycle/service/registry/command tests and owning docs. Complete-folder scope, same-task Refresh and acknowledge/restore use exact original-command receipts. Failed projection replacement retains prior complete publication; warnings never acquire action authority; visibility reports each conditional row disposition. | Fresh/replayed/refused admissions, warning rejection, exact scope, replacement races, post-effect result recovery, per-row visibility dispositions, bounded retained starts and Close retirement. |
+| Inventory desktop consumer | Separate inventory pane using existing shell/row/tree assets, panels/app integration and styles; ordinary browser probes and installed headed inventory harness with shared fixtures; DESKTOP_UI/BRIDGE/PRESENTATION/INTERFACES. Search, facets, collapse, windowing, sibling sorting/reset, evidence detail, refresh, acknowledged hiding/counts and acknowledge/restore. Browser owns no path/action policy. | Ordinary browser interaction and stale-response probes; installed native inventory journey and affected existing shell journeys; independent final review. |
+
+The acceptance gate combines those focused checks, affected departments, the
+ordinary suite, imports, active-document links/diff checks and installed headed
+witnesses. Retain the PRESENTATION cold projection maxima (base 3 s,
+information-heavy 6 s) under PERFORMANCE's reference sampling/profile, with
+finite fixture population and raw provenance. The user is running sustained
+compute: prepare fixtures and correctness checks now, and coordinate before
+collecting performance samples. Busy-machine timings cannot close that gate.
+
+Facts/order is independently reviewed: corrected focused 160, workflow 894,
+12 import contracts and 144 local file-link targets pass. The ordinary receipt
+has 5,749 passes/four skips plus three environmental setup/policy failures;
+those three pass outside the sandbox. Retain its unaffected evidence alongside
+the corrected projection neighborhood rather than claiming one all-green run.
+The raw-basename regression failed before correction and passed afterward.
+Raw receipts and independent review are in `build/m1-9-20261001/`.
+Read surface, actions, desktop, headed and coordinated timing gates remain open.
+
+Retain current scan reconciliation, warning and ingress/population bounds,
+conditional ledger changes, exact task retirement and original-command recovery.
+Refresh starts a fresh inventory scan in the same task only after the exact
+previous terminal delivery and session release. The published location and
+domain node resolve full/exact/recursive scope on the server; warning targets
+refuse before scan. Retain the old complete projection while scanning and on
+failed/refused projection construction. Projection completeness means a whole
+ledger snapshot, not a claim that the preceding scan was complete: incomplete
+scans retain their warnings and cannot infer missing rows, while their recorded
+observations may appear in a complete ledger projection. The task lifecycle's existing plan-only follow-up
+admission needs a narrow inventory follow-up path, with original-command receipt,
+attachment/rollback and old-detail retirement tests; this does not authorize a
+generic lifecycle rewrite. Close retains its existing pending-cancel semantics.
+Repeated Refresh uses the registry's existing 48-entry start-response capacity,
+with admission before effects and truthful refusal when it is exhausted.
+Receipts remain attached until explicit task Close; Plan's existing one-follow-up
+rule remains unchanged. Capture inventory review facts before terminal release
+drops the workflow request details, and preserve them until exact task retirement.
+Archived representation/cache/DTO recipes confer no authority: use current
+subject criteria and the smallest implementation that meets them. New hashing,
+baseline/verify/rebaseline controls and overlays, manual post-copy handoff,
+schema changes, broad lifecycle redesign, event-body removal, history surfaces,
+new speed/memory targets and unrelated bug fixes are excluded. Repository
+mandatory and recurrence stops remain unchanged. Each outcome receives fresh
+adversarial review before its commit; final verification accounts for changed
+producer, consumer and test-driver dependencies.
+
 Pending rows record accepted future outcomes. Backend optimization is closed;
 pending rows still need user authorization, active scope and finite verification.
 A finding does not enlarge a row; [AGENTS](../AGENTS.md) governs scope changes,
@@ -255,7 +319,7 @@ stops and recovery.
 
 | ID | Accepted outcome | Named verification | Status |
 | --- | --- | --- | --- |
-| M1-9 | Bounded inventory projections, current evidence and the full inventory consumer for sibling sorting. | Complete or prior-complete publication; warnings outside action scope; raw evidence provenance; search/filter/collapse/window/detail, replacement/race and production sort/reset paths; headed witnesses. | Pending. Missing-row acknowledge/restore UI must be explicitly allocated at activation; this row does not silently claim it. |
+| M1-9 | Bounded inventory projections, current evidence and the full inventory consumer for sibling sorting, including missing-row acknowledge/restore. | Complete or prior-complete publication; warnings outside action scope; raw evidence provenance; search/filter/collapse/window/detail, replacement/race and production sort/reset paths; headed witnesses. | Active; scope and atomic boundaries above. |
 | M1-10 | Baseline, verify and rebaseline controls plus first same-task manual post-copy verification, without persistent operation-time hashes. Eligible null-evidence files enter rebaseline; every admitted rebaseline hashes and replaces/creates evidence, and a match is not verified. | Confirm acknowledgement admission before claim/native work; all-null/mixed workflow, service/CLI and desktop paths; conditional recording and supersession races; atomic handoff classification; live pause/resume/cancel and unchanged automatic failed-read retries; overlay/result identity. Independently review operation matrix and conditional recording. Terminal Verify-remaining/subset retry remains deferred. | Pending. Rebaseline confirmation is distinct from missing-row acknowledgement. |
 | M1-12 | Close integrated lifecycle/retention across activated task surfaces, then complete adversarial, documentation, ordinary and headed verification. This absorbs former M1-11. | Plan-only, execution-only, linked/manual verification, inventory, refused/canceled/degraded/failed tasks across same-document navigation, contained unsupported reload, explicit close and shutdown; admission bounds, stale-response suppression, exact resource release and retained truth. Applicable settlement oracle, ordinary/headed, installed-wheel/product, imports, diff/active-link checks and independent cross-component review. No aggregate-artifact or whole-owner-graph criterion. | Pending. |
 | M1-Release | Beta packaging and release closure after delivery rows above. | Installed artifact from clean checkout; frozen specification/dependency/CI, notices and corresponding source; standard-integrity host proof and every applicable BR-G/SH-G gate. [INTERFACES](INTERFACES.md) owns host/package/SH-G; [BRIDGE](BRIDGE.md) owns BR-G. | Pending. |

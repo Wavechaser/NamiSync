@@ -218,8 +218,31 @@ candidate pipeline and always re-admits a real start; a slot or
 The signed-64 scalar, full-width native identity, and event/persistence epoch
 consumed here are active. Remembered-location readback and Setup widgets are
 implemented. A standalone inventory task freezes only its admitted root,
-without sync options or a fabricated source/target pair. Desktop projection,
-paging and retention behavior below remain accepted but unrealized.
+without sync options or a fabricated source/target pair. Pure workflow inventory
+projection and sibling ordering are implemented; desktop publication, paging and
+retention remain accepted but unrealized.
+
+`workflows/inventory_projection.py` builds a complete immutable generation from
+the repository's typed rows and an independent warning population. It retains
+current observations, attested subjects, digest/provenance, timestamps and sticky
+invalidation separately; a row-id lookup does not scan the location again. The
+location-scoped tree owns path and domain indexes and complete-folder membership.
+Warnings use a separate identity domain, attach as ordered root leaves and enter
+none of those domain indexes or rollups. They retain their informational path
+without making it action authority. Domain and warning source occurrences each
+keep their existing 120,000-row admission; implicit ancestors do not introduce
+a new total-row wall. Scan completeness is separate workflow evidence and is
+not a pure projection admission decision.
+
+Complete-domain rollups include retained missing and acknowledged subjects;
+the missing facet counts only unacknowledged missing rows. Exact file-byte totals
+propagate once through source parents, publishing null with an overflow flag
+above the signed-64 domain. Raw own-object size and mtime sort keys remain
+separate from folder aggregate bytes; synthetic ancestors invent neither key.
+Unknown subject bytes mark containing totals partial rather than claiming that
+the known-byte sum is a complete total.
+Sibling sorts keep canonical ties and unavailable-last semantics and preserve
+the source topology, domain membership and evidence.
 
 The desktop inventory projection is one canonical server-side view over a
 complete immutable inventory generation. Search, filters, collapse, visible
@@ -229,8 +252,7 @@ Projection eviction removes only rebuildable view state. A refused refresh
 stages no partial artifact and preserves the prior inventory generation and its
 view identity unchanged.
 
-The accepted but unrealized view contract adds the shared server-owned sibling
-sorter from
+The pure projection supplies the shared server-owned sibling sorter required by
 [Bridge DR-BR-15](PRESENTATION.md#search-filters-sorting-and-follow).
 New views and reset use canonical path-key order; filename, size, and mtime
 are explicit opt-in column/direction choices. Sort the complete projection

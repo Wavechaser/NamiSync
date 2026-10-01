@@ -26,6 +26,7 @@ from .selection import (
     derive_execution_selection,
     require_derived_execution_selection,
 )
+from .sibling_order import canonical_siblings, preorder_positions, sorted_siblings
 
 
 class PlanSortColumn(StrEnum):
@@ -393,13 +394,7 @@ def sort_plan_projection(
         raise TypeError("plan sort must use exact enums")
     if column is PlanSortColumn.PATH and direction is not SortDirection.ASCENDING:
         raise ValueError("canonical path sort supports ascending only")
-    nodes = projection.nodes
-    children: dict[int, list[int]] = {}
-    for index, node in enumerate(nodes[1:], 1):
-        assert node.parent_index is not None
-        children.setdefault(node.parent_index, []).append(index)
-    for siblings in children.values():
-        siblings.sort(key=lambda index: (nodes[index].rel_path_key, nodes[index].node_id))
+    children = canonical_siblings(projection.nodes)
     canonical = _publish_plan_projection_order(projection, children)
     return (
         canonical
@@ -424,61 +419,12 @@ def _sort_plan_projection_from_canonical(
             raise ValueError("canonical path sort supports ascending only")
         return canonical
     projection = canonical.projection
-    nodes = projection.nodes
-    children: dict[int, list[int]] = {}
-    for source_position in canonical.ordered_source_positions:
-        if source_position == 0:
-            continue
-        parent = nodes[source_position].parent_index
-        assert parent is not None
-        children.setdefault(parent, []).append(source_position)
-    for parent, siblings in children.items():
-        if column is PlanSortColumn.SIZE:
-            buckets: tuple[list[int], list[int], list[int]] = ([], [], [])
-            for source_position in siblings:
-                node = nodes[source_position]
-                if node.row_kind == "notice" or node.row_kind.startswith("prior-"):
-                    bucket = 2
-                elif node.row_kind == "folder" or node.is_directory:
-                    bucket = 1
-                else:
-                    bucket = 0
-                buckets[bucket].append(source_position)
-            ordered: list[int] = []
-            for bucket in buckets[:2]:
-                available = [position for position in bucket if nodes[position].size is not None]
-                unavailable = [position for position in bucket if nodes[position].size is None]
-                available.sort(
-                    key=lambda position: nodes[position].size,
-                    reverse=direction is SortDirection.DESCENDING,
-                )
-                ordered.extend((*available, *unavailable))
-            ordered.extend(buckets[2])
-            children[parent] = ordered
-            continue
-        available: list[int] = []
-        unavailable: list[int] = []
-        for source_position in siblings:
-            node = nodes[source_position]
-            value = (
-                node.filename_key
-                if column is PlanSortColumn.FILENAME
-                else node.size
-                if column is PlanSortColumn.SIZE
-                else node.mtime_ns
-            )
-            (unavailable if value is None else available).append(source_position)
-        available.sort(
-            key=lambda position: (
-                nodes[position].filename_key
-                if column is PlanSortColumn.FILENAME
-                else nodes[position].size
-                if column is PlanSortColumn.SIZE
-                else nodes[position].mtime_ns
-            ),
-            reverse=direction is SortDirection.DESCENDING,
-        )
-        children[parent] = available + unavailable
+    children = sorted_siblings(
+        projection.nodes,
+        canonical.ordered_source_positions,
+        column.value,
+        descending=direction is SortDirection.DESCENDING,
+    )
     return _publish_plan_projection_order(projection, children)
 
 
@@ -486,15 +432,7 @@ def _publish_plan_projection_order(
     projection: PlanProjection,
     children: Mapping[int, Sequence[int]],
 ) -> PlanProjectionOrder:
-    ordered: list[int] = []
-    stack = [0]
-    while stack:
-        current = stack.pop()
-        ordered.append(current)
-        stack.extend(reversed(children.get(current, ())))
-    inverse = [0] * len(ordered)
-    for rank, source_position in enumerate(ordered):
-        inverse[source_position] = rank
+    ordered, inverse = preorder_positions(children)
     maximum = max(len(projection.nodes) - 1, 0)
     published = object.__new__(PlanProjectionOrder)
     object.__setattr__(published, "projection", projection)

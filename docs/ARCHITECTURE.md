@@ -830,8 +830,12 @@ Primary shapes are:
 Undo, repair, replay, and ingest must enter as ordinary planned workflows so
 managed user-data mutation continues through review, preflight, and execution.
 
-Plan presentation facts and sibling ordering are owned by
-`workflows/plan_projection.py` and exported through the workflow facade.
+Plan presentation facts are owned by `workflows/plan_projection.py`; role-free
+inventory facts and complete-domain scope are owned by
+`workflows/inventory_projection.py`. Both are exported through the workflow
+facade and share the internal sibling ordering in `workflows/sibling_order.py`.
+Inventory preserves repository evidence separately from presentation rollups;
+warning leaves never become domain paths or subjects.
 `PlanProjection` keeps source-preorder topology independent of display order;
 `PlanProjectionOrder` binds a compact permutation and inverse to that projection.
 Sorting cannot rewrite node identities, source parent/subtree coordinates,
