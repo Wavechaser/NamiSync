@@ -1,41 +1,28 @@
-# Latest session — backend optimization closeout
+# Latest session — reviewed open-bug resolutions
 
-2026-09-30, `milestone1-adelbert`, housekeeping base `7f36a2a4`. The user closed
-backend optimization with no remaining in-scope actionable work. M1_PLAN now
-holds compact shipped-outcome records; detailed execution history remains in
-Git and the existing evidence roots. Future M1 delivery rows and accepted
-behavior remain intact.
+2026-10-01 on `milestone1`, base `1d17883`. The user authorized three bounded
+outcomes through execute-task: optional report advice, filesystem-aware handle
+identity fallback, and a bounded exception-retention disposition. The response-
+copy entry remains untouched. M1_PLAN owns the scope and gates.
 
-## Closeout changes
+## Current changes and evidence
 
-- CHANGELOG adds M1 Performance, moves subtractive work into Consolidation,
-  and compacts delivered GUI/consolidation history. README mirrors phase
-  summaries. The original-to-compacted task mapping is retained for review.
-- EXECUTOR closes the completed run's special oracle re-pin permission.
-  M2_PROPOSAL carries unbuffered source reads as a measurement-dependent proposal;
-  M1 continues buffered reads. Directory-flush batching also remains deferred.
-- Removed the detached `b8baf42d` worktree after proving it was an integrated
-  ancestor with no tracked/untracked changes, no active command-line reference,
-  and only 59 regenerable Python cache files. Primary checkout, source fixtures,
-  original evidence, other refs and stashes were preserved.
+- Report advice: performance passes no replacement flag and directs the user to
+  a new `--json` path. Existing report bytes and prelaunch refusal are preserved.
+  Focused CLI verification: 77 passed, two capability skips; tools department:
+  336 passed, three capability skips. Independent review approved; separately
+  committed as `fix(tools): make replacement advice optional`.
+- Identity fallback is being implemented independently; successful identity
+  queries must add no volume lookup, and NTFS/ReFS failures remain failures.
+- Retention review supports bounded closure without product edits. The original
+  finalizer probe itself retained the exception; it did not demonstrate excess
+  product ownership. Host/document endpoints and reopening evidence will be
+  documented in INTERFACES before the disposition commit.
 
-## Verification and publication
-
-This closeout edits documentation only. Consistency, local links/anchors,
-compaction accounting, unchanged future requirements and independent review
-are the closeout checks. Prior product evidence retains its original dependency
-attribution: latest 640 executor passes; direct-write ordinary evidence of 5,720
-passes plus the corrected 95-test audit module; 12 imports; official 30×3
-oracle; classified fixed differential; and 25 production readbacks. M1_PLAN and
-PERFORMANCE retain the precise dispositions and measurement limits.
-
-Evidence root: `build/executor-simplification-20260929/closeout/`, including
-`worktree-before.json`, `worktree-removed.json`, changelog mapping and document
-validation. After publication, `pr.json` will record the pushed closeout commit
-and draft PR from `milestone1-adelbert` into `milestone1`.
-
-The pre-publication remote `milestone1` is `6de6d1c`; this branch has 41 existing
-commits above it before the closeout commit. No rebase, squash or history rewrite
-is part of this task. Future M1-9/10/12/release work, DOC-2 history work, the
-separately logged exFAT limitation and replacement findings remain outside this
-closed optimization scope.
+Evidence root: `build/open-bugs-20261001/`. Prechange `current.json` reproduces
+report advice and exFAT target failure; `reader.json` reproduces the verifier's
+same native identity failure. Their temporary F:/K: fixtures were removed.
+Current product changes invalidate those probes as final acceptance; native
+postchange probes, affected tests, ordinary suite/imports and settlement gate
+remain required for the identity outcome. No changes to protected oracle
+baseline, response-copy disposition, or future M1 delivery are authorized.

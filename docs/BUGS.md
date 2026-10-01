@@ -71,14 +71,16 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Workspace and measurement integrity
 
-- MINOR - OPEN (2026-09-27). Unsupported recovery advice. Reusing a
+- MINOR - FIXED (2026-10-01). Unsupported recovery advice. Reusing a
   `tools performance --json` destination safely refuses before launching,
   but suggests `--replace-report`, which that subcommand does not accept.
-  Cause: the shared output guard uses a replacement-option default that only
-  other callers expose. Use a fresh report destination. This pre-existing CLI
-  guidance defect is deferred outside IR-BRIDGE; the refusal preserves existing
-  reports. Evidence: `build/admission-bridge-closeout-20260927/bridge-report-replacement-guard.log`
-  and `bridge-report-unsupported-option.log` in that directory.
+  Cause: the shared output guard used a replacement-option default that only
+  other callers expose. The flag name is now optional; performance supplies
+  none and advises choosing a new `--json` path. Replacement-capable callers
+  retain their flag advice. CLI coverage verifies refusal before launch and
+  preservation of the existing report. Current evidence:
+  `build/open-bugs-20261001/`; historical reproduction remains under
+  `build/admission-bridge-closeout-20260927/`.
 
 - MINOR - FIXED (2026-09-27). Stale observation contract. The optional
   bridge-event diagnostic rejects current decimal-string Progress positions

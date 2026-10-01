@@ -521,7 +521,9 @@ its own wheel from committed HEAD and uses the working-tree driver. Reports
 distinguish those sources. See [PERFORMANCE](PERFORMANCE.md) for exact cases,
 installation methods, profiles and interpretation.
 
-Reports are published without overwriting an existing result. Repository-local
+Reports are published without overwriting an existing result. If the destination
+already exists, the performance command advises choosing a new `--json` path;
+it has no report-replacement flag. Repository-local
 output belongs under ignored `build/`; keep raw child evidence beside its report.
 An incomplete measurement returns nonzero and remains explicitly incomplete;
 completion means a valid observation, not acceptance of the historical timing

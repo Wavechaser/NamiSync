@@ -177,6 +177,13 @@ behavioral evidence.
 Safety, settlement and authority work made high-consequence release claims
 explicit, reviewable and regression-backed.
 
+#### Resolve reviewed open bugs (2026-10-01)
+
+- Make replacement-option advice optional. Performance reports now refuse
+  overwrite with guidance to choose a new `--json` path; existing replacement
+  commands retain their flag advice. Focused CLI tests preserve refusal before
+  launch and existing report bytes.
+
 #### Ratify proportional defense and root safety (2026-09-28 – 2026-09-29)
 
 - DEFENSE distinguishes plausible accident from adversarial content and

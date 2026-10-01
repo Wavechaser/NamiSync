@@ -452,6 +452,29 @@ def test_report_refuses_existing_destination_and_replaces_only_explicitly(
     assert json.loads(report.read_text(encoding="utf-8"))["format"] == tools_cli.REPORT_FORMAT
 
 
+def test_performance_existing_report_advises_a_new_json_path(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    from tools import performance
+
+    report = tmp_path / "report.json"
+    report.write_text("keep", encoding="utf-8")
+    calls = []
+    monkeypatch.setattr(performance, "run_case", lambda *args, **kwargs: calls.append(args))
+
+    assert tools_cli.main(
+        ["performance", "plan", "sample", "--json", str(report)]
+    ) == 2
+
+    message = capsys.readouterr().err
+    assert "choose a new `--json` path" in message
+    assert "--replace-report" not in message
+    assert report.read_text(encoding="utf-8") == "keep"
+    assert calls == []
+
+
 def test_later_invalid_sample_publishes_no_partial_report(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

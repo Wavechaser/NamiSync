@@ -11,6 +11,23 @@ retains investigation, rejected proposals and superseded execution recipes;
 the decisions still governing delivery are below. Historical observations
 certify their recorded build and dependencies only.
 
+## Open-bug resolutions — 2026-10-01
+
+Authorized from `1d17883` on `milestone1`; evidence and disposable native probes
+live under `build/open-bugs-20261001/`. Each row is one independently reviewed
+commit. Shared ledger/changelog/handoff edits are serialized by the coordinator.
+
+| Outcome | Finite population and preserved guarantees | Verification / status |
+| --- | --- | --- |
+| Optional replacement advice | `tools/__main__.py`, its CLI tests and TOOLS; an absent replacement flag advises a new `--json` path. Existing reports remain untouched and existing replacement-capable callers retain their flag. | Delivered: CLI 77 passed/two skips; tools department 336 passed/three skips; independent review approved. |
+| Handle identity on identity-weak filesystems | Core native identity adapter, scanner's filesystem predicate, executor/verifier direct consumers, their focused tests and owning docs. Only a failed identity query may probe the handle filesystem; only a confirmed non-NTFS/ReFS filesystem may return no identity. NTFS/ReFS and failed filesystem observation remain failures; successful identity queries add no lookup. | Native K: copy/readback probes with cleaned fixtures, strict identity/fallback controls, affected departments, ordinary suite/imports and applicable executor settlement gate; implementing. |
+| Bounded exception-retention disposition | Host consumers and document callbacks in `interfaces/web/host.py` and `document_channel.py`, their direct tests, BUGS and INTERFACES. Establish finite endpoints and require a measured retention trigger before any additional product code. No repository-wide raw-exception elimination criterion. | Review current ownership and weak-reference evidence; document a bounded scope or closure with a named reopening condition; investigating. |
+
+BUGS, CHANGELOG and HANDOFF carry the corresponding dispositions and final
+verification. The response-copy entry is explicitly excluded. New effects,
+identity weakening on NTFS/ReFS, or an unbounded retention migration are outside
+this authorization; repository mandatory stops remain in force.
+
 ## Delivered backend optimizations
 
 ### Executor simplification and throughput — 2026-09-29

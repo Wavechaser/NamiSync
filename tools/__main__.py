@@ -248,6 +248,7 @@ def _run_performance_command(args: argparse.Namespace) -> int:
     destination = _output_destination(
         args.json, "performance report", roots=(("source tree", repository / "namisync"),),
         replace=False,
+        replace_flag=None,
     )
     destination.path.parent.mkdir(parents=True, exist_ok=True)
     try:
@@ -350,7 +351,7 @@ def _output_destination(
     roots: Sequence[tuple[str, Path]],
     reserved: Sequence[Path] = (),
     replace: bool,
-    replace_flag: str = "--replace-report",
+    replace_flag: str | None = "--replace-report",
 ) -> ArtifactDestination:
     resolved = _validate_artifact_path(
         path,
@@ -361,6 +362,11 @@ def _output_destination(
     if not resolved.exists():
         return ArtifactDestination(resolved, None)
     if not replace:
+        if replace_flag is None:
+            raise ToolError(
+                f"refusing to replace existing {label}: {resolved}; "
+                "choose a new `--json` path"
+            )
         raise ToolError(
             f"refusing to replace existing {label} without {replace_flag}: "
             f"{resolved}"
