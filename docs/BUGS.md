@@ -2232,29 +2232,18 @@ defect, and move implementation-level test choreography out of the log.
   linked verification, and standalone integrity now reconcile before and after
   the callback; an unreported delta blocks re-entry while accepted-prefix and
   pause/cancel truth remain unchanged.
-- MODERATE - OPEN (2026-08-27). Phase exception-frame retention. Session,
-  planning, execution, recording, dispatcher, history, bridge, and document
-  callbacks still consume, chain, or rethrow raw errors while request, scan,
-  plan, result, or callback graphs remain in traceback frames. The core runner
-  now retires consumed lifecycle links, including nested exception-group
-  members, without changing terminal truth. Planner and sync workflow now do
-  the same across paths, collaborators, execution, exclusion delivery, and
-  recording overlap. History now retires callback and replay-reader frames
-  without changing prefix, retry, or pending-window truth. Dispatcher now
-  retires consumed admission, audit, store, custody, subscription, and worker-
-  start frames while preserving cancel and actual-thread ownership. Task start,
-  compensation, release, close, shutdown-unsubscribe, and ordinary service path
-  refusal now retire their dependency frames without changing retry truth.
-  Every rendered ordinary live-exception detail now passes one core logical-
-  diagnostic-and-retirement helper. Recording failures attempt that projection
-  before their fixed type-only diagnostic-unavailable fallback; an exact owner/
-  scope AST guard keeps other direct construction limited to static/base
-  reconstruction. Host consumers, document callbacks, and raw failures that do
-  not become `FailureDetail` remain open. Cause:
-  bounded public failure projection did not consistently retire the caught
-  graph before the next ownership transition. Closure must preserve public
-  behavior while retiring every remaining app-owned raw exception reference;
-  arbitrary caller-owned attributes are not bounded task artifacts.
+- MODERATE - CLOSED, BOUNDED (2026-10-01). Phase exception-frame retention.
+  Cause: consumed errors retained request, plan, result or callback graphs
+  through traceback links. Lifecycle, workflow, history, dispatcher, service
+  and diagnostic consumers received targeted retirement fixes; document
+  publication and completion failures also retire dependency frames. The
+  remaining host startup/finalization, close/status/Retry and document callback
+  review established no measured excess lifetime: the finalizer probe itself
+  held its returned exception. This closes the unbounded raw-exception remainder,
+  without claiming leak-free execution or adding product code. Reopen only for
+  measured product-owned retention beyond the endpoints in
+  [INTERFACES](INTERFACES.md#exception-retention-follow-up).
+  Evidence: `build/open-bugs-20261001/` and existing host/document lifetime tests.
 - MODERATE - FIXED (2026-08-30). Review-limit refusal provenance. A first-party
   plan or inventory collaborator could directly raise its domain's private
   exact signal and turn an internal bug into false `REFUSED+UNRUN`; a signal

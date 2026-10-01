@@ -183,6 +183,10 @@ explicit, reviewable and regression-backed.
   overwrite with guidance to choose a new `--json` path; existing replacement
   commands retain their flag advice. Focused CLI tests preserve refusal before
   launch and existing report bytes.
+- Close the open-ended exception-retirement remainder as a bounded disposition,
+  without product changes. Host/document follow-up now requires measured
+  product-owned retention past named lifecycle endpoints; the diagnostic that
+  deliberately held a returned exception does not establish that trigger.
 
 #### Ratify proportional defense and root safety (2026-09-28 – 2026-09-29)
 

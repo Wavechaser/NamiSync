@@ -16,8 +16,9 @@ copy entry remains untouched. M1_PLAN owns the scope and gates.
   queries must add no volume lookup, and NTFS/ReFS failures remain failures.
 - Retention review supports bounded closure without product edits. The original
   finalizer probe itself retained the exception; it did not demonstrate excess
-  product ownership. Host/document endpoints and reopening evidence will be
-  documented in INTERFACES before the disposition commit.
+  product ownership. INTERFACES now names the lifecycle endpoints, production
+  retaining owner and measured evidence required to reopen. Four existing
+  host/document lifetime and retry cases pass; independent review approved.
 
 Evidence root: `build/open-bugs-20261001/`. Prechange `current.json` reproduces
 report advice and exFAT target failure; `reader.json` reproduces the verifier's

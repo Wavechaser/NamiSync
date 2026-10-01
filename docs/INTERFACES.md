@@ -863,6 +863,24 @@ Publishing native closing or retry guidance also reveals the status label that
 ordinary Ready hides. Text is written before revealing it, so a failed write
 cannot expose stale Ready as close feedback.
 
+### Exception-retention follow-up
+
+The 2026-10-01 bounded disposition covers host startup/finalization,
+close-attempt/status/Retry consumers and DocumentChannel callbacks, with their
+direct readiness and logging consumers. Further retirement changes require a
+measured case where a product-owned exception graph retains a request, plan,
+result or callback payload after its relevant endpoint: `run_desktop` returns,
+a close/status/Retry callback exits, or document completion retires. Repeated
+completed attempts accumulating such graphs also qualify.
+
+Evidence must identify the retaining product owner and exclude probe-held
+exceptions, traceback objects and externally retained log records, using weak
+references/referrer inspection or a scoped lifetime measurement. An exception
+held for ongoing startup diagnosis or unfinished cleanup does not by itself
+establish excess retention. Preserve diagnostics, cleanup ownership and
+Retry/Cancel behavior. No blanket exception sweep is required, and this bounded
+disposition does not establish universal leak freedom or close SH-G-15.
+
 ### Package and frontend placement
 
 The frontend is plain local ES modules: no Node, npm, framework, bundler, transpiler, source map, inline script, or inline event handler. The CSP meta element is first in `head`; every import names a local file. Production package resources provide the page. A Python-construction-only absolute local index override exists for headed tests and is unavailable from GUI arguments, the bridge, or page data.
