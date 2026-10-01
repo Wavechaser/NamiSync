@@ -126,6 +126,7 @@ DEPARTMENTS: dict[str, tuple[str, ...]] = {
         "tests/test_wheel_metadata.py",
     ),
     "tools": (
+        "tests/test_inventory_performance.py",
         "tests/test_department_policy.py",
         "tests/test_icon_maintenance.py",
         "tests/test_tools_cli.py",

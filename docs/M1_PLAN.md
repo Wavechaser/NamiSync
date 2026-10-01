@@ -265,8 +265,9 @@ fixtures after their evidence is retained. No parallel delivery register is adde
 | --- | --- | --- |
 | Inventory facts and sibling ordering | Workflow inventory projection, existing node tree and Plan projection sorter, workflow facade, focused projection tests and department assignment; INVENTORY/PRESENTATION/ARCHITECTURE. Build complete immutable domain/warning populations, independent warning identity, checked domain rollups, raw own-object sort facts and evidence provenance. Share sibling ordering without changing Plan identity, selection or execution order. | Projection fixtures for hierarchy, warnings, evidence, overflow, sort directions/reset and base/information-heavy scale (120,000/240,000 displayed rows, including structural rows); existing independent source bounds and Plan sorter/workflow regressions. |
 | Bounded inventory reads | Workflow/runtime and service projection/evidence entry points, task port, web inventory review, registry and command adapters, browser bridge wrappers; direct workflow/service/registry/command/bridge tests and owning docs. Capture task-bound scan details before release, without making release construct a projection. Lazy view construction reads one whole ledger snapshot; exact Details uses a fresh bounded row read. One task-owned complete view, exact revisions and bounded windows/details keep current durable evidence distinct from session truth. | Real composition first, then publication/refusal/replacement/close races, stale revisions, request limits, unchanged-window counted work and current-evidence provenance. |
-| Inventory refresh and visibility actions | Service/task port/lifecycle, existing inventory review/registry/command/bridge owners; direct lifecycle/service/registry/command tests and owning docs. Complete-folder scope, same-task Refresh and acknowledge/restore use exact original-command receipts. Failed projection replacement retains prior complete publication; warnings never acquire action authority; visibility reports each conditional row disposition. | Fresh/replayed/refused admissions, warning rejection, exact scope, replacement races, post-effect result recovery, per-row visibility dispositions, bounded retained starts and Close retirement. |
+| Inventory refresh and visibility actions | Service/task port/lifecycle, existing inventory review/registry/command/bridge owners; direct lifecycle/service/registry/command tests and owning docs. Complete-folder scope, same-task Refresh and acknowledge/restore use exact original-command receipts. Failed projection replacement retains prior complete publication; warnings never acquire action authority; bounded result counts report actual conditional row dispositions rather than an all-or-none claim. | Fresh/replayed/refused admissions, warning rejection, exact scope, replacement races, post-effect result recovery, per-row visibility dispositions, bounded retained starts and Close retirement. |
 | Inventory desktop consumer | Separate inventory pane using existing shell/row/tree assets, panels/app integration and styles; ordinary browser probes and installed headed inventory harness with shared fixtures; DESKTOP_UI/BRIDGE/PRESENTATION/INTERFACES. Search, facets, collapse, windowing, sibling sorting/reset, evidence detail, refresh, acknowledged hiding/counts and acknowledge/restore. Browser owns no path/action policy. | Ordinary browser interaction and stale-response probes; installed native inventory journey and affected existing shell journeys; independent final review. |
+| Reproducible projection acceptance | Dedicated `tools/performance/inventory.py` collector and `validate_inventory.py` checker, focused tools tests, PERFORMANCE/TOOLS methods, and compact raw/validation JSON under the existing `tests/interfaces/web/` evidence convention. This verification-only outcome depends on the committed pure projection, so its preparation may proceed independently of the read/action/UI code. | Untimed exact fixture checks; checker controls for over-budget, incomplete, wrong-population and changed-source evidence; tools checks and fresh review. Timing collection waits for coordinated reference conditions and the final measured source/driver/checker dependencies. No general CLI framework or new budget. |
 
 The acceptance gate combines those focused checks, affected departments, the
 ordinary suite, imports, active-document links/diff checks and installed headed
@@ -276,14 +277,20 @@ finite fixture population and raw provenance. The user is running sustained
 compute: prepare fixtures and correctness checks now, and coordinate before
 collecting performance samples. Busy-machine timings cannot close that gate.
 
-Facts/order is independently reviewed: corrected focused 160, workflow 894,
+Facts/order shipped in `ec3865c`, independently reviewed: corrected focused 160, workflow 894,
 12 import contracts and 144 local file-link targets pass. The ordinary receipt
 has 5,749 passes/four skips plus three environmental setup/policy failures;
 those three pass outside the sandbox. Retain its unaffected evidence alongside
 the corrected projection neighborhood rather than claiming one all-green run.
 The raw-basename regression failed before correction and passed afterward.
 Raw receipts and independent review are in `build/m1-9-20261001/`.
-Read surface, actions, desktop, headed and coordinated timing gates remain open.
+Cold construction timing now passes the coordinated reference-profile gate:
+five samples each, maxima 1.9712401 s base and 2.8123806 s information-heavy.
+PERFORMANCE owns the committed raw/validation pointers and failed-launch
+disposition. Read surface review and the corrected combined tools/workflows/
+interfaces neighborhood pass (3,109 tests, three skips); 12 imports and 191
+local documentation links pass. Actions, desktop, headed and integrated
+verification remain open.
 
 Retain current scan reconciliation, warning and ingress/population bounds,
 conditional ledger changes, exact task retirement and original-command recovery.

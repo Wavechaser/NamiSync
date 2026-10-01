@@ -530,3 +530,29 @@ completion means a valid observation, not acceptance of the historical timing
 target. Plan/UI latency and empirical representation memory are advisory.
 Correctness, counted scale behavior, custody, lifecycle/resource containment,
 history release limits, SH-G-15 and executor settlement retain their named gates.
+
+The M1-9 inventory cold projection gate has two dedicated commands, independent
+of that optional case registry:
+
+```powershell
+.\.venv\Scripts\python.exe -m tools.performance.inventory --check
+.\.venv\Scripts\python.exe -m tools.performance.inventory --collect --profile build/m1-9-20261001/inventory-cold-profile-verified.json
+.\.venv\Scripts\python.exe -m tools.performance.validate_inventory build/m1-9-20261001/measurement-inventory-cold-<run-id>/raw.json
+```
+
+`--check` validates both complete fixtures without measuring elapsed time.
+Collection requires actual reference-profile, AC-power and quiet-workload facts;
+coordinate with the user before timing. The collector launches the package
+module in five fresh children per case and records each exact launch and raw
+result. The separate checker owns the retained 3/6-second comparison and refuses
+incomplete, wrong-fixture or changed-source evidence. [PERFORMANCE](PERFORMANCE.md#cold-inventory-projection-acceptance-method)
+owns the fixture, interval, finite dependencies, profile and interpretation.
+
+Generated inventory reports live only under ignored `build/m1-9-20261001/`:
+`measurement-inventory-fixture-check-<uuid>.json` contains untimed fixture facts;
+`measurement-inventory-cold-<timestamp>-<uuid>/` contains raw JSON, per-case/index
+stdout/stderr and a separate validation JSON. Create exclusively, preserve failed
+receipts and never overwrite reports. After final reviewed collection, retain
+compact raw/validation evidence under the existing test evidence convention;
+task-owned temporary fixtures may be cleaned only after their receipts and
+provenance are retained. No new general CLI framework or runtime feature is added.

@@ -36,6 +36,88 @@ exercises bounded retention without prescribing a cache mechanism. Key,
 projection, comparator, index, publication or retention changes reopen
 affected evidence. The source-owned runtime admission bounds are independent.
 
+## Cold inventory projection acceptance method
+
+PRESENTATION owns the retained base 3 s / information-heavy 6 s maxima. The
+inventory maxima remain fixed acceptance criteria; optional Plan/UI diagnostics
+do not replace or close this gate. The dedicated
+`python -m tools.performance.inventory --check` command validates its
+full deterministic fixtures without collecting timing. Acceptance collection
+uses `--collect --profile PATH` only after confirming the actual reference
+profile above, AC power and absence of unrelated sustained workload. The profile
+JSON records `captured_at`, OS name/build, CPU, physical/logical core counts,
+memory GiB, repository device and explicit `reference_profile_confirmed`,
+`ac_power` and `no_unrelated_sustained_workload` facts. A changed or unverified
+profile needs a DEFENSE §7 disposition before it can close acceptance.
+
+The inventory corpus uses seed `0x4E414D49`, 100,000 typed file rows and 20,000
+synthetic folders, five files per folder, for 120,000 displayed rows excluding
+the internal root. Raw sizes are 7 and mtimes 11; every fifth row retains typed
+verify-provenance attestation, giving 20,000 evidence rows. The information-heavy
+variant adds 120,000 typed warnings with indexed paths, bounded indexed detail
+and a stable ScanWarningCode cycle, for 240,000 displayed rows. These populations
+are fixture facts, not a new total-row admission wall.
+
+Each fresh child imports the product, constructs complete input tuples and runs
+`gc.collect()` before the clock. One interval surrounds only the real
+`build_inventory_projection` call, including its tree, indexes, rollups and
+validation. Startup, input generation, sibling view sorting, window/detail work
+and post-build correctness are outside it. GC remains enabled at its recorded
+normal setting. Post-build checks cover every subject/warning, exact populations,
+current/attested evidence, aggregate counts/bytes, warning attachment and index
+exclusion, plus independent path-derived first/middle/last folder membership.
+Wrong or unfinished construction invalidates the sample regardless of elapsed time.
+
+The collector launches five sequential fresh child processes per case, one cold
+sample each. Raw JSON and stdout/stderr record launch argv, repository cwd,
+invocation identity, Popen-launched and child/parent process ids, sample membership, nanoseconds,
+fixture seed, runtime/GC, candidate revision/dirty context and source SHA-256
+bindings. A direct child's id matches the launched id and its parent is the
+collector; a Windows venv redirector child's parent matches the launched id.
+Process ids may be reused; matching launch receipts substantiate actual
+collector launches without claiming cryptographic protection. Per-case maximum
+is the predeclared statistic; minimum/maximum dispersion accompanies it. The
+separate `python -m tools.performance.validate_inventory RAW_JSON` checker
+requires all ten matching samples and compares maxima with 3/6 seconds. Its
+acceptance checks remain active under optimized Python; the collector requires
+a normal interpreter so fixture assertions cannot disappear.
+
+The finite gating source corpus is the collector/fixture and separate checker;
+`workflows/inventory_projection.py` and `node_tree.py`; `core/models.py`,
+`evidence.py`, `integrity.py`, `pathing.py`, `scalars.py` and `review.py`; and
+`db/repositories.py` for row facts and derived verification state. These own the
+construction, type, scalar/path or property calls exercised by this interval.
+Unrelated facade/runtime/executor imports, Plan sorting and later view work are
+outside it; their edits alone do not invalidate cold construction evidence.
+Changed gating files, fixture, producer/checker/driver, Python/dependencies or
+accepted machine/profile require fresh affected samples.
+
+This local, predeclared named-reference criterion uses Tier 2 under DEFENSE §7:
+retain committed compact raw/validation JSON under `tests/interfaces/web/` and
+raw child logs under ignored `build/m1-9-20261001/`. Every run has a fresh exclusive
+directory; failures remain incomplete and neither reports nor validator results
+are overwritten. Samples apply only to the recorded profile and five children,
+without universal latency, memory or complexity claims. No acceptance samples
+are claimed merely by adding this method or passing correctness-only controls.
+
+### Inventory projection result — 2026-10-01
+
+The coordinated quiet reference-profile run passed both fixed maxima:
+base **1.9712401 s** and information-heavy **2.8123806 s**, each the maximum
+of five fresh child samples. The observed hardware, AC power, Python and SQLite
+match the reference profile above. The [raw samples](../tests/interfaces/web/m1_9_inventory_cold_raw.json)
+bind the exact construction/driver/checker bytes, and the [separate validation](../tests/interfaces/web/m1_9_inventory_cold_validation.json)
+records their passing verdict. The candidate is based on `ec3865c` with the
+explicit working-tree source hashes in the receipt; unrelated read-surface
+changes were present but are outside the timed dependency corpus.
+
+Raw child logs remain under
+`build/m1-9-20261001/measurement-inventory-cold-20261001T115350Z-48927bf0/`.
+An earlier incomplete attempt rejected a Windows venv redirector's process
+identity before sample admission. It remains failed evidence; the corrected
+collector/checker were independently reviewed and tested with a real untimed
+launch before this complete run. No wider runtime or memory claim follows.
+
 ## Source-linked historical observations
 
 All values below are independently derived from committed compact JSON.

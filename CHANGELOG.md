@@ -301,6 +301,11 @@ Inventory review and beta packaging remain open.
   correction review pass. Ordinary evidence and environment reruns are retained
   by dependency under `build/m1-9-20261001/`.
   Desktop wiring and actions follow in separate reviewed commits.
+- Add a dedicated cold inventory projection collector and independent checker,
+  including real Windows venv launch provenance and incomplete-evidence controls.
+  Five fresh samples per fixture pass the retained reference-profile maxima:
+  1.97 s base and 2.81 s information-heavy. Commit the raw samples and validation;
+  keep the failed first launch receipt and detailed logs in the task evidence.
 
 #### Mitigate the Advanced Color flyout halo (2026-09-24)
 

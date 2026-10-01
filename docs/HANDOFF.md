@@ -13,13 +13,34 @@ actions; desktop consumer and installed witnesses. Work uses the original
 checkout; no task branches or worktrees have been created and initial status
 was clean. Shared register, manifest, changelog and handoff edits are serialized.
 
-The first outcome adds a pure immutable inventory projection and shares the
+`ec3865c` adds a pure immutable inventory projection and shares the
 existing Plan sibling sorter. Independent domain/warning bounds, complete-folder
 scope, raw evidence provenance, overflow/unknown byte truth and full-width
 location identifiers are covered. Independent review caught a mixed-spelling
 directory sort error; the corrected key uses the real row's raw basename while
 synthetic ancestors keep their tree spelling. Independent correction review
-approved the first outcome; bounded reads are the next implementation boundary.
+approved the first outcome.
+
+Bounded reads are implemented and independently reviewed: lazy
+task-bound projection, cached revisioned windows and fresh exact-row evidence
+details, with native/browser ingress and stale-response checks. Focused checks
+pass 529 tests (10 supplemental deselected); 12 import contracts pass. The
+corrected tools/workflow/interfaces neighborhood passes 3,109 tests/three skips.
+The fresh review includes a real native scan-to-release-to-current-Details
+composition probe. Failed development receipts remain
+in the evidence root, including the corrected release-versus-delivery-closing
+guard. Refresh/visibility actions and desktop implementation have not begun.
+
+Independent acceptance tooling and its Windows venv-launch correction passed
+review, 23 focused checks and a real untimed native launch. Full untimed fixture
+checks confirm 120,000/240,000 displayed rows. The tools department passes
+353 tests/three skips with its required external fixture root; earlier
+in-repository fixture refusals remain retained. After the user explicitly
+authorized a quiet interval, five fresh samples per case and the separate
+validator passed: maxima 1.9712401 s base / 2.8123806 s information-heavy.
+PERFORMANCE links the copied compact raw/validation evidence. The failed first
+launch remains incomplete; corrected source dependencies are frozen. No more
+timing is required unless those dependencies change.
 
 ## Verification and immediate context
 
@@ -47,13 +68,12 @@ records source/API and verification chronology. Raw failed and passing logs
 are retained. Temporary fixtures remain task-owned and must be accounted for
 before cleanup; no unrelated fixtures or recovery refs may be removed.
 
-The user is running sustained compute for a couple of hours. Continue correctness
-work, but coordinate before collecting the retained 3 s/6 s cold projection
-acceptance samples. No performance samples have been collected.
+The user has been told timing is complete and may resume sustained compute.
+Coding and correctness work can proceed; coordinate any newly required timing.
 
-The next backend outcome captures scan metadata before terminal release, lazily
-builds one complete transactional ledger projection, and provides bounded windows
-and fresh exact-row evidence Details. An incomplete scan is not an incomplete
+The read backend captures scan metadata before terminal release, lazily builds
+one complete transactional ledger projection and provides bounded windows and
+fresh exact-row evidence Details. An incomplete scan is not an incomplete
 projection: its observations may publish with warnings, without missing inference.
 Refresh later attaches a fresh inventory scan to the same released task using the
 existing bounded start-response capacity and exact original-command recovery.
