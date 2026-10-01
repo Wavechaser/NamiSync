@@ -1,72 +1,66 @@
-# Latest session — M1-9 final integration
+# Latest session — M1-9 delivered
 
-2026-10-02. Integration branch `milestone1`; original task base `937af54`.
-The user authorized M1-9, allocated missing-row acknowledge/restore here, and
-requested a stop after M1-9 for recap and GUI tweaks. No M1-10/release work is
-activated. M1_PLAN owns current scope and decisions.
+2026-10-01–2026-10-02 on `milestone1`, original task base `937af54`.
+M1-9 is complete. Stop here for the requested recap and GUI tweaks. M1-10,
+M1-12, release and DOC-2 remain unactivated. M1_PLAN is the delivery authority.
 
-## Changes and integration
+## Integrated changes
 
-Six preceding reviewed commits: `ec3865c` projection/shared sibling ordering;
-`12cae9b` cold evidence; `a84e816` bounded reads; `687549a` desktop reads;
-`9266845` same-task Refresh; `978ddf1` conditional visibility actions.
+- `ec3865c`: immutable inventory projection and shared sibling ordering.
+- `12cae9b`: independent cold projection collector/checker and accepted evidence.
+- `a84e816`: bounded inventory reads and fresh exact-row details.
+- `687549a`: inventory desktop read pane and controls.
+- `9266845`: same-task Refresh with original-result recovery.
+- `978ddf1`: conditional acknowledge/restore with truthful partial dispositions.
+- `910255f`: shared admitted-start identity for Plan, inventory, Plan again and
+  pair batches; replace drains and fence older lists without confusing execution.
+- `02d7595`: exact headed command catalogs and bounded native completion waits.
+- `5cf18f8`: desktop Refresh/visibility actions and the narrowed installed witness.
 
-`910255f` fixes shared admitted-start identity for Plan, inventory, Plan again
-and serial pair-batch starts. It advances list generation, adopts active session
-identity, replaces the old drain and keeps fresh Plan requests distinct from
-execution. The reconstructed desktop candidate uses that helper for Refresh,
-retains original-command recovery, and provides folder acknowledge/restore.
-User narrowed the new native witness to real command clicks, displayed result
-replacement, missing-row hide/return, screenshot and task/host Close.
+Each outcome has independent review. The shared fix was committed first as the
+user directed; desktop Refresh uses it. The witness uses producer-owned identity
+and proves native clicks, replacement display, row hide/return and screenshot/
+task/host Close. It does not independently reimplement ledger rules.
 
-Separate test maintenance is ready to commit: six exact command catalogs gain
-seven inventory commands; three native-completion/join waits allow forty seconds
-inside the unchanged sixty-second scenario bound. Original ten-second waits
-expired before correctly canceled navigation completed. A failure-only diagnostic
-and a bounded timing diagnostic establish the mismatch; actual unmodified gate
-assertions then pass. No DNS, browser-update or GIL cause is claimed. Product
-behavior and cancellation, identity, ordering and transport assertions are unchanged.
-The desktop action candidate is separately reviewed and ready for final commit.
+## Verification and evidence
 
-## Verification
-
-Evidence root: `build/m1-9-20261001/`.
+All raw receipts and independent reviews are in `build/m1-9-20261001/`.
 
 - `complete-ordinary-20261002.log`: 5,829 passed, four skipped, 35 headed excluded.
-- `desktop-refresh-frontend-focused.txt`: 64 passed, six deselected. Seven shared
-  start regressions and two permanent Refresh regressions retain red/green controls.
-- `native-wait-ordinary.log`: 1,890 interface tests passed after the test-only
-  maintenance; unaffected ordinary evidence is retained by dependency.
-- Headed coverage is across affected runs, not one aggregate invocation:
-  `complete-headed-20261002.log` supplies 30 unchanged passes; its AB-6 pass is
-  superseded by `native-replacement-20261002.log` (one pass). Transport passes
-  in `headed-recheck-20261002.log`; BR-G-30/31 pass in `native-wait-headed.log`
-  (two passes). `inventory-headed-focus-ready.log` adds the new inventory pass.
-  Total current coverage: all 35 required cases. Earlier failures remain retained.
-- New inventory receipt proves trusted foreground-owned clicks, exact folder
-  actions, replaced display, missing row hidden/back, screenshot, task Close,
-  and normal host Close. Its final focus driver re-establishes button focus after
-  foreground recovery and records seven facts before refusing. Current AST/JS
-  parse receipt is `inventory-focus-parse-corrected.log`.
-- `final-imports-20261002.log`: 12 contracts kept. Local document targets: 191
-  checked, zero missing; anchors are not checked. Diff checks pass.
-- Cold projection samples remain valid: five fresh runs each, maxima
-  1.9712401/2.8123806 seconds below 3/6-second limits. No new timing was needed.
+- `desktop-refresh-frontend-focused.txt`: 64 passed, six deselected; shared and
+  Refresh lifecycle controls retain prior-red/corrected-green evidence.
+- `native-wait-ordinary.log`: all 1,890 interfaces checks pass after test-only
+  maintenance; unaffected ordinary evidence is reused by dependency.
+- All 35 headed cases pass across affected runs: 30 unchanged existing passes
+  from `complete-headed-20261002.log`, fresh AB-6 replacement/Close from
+  `native-replacement-20261002.log`, transport from `headed-recheck-20261002.log`,
+  two live-host gates from `native-wait-headed.log`, and the inventory journey
+  from `inventory-headed-focus-ready.log`. No single aggregate invocation is claimed.
+- `final-imports-20261002.log`: 12 contracts kept. Final local document targets
+  and diff checks pass; link checking does not validate heading anchors.
+- `cold-evidence-final-20261002.log` revalidates five samples per fixture and
+  unchanged source dependencies: maxima 1.9712401/2.8123806 s below 3/6 s.
+  No new timing was needed. User says the machine is idle.
 
-Independent receipts: `review-shared-start.md`,
-`review-inventory-witness-corrected.md`, `review-desktop-actions-final.md`, and
-`review-host-gate-maintenance.md`. Final document completion facts and commits
-remain to be recorded. No native-input interval is active.
+The live-host test's ten-second local wait was a false refusal: matching native
+navigation/popup completion arrived after 17.7/13.3 seconds in a bounded
+counter-observation. Only three local waits changed; the sixty-second parent
+bound and all semantic assertions remain. Actual acceptance runs passed after
+that correction; diagnostic runs are not counted as acceptance. No DNS, browser
+update, GIL issue or product security failure is inferred. Earlier failed and
+incomplete receipts are retained.
 
-## Preservation and closeout
+## Preservation and immediate context
 
-Recovery `4b936db` on `codex/wip-20261001-2242-m1-9-desktop` was not merged or
-cherry-picked. Useful changes were reconstructed on the integration branch;
-account for all saved paths before removing the recovery ref. No worktree or
-unrelated changes exist. Thirty-four inventory receipt/identity files are copied
-and hash-verified under `inventory-native-preserved/`. External task Temp roots
-and other raw evidence remain retained, including failed and diagnostic runs.
-No fixture cleanup or unrelated deletion has occurred. Finish reviewed commits,
-condense M1_PLAN to delivered scope/evidence, update changelog/handoff, verify clean
-status, then stop for the user's GUI review. The machine is idle; no further
-measurements or native runs are currently needed.
+Recovery `4b936db` was never merged/cherry-picked wholesale. All twenty saved
+paths are accounted for in `recovery-accounting.json`; the original recovery
+patch is preserved and hashed. Its disposable branch was removed after final
+closeout review approved the accounting. No worktrees or unrelated changes were created.
+Thirty-four inventory receipt/identity files are copied and hash-verified under
+`inventory-native-preserved/`; other raw evidence and external task Temp roots
+remain retained. No fixture or unrelated filesystem cleanup was performed.
+
+No native-input interval remains active and no further measurement is needed.
+The saved inventory PNG is a browser surface capture with alpha, not acceptance
+of native material appearance or GUI polish. The next interaction is the user's
+M1-9 recap/GUI review, not implementation of the next checkpoint.

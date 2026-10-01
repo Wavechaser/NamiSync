@@ -175,7 +175,7 @@ performance measurements without new hard speed targets (D3/E1/D7); unchanged
 highlight/focus and range/navigation behavior separate from execution checkboxes
 (D4); native Advanced Color mitigation (D5); and the user-owned small-change
 classification in [AGENTS](../AGENTS.md) (D7). D6's missing-row
-acknowledge/restore desktop capability is allocated to active M1-9 below.
+acknowledge/restore desktop capability was delivered in M1-9 below.
 M1-10's rebaseline confirmation
 accepts replacement of content evidence and is a different action. Existing
 [FEATURES](FEATURES.md), [INVENTORY](INVENTORY.md),
@@ -248,214 +248,63 @@ commits were not merge units.
 
 ## Remaining checkpoints
 
-### Active M1-9 — 2026-10-01
+### Completed M1-9 — 2026-10-01 – 2026-10-02
 
-Authorized on `milestone1` from `937af54`. Missing-row acknowledge/restore
-is explicitly allocated here by the user. Stop after M1-9 for a recap and GUI
-tweaks; M1-10, M1-12, release and DOC-2 are not activated.
+Delivered on `milestone1` from `937af54`. The user allocated missing-row
+acknowledge/restore here and directed the shared start-admission correction and
+narrow native witness on resumption. Stop here for recap and GUI tweaks;
+M1-10, M1-12, release and DOC-2 are not activated.
 
-Implementation proceeds in dependency order with independently reviewed atomic
-commits. Existing package conventions apply; new projection/review modules live
-beside their Plan counterparts, focused tests follow their owning package, and
-temporary fixtures and receipts live only under ignored `build/m1-9-20261001/`.
-Keep raw command logs and review receipts there; remove only task-owned disposable
-fixtures after their evidence is retained. No parallel delivery register is added.
-
-| Outcome / commit boundary | Finite population and preserved guarantees | Verification |
+| Delivered outcome | Reviewed commit | Acceptance evidence |
 | --- | --- | --- |
-| Inventory facts and sibling ordering | Workflow inventory projection, existing node tree and Plan projection sorter, workflow facade, focused projection tests and department assignment; INVENTORY/PRESENTATION/ARCHITECTURE. Build complete immutable domain/warning populations, independent warning identity, checked domain rollups, raw own-object sort facts and evidence provenance. Share sibling ordering without changing Plan identity, selection or execution order. | Projection fixtures for hierarchy, warnings, evidence, overflow, sort directions/reset and base/information-heavy scale (120,000/240,000 displayed rows, including structural rows); existing independent source bounds and Plan sorter/workflow regressions. |
-| Bounded inventory reads | Workflow/runtime and service projection/evidence entry points, task port, web inventory review, registry and command adapters, browser bridge wrappers; direct workflow/service/registry/command/bridge tests and owning docs. Capture task-bound scan details before release, without making release construct a projection. Lazy view construction reads one whole ledger snapshot; exact Details uses a fresh bounded row read. One task-owned complete view, exact revisions and bounded windows/details keep current durable evidence distinct from session truth. | Real composition first, then publication/refusal/replacement/close races, stale revisions, request limits, unchanged-window counted work and current-evidence provenance. |
-| Inventory Refresh | Service/task port/lifecycle, existing inventory review/registry/command/bridge owners; direct lifecycle/service/registry/command tests and owning docs. Full/exact/complete-folder same-task Refresh uses exact original-command receipts. Failed projection replacement retains prior complete publication and view preferences; warnings never acquire action authority. | Fresh/replayed/refused admissions, warning rejection, exact scope, replacement races, original-result recovery, bounded retained starts and Close retirement. |
-| Missing-row visibility actions | The same service/task port/review/registry/command/bridge owners and direct tests/docs, after Refresh publication is integrated. Acknowledge/restore use frozen original-command facts, complete-folder scope and conditional writes; bounded result counts report actual row dispositions rather than an all-or-none claim. | Hidden/off-window scope, stale/reappeared conditions, post-effect result recovery, shared retained capacity and exact Close cleanup. |
-| Inventory desktop reads | Separate `assets/inventory_review.js`, shell/panels integration, narrow optional tree decoration and styles, dedicated inventory frontend probes/test module and DESKTOP_UI. Search, facets, collapse, windowing, sibling sorting/reset, current evidence detail and acknowledged hiding/counts. Depends only on committed bounded reads; may proceed independently of backend Refresh with disjoint file ownership. Four read shapes remain stable; publication request identity may differ from an active scan. | Ordinary production browser interaction, accessibility/tree regression and stale-response probes; existing installed SH-G-7 for the shared tree seam, affected interfaces gate and independent review. |
-| Inventory desktop actions and installed witness | Existing inventory pane/app plus reviewed action bridge wrappers; ordinary probes and installed headed inventory harness with shared fixtures; DESKTOP_UI/BRIDGE/PRESENTATION/INTERFACES. Refresh and acknowledge/restore use original-command recovery and server-owned complete-folder scope. Depends on both desktop reads and backend actions. | Installed native inventory journey and affected existing shell journeys; final ordinary/headed integration and independent review. |
-| Reproducible projection acceptance | Dedicated `tools/performance/inventory.py` collector and `validate_inventory.py` checker, focused tools tests, PERFORMANCE/TOOLS methods, and compact raw/validation JSON under the existing `tests/interfaces/web/` evidence convention. This verification-only outcome depends on the committed pure projection, so its preparation may proceed independently of the read/action/UI code. | Untimed exact fixture checks; checker controls for over-budget, incomplete, wrong-population and changed-source evidence; tools checks and fresh review. Timing collection waits for coordinated reference conditions and the final measured source/driver/checker dependencies. No general CLI framework or new budget. |
+| Immutable inventory facts and shared sibling ordering | `ec3865c` | Hierarchy, domain/warning separation, raw evidence, checked/partial totals, both sort directions/reset and 120,000/240,000-row fixtures; 160 focused and 894 workflow checks. |
+| Reproducible cold projection acceptance | `12cae9b` | Independent collector/checker; five fresh samples each, maxima 1.9712401 s base and 2.8123806 s heavy below 3/6 s; source dependencies revalidated at closeout. |
+| Bounded task inventory reads and fresh exact-row details | `a84e816` | Real scan/release/read composition, revision/window/detail/Close races, 529 focused and 3,109 combined department checks. |
+| Desktop inventory read pane and controls | `687549a` | Search/facets/collapse/paging/sibling sort/reset, evidence provenance and stale responses; production frontend and installed shared-tree checks. |
+| Same-task whole/item/folder Refresh | `9266845` | Fresh location admission, old-complete publication, exact original success/failure recovery and bounded task-owned receipts; 2,769 workflow/interface checks. |
+| Conditional missing-row acknowledge/restore | `978ddf1` | Complete hidden/off-window scope, reappeared/stale cases, retained actual partial counts, dirty-view fence and exact Close; 795 focused and 2,785 workflow/interface checks. |
+| Shared admitted-start identity adoption | `910255f` | Initial Plan/Inventory, Plan again and serial pair batches; failed/stale-list red/green probes, replacement drain and preserved execution semantics; 1,890 interfaces checks. |
+| Installed host command catalogs and native completion waits | `02d7595` | Six exact catalogs include seven inventory commands; three local waits fit observed native completion without changing the sixty-second parent bound or semantic assertions; actual host gates, replacement/Close and 1,890 interfaces checks. |
+| Desktop Refresh and missing visibility actions | `5cf18f8` | Original-command recovery, immediate Refresh identity, truthful partial feedback, dirty/current publication rules; production probes and real folder-command clicks, replaced results, row hide/return, screenshot and task/host Close. |
 
-The acceptance gate combines those focused checks, affected departments, the
-ordinary suite, imports, active-document links/diff checks and installed headed
-witnesses. Retain the PRESENTATION cold projection maxima (base 3 s,
-information-heavy 6 s) under PERFORMANCE's reference sampling/profile, with
-finite fixture population and raw provenance. The user is running sustained
-compute: prepare fixtures and correctness checks now, and coordinate before
-collecting performance samples. Busy-machine timings cannot close that gate.
+Inventory remains a complete or prior-complete ledger publication, not a claim
+that its preceding scan was complete. Warnings stay outside domain action scope.
+The server owns full folder membership; view filters/windows do not narrow
+effects. Refresh re-admits location authority and can recover retained scope;
+visibility additionally needs a current complete publication. Conditional writes
+retain frozen original facts and actual bounded dispositions, including uncertain
+suffixes after failure. Receipts share the existing 48-entry admission capacity
+and live until task Close. No batch-atomicity or automatic-replay promise is added.
+[INVENTORY](INVENTORY.md), [PRESENTATION](PRESENTATION.md),
+[INTERFACES](INTERFACES.md) and [BRIDGE](BRIDGE.md) own shipped behavior.
 
-Facts/order shipped in `ec3865c`, independently reviewed: corrected focused 160, workflow 894,
-12 import contracts and 144 local file-link targets pass. The ordinary receipt
-has 5,749 passes/four skips plus three environmental setup/policy failures;
-those three pass outside the sandbox. Retain its unaffected evidence alongside
-the corrected projection neighborhood rather than claiming one all-green run.
-The raw-basename regression failed before correction and passed afterward.
-Raw receipts and independent review are in `build/m1-9-20261001/`.
-Cold construction tooling/evidence shipped in `12cae9b` and passes the coordinated reference-profile gate:
-five samples each, maxima 1.9712401 s base and 2.8123806 s information-heavy.
-PERFORMANCE owns the committed raw/validation pointers and failed-launch
-disposition. Read surface review and the corrected combined tools/workflows/
-interfaces neighborhood pass (3,109 tests, three skips); bounded reads shipped
-in `a84e816`. Twelve imports and 191
-local documentation links pass. The desktop read pane passes fresh independent
-review after stale-window adoption and nested-row indentation corrections and
-ships in `687549a`;
-57 focused checks and installed SH-G-7 pass. The broader neighborhood reports
-2,765 passes and four direct Refresh test-helper mismatches. Migrating the exact
-bridge trace anchor and fixed error vocabulary passes all seven focused checks,
-including byte restoration and no partial mutation on anchor drift. These
-helpers join the Refresh population with unchanged guarantees. The final frozen
-workflows/interfaces rerun passes all 2,769 tests; Refresh's independent review
-also approves those helper migrations. Refresh ships in `9266845`. Visibility's
-final focused gate passes 795 cases and its frozen workflow/interface gate
-passes 2,785. Fresh independent source/evidence review approves it, including
-13 independent focused checks; visibility ships in `978ddf1`. Desktop actions
-and final integration remain open.
+Final ordinary gate: 5,829 passed, four skipped, 35 headed excluded. The subsequent
+test-only maintenance passes all 1,890 interfaces checks. All 35 headed cases
+are covered across dependency-scoped runs: 30 unchanged existing passes, refreshed
+replacement/Close (one), transport (one), live host gates (two), and the new
+inventory journey (one). This is not a single aggregate headed invocation.
+Twelve import contracts, local document-target checks and diff checks pass.
+The 64 focused frontend/trace checks and retained negative controls cover the
+shared and Refresh lifecycle corrections. Screenshot capture preserves browser
+surface evidence; it does not claim native-material or GUI-polish acceptance.
 
-The desktop action candidate passes 5,829 ordinary tests (four skips; 35 headed
-cases excluded). Its new installed witness is not accepted yet. Repeated
-fixture assumptions about directory-inclusive counts, display paths and
-canonical path keys caused false refusals; no passing gate or product defect
-is established by those failures. Native reruns and witness edits are paused
-for a fresh review of the whole finite harness and its producer contracts.
-Corrected helpers must run against actual projection/ledger fixtures before
-another native attempt. Retain the failed and foreground-incomplete receipts;
-the latter stopped before Refresh and do not establish a product failure.
+Raw successes, failures, diagnostic-only runs and independent reviews remain in
+`build/m1-9-20261001/`. Final receipts include
+`complete-ordinary-20261002.log`, `native-wait-ordinary.log`,
+`complete-headed-20261002.log`, `headed-recheck-20261002.log`,
+`native-wait-headed.log`, `native-replacement-20261002.log`,
+`inventory-headed-focus-ready.log` and `cold-evidence-final-20261002.log`.
+The nine outcome reviews and final documentary review are retained there.
+Thirty-four inventory receipt/identity copies are hash-verified under
+`inventory-native-preserved/`; external fixture roots are retained for provenance.
+Recovery `4b936db` was reconstructed into reviewed commits, never merged or
+cherry-picked as-is; its disposable ref was removed after independently reviewed
+accounting of all twenty saved paths. The original patch remains preserved.
 
-**Mandatory stop — 2026-10-01:** independent desktop review reproduced a
-successful Refresh followed by either a failed task-list read or a stale
-in-flight task-list response. The frontend discards the admitted start identity
-and does not advance its lifecycle mutation revision. It can consequently show
-`Current scan: completed` and label the old publication current while the new
-scan is active; its suggested Retry is not installed. This false current terminal
-presentation triggers AGENTS' mandatory stop. No durable backend success,
-duplicate mutation or data loss was established. Product edits and native runs
-are stopped; preserve the uncommitted candidate on an isolated recovery branch,
-never merge that recovery commit as-is.
-
-The reviewable resumption proposal is confined to three mechanisms:
-
-| Mechanism | Owner / correction proposal | Verification before delivery |
-| --- | --- | --- |
-| Refresh lifecycle publication loses the admitted identity or accepts an older list | Desktop app: adopt the original successful start identity using the existing lifecycle path and invalidate stale list responses; preserve original-command recovery and prior complete inventory | Both retained failure/race reproductions must reject the old behavior and pass the correction; production frontend probes and affected installed task journeys |
-| Witness guesses producer identity and mixes action results with fallible observation | The two new inventory witness files: derive canonical fixture identity from core/projection, retain original results and first failure, assert exact folder/order/ledger/visible identity, recheck hit/focus after foreground wait | Exercise the actual helper against genuine service/registry/ledger composition, including adverse identity/observation controls, before another native attempt; then screenshot, exact task Close and normal host Close |
-| Existing headed expected command catalogs omit the seven delivered inventory commands | Explicit expectations in component-gallery, native-host and transport headed tests; retain independent exact catalogs and all security assertions | All eight failures reached those catalog assertions; migrate the finite direct consumers and rerun affected headed cases |
-
-Existing headed integration ended with 26 passes and eight catalog failures;
-the new inventory journey remains separately incomplete. Review evidence and
-the complete witness correction proposal are in
-`build/m1-9-20261001/review-desktop-actions.md` and
-`review-inventory-witness.md`; both Refresh reproductions and all failed native
-receipts remain retained.
-
-The user adjudicated resumption on 2026-10-02 with these changes, superseding
-the broader witness review recommendations above:
-
-- First deliver a separate shared admitted-start fix for `start_plan`,
-  `start_inventory`, `plan_again` and Refresh. A small helper adopts the returned
-  TaskStartView and advances the task mutation revision; it must not mistake
-  Plan again for execution merely because a Plan review exists. Finite owners:
-  app.js (form and serial pair-batch admission), production frontend probes,
-  the direct Plan-again trace helper and lifecycle docs. Verify failed-list and
-  stale-list reproductions plus Plan again, preserve execution behavior, and
-  obtain independent review before committing. The subsequent desktop action
-  commit wires Refresh to this same helper.
-- Limit the installed witness to native evidence: real folder-command clicks,
-  the missing row hiding and returning, replacement displayed results,
-  screenshot, task Close and host Close. Obtain fixture identity/count/display
-  from product owners; retain original results before fallible observations and
-  retain the first failure; recheck focus/hit target after the foreground wait.
-  Do not add independent bucket/order/ledger joins, alternate-case fixtures,
-  extra detail-retirement assertions or helper fault controls.
-- Migrate the three existing explicit headed command catalogs as proposed.
-
-Recovery `4b936db` on `codex/wip-20261001-2242-m1-9-desktop` is retained while
-useful changes are rebuilt into reviewed atomic commits on `milestone1` from
-`978ddf1`; never merge or cherry-pick the WIP. Approved corrections are resumed.
-M1-9 remains incomplete; M1-10 and GUI tweaks are not activated.
-
-The shared admitted-start candidate passes all 1,890 interfaces checks after
-the pair-batch hookup and exact trace-helper migration. Seven production
-failed/stale-list and Plan-again cases fail on the prior source and pass on the
-candidate; both saved Refresh reproductions pass with its helper connected in
-scratch. Independent review found and confirmed the batch correction and trace
-migration. The earlier 1,887-pass/three-anchor-failure receipt remains retained.
-The shared fix ships in `910255f`.
-
-Final desktop evidence includes 5,829 ordinary passes/four skips, 64 focused
-frontend/trace passes, and the native inventory journey: actual folder-command
-clicks, replaced display, missing-row hide/return, screenshot and task/host Close.
-The initial focus attempt refused before any command; the corrected driver
-focuses its current control after foreground recovery and retains bounded facts
-before a refusal. Independent review approves that narrow driver correction.
-
-An existing host fixture separately exposed a bounded test-only defect during
-the final gate: ten-second local waits expired before correlated native
-cancellation completion. Raw failure diagnostics prove the guard canceled the
-navigation; a separate diagnostic with longer local waits retained completions
-after 17.7/13.3 seconds and passed all existing semantic assertions within the
-unchanged sixty-second live-scenario containment. This supports a separate host
-test-maintenance outcome under AGENTS' bounded pre-existing defect provision:
-three waits in `_native_gate_child.py`, six explicit command catalogs in the
-three previously named headed tests, TESTS/BUGS and delivery records. Product
-code, event identity/order, cancellation and transport assertions do not change;
-no DNS, browser-update or GIL cause is claimed. Acceptance requires the actual
-BR-G-30/31 run, affected interfaces checks and fresh independent review. The
-diagnostic pass is not acceptance and does not relax whole-scenario containment.
-The actual corrected BR-G-30/31 gate passes both cases and the interfaces suite
-passes 1,890 tests; the shared driver's replacement/Close case also passes in a
-separate fresh run. All 35 headed cases are accounted for by the affected runs.
-
-Retain current scan reconciliation, warning and ingress/population bounds,
-conditional ledger changes, exact task retirement and original-command recovery.
-Refresh starts a fresh inventory scan in the same task only after the exact
-previous terminal delivery and session release. The published location and
-domain node resolve full/exact/recursive scope on the server; warning targets
-refuse before scan. Retain the old complete projection while scanning and on
-failed/refused projection construction. Projection completeness means a whole
-ledger snapshot, not a claim that the preceding scan was complete: incomplete
-scans retain their warnings and cannot infer missing rows, while their recorded
-observations may appear in a complete ledger projection. The task lifecycle's existing plan-only follow-up
-admission needs a narrow inventory follow-up path, with original-command receipt,
-attachment/rollback and old-detail retirement tests; this does not authorize a
-generic lifecycle rewrite. Close retains its existing pending-cancel semantics.
-Repeated Refresh and inventory visibility receipts share the registry's existing
-48-entry retained start-response capacity, with admission before effects and
-truthful refusal when it is exhausted. Visibility freezes the original command's
-timestamp and returns bounded counts of actual conditional dispositions. Receipts
-remain task-owned until explicit Close, including starts whose released inventory
-session association was superseded and reserved Refresh failures. An initial
-pre-admission failure made no scan/effect, but inherited failed-start cleanup
-discarded its receipt and let a later direct replay admit its first scan. Correct
-that original-result retention gap only for task-owned Refresh entries; evidence
-does not establish duplicate durable mutation or false terminal success.
-Plan's existing one-follow-up rule remains
-unchanged. Keep prior complete inventory reads available during a fresh scan.
-Fresh Refresh requires the current released task request plus the retained
-complete view revision; it may rescan that prior domain scope after an offline
-or unpublished scan. Preserve the last location-bearing Details as a location/
-mount hint in that case, while exact request matching prevents falsely publishing
-it as the new scan. Fresh workflow admission remains mandatory. Visibility
-effects additionally require a publication matching the current request.
-Visibility's task-bound service entry point retains frozen command facts and a
-bounded aggregate of actual per-row dispositions; existing CLI tuple behavior
-stays intact. A partial exception counts the failed row and unattempted suffix
-as unresolved, because the failing write's durability can be unknown. Retain
-that result before rebuilding the projection. A failed post-write rebuild marks
-the old publication dirty for further visibility effects while leaving it
-readable; a successful complete rebuild advances the revision and clears that
-fence. Existing task transitions serialize Refresh/visibility/Close, and a
-concurrent view gesture fences replacement. No generic receipt framework or
-database batch-atomicity promise is introduced.
-The existing observation-claim lifetime guards the task-bound visibility call;
-Close already waits for those claims and Refresh refuses while a visibility
-claim is active. A dedicated `tests/assets/inventory_visibility_bridge_probe.mjs`
-joins the existing frontend test owner for exact aggregate/recovery validation.
-Capture inventory review facts before terminal release
-drops the workflow request details, and preserve them until exact task retirement.
-Archived representation/cache/DTO recipes confer no authority: use current
-subject criteria and the smallest implementation that meets them. New hashing,
-baseline/verify/rebaseline controls and overlays, manual post-copy handoff,
-schema changes, broad lifecycle redesign, event-body removal, history surfaces,
-new speed/memory targets and unrelated bug fixes are excluded. Repository
-mandatory and recurrence stops remain unchanged. Each outcome receives fresh
-adversarial review before its commit; final verification accounts for changed
-producer, consumer and test-driver dependencies.
+New hashing and integrity controls, overlays, manual post-copy verification,
+schema/history work, broad lifecycle redesign, new performance targets and
+release acceptance remain excluded. Earlier stop/recovery chronology is retained
+in Git and evidence rather than a second active register.
 
 Pending rows record accepted future outcomes. Backend optimization is closed;
 pending rows still need user authorization, active scope and finite verification.
@@ -464,7 +313,7 @@ stops and recovery.
 
 | ID | Accepted outcome | Named verification | Status |
 | --- | --- | --- | --- |
-| M1-9 | Bounded inventory projections, current evidence and the full inventory consumer for sibling sorting, including missing-row acknowledge/restore. | Complete or prior-complete publication; warnings outside action scope; raw evidence provenance; search/filter/collapse/window/detail, replacement/race and production sort/reset paths; headed witnesses. | Active; scope and atomic boundaries above. |
+| M1-9 | Bounded inventory projections, current evidence and the full inventory consumer for sibling sorting, including missing-row acknowledge/restore. | Complete or prior-complete publication; warnings outside action scope; raw evidence provenance; search/filter/collapse/window/detail, replacement/race and production sort/reset paths; headed witnesses. | Complete; reviewed commits and final evidence above. |
 | M1-10 | Baseline, verify and rebaseline controls plus first same-task manual post-copy verification, without persistent operation-time hashes. Eligible null-evidence files enter rebaseline; every admitted rebaseline hashes and replaces/creates evidence, and a match is not verified. | Confirm acknowledgement admission before claim/native work; all-null/mixed workflow, service/CLI and desktop paths; conditional recording and supersession races; atomic handoff classification; live pause/resume/cancel and unchanged automatic failed-read retries; overlay/result identity. Independently review operation matrix and conditional recording. Terminal Verify-remaining/subset retry remains deferred. | Pending. Rebaseline confirmation is distinct from missing-row acknowledgement. |
 | M1-12 | Close integrated lifecycle/retention across activated task surfaces, then complete adversarial, documentation, ordinary and headed verification. This absorbs former M1-11. | Plan-only, execution-only, linked/manual verification, inventory, refused/canceled/degraded/failed tasks across same-document navigation, contained unsupported reload, explicit close and shutdown; admission bounds, stale-response suppression, exact resource release and retained truth. Applicable settlement oracle, ordinary/headed, installed-wheel/product, imports, diff/active-link checks and independent cross-component review. No aggregate-artifact or whole-owner-graph criterion. | Pending. |
 | M1-Release | Beta packaging and release closure after delivery rows above. | Installed artifact from clean checkout; frozen specification/dependency/CI, notices and corresponding source; standard-integrity host proof and every applicable BR-G/SH-G gate. [INTERFACES](INTERFACES.md) owns host/package/SH-G; [BRIDGE](BRIDGE.md) owns BR-G. | Pending. |
@@ -490,8 +339,8 @@ consolidation do not execute, close or authorize DOC-2 history rewriting.
 The existing 48-pair bound, serial best effort, per-row options, exact uncertain
 retry, keyboard/forced-color and admission guarantees remain active. Clearing
 a batch receipt does not close a task. The reported Optics refresh delay remains
-unprofiled. No completed row authorizes M1-9 inventory projection, M1-10
-integrity controls, M1-12 lifecycle closure or release.
+unprofiled. No completed row authorizes M1-10 integrity controls, M1-12
+lifecycle closure or release.
 
 ## Accepted behavior carried by the delivery rows
 

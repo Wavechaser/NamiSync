@@ -309,12 +309,11 @@ Integrity controls, manual post-copy handoff and beta packaging remain open.
   inventory commands without weakening the security assertions.
 - Adopt admitted starts directly in the desktop rather than relying on a later
   task-list read. Share the lifecycle correction across Plan, inventory and
-  Plan again, including serial pair-batch starts, with the same helper reserved
-  for Refresh. Ignore pre-admission
+  Plan again, including serial pair-batch starts, and Refresh. Ignore pre-admission
   list responses, contain later read failures and replace the old event drain.
   Fresh Plan requests no longer imply execution merely because a review exists.
   Failed/stale-list and Plan-again probes reproduce the old failure and pass
-  after correction, including the forthcoming Refresh call site in isolation.
+  after correction, including the delivered Refresh call site.
   The corrected interfaces suite passes all 1,890 checks; independent review
   also verifies batch admission and the migrated Plan-again trace helper.
 - Add the immutable workflow inventory projection with independent domain and
