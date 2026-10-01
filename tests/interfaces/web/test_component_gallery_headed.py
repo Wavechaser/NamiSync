@@ -3000,11 +3000,14 @@ def _run_gallery_mode(
         "namisync.interfaces.web.bridge.BridgeDispatcher"
     )
     assert result["production_command_names"] == [
+        "acknowledge_inventory",
         "admit_location",
         "close_task",
         "control_execution",
         "create_task",
         "get_execution_detail",
+        "get_inventory_detail",
+        "get_inventory_window",
         "get_plan_anchor",
         "get_plan_window",
         "list_tasks",
@@ -3013,6 +3016,7 @@ def _run_gallery_mode(
         "mutate_plan_scope",
         "mutate_plan_selection",
         "next_events",
+        "open_inventory_view",
         "open_plan_view",
         "pick_folder",
         "plan_again",
@@ -3021,12 +3025,15 @@ def _run_gallery_mode(
         "read_cosmetic_section",
         "read_setup",
         "readiness_echo",
+        "refresh_inventory",
         "release_terminal_session",
         "replace_cosmetic_section",
+        "restore_inventory",
         "shell_ready",
         "start_execution",
         "start_inventory",
         "start_plan",
+        "update_inventory_view",
         "update_plan_view",
     ]
     assert result["combined_mapping_type"] == "mappingproxy"

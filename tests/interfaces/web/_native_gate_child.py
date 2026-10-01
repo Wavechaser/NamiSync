@@ -706,7 +706,9 @@ def _run_live(arguments: argparse.Namespace, recorder: _Recorder) -> int:
                     "canceled_navigation_completed",
                     threading.Event(),
                 )
-                if not navigation_completed.wait(10.0):
+                # Native completion can arrive after cancellation was observed;
+                # the parent still contains the entire live scenario at 60 s.
+                if not navigation_completed.wait(40.0):
                     raise RuntimeError("canceled native navigation did not complete")
                 original_get_current_url = runtime["original_get_current_url"]
                 measured_managed_url = original_get_current_url()
@@ -738,7 +740,7 @@ def _run_live(arguments: argparse.Namespace, recorder: _Recorder) -> int:
                     raise RuntimeError("delayed bridge worker was not captured")
                 if delayed_worker is threading.current_thread():
                     raise RuntimeError("delayed bridge worker joined itself")
-                delayed_worker.join(10.0)
+                delayed_worker.join(40.0)
                 if delayed_worker.is_alive():
                     raise RuntimeError("delayed bridge worker did not exit")
                 recorder.event("delayed_handler.joined")
@@ -746,7 +748,7 @@ def _run_live(arguments: argparse.Namespace, recorder: _Recorder) -> int:
                 popup_completed = runtime.setdefault(
                     "canceled_popup_completed", threading.Event()
                 )
-                if not popup_completed.wait(10.0):
+                if not popup_completed.wait(40.0):
                     raise RuntimeError("canceled native popup did not complete")
 
             window = runtime["window"]

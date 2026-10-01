@@ -1,68 +1,72 @@
-# Latest session — M1-9 resumed
+# Latest session — M1-9 final integration
 
-2026-10-02. User approved resumption after mandatory stop, expanding the first
-correction to the shared start-admission mechanism and narrowing the installed
-witness. M1_PLAN owns the accepted details. Finish M1-9 and stop for recap/GUI
-tweaks; no M1-10 or release work is authorized.
+2026-10-02. Integration branch `milestone1`; original task base `937af54`.
+The user authorized M1-9, allocated missing-row acknowledge/restore here, and
+requested a stop after M1-9 for recap and GUI tweaks. No M1-10/release work is
+activated. M1_PLAN owns current scope and decisions.
 
-## Integration and preservation
+## Changes and integration
 
-Original/integration branch `milestone1`, current base `978ddf1`; original task
-base `937af54`. Six reviewed commits have shipped: `ec3865c`, `12cae9b`,
-`a84e816`, `687549a`, `9266845`, `978ddf1` (projection, timing evidence, bounded
-reads, desktop reads, same-task Refresh, conditional visibility respectively).
+Six preceding reviewed commits: `ec3865c` projection/shared sibling ordering;
+`12cae9b` cold evidence; `a84e816` bounded reads; `687549a` desktop reads;
+`9266845` same-task Refresh; `978ddf1` conditional visibility actions.
 
-Recovery `4b936db` remains on `codex/wip-20261001-2242-m1-9-desktop`. Never merge
-or cherry-pick it as-is. Rebuild useful changes on milestone1; account for every
-saved path before removing the recovery ref. No unrelated dirty work or task
-worktrees exist. Ignored evidence and external fixtures remain preserved.
+`910255f` fixes shared admitted-start identity for Plan, inventory, Plan again
+and serial pair-batch starts. It advances list generation, adopts active session
+identity, replaces the old drain and keeps fresh Plan requests distinct from
+execution. The reconstructed desktop candidate uses that helper for Refresh,
+retains original-command recovery, and provides folder acknowledge/restore.
+User narrowed the new native witness to real command clicks, displayed result
+replacement, missing-row hide/return, screenshot and task/host Close.
 
-First atomic outcome: shared TaskStartView adoption for initial Plan/Inventory,
-Plan again and subsequent Refresh hookup. Advance task mutation revision, adopt
-active/unreleased identity, replace the old drain and avoid Plan-again being
-misclassified as execution. Failed-list/stale-list and Plan-again probes plus
-fresh independent review precede its own commit. Builder owns app.js/probes and
-INTERFACES; root owns shared register/changelog/handoff.
+Separate test maintenance is ready to commit: six exact command catalogs gain
+seven inventory commands; three native-completion/join waits allow forty seconds
+inside the unchanged sixty-second scenario bound. Original ten-second waits
+expired before correctly canceled navigation completed. A failure-only diagnostic
+and a bounded timing diagnostic establish the mismatch; actual unmodified gate
+assertions then pass. No DNS, browser-update or GIL cause is claimed. Product
+behavior and cancellation, identity, ordering and transport assertions are unchanged.
+The desktop action candidate is separately reviewed and ready for final commit.
 
-Shared candidate is now verified: 1,890 interfaces tests pass; seven prior-red/
-candidate-green production scenarios and both Refresh scratch controls pass.
-Independent review confirmed the batch and trace-helper corrections. Exact
-receipt: shared-ready-dept.log. The first 1,887-pass/three-anchor-failure receipt
-is retained; no unresolved first-outcome finding remains.
+## Verification
 
-Second outcome: reconstruct desktop action candidate atop that fix. Separate
-builder owns only the two new inventory witness files. User explicitly limited
-the witness to real folder-command clicks, hidden/returned missing row,
-replacement shown results, screenshot and task/host Close. Use producer-owned
-identity/count/display; retain original results before fallible observation,
-first failure and fresh focus/hit check after manual foreground wait. Do not
-implement the prior review's expanded ledger/order/bucket/helper-fault checks.
-Root migrated five explicit expected command lists across the three existing
-headed test files; retain all independent security assertions.
+Evidence root: `build/m1-9-20261001/`.
 
-## Evidence and next gates
+- `complete-ordinary-20261002.log`: 5,829 passed, four skipped, 35 headed excluded.
+- `desktop-refresh-frontend-focused.txt`: 64 passed, six deselected. Seven shared
+  start regressions and two permanent Refresh regressions retain red/green controls.
+- `native-wait-ordinary.log`: 1,890 interface tests passed after the test-only
+  maintenance; unaffected ordinary evidence is retained by dependency.
+- Headed coverage is across affected runs, not one aggregate invocation:
+  `complete-headed-20261002.log` supplies 30 unchanged passes; its AB-6 pass is
+  superseded by `native-replacement-20261002.log` (one pass). Transport passes
+  in `headed-recheck-20261002.log`; BR-G-30/31 pass in `native-wait-headed.log`
+  (two passes). `inventory-headed-focus-ready.log` adds the new inventory pass.
+  Total current coverage: all 35 required cases. Earlier failures remain retained.
+- New inventory receipt proves trusted foreground-owned clicks, exact folder
+  actions, replaced display, missing row hidden/back, screenshot, task Close,
+  and normal host Close. Its final focus driver re-establishes button focus after
+  foreground recovery and records seven facts before refusing. Current AST/JS
+  parse receipt is `inventory-focus-parse-corrected.log`.
+- `final-imports-20261002.log`: 12 contracts kept. Local document targets: 191
+  checked, zero missing; anchors are not checked. Diff checks pass.
+- Cold projection samples remain valid: five fresh runs each, maxima
+  1.9712401/2.8123806 seconds below 3/6-second limits. No new timing was needed.
 
-Evidence root `build/m1-9-20261001/`; old reviews and failed receipts retained.
-Prior candidate ordinary: 5,829 passed, four skipped, 35 headed deselected;
-frontend 58 passed. Existing headed: 26 passed, eight explicit command-catalog
-failures. New inventory witness never passed; six failure/incomplete receipts.
-Review repros `review-refresh-list-{failure,race}.{mjs,py,json}` prove false current
-completed display; correcting that mechanism is now explicitly authorized.
+Independent receipts: `review-shared-start.md`,
+`review-inventory-witness-corrected.md`, `review-desktop-actions-final.md`, and
+`review-host-gate-maintenance.md`. Final document completion facts and commits
+remain to be recorded. No native-input interval is active.
 
-Backend visibility neighborhood 2,785 passes, focused 795, independent 13;
-imports12 and local links191 passed before final frontend work. Reuse unaffected
-backend evidence; rerun affected frontend, ordinary and installed gates after
-writers freeze. Package inputs must not change during wheel-backed runs.
+## Preservation and closeout
 
-Cold projection gate passed five fresh samples each: maxima 1.9712401/2.8123806s
-under 3/6s. Current source dependency validation is in cold-evidence-current.log.
-User says machine idle and authorizes further measurements if needed; none are
-currently needed. User manual test-window focus is already authorized. Announce
-native input intervals, verify foreground before clicks, and close the interval
-when processes end. No native run is currently active.
-
-External task evidence under C:\Users\Spectrum\AppData\Local\Temp includes
-namisync-m1-9-{existing-headed,final-ordinary}-20261001 and six
-NamiSync-M19-Inventory-20261001-{first,second,diagnostic,focus,manual,identity}
-roots. Prior roots are indexed in build/m1-9-20261001/evidence-index.md. Preserve
-receipts/screenshots/package identity before any exact task-owned cleanup.
+Recovery `4b936db` on `codex/wip-20261001-2242-m1-9-desktop` was not merged or
+cherry-picked. Useful changes were reconstructed on the integration branch;
+account for all saved paths before removing the recovery ref. No worktree or
+unrelated changes exist. Thirty-four inventory receipt/identity files are copied
+and hash-verified under `inventory-native-preserved/`. External task Temp roots
+and other raw evidence remain retained, including failed and diagnostic runs.
+No fixture cleanup or unrelated deletion has occurred. Finish reviewed commits,
+condense M1_PLAN to delivered scope/evidence, update changelog/handoff, verify clean
+status, then stop for the user's GUI review. The machine is idle; no further
+measurements or native runs are currently needed.

@@ -1147,6 +1147,15 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Desktop bridge and native-owner lifecycle
 
+- MINOR - FIXED (2026-10-02). Native observation budget mismatch. The existing
+  live host witness could time out after correctly canceled navigation because
+  its local native-completion and worker-join waits ended before the matching
+  event arrived. Cause: ten-second local waits did not accommodate observed
+  completion latency within the existing sixty-second scenario bound. A bounded
+  diagnostic retained matching unsuccessful completions after 17.7/13.3 seconds
+  and passed the original semantic assertions. The three local waits now allow
+  forty seconds; whole-scenario containment, event identity/order, cancellation
+  and bridge/source assertions are unchanged. No product latency claim is added.
 - MODERATE - FIXED (2026-09-26). Recovery-owner omission. A fixed-unknown
   execution admission left the Plan review status blank, or showing ordinary
   plan feedback after reconstruction, although Execute and Close stayed fenced.

@@ -291,6 +291,13 @@ Inventory review and beta packaging remain open.
 
 #### Deliver M1-9 inventory review (2026-10-01 – 2026-10-02)
 
+- Correct the existing live host witness's local native-completion wait budget
+  after diagnostics showed matching canceled events arriving beyond ten seconds.
+  Preserve the whole-scenario limit and every cancellation, identity, ordering
+  and post-cancellation transport assertion; product behavior is unchanged.
+  Both actual live-host gates and all 1,890 interfaces checks pass. Migrate the
+  existing exact production/extended command catalogs for the seven delivered
+  inventory commands without weakening the security assertions.
 - Adopt admitted starts directly in the desktop rather than relying on a later
   task-list read. Share the lifecycle correction across Plan, inventory and
   Plan again, including serial pair-batch starts, with the same helper reserved

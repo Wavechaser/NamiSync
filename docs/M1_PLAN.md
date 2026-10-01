@@ -375,6 +375,31 @@ failed/stale-list and Plan-again cases fail on the prior source and pass on the
 candidate; both saved Refresh reproductions pass with its helper connected in
 scratch. Independent review found and confirmed the batch correction and trace
 migration. The earlier 1,887-pass/three-anchor-failure receipt remains retained.
+The shared fix ships in `910255f`.
+
+Final desktop evidence includes 5,829 ordinary passes/four skips, 64 focused
+frontend/trace passes, and the native inventory journey: actual folder-command
+clicks, replaced display, missing-row hide/return, screenshot and task/host Close.
+The initial focus attempt refused before any command; the corrected driver
+focuses its current control after foreground recovery and retains bounded facts
+before a refusal. Independent review approves that narrow driver correction.
+
+An existing host fixture separately exposed a bounded test-only defect during
+the final gate: ten-second local waits expired before correlated native
+cancellation completion. Raw failure diagnostics prove the guard canceled the
+navigation; a separate diagnostic with longer local waits retained completions
+after 17.7/13.3 seconds and passed all existing semantic assertions within the
+unchanged sixty-second live-scenario containment. This supports a separate host
+test-maintenance outcome under AGENTS' bounded pre-existing defect provision:
+three waits in `_native_gate_child.py`, six explicit command catalogs in the
+three previously named headed tests, TESTS/BUGS and delivery records. Product
+code, event identity/order, cancellation and transport assertions do not change;
+no DNS, browser-update or GIL cause is claimed. Acceptance requires the actual
+BR-G-30/31 run, affected interfaces checks and fresh independent review. The
+diagnostic pass is not acceptance and does not relax whole-scenario containment.
+The actual corrected BR-G-30/31 gate passes both cases and the interfaces suite
+passes 1,890 tests; the shared driver's replacement/Close case also passes in a
+separate fresh run. All 35 headed cases are accounted for by the affected runs.
 
 Retain current scan reconciliation, warning and ingress/population bounds,
 conditional ledger changes, exact task retirement and original-command recovery.

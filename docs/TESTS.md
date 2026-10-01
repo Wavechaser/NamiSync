@@ -167,6 +167,11 @@ $env:NAMISYNC_TEST_NODE = 'C:\path\to\node.exe'
 Headed acceptance requires an interactive supported Windows desktop and the
 real WebView2 host. Run the interface-owned headed gate when desktop behavior,
 packaging, or headed harnesses change.
+The live host cancellation witness keeps its whole-scenario containment while
+allowing correlated native completion to arrive after cancellation is observed.
+Its waits are test containment, not a product latency criterion; cancellation,
+completion identity, event ordering and post-cancellation transport assertions
+remain required.
 For checks that send native keyboard/mouse input, announce the brief input
 interval and leave the owned test window in front until it ends. Verify the
 foreground/focused window and mouse hit target belong to the test process tree

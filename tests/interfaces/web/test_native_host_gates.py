@@ -405,11 +405,14 @@ def test_br_g_30_real_installed_host_assumptions_are_measured(
     assert presentation_revisions == sorted(set(presentation_revisions))
     assert all(revision > 0 for revision in presentation_revisions)
     assert evidence["production_command_names"] == [
+        "acknowledge_inventory",
         "admit_location",
         "close_task",
         "control_execution",
         "create_task",
         "get_execution_detail",
+        "get_inventory_detail",
+        "get_inventory_window",
         "get_plan_anchor",
         "get_plan_window",
         "list_tasks",
@@ -418,6 +421,7 @@ def test_br_g_30_real_installed_host_assumptions_are_measured(
         "mutate_plan_scope",
         "mutate_plan_selection",
         "next_events",
+        "open_inventory_view",
         "open_plan_view",
         "pick_folder",
         "plan_again",
@@ -426,12 +430,15 @@ def test_br_g_30_real_installed_host_assumptions_are_measured(
         "read_cosmetic_section",
         "read_setup",
         "readiness_echo",
+        "refresh_inventory",
         "release_terminal_session",
         "replace_cosmetic_section",
+        "restore_inventory",
         "shell_ready",
         "start_execution",
         "start_inventory",
         "start_plan",
+        "update_inventory_view",
         "update_plan_view",
     ]
     assert evidence["combined_command_names"] == sorted(
@@ -1124,11 +1131,14 @@ def _assert_packaged_popup_evidence(
     assert page["document_token"].startswith("packaged-")
     assert page["ready_count"] == 1
     assert evidence["production_command_names"] == [
+        "acknowledge_inventory",
         "admit_location",
         "close_task",
         "control_execution",
         "create_task",
         "get_execution_detail",
+        "get_inventory_detail",
+        "get_inventory_window",
         "get_plan_anchor",
         "get_plan_window",
         "list_tasks",
@@ -1137,6 +1147,7 @@ def _assert_packaged_popup_evidence(
         "mutate_plan_scope",
         "mutate_plan_selection",
         "next_events",
+        "open_inventory_view",
         "open_plan_view",
         "pick_folder",
         "plan_again",
@@ -1145,12 +1156,15 @@ def _assert_packaged_popup_evidence(
         "read_cosmetic_section",
         "read_setup",
         "readiness_echo",
+        "refresh_inventory",
         "release_terminal_session",
         "replace_cosmetic_section",
+        "restore_inventory",
         "shell_ready",
         "start_execution",
         "start_inventory",
         "start_plan",
+        "update_inventory_view",
         "update_plan_view",
     ]
     assert evidence["combined_command_names"] == sorted(
