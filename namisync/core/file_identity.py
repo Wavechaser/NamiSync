@@ -4,13 +4,14 @@ from __future__ import annotations
 
 from collections.abc import Callable
 import ctypes
+from ctypes import wintypes
 
 from .models import FileIdentity
 from .scalars import MAX_FILE_INDEX_128, file_index_128_to_text
 
 
 FILE_ID_INFO_CLASS = 18
-_SUPPORTED_STAT_IDENTITY_FILESYSTEMS = frozenset({"NTFS", "REFS"})
+_SUPPORTED_IDENTITY_FILESYSTEMS = frozenset({"NTFS", "REFS"})
 
 
 class _FileId128(ctypes.Structure):
@@ -25,6 +26,12 @@ class _FileIdInfo(ctypes.Structure):
 
 
 GetFileInformationByHandleEx = Callable[[int, int, object, int], object]
+
+
+def supports_stable_file_identity(fs_type: str) -> bool:
+    """Identify filesystems on which identity-query failures must fail closed."""
+
+    return fs_type.upper() in _SUPPORTED_IDENTITY_FILESYSTEMS
 
 
 def file_index_128_from_bytes(value: bytes | bytearray | memoryview) -> int:
@@ -51,7 +58,7 @@ def file_identity_from_stat(
 ) -> FileIdentity | None:
     """Adapt CPython's complete Windows ``st_ino`` on witnessed filesystems."""
 
-    if fs_type.upper() not in _SUPPORTED_STAT_IDENTITY_FILESYSTEMS:
+    if not supports_stable_file_identity(fs_type):
         return None
     if type(st_ino) is not int or not 0 <= st_ino <= MAX_FILE_INDEX_128:
         return None
@@ -61,8 +68,8 @@ def file_identity_from_stat(
 def file_identity_from_windows_handle(
     handle: int,
     get_file_information_ex: GetFileInformationByHandleEx,
-) -> FileIdentity:
-    """Read a complete handle-bound identity using ``FileIdInfo`` only."""
+) -> FileIdentity | None:
+    """Read ``FileIdInfo``, allowing absence only on other filesystems."""
 
     info = _FileIdInfo()
     succeeded = get_file_information_ex(
@@ -72,11 +79,31 @@ def file_identity_from_windows_handle(
         ctypes.sizeof(info),
     )
     if not succeeded:
-        raise ctypes.WinError(ctypes.get_last_error())
+        error = ctypes.WinError(ctypes.get_last_error())
+        if not supports_stable_file_identity(_filesystem_from_windows_handle(handle)):
+            return None
+        raise error
     return file_identity_from_windows_parts(
         info.volume_serial_number,
         bytes(info.file_id.identifier),
     )
+
+
+def _filesystem_from_windows_handle(handle: int) -> str:
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    get_volume_information = kernel32.GetVolumeInformationByHandleW
+    get_volume_information.argtypes = [
+        wintypes.HANDLE, wintypes.LPWSTR, wintypes.DWORD,
+        ctypes.POINTER(wintypes.DWORD), ctypes.POINTER(wintypes.DWORD),
+        ctypes.POINTER(wintypes.DWORD), wintypes.LPWSTR, wintypes.DWORD,
+    ]
+    get_volume_information.restype = wintypes.BOOL
+    filesystem = ctypes.create_unicode_buffer(261)
+    if not get_volume_information(
+        handle, None, 0, None, None, None, filesystem, len(filesystem),
+    ):
+        raise ctypes.WinError(ctypes.get_last_error())
+    return filesystem.value
 
 
 def file_identity_from_windows_parts(

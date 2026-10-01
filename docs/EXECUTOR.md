@@ -212,6 +212,11 @@ recording; post-effect and recovery version recognition compares kind, size,
 mtime and available identity, ignoring attributes, creation time and link count.
 Path, placeholder and reparse checks precede admission.
 
+Native handle stats use core's filesystem-qualified identity fallback described
+in [ARCHITECTURE.md](ARCHITECTURE.md): exFAT can supply absent identity after a
+failed `FileIdInfo` query, while NTFS/ReFS identity-query errors still refuse
+the operation. This applies to prepared-copy finalization as well as later stats.
+
 On the Windows probe path, a valid nonnegative integer `st_dev` from that
 checked snapshot selects the admitted held root's `VolumeId` when its low 32 bits
 match the root's native serial. This reuse first checks current held attributes.

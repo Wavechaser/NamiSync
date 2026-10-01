@@ -349,6 +349,13 @@ authority.
 Verifier totals follow the active checked-arithmetic contract in
 [BRIDGE.md](BRIDGE.md) and [DEFENSE.md](DEFENSE.md) §1.3;
 verifier defines no local numeric or file-identity variant.
+Native reader stats use core's filesystem-qualified identity fallback in
+[ARCHITECTURE.md](ARCHITECTURE.md), allowing absent identity on exFAT while
+retaining NTFS/ReFS identity-query failures. Unbuffered reading and existing
+size/mtime stability checks remain required when identity is unavailable.
+When a reviewed root supplies an expected volume id, the engine still refuses
+an opened subject without identity; native reader compatibility does not relax
+that volume-corroboration policy.
 
 Verify, baseline, and the implemented rebaseline entry point carry per-item
 status as their pause continuation. They emit each reliable outcome before

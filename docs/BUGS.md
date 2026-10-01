@@ -260,16 +260,18 @@ defect, and move implementation-level test choreography out of the log.
   failures propagate through resolve and both owned-trash consumers. Native regressions
   assert refusal without writing through the junction, check ACL restoration,
   and remove the junction before fixture cleanup.
-- MODERATE - OPEN (2026-09-28). Native handle metadata on exFAT.
-  A K: exFAT copy witness reports truthful `io-error` / WinError 87 after
-  transferring eight bytes; the independent invocation-hold witness passes.
-  Read-only handle queries accept basic/size metadata but reject `FileIdInfo`.
-  `_stat_handle` unconditionally requests that identity in the baseline too,
-  before the identity-weak capability profile can discard it. This establishes
-  a pre-existing compatibility blocker, but the copy's first failing native
-  call has not been traced. Deferred outside the root-admission change; no
-  exFAT copy success is claimed. Raw evidence: `build/root-admission-optimization-20260928/`
-  `executor/exfat-handle-metadata.log` and `resume/executor-exfat-diagnostic.log`.
+- MODERATE - FIXED (2026-10-01). Native handle metadata on exFAT.
+  K: copies failed before publication when temp finalization requested unsupported
+  `FileIdInfo`. Cause: handle metadata required identity before an identity-weak
+  profile could discard it. Failed queries now inspect that handle's filesystem
+  and return no identity only outside NTFS/ReFS, using the scanner's shared
+  predicate; supported-filesystem and lookup failures still raise. Successful
+  identity queries add no lookup. Database leases still require identity.
+  COPY/UPDATE across all four NTFS/exFAT directions pass native readback and
+  immediate NOOP replanning; fixtures were removed. Workflow verification still
+  refuses absent identity when required for reviewed-volume corroboration.
+  Evidence: `build/open-bugs-20261001/identity-fix.json`; original failure receipts
+  remain in `build/root-admission-optimization-20260928/`.
 - MODERATE - FIXED (2026-08-26). Cancellation settlement ownership gap.
   A reliable collaborator raising `Canceled` after outcome retention could
   replace cancellation with an invariant error despite publication and a

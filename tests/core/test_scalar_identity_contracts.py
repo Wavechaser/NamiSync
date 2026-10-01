@@ -358,8 +358,12 @@ def test_zero_file_id_is_equivalent_across_stat_and_handle_adapters() -> None:
     ),
 )
 def test_handle_adapter_requests_file_id_info_and_keeps_all_128_bits(
-    volume_serial: int, expected_serial: str,
+    volume_serial: int, expected_serial: str, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    def unexpected_lookup(_handle: int) -> str:
+        pytest.fail("successful identity queries must not query the filesystem")
+
+    monkeypatch.setattr(identity_module, "_filesystem_from_windows_handle", unexpected_lookup)
     raw = bytes.fromhex("ffeeddccbbaa99887766554433221100")
     calls: list[tuple[int, int, int]] = []
 
@@ -385,6 +389,70 @@ def test_handle_adapter_requests_file_id_info_and_keeps_all_128_bits(
     assert identity.volume_serial == expected_serial
     assert identity.file_index == int.from_bytes(raw, "little")
     assert identity.file_index > (1 << 64) - 1
+
+
+@pytest.mark.skipif(os.name != "nt", reason="requires Windows error adaptation")
+@pytest.mark.parametrize("filesystem", ("NTFS", "ReFS", "exFAT", "FAT32"))
+@pytest.mark.parametrize("error_code", (87, 5))
+def test_failed_handle_identity_is_optional_only_on_other_filesystems(
+    monkeypatch: pytest.MonkeyPatch, filesystem: str, error_code: int,
+) -> None:
+    handles: list[int] = []
+
+    def get_file_information(*_args: object) -> int:
+        ctypes.set_last_error(error_code)
+        return 0
+
+    def lookup(handle: int) -> str:
+        handles.append(handle)
+        ctypes.set_last_error(0)
+        return filesystem
+
+    monkeypatch.setattr(identity_module, "_filesystem_from_windows_handle", lookup)
+    if filesystem.upper() in {"NTFS", "REFS"}:
+        with pytest.raises(OSError) as caught:
+            file_identity_from_windows_handle(73, get_file_information)
+        assert caught.value.winerror == error_code
+    else:
+        assert file_identity_from_windows_handle(73, get_file_information) is None
+    assert handles == [73]
+
+
+@pytest.mark.skipif(os.name != "nt", reason="requires Windows error adaptation")
+def test_failed_filesystem_lookup_cannot_authorize_absent_identity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def get_file_information(*_args: object) -> int:
+        ctypes.set_last_error(87)
+        return 0
+
+    failure = OSError("filesystem unavailable")
+
+    def lookup(_handle: int) -> str:
+        raise failure
+
+    monkeypatch.setattr(identity_module, "_filesystem_from_windows_handle", lookup)
+    with pytest.raises(OSError) as caught:
+        file_identity_from_windows_handle(73, get_file_information)
+    assert caught.value is failure
+
+
+@pytest.mark.skipif(os.name != "nt", reason="requires native Windows handles")
+def test_handle_filesystem_lookup_uses_the_open_subject_and_rejects_invalid_handles(
+    tmp_path: Path,
+) -> None:
+    subject = tmp_path / "filesystem-witness.bin"
+    subject.write_bytes(b"identity")
+    filesystem = executor_native.NativeFileSystem()
+    handle = filesystem._open_metadata_handle(subject)
+    try:
+        assert identity_module._filesystem_from_windows_handle(handle).upper() == (
+            observe_native_volume(subject).volume_id.fs_type.upper()
+        )
+    finally:
+        filesystem._close_handle(handle)
+    with pytest.raises(OSError):
+        identity_module._filesystem_from_windows_handle(-1)
 
 
 @pytest.mark.parametrize("file_index", (0, 1 << 64, MAX_FILE_INDEX_128))

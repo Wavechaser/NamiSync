@@ -8,6 +8,7 @@ import sqlite3
 import stat
 import tempfile
 import traceback
+from types import SimpleNamespace
 
 import pytest
 
@@ -15,6 +16,7 @@ import namisync.db.contracts as file_contracts
 import namisync.db.repositories as repositories_module
 import namisync.db.schema as schema_module
 import namisync.workflows.database_pair as database_pair
+import namisync.workflows._database_pair_native as database_pair_native
 from namisync.db.connections import connect_history_writer, connect_ledger_writer
 from namisync.db.history import HistoryRepository
 from namisync.db.repositories import LedgerRepository
@@ -1611,6 +1613,26 @@ def test_owned_artifact_delete_cannot_be_redirected_after_bound_identity_check(
     assert failures == ()
     assert path.read_bytes() == b"foreign-replacement"
     assert not displaced.exists()
+
+
+def test_database_artifact_refuses_absent_identity_and_closes_query_handle(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    native = WindowsArtifactNative()
+    closed = []
+    monkeypatch.setattr(native, "_open", lambda *_args, **_kwargs: 73)
+    monkeypatch.setattr(native, "_bindings", lambda: SimpleNamespace(
+        GetFileInformationByHandleEx=object(),
+    ))
+    monkeypatch.setattr(native, "close", closed.append)
+    monkeypatch.setattr(
+        database_pair_native, "file_identity_from_windows_handle",
+        lambda _handle, _query: None,
+    )
+
+    with pytest.raises(OSError, match="requires a stable file identity"):
+        native.path_identity(Path("reserved.db"))
+    assert closed == [73]
 
 
 @pytest.mark.parametrize(

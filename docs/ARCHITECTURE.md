@@ -422,6 +422,12 @@ never inferred from a bounded window or accepted from a browser.
   persists as opaque canonical decimal text paired with volume identity.
   Features that cannot obtain the complete identity degrade or refuse rather
   than inventing, narrowing, or ordering one.
+  Scanner capabilities and native handle adaptation share the core NTFS/ReFS
+  predicate. A failed `FileIdInfo` query can yield absent identity only after
+  a successful filesystem query on that same handle identifies another
+  filesystem. NTFS/ReFS retain the original identity-query failure; failure to
+  identify the filesystem also fails closed. Successful identity queries incur
+  no filesystem lookup.
 - Path validation rejects absolute/drive-qualified relatives, traversal,
   ambiguous Windows suffixes and device names, alternate-stream syntax, NUL,
   malformed Unicode, and root escape.

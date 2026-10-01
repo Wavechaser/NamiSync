@@ -40,7 +40,10 @@ from namisync.core.pathing import (
     to_extended_length_path,
     validate_relative_path,
 )
-from namisync.core.file_identity import file_identity_from_stat
+from namisync.core.file_identity import (
+    file_identity_from_stat,
+    supports_stable_file_identity,
+)
 from namisync.core.root_authority import (
     FILE_ATTRIBUTE_DIRECTORY,
     FILE_ATTRIBUTE_OFFLINE,
@@ -191,10 +194,6 @@ def _granularity_for(fs_type: str) -> int:
     return 2_000_000_000
 
 
-def _identity_supported(fs_type: str) -> bool:
-    return fs_type.upper() in {"NTFS", "REFS"}
-
-
 class NativeScannerBackend:
     """Native Windows metadata backend; it never opens ordinary file content."""
 
@@ -229,7 +228,7 @@ class NativeScannerBackend:
             CapabilityProfile(
                 fs_type=fs_type,
                 mtime_granularity_ns=_granularity_for(fs_type),
-                stable_file_identity=_identity_supported(fs_type),
+                stable_file_identity=supports_stable_file_identity(fs_type),
                 incurs_seek_penalty=None,
                 max_path=32767,
                 supports_ads=bool(

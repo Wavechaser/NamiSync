@@ -179,6 +179,13 @@ explicit, reviewable and regression-backed.
 
 #### Resolve reviewed open bugs (2026-10-01)
 
+- After failed handle identity queries, probe that handle's filesystem and permit
+  absent identity only outside NTFS/ReFS. Scanner and native adapters share the
+  same predicate; successful queries add no lookup. Database ownership leases
+  keep their strict identity refusal. Native exFAT COPY/UPDATE/readback and
+  immediate NOOP replanning pass; reviewed-volume verifier policy is unchanged.
+  Independent review, 5,733 ordinary tests, 12 import contracts and the
+  30-scenario × three-run settlement gate pass.
 - Make replacement-option advice optional. Performance reports now refuse
   overwrite with guidance to choose a new `--json` path; existing replacement
   commands retain their flag advice. Focused CLI tests preserve refusal before

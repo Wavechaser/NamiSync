@@ -245,6 +245,8 @@ class WindowsArtifactNative:
             handle,
             bindings.GetFileInformationByHandleEx,
         )
+        if identity is None:
+            raise OSError("database artifact requires a stable file identity")
         return int(identity.volume_serial, 16), identity.file_index
 
     def _bindings(self) -> ctypes.WinDLL:

@@ -352,7 +352,9 @@ publishes ledger then history after reserving every main and sidecar cleanup
 target through a Windows ownership lease. Failure cleanup derives a new delete
 handle from the retained reservation with `ReOpenFile` and requests
 exact-object disposition; a displaced foreign pathname is retained rather than
-removed through a check/use race. Rollback covers ordinary exceptions,
+removed through a check/use race. These leases require a stable file identity;
+an absent native identity is an `OSError` refusal, never a usable lease token.
+Rollback covers ordinary exceptions,
 `KeyboardInterrupt`, and `SystemExit`; handles release stepwise and an
 incomplete cleanup carries the coordinated reset direction. It never invokes
 the destructive development reset. A crash-shaped one-main pair, an orphan
