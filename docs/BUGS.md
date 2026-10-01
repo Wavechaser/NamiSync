@@ -1215,14 +1215,19 @@ defect, and move implementation-level test choreography out of the log.
   the lower-bound-only Python
   metadata policy, and retaining exact runtime profiles only as measurement
   qualifiers; native dependency and WebView2 compatibility gates remain.
-- MODERATE - OPEN (2026-08-27). Response-copy ownership gap. Python now admits
-  each hostile response occurrence against the exact 8 MiB canonical-JSON wall
-  while detaching it, then retires the raw graph before primitive projection.
-  Native workers retain their position through both thread exit and exact
-  browser receipt, with document-generation retirement. CLR/WebView2/browser
-  encodings still need source-derived byte charges. Cause: ingress and Python-
-  worker bounds were reused as if they also bounded every output copy;
-  closure requires the remaining representation-specific charges to be frozen.
+- MODERATE - SUPERSEDED (2026-08-27; superseded 2026-10-01). Response-copy
+  ownership gap. Responses are charged against the 8 MiB canonical-JSON wall
+  through worker exit and browser receipt, but CLR/WebView2/browser copies are
+  not. Cause: ingress and Python-worker bounds were reused for every output
+  copy. Per-encoding charges are the object-graph certificate DEFENSE §1.3
+  retired; the 64-exchange and 8 MiB walls remain the owner bounds. Pinned
+  pywebview's triple escaping makes the CLR UTF-16 script 2× canonical bytes
+  for ASCII, 6× for `"`/CJK, 8× for `\`/`'` and 9× for astral characters:
+  about 72 MiB per response and 4.5 GiB for 64, plus Python/V8 copies. Only
+  the trusted page can drive this, real responses are KB-low MB, and the worst
+  consequence is host OOM without false durable state; an aggregate byte budget
+  would add false `bridge_busy` refusals. Reopen if return encoding or a wall
+  changes, or SH-G-15 attributes growth to native return copies.
 - MODERATE - FIXED (2026-08-28). Document-generation custody accumulation. A
   reload reconstructed the post helper while queued callbacks, encoded values,
   and sent appearance/readiness values had no page-acknowledged retirement, so
@@ -1231,7 +1236,8 @@ defect, and move implementation-level test choreography out of the log.
   and document identity was sampled too late. Fixed with one reused epoch-bound
   channel, exact required/replaceable acknowledgment shapes, one in-flight plus
   two queued slots, synchronous replacement retirement, and hostile stale-sink
-  regressions. Native/browser byte charges remain in the OPEN entry above.
+  regressions. Native/browser byte charges are disposed in the SUPERSEDED
+  entry above.
 - MINOR - FIXED (2026-08-28). Surface-settlement waiter abandonment. Repeated
   readiness requests replaced an unresolved appearance waiter without invoking
   it, while close and partial attachment simply cleared the last callback.
