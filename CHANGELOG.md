@@ -289,8 +289,18 @@ Stage 6 delivered the secured desktop host, process-live tasks, frozen Setup,
 bounded Plan review/selection and execution, and live/retained result review.
 Inventory review and beta packaging remain open.
 
-#### Deliver M1-9 inventory review (2026-10-01)
+#### Deliver M1-9 inventory review (2026-10-01 – 2026-10-02)
 
+- Adopt admitted starts directly in the desktop rather than relying on a later
+  task-list read. Share the lifecycle correction across Plan, inventory and
+  Plan again, including serial pair-batch starts, with the same helper reserved
+  for Refresh. Ignore pre-admission
+  list responses, contain later read failures and replace the old event drain.
+  Fresh Plan requests no longer imply execution merely because a review exists.
+  Failed/stale-list and Plan-again probes reproduce the old failure and pass
+  after correction, including the forthcoming Refresh call site in isolation.
+  The corrected interfaces suite passes all 1,890 checks; independent review
+  also verifies batch admission and the migrated Plan-again trace helper.
 - Add the immutable workflow inventory projection with independent domain and
   warning populations, complete-folder membership, raw evidence provenance,
   checked rollups and explicit partial byte totals. Share canonical sibling

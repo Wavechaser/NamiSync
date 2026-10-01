@@ -519,6 +519,8 @@ function adoptTask(summary) {
     tasks.set(task.taskId, task);
   } else {
     if (task.sessionId !== summary.session_id) {
+      task.stopDrain?.();
+      task.stopDrain = null;
       if (task.inventoryReview !== null) retireInventoryDetail(task.inventoryReview);
       task.inventoryRevision += 1;
       task.inventoryLoading = false;
@@ -540,6 +542,8 @@ function adoptTask(summary) {
       task.sessionId !== null
       && summary.session_id !== null
       && task.sessionId !== summary.session_id
+      && summary.task_kind === "sync-plan"
+      && task.requestId === summary.request_id
       && task.review !== null
     ) {
       task.executionStarted = true;
@@ -567,6 +571,18 @@ function adoptTask(summary) {
   }
   if (task.taskKind === "inventory" && task.sessionReleased) void loadInventoryReview(task);
   return task;
+}
+
+function adoptTaskStart(result, taskKind) {
+  taskMutationRevision += 1;
+  return adoptTask({
+    task_id: result.task_id,
+    request_id: result.request_id,
+    session_id: result.session_id,
+    session_state: "active",
+    session_released: false,
+    task_kind: taskKind,
+  });
 }
 
 function attachTaskDrain(task) {
@@ -2584,7 +2600,8 @@ async function dispatchFormAttempt(task, form, attempt, submit) {
   attempt.dispatched = true;
   renderTasks();
   try {
-    await submit();
+    const result = await submit();
+    adoptTaskStart(result, attempt.kind === "inventory" ? "inventory" : "sync-plan");
   } catch (error) {
     if (!currentFormAttempt(task, form, attempt)) return;
     if (error instanceof StartPlanUncertainError) {
@@ -2603,7 +2620,10 @@ async function dispatchFormAttempt(task, form, attempt, submit) {
     form.attempt = null;
     task.startRecovery = null;
   }
-  await refreshTasks();
+  renderTasks();
+  try { await refreshTasks(); } catch (_error) {
+    // The admitted identity and its live drain already own current task status.
+  }
 }
 
 async function retryFormAttempt(task, form, kind) {
@@ -2844,12 +2864,13 @@ async function startBatchRow(row, context) {
     row.stage = "starting";
     row.message = "Creating plan…";
     renderTasks();
-    await startPlan(task.taskId, row.sourceId, row.targetId, row.options, (recovery) => {
+    const result = await startPlan(task.taskId, row.sourceId, row.targetId, row.options, (recovery) => {
       if (row.state === "submitting") {
         row.recovery = recovery;
         renderTasks();
       }
     });
+    adoptTaskStart(result, "sync-plan");
     row.recovery = null;
     row.state = "created";
     row.message = "Plan task created.";
@@ -2915,7 +2936,9 @@ async function startPairBatch() {
     if (batch.running === owner) batch.running = null;
     renderTasks();
   }
-  await refreshTasks();
+  try { await refreshTasks(); } catch (_error) {
+    // Each admitted child already retains its identity and current task drain.
+  }
 }
 
 async function admitBatchRow(row, purpose, batchRow) {

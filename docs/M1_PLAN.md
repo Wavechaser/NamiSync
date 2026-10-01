@@ -304,7 +304,77 @@ workflows/interfaces rerun passes all 2,769 tests; Refresh's independent review
 also approves those helper migrations. Refresh ships in `9266845`. Visibility's
 final focused gate passes 795 cases and its frozen workflow/interface gate
 passes 2,785. Fresh independent source/evidence review approves it, including
-13 independent focused checks. Desktop actions and final integration remain open.
+13 independent focused checks; visibility ships in `978ddf1`. Desktop actions
+and final integration remain open.
+
+The desktop action candidate passes 5,829 ordinary tests (four skips; 35 headed
+cases excluded). Its new installed witness is not accepted yet. Repeated
+fixture assumptions about directory-inclusive counts, display paths and
+canonical path keys caused false refusals; no passing gate or product defect
+is established by those failures. Native reruns and witness edits are paused
+for a fresh review of the whole finite harness and its producer contracts.
+Corrected helpers must run against actual projection/ledger fixtures before
+another native attempt. Retain the failed and foreground-incomplete receipts;
+the latter stopped before Refresh and do not establish a product failure.
+
+**Mandatory stop — 2026-10-01:** independent desktop review reproduced a
+successful Refresh followed by either a failed task-list read or a stale
+in-flight task-list response. The frontend discards the admitted start identity
+and does not advance its lifecycle mutation revision. It can consequently show
+`Current scan: completed` and label the old publication current while the new
+scan is active; its suggested Retry is not installed. This false current terminal
+presentation triggers AGENTS' mandatory stop. No durable backend success,
+duplicate mutation or data loss was established. Product edits and native runs
+are stopped; preserve the uncommitted candidate on an isolated recovery branch,
+never merge that recovery commit as-is.
+
+The reviewable resumption proposal is confined to three mechanisms:
+
+| Mechanism | Owner / correction proposal | Verification before delivery |
+| --- | --- | --- |
+| Refresh lifecycle publication loses the admitted identity or accepts an older list | Desktop app: adopt the original successful start identity using the existing lifecycle path and invalidate stale list responses; preserve original-command recovery and prior complete inventory | Both retained failure/race reproductions must reject the old behavior and pass the correction; production frontend probes and affected installed task journeys |
+| Witness guesses producer identity and mixes action results with fallible observation | The two new inventory witness files: derive canonical fixture identity from core/projection, retain original results and first failure, assert exact folder/order/ledger/visible identity, recheck hit/focus after foreground wait | Exercise the actual helper against genuine service/registry/ledger composition, including adverse identity/observation controls, before another native attempt; then screenshot, exact task Close and normal host Close |
+| Existing headed expected command catalogs omit the seven delivered inventory commands | Explicit expectations in component-gallery, native-host and transport headed tests; retain independent exact catalogs and all security assertions | All eight failures reached those catalog assertions; migrate the finite direct consumers and rerun affected headed cases |
+
+Existing headed integration ended with 26 passes and eight catalog failures;
+the new inventory journey remains separately incomplete. Review evidence and
+the complete witness correction proposal are in
+`build/m1-9-20261001/review-desktop-actions.md` and
+`review-inventory-witness.md`; both Refresh reproductions and all failed native
+receipts remain retained.
+
+The user adjudicated resumption on 2026-10-02 with these changes, superseding
+the broader witness review recommendations above:
+
+- First deliver a separate shared admitted-start fix for `start_plan`,
+  `start_inventory`, `plan_again` and Refresh. A small helper adopts the returned
+  TaskStartView and advances the task mutation revision; it must not mistake
+  Plan again for execution merely because a Plan review exists. Finite owners:
+  app.js (form and serial pair-batch admission), production frontend probes,
+  the direct Plan-again trace helper and lifecycle docs. Verify failed-list and
+  stale-list reproductions plus Plan again, preserve execution behavior, and
+  obtain independent review before committing. The subsequent desktop action
+  commit wires Refresh to this same helper.
+- Limit the installed witness to native evidence: real folder-command clicks,
+  the missing row hiding and returning, replacement displayed results,
+  screenshot, task Close and host Close. Obtain fixture identity/count/display
+  from product owners; retain original results before fallible observations and
+  retain the first failure; recheck focus/hit target after the foreground wait.
+  Do not add independent bucket/order/ledger joins, alternate-case fixtures,
+  extra detail-retirement assertions or helper fault controls.
+- Migrate the three existing explicit headed command catalogs as proposed.
+
+Recovery `4b936db` on `codex/wip-20261001-2242-m1-9-desktop` is retained while
+useful changes are rebuilt into reviewed atomic commits on `milestone1` from
+`978ddf1`; never merge or cherry-pick the WIP. Approved corrections are resumed.
+M1-9 remains incomplete; M1-10 and GUI tweaks are not activated.
+
+The shared admitted-start candidate passes all 1,890 interfaces checks after
+the pair-batch hookup and exact trace-helper migration. Seven production
+failed/stale-list and Plan-again cases fail on the prior source and pass on the
+candidate; both saved Refresh reproductions pass with its helper connected in
+scratch. Independent review found and confirmed the batch correction and trace
+migration. The earlier 1,887-pass/three-anchor-failure receipt remains retained.
 
 Retain current scan reconciliation, warning and ingress/population bounds,
 conditional ledger changes, exact task retirement and original-command recovery.

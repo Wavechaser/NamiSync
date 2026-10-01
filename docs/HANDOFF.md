@@ -1,93 +1,68 @@
-# Latest session — M1-9 inventory review
+# Latest session — M1-9 resumed
 
-2026-10-01 on `milestone1`, base `937af54`. The user authorized M1-9 under
-execute-task with small reviewed atomic commits, explicitly allocated missing-row
-acknowledge/restore here, and requested a stop for recap and GUI tweaks after
-M1-9. No work on M1-10, M1-12, release or DOC-2 is activated.
+2026-10-02. User approved resumption after mandatory stop, expanding the first
+correction to the shared start-admission mechanism and narrowing the installed
+witness. M1_PLAN owns the accepted details. Finish M1-9 and stop for recap/GUI
+tweaks; no M1-10 or release work is authorized.
 
-## Current work
+## Integration and preservation
 
-M1_PLAN owns the active finite population and dependency-ordered boundaries:
-inventory facts/shared ordering; bounded inventory reads; Refresh/visibility
-actions; desktop consumer and installed witnesses. Work uses the original
-checkout; no task branches or worktrees have been created and initial status
-was clean. Shared register, manifest, changelog and handoff edits are serialized.
+Original/integration branch `milestone1`, current base `978ddf1`; original task
+base `937af54`. Six reviewed commits have shipped: `ec3865c`, `12cae9b`,
+`a84e816`, `687549a`, `9266845`, `978ddf1` (projection, timing evidence, bounded
+reads, desktop reads, same-task Refresh, conditional visibility respectively).
 
-`ec3865c` adds a pure immutable inventory projection and shares the
-existing Plan sibling sorter. Independent domain/warning bounds, complete-folder
-scope, raw evidence provenance, overflow/unknown byte truth and full-width
-location identifiers are covered. Independent review caught a mixed-spelling
-directory sort error; the corrected key uses the real row's raw basename while
-synthetic ancestors keep their tree spelling. Independent correction review
-approved the first outcome.
+Recovery `4b936db` remains on `codex/wip-20261001-2242-m1-9-desktop`. Never merge
+or cherry-pick it as-is. Rebuild useful changes on milestone1; account for every
+saved path before removing the recovery ref. No unrelated dirty work or task
+worktrees exist. Ignored evidence and external fixtures remain preserved.
 
-`a84e816` commits independently reviewed bounded reads: lazy
-task-bound projection, cached revisioned windows and fresh exact-row evidence
-details, with native/browser ingress and stale-response checks. Focused checks
-pass 529 tests (10 supplemental deselected); 12 import contracts pass. The
-corrected tools/workflow/interfaces neighborhood passes 3,109 tests/three skips.
-The fresh review includes a real native scan-to-release-to-current-Details
-composition probe. Failed development receipts remain
-in the evidence root, including the corrected release-versus-delivery-closing
-guard. The desktop read pane is independently approved after stale viewport
-adoption and nested-row indentation corrections: 57 focused cases and installed
-SH-G-7 pass. Same-task Refresh source review passes; its direct bridge
-trace/error-vocabulary helper migrations pass seven checks after the broader
-neighborhood reported 2,765 passes/four mismatches. The final frozen
-workflows/interfaces rerun passes all 2,769 cases and independent Refresh review
-approves the helper migrations. The read pane is committed as `687549a`.
-Refresh is committed as `9266845`. Visibility source/tests/docs are frozen on
-that base; 795 focused checks and 2,785 workflow/interface checks pass, with
-fresh independent review approved (13 additional focused passes). The implementation retains actual bounded
-conditional outcomes, frozen timestamps and uncertain suffixes after partial
-failure. Dirty prior publications remain readable but cannot authorize more
-visibility writes until a complete replacement succeeds. Desktop actions and
-the installed inventory witness wait for this reviewed backend. Twelve import
-contracts and 191 local document links pass.
+First atomic outcome: shared TaskStartView adoption for initial Plan/Inventory,
+Plan again and subsequent Refresh hookup. Advance task mutation revision, adopt
+active/unreleased identity, replace the old drain and avoid Plan-again being
+misclassified as execution. Failed-list/stale-list and Plan-again probes plus
+fresh independent review precede its own commit. Builder owns app.js/probes and
+INTERFACES; root owns shared register/changelog/handoff.
 
-`12cae9b` commits independent acceptance tooling and its Windows venv-launch correction, which passed
-review, 23 focused checks and a real untimed native launch. Full untimed fixture
-checks confirm 120,000/240,000 displayed rows. The tools department passes
-353 tests/three skips with its required external fixture root; earlier
-in-repository fixture refusals remain retained. After the user explicitly
-authorized a quiet interval, five fresh samples per case and the separate
-validator passed: maxima 1.9712401 s base / 2.8123806 s information-heavy.
-PERFORMANCE links the copied compact raw/validation evidence. The failed first
-launch remains incomplete; corrected source dependencies are frozen. No more
-timing is required unless those dependencies change.
+Shared candidate is now verified: 1,890 interfaces tests pass; seven prior-red/
+candidate-green production scenarios and both Refresh scratch controls pass.
+Independent review confirmed the batch and trace-helper corrections. Exact
+receipt: shared-ready-dept.log. The first 1,887-pass/three-anchor-failure receipt
+is retained; no unresolved first-outcome finding remains.
 
-## Verification and immediate context
+Second outcome: reconstruct desktop action candidate atop that fix. Separate
+builder owns only the two new inventory witness files. User explicitly limited
+the witness to real folder-command clicks, hidden/returned missing row,
+replacement shown results, screenshot and task/host Close. Use producer-owned
+identity/count/display; retain original results before fallible observation,
+first failure and fresh focus/hit check after manual foreground wait. Do not
+implement the prior review's expanded ledger/order/bucket/helper-fault checks.
+Root migrated five explicit expected command lists across the three existing
+headed test files; retain all independent security assertions.
 
-- Prechange inventory/runtime/service/visible-sequence seam: 282 passed.
-- Initial projection candidate: 159 focused and 893 workflow tests passed;
-  the information-heavy correctness fixture has 240,000 displayed rows.
-- All 12 import contracts pass; 144 local documentation file-link targets exist.
-- Ordinary precorrection evidence: 5,749 passed, four skipped, 34 headed
-  deselected; three environmental failures. Two ACL fixtures failed their
-  prerequisite before product resolve; Windows PowerShell execution policy
-  blocked the third script before its version guard. All three pass in the
-  exact unsandboxed rerun. Neither failure proves a product defect.
-- The raw-basename regression failed before correction and the corrected
-  focused neighborhood passes 160 tests and the corrected workflow department
-  passes 894. Independent correction review passed, including 48 independent
-  focused checks. Retain unaffected ordinary evidence
-  by dependency; no aggregate all-green ordinary invocation is claimed.
-- Failed pytest default-temp access receipt is retained; focused/department
-  reruns use task-owned build temp/cache. The ordinary suite uses the unique
-  external temp root `C:\Users\Spectrum\AppData\Local\Temp\namisync-m1-9-projection-20261001`
-  because transport custody tests require external staging.
+## Evidence and next gates
 
-Evidence is under `build/m1-9-20261001/`; `projection-builder-evidence.md`
-records source/API and verification chronology. Raw failed and passing logs
-are retained. Temporary fixtures remain task-owned and must be accounted for
-before cleanup; no unrelated fixtures or recovery refs may be removed.
+Evidence root `build/m1-9-20261001/`; old reviews and failed receipts retained.
+Prior candidate ordinary: 5,829 passed, four skipped, 35 headed deselected;
+frontend 58 passed. Existing headed: 26 passed, eight explicit command-catalog
+failures. New inventory witness never passed; six failure/incomplete receipts.
+Review repros `review-refresh-list-{failure,race}.{mjs,py,json}` prove false current
+completed display; correcting that mechanism is now explicitly authorized.
 
-The user has been told timing is complete and may resume sustained compute.
-Coding and correctness work can proceed; coordinate any newly required timing.
+Backend visibility neighborhood 2,785 passes, focused 795, independent 13;
+imports12 and local links191 passed before final frontend work. Reuse unaffected
+backend evidence; rerun affected frontend, ordinary and installed gates after
+writers freeze. Package inputs must not change during wheel-backed runs.
 
-The read backend captures scan metadata before terminal release, lazily builds
-one complete transactional ledger projection and provides bounded windows and
-fresh exact-row evidence Details. An incomplete scan is not an incomplete
-projection: its observations may publish with warnings, without missing inference.
-Refresh later attaches a fresh inventory scan to the same released task using the
-existing bounded start-response capacity and exact original-command recovery.
+Cold projection gate passed five fresh samples each: maxima 1.9712401/2.8123806s
+under 3/6s. Current source dependency validation is in cold-evidence-current.log.
+User says machine idle and authorizes further measurements if needed; none are
+currently needed. User manual test-window focus is already authorized. Announce
+native input intervals, verify foreground before clicks, and close the interval
+when processes end. No native run is currently active.
+
+External task evidence under C:\Users\Spectrum\AppData\Local\Temp includes
+namisync-m1-9-{existing-headed,final-ordinary}-20261001 and six
+NamiSync-M19-Inventory-20261001-{first,second,diagnostic,focus,manual,identity}
+roots. Prior roots are indexed in build/m1-9-20261001/evidence-index.md. Preserve
+receipts/screenshots/package identity before any exact task-owned cleanup.

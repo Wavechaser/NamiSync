@@ -135,6 +135,7 @@ async function loadScenario({
     createStates: [],
     model: null,
     task: null,
+    drains: [],
     calls: [],
     snapshot,
     recents: structuredClone(recents),
@@ -223,7 +224,11 @@ async function loadScenario({
     export const readSetup = (...args) => harness.readSetup(...args);
     export const startInventory = (...args) => harness.startInventory(...args);
     export const startPlan = (...args) => harness.startPlan(...args);
-    export const startTaskDrain = () => () => {};
+    export const startTaskDrain = (...args) => {
+      const drain = { args, stopped: false };
+      harness.drains.push(drain);
+      return () => { drain.stopped = true; };
+    };
     export const whenBridgeApiReady = () => Promise.resolve();
     // scenario ${scenarioId}
   `);
@@ -292,6 +297,7 @@ async function loadScenario({
     .replace("./rail.js", railUrl)
     .replace("./render.js", renderUrl)
     .replace("./task_status.js", taskStatusUrl);
+  source += "\nObject.assign(globalThis.setupAppHarness, { refreshTasks, dispatchFormAttempt, adoptTask, tasks, startPlanAgain, startPairBatch });";
   await import(moduleUrl(`${source}\n// scenario ${scenarioId}`));
   await until(() => harness.model !== null, "initial Setup read");
   return harness;
@@ -1060,10 +1066,10 @@ for (const sessionState of ["active", "failed"]) {
   let exactRetries = 0;
   harness.startPlan = (...values) => {
     harness.calls.push(["start-plan", ...structuredClone(values.slice(0, 4))]);
-    if (values[0] !== TASK_C) return Promise.resolve({ task_id: values[0] });
+    if (values[0] !== TASK_C) return Promise.resolve({ task_id: values[0], request_id: "4".repeat(32), session_id: "5".repeat(32) });
     return delayedOriginal(values.at(-1), () => {
       exactRetries += 1;
-      return Promise.resolve({ task_id: TASK_C });
+      return Promise.resolve({ task_id: TASK_C, request_id: "6".repeat(32), session_id: "7".repeat(32) });
     });
   };
 
@@ -1143,6 +1149,138 @@ for (const action of ["remove", "close"]) {
   await until(() => !harness.model.source.pending, "picker releases row after unrelated option edit");
   assert.equal(harness.model.source.location, null, "the stale result remains unadopted");
   assert.equal(harness.model.options.deletion_policy, "additive");
+}
+
+// An admitted start is authoritative even when the subsequent task-list read
+// fails or a read launched before admission finishes afterward.
+const lifecycleScenario = process.argv[3] ?? "all";
+for (const kind of ["inventory", "sync-plan"]) {
+  for (const observation of ["failed", "stale"]) {
+    if (lifecycleScenario !== "all" && lifecycleScenario !== `${kind}-${observation}`) continue;
+    const harness = await loadScenario();
+    const task = harness.task;
+    const form = task.form;
+    const attempt = { kind, running: true, dispatched: false };
+    form.attempt = attempt;
+    const start = { task_id: TASK_A, request_id: (kind === "inventory" ? "6" : "4").repeat(32),
+      session_id: (kind === "inventory" ? "7" : "5").repeat(32) };
+    const active = { ...start, task_kind: kind, session_state: "active", session_released: false };
+    const oldList = deferred();
+    let olderRead;
+    if (observation === "failed") {
+      harness.listTasks = () => Promise.reject(new Error("list transport unavailable"));
+    } else {
+      let reads = 0;
+      harness.listTasks = () => ++reads === 1 ? oldList.promise : Promise.resolve({ tasks: [active] });
+      olderRead = harness.refreshTasks();
+    }
+    const submit = kind === "inventory" ? () => harness.startInventory(TASK_A) : () => harness.startPlan(TASK_A);
+    const dispatched = harness.dispatchFormAttempt(task, form, attempt, submit);
+    let dispatchError;
+    try { await dispatched; } catch (error) { dispatchError = error; }
+    assert.equal(task.sessionId, start.session_id, `${kind}: admitted session survives ${observation} list`);
+    assert.equal(task.requestId, start.request_id);
+    assert.equal(task.sessionState, "active");
+    assert.equal(task.sessionReleased, false);
+    assert.equal(harness.drains.at(-1).args[1], start.session_id);
+    assert.equal(dispatchError, undefined, "task-list observation failure cannot reject an admitted start");
+    if (olderRead !== undefined) {
+      oldList.resolve({ tasks: [summary()] });
+      await olderRead;
+      await turns();
+      assert.equal(task.sessionId, start.session_id, "an older task list cannot restore the pre-start shell");
+      assert.equal(harness.drains.at(-1).args[1], start.session_id);
+    }
+  }
+}
+
+// Plan again adopts its newly admitted task without modifying the original
+// review. A fresh request must never be inferred to be execution.
+if (lifecycleScenario === "all" || lifecycleScenario === "plan-again") {
+  const snapshot = {
+    setup_state: "frozen", task_kind: "sync-plan",
+    source: { display: "C:\\source", location_id: "41" },
+    target: { display: "D:\\target", location_id: "42" }, root: null,
+    options: structuredClone(DEFAULT_OPTIONS),
+    plan_again: { source_state: "resolved", source_candidates: [], target_state: "resolved", target_candidates: [] },
+  };
+  const originalSummary = { ...summary(), session_id: "1".repeat(32), request_id: "2".repeat(32),
+    task_kind: "sync-plan", session_state: "completed", session_released: true };
+  const harness = await loadScenario({ snapshot, initialSummary: originalSummary });
+  const original = harness.task;
+  original.review = { pending: null };
+  const originalReview = original.review;
+  const shell = harness.adoptTask({ ...summary(TASK_B), session_id: "6".repeat(32),
+    request_id: "7".repeat(32), task_kind: "sync-plan", session_state: "completed", session_released: true });
+  shell.review = { pending: null };
+  const previousDrain = harness.drains.at(-1);
+  harness.listTasks = () => Promise.reject(new Error("list transport unavailable"));
+  let dispatchError;
+  try { await harness.startPlanAgain(original); } catch (error) { dispatchError = error; }
+  assert.equal(harness.calls.filter((call) => call[0] === "plan-again").length, 1);
+  assert.equal(original.review, originalReview);
+  assert.equal(original.sessionId, originalSummary.session_id);
+  assert.equal(shell.sessionId, "9".repeat(32));
+  assert.equal(shell.requestId, "8".repeat(32));
+  assert.equal(shell.executionStarted, false, "fresh Plan-again admission cannot imply execution");
+  assert.equal(shell.executionWindowDirty, false);
+  assert.equal(previousDrain.stopped, true, "session replacement stops its old drain");
+  assert.equal(harness.drains.at(-1).args[1], shell.sessionId);
+  assert.equal(dispatchError, undefined, "Plan-again admission also survives observation failure");
+  previousDrain.args[5](TASK_B, "6".repeat(32));
+  assert.equal(shell.sessionReleased, false, "the superseded drain cannot release the new session");
+  assert.equal(shell.sessionState, "active");
+  harness.adoptTask({ ...summary(TASK_B), session_id: "a".repeat(32),
+    request_id: shell.requestId, task_kind: "sync-plan", session_state: "active", session_released: false });
+  assert.equal(shell.executionStarted, true, "execution's same-request transition remains intact");
+  assert.equal(shell.executionWindowDirty, true);
+}
+
+for (const observation of ["failed", "stale"]) {
+  if (lifecycleScenario !== "all" && lifecycleScenario !== `batch-${observation}`) continue;
+  const harness = await loadScenario();
+  harness.pickFolder = (purpose) => Promise.resolve(choice(purpose, purpose === "source" ? "6" : "7"));
+  harness.callbacks.onPick("source");
+  await until(() => harness.model.source.location?.state === "resolved", "batch resolved source");
+  harness.callbacks.onPick("target");
+  await until(() => harness.model.target.location?.state === "resolved", "batch resolved target");
+  harness.callbacks.onAddPair();
+  const start = { task_id: TASK_B, request_id: "4".repeat(32), session_id: "5".repeat(32) };
+  const active = { ...start, task_kind: "sync-plan", session_state: "active", session_released: false };
+  const startReply = deferred();
+  harness.startPlan = (...values) => {
+    harness.calls.push(["start-plan", ...values]);
+    return startReply.promise;
+  };
+  const dispatched = harness.startPairBatch();
+  await until(() => harness.calls.some((call) => call[0] === "start-plan"), "batch dispatched original start");
+  const oldList = deferred();
+  let olderRead;
+  if (observation === "failed") {
+    harness.listTasks = () => Promise.reject(new Error("list transport unavailable"));
+  } else {
+    let reads = 0;
+    harness.listTasks = () => ++reads === 1 ? oldList.promise
+      : Promise.resolve({ tasks: [summary(TASK_A), active] });
+    olderRead = harness.refreshTasks();
+  }
+  startReply.resolve(start);
+  let dispatchError;
+  try { await dispatched; } catch (error) { dispatchError = error; }
+  if (olderRead !== undefined) {
+    oldList.resolve({ tasks: [summary(TASK_A), summary(TASK_B)] });
+    await olderRead;
+    await turns();
+  }
+  const child = harness.tasks.get(TASK_B);
+  assert.equal(child?.sessionId, start.session_id, `batch: admitted session survives ${observation} list`);
+  assert.equal(child?.requestId, start.request_id);
+  assert.equal(child?.sessionState, "active");
+  assert.equal(child?.sessionReleased, false);
+  assert.equal(harness.drains.at(-1).args[1], start.session_id);
+  assert.equal(harness.model.batch[0].state, "created");
+  assert.equal(harness.calls.filter((call) => call[0] === "start-plan").length, 1);
+  assert.equal(dispatchError, undefined, "batch observation failure cannot reject an admitted start");
 }
 
 await turns();

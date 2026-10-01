@@ -550,6 +550,15 @@ snapshot, keeping roots and options out of aggregate lists and small async
 responses. The browser's serial pair coordinator uses ordinary independent
 starts and never rolls back previously admitted rows.
 
+The page adopts an admitted Plan, inventory or Plan-again start's exact task,
+request and session identity before refreshing the task list, marks that session
+active and unreleased, and invalidates list reads launched before admission.
+Task-list observation failure cannot restore the prior terminal presentation.
+Replacing a session stops its prior drain before attaching the new one; callbacks
+from the old session cannot update or release its replacement. A session change
+implies execution only for the same sync-plan request, so a fresh Plan request
+does not inherit execution state from a retained review.
+
 Picker ambiguity uses a non-startable continuation in the adapter's existing
 bounded slot table. It retains reviewed identity and current mount ordering,
 accepts only an explicit indexed choice, then repeats workflow admission before

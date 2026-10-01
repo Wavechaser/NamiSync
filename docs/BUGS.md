@@ -1027,6 +1027,18 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Application task lifecycle
 
+- MODERATE - FIXED (2026-10-02). Admitted-start identity loss. The desktop
+  discarded a successful TaskStartView and relied on a later task-list read.
+  A failed read left the old completed session visible; a pre-start list response
+  arriving later could restore it and stop observation of the new active scan.
+  Refresh could therefore call the old result the current completed scan, with
+  an unavailable Retry suggestion. Initial Plan/Inventory and Plan again share
+  the same admission path. Cause: admitted identity was neither adopted directly
+  nor fenced against older list responses. Shared start adoption now publishes
+  active identity, replaces the drain and invalidates older reads before optional
+  list reconciliation. Fresh Plan requests stay distinct from execution.
+  Failed/stale-list and Plan-again probes fail on the prior source and pass with
+  the correction; the same-request execution transition remains covered.
 - MODERATE - FIXED (2026-09-26). Delivery-clock sampling. Task rate/ETA used the
   time a drain reduced Progress rather than when the adapter accepted it.
   Delayed polling or a response retry therefore changed estimates for the same

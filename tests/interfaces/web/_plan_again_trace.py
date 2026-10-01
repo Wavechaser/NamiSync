@@ -224,14 +224,17 @@ _APP_DISPATCH_START = r'''async function dispatchFormAttempt(task, form, attempt
   attempt.dispatched = true;
   renderTasks();
   try {
-    await submit();
+    const result = await submit();
+    adoptTaskStart(result, attempt.kind === "inventory" ? "inventory" : "sync-plan");
 '''
 _APP_DISPATCH_START_TRACE = r'''async function dispatchFormAttempt(task, form, attempt, submit) {
   attempt.dispatched = true;
   renderTasks();
+  const countBeforeRefresh = attempt.kind === "plan-again" ? tasks.size : null;
   if (attempt.kind === "plan-again") globalThis.__namiPlanAgainTrace?.record("dispatch", "submitted");
   try {
-    await submit();
+    const result = await submit();
+    adoptTaskStart(result, attempt.kind === "inventory" ? "inventory" : "sync-plan");
     if (attempt.kind === "plan-again") globalThis.__namiPlanAgainTrace?.record("dispatch-settle", "success");
 '''
 
@@ -249,15 +252,20 @@ _APP_REFRESH = r'''  if (currentFormAttempt(task, form, attempt)) {
     form.attempt = null;
     task.startRecovery = null;
   }
-  await refreshTasks();
+  renderTasks();
+  try { await refreshTasks(); } catch (_error) {
+    // The admitted identity and its live drain already own current task status.
+  }
 }
 '''
 _APP_REFRESH_TRACE = r'''  if (currentFormAttempt(task, form, attempt)) {
     form.attempt = null;
     task.startRecovery = null;
   }
-  const countBeforeRefresh = attempt.kind === "plan-again" ? tasks.size : null;
-  await refreshTasks();
+  renderTasks();
+  try { await refreshTasks(); } catch (_error) {
+    // The admitted identity and its live drain already own current task status.
+  }
   if (attempt.kind === "plan-again") globalThis.__namiPlanAgainTrace?.record("task-refresh", tasks.size > countBeforeRefresh ? "added" : "unchanged");
 }
 '''
