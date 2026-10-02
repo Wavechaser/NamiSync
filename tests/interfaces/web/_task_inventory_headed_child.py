@@ -279,7 +279,8 @@ _PAGE = r"""
     .find(value => value.dataset.nodeId === id);
   const missing = () => row(fixture.missing_node_id);
   await until(() => missing()?.querySelector('[data-integrity="missing"]')
-    && review.textContent.includes('Displayed scan'), 'refreshed-missing');
+    && review.textContent.includes('Displayed scan: Entire location')
+    && review.textContent.includes('notices from this scan'), 'refreshed-missing');
   const folder = () => row(fixture.folder_node_id);
   const folderRow = await until(folder, 'folder-row');
   folderRow.click();

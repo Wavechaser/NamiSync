@@ -502,7 +502,10 @@ session release. A prior complete view remains readable during a new scan or a
 failed replacement; its request identity continues to name that publication.
 `InventoryViewSummary` carries task/request/location identity, view revision,
 frozen scan metadata, complete-domain rollup and current search/filter/sort/collapse
-state. `InventoryWindowRow` supplies server-derived frames and domain status,
+state. Scan scope is a bounded descriptor naming the entire location, one exact
+item, one recursive folder, or a multi-subject selection; it carries at most one
+path, never the complete scope arrays. It belongs to the producing publication,
+including while a newer scan is running or refused. `InventoryWindowRow` supplies server-derived frames and domain status,
 raw size/mtime and rollup, or an informational warning. The source-owned exact
 shapes are serialized by `inventory_review.py` and validated by `bridge.js`.
 `InventoryFilter` admits present, unverified, verified, modified, reappeared,

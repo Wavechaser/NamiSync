@@ -610,6 +610,7 @@ class InventoryDetails:
     complete: bool = False
     selected_paths: tuple[str, ...] = ()
     warnings: tuple[ScanWarning, ...] = ()
+    subtree_roots: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -1497,6 +1498,7 @@ def run_inventory(
                 request.request_id,
                 resolution,
                 selected_paths=request.selected_paths,
+                subtree_roots=request.subtree_roots,
             )
         )
         return _refused_resolution(resolution)
@@ -1584,6 +1586,7 @@ def run_inventory(
             scan.complete,
             request.selected_paths,
             scan.warnings,
+            request.subtree_roots,
         )
     )
     return OperationResult(SessionState.COMPLETED)

@@ -1803,7 +1803,13 @@ current details and retains an earlier publication, guidance instead directs
 the user to check the location/reconnect its drive and use Refresh. Confirmed
 Refresh admission clears its transient action message; the current scan state
 owns progress and terminal feedback. The pane labels the current scan
-state separately from a displayed prior publication. Refresh acts on the whole
+state separately from a displayed prior publication. The displayed scan summary
+names its producing scope: Entire location, an exact item, a folder including
+subfolders, or selected items. Completion and observed/missing counts apply to
+that scope; a scoped Refresh also states that other inventory items were not
+rescanned. Notices are labelled as belonging to this scan, with no accumulation
+of earlier scans' notices. A retained prior publication keeps its original scope.
+Refresh acts on the whole
 location or a selected file/folder; folder scope includes hidden and off-window
 descendants. Acknowledge missing hides missing subjects from default matches,
 while Restore visibility reverses only that acknowledgement and does not restore files.

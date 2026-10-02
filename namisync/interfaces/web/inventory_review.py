@@ -6,7 +6,7 @@ from dataclasses import asdict, dataclass, field
 
 from namisync.interfaces.ui_state import MAX_JAVASCRIPT_SAFE_INTEGER
 from namisync.workflows import (
-    InventoryProjection, InventoryProjectionNode, InventoryProjectionOrder, InventoryRollup,
+    InventoryDetails, InventoryProjection, InventoryProjectionNode, InventoryProjectionOrder, InventoryRollup,
     PlanSortColumn, SortDirection,
     sort_inventory_projection,
 )
@@ -20,6 +20,17 @@ INVENTORY_FILTERS = frozenset({
     "present", "unverified", "verified", "modified", "reappeared",
     "unsupported", "missing", "mismatched", "acknowledged", "notice",
 })
+
+
+def inventory_scan_scope(details: InventoryDetails) -> tuple[str, str | None]:
+    """Describe the producing scan without serializing its full path population."""
+    if not details.selected_paths and not details.subtree_roots:
+        return "location", None
+    if len(details.selected_paths) == 1 and not details.subtree_roots:
+        return "item", details.selected_paths[0]
+    if len(details.subtree_roots) == 1 and not details.selected_paths:
+        return "folder", details.subtree_roots[0]
+    return "selection", None
 
 
 def inventory_rollup_wire(rollup: InventoryRollup) -> dict[str, object]:
@@ -52,6 +63,7 @@ class InventoryReviewState:
     scan_complete: bool
     observed_count: int
     missing_count: int
+    scan_scope: tuple[str, str | None] = field(default=("location", None), kw_only=True)
     view_revision: int = 0
     search_query: str = ""
     filters: frozenset[str] = field(default_factory=frozenset)
@@ -86,6 +98,7 @@ class InventoryReviewState:
             "request_id": self.request_id, "location_id": str(self.projection.location_id),
             "view_revision": self.view_revision, "root_path": self.root_path,
             "scan_complete": self.scan_complete, "observed_count": self.observed_count,
+            "scan_scope": {"kind": self.scan_scope[0], "path": self.scan_scope[1]},
             "missing_count": self.missing_count, "warning_count": self.projection.warning_count,
             "rollup": inventory_rollup_wire(self.projection.nodes[0].rollup),
             "visible_row_count": max(0, len(self._visible.visible_positions) - 1),
@@ -96,7 +109,8 @@ class InventoryReviewState:
 
     def replacement(self, request_id: str, projection: InventoryProjection,
                     root_path: str | None, scan_complete: bool,
-                    observed_count: int, missing_count: int) -> InventoryReviewState:
+                    observed_count: int, missing_count: int, *,
+                    scan_scope: tuple[str, str | None]) -> InventoryReviewState:
         """Stage one complete replacement while preserving surviving gestures."""
         if self.view_revision >= MAX_JAVASCRIPT_SAFE_INTEGER:
             raise OverflowError("inventory view revision is exhausted")
@@ -109,6 +123,7 @@ class InventoryReviewState:
             self.task_id, request_id, projection, root_path, scan_complete,
             observed_count, missing_count, self.view_revision + 1,
             self.search_query, self.filters, self.sort_column, self.sort_direction, collapsed,
+            scan_scope=scan_scope,
         )
 
     def update(self, *, expected_revision: int, search_query: str, filters: frozenset[str],

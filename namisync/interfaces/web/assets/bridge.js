@@ -2809,7 +2809,7 @@ function validateInventoryRollup(value) {
 
 function validateInventorySummary(value) {
   return isExactObject(value, ["disposition", "task_id", "request_id", "location_id", "view_revision",
-    "root_path", "scan_complete", "observed_count", "missing_count", "warning_count", "rollup",
+    "root_path", "scan_complete", "scan_scope", "observed_count", "missing_count", "warning_count", "rollup",
     "visible_row_count", "search_query", "filters", "sort_column", "sort_direction", "collapsed_count"])
     && ["opened", "current", "conflict", "noop"].includes(value.disposition)
     && typeof value.task_id === "string" && TASK_PATTERN.test(value.task_id)
@@ -2818,6 +2818,10 @@ function validateInventorySummary(value) {
     && ["view_revision", "observed_count", "missing_count", "warning_count", "visible_row_count", "collapsed_count"]
       .every((key) => isNonnegativeInteger(value[key]))
     && (value.root_path === null || isBoundedPath(value.root_path))
+    && isExactObject(value.scan_scope, ["kind", "path"])
+    && (["location", "selection"].includes(value.scan_scope.kind)
+      ? value.scan_scope.path === null
+      : ["item", "folder"].includes(value.scan_scope.kind) && isBoundedPath(value.scan_scope.path))
     && typeof value.scan_complete === "boolean" && validateInventoryRollup(value.rollup)
     && isTreeViewGesture({searchQuery: value.search_query, filters: value.filters,
       sortColumn: value.sort_column, sortDirection: value.sort_direction,

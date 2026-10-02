@@ -2892,7 +2892,7 @@ def test_br_g_33_close_task_delegates_terminal_fact_and_retires_delivery() -> No
         registry.drain(start.task_id, SESSION, DRAIN, replay_from=None)
 
 
-def _inventory_read_registry():
+def _inventory_read_registry(*, selected_paths=(), subtree_roots=()):
     from namisync.core.models import EntryKind, VolumeId, ScanWarning, ScanWarningCode
     from namisync.db.repositories import InventoryPresence, InventorySnapshot
     from namisync.workflows import (InventoryDetails, LocationBinding, VolumeResolution,
@@ -2907,7 +2907,8 @@ def _inventory_read_registry():
         ScanWarning(ScanWarningCode.ACCESS_DENIED, "warning", "unreadable"),))
     binding = LocationBinding(VolumeId("test", "NTFS"), "", "C:\\", ("C:\\",), False, location_id=1)
     details = InventoryDetails(REQUEST, VolumeResolution(VolumeResolutionState.RESOLVED,
-        binding, r"C:\root", "C:\\"), location_id=1, observed_count=1, complete=False)
+        binding, r"C:\root", "C:\\"), location_id=1, observed_count=1, complete=False,
+        selected_paths=selected_paths, subtree_roots=subtree_roots)
     class Service(_Service):
         def __init__(self):
             super().__init__()
@@ -2927,6 +2928,21 @@ def _inventory_read_registry():
     registry._tasks[start.task_id].task_kind = "inventory"
     _mark_terminal_drained(registry, start, replace(_record(kind="inventory", supports_pause=False), session_id=start.session_id))
     return registry, service, start, projection
+
+
+@pytest.mark.parametrize(("paths", "roots", "kind", "path"), [
+    ((), (), "location", None),
+    (("one.txt",), (), "item", "one.txt"),
+    ((), ("folder",), "folder", "folder"),
+    (("one.txt", "two.txt"), (), "selection", None),
+    ((), ("folder", "other"), "selection", None),
+    (("one.txt",), ("folder",), "selection", None),
+])
+def test_inventory_summary_carries_bounded_producing_scope(paths, roots, kind, path):
+    registry, service, start, projection = _inventory_read_registry(
+        selected_paths=paths, subtree_roots=roots)
+    registry.release_terminal_session(start.task_id, start.session_id)
+    assert registry.open_inventory_view(start.task_id)["scan_scope"] == {"kind": kind, "path": path}
 
 
 def test_inventory_read_open_waits_for_release_then_windows_need_no_full_reread():
@@ -3034,7 +3050,9 @@ def test_inventory_open_serializes_construction_and_fences_close(close_during_bu
 
 
 @pytest.mark.parametrize("failure_phase", ["none", "pre-admission", "invocation"])
-def test_inventory_refresh_real_service_releases_replaces_and_replays_old_starts(tmp_path, failure_phase):
+@pytest.mark.parametrize("scope", ["location", "item", "folder"])
+def test_inventory_refresh_real_service_releases_replaces_and_replays_old_starts(tmp_path, failure_phase, scope):
+    from namisync.core.pathing import normalize_relative_path
     from namisync.interfaces.service import SessionObserver, _dispatcher
     from namisync.workflows import LocationCandidate
     from _inventory_fixtures import _Resolver, _Scanner, _file, _runtime
@@ -3072,6 +3090,12 @@ def test_inventory_refresh_real_service_releases_replaces_and_replays_old_starts
         finish(first)
         summary = registry.open_inventory_view(first.task_id)
         assert summary["rollup"]["domain_count"] == 2
+        assert summary["scan_scope"] == {"kind": "location", "path": None}
+        projection = registry._inventory_views[first.task_id].projection
+        scope_path = {"location": None, "item": r"folder\one.bin", "folder": "folder"}[scope]
+        node_id = None if scope_path is None else projection.nodes[
+            projection.position_by_path_key[normalize_relative_path(scope_path)]].node_id
+        expected_scope = {"kind": scope, "path": scope_path}
         offline = failure_phase == "invocation"
         refresh_command = "3" * 32
         if failure_phase != "none":
@@ -3092,9 +3116,10 @@ def test_inventory_refresh_real_service_releases_replaces_and_replays_old_starts
                     wire_intent=("refresh", first.request_id))
             refresh_command = "d" * 32
         second = registry.refresh_inventory(first.task_id, first.request_id,
-            expected_revision=0, node_id=None, command_id=refresh_command,
+            expected_revision=0, node_id=node_id, command_id=refresh_command,
             wire_intent=("refresh", first.request_id))
         assert registry.open_inventory_view(first.task_id)["request_id"] == first.request_id
+        assert registry._inventory_views[first.task_id].summary()["scan_scope"] == summary["scan_scope"]
         assert registry.get_inventory_window(first.task_id, expected_revision=0, offset=0, limit=1)["rows"]
         finish(second)
         if offline:
@@ -3102,6 +3127,7 @@ def test_inventory_refresh_real_service_releases_replaces_and_replays_old_starts
             with pytest.raises(TaskUnavailableError):
                 registry.open_inventory_view(first.task_id)
             assert service._task_inventory_details[first.task_id][0] == first.request_id
+            assert registry._inventory_views[first.task_id].summary()["scan_scope"] == summary["scan_scope"]
             assert registry.get_inventory_window(first.task_id, expected_revision=0, offset=0, limit=1)["rows"]
             with pytest.raises(TaskUnavailableError):
                 _refresh(registry, first, command_id="e" * 32)
@@ -3109,14 +3135,16 @@ def test_inventory_refresh_real_service_releases_replaces_and_replays_old_starts
         else:
             replacement = registry.open_inventory_view(first.task_id)
             assert replacement["request_id"] == second.request_id and replacement["view_revision"] == 1
+            assert replacement["scan_scope"] == expected_scope
         third = registry.refresh_inventory(first.task_id, second.request_id,
             expected_revision=0 if offline else 1, node_id=None, command_id="4" * 32,
             wire_intent=("refresh", second.request_id))
         finish(third)
         assert registry.open_inventory_view(first.task_id)["view_revision"] == (1 if offline else 2)
+        assert registry.open_inventory_view(first.task_id)["scan_scope"] == {"kind": "location", "path": None}
         assert service._task_inventory_details[first.task_id][1].resolution.selected_mount == str(mount)
         assert registry.refresh_inventory(first.task_id, first.request_id,
-            expected_revision=0, node_id=None, command_id=refresh_command,
+            expected_revision=0, node_id=node_id, command_id=refresh_command,
             wire_intent=("refresh", first.request_id)) == second
         assert service._lifecycle.replay_start(refresh_command, "task-inventory",
             ("refresh", first.request_id)).session_id == second.session_id

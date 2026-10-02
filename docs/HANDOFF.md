@@ -1,39 +1,38 @@
-# Latest session — inventory feedback corrections
+# Latest session — inventory scan scope and M2 capacity
 
-2026-10-02 on `milestone1`, starting from `0160f87` after M1-9 delivery.
-The user requested three small follow-up fixes. No later checkpoint is activated.
+2026-10-02 on `milestone1`, starting from `c129fe5`.
+The user requested scan-scope labeling and an M2 capacity design note. Later
+M1 checkpoints remain unactivated.
 
 ## Changes
 
-- Preserve newer observed state/release when the admitted-start receipt names
-  the same session; still advance the task-list revision fence.
-- For an unavailable view after a refused Refresh retains an older publication,
-  advise checking the location/reconnecting its drive and Refresh. Ordinary
-  read failures retain Reload guidance.
-- Clear the transient Refresh message on confirmed admission. The existing
-  current-scan indicator owns progress and terminal feedback; uncertain action
-  recovery and visibility result counts remain intact.
+- `0d4d7d1` records command-result retention independent of task lifetime in
+  M2_PROPOSAL. M1's shared 48-slot capacity and task-close retirement remain.
+- The scan-label change retains producing subtree scope alongside exact paths,
+  sends a bounded kind/optional-path descriptor, and labels Entire location,
+  Item, Folder including subfolders, or Selected items. Scoped scans disclose
+  that other inventory items were not rescanned. Notices belong to this scan.
+- Retained prior publications keep their original scope after newer scans or
+  refusals. Ledger contents and notice lifecycle are unchanged.
 
 ## Verification and immediate context
 
-Evidence is retained under `build/m1-9-20261001/minor-feedback-*` and independent
-review in `review-minor-feedback.md`. Focused frontend checks pass 58 cases;
-the external-temp ordinary interfaces run passes all 1,890 cases.
-All 35 headed cases pass across the full run's 34 passes and the final manual-
-focus inventory run (`minor-feedback-inventory-manual.log`, one pass in 22.70 s).
-The first two inventory attempts stopped at `wait-foreground` before sending
-clicks; those incomplete observations remain recorded separately.
-The new probe exercises delayed admission after list discovery and drain
-completion, failed reconciliation, stale-list fencing, refused-view guidance,
-ordinary read failure and cleared Refresh feedback.
+Evidence is retained under `build/m1-9-20261001/scope-label-*`; independent
+reviews are `review-m2-capacity-note.md` and `review-scan-scope-label.md`.
+Focused workflow/adapter/frontend checks pass 406 cases. The initial focused
+run's sandbox default-temp setup failures are retained; the external-temp run
+passes without changing product expectations.
+The workflows/interfaces neighborhood passes 2,797 cases; all twelve import
+contracts and 260 local document targets pass. The headed gate has 33 passes
+plus a passing isolated execution-review rerun. Its first larger-window run
+timed out waiting for capture readiness after observing execution and release;
+the cause is not established, and the unchanged rerun passes in 18.65 seconds.
+That failed receipt remains retained. The manually focused inventory witness
+passes in 17.67 seconds, including the displayed whole-location scope and
+scan-specific notice label. All 35 headed cases pass across these runs.
+Existing cold-projection evidence validates against unchanged dependencies;
+no new timing measurement is required.
 
-The first ordinary run used a workspace-local temporary directory, which the
-custody tests correctly reject as a source-tree pycache location. Its 1,860
-passes, two failures and 28 setup errors remain recorded; the corrected
-external-temp run passes without changing product or test expectations.
-
-M1-9 delivery and prior evidence remain recorded in M1_PLAN. This follow-up
-changes page state/feedback only. TESTS.md still requires the interfaces headed
-gate for desktop behavior. All native-input intervals have ended and their
-test windows closed. No further measurements are needed. Stop for the user's
-GUI review after these corrections.
+The native-input interval has ended and all test windows have closed. No
+further measurements are needed. Stop for the user's GUI review after these
+changes; the M2 note grants no capacity-redesign implementation authority.

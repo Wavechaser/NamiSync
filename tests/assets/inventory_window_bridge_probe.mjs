@@ -17,6 +17,23 @@ bridge.markBridgeOperational();
 const task = fixture.summary.task_id;
 response = fixture.summary;
 assert.deepEqual(await bridge.openInventoryView(task), fixture.summary);
+for (const scan_scope of [
+  {kind: "item", path: "one.txt"}, {kind: "folder", path: "folder"},
+  {kind: "selection", path: null},
+]) {
+  response = {...fixture.summary, scan_scope};
+  assert.deepEqual((await bridge.openInventoryView(task)).scan_scope, scan_scope);
+}
+for (const scan_scope of [
+  null, {kind: "unknown", path: null}, {kind: "location", path: "folder"},
+  {kind: "selection", path: "one.txt"}, {kind: "folder", path: null},
+  {kind: "item", path: "x".repeat(32768)}, {kind: "item", path: ""},
+  {kind: "folder", path: "folder", extra: true},
+]) {
+  response = {...fixture.summary, scan_scope};
+  await assert.rejects(bridge.openInventoryView(task));
+}
+response = fixture.summary;
 const gesture = {searchQuery: "", filters: [], sortColumn: "path", sortDirection: "ascending", collapseNodeId: null, collapsed: null};
 assert.deepEqual(await bridge.updateInventoryView(task, 0, gesture), fixture.summary);
 response = fixture.window;

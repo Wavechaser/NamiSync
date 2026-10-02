@@ -59,7 +59,7 @@ from namisync.workflows import (
 
 from ._exception_graph import retire_exception_graph as _retire_exception_graph
 from .plan_review import PlanReviewState
-from .inventory_review import InventoryReviewState
+from .inventory_review import InventoryReviewState, inventory_scan_scope
 from .task_snapshot import TaskPresentationState, TaskSnapshotStage
 
 
@@ -944,6 +944,7 @@ class TaskRegistry:
             view = make_view(*args,
                 projection, details.resolution.root_path,
                 details.complete, details.observed_count, details.missing_count,
+                scan_scope=inventory_scan_scope(details),
             )
         except BaseException:
             with task.condition:

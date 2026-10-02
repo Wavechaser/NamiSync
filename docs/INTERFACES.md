@@ -81,7 +81,10 @@ This changes neither service admission nor receipt timing guarantees; the
 describes the paused-index lifetime.
 
 Inventory tasks additionally retain their exact `InventoryDetails` metadata at
-task scope before terminal release drops runtime request details. A legitimate
+task scope before terminal release drops runtime request details, including
+the producing scan's exact paths and recursive subtree roots. The read summary
+reduces this to a bounded scope descriptor; it never derives scan coverage from
+the whole ledger projection or the user's current row choice. A legitimate
 initial refusal can have no details; that typed unavailability does not prevent
 custody release. A later refused scan with no location retains the last
 location-bearing metadata for fresh Refresh admission, while its current terminal

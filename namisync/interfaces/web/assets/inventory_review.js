@@ -356,8 +356,12 @@ export function createInventoryReviewPanel(callbacks) {
     renderText(facts, available ? `${rollupText(review.summary.rollup)} · ${review.summary.visible_row_count} visible rows` : "");
     facts.title = available && !review.summary.filters.includes("acknowledged")
       ? `${review.summary.rollup.acknowledged} acknowledged items hidden as matches; folder context may remain. Show them with the Acknowledged filter.` : "";
-    renderText(scanFacts, available
-      ? `${review.summary.request_id === value.requestId ? "Displayed scan" : "Previous published scan"}: ${review.summary.scan_complete ? "complete" : "incomplete"} · ${review.summary.observed_count} observed · ${review.summary.missing_count} missing · ${review.summary.warning_count} notices` : "");
+    const scanScope = review?.summary.scan_scope;
+    const scopeLabel = scanScope?.kind === "location" ? "Entire location"
+      : scanScope?.kind === "item" ? `Item: ${scanScope.path}`
+      : scanScope?.kind === "folder" ? `Folder: ${scanScope.path} (including subfolders)` : "Selected items";
+    renderFilesystemText(scanFacts, available
+      ? `${review.summary.request_id === value.requestId ? "Displayed scan" : "Previous published scan"}: ${scopeLabel} · ${review.summary.scan_complete ? "complete" : "incomplete"} · ${review.summary.observed_count} observed · ${review.summary.missing_count} missing · ${review.summary.warning_count} notices from this scan.${scanScope.kind === "location" ? "" : " Other inventory items were not rescanned."}` : "");
     if (!available) return;
     const selected = review.detail?.row ?? null;
     const domain = selected !== null && selected.warning === null;

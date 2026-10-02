@@ -179,6 +179,12 @@ explicit, reviewable and regression-backed.
 
 #### Correct inventory lifecycle feedback (2026-10-02)
 
+- Label each displayed scan with its producing scope, qualify scoped completion
+  and counts, and identify notices as belonging to that scan. Retained prior
+  publications preserve their scope across newer scans and refusals.
+  Scope-label verification passes 406 focused and 2,797 workflow/interface
+  checks, twelve import contracts, and all 35 headed cases across the main run
+  and focused reruns; the initial execution capture-readiness timeout is retained.
 - Record independent command-result retirement as an M2 design item so routine
   inventory actions need not eventually force task closure. Keep M1's shared
   capacity and original-result recovery behavior unchanged.

@@ -1577,6 +1577,7 @@ def test_first_location_adopts_scan_once_before_registration_and_inventory(
     assert len(adoption_calls) == len(scanner.calls) == 1
     assert details[-1].resolution.state is VolumeResolutionState.RESOLVED
     assert details[-1].observed_count == 1
+    assert details[-1].selected_paths == details[-1].subtree_roots == ()
     with connect_ledger_reader(ledger_path) as connection:
         assert connection.execute("SELECT count(*) FROM mappings").fetchone()[0] == 0
     with LedgerRepository(ledger_path) as repository:
@@ -1623,6 +1624,8 @@ def test_incomplete_inventory_retains_typed_scan_warnings(
     assert scanner.calls[0][1].kind is ScanScopeKind.SUBTREES
     assert details[-1].complete is False
     assert details[-1].warnings == (warning,)
+    assert details[-1].selected_paths == ()
+    assert details[-1].subtree_roots == ("Folder",)
 
 
 @pytest.mark.parametrize("text", ("\ud800", "\udcff", "\ud83d\ude00"))

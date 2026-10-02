@@ -104,7 +104,28 @@ assert.equal(find((value) => value.getAttribute("role") === "tree").tabIndex, 0)
 assert.equal(find((value) => value.tagName === "INPUT" && value.type === "checkbox"), undefined);
 assert.equal(action("inventory-all").textContent, "Default");
 assert.match(text(pane.element), /Acknowledged 1/);
-assert.match(text(pane.element), /Displayed scan: incomplete/);
+assert.match(text(pane.element), /Displayed scan: Entire location · incomplete/);
+assert.match(text(pane.element), /1 notices from this scan/);
+assert.doesNotMatch(text(pane.element), /Other inventory items were not rescanned/);
+for (const [scope, expected] of [
+  [{kind: "item", path: "folder\\one.txt"}, "Item: folder\\one.txt"],
+  [{kind: "folder", path: "folder"}, "Folder: folder (including subfolders)"],
+  [{kind: "selection", path: null}, "Selected items"],
+]) {
+  review.summary = {...review.summary, scan_scope: scope};
+  pane.render(task);
+  assert.ok(text(pane.element).includes(`Displayed scan: ${expected} · incomplete`));
+  assert.match(text(pane.element), /Other inventory items were not rescanned/);
+  task.requestId = "f".repeat(32);
+  task.sessionState = "refused";
+  pane.render(task);
+  assert.ok(text(pane.element).includes(`Previous published scan: ${expected}`));
+  assert.match(text(pane.element), /Current scan: refused/);
+  task.requestId = fixture.views.default.summary.request_id;
+  task.sessionState = "completed";
+}
+review.summary = fixture.views.default.summary;
+pane.render(task);
 assert.ok(!rowElements().some((value) => text(value).includes("missing.txt")));
 assert.ok(rowElements().every((value) => value.children.length === 4));
 const real = fixture.views.default.window.rows.find((row) => row.row_id === "1");
