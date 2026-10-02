@@ -22,7 +22,7 @@ const url = (source) => `data:text/javascript;base64,${Buffer.from(source).toStr
 const fixture = JSON.parse(await readFile(process.argv[3], "utf8"));
 const calls = [], renders = [], drains = [], stoppedDrains = [];
 let delayedDetail = null, delayedWindow = null, delayedView = null, delayedOpen = null, delayedVisibility = null;
-let taskSnapshot = null, observedChecks = 0, refuseRefresh = false;
+let taskSnapshot = null, observedChecks = 0, refuseRefresh = false, delayedRefresh = null;
 let viewRevision = 0, query = "";
 const summary = () => ({ ...fixture.views.default.summary, view_revision: viewRevision, search_query: query });
 const windowResponse = (revision, offset) => ({ ...fixture.views.default.window, view_revision: revision, offset });
@@ -53,7 +53,7 @@ globalThis.inventoryHarness = {
     const [taskId] = args;
     taskSnapshot = { task_id: taskId, session_id: "7".repeat(32), session_state: "active",
       session_released: false, task_kind: "inventory", request_id: "8".repeat(32) };
-    return Promise.resolve({ task_id: taskId, session_id: taskSnapshot.session_id,
+    return delayedRefresh?.promise ?? Promise.resolve({ task_id: taskId, session_id: taskSnapshot.session_id,
       request_id: taskSnapshot.request_id });
   },
   restoreInventory(...args) {
@@ -288,11 +288,62 @@ for (const observation of ["failed", "stale"]) {
   assert.ok(stoppedDrains.includes(oldSnapshot.session_id), "the prior session drain is retired");
   assert.equal(task.inventoryReview, retainedPublication, "observation failure retains the prior complete publication");
   assert.equal(task.inventoryAction.pending, false);
-  assert.match(task.inventoryAction.message, /Inventory scan started/);
-  assert.doesNotMatch(task.inventoryAction.message, /Retry updates/);
+  assert.equal(task.inventoryAction.message, null, "admitted Refresh leaves progress feedback to current scan status");
   assert.equal(calls.filter(([name]) => name === "refresh").length, beforeStarts + 1, "task-list recovery cannot repeat Refresh");
   globalThis.inventoryHarness.listTasks = originalListTasks;
 }
+
+// A task-list observation and terminal drain can beat the original start reply.
+app.adoptTask({ task_id: taskId, session_id: "b".repeat(32), session_state: "completed",
+  session_released: true, task_kind: "inventory", request_id: fixture.views.default.summary.request_id });
+delayedRefresh = defer();
+const lateStart = app.runInventoryAction(task.inventoryReview, "refresh", null);
+await app.refreshTasks();
+const observedDrain = drains.at(-1);
+observedDrain[2]({ update_type: "record" }, {
+  session_state: "completed", phase: "inventory", active_item: null,
+  presentation: { item_percent: null }, control_state: "running",
+});
+observedDrain[5](taskId, task.sessionId);
+await tick();
+assert.equal(task.sessionState, "completed");
+assert.equal(task.sessionReleased, true);
+const beforeLateReplyDrains = drains.length;
+const staleObservation = defer();
+globalThis.inventoryHarness.listTasks = () => staleObservation.promise;
+const beforeLateReplyRead = app.refreshTasks();
+globalThis.inventoryHarness.listTasks = () => Promise.reject(new Error("list transport unavailable"));
+delayedRefresh.resolve({ task_id: taskId, session_id: task.sessionId, request_id: task.requestId });
+await lateStart;
+// Keep the replacement observation pending so it cannot repair a regressed state.
+globalThis.inventoryHarness.listTasks = () => defer().promise;
+staleObservation.resolve({ tasks: [taskSnapshot] });
+await beforeLateReplyRead;
+assert.equal(task.sessionState, "completed", "late same-session admission cannot regress observed completion");
+assert.equal(task.sessionReleased, true, "late same-session admission preserves observed release");
+assert.equal(drains.length, beforeLateReplyDrains, "late same-session admission keeps its observed drain");
+assert.equal(task.inventoryAction.message, null, "late admission cannot promise a result after completion");
+delayedRefresh = null;
+globalThis.inventoryHarness.listTasks = originalListTasks;
+
+// A refused scan with no fresh location details cannot be repaired by a view reload.
+app.adoptTask({ task_id: taskId, session_id: "c".repeat(32), session_state: "refused",
+  session_released: true, task_kind: "inventory", request_id: "d".repeat(32) });
+const retainedBeforeRefusal = task.inventoryReview;
+delayedOpen = defer();
+const refusedOpen = app.loadInventoryReview(task, true);
+delayedOpen.resolve(Promise.reject(Object.assign(new Error("details unavailable"), { code: "task_unavailable" })));
+await refusedOpen;
+assert.equal(task.inventoryReview, retainedBeforeRefusal);
+assert.match(task.inventoryError, /[Cc]heck.*location.*[Rr]econnect.*Refresh/);
+assert.doesNotMatch(task.inventoryError, /Reload/);
+assert.equal(task.inventoryAction.message, null, "refused scan retains no pending-result promise");
+delayedOpen = defer();
+const transportFailedOpen = app.loadInventoryReview(task, true);
+delayedOpen.resolve(Promise.reject(new Error("transport unavailable")));
+await transportFailedOpen;
+assert.match(task.inventoryError, /Reload/, "transport failure alone retains view retry guidance");
+delayedOpen = null;
 
 delayedDetail = defer();
 const closeDetail = app.readInventoryDetail(review, real.node_id);

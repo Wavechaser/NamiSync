@@ -1797,8 +1797,12 @@ ledger evidence with observed and attested facts, full digest, provenance,
 evidence observation time, verification freshness and invalidation. Synthetic
 folders show complete rollups; notices show their informational warning only.
 Task navigation, view changes and Close retire details before late replies can
-restore them. A failed read offers Reload inventory view, which reads current
-publication without starting another scan. The pane labels the current scan
+restore them. A failed read normally offers Reload inventory view, which reads
+current publication without starting another scan. If a refused Refresh has no
+current details and retains an earlier publication, guidance instead directs
+the user to check the location/reconnect its drive and use Refresh. Confirmed
+Refresh admission clears its transient action message; the current scan state
+owns progress and terminal feedback. The pane labels the current scan
 state separately from a displayed prior publication. Refresh acts on the whole
 location or a selected file/folder; folder scope includes hidden and off-window
 descendants. Acknowledge missing hides missing subjects from default matches,

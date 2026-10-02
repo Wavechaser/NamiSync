@@ -553,8 +553,10 @@ responses. The browser's serial pair coordinator uses ordinary independent
 starts and never rolls back previously admitted rows.
 
 The page adopts an admitted Plan, inventory or Plan-again start's exact task,
-request and session identity before refreshing the task list, marks that session
-active and unreleased, and invalidates list reads launched before admission.
+request and session identity before refreshing the task list and invalidates
+list reads launched before admission. A newly observed session starts active
+and unreleased; a late start receipt for the already observed session preserves
+its newer state and release observations.
 Task-list observation failure cannot restore the prior terminal presentation.
 Replacing a session stops its prior drain before attaching the new one; callbacks
 from the old session cannot update or release its replacement. A session change

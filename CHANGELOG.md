@@ -177,6 +177,18 @@ behavioral evidence.
 Safety, settlement and authority work made high-consequence release claims
 explicit, reviewable and regression-backed.
 
+#### Correct inventory lifecycle feedback (2026-10-02)
+
+- Preserve observed session state when a delayed start receipt arrives after
+  that same session has finished, while still invalidating older task-list reads.
+- After a refused Refresh leaves only a prior publication, direct users to
+  check the location/reconnect its drive and Refresh instead of retrying an
+  unavailable view. Clear the transient Refresh message on confirmed admission;
+  the existing current-scan indicator owns subsequent progress and completion.
+- Reproduce all three failures and pass 58 focused frontend checks, all 1,890
+  ordinary interfaces checks and all 35 headed cases across the full run and a
+  manually focused inventory rerun. Independent review approves the correction.
+
 #### Resolve reviewed open bugs (2026-10-01)
 
 - After failed handle identity queries, probe that handle's filesystem and permit

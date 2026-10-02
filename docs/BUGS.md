@@ -1027,6 +1027,24 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Application task lifecycle
 
+- MODERATE - FIXED (2026-10-02). Late admission overwrites observation. An
+  unrelated task-list read can discover a new session before its start response
+  arrives; if its drain then observes completion, the late receipt reset it to
+  active/unreleased. A failed follow-up read left Refresh disabled and the scan
+  shown as running. Cause: start adoption unconditionally assigned initial
+  state even for the already observed session. It now preserves same-session
+  observations while still advancing the task-list revision fence. A delayed
+  receipt probe covers completion before response and failed reconciliation.
+- MINOR - FIXED (2026-10-02). Feedback outlives its applicable state. Refresh
+  admission promised a future result after completion or refusal, and refused
+  scans without current details advised repeatedly reloading an unavailable
+  projection. Cause: permanent admission prose and generic read-failure advice
+  ignored the current scan/publication relationship. Confirmed admission now
+  clears transient feedback; refused unavailable reads with a prior publication
+  direct users to check the location/reconnect and Refresh. Ordinary read
+  failures retain Reload guidance, and uncertain actions retain their recovery
+  feedback. Frontend probes cover these distinct paths.
+
 - MODERATE - FIXED (2026-10-02). Admitted-start identity loss. The desktop
   discarded a successful TaskStartView and relied on a later task-list read.
   A failed read left the old completed session visible; a pre-start list response

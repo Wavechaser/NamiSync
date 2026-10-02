@@ -588,6 +588,8 @@ function adoptTask(summary) {
 
 function adoptTaskStart(result, taskKind) {
   taskMutationRevision += 1;
+  const observed = tasks.get(result.task_id);
+  if (observed?.sessionId === result.session_id) return observed;
   return adoptTask({
     task_id: result.task_id,
     request_id: result.request_id,
@@ -1284,7 +1286,7 @@ async function runInventoryAction(review, kind, nodeId) {
     attempt.recovery = null;
     if (kind === "refresh") {
       adoptTaskStart(result, "inventory");
-      attempt.message = "Inventory scan started. Its current result will appear when the scan finishes.";
+      attempt.message = null;
       renderTasks();
       try { await refreshTasks(); } catch (_error) {
         // The admitted identity and its live drain already own current task status.
@@ -1358,8 +1360,12 @@ async function loadInventoryReview(task, force = false) {
       actionRevision: 0, windowRequestRevision: 0, detailRevision: 0, detail: null, scrollTop: 0,
     };
     task.inventoryViewUnconfirmed = false;
-  } catch (_error) {
-    if (stillCurrent()) task.inventoryError = "Inventory unavailable. Reload the inventory view to retry.";
+  } catch (error) {
+    if (stillCurrent()) task.inventoryError = error?.code === "task_unavailable"
+      && task.sessionState === "refused" && task.inventoryReview !== null
+      && task.inventoryReview.summary.request_id !== task.requestId
+      ? "Inventory unavailable for the refused scan. Check the location, reconnect its drive if needed, then click Refresh."
+      : "Inventory unavailable. Reload the inventory view to retry.";
   } finally {
     if (tasks.get(task.taskId) === task && task.inventoryRevision === request) {
       task.inventoryLoading = false;
