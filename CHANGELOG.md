@@ -179,6 +179,9 @@ explicit, reviewable and regression-backed.
 
 #### Correct inventory lifecycle feedback (2026-10-02)
 
+- Record independent command-result retirement as an M2 design item so routine
+  inventory actions need not eventually force task closure. Keep M1's shared
+  capacity and original-result recovery behavior unchanged.
 - Preserve observed session state when a delayed start receipt arrives after
   that same session has finished, while still invalidating older task-list reads.
 - After a refused Refresh leaves only a prior publication, direct users to

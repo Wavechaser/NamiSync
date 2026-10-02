@@ -696,6 +696,9 @@ the existing concurrent release/Close receipt convergence remain available.
 Refresh reserves this existing start-response capacity before claiming or scanning;
 capacity refusal directs the user to close a task. It adds no per-task scan cap
 and does not change Plan's single execution follow-up.
+Decoupling settled command-result retention from task lifetime is proposed in
+[M2_PROPOSAL](M2_PROPOSAL.md); it must preserve unresolved original-outcome
+recovery and prevent replay after retirement. M1 retains the existing bound.
 
 Plan task records retain the workflow's exact `sync-plan` kind across the
 service and browser boundary; retained database history remains independent of
