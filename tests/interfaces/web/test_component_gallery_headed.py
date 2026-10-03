@@ -3029,6 +3029,7 @@ def _run_gallery_mode(
         "release_terminal_session",
         "replace_cosmetic_section",
         "restore_inventory",
+        "reveal_plan_move",
         "shell_ready",
         "start_execution",
         "start_inventory",

@@ -25,9 +25,11 @@ def _registry(*, wrong: str | None = None):
     encoded = request_id.encode()
     expected.update(len(encoded).to_bytes(4, "big"))
     expected.update(encoded)
+    expected.update((0).to_bytes(4, "big"))
+    expected.update((0).to_bytes(4, "big"))
     first = {
         "node_id": "node-" + expected.hexdigest(),
-        "row_kind": "prior-group", "display": "Previous paths",
+        "row_kind": "prior-group", "display": "1 item moved to root",
         "operation_id": None, "operation_kind": None,
         "visible_index": 0, "depth": 0,
         "parent_visible_index": None, "first_child_visible_index": 1,
@@ -69,7 +71,7 @@ def test_rootless_fixture_settles_real_public_row_shape() -> None:
     observed = adapter._rootless_settlement(registry, row)
     assert observed["window_total"] == 119_999
     assert observed["projection_node_count"] == 120_000
-    assert observed["first_row"]["display"] == "Previous paths"
+    assert observed["first_row"]["display"] == "1 item moved to root"
 
 
 @pytest.mark.parametrize("wrong", ("prior-id", "public-total", "first-row-kind", "view"))

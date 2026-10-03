@@ -49,6 +49,7 @@ const COMMAND_POLICY_JSON = `{
   "get_plan_window": {"response_policy": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
   "get_execution_detail": {"response_policy": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
   "get_plan_anchor": {"response_policy": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
+  "reveal_plan_move": {"response_policy": "feedback-only", "retry": "none", "phase": "open"},
   "mutate_plan_selection": {"response_policy": "mutation-observed", "retry": "none", "phase": "open"},
   "mutate_plan_scope": {"response_policy": "mutation-observed", "retry": "none", "phase": "open"},
   "mutate_plan_highlight": {"response_policy": "feedback-only", "retry": "none", "phase": "open"},
@@ -879,6 +880,23 @@ export async function getExecutionDetail(
     if (!(error instanceof BridgeTransportError)) throw error;
   }
   return submit();
+}
+
+export function revealPlanMove(taskId, expectedRevision, nodeId, onDelayed = null) {
+  requireTaskId(taskId, "revealPlanMove");
+  if (!isNonnegativeInteger(expectedRevision) || !isNodeId(nodeId)) {
+    throw new TypeError("revealPlanMove requires an exact revision and group node");
+  }
+  return dispatchAttempt("reveal_plan_move", Object.freeze({
+    task_id: taskId, expected_revision: expectedRevision, node_id: nodeId,
+  }), (value) => isExactObject(value, ["summary", "node_id", "index"])
+    && validatePlanViewSummary(value.summary) && value.summary.task_id === taskId
+    && (value.summary.disposition === "conflict"
+      ? value.node_id === null && value.index === null
+      : ["applied", "noop"].includes(value.summary.disposition)
+        && isNodeId(value.node_id) && isNonnegativeInteger(value.index)
+        && value.index < value.summary.visible_row_count),
+  PLAN_VIEW_TIMEOUT_MS, false, onDelayed);
 }
 
 export async function getPlanAnchor(taskId, expectedRevision, nodeId) {
@@ -3110,7 +3128,7 @@ function validatePlanWindowRow(value) {
     "set_size", "expanded", "row_kind", "operation_id", "operation_kind",
     "reason", "blocked_reason", "selection", "highlighted", "selectable_operation_count",
     "selected_operation_count", "operation_count", "size", "mtime_ns",
-    "dependency_count", "risk", "move_peer_id", "notice",
+    "dependency_count", "risk", "move_peer_id", "move_group", "notice",
     "selection_exclusion_reason", "execution",
   ]) && isNodeId(value.node_id) && isValidUnicode(value.display)
     && isNonnegativeInteger(value.depth) && typeof value.is_container === "boolean"
@@ -3135,6 +3153,11 @@ function validatePlanWindowRow(value) {
     && (value.mtime_ns === null || isScalar64(value.mtime_ns))
     && ["none", "reversible", "irreversible"].includes(value.risk)
     && (value.move_peer_id === null || isNodeId(value.move_peer_id))
+    && (value.move_group === null ? value.row_kind !== "prior-group"
+      : value.row_kind === "prior-group" && value.move_peer_id !== null
+        && isExactObject(value.move_group, ["count", "destination"])
+        && isNonnegativeInteger(value.move_group.count) && value.move_group.count > 0
+        && (value.move_group.destination === "" || isBoundedPath(value.move_group.destination)))
     && (value.notice === null || isValidUnicode(value.notice))
     && (value.selection_exclusion_reason === null
       || isValidUnicode(value.selection_exclusion_reason))

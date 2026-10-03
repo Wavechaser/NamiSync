@@ -198,7 +198,7 @@ const { createPlanReviewPanel } = await import(moduleUrl(source));
 const calls = [];
 const callbacks = Object.fromEntries([
   "onViewChange", "onWindow", "onSelect", "onScopeSelect", "onExecute", "onControl", "onPlanAgain",
-  "onHighlight", "onHighlightedSelect", "onExecutionDetail", "onFollowOverride", "onNavigateCurrent",
+  "onHighlight", "onHighlightedSelect", "onExecutionDetail", "onFollowOverride", "onNavigateCurrent", "onRevealMove",
 ].map((name) => [name, (...args) => calls.push([name, ...args])]));
 const panel = createPlanReviewPanel(callbacks);
 const planAgainButton = findAction(panel.element, "plan-again");
@@ -234,6 +234,7 @@ const row = {
   dependency_count: 2,
   risk: "none",
   move_peer_id: null,
+  move_group: null,
   notice: null,
   selection_exclusion_reason: null,
   execution: null,
@@ -858,7 +859,7 @@ function findText(root, text) {
 
 const terminologyPanel = createPlanReviewPanel(Object.fromEntries([
   "onViewChange", "onWindow", "onSelect", "onScopeSelect", "onExecute", "onControl",
-  "onPlanAgain", "onHighlight", "onHighlightedSelect", "onExecutionDetail", "onFollowOverride", "onNavigateCurrent",
+  "onPlanAgain", "onHighlight", "onHighlightedSelect", "onExecutionDetail", "onFollowOverride", "onNavigateCurrent", "onRevealMove",
 ].map((name) => [name, () => {}])));
 function terminologyRow(patch) {
   const specimen = { ...row, operation_kind: "noop", reason: null, ...patch };
@@ -890,10 +891,42 @@ for (const [operation_kind, label] of [["mkdir", "Create folder"], ["recase", "C
 }
 terminologyPanel.dispose();
 
+const moveCalls = [];
+const movePanel = createPlanReviewPanel(Object.fromEntries([
+  "onViewChange", "onWindow", "onSelect", "onScopeSelect", "onExecute", "onControl",
+  "onPlanAgain", "onHighlight", "onHighlightedSelect", "onExecutionDetail", "onFollowOverride", "onNavigateCurrent", "onRevealMove",
+].map((name) => [name, (...args) => moveCalls.push([name, ...args])])));
+const moveRow = { ...row, row_kind: "prior-group", operation_kind: null,
+  selection: "disabled", selectable_operation_count: 0, selected_operation_count: 0,
+  operation_count: 0, display: "2 items moved to destination\\nested",
+  move_peer_id: `node-${"9".repeat(32)}`,
+  move_group: { count: 2, destination: "destination\\nested" } };
+const moveReview = { ...review, window: { ...review.window, rows: [moveRow] } };
+movePanel.render({ ...task, review: moveReview });
+const moveElement = findByDataset(movePanel.element, "nodeId", moveRow.node_id);
+const movePill = findByClass(moveElement, "nami-plan-move-pill");
+assert.ok(movePill);
+assert.equal(movePill.ariaLabel, moveRow.display);
+assert.equal(movePill.title, moveRow.display);
+assert.equal(findByClass(moveElement, "nami-badge").textContent, "2 items moved to");
+assert.equal(findByClass(moveElement, "nami-plan-move-pill__destination").textContent, "destination\\nested");
+assert.equal(findByClass(moveElement, "nami-checkbox"), null);
+movePill.dispatch("click");
+moveElement.dispatch("click", { target: movePill });
+assert.deepEqual(moveCalls.map(([name]) => name), ["onRevealMove"]);
+assert.equal(moveCalls[0][2], moveRow.node_id);
+findByClass(moveElement, "nami-file-row__disclosure").dispatch("click");
+assert.equal(moveCalls.at(-1)[0], "onViewChange");
+assert.equal(moveCalls.at(-1)[2].collapseNodeId, moveRow.node_id);
+moveReview.pending = "view";
+movePanel.render({ ...task, review: moveReview });
+assert.equal(movePill.disabled, true);
+movePanel.dispose();
+
 const detailCalls = [];
 const executionPanel = createPlanReviewPanel(Object.fromEntries([
   "onViewChange", "onWindow", "onSelect", "onScopeSelect", "onExecute", "onControl",
-  "onPlanAgain", "onHighlight", "onHighlightedSelect", "onExecutionDetail", "onFollowOverride", "onNavigateCurrent",
+  "onPlanAgain", "onHighlight", "onHighlightedSelect", "onExecutionDetail", "onFollowOverride", "onNavigateCurrent", "onRevealMove",
 ].map((name) => [name, (...args) => {
   if (name === "onExecutionDetail") detailCalls.push(args);
 }])));

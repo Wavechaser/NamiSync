@@ -1474,6 +1474,16 @@ class TaskRegistry:
                 "evidence": evidence.get(operation_id),
             }
 
+    def reveal_plan_move(
+        self, task_id: str, *, expected_revision: int, node_id: str,
+    ) -> dict[str, object]:
+        task, view = self._require_plan_view(task_id)
+        with task.condition:
+            self._require_plan_view_locked(task, view)
+            result = view.reveal_move(expected_revision=expected_revision, node_id=node_id)
+            result["summary"] = self._decorate_plan_summary_locked(task, result["summary"])
+            return result
+
     def get_plan_anchor(
         self,
         task_id: str,

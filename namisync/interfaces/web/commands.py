@@ -276,6 +276,7 @@ class TaskAuthority(Protocol):
     def get_execution_detail(self, *args, **kwargs) -> dict[str, object]: ...
 
     def get_plan_anchor(self, *args, **kwargs) -> dict[str, object]: ...
+    def reveal_plan_move(self, *args, **kwargs) -> dict[str, object]: ...
 
     def get_plan_operation_anchor(self, *args, **kwargs) -> dict[str, object]: ...
 
@@ -1064,6 +1065,13 @@ def production_command_specs(
             expected_execution_revision=payload.expected_execution_revision,
         )
 
+    def reveal_plan_move(payload: object) -> object:
+        if type(payload) is not _PlanAnchorPayload:
+            raise TypeError("reveal_plan_move received an unvalidated payload")
+        return registry.reveal_plan_move(
+            payload.task_id, expected_revision=payload.expected_revision, node_id=payload.node_id,
+        )
+
     def get_plan_anchor(payload: object) -> object:
         if type(payload) is _PlanOperationAnchorPayload:
             return registry.get_plan_operation_anchor(
@@ -1478,6 +1486,15 @@ def production_command_specs(
                 revision=FieldRequirement.REQUIRED,
                 response_policy=CommandResponsePolicy.LOCAL_5_SECONDS,
                 retry=CommandRetry.SAME_PAYLOAD_ONCE,
+            ),
+            "reveal_plan_move": CommandSpec(
+                validate_payload=_validate_plan_move_reveal,
+                handler=reveal_plan_move,
+                access=CommandAccess.READ_ONLY,
+                command_id=FieldRequirement.FORBIDDEN,
+                revision=FieldRequirement.REQUIRED,
+                response_policy=CommandResponsePolicy.FEEDBACK_ONLY,
+                retry=CommandRetry.NONE,
             ),
             "get_plan_anchor": CommandSpec(
                 validate_payload=_validate_plan_anchor,
@@ -1918,6 +1935,12 @@ def _validate_execution_detail(value: object) -> _ExecutionDetailPayload:
     ):
         raise CommandPayloadError("get_execution_detail payload is invalid")
     return _ExecutionDetailPayload(task_id, operation_id, expected_revision)
+
+
+def _validate_plan_move_reveal(value: object) -> _PlanAnchorPayload:
+    if type(value) is not dict or set(value) != {"task_id", "expected_revision", "node_id"}:
+        raise CommandPayloadError("reveal_plan_move payload is invalid")
+    return _validate_plan_anchor(value)
 
 
 def _validate_plan_anchor(value: object) -> _PlanAnchorPayload | _PlanOperationAnchorPayload:

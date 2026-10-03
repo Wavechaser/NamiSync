@@ -1156,7 +1156,7 @@ window.addEventListener("unhandledrejection", (event) => {
   const planReviewCallbacks = Object.fromEntries([
     "onViewChange", "onWindow", "onSelect", "onScopeSelect", "onExecute", "onControl",
     "onPlanAgain", "onHighlight", "onHighlightedSelect", "onExecutionDetail",
-    "onFollowOverride", "onNavigateCurrent",
+    "onFollowOverride", "onNavigateCurrent", "onRevealMove",
   ].map((name) => [name, () => {}]));
   planReviewCallbacks.onWindow = (review, offset) => {
     galleryWindowRequests.push(offset);
@@ -1221,7 +1221,32 @@ window.addEventListener("unhandledrejection", (event) => {
     form: { options: { verify_after_execute: true, deletion_policy: "trash" } },
   };
   galleryMeasurementStep = "plan_review_initial_render";
+  const galleryMovePath = "projects\\archive\\a-long-relative-destination-that-remains-available-in-the-tooltip";
+  planReviewTask.review.window.total = 1;
+  planReviewTask.review.window.rows = [{
+    node_id: `node-${"8".repeat(32)}`, display: `12 items moved to ${galleryMovePath}`,
+    depth: 0, is_container: true, visible_index: 0, parent_visible_index: null,
+    first_child_visible_index: null, position_in_set: 1, set_size: 1,
+    expanded: false, row_kind: "prior-group", operation_id: null, operation_kind: null,
+    reason: null, blocked_reason: null, selection: "disabled", highlighted: false,
+    selectable_operation_count: 0, selected_operation_count: 0, operation_count: 0,
+    size: null, mtime_ns: null, dependency_count: 0, risk: "none",
+    move_peer_id: `node-${"9".repeat(32)}`,
+    move_group: { count: 12, destination: galleryMovePath },
+    notice: null, selection_exclusion_reason: null, execution: null,
+  }];
   planReviewPanel.render(planReviewTask);
+  const galleryMovePill = planReviewPanel.element.querySelector(".nami-plan-move-pill");
+  const galleryMoveBadgeStyle = getComputedStyle(galleryMovePill.querySelector(".nami-badge"));
+  const galleryDark = document.documentElement.dataset.theme === "dark";
+  const galleryForced = matchMedia("(forced-colors: active)").matches;
+  if (!galleryForced && (galleryMoveBadgeStyle.backgroundColor !== (galleryDark ? "rgb(51, 17, 85)" : "rgb(187, 136, 238)")
+      || galleryMoveBadgeStyle.color !== (galleryDark ? "rgb(187, 136, 238)" : "rgb(51, 17, 85)"))
+      || galleryMovePill.title !== `12 items moved to ${galleryMovePath}`
+      || galleryMovePill.ariaLabel !== galleryMovePill.title
+      || getComputedStyle(galleryMovePill.querySelector(".nami-plan-move-pill__destination")).textOverflow !== "ellipsis") {
+    throw new Error("move pill color, cap or accessible destination changed");
+  }
   const planDetailsToggle = planReviewPanel.element.querySelector('[data-action="toggle-execution-details"]');
   const planItemPane = planReviewPanel.element.querySelector(".nami-plan-review__detail");
   planDetailsToggle.click();
@@ -1397,7 +1422,7 @@ window.addEventListener("unhandledrejection", (event) => {
     selection: "selected", selectable_operation_count: 1,
     selected_operation_count: 1, operation_count: 1, size: "4096",
     mtime_ns: "1000000000", dependency_count: 0, risk: "none",
-    move_peer_id: null, notice: null, selection_exclusion_reason: null,
+    move_peer_id: null, move_group: null, notice: null, selection_exclusion_reason: null,
     execution: {
       operation: {
         result: "failed", reason: "io-error", recording: "degraded",

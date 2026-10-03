@@ -1953,6 +1953,7 @@ def _summarize(
         "readiness_echo",
         "release_terminal_session",
         "replace_cosmetic_section",
+        "reveal_plan_move",
         "shell_ready",
         "start_execution",
         "start_inventory",

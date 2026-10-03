@@ -124,6 +124,7 @@ def test_task_shell_failure_records_do_not_expose_private_text(tmp_path: Path) -
         "trusted_keydown_count": 1,
         "trusted_keyup_count": 1,
         "browser_async_error": {"type": "TypeError", "line": 1608},
+        "move_bottom_gap": None,
     }
     child._write_driver_diagnostic(diagnostic_path, diagnostic)
     persisted = json.loads(diagnostic_path.read_text(encoding="utf-8"))
@@ -258,6 +259,23 @@ def test_m1_4_installed_task_shell_navigation_closure_and_recovery(
     assert second["closed"]["task_count"] == 46
 
     plan_review = report["plan_review"]
+    move_pill = plan_review["movePill"]
+    geometry = move_pill["geometry"]
+    tolerance = 1 / geometry["devicePixelRatio"]
+    assert geometry["row"]["top"] >= geometry["viewport"]["top"] - tolerance
+    assert geometry["row"]["bottom"] <= geometry["viewport"]["bottom"] + tolerance
+    assert abs(geometry["row"]["height"] - geometry["expectedRowHeight"]) <= tolerance
+    assert geometry["firstIndex"] <= geometry["targetIndex"] <= geometry["lastIndex"]
+    assert (move_pill["background"], move_pill["foreground"]) in {
+        ("rgb(187, 136, 238)", "rgb(51, 17, 85)"),
+        ("rgb(51, 17, 85)", "rgb(187, 136, 238)"),
+    }
+    assert {key: value for key, value in move_pill.items()
+            if key not in {"background", "foreground", "geometry"}} == {
+        "badgeText": "1 item moved to", "destinationText": "move-parent",
+        "selectionAbsent": True, "accessibleLabel": "1 item moved to move-parent",
+        "collapsed": True, "revealedParent": "move-parent", "rootReveal": True, "filteredFarScroll": True,
+    }
     assert plan_review["initial"] == {
         "planningIssuesVisible": True,
         "refusalNotice": True,
@@ -495,5 +513,5 @@ def test_driver_failure_reports_actual_checkpoint(
     }
     diagnostic = json.loads((tmp_path / "execution-confirmation-driver.json").read_text())
     assert diagnostic["actual_control_checkpoint"] == checkpoint
-    assert diagnostic["last_driver_step"] == "wait_execute"
+    assert diagnostic["last_driver_step"] == "wait_move_pill"
     assert "private" not in json.dumps(diagnostic)

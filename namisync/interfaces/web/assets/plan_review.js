@@ -146,7 +146,7 @@ function rowView(row, busy, committed, progressPresentation = null) {
   const execution = projectExecutionRow(row.execution);
   const notes = [...new Set([
     row.notice, reasonLabel(row.blocked_reason), reasonLabel(row.selection_exclusion_reason),
-    row.move_peer_id === null ? null : row.row_kind.startsWith("prior-") ? "Previous location" : "Paired move",
+    row.move_peer_id === null || row.row_kind === "prior-group" ? null : row.row_kind.startsWith("prior-") ? "Previous location" : "Paired move",
     reason, ...execution.notes,
   ].filter((value) => typeof value === "string" && value !== ""))].join(" · ");
   const risk = row.risk === "none" ? "" : `Risk: ${row.risk}`;
@@ -184,6 +184,7 @@ function eventInControl(event, row) {
   let target = event.target;
   while (target !== null && target !== row) {
     if (target.classList?.contains("nami-checkbox")
+      || target.classList?.contains("nami-plan-move-pill")
       || target.classList?.contains("nami-file-row__disclosure")) return true;
     target = target.parentElement;
   }
@@ -222,7 +223,7 @@ function addGroupDisclosure(element, row, onCollapse) {
 export function createPlanReviewPanel(callbacks) {
   const required = [
     "onViewChange", "onWindow", "onSelect", "onScopeSelect", "onExecute", "onControl", "onPlanAgain",
-    "onHighlight", "onHighlightedSelect", "onExecutionDetail", "onFollowOverride", "onNavigateCurrent",
+    "onHighlight", "onHighlightedSelect", "onExecutionDetail", "onFollowOverride", "onNavigateCurrent", "onRevealMove",
   ];
   if (callbacks === null || typeof callbacks !== "object"
       || !required.every((name) => typeof callbacks[name] === "function")) {
@@ -974,6 +975,8 @@ export function createPlanReviewPanel(callbacks) {
         for (const [index, checkbox] of renderedRows.checkboxes.entries()) {
           if (checkbox !== null) checkbox.disabled = disabled || committed
             || review.window.rows[index].selection === "disabled";
+          const pill = renderedRows.rows[index].querySelector(".nami-plan-move-pill");
+          if (pill !== null) pill.disabled = disabled;
         }
         renderedRows.disabled = disabled;
         renderedRows.committed = committed;
@@ -1072,6 +1075,24 @@ export function createPlanReviewPanel(callbacks) {
       addGroupDisclosure(element, row, () => callbacks.onViewChange(review, {
         collapseNodeId: row.node_id, collapsed: row.expanded === true,
       }));
+      if (row.row_kind === "prior-group" && row.move_peer_id !== null) {
+        const pill = button("", "nami-plan-move-pill");
+        const badge = document.createElement("span");
+        badge.className = "nami-badge";
+        badge.dataset.form = "fill";
+        renderText(badge, `${row.move_group.count} ${row.move_group.count === 1 ? "item" : "items"} moved to`);
+        const destination = document.createElement("span");
+        destination.className = "nami-plan-move-pill__destination";
+        renderFilesystemText(destination, row.move_group.destination || "root");
+        pill.append(badge, destination);
+        pill.title = row.display;
+        pill.ariaLabel = row.display;
+        pill.disabled = disabled;
+        pill.addEventListener("click", () => callbacks.onRevealMove(review, row.node_id));
+        element.querySelector(".nami-file-row__name-text").replaceWith(pill);
+        element.querySelector(".nami-file-row__selection").replaceChildren();
+        checkboxes[checkboxes.length - 1] = null;
+      }
       rowElements.push(element);
       fragment.append(element);
     }
@@ -1328,6 +1349,13 @@ export function createPlanReviewPanel(callbacks) {
     updateText(retryOutcome, checkOutcome ? "Check outcome" : "Refresh review");
     retryOutcome.disabled = review.recovery?.checking === true || controlAttempt?.recovery?.checking === true;
     renderRows(review, task);
+    if (Number.isSafeInteger(review.moveScrollOffset)) {
+      // Query removal can grow the spacers; scroll only after their new height exists.
+      programmaticScroll = true;
+      body.scrollTop = review.moveScrollOffset * ROW_HEIGHT;
+      review.moveScrollOffset = null;
+      window.requestAnimationFrame(() => { programmaticScroll = false; });
+    }
     if (focusedPlanRequestId !== review.summary.request_id) focusedPlanRow = null;
     focusedPlanRequestId = review.summary.request_id;
     const focusNodeId = review.summary.highlight_focus_node_id;

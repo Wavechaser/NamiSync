@@ -79,7 +79,7 @@ def _file_fact_state(operations, *, complete=True) -> PlanReviewState:
     value = replace(plan(tuple(operations)), source_complete=complete)
     request = PlanRequest("b" * 32, value.source_root.path, value.target_root.path)
     artifact = PlanArtifact(
-        request, SimpleNamespace(warnings=()), SimpleNamespace(warnings=()),
+        request, SimpleNamespace(warnings=()), SimpleNamespace(warnings=(), directories=()),
         value, Verdict(True, (), SimpleNamespace()),
     )
     return PlanReviewState(
@@ -168,6 +168,40 @@ def test_folder_size_ignores_selection_query_collapse_and_window() -> None:
             assert len(rows) == 1
         elif query:
             assert len(rows) == 2
+
+
+@pytest.mark.parametrize("query,filters,kept_query,kept_filters", [
+    ("moved", frozenset(), "", frozenset()),
+    ("destination", frozenset({"copy"}), "destination", frozenset()),
+    ("destination", frozenset(), "destination", frozenset()),
+    ("missing", frozenset({"copy"}), "", frozenset()),
+])
+def test_move_reveal_expands_destination_and_clears_only_obstructing_query(query, filters, kept_query, kept_filters) -> None:
+    state = _file_fact_state([
+        operation(OperationKind.MOVE, target_path=r"outer\destination\file", prior_target_path=r"old\file", target=file_stat()),
+        operation(OperationKind.COPY, target_path=r"other\copy", source=file_stat()),
+    ])
+    group = next(node for node in state.projection.nodes if node.row_kind == "prior-group")
+    outer = next(node for node in state.projection.nodes if node.rel_path_key == "OUTER")
+    state.update(expected_revision=0, search_query=query, filters=filters,
+                 sort_column=PlanSortColumn.FILENAME, sort_direction=SortDirection.DESCENDING,
+                 collapse_node_id=outer.node_id, collapsed=True)
+    selected = state.projection.selected_operation_ids
+    before = state.summary()
+    assert state.reveal_move(expected_revision=0, node_id=group.node_id)["summary"]["disposition"] == "conflict"
+    assert state.summary() == before
+    result = state.reveal_move(expected_revision=state.view_revision, node_id=group.node_id)
+    assert result["node_id"] == group.move_peer_id
+    assert result["summary"]["search_query"] == kept_query
+    assert result["summary"]["filters"] == sorted(kept_filters)
+    assert result["summary"]["sort_direction"] == "descending"
+    assert state.projection.selected_operation_ids == selected
+    assert outer.node_id not in state.collapsed_node_ids
+    window = state.window(expected_revision=state.view_revision, offset=result["index"], limit=1)
+    assert window["rows"][0]["node_id"] == group.move_peer_id
+    assert state.reveal_move(expected_revision=state.view_revision, node_id=group.node_id)["summary"]["disposition"] == "noop"
+    with pytest.raises(ValueError, match="informational"):
+        state.reveal_move(expected_revision=state.view_revision, node_id=outer.node_id)
 
 
 def test_plan_review_state_derives_revisioned_filters_windows_and_anchor() -> None:

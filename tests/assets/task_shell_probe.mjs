@@ -177,6 +177,10 @@ globalThis.taskHarness = {
     calls.push(["plan-anchor", ...args]);
     return deferAnchor ? deferred(planAnchors) : Promise.reject(new Error("anchor unavailable"));
   },
+  revealPlanMove(...args) {
+    calls.push(["reveal-move", ...args.slice(0, -1)]);
+    return deferred(planViewUpdates);
+  },
   getPlanOperationAnchor(...args) {
     calls.push(["plan-operation-anchor", ...args]);
     return deferAnchor ? deferred(planAnchors) : Promise.reject(new Error("operation anchor unavailable"));
@@ -413,6 +417,7 @@ const bridgeUrl = moduleUrl(`
   export const listTasks = () => globalThis.taskHarness.listTasks();
   export const controlExecution = (...args) => globalThis.taskHarness.controlExecution(...args);
   export const getPlanAnchor = (...args) => globalThis.taskHarness.getPlanAnchor(...args);
+  export const revealPlanMove = (...args) => globalThis.taskHarness.revealPlanMove(...args);
   export const getPlanOperationAnchor = (...args) => globalThis.taskHarness.getPlanOperationAnchor(...args);
   export const getPlanWindow = (...args) => globalThis.taskHarness.getPlanWindow(...args);
   export const getExecutionDetail = (...args) => globalThis.taskHarness.getExecutionDetail(...args);
@@ -455,7 +460,7 @@ const themeUrl = moduleUrl(`
 let appSource = await readFile(process.argv[2], "utf8");
 appSource = appSource.replace(
   /import \{[\s\S]*?\} from "\.\/bridge\.js";/,
-  `import { acknowledgeShellReady, acknowledgeInventory, admitLocation, BridgeTransportError, closeTask, controlExecution, createTask, echoReadiness, getExecutionDetail, getInventoryDetail, getInventoryWindow, openInventoryView, refreshInventory, restoreInventory, updateInventoryView, getPlanAnchor, getPlanOperationAnchor, getPlanWindow, listTasks, markBridgeOperational, mutatePlanHighlight, mutatePlanSelection, openPlanView, OutcomeUnavailableError, pickFolder, planAgain, prepareSetup, readSetup, StartPlanUncertainError, startExecution, startInventory, startPlan, startTaskDrain, TaskCloseUncertainError, TaskCreateUncertainError, TerminalPresentationError, TerminalSessionReleaseError, updatePlanView, whenBridgeApiReady } from "${bridgeUrl}";`,
+  `import { acknowledgeShellReady, acknowledgeInventory, admitLocation, BridgeTransportError, closeTask, controlExecution, createTask, echoReadiness, getExecutionDetail, getInventoryDetail, getInventoryWindow, openInventoryView, refreshInventory, restoreInventory, updateInventoryView, getPlanAnchor, getPlanOperationAnchor, getPlanWindow, revealPlanMove, listTasks, markBridgeOperational, mutatePlanHighlight, mutatePlanSelection, openPlanView, OutcomeUnavailableError, pickFolder, planAgain, prepareSetup, readSetup, StartPlanUncertainError, startExecution, startInventory, startPlan, startTaskDrain, TaskCloseUncertainError, TaskCreateUncertainError, TerminalPresentationError, TerminalSessionReleaseError, updatePlanView, whenBridgeApiReady } from "${bridgeUrl}";`,
 );
 appSource = appSource
   .replace("./readiness.js", readinessUrl)
@@ -602,6 +607,7 @@ function planWindow(summary, offset = 0) {
       dependency_count: 0,
       risk: "none",
       move_peer_id: null,
+      move_group: null,
       notice: "The source changed. Create a fresh plan.",
       selection_exclusion_reason: null,
       execution: null,
@@ -1464,6 +1470,34 @@ for (const destination of ["settings", "task"]) {
 }
 
 const followAnchorBase = planAnchors.length;
+const moveUpdateBase = planViewUpdates.length;
+const moveWindowBase = planWindows.length;
+const moveSummary = { ...liveReview.summary, view_revision: liveReview.summary.view_revision + 1,
+  search_query: "", filters: [], disposition: "applied" };
+globalThis.planReviewHarness.callbacks.onRevealMove(liveReview, `node-${"9".repeat(32)}`);
+await until(() => planViewUpdates.length === moveUpdateBase + 1);
+assert.equal(liveReview.pending, "view");
+planViewUpdates[moveUpdateBase].resolve({ summary: moveSummary, node_id: `node-${"8".repeat(32)}`, index: 400 });
+await until(() => planWindows.length === moveWindowBase + 1);
+assert.deepEqual(calls.at(-1), ["plan-window", TASK_G, moveSummary.view_revision, 400, 256]);
+planWindows[moveWindowBase].resolve(executionWindow(moveSummary, 400, 6));
+await until(() => liveReview.pending === null);
+assert.equal(liveReview.summary, moveSummary);
+assert.equal(liveReview.follow.enabled, false);
+assert.equal(liveReview.moveScrollOffset, 400);
+assert.equal(liveReview.foregroundWindowReaders, 0);
+const moveWindowBeforeStale = liveReview.window;
+globalThis.planReviewHarness.callbacks.onRevealMove(liveReview, `node-${"9".repeat(32)}`);
+await until(() => planViewUpdates.length === moveUpdateBase + 2);
+settingsButton().click();
+planViewUpdates[moveUpdateBase + 1].resolve({ summary: { ...moveSummary, view_revision: moveSummary.view_revision + 1 },
+  node_id: `node-${"8".repeat(32)}`, index: 500 });
+await until(() => liveReview.pending === null);
+assert.equal(liveReview.window, moveWindowBeforeStale);
+assert.equal(planWindows.length, moveWindowBase + 1);
+taskButton("Task 7").click();
+planViewUpdates.splice(moveUpdateBase);
+planWindows.splice(moveWindowBase);
 const followWindowBase = planWindows.length;
 const followSummaryBefore = liveReview.summary;
 liveReview.summary = {

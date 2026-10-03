@@ -331,6 +331,10 @@ class _Service:
         self.calls.append(("get-plan-anchor", task_id, kwargs))
         return {"disposition": "current", "node_id": kwargs["node_id"], "index": 0}
 
+    def reveal_plan_move(self, task_id, **kwargs):
+        self.calls.append(("reveal-plan-move", task_id, kwargs))
+        return {"summary": {"disposition": "applied"}, "node_id": kwargs["node_id"], "index": 0}
+
     def get_plan_operation_anchor(self, task_id, **kwargs):
         self.calls.append(("get-plan-operation-anchor", task_id, kwargs))
         return {"disposition": "current", "view_revision": kwargs["expected_revision"],
@@ -524,6 +528,21 @@ def test_production_command_composition_binds_transport_response_codec_when_supp
     assert codec.consume is _consume_task_drain_response
 
 
+def test_move_reveal_command_routes_only_compact_revisioned_group_identity() -> None:
+    commands, _, registry = _commands()
+    payload = {"task_id": "task-" + "1" * 32, "expected_revision": 4, "node_id": "node-" + "2" * 32}
+    result = _invoke(commands["reveal_plan_move"], payload)
+    assert result["index"] == 0
+    assert registry.calls[-1] == ("reveal-plan-move", payload["task_id"], {
+        "expected_revision": 4, "node_id": payload["node_id"],
+    })
+    for invalid in [{**payload, "command_id": "3" * 32}, {**payload, "expected_revision": True},
+                    {**payload, "node_id": r"destination\file"},
+                    {"task_id": payload["task_id"], "expected_revision": 4, "operation_id": "4" * 32, "session_id": "5" * 32}]:
+        with pytest.raises(CommandPayloadError):
+            _invoke(commands["reveal_plan_move"], invalid)
+
+
 def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete() -> None:
     commands, _, _ = _commands()
 
@@ -551,6 +570,7 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
         "update_plan_view",
         "get_plan_window",
         "get_execution_detail",
+        "reveal_plan_move",
         "get_plan_anchor",
         "mutate_plan_selection",
         "mutate_plan_scope",
@@ -596,7 +616,7 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
         name for name, spec in commands.items()
         if spec.response_policy is CommandResponsePolicy.FEEDBACK_ONLY
     } == {
-        "admit_location", "update_plan_view", "mutate_plan_highlight",
+        "admit_location", "update_plan_view", "mutate_plan_highlight", "reveal_plan_move",
         "replace_cosmetic_section", "update_inventory_view",
     }
     # Each group shares one policy; the browser mirror is checked separately.

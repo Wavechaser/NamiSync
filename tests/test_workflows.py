@@ -965,8 +965,8 @@ def test_review_and_commit_bind_the_same_safe_selection(tmp_path: Path) -> None:
     )
     artifact = PlanArtifact(
         request,
-        SimpleNamespace(warnings=()),
-        SimpleNamespace(warnings=()),
+        SimpleNamespace(warnings=(), directories=()),
+        SimpleNamespace(warnings=(), directories=()),
         plan,
         Verdict(True, (), world),
     )
@@ -1006,8 +1006,8 @@ def test_commit_rejects_selection_authority_from_an_equal_plan(tmp_path: Path) -
     request = PlanRequest("request", plan.source_root.path, plan.target_root.path)
     artifact = PlanArtifact(
         request,
-        SimpleNamespace(warnings=()),
-        SimpleNamespace(warnings=()),
+        SimpleNamespace(warnings=(), directories=()),
+        SimpleNamespace(warnings=(), directories=()),
         replace(plan),
         Verdict(True, (), SimpleNamespace(paths={}, free_space=1_000, reclaimable_temp_bytes=0)),
     )
@@ -1034,8 +1034,8 @@ def test_commit_reuses_exact_selection_without_deriving_again(
     request = PlanRequest("request", plan.source_root.path, plan.target_root.path)
     artifact = PlanArtifact(
         request,
-        SimpleNamespace(warnings=()),
-        SimpleNamespace(warnings=()),
+        SimpleNamespace(warnings=(), directories=()),
+        SimpleNamespace(warnings=(), directories=()),
         plan,
         Verdict(
             True,
@@ -1092,8 +1092,8 @@ def test_commit_rejects_selection_authority_from_equal_distinct_user_intent(
     request = PlanRequest("request", plan.source_root.path, plan.target_root.path)
     artifact = PlanArtifact(
         request,
-        SimpleNamespace(warnings=()),
-        SimpleNamespace(warnings=()),
+        SimpleNamespace(warnings=(), directories=()),
+        SimpleNamespace(warnings=(), directories=()),
         plan,
         Verdict(
             True,

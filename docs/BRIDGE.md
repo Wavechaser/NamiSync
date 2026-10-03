@@ -478,6 +478,7 @@ BOOTSTRAP rows, commands require OPEN.
 | `get_plan_window` | `{task_id:TaskId,expected_revision:SafeInt,offset:SafeInt,limit:1..256}` | `{disposition:"current"\|"conflict",view_revision:SafeInt,offset:SafeInt,total:SafeInt,execution:ExecutionSummary,rows:[PlanWindowRow]}` | 5 s; one identical-payload retry |
 | `get_execution_detail` | `{task_id:TaskId,operation_id:HexId,expected_execution_revision:SafeInt}` | `{disposition:"current"\|"conflict"\|"not-retained",execution_revision:SafeInt,operation_id:HexId,operation:null\|OperationItemView,automatic_verification:null\|IntegrityOutcomeView,evidence:null\|ExecutionEvidence}` | 5 s; one identical-payload retry |
 | `get_plan_anchor` | `{task_id:TaskId,expected_revision:SafeInt,node_id:NodeId}` or `{task_id:TaskId,session_id:HexId,expected_revision:SafeInt,operation_id:HexId}` | `{disposition:"current"\|"conflict",view_revision:SafeInt,node_id:null\|NodeId,index:null\|SafeInt}` | 5 s; one identical-payload retry |
+| `reveal_plan_move` | `{task_id:TaskId,expected_revision:SafeInt,node_id:NodeId}` | `{summary:PlanViewSummary,node_id:null\|NodeId,index:null\|SafeInt}` | current-state recovery; 5 s feedback; no mutation replay |
 | `mutate_plan_selection` | `{task_id:TaskId,command_id:HexId,expected_view_revision:SafeInt,expected_selection_revision:SafeInt,node_id:NodeId,selected:boolean}` | `PlanViewSummary` | observed original result; 5 s feedback; no mutation replay |
 | `mutate_plan_scope` | `{task_id:TaskId,command_id:HexId,expected_view_revision:SafeInt,expected_selection_revision:SafeInt,selected:boolean}` | `PlanViewSummary` | observed original result; 5 s feedback; no mutation replay |
 | `mutate_plan_highlight` | `{task_id:TaskId,expected_view_revision:SafeInt,expected_highlight_revision:SafeInt,gesture:"clear"|"replace"|"toggle"|"extend"|"add-range"|"move_up"|"move_down"|"move_up_extend"|"move_down_extend",node_id:null\|NodeId}` | `PlanViewSummary` | current-state recovery; 5 s feedback; no mutation replay |
@@ -618,6 +619,17 @@ null. All response variants remain inside the existing 8 MiB wall.
 Plan window totals, offsets, visible/parent/first-child indexes and anchors
 exclude the synthetic projection root. Its direct children have depth zero
 and no public parent; an anchor resolving only to the root returns null.
+
+`reveal_plan_move` admits one current informational prior-group node, whose
+server-owned peer names the canonical destination. Under the task/view owner it
+stages obstructing query removal and ancestor expansion before publishing one
+revision. A stale request has no effect and returns a conflict summary with
+null node/index. This changes presentation only; selection and effects retain
+their ordinary authority. The browser refetches at most 256 rows at the returned
+index, guarded by task, view and foreground generations.
+Plan window rows carry `move_group:null|{count:positive-SafeInt,destination:string}`;
+only prior groups carry it, and their `move_peer_id` is the canonical reveal
+target. Destination is root-relative (empty for root), never path authority.
 
 `PlanViewSummary` also carries `highlight_revision`,
 `highlight_anchor_node_id`, `highlight_focus_node_id`,

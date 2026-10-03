@@ -23,6 +23,8 @@ def _prior_group_node_id(request_id: str) -> str:
     encoded = request_id.encode("utf-8")
     digest.update(len(encoded).to_bytes(4, "big"))
     digest.update(encoded)
+    digest.update((0).to_bytes(4, "big"))
+    digest.update((0).to_bytes(4, "big"))
     return f"node-{digest.hexdigest()}"
 
 
@@ -43,7 +45,7 @@ def _rootless_settlement(registry: object, row: Mapping[str, object]) -> dict[st
         or len(view.projection.nodes) != 120_000 or window["total"] != 119_999
         or len(rows) != 256 or not isinstance(first, dict)
         or first["node_id"] != _prior_group_node_id(row["request_id"])
-        or first["row_kind"] != "prior-group" or first["display"] != "Previous paths"
+        or first["row_kind"] != "prior-group" or first["display"] != "1 item moved to root"
         or first["operation_id"] is not None or first["operation_kind"] is not None
         or first["visible_index"] != 0 or first["depth"] != 0
         or first["parent_visible_index"] is not None or first["first_child_visible_index"] != 1

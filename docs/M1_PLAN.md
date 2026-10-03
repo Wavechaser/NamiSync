@@ -20,8 +20,8 @@ atomic commit. Shared frontend and delivery documents are edited serially.
 | ID | Outcome and preserved guarantees | Verification | Status |
 | --- | --- | --- | --- |
 | GUI-RF1 | Surface execution preflight refusal codes/details on the planning page, distinguish commitment/admission failures; preserve effect authority and original-command recovery. | Focused 628 pass; ordinary 5,854 pass/four skips plus corrected fixture module 40 pass; 12 import contracts; installed 34 pass plus unchanged foreground-focus retry pass. Independent review approved. | Complete |
-| GUI-RF2 | Place informational prior-move groups at the deepest surviving on-disk target ancestor, root fallback; capped relative purple destination pills reveal canonical rows, clearing obstructing search/filters. Preserve expandable contents, selection/count/byte exclusion, stable navigation and bounded windows. | Projection/selection/sort/search/navigation cases, page and fixture migrations, affected departments, ordinary suite, applicable existing scale and installed Plan/gallery witnesses. | Pending |
-| GUI-RF3 | Shorten the delete badge to Delete; use neutral Pause/play toggle with accented Resume when paused, and neutral regular Stop/Cancel armed for five seconds in accent with filled Stop before a second click submits cancel. Preserve authoritative control state, pending/recovery and task/session ownership. | Control/timer/retirement page probes, icon generator/provenance checks, consumer fixtures, affected departments and installed controls/gallery witnesses. | Pending |
+| GUI-RF2 | Place informational prior-move groups at the deepest surviving on-disk target ancestor, root fallback; capped relative purple destination pills reveal canonical rows, clearing obstructing search/filters. Preserve expandable contents, selection/count/byte exclusion, stable navigation and bounded windows. | Projection/scale 311 pass; frontend 367 pass; ordinary 5,866 pass/four skips plus corrected host 84 and catalog consumers 96 pass; 12 import contracts. All 35 installed cases pass across dependency-scoped runs. Independent review approved. | Complete |
+| GUI-RF3 | Shorten the delete badge to Delete and recase badge to Recase; use neutral Pause/play toggle with accented Resume when paused, and neutral regular Stop/Cancel armed for five seconds in accent with filled Stop before a second click submits cancel. Preserve authoritative control state, pending/recovery and task/session ownership. | Control/timer/retirement page probes, icon generator/provenance checks, consumer fixtures, affected departments and installed controls/gallery witnesses. | Pending |
 
 No execution-policy, commitment-authority, persisted-state or unrelated feature
 changes. Contract migrations needed for these accepted presentations are in scope;
@@ -46,7 +46,8 @@ parent, including separate groups for distinct target parents. Moving a director
 counts as one item. Root destinations reveal the first canonical moved item;
 other groups reveal the target parent row. User confirmed this interpretation.
 
-RF2 design population (inspected `99e65c8`, revalidate after RF1): workflow
+RF1 shipped as `1865d66`. RF2 starts from that integrated revision and refreshes
+the earlier `99e65c8` design at the shared bridge/page seams. Its population: workflow
 plan_projection; web plan_review/drain/commands; bridge/app/Plan row renderer,
 styles and tokens; projection/selection/navigation/bridge/page/headed tests and
 their direct fixtures. Current performance Plan/execution-receipt helpers that
@@ -59,6 +60,18 @@ reveal operation preserves ordinary anchor semantics and clears only obstructing
 query settings. Regression gate includes deepest survival, multiple destinations,
 root fallback, unchanged totals, sorting, stale/off-window/filtered navigation,
 the existing large projection/folder-size witnesses and installed Plan/gallery.
+
+RF3 design population (inspected `1865d66`, refresh after RF2): Plan renderer;
+icon catalog/generator and generated registry, CSS, provenance and native-size
+Stop SVGs; frontend/icon-maintenance tests, gallery and installed task-shell
+fixtures; current Plan/execution-UI performance helpers and their tests.
+DESKTOP_UI and TOOLS own the behavior/catalog changes. Keep one authoritative
+Pause/Resume button and panel-local five-second Cancel arming; timeout is checked
+at activation as well as by timer. Task/session retirement and unavailable
+controls discard arming. The catalog declares only the filled Stop alias while
+retaining pinned upstream provenance and regular artwork elsewhere. Verification
+covers first/second/expired clicks, ordinary rerenders, pending control truth,
+retirement, generated-asset checks, affected departments and installed controls.
 
 ## Open-bug resolutions — 2026-10-01
 

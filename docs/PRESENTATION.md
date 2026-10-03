@@ -95,6 +95,24 @@ Trees are pure workflow-derived projections. Node identity is deterministic, sco
 
 A path may contain multiple direct plan operations. The path node remains the path index; it becomes a container and exposes each direct operation exactly once as an immediate member child. Member order is deterministic before any view sort, and view sorting does not alter canonical indexes, membership, or execution order. Move decomposition renders one paired annotation rather than a second selection or paging unit. Structural folders never impersonate an operation.
 
+Prior-location groups attach to the deepest proper old-path ancestor observed
+as a target directory that survives at the same Windows path key in immutable
+reviewed intent; root is the fallback. Unblocked directory removal, move or
+recase excludes its old prefix and descendants, independently of selection.
+Newly created replacements and inferred destination ancestors are not evidence
+of old-directory survival. Missing surviving context is added structurally.
+Each attachment groups by the move's target parent; a directory move counts as
+one item. Groups and their expandable prior contents are informational and
+contribute no execution selection, facet counts or folder bytes. Their label
+uses a relative destination, and the group peer resolves its canonical target
+parent, or the first canonical moved item for a root destination.
+
+Explicit move-group reveal is revisioned presentation navigation. It expands
+the destination's ancestors, clears only search/category filters that obstruct
+that exact row, preserves sort and execution selection, and returns its rootless
+index with the updated summary. Ordinary anchors and execution follow keep their
+existing read-only nearest-visible-ancestor semantics.
+
 Nodes retain the structural data needed by presentation—preorder position, depth, parent index, subtree extent, and id-to-position lookup—so the adapter does not reconstruct ancestry from paths. Exact internal fields remain owned by the source codec. The emitted tree preserves valid Unicode; only the renderer projects fixed layout controls or marker delimiters into visible text. Search uses raw display text and never decodes that projection.
 
 ## Views, windows, and selection

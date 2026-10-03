@@ -9,7 +9,7 @@ from hashlib import blake2b
 from types import MappingProxyType
 from typing import Mapping
 
-from namisync.core.models import EntryKind, FileStat
+from namisync.core.models import DirRecord, EntryKind, FileStat
 from namisync.core.pathing import fold_validated_path
 from namisync.core.planning import OpId, OperationKind, Plan, PlanOperation
 from namisync.core.scalars import MAX_SIGNED_64
@@ -121,6 +121,8 @@ class PlanProjectionNode:
     selection_exclusion_reason: str | None = None
     filename_key: str | None = None
     is_directory: bool = False
+    move_item_count: int = 0
+    move_destination_path: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -249,6 +251,8 @@ class _PlanProjectionDraft:
     selection_exclusion_reason: str | None = None
     filename_key: str | None = None
     is_directory: bool = False
+    move_item_count: int = 0
+    move_destination_path: str | None = None
 
 
 def build_plan_projection(
@@ -299,26 +303,51 @@ def build_plan_projection(
         parent_override=None,
         row_prefix="",
     )
+    target_paths = {
+        node.rel_path_key: target_draft_by_tree_position[node.position]
+        for node in target_tree.nodes
+    }
     del target_tree, target_draft_by_tree_position
 
     prior_operations = tuple(
         item for item in plan.operations if item.prior_target_rel_path is not None
     )
-    peer_pairs: list[tuple[int, int]] = []
-    if prior_operations:
+    groups = _prior_move_groups(artifact, prior_operations)
+    target_directories = (
+        {item.rel_path_key: item for item in artifact.target_scan.directories} if groups else {}
+    )
+    for (ancestor_key, destination_key), group_operations in groups.items():
+        attachment = _ensure_prior_attachment(
+            drafts, target_paths, ancestor_key, target_directories, request_id,
+        )
         prior_group = len(drafts)
+        destination_path = _parent_path(group_operations[0].target_rel_path)
         drafts.append(
             _structural_draft(
-                _projection_id(b"NamiSyncPriorV1", request_id),
-                "Previous paths",
+                _projection_id(b"NamiSyncPriorV1", request_id, ancestor_key, destination_key),
+                f"{len(group_operations)} {'item' if len(group_operations) == 1 else 'items'} moved to {destination_path or 'root'}",
                 "",
-                1,
-                0,
+                drafts[attachment].depth + 1,
+                attachment,
                 row_kind="prior-group",
                 is_container=True,
             )
         )
-        prior_tree = _operation_tree(request_id + ":prior", prior_operations, prior=True)
+        first_operation = min(
+            group_operations,
+            key=lambda item: (fold_validated_path(item.target_rel_path.replace('/', '\\')), str(item.op_id)),
+        )
+        destination_index = (
+            target_paths[destination_key] if destination_key else
+            operation_draft_by_id[str(first_operation.op_id)]
+        )
+        drafts[prior_group].move_peer_id = drafts[destination_index].node_id
+        drafts[prior_group].move_item_count = len(group_operations)
+        drafts[prior_group].move_destination_path = destination_path
+        prior_tree = _operation_tree(
+            request_id + ":" + drafts[prior_group].node_id,
+            group_operations, prior=True, strip_ancestor=ancestor_key,
+        )
         prior_draft_by_tree_position: dict[int, int] = {}
         prior_operation_draft_by_id: dict[str, int] = {}
         _append_operation_tree(
@@ -335,16 +364,12 @@ def build_plan_projection(
             row_prefix="prior-",
         )
         del prior_tree, prior_draft_by_tree_position
-        for operation_id, target_draft in operation_draft_by_id.items():
-            prior_draft = prior_operation_draft_by_id.get(operation_id)
-            if prior_draft is not None:
-                peer_pairs.append((target_draft, prior_draft))
+        for operation_id, prior_draft in prior_operation_draft_by_id.items():
+            target_draft = operation_draft_by_id[operation_id]
+            drafts[target_draft].move_peer_id = drafts[prior_draft].node_id
+            drafts[prior_draft].move_peer_id = drafts[target_draft].node_id
         del prior_operation_draft_by_id
-
-    for target, prior in peer_pairs:
-        drafts[target].move_peer_id = drafts[prior].node_id
-        drafts[prior].move_peer_id = drafts[target].node_id
-    del peer_pairs, operations, safety_decision, decision, excluded, selectable
+    del groups, target_paths, target_directories, operations, safety_decision, decision, excluded, selectable
 
     for side, warnings in (
         ("source", artifact.source_scan.warnings),
@@ -367,6 +392,8 @@ def build_plan_projection(
             )
         )
 
+    if prior_operations:
+        drafts, operation_draft_by_id = _preorder_drafts(drafts, operation_draft_by_id)
     return _materialize_projection(
         request_id,
         drafts,
@@ -559,17 +586,116 @@ def apply_plan_projection_selection(
     )
 
 
+def _parent_path(path: str) -> str:
+    return path.replace('/', '\\').rpartition('\\')[0]
+
+
+def _prior_move_groups(
+    artifact: PlanArtifact,
+    prior_operations: tuple[PlanOperation, ...],
+) -> dict[tuple[str, str], list[PlanOperation]]:
+    if not prior_operations:
+        return {}
+    removed: set[str] = set()
+    for operation in artifact.plan.operations:
+        if operation.blocked:
+            continue
+        if operation.kind in {OperationKind.DELETE, OperationKind.TRASH}:
+            old_path, stat = operation.target_rel_path, operation.target_expected
+        elif operation.kind in {OperationKind.MOVE, OperationKind.MOVE_UPDATE, OperationKind.RECASE}:
+            old_path = operation.prior_target_rel_path
+            stat = operation.prior_target_expected or operation.target_expected
+        else:
+            continue
+        if old_path is not None and stat is not None and stat.kind is EntryKind.DIRECTORY:
+            removed.add(fold_validated_path(old_path.replace('/', '\\')))
+    surviving: set[str] = set()
+    for directory in artifact.target_scan.directories:
+        key = directory.rel_path_key
+        probe = key
+        while probe and probe not in removed:
+            probe = _parent_path(probe)
+        if not probe:
+            surviving.add(key)
+    groups: dict[tuple[str, str], list[PlanOperation]] = {}
+    for operation in prior_operations:
+        assert operation.prior_target_rel_path is not None
+        ancestor = fold_validated_path(_parent_path(operation.prior_target_rel_path))
+        while ancestor and ancestor not in surviving:
+            ancestor = _parent_path(ancestor)
+        destination = fold_validated_path(_parent_path(operation.target_rel_path))
+        groups.setdefault((ancestor, destination), []).append(operation)
+    return groups
+
+
+def _ensure_prior_attachment(
+    drafts: list[_PlanProjectionDraft],
+    paths: dict[str, int],
+    ancestor_key: str,
+    records: Mapping[str, DirRecord],
+    request_id: str,
+) -> int:
+    missing: list[str] = []
+    key = ancestor_key
+    while key not in paths:
+        missing.append(key)
+        key = _parent_path(key)
+    parent = paths[key]
+    # Only newly needed context uses scan records; existing operation facts stay intact.
+    for key in reversed(missing):
+        record = records.get(key)
+        path = key if record is None else record.rel_path.replace('/', '\\')
+        index = len(drafts)
+        draft = _structural_draft(
+            _projection_id(b"NamiSyncNodeV1", "plan", request_id, key),
+            _basename(path), key, drafts[parent].depth + 1, parent,
+            row_kind="folder", is_container=True,
+        )
+        draft.size = 0
+        draft.mtime_ns = None if record is None else record.mtime_ns
+        drafts.append(draft)
+        paths[key] = index
+        parent = index
+    drafts[parent].is_container = True
+    return parent
+
+
+def _preorder_drafts(
+    drafts: list[_PlanProjectionDraft], operation_positions: dict[str, int],
+) -> tuple[list[_PlanProjectionDraft], dict[str, int]]:
+    children: dict[int, list[int]] = {}
+    for position, draft in enumerate(drafts[1:], 1):
+        assert draft.parent is not None
+        children.setdefault(draft.parent, []).append(position)
+    pending = [0]
+    order: list[int] = []
+    while pending:
+        position = pending.pop()
+        order.append(position)
+        pending.extend(reversed(children.get(position, ())))
+    inverse = {old: new for new, old in enumerate(order)}
+    reordered = [drafts[position] for position in order]
+    for draft in reordered:
+        if draft.parent is not None:
+            draft.parent = inverse[draft.parent]
+            draft.depth = reordered[draft.parent].depth + 1
+    return reordered, {key: inverse[position] for key, position in operation_positions.items()}
+
+
 def _operation_tree(
     scope_identity: str,
     operations: tuple[PlanOperation, ...],
     *,
     prior: bool,
+    strip_ancestor: str = "",
 ) -> NodeTree:
     def member(operation: PlanOperation) -> _ValidatedNodeTreeMember:
         rel_path = (
             operation.prior_target_rel_path if prior else operation.target_rel_path
         )
         assert rel_path is not None
+        if strip_ancestor:
+            rel_path = rel_path.replace('/', '\\').split('\\', strip_ancestor.count('\\') + 1)[-1]
         canonical = rel_path.replace("/", "\\")
         return _ValidatedNodeTreeMember(
             str(operation.op_id),
@@ -895,6 +1021,8 @@ def _materialize_projection(
             selection_exclusion_reason=draft.selection_exclusion_reason,
             filename_key=draft.filename_key,
             is_directory=draft.is_directory,
+            move_item_count=draft.move_item_count,
+            move_destination_path=draft.move_destination_path,
         ))
         drafts[index] = None  # type: ignore[list-item]
     frozen_nodes = tuple(nodes)

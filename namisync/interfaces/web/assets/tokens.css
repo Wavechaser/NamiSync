@@ -207,6 +207,8 @@
   /* A rendered signal selects exactly one of these semantic channels. */
   --intent-additive-foreground: var(--palette-blue-main);
   --intent-relocating-foreground: var(--palette-purple-main);
+  --move-pill-background: var(--palette-purple-light);
+  --move-pill-foreground: var(--palette-purple-dark);
   --intent-replacing-foreground: var(--palette-yellow-main);
   --intent-removing-foreground: var(--palette-red-main);
   --intent-neutral-foreground: var(--color-neutral-foreground-secondary);
@@ -330,6 +332,8 @@
   --filter-noop-background-hover: #D6D6D6E6;
   --filter-noop-background-pressed: #D6D6D6CC;
   --intent-relocating-foreground: var(--palette-purple-light);
+  --move-pill-background: var(--palette-purple-dark);
+  --move-pill-foreground: var(--palette-purple-light);
   --intent-permanent-background: var(--palette-red-dark);
   --intent-permanent-foreground: var(--palette-red-main);
   --intent-exception-background: var(--palette-yellow-dark);
@@ -429,6 +433,8 @@
     --filter-noop-background-hover: #D6D6D6E6;
     --filter-noop-background-pressed: #D6D6D6CC;
     --intent-relocating-foreground: var(--palette-purple-light);
+    --move-pill-background: var(--palette-purple-dark);
+    --move-pill-foreground: var(--palette-purple-light);
     --intent-permanent-background: var(--palette-red-dark);
     --intent-permanent-foreground: var(--palette-red-main);
     --intent-exception-background: var(--palette-yellow-dark);
@@ -548,6 +554,8 @@
     --filter-noop-background-pressed: Highlight;
     --filter-noop-foreground: HighlightText;
     --filter-purple-active-foreground: HighlightText;
+    --move-pill-background: ButtonFace;
+    --move-pill-foreground: ButtonText;
     --color-main-fill-foreground: HighlightText;
     --intent-additive-foreground: CanvasText;
     --intent-relocating-foreground: CanvasText;

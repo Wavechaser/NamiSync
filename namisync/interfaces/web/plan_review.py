@@ -596,6 +596,66 @@ class PlanReviewState:
         with self._lock:
             return self.projection.node_for_id(node_id)
 
+    def reveal_move(self, *, expected_revision: int, node_id: str) -> dict[str, object]:
+        """Reveal one informational group's server-owned canonical destination."""
+
+        with self._lock:
+            if expected_revision != self.view_revision:
+                return {"summary": self._summary(disposition="conflict"), "node_id": None, "index": None}
+            group = self.projection.node_for_id(node_id)
+            if group.row_kind != "prior-group" or group.move_peer_id is None:
+                raise ValueError("move reveal requires an informational move group")
+            target = self.projection.node_for_id(group.move_peer_id)
+            ancestors: set[str] = set()
+            position = target.parent_index
+            while position is not None:
+                node = self.projection.nodes[position]
+                ancestors.add(node.node_id)
+                position = node.parent_index
+            collapsed = self.collapsed_node_ids - ancestors
+            assert self._order is not None
+            query, filters = self.search_query, self.filters
+            visible = None
+            for next_query, next_filters in dict.fromkeys((
+                (query, filters), ("", filters), (query, frozenset()), ("", frozenset()),
+            )):
+                candidate = _derive_view(
+                    self._order, search_query=next_query, filters=next_filters,
+                    sort_column=self.sort_column, sort_direction=self.sort_direction,
+                    collapsed_node_ids=collapsed,
+                )
+                if candidate.visible_index_by_source_position[target.position] < len(self.projection.nodes):
+                    query, filters, visible = next_query, next_filters, candidate
+                    break
+            assert visible is not None
+            changed = (query != self.search_query or filters != self.filters or collapsed != self.collapsed_node_ids)
+            if changed:
+                query_changed = query != self.search_query or filters != self.filters
+                selectable, selected = (
+                    _scope_prefixes(self.projection, query, filters) if query_changed else
+                    (self._scope_selectable, self._scope_selected)
+                )
+                next_revision = _next_revision(self.view_revision)
+                next_highlight_revision = (
+                    _next_revision(self.highlight_revision) if query_changed and (
+                        self.highlighted_node_ids or self.highlight_anchor_node_id is not None
+                        or self.highlight_focus_node_id is not None
+                    ) else self.highlight_revision
+                )
+                self.search_query, self.filters = query, filters
+                self.collapsed_node_ids, self._visible = collapsed, visible
+                self._scope_selectable, self._scope_selected = selectable, selected
+                self.view_revision = next_revision
+                if query_changed:
+                    self.highlighted_node_ids = frozenset()
+                    self.highlight_anchor_node_id = self.highlight_focus_node_id = None
+                    self.highlight_revision = next_highlight_revision
+            return {
+                "summary": self._summary(disposition="applied" if changed else "noop"),
+                "node_id": target.node_id,
+                "index": visible.visible_index_by_source_position[target.position] - 1,
+            }
+
     def operation_anchor(
         self, *, expected_revision: int, operation_id: str,
     ) -> dict[str, object]:
@@ -851,6 +911,9 @@ def _row_view(
         "dependency_count": node.dependency_count,
         "risk": node.risk,
         "move_peer_id": node.move_peer_id,
+        "move_group": None if node.move_destination_path is None else {
+            "count": node.move_item_count, "destination": node.move_destination_path,
+        },
         "notice": node.notice,
         "selection_exclusion_reason": node.selection_exclusion_reason,
     }

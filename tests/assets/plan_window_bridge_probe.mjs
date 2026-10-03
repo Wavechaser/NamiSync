@@ -49,6 +49,7 @@ const baseRow = {
   dependency_count: 0,
   risk: "none",
   move_peer_id: null,
+  move_group: null,
   notice: "Partial size: overflow",
   selection_exclusion_reason: null,
   execution: {
@@ -180,5 +181,46 @@ responseResult = { ...baseWindow(null), execution: {
 } };
 if (await bridge.getPlanWindow(taskId, 0, 0, 1).then(() => null, (error) => error) === null) {
   throw new Error("completed execution accepted a refusal disclosure");
+}
+const groupRow = { ...baseRow, row_kind: "prior-group", operation_id: null,
+  operation_kind: null, execution: null, size: null, is_container: true,
+  selection: "disabled", selectable_operation_count: 0, selected_operation_count: 0,
+  operation_count: 0, move_peer_id: `node-${"9".repeat(32)}`,
+  move_group: { count: 1, destination: "" } };
+responseResult = { ...baseWindow(null), rows: [groupRow] };
+await bridge.getPlanWindow(taskId, 0, 0, 1);
+for (const move_group of [null, { count: 0, destination: "" }, { count: 1, destination: "relative", absolute: "private" }]) {
+  responseResult = { ...baseWindow(null), rows: [{ ...groupRow, move_group }] };
+  if (await bridge.getPlanWindow(taskId, 0, 0, 1).then(() => null, (error) => error) === null) {
+    throw new Error("invalid informational move group was accepted");
+  }
+}
+const revealSummary = {
+  disposition: "applied", task_id: taskId, request_id: "6".repeat(32), view_revision: 1,
+  selection_revision: 0, selection_state: "reviewing", highlight_revision: 0,
+  highlight_anchor_node_id: null, highlight_focus_node_id: null, highlight_focus_visible_index: null,
+  highlighted_count: 0, source_path: "C:\\source", target_path: "D:\\target",
+  selected_operation_count: 1, selectable_operation_count: 1, operation_count: 1,
+  scope_selected_operation_count: 1, scope_selectable_operation_count: 1,
+  filter_counts: Object.fromEntries(["all", "copy", "mkdir", "move", "recase", "update", "move_update",
+    "trash", "delete", "noop", "blocked", "unsupported", "error", "notice"].map((key) => [key, key === "all" || key === "copy" ? 1 : 0])),
+  preflight_ready: true, preflight_refusal_count: 0, warning_count: 0,
+  requires_destructive_confirmation: false, destructive_operation_count: 0,
+  destructive_operation_counts: { update: 0, move_update: 0, trash: 0, delete: 0 },
+  irreversible_operation_count: 0, irreversible_update_count: 0, required_bytes: "0",
+  visible_row_count: 600, search_query: "", filters: [], sort_column: "path", sort_direction: "ascending",
+  collapsed_count: 0, execution,
+};
+responseResult = { summary: revealSummary, node_id: groupRow.move_peer_id, index: 400 };
+const revealStart = requests.length;
+const revealed = await bridge.revealPlanMove(taskId, 0, groupRow.node_id);
+if (revealed.index !== 400 || requests.length !== revealStart + 1
+    || requests.at(-1).command !== "reveal_plan_move") throw new Error("move reveal did not use one compact command");
+for (const value of [{ ...responseResult, index: 600 }, { ...responseResult, node_id: null },
+  { ...responseResult, summary: { ...revealSummary, task_id: `task-${"9".repeat(32)}` } }]) {
+  responseResult = value;
+  if (await bridge.revealPlanMove(taskId, 0, groupRow.node_id).then(() => null, (error) => error) === null) {
+    throw new Error("invalid move destination reply was accepted");
+  }
 }
 console.log("ok");

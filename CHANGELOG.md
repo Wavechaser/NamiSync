@@ -321,6 +321,17 @@ Integrity controls, manual post-copy handoff and beta packaging remain open.
   the corrected service-fixture module's 40 passes, twelve import contracts,
   and all 35 installed cases across the main run and one unchanged focus retry.
   Independent review found no remaining substantive defect.
+- GUI-RF2 groups prior locations beneath their deepest surviving scanned parent,
+  with one purple count badge and capped relative destination per move target
+  parent. Activating the pill reveals the canonical destination, expands its
+  ancestry and clears only obstructing query settings. Informational contents
+  stay expandable and excluded from selection, operation totals and bytes.
+  Projection, bridge, navigation and performance/test consumers migrate together.
+- RF2 verification covers the large projection/folder-size oracle, 5,866 ordinary
+  passes/four skips plus corrected host/catalog modules (84/96 passes), and all
+  35 installed cases across retained runs. Independent review approved. The
+  benchmark's older missing inventory-command catalog is recorded separately in
+  BUGS; no new quantitative benchmark result is claimed.
 
 #### Deliver M1-9 inventory review (2026-10-01 – 2026-10-02)
 

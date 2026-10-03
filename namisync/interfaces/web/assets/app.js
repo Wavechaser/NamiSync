@@ -29,6 +29,7 @@ import {
   readSetup,
   refreshInventory,
   restoreInventory,
+  revealPlanMove,
   StartPlanUncertainError,
   startInventory,
   startExecution,
@@ -253,6 +254,7 @@ const panel = createWorkPanel({
   onExecutionDetail: (review, row) => { void readExecutionDetail(review, row); },
   onFollowOverride: disablePlanFollow,
   onNavigateCurrent: (review, enableFollow) => { queuePlanFollow(review, enableFollow, true); },
+  onRevealMove: (review, nodeId) => { void revealPlanMoveDestination(review, nodeId); },
 }, settingsView, {
   onViewChange: (review, patch) => { void changeInventoryView(review, patch); },
   onWindow: loadInventoryWindow,
@@ -1834,6 +1836,62 @@ async function readPlanWindowAtAnchor(task, review, summary, anchorNodeId, fallb
     }
   }
   return getPlanWindow(task.taskId, summary.view_revision, offset, 256);
+}
+
+async function revealPlanMoveDestination(review, nodeId) {
+  const task = currentReviewTask(review);
+  if (task === null || settingsVisible || task.closePending || review.pending !== null) return;
+  const action = ++review.actionRevision;
+  const sessionId = task.sessionId;
+  const requestId = review.summary.request_id;
+  const navigation = navigationRevision;
+  review.follow.enabled = false;
+  review.follow.generation += 1;
+  review.pending = "view";
+  review.message = "Opening move destination…";
+  beginForegroundWindowRead(review);
+  renderTasks();
+  const stillCurrent = () => currentReviewTask(review) === task && !settingsVisible
+    && !task.closePending && task.sessionId === sessionId
+    && review.summary.request_id === requestId && review.actionRevision === action
+    && navigationRevision === navigation;
+  try {
+    const result = await revealPlanMove(task.taskId, review.summary.view_revision, nodeId, () => {
+      if (stillCurrent()) {
+        review.refreshAvailable = true;
+        review.message = "Destination response delayed. Refresh to read the current review.";
+        renderTasks();
+      }
+    });
+    if (!stillCurrent()) return;
+    const window = await getPlanWindow(task.taskId, result.summary.view_revision, result.index ?? 0, 256);
+    if (!stillCurrent() || window.disposition !== "current"
+        || window.view_revision !== result.summary.view_revision
+        || window.highlight_revision !== result.summary.highlight_revision) return;
+    review.summary = result.summary;
+    adoptExecutionWindow(review, window);
+    review.refreshAvailable = false;
+    review.follow.eligible = planFollowEligible(review);
+    review.moveScrollOffset = result.index;
+    review.message = result.summary.disposition === "conflict"
+      ? "View changed. Click the move destination again." : null;
+  } catch (_error) {
+    if (stillCurrent()) {
+      review.refreshAvailable = true;
+      review.message = "Destination response unavailable. Refresh to read the current review.";
+    }
+  } finally {
+    if (retainedReviewTask(review) === task && review.actionRevision === action) {
+      if (review.pending === "view") review.pending = null;
+      renderTasks();
+      const queued = review.queuedSearchQuery;
+      review.queuedSearchQuery = null;
+      if (stillCurrent() && queued !== null && queued !== review.summary.search_query) {
+        void changePlanView(review, { searchQuery: queued });
+      }
+    }
+    endForegroundWindowRead(review);
+  }
 }
 
 async function changePlanView(review, patch, queued = false) {

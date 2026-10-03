@@ -1377,12 +1377,23 @@ The Notes policy is explicit and fail-visible:
 | `metadata_changed`, `identity_rename_changed`, `target_only`, `directory_cleanup` | Show changed-file, removal or cleanup context. |
 | Case, Unicode, type, policy and destination conflicts; unsupported and blocked reasons | Show friendly explanation. |
 | Selection exclusions, including incomplete scan and deselection | Show; never apply the operation-reason hiding list to them. |
-| Move peer / prior-location rows | Keep paired-move / previous-location context and the prior-path hierarchy. |
+| Move peer / prior-location rows | Keep paired-move / previous-location context; expandable old contents attach at their deepest surviving scanned target ancestor. |
 | Non-neutral risk, free-form notices, partial/overflow totals | Show unchanged. |
 | Any unrecognized or future reason/notice | Show verbatim as inert text; hiding never follows a broad pattern. |
 
 Known reason-code labels are translated only at rendering; backend facts, search,
 selection, filter membership and execution authority remain unchanged.
+
+Prior groups show a clickable count badge (`N items moved to`) and relative
+destination text in one filename-area button, with separate expand/collapse
+disclosure. The target parent is the destination even for a directory move.
+Cap the relative text with an ellipsis and retain the full
+relative label in its tooltip and accessible name. Use purple background/text:
+light purple badge fill with dark purple text in Light, dark purple fill with light
+purple text in Dark, and system colors in forced colors. Activation reveals the
+canonical destination, expanding its ancestors and clearing only obstructing
+search/filters. Root destinations jump to the first canonical moved item.
+The pill and its contents stay outside execution selection and totals.
 
 Row highlighting is distinct from execution selection. Pointer and keyboard
 gestures replace, toggle, extend, or add ranges in the complete server-owned

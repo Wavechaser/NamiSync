@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import importlib.metadata
 import json
+import os
 import sys
 import threading
 from contextlib import ExitStack
@@ -41,6 +42,11 @@ _FAILURE_STAGES = frozenset(
         "page_terminal_second",
         "page_plan_review",
         "page_plan_review_plan_surface",
+        "page_plan_review_move_reveal_query",
+        "page_plan_review_move_reveal_missing",
+        "page_plan_review_move_reveal_above",
+        "page_plan_review_move_reveal_below",
+        "page_plan_review_move_reveal_visible",
         "page_plan_review_plan_offset",
         "page_plan_review_plan_notice",
         "page_plan_review_plan_refused",
@@ -74,6 +80,7 @@ _DRIVER_DIAGNOSTIC_KEYS = frozenset(
         "runtime_has_exception_details", "runtime_result_type", "trusted_click_count",
         "trusted_keydown_count", "trusted_keyup_count",
         "browser_async_error",
+        "move_bottom_gap",
     }
 )
 
@@ -151,7 +158,7 @@ function detailFor(title) { return rowByTitle(title)?.querySelector(".nami-task-
 function clickNew() { document.querySelector(".nami-task-rail__create")?.click(); }
 function clickSelect(title) { rowByTitle(title)?.querySelector(".nami-task-card")?.click(); }
 function clickClose(title) { rowByTitle(title)?.querySelector(".nami-task-rail__close")?.click(); }
-async function submitPlan(title, reviewOptions = false) {
+async function submitPlan(title, reviewOptions = false, sourceCasing = false) {
   clickSelect(title);
   let source = await until(() => {
     const input = document.querySelector("#setup-source-path");
@@ -179,9 +186,10 @@ async function submitPlan(title, reviewOptions = false) {
       "preserve_created", "preserve_acl", "propagate_source_casing"]) {
       const option = document.querySelector(`[data-option="${key}"]`);
       if (!(option instanceof HTMLInputElement)) throw new Error(`Plan option ${key} is unavailable`);
-      if (option.checked) option.click();
-      await until(() => document.querySelector(`[data-option="${key}"]`)?.checked === false,
-        `Plan option ${key} disabled`);
+      const enabled = key === "propagate_source_casing" && sourceCasing;
+      if (option.checked !== enabled) option.click();
+      await until(() => document.querySelector(`[data-option="${key}"]`)?.checked === enabled,
+        `Plan option ${key} settled`);
     }
   }
   const start = await until(() => {
@@ -516,7 +524,7 @@ window.addEventListener("error", (event) => {
   }
   clickNew();
   await until(() => rows().length === 47 && statusFor("Task 52") === "New task", "review Setup task");
-  await submitPlan("Task 52", true);
+  await submitPlan("Task 52", true, true);
   await until(() => rows().length === 47 && statusFor("Task 52") === "Plan ready", "reviewed plan task");
   await control("track_review_task");
   await until(() => document.querySelector(".nami-plan-review"), "Plan review surface");
@@ -526,6 +534,75 @@ window.addEventListener("error", (event) => {
   const facts = review.querySelector(".nami-plan-review__status-summary").textContent;
   const viewport = review.querySelector(".nami-plan-review__rows");
   const planGeometry = planGeometryFor(review);
+  const nestedPill = await until(() => [...viewport.querySelectorAll(".nami-plan-move-pill")]
+    .find((pill) => pill.textContent.includes("move-parent")), "surviving-parent move pill");
+  const pillRow = nestedPill.closest("[data-node-id]");
+  const groupNodeId = pillRow.dataset.nodeId;
+  const parentName = "move-parent";
+  const pillBadge = nestedPill.querySelector(".nami-badge");
+  const pillStyle = getComputedStyle(pillBadge);
+  const movePill = {
+    badgeText: pillBadge.textContent,
+    destinationText: nestedPill.querySelector(".nami-plan-move-pill__destination").textContent,
+    background: pillStyle.backgroundColor, foreground: pillStyle.color,
+    selectionAbsent: pillRow.querySelector("input") === null,
+    accessibleLabel: nestedPill.ariaLabel,
+  };
+  window.__namiMovePillReady = true;
+  await until(() => window.__namiMovePillCaptured === true, "native move-pill screenshot");
+  const disclosure = pillRow.querySelector(".nami-file-row__disclosure");
+  disclosure.click();
+  await until(() => review.dataset.pending === ""
+    && viewport.querySelector(`[data-node-id="${groupNodeId}"] .nami-file-row__disclosure`)?.ariaExpanded === "false",
+    "collapsed prior contents");
+  movePill.collapsed = true;
+  viewport.querySelector(`[data-node-id="${groupNodeId}"] .nami-file-row__disclosure`).click();
+  await until(() => review.dataset.pending === ""
+    && viewport.querySelector(`[data-node-id="${groupNodeId}"] .nami-file-row__disclosure`)?.ariaExpanded === "true",
+    "expanded prior contents");
+  viewport.querySelector(`[data-node-id="${groupNodeId}"] .nami-plan-move-pill`).click();
+  await until(() => review.dataset.pending === ""
+    && viewport.querySelector("[data-node-id] .nami-file-row__name-text")?.textContent === parentName,
+    "exact canonical destination parent");
+  movePill.revealedParent = viewport.querySelector("[data-node-id] .nami-file-row__name-text").textContent;
+  const searchMove = review.querySelector('[data-action="plan-search"]');
+  searchMove.value = "moved to root";
+  searchMove.dispatchEvent(new Event("input", {bubbles: true}));
+  review.querySelector('[data-action="plan-search-submit"]').click();
+  await until(() => review.dataset.pending === "" && viewport.querySelector(".nami-plan-move-pill")?.textContent.includes("root"),
+    "filtered root move pill");
+  const filteredMaximumScroll = Math.max(0, viewport.scrollHeight - viewport.clientHeight);
+  viewport.querySelector(".nami-plan-move-pill").click();
+  await until(() => review.dataset.pending === "", "root move response");
+  const rootDestinationRow = [...viewport.querySelectorAll("[data-node-id]")]
+    .find((row) => row.querySelector(".nami-file-row__name-text")?.textContent === "ZzzMove.txt");
+  const rootBounds = rootDestinationRow?.getBoundingClientRect();
+  const viewportBounds = viewport.getBoundingClientRect();
+  const pixelTolerance = 1 / devicePixelRatio;
+  await control("checkpoint", searchMove.value !== "" ? "move_reveal_query"
+    : rootBounds === undefined ? "move_reveal_missing"
+      : rootBounds.top < viewportBounds.top - pixelTolerance ? "move_reveal_above"
+        : rootBounds.bottom > viewportBounds.bottom + pixelTolerance ? "move_reveal_below" : "move_reveal_visible");
+  await until(() => review.dataset.pending === "" && searchMove.value === ""
+    && [...viewport.querySelectorAll("[data-node-id]")].some((row) => {
+      if (row.querySelector(".nami-file-row__name-text")?.textContent !== "ZzzMove.txt") return false;
+      const bounds = row.getBoundingClientRect();
+      const visible = viewport.getBoundingClientRect();
+      return bounds.top >= visible.top - pixelTolerance && bounds.bottom <= visible.bottom + pixelTolerance;
+    }),
+    "root move exact item and obstructing search cleared");
+  movePill.rootReveal = true;
+  movePill.filteredFarScroll = viewport.scrollTop > filteredMaximumScroll;
+  const destinationRow = [...viewport.querySelectorAll("[data-node-id]")]
+    .find((row) => row.querySelector(".nami-file-row__name-text")?.textContent === "ZzzMove.txt");
+  const loadedRows = [...viewport.querySelectorAll("[data-node-id]")];
+  movePill.geometry = {
+    row: destinationRow.getBoundingClientRect().toJSON(), viewport: viewport.getBoundingClientRect().toJSON(),
+    scrollTop: viewport.scrollTop, scrollHeight: viewport.scrollHeight, clientHeight: viewport.clientHeight,
+    firstIndex: Number(loadedRows[0].ariaRowIndex) - 2,
+    lastIndex: Number(loadedRows.at(-1).ariaRowIndex) - 2,
+    targetIndex: Number(destinationRow.ariaRowIndex) - 2, expectedRowHeight: 24, devicePixelRatio,
+  };
   viewport.scrollTop = 280 * 24;
   viewport.dispatchEvent(new Event("scroll"));
   await until(() => Number(viewport.querySelector("[data-node-id]")?.ariaRowIndex) > 2, "offset Plan window");
@@ -918,9 +995,12 @@ window.addEventListener("error", (event) => {
   const focusBeforeFollow = live.querySelector('[data-action="pause"]');
   focusBeforeFollow.focus();
   const selectionBeforeFollow = await control('follow_snapshot');
+  const followAnchor = await control('follow_anchor');
+  const followTargetVisible = () => liveViewport.querySelector(`[data-node-id="${followAnchor.node_id}"]`) !== null
+    && Math.abs(liveViewport.scrollTop - followAnchor.index * 24) <= pixelTolerance;
   const titleBeforeFollow = selectedTitle();
   await control('release_follow_progress');
-  await until(() => liveViewport.scrollTop < 24, 'automatic current-operation movement');
+  await until(followTargetVisible, 'automatic current-operation movement');
   const goCurrent = live.querySelector('[data-action="go-current-operation"]');
   const enableFollow = live.querySelector('[data-action="enable-operation-follow"]');
   await until(() => !goCurrent.hidden, 'current-operation navigation');
@@ -934,12 +1014,13 @@ window.addEventListener("error", (event) => {
     && !enableFollow.hidden, 'native scroll override');
   const manualOffset = liveViewport.scrollTop;
   goCurrent.click();
-  await until(() => liveViewport.scrollTop < 24, 'one-shot current-operation jump');
+  await until(followTargetVisible, 'one-shot current-operation jump');
   const goStayedManual = !enableFollow.hidden;
   enableFollow.click();
   await until(() => enableFollow.hidden, 'explicit follow enable');
   const followNavigation = {
-    automaticMoved: automaticOffset < 24 && offWindowOffset > 24,
+    automaticMoved: Math.abs(automaticOffset - followAnchor.index * 24) <= pixelTolerance
+      && offWindowOffset > automaticOffset + 24,
     nativeOverride: manualOffset > 24 && trustedFollowWheels > 0,
     goStayedManual, explicitEnable: enableFollow.hidden,
     focusPreserved: automaticPreservesFocus && document.activeElement === focusBeforeFollow,
@@ -984,6 +1065,7 @@ window.addEventListener("error", (event) => {
   await control("record", {
     plan_review: {
       initial,
+      movePill,
       refused,
       planAgainChangedSource: changedRows.includes("source-added.txt"),
       planAgainChangedTarget: changedRows.includes("target-added.txt"),
@@ -1118,6 +1200,7 @@ class _Control:
         self.execution_entered = threading.Event()
         self.execution_release = threading.Event()
         self.follow_release = threading.Event()
+        self.follow_operation_id: str | None = None
         self.review_task_id: str | None = None
         self.review_plan_session_id: str | None = None
         self.preflight_hook_count = 0
@@ -1342,7 +1425,8 @@ class _Control:
             , "plan_surface", "plan_offset", "plan_notice", "plan_refused",
             "plan_release", "plan_again", "plan_live", "plan_paused",
             "plan_resumed", "plan_force", "plan_ack", "plan_execute",
-            "plan_empty_prepare", "plan_empty_wait"
+            "plan_empty_prepare", "plan_empty_wait", "move_reveal_query",
+            "move_reveal_missing", "move_reveal_above", "move_reveal_below", "move_reveal_visible"
         }:
             self.checkpoint = value
             return {"accepted": True}
@@ -1432,8 +1516,16 @@ class _Control:
             return {key: summary[key] for key in (
                 "task_id", "selection_revision", "selected_operation_count", "highlight_revision",
             )}
+        if action == "follow_anchor":
+            task = self._registry().list_tasks().tasks[-1]
+            summary = self._registry().open_plan_view(task.task_id)
+            return self._registry().get_plan_operation_anchor(
+                task.task_id, session_id=task.session_id,
+                expected_revision=summary["view_revision"], operation_id=self.follow_operation_id,
+            )
         if action == "prepare_live_execution":
             self.follow_release.clear()
+            self.follow_operation_id = None
             self.force_preflight_refusal = False
             self.block_execution = True
             self.execution_entered.clear()
@@ -1485,6 +1577,17 @@ class _Control:
         nested = self.source / "nested-folder" / "child-folder"
         nested.mkdir(parents=True)
         (nested / "child.txt").write_text("nested fixture", encoding="utf-8")
+        for relative, name in (("", "ZzzMove.txt"), ("move-parent", "Move.txt")):
+            source_folder = self.source / relative
+            target_folder = self.target / relative
+            source_folder.mkdir(parents=True, exist_ok=True)
+            target_folder.mkdir(parents=True, exist_ok=True)
+            source_file = source_folder / name
+            target_file = target_folder / name.lower()
+            source_file.write_text("move fixture", encoding="utf-8")
+            target_file.write_text("move fixture", encoding="utf-8")
+            stamp = source_file.stat().st_mtime_ns
+            os.utime(target_file, ns=(stamp, stamp))
         self.review_deps = self._service()._runtime._deps
         original_preflight = self.review_deps.preflight
         original_executor = self.review_deps.executor
@@ -1513,6 +1616,7 @@ class _Control:
                 nonlocal held
                 if not held and type(body) is Progress and body.item_id is not None:
                     held = True
+                    self.follow_operation_id = body.item_id
                     self.execution_entered.set()
                     while not self.follow_release.wait(0.01):
                         context.checkpoint()
@@ -1680,6 +1784,7 @@ def _drive_plan_confirmation(
             "trusted_keydown_count": None,
             "trusted_keyup_count": None,
             "browser_async_error": None,
+            "move_bottom_gap": None,
         }
         diagnostic_expression = r"""
 (() => {
@@ -1688,6 +1793,11 @@ def _drive_plan_confirmation(
   const resume = document.querySelector('.nami-plan-review [data-action="resume"]');
   const dialog = document.querySelector("#execution-confirmation");
   const active = document.activeElement;
+  const moveViewport = document.querySelector(".nami-plan-review__rows");
+  const moveTarget = [...(moveViewport?.querySelectorAll("[data-node-id]") ?? [])]
+    .find((row) => row.querySelector(".nami-file-row__name-text")?.textContent === "ZzzMove.txt");
+  const moveGap = moveTarget === undefined ? null
+    : moveTarget.getBoundingClientRect().bottom - moveViewport.getBoundingClientRect().bottom;
   const counters = window.__namiConfirmationTrustedInput ?? {};
   const activeElement = active === execute ? "execute"
     : active === dialog ? "dialog"
@@ -1696,6 +1806,7 @@ def _drive_plan_confirmation(
           : active === null ? "none" : "other";
   return {
     browser_async_error: window.__namiFirstAsyncError ?? null,
+    move_bottom_gap: Number.isFinite(moveGap) && Math.abs(moveGap) <= 1000000 ? moveGap : null,
     review_pending: ['','pause','resume','execute','view','selection','confirmation','plan-again'].includes(document.querySelector('.nami-plan-review')?.dataset.pending) ? document.querySelector('.nami-plan-review').dataset.pending : null,
     pause_disabled: pause instanceof HTMLButtonElement ? pause.disabled : null,
     pause_hidden: pause instanceof HTMLButtonElement ? pause.hidden : null,
@@ -1728,6 +1839,7 @@ def _drive_plan_confirmation(
                     "execute_focused", "execute_hidden", "page_confirmation_stage", "trusted_click_count",
                     "trusted_keydown_count", "trusted_keyup_count",
                     "pause_disabled", "pause_hidden", "resume_hidden", "controls_hidden", "review_pending",
+                    "move_bottom_gap",
                 ):
                     if key in page:
                         base[key] = page[key]
@@ -1790,11 +1902,11 @@ def _drive_plan_confirmation(
         last_method = "Runtime.evaluate"
         transport.evaluate(expression, then, step)
 
-    def capture(then: Callable[[], None], step: str) -> None:
+    def capture(then: Callable[[], None], step: str, destination: Path = screenshot) -> None:
         nonlocal last_driver_step, last_method
         last_driver_step = step
         last_method = "Page.captureScreenshot"
-        transport.capture(screenshot, then, step)
+        transport.capture(destination, then, step)
 
     def dispatch(
         events: list[tuple[str, dict[str, object]]],
@@ -2181,7 +2293,20 @@ def _drive_plan_confirmation(
             "verify_live_confirm_focus",
         ), "live_confirm_tab")
 
-    evaluate(wait_execute, after_execute, "wait_execute")
+    evaluate(r"""
+(async () => {
+  for (let attempt = 0; attempt < 1200; attempt += 1) {
+    if (window.__namiFirstAsyncError) throw new Error('browser asynchronous error');
+    if (window.__namiMovePillReady) return true;
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  throw new Error('move-pill surface did not settle');
+})()
+""", lambda _ready: capture(lambda: evaluate(
+        "window.__namiMovePillCaptured=true;true",
+        lambda _captured: evaluate(wait_execute, after_execute, "wait_execute"),
+        "move_pill_captured",
+    ), "capture_move_pill", screenshot.with_name("move-pill.png")), "wait_move_pill")
     return fail
 
 

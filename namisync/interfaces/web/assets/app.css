@@ -1664,6 +1664,42 @@ body {
   text-overflow: ellipsis;
 }
 
+.nami-plan-move-pill {
+  align-items: center;
+  appearance: none;
+  background: none;
+  border: 1px solid var(--color-semantic-transparent);
+  border-radius: var(--radius-small);
+  color: var(--move-pill-foreground);
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  gap: var(--space-1);
+  max-inline-size: min(24rem, 100%);
+  min-inline-size: 0;
+  padding: 0;
+  white-space: nowrap;
+}
+
+.nami-plan-move-pill .nami-badge {
+  background: var(--move-pill-background);
+  color: var(--move-pill-foreground);
+  flex: 0 0 auto;
+}
+
+.nami-plan-move-pill__destination {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nami-plan-move-pill:hover {
+  border-color: currentColor;
+}
+
+.nami-plan-move-pill:disabled {
+  cursor: default;
+}
+
 .nami-file-row__disclosure,
 .nami-file-row__disclosure-spacer {
   block-size: var(--icon-size-sm);

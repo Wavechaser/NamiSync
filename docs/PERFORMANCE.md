@@ -180,7 +180,7 @@ Four Plan component observations use the delivered rootless public view while
 the frozen historical contract records the earlier rootful view: unchanged
 window total 239,999 rather than 240,000, hostile search two rather than three
 visible rows, and memory-overlap base/staged window totals 119,999/239,999.
-The changed-collapse case now collapses the visible Previous paths folder and
+The changed-collapse case now collapses the visible prior-move group and
 reads its 256-row window, instead of collapsing the hidden synthetic Plan root.
 Those endpoints are not direct apples-to-apples latency comparisons with the
 old rootful observations. The underlying 120,000/240,000 projection populations
@@ -189,7 +189,10 @@ or contract byte was rewritten.
 
 The M1-8 receipt adapter settles the installed rootless public view with
 119,999 visible rows from 120,000 projection nodes. Its first group is the
-independently derived `NamiSyncPriorV1` Previous paths row. Each selected
+independently derived `NamiSyncPriorV1` root-to-root group (`1 item moved to root`),
+with request, old-ancestor and target-parent identity components. Its prior rows
+retain the historical fixture population; changed projection/helper bytes require
+fresh observations rather than authenticating the old receipts. Each selected
 receipt case uses six samples after an equivalent untimed warmup. The execution
 UI adapter keeps eight cold click-feedback and five warm receipt endpoints;
 cold cases have one sample and warm cases six. Its guarded JavaScript probe is

@@ -71,6 +71,17 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Workspace and measurement integrity
 
+- MINOR - OPEN (2026-10-04). Stale observation contract. The optional
+  `bridge-event installed` diagnostic rejects current complete composition
+  receipts as invalid even when its event and resource observations qualify.
+  Cause: the native child records the full production command mapping, while
+  its parent validator still compares it with a catalog missing seven inventory
+  commands already present before GUI-RF2. The synthetic passing receipt repeats
+  those omissions. RF2 migrates its new move-reveal command only; this prior
+  diagnostic defect remains deferred and makes no new benchmark measurement
+  authoritative. It has no product execution consequence. Source comparison
+  evidence: `build/gui-refinements-20261004/rf2-command-catalog-audit.json`.
+
 - MINOR - FIXED (2026-10-01). Unsupported recovery advice. Reusing a
   `tools performance --json` destination safely refuses before launching,
   but suggests `--replace-report`, which that subcommand does not accept.

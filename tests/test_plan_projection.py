@@ -6,7 +6,8 @@ from types import SimpleNamespace
 import pytest
 
 import namisync.workflows.plan_projection as projection_module
-from namisync.core.models import EntryKind, ScanWarning, ScanWarningCode
+from namisync.core.models import DirRecord, EntryKind, ScanWarning, ScanWarningCode
+from namisync.core.pathing import normalize_relative_path
 from namisync.core.planning import BlockedReason, OpId, OperationKind
 from namisync.core.scalars import MAX_SIGNED_64
 from namisync.core.preflight import Refusal, RefusalCode, Verdict
@@ -30,7 +31,7 @@ def _ordered_nodes(order):
     return tuple(order.projection.nodes[position] for position in order.ordered_source_positions)
 
 
-def _artifact(*operations, warnings=(), refusals=()) -> PlanArtifact:
+def _artifact(*operations, warnings=(), refusals=(), target_directories=()) -> PlanArtifact:
     plan_value = plan(tuple(operations))
     request = PlanRequest(
         REQUEST_ID,
@@ -40,7 +41,7 @@ def _artifact(*operations, warnings=(), refusals=()) -> PlanArtifact:
     return PlanArtifact(
         request,
         SimpleNamespace(warnings=tuple(warnings)),
-        SimpleNamespace(warnings=()),
+        SimpleNamespace(warnings=(), directories=target_directories),
         plan_value,
         Verdict(not refusals, tuple(refusals), SimpleNamespace()),
     )
@@ -90,6 +91,80 @@ def test_plan_projection_preserves_groups_selection_and_move_old_path_ancestry()
         node.row_kind == "prior-folder" and node.display == "old"
         for node in projection.nodes
     )
+
+
+def _directory(path: str) -> DirRecord:
+    stat = file_stat()
+    return DirRecord(path, normalize_relative_path(path), 11, stat.metadata, stat.file_identity)
+
+
+def test_move_groups_use_deepest_scanned_survivor_and_target_parent_without_totals() -> None:
+    moved = tuple(operation(
+        OperationKind.MOVE, target_path=path, prior_target_path=old,
+        target=file_stat(size=13, identity_index=index),
+    ) for index, (path, old) in enumerate([
+        (r"destination\a.txt", r"Old\deep\a.txt"),
+        (r"destination\b.txt", r"Old\deep\b.txt"),
+        (r"other\c.txt", r"Old\deep\c.txt"),
+    ], 1))
+    projection = build_plan_projection(REQUEST_ID, _artifact(
+        *moved, target_directories=(_directory("Old"), _directory(r"Old\deep")),
+    ))
+    groups = [node for node in projection.nodes if node.row_kind == "prior-group"]
+    assert {node.display for node in groups} == {"2 items moved to destination", "1 item moved to other"}
+    for group in groups:
+        parent = projection.nodes[group.parent_index]
+        assert parent.rel_path_key == r"OLD\DEEP" and parent.row_kind == "folder"
+        assert parent.size == 0
+        assert group.selection == "disabled" and group.operation_count == 0 and group.size is None
+        target = projection.node_for_id(group.move_peer_id)
+        assert target.row_kind == "folder" and target.rel_path_key == normalize_relative_path(group.move_destination_path)
+        assert all(node.display not in {"Old", "deep"} for node in projection.nodes[group.position + 1:group.subtree_end])
+    assert projection.nodes[0].operation_count == 3 and projection.nodes[0].selected_operation_count == 3
+    assert next(node for node in projection.nodes if node.rel_path_key == "DESTINATION").size == 26
+    refreshed = apply_plan_projection_selection(projection, selected_operation_ids=frozenset(), exclusion_reasons={})
+    assert [(node.node_id, node.parent_index, node.size, node.move_item_count) for node in refreshed.nodes] == [
+        (node.node_id, node.parent_index, node.size, node.move_item_count) for node in projection.nodes
+    ]
+
+
+@pytest.mark.parametrize("kind", [OperationKind.DELETE, OperationKind.TRASH, OperationKind.MOVE, OperationKind.RECASE])
+def test_removed_or_moved_old_directory_prefix_cannot_host_group(kind) -> None:
+    moved = operation(OperationKind.MOVE, target_path=r"destination\file", prior_target_path=r"old\deep\inner\file", target=file_stat())
+    directory_stat = replace(file_stat(), kind=EntryKind.DIRECTORY, size=0)
+    directory = operation(kind, source_path=None, target_path=r"elsewhere\deep" if kind in {OperationKind.MOVE, OperationKind.RECASE} else r"old\deep",
+                          prior_target_path=r"old\deep" if kind in {OperationKind.MOVE, OperationKind.RECASE} else None, target=directory_stat)
+    artifact = _artifact(moved, directory, target_directories=tuple(_directory(path) for path in ["old", r"old\deep", r"old\deep\inner"]))
+    projection = build_plan_projection(REQUEST_ID, artifact)
+    group = next(node for node in projection.nodes if node.move_destination_path == "destination")
+    assert projection.nodes[group.parent_index].rel_path_key == "OLD"
+    deselected = build_plan_projection(REQUEST_ID, artifact, user_deselected=frozenset({directory.op_id}))
+    assert [(node.node_id, node.parent_index) for node in deselected.nodes] == [(node.node_id, node.parent_index) for node in projection.nodes]
+
+
+def test_root_group_uses_first_canonical_item_and_directory_counts_once() -> None:
+    directory = operation(OperationKind.MOVE, target_path="z-directory", prior_target_path=r"virtual\old", target=replace(file_stat(), kind=EntryKind.DIRECTORY, size=0))
+    file = operation(OperationKind.MOVE, target_path="a-file", prior_target_path=r"virtual\new\file", target=file_stat())
+    created = operation(OperationKind.MKDIR, target_path="virtual", intended=replace(file_stat(), kind=EntryKind.DIRECTORY, size=0))
+    projection = build_plan_projection(REQUEST_ID, _artifact(directory, file, created))
+    group = next(node for node in projection.nodes if node.row_kind == "prior-group")
+    assert group.parent_index == 0 and group.display == "2 items moved to root"
+    assert group.move_item_count == 2
+    assert group.move_peer_id == projection.operation_node_id_by_id[str(file.op_id)]
+
+
+def test_move_group_directory_reads_do_not_grow_with_group_count() -> None:
+    class Directories:
+        visits = 0
+        def __iter__(self):
+            for index in range(300):
+                self.visits += 1
+                yield _directory(f"old-{index}")
+    directories = Directories()
+    moves = tuple(operation(OperationKind.MOVE, target_path=fr"new-{i}\file", prior_target_path=fr"old-{i}\file", target=file_stat(identity_index=i + 1)) for i in range(300))
+    projection = build_plan_projection(REQUEST_ID, _artifact(*moves, target_directories=directories))
+    assert len([node for node in projection.nodes if node.row_kind == "prior-group"]) == 300
+    assert directories.visits <= 900  # bounded scans, not directories times groups
 
 
 def test_plan_projection_reuses_exact_workflow_selection_membership() -> None:

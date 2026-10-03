@@ -97,8 +97,8 @@ def _projection_artifact(plan_value) -> PlanArtifact:
             plan_value.source_root.path,
             plan_value.target_root.path,
         ),
-        SimpleNamespace(warnings=()),
-        SimpleNamespace(warnings=()),
+        SimpleNamespace(warnings=(), directories=()),
+        SimpleNamespace(warnings=(), directories=()),
         plan_value,
         Verdict(True, (), SimpleNamespace()),
     )
