@@ -22,7 +22,7 @@ from namisync.core.integrity import (
 )
 from namisync.core.models import ScanResult
 from namisync.core.planning import OperationKind, Plan, SyncOptions
-from namisync.core.preflight import Verdict
+from namisync.core.preflight import RefusalCode, Verdict
 from namisync.core.scalars import bounded_utf8_text, require_safe_int
 from namisync.core.session import OperationResult, PhaseResult, PhaseStatus, SessionState
 from namisync.workflows.views import (
@@ -431,6 +431,36 @@ class ExecutionDetails:
     commitment_error: str | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class ExecutionRefusalView:
+    """Finite refusal disclosure without private paths or diagnostic text."""
+
+    origin: str
+    codes: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if self.origin not in {"preflight", "commitment", "other"}:
+            raise ValueError("execution refusal origin is invalid")
+        if type(self.codes) is not tuple or len(self.codes) > len(RefusalCode):
+            raise ValueError("execution refusal codes are invalid")
+        if any(type(code) is not str or code not in RefusalCode for code in self.codes):
+            raise ValueError("execution refusal code is invalid")
+        if len(set(self.codes)) != len(self.codes):
+            raise ValueError("execution refusal codes must be distinct")
+        if bool(self.codes) != (self.origin == "preflight"):
+            raise ValueError("execution refusal codes disagree with origin")
+
+    @classmethod
+    def from_details(cls, details: ExecutionDetails) -> ExecutionRefusalView:
+        if details.commitment_error is not None:
+            return cls("commitment")
+        if details.refusals:
+            return cls("preflight", tuple(dict.fromkeys(
+                refusal.code for refusal in details.refusals
+            )))
+        return cls("other")
+
+
 class ExecutionEvidenceState(StrEnum):
     RECORDED_COPY = "recorded-copy"
     ALREADY_VERIFIED = "already-verified"
@@ -507,6 +537,7 @@ class RetainedExecutionSummary:
     failed_operation_count: int
     disk_capacity_failure_count: int
     trash_location: str
+    refusal: ExecutionRefusalView | None = None
 
     @classmethod
     def from_result(
@@ -517,6 +548,7 @@ class RetainedExecutionSummary:
         failed_operation_count: int,
         disk_capacity_failure_count: int,
         trash_location: str,
+        refusal: ExecutionRefusalView | None = None,
     ) -> RetainedExecutionSummary:
         return cls(
             binding.task_id,
@@ -525,6 +557,7 @@ class RetainedExecutionSummary:
             failed_operation_count,
             disk_capacity_failure_count,
             trash_location,
+            refusal,
         )
 
 

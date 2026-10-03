@@ -1,38 +1,32 @@
-# Latest session — inventory scan scope and M2 capacity
+# Latest session — Plan GUI refinements
 
-2026-10-02 on `milestone1`, starting from `c129fe5`.
-The user requested scan-scope labeling and an M2 capacity design note. Later
-M1 checkpoints remain unactivated.
+2026-10-04 on `milestone1`, starting from `99e65c8`. The user authorized the
+three units in M1_PLAN: RF1 refusal disclosure, RF2 move groups/pills and reveal
+navigation, RF3 Delete label and pause/resume/two-click cancel controls. Each
+unit is independently reviewed and committed before the next implementation.
 
-## Changes
+RF1 adds bounded refusal origin and closed preflight codes to existing retained
+execution review and admission responses. The page explains preflight,
+commitment and other refusals, retaining the message after release/navigation.
+No task-snapshot version, effect authority or recovery policy changed. Unrun
+filesystem disposition does not imply a null dispatcher start timestamp.
 
-- `0d4d7d1` records command-result retention independent of task lifetime in
-  M2_PROPOSAL. M1's shared 48-slot capacity and task-close retirement remain.
-- The scan-label change retains producing subtree scope alongside exact paths,
-  sends a bounded kind/optional-path descriptor, and labels Entire location,
-  Item, Folder including subfolders, or Selected items. Scoped scans disclose
-  that other inventory items were not rescanned. Notices belong to this scan.
-- Retained prior publications keep their original scope after newer scans or
-  refusals. Ledger contents and notice lifecycle are unchanged.
+Evidence is in `build/gui-refinements-20261004/`. The baseline installed default
+task-shell passed. RF1 focused checks pass 628 cases and all twelve import
+contracts pass. The ordinary run has 5,854 passes, four skips and one direct
+fixture migration failure: the old service artifact double lacked a verdict.
+Its corrected module passes 40 cases with dispatcher-failure/retry guarantees
+unchanged; unaffected ordinary passes remain valid. Installed verification has
+34 passes and one inventory foreground-focus failure before its action; that
+unchanged case passes its isolated retry. All 35 cases are covered across these
+receipts; no broad clean-pass claim is made. Independent source review approved.
+Earlier focused assertion corrections and temporary-directory permission errors
+remain recorded in the evidence directory.
 
-## Verification and immediate context
-
-Evidence is retained under `build/m1-9-20261001/scope-label-*`; independent
-reviews are `review-m2-capacity-note.md` and `review-scan-scope-label.md`.
-Focused workflow/adapter/frontend checks pass 406 cases. The initial focused
-run's sandbox default-temp setup failures are retained; the external-temp run
-passes without changing product expectations.
-The workflows/interfaces neighborhood passes 2,797 cases; all twelve import
-contracts and 260 local document targets pass. The headed gate has 33 passes
-plus a passing isolated execution-review rerun. Its first larger-window run
-timed out waiting for capture readiness after observing execution and release;
-the cause is not established, and the unchanged rerun passes in 18.65 seconds.
-That failed receipt remains retained. The manually focused inventory witness
-passes in 17.67 seconds, including the displayed whole-location scope and
-scan-specific notice label. All 35 headed cases pass across these runs.
-Existing cold-projection evidence validates against unchanged dependencies;
-no new timing measurement is required.
-
-The native-input interval has ended and all test windows have closed. No
-further measurements are needed. Stop for the user's GUI review after these
-changes; the M2 note grants no capacity-redesign implementation authority.
+RF2 design inspected `99e65c8`; refresh the shared Plan/bridge seams after RF1.
+The user confirmed grouping by move target parent, not the moved directory
+itself. Root destinations jump to the first canonical moved item. Informational
+rows remain outside selection and byte totals. RF3 uses existing regular
+pause/play plus pinned regular/filled Stop artwork; local Cancel arming lasts
+five seconds, survives ordinary renders, and is discarded on task/session or
+panel retirement. No later milestone, push or PR is authorized by this batch.

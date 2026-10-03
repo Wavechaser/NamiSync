@@ -11,6 +11,55 @@ retains investigation, rejected proposals and superseded execution recipes;
 the decisions still governing delivery are below. Historical observations
 certify their recorded build and dependencies only.
 
+## Plan GUI refinements — 2026-10-04
+
+User-authorized three-unit batch from `99e65c8` on `milestone1`. Each unit
+includes its direct contract/fixture migrations and one independently reviewed
+atomic commit. Shared frontend and delivery documents are edited serially.
+
+| ID | Outcome and preserved guarantees | Verification | Status |
+| --- | --- | --- | --- |
+| GUI-RF1 | Surface execution preflight refusal codes/details on the planning page, distinguish commitment/admission failures; preserve effect authority and original-command recovery. | Focused 628 pass; ordinary 5,854 pass/four skips plus corrected fixture module 40 pass; 12 import contracts; installed 34 pass plus unchanged foreground-focus retry pass. Independent review approved. | Complete |
+| GUI-RF2 | Place informational prior-move groups at the deepest surviving on-disk target ancestor, root fallback; capped relative purple destination pills reveal canonical rows, clearing obstructing search/filters. Preserve expandable contents, selection/count/byte exclusion, stable navigation and bounded windows. | Projection/selection/sort/search/navigation cases, page and fixture migrations, affected departments, ordinary suite, applicable existing scale and installed Plan/gallery witnesses. | Pending |
+| GUI-RF3 | Shorten the delete badge to Delete; use neutral Pause/play toggle with accented Resume when paused, and neutral regular Stop/Cancel armed for five seconds in accent with filled Stop before a second click submits cancel. Preserve authoritative control state, pending/recovery and task/session ownership. | Control/timer/retirement page probes, icon generator/provenance checks, consumer fixtures, affected departments and installed controls/gallery witnesses. | Pending |
+
+No execution-policy, commitment-authority, persisted-state or unrelated feature
+changes. Contract migrations needed for these accepted presentations are in scope;
+new safety/effect models or architectural owners require adjudication. Repository
+safety and recurrence stops apply. Elaborate each pending unit's finite owners,
+consumers and regression checks before implementation; retain failed attempts
+and review evidence under ignored `build/gui-refinements-20261004/`.
+
+RF1 owners/population: retained execution summary in workflow models/runtime/
+execution_review, service execution admission, web Plan review/drain/commands,
+bridge/app/Plan renderer and their direct Python/JavaScript/headed fixtures;
+BRIDGE/PRESENTATION/DESKTOP_UI describe the migrated view. Reuse existing
+ExecutionDetails and release-time capture, carrying closed refusal origins and
+codes with fixed actionable text rather than raw exception/path strings. No
+task-snapshot protocol migration. Regression checks cover pre-admission refusal,
+post-admission unrun committed refusal, invalid commitment, fast terminal/release,
+navigation, stale replies and retained original-command recovery. Baseline
+installed default task-shell passed; one RF1 commit includes all these consumers.
+
+RF2 grouping decision: one group per surviving old ancestor and move's target
+parent, including separate groups for distinct target parents. Moving a directory
+counts as one item. Root destinations reveal the first canonical moved item;
+other groups reveal the target parent row. User confirmed this interpretation.
+
+RF2 design population (inspected `99e65c8`, revalidate after RF1): workflow
+plan_projection; web plan_review/drain/commands; bridge/app/Plan row renderer,
+styles and tokens; projection/selection/navigation/bridge/page/headed tests and
+their direct fixtures. Current performance Plan/execution-receipt helpers that
+name the old group must migrate; frozen receipts remain historical. Use scanned
+target directory facts, excluding unblocked directory removal/move/recase old
+prefixes, to find surviving ancestors with Windows path keys. Preserve reviewed
+intent independently of selection toggles, add missing structural context, and
+keep prior rows excluded from counts/bytes/selection. A dedicated revisioned
+reveal operation preserves ordinary anchor semantics and clears only obstructing
+query settings. Regression gate includes deepest survival, multiple destinations,
+root fallback, unchanged totals, sorting, stale/off-window/filtered navigation,
+the existing large projection/folder-size witnesses and installed Plan/gallery.
+
 ## Open-bug resolutions — 2026-10-01
 
 Authorized from `1d17883` on `milestone1`; evidence and disposable native probes

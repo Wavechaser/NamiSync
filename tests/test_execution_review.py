@@ -35,12 +35,14 @@ from namisync.db.repositories import (
 )
 from namisync.db.timestamps import encode_utc
 from namisync.interfaces.service import NamiSyncService
-from namisync.core.session import OperationResult, SessionState
+from namisync.core.session import Disposition, OperationResult, SessionState
 from namisync.workflows import (
     ExecutionEvidenceResult,
     ExecutionEvidenceState,
     ExecutionEvidenceSubject,
     ExecutionEvidenceWindow,
+    ExecutionDetails,
+    ExecutionRefusalView,
     LocalWorkflowRuntime,
     RetainedExecutionBinding,
 )
@@ -54,6 +56,45 @@ from namisync.workflows.execution_review import (
 )
 
 from _db_fixtures import NOW, attestation, file_stat, operation, plan, setup_recorder
+
+from namisync.core.preflight import RefusalCode
+from namisync.workflows.models import RefusalView
+
+
+@pytest.mark.parametrize("origin", ["preflight", "commitment", "other"])
+def test_retained_unrun_refusal_keeps_only_bounded_origin_and_codes(origin: str) -> None:
+    op = operation(OperationKind.COPY)
+    value = plan((op,))
+    binding = RetainedExecutionBinding("task", "request", 1, "session", "run")
+    details = ExecutionDetails(
+        "run",
+        tuple(RefusalView(code.value, "private path", "private detail") for code in RefusalCode)
+        * 2 if origin == "preflight" else (),
+        "private commitment error" if origin == "commitment" else None,
+    )
+    review = build_retained_execution_review(
+        binding, OperationResult(SessionState.REFUSED, disposition=Disposition.UNRUN),
+        value, frozenset({op.op_id}), details=details,
+    )
+    refusal = review.summary.refusal
+    assert refusal is not None and refusal.origin == origin
+    assert refusal.codes == (tuple(code.value for code in RefusalCode) if origin == "preflight" else ())
+    assert "private" not in repr(refusal)
+    completed = build_retained_execution_review(
+        binding, OperationResult(SessionState.COMPLETED), value,
+        frozenset({op.op_id}), details=details,
+    )
+    assert completed.summary.refusal is None
+
+
+@pytest.mark.parametrize("origin,codes", [
+    ("preflight", ()), ("other", ("source_drift",)),
+    ("commitment", ("source_drift",)), ("unknown", ()),
+    ("preflight", ("unknown",)), ("preflight", ("source_drift", "source_drift")),
+])
+def test_refusal_disclosure_rejects_unknown_or_inconsistent_codes(origin, codes) -> None:
+    with pytest.raises(ValueError):
+        ExecutionRefusalView(origin, codes)
 
 
 def _item(
@@ -213,6 +254,7 @@ def test_runtime_retained_capture_is_exact_idempotent_and_disposable() -> None:
     runtime._closing = False
     runtime._closed = False
     runtime._retained_execution_reviews = {}
+    runtime._execution_details = {}
 
     first = runtime.capture_execution_review(
         binding, result, plan=plan_value,

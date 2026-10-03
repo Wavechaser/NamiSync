@@ -82,7 +82,7 @@ from namisync.workflows.views import (
     RecordingIssueView,
     ReviewFactLimitView,
 )
-from namisync.workflows import PlanSortColumn, SortDirection
+from namisync.workflows import ExecutionRefusalView, PlanSortColumn, SortDirection
 from .plan_review import PLAN_FILTERS
 from .inventory_review import INVENTORY_FILTERS
 from namisync.workflows.inventory import (
@@ -141,6 +141,7 @@ NESTED_PUBLIC_VIEW_DATACLASSES: frozenset[type[object]] = frozenset(
         PlanOperationView,
         PlanReview,
         RefusalView,
+        ExecutionRefusalView,
     }
 )
 ADAPTER_PUBLIC_VIEW_DATACLASSES: frozenset[type[object]] = frozenset(

@@ -156,6 +156,46 @@ function setTaskRecoveryError(task, message) {
   }
 }
 
+const PREFLIGHT_REFUSAL_MESSAGES = Object.freeze({
+  incomplete_source_scan: "The source scan is incomplete. Check source access.",
+  incomplete_target_scan: "The target scan is incomplete. Check target access.",
+  root_unavailable: "A reviewed folder is unavailable. Reconnect its drive and check access.",
+  root_changed: "A reviewed folder changed. Check the source and target folders.",
+  roots_overlap: "The source and target overlap. Choose separate folders.",
+  volume_clone_ambiguous: "A drive identity is ambiguous. Disconnect the duplicate drive.",
+  selection_not_closed: "The selection is missing required operations. Review its dependencies.",
+  operation_blocked: "A selected operation is blocked. Inspect the plan notices.",
+  blocked_correspondence: "A source or target item is blocked. Inspect the plan notices.",
+  dependency_unavailable: "A required operation is unavailable. Inspect the plan notices.",
+  observation_unavailable: "An item could not be checked. Check folder access and file locks.",
+  source_drift: "A source item changed after review.",
+  target_drift: "A target item changed after review.",
+  destination_appeared: "An item appeared at a planned destination after review.",
+  type_changed: "An item changed between a file and a folder after review.",
+  identity_changed: "An item was replaced after review.",
+  size_changed: "An item's size changed after review.",
+  mtime_changed: "An item's modification time changed after review.",
+  metadata_changed: "An item's metadata changed after review.",
+  insufficient_space: "The target has insufficient free space. Free space on its drive.",
+  trash_unavailable: "The recovery folder is unavailable. Check target access.",
+  trash_escape: "The recovery folder resolves outside the target. Check its location.",
+  trash_off_volume: "The recovery folder is on a different drive. Check its location.",
+  trash_not_writable: "The recovery folder is not writable. Check its permissions.",
+  trash_reparse: "The recovery folder uses an unsupported link. Check its location.",
+  path_escape: "An item resolves outside its reviewed folder. Check links in the folders.",
+  path_unrepresentable: "An item path cannot be used on Windows. Check its name and path length.",
+});
+
+function executionRefusalMessage(refusal) {
+  if (refusal?.origin === "preflight") {
+    return `Execution preflight refused. ${refusal.codes.map((code) => PREFLIGHT_REFUSAL_MESSAGES[code]).join(" ")} Resolve these issues, then click Plan again.`;
+  }
+  if (refusal?.origin === "commitment") {
+    return "Execution commitment is invalid. Click Plan again and review the new plan before executing.";
+  }
+  return "Execution was refused before it started. Click Plan again and review the new plan.";
+}
+
 function executionControlMessage(state) {
   switch (state) {
     case "pending": return "Execution waiting.";
@@ -1704,7 +1744,10 @@ async function loadPlanReview(task, force = false) {
     const message = task.executionStarted
       ? task.sessionState === "active"
         ? executionControlMessage(task.executionControlState)
-        : task.sessionState === "completed" ? null : `Execution ${task.sessionState}.`
+        : task.sessionState === "completed" ? null
+          : summary.execution.refusal !== null
+            ? executionRefusalMessage(summary.execution.refusal)
+            : `Execution ${task.sessionState}.`
       : summary.preflight_ready
         ? null
         : "Plan failed review. Inspect notices and create a fresh plan.";
@@ -2257,6 +2300,12 @@ async function submitReviewedExecution(task, attempt) {
     }
     const currentReview = task.review;
     if (currentReview === null) return;
+    if (result.disposition === "preflight-refused") {
+      currentReview.message = executionRefusalMessage(result.refusal);
+      currentReview.pending = null;
+      renderTasks();
+      return;
+    }
     currentReview.message = result.disposition === "confirmation-required"
       ? "Confirmation no longer matches. Review selection again."
       : result.disposition === "conflict"

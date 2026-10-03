@@ -562,6 +562,7 @@ function planSummary(overrides = {}) {
       disk_capacity_failure_count: null,
       gap: null,
       trash_location: null,
+      refusal: null,
     },
     ...overrides,
   };
@@ -2390,5 +2391,42 @@ assert.equal(failedTask.sessionState, "failed",
   "the new execution's lower revision cannot suppress its failed terminal record");
 assert.equal(failedTask.snapshot.terminal_result, terminalFailureResult);
 assert.equal(taskStatusDigest(failedTask).title, "Failed");
+
+for (const [index, refusal, expected] of [
+  [10, { origin: "preflight", codes: ["insufficient_space", "root_unavailable"] },
+    ["Execution preflight refused.", "insufficient free space", "Reconnect its drive"]],
+  [11, { origin: "commitment", codes: [] }, ["Execution commitment is invalid."]],
+  [12, { origin: "other", codes: [] }, ["Execution was refused before it started."]],
+]) {
+  const refusalTaskId = `task-${index.toString(16).repeat(32)}`;
+  const refusalSession = "d".repeat(32);
+  const openBase = planOpens.length;
+  const windowBase = planWindows.length;
+  const task = globalThis.taskHarness.adoptTask({
+    task_id: refusalTaskId, session_id: refusalSession, session_state: "refused",
+    session_released: true, task_kind: "sync-plan", request_id: "d".repeat(32),
+  });
+  const summary = planSummary({ task_id: refusalTaskId, request_id: "d".repeat(32),
+    selection_state: "committed", execution: {
+      ...planSummary().execution, session_id: refusalSession, result: refusedResult,
+      refusal, ended_at: "2026-09-23T02:00:00+00:00",
+    } });
+  await until(() => planOpens.length === openBase + 1);
+  planOpens.at(-1).resolve(summary);
+  await until(() => planWindows.length === windowBase + 1);
+  planWindows.at(-1).resolve(planWindow(summary));
+  await until(() => task.review !== null);
+  for (const message of expected) assert.ok(task.review.message.includes(message));
+  assert.ok(task.review.message.includes("Plan again"));
+  assert.equal(task.review.summary.selection_state, "committed");
+  const retainedMessage = task.review.message;
+  void globalThis.taskHarness.forceReview(task, true);
+  await until(() => planOpens.length === openBase + 2);
+  planOpens.at(-1).resolve(summary);
+  await until(() => planWindows.length === windowBase + 2);
+  planWindows.at(-1).resolve(planWindow(summary));
+  await until(() => !task.reviewLoading);
+  assert.equal(task.review.message, retainedMessage, "reload preserves refusal origin and guidance");
+}
 
 process.stdout.write("ok");

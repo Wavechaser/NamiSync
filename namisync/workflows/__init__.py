@@ -37,6 +37,7 @@ from namisync.workflows.inventory_projection import (
 )
 from namisync.workflows.models import (
     ExecutionDetails,
+    ExecutionRefusalView,
     ExecutionEvidenceResult,
     ExecutionEvidenceState,
     ExecutionEvidenceSubject,
@@ -118,6 +119,7 @@ __all__ = [
     "DatabaseAdmissionError",
     "EXECUTION_KIND",
     "ExecutionDetails",
+    "ExecutionRefusalView",
     "ExecutionEvidenceResult",
     "ExecutionEvidenceState",
     "ExecutionEvidenceSubject",

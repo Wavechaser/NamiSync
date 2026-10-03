@@ -86,6 +86,7 @@ def _artifact(plan_value):
     return SimpleNamespace(
         plan=plan_value,
         request=SimpleNamespace(verify_after_execute=False),
+        verdict=Verdict(True, (), SimpleNamespace()),
     )
 
 

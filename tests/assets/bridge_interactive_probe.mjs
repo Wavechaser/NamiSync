@@ -523,6 +523,24 @@ assert.deepEqual(
   "task creation recovers its original request through observation",
 );
 
+const preflightAdmission = {
+  disposition: "preflight-refused", revision: 0, state: "reviewing", session: null,
+  refusal: { origin: "preflight", codes: ["source_drift"] },
+};
+testWindow.queueResults("start_execution", preflightAdmission);
+assert.deepEqual(await bridge.startExecution(taskId, "a".repeat(32), 0, false), preflightAdmission);
+for (const invalid of [
+  { ...preflightAdmission, state: "committed" },
+  { ...preflightAdmission, refusal: { origin: "commitment", codes: [] } },
+  { ...preflightAdmission, refusal: { origin: "preflight", codes: ["unknown"] } },
+]) {
+  testWindow.queueResults("start_execution", invalid);
+  const before = testWindow.requests.length;
+  await assert.rejects(bridge.startExecution(taskId, "a".repeat(32), 0, false),
+    { name: "StartPlanUncertainError" });
+  assert.equal(testWindow.requests.length, before + 1, "invalid admission cannot resubmit Execute");
+}
+
 const recentPairProbe = { pairs: [{
   mapping_id: "1", source_id: "2", target_id: "3",
   source_state: "resolved", target_state: "offline",

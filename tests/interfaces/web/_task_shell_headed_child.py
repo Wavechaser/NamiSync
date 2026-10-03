@@ -825,6 +825,13 @@ window.addEventListener("error", (event) => {
     === "Execution did not start"
     && fresh.querySelector(".nami-plan-review__execution")?.textContent
       .includes("Disposition: Unrun"), "refused execution review refresh");
+  await until(() => fresh.querySelector(".nami-plan-review__status")?.textContent
+    .includes("Execution preflight refused.")
+    && fresh.querySelector(".nami-plan-review__status")?.textContent
+      .includes("The target has insufficient free space. Free space on its drive.")
+    && fresh.querySelector(".nami-plan-review__status")?.textContent
+      .includes("Resolve these issues, then click Plan again."),
+    "specific preflight refusal guidance");
   const refused = {
     committed: fresh.querySelector('[data-action="execute"]').hidden,
     unrun: statusFor("Task 53") === "Execution did not start",

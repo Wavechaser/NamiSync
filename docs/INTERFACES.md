@@ -658,7 +658,10 @@ owner, then the adapter reads and installs its item-free retained summary before
 publishing release locally. This step retains the terminal filesystem,
 integrity, recording, audit, disposition, cancellation, phase, byte, error,
 recording-issue and omission axes, the failed and disk-capacity counts, and the
-location-only trash context. It does not scan trash, infer an item count, or
+location-only trash context. For an unrun refused execution, capture also
+retains the bounded refusal origin and distinct preflight codes from the
+existing execution details before those session details are retired; BRIDGE
+owns its wire disclosure. It does not scan trash, infer an item count, or
 clear transport-loss history. Explicit task Close retires both the task and
 adapter overlay through the existing owner path.
 

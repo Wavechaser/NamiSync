@@ -2993,6 +2993,7 @@ def test_br_g_32_public_view_codec_manifest_is_recursive_and_json_native() -> No
             "revision": 3,
             "state": "running",
             "session": {"run_id": "6" * 32, "session_id": "7" * 32},
+            "refusal": None,
         },
         "sessions": [
             {

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from namisync.workflows import ExecutionRefusalView
+
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -657,6 +659,7 @@ PUBLIC_VIEW_WITNESSES: dict[
                 "revision": 8,
                 "state": "running",
                 "session": {"run_id": RUN_ID, "session_id": SESSION_ID},
+                "refusal": None,
             },
         ),
         PublicViewWitness(
@@ -667,7 +670,25 @@ PUBLIC_VIEW_WITNESSES: dict[
                 "revision": 9,
                 "state": "reviewing",
                 "session": None,
+                "refusal": None,
             },
+        ),
+    ),
+    ExecutionRefusalView: (
+        PublicViewWitness(
+            "execution-refusal-preflight",
+            ExecutionRefusalView("preflight", ("insufficient_space",)),
+            {"origin": "preflight", "codes": ["insufficient_space"]},
+        ),
+        PublicViewWitness(
+            "execution-refusal-commitment",
+            ExecutionRefusalView("commitment"),
+            {"origin": "commitment", "codes": []},
+        ),
+        PublicViewWitness(
+            "execution-refusal-other",
+            ExecutionRefusalView("other"),
+            {"origin": "other", "codes": []},
         ),
     ),
     InventoryDispositionView: (

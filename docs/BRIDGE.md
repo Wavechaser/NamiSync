@@ -32,7 +32,8 @@ Terminal release and explicit task close are distinct operations. Releasing an e
 The Plan execution summary carries nullable `started_at` and `ended_at` in the
 same strict UTC form as `SessionRecordView`. Both are null until a matching
 execution terminal record and retained result have been captured. After capture,
-`ended_at` is required while `started_at` remains null for an unrun refusal.
+`ended_at` is required. `started_at` remains null when the dispatcher worker
+never started; an unrun filesystem result may still have a worker start time.
 The browser validates this exact shape on Plan summary and window reads;
 neither time is inferred from event receipt or a local clock.
 
@@ -580,7 +581,14 @@ node and Boolean state are either both null or both present.
 result:null|OperationResultView,failed_operation_count:null|SafeInt,
 disk_capacity_failure_count:null|SafeInt,gap:null|{minimum_first_missed_seq:
 PositiveSafeInt,maximum_first_missed_seq:PositiveSafeInt},trash_location:null|
-string}`. Before execution every field except revision is null. A live execution
+string,refusal:null|{origin:"preflight"|"commitment"|"other",codes:[RefusalCode]}}`.
+The summary also carries the nullable record timestamps described above.
+Refusal codes are distinct closed values from `core/preflight.py`, bounded by
+that finite vocabulary. Only an unrun refused execution has a non-null refusal;
+preflight has at least one code, commitment and other have none. The existing
+retained execution capture preserves this disclosure before session details
+are retired. No private paths, diagnostic text or commitment error cross it.
+Before execution every field except revision is null. A live execution
 has a session and null terminal result/count/trash fields. Only captured retained
 truth fills those terminal fields. Gap extrema describe all observed first-missed
 sequences regardless of arrival order. Gap facts may coexist with terminal truth and
@@ -648,6 +656,13 @@ is attached without a duplicate start. Controls bind the exact current task and
 session identity. A retired planning or prior execution session cannot control a
 replacement. Negative review-preflight facts remain immutable review context;
 post-admission preflight refusal leaves selection committed and execution unrun.
+Execute against an already refused reviewed plan returns the named
+`preflight-refused` admission with its bounded preflight disclosure, null
+session and reviewing state. It neither commits selection nor starts a worker.
+Other admission outcomes carry a null refusal. The browser preserves the
+original-command receipt flow and renders fixed actionable text from the
+codes. After terminal release the existing Plan reload reads the retained
+execution disclosure, including for fast refusals and later navigation.
 
 Execute freezes task id, request id and selection revision before opening the
 destructive confirmation dialog. Cancel sends no command; Confirm submits that

@@ -52,6 +52,7 @@ from namisync.workflows import (
     RetainedExecutionBinding,
     RetainedExecutionItemWindow,
     RetainedExecutionSummary,
+    ExecutionRefusalView,
     RetainedIntegrityItemWindow,
     SyncOptions,
     VolumeResolutionRequired,
@@ -285,6 +286,7 @@ class ExecutionAdmissionView:
     revision: int
     state: str
     session: ExecutionSession | None = None
+    refusal: ExecutionRefusalView | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -1221,6 +1223,13 @@ class NamiSyncService:
                     elif expected_revision != state.revision:
                         preflight_response = ExecutionAdmissionView(
                             "conflict", state.revision, state.phase
+                        )
+                    elif not artifact.verdict.ok:
+                        preflight_response = ExecutionAdmissionView(
+                            "preflight-refused", state.revision, state.phase,
+                            refusal=ExecutionRefusalView("preflight", tuple(dict.fromkeys(
+                                refusal.code.value for refusal in artifact.verdict.refusals
+                            ))),
                         )
                     else:
                         decision = self._selection_decision_locked(

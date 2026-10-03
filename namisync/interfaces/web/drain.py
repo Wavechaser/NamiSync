@@ -619,6 +619,10 @@ class TaskRegistry:
             ),
             "gap": gap,
             "trash_location": None if retained is None else retained.trash_location,
+            "refusal": None if retained is None or retained.refusal is None else {
+                "origin": retained.refusal.origin,
+                "codes": list(retained.refusal.codes),
+            },
         }
 
     @classmethod

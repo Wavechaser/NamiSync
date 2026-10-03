@@ -1732,6 +1732,12 @@ plan, the user chooses a dependency-closed selection, and Execute attaches to
 the same task only after commitment and fresh preflight of that set. A terminal
 with `filesystem="refused"` and `disposition="unrun"` displays the generic
 “Execution did not start” state and retains the committed selection for review.
+After retained review capture, separate guidance identifies preflight refusal,
+invalid execution commitment, or another refusal. Closed preflight codes select
+fixed actionable explanations, such as insufficient target space; raw exception
+and path details are not displayed. The guidance survives release and navigation.
+A reviewed-negative admission receives preflight guidance immediately without
+committing selection; [BRIDGE](BRIDGE.md) owns the bounded refusal disclosure.
 Recovery is explicit **Plan again**. Only failure to admit an execution restores
 editable selection; a preflight rejection after admission does not. Plan again freshly resolves
 the immutable reviewed volume pair, then creates a new task with the old frozen

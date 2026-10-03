@@ -310,6 +310,18 @@ Stage 6 delivered the secured desktop host, process-live tasks, frozen Setup,
 bounded Plan review/selection and execution, and live/retained result review.
 Integrity controls, manual post-copy handoff and beta packaging remain open.
 
+#### Refine Plan refusal messages, move context and controls (2026-10-04)
+
+- GUI-RF1 carries bounded preflight codes and refusal origin through retained
+  Plan execution review and execution admission. The page distinguishes
+  preflight, invalid commitment and other refusals with actionable guidance,
+  preserved after release/navigation. Raw diagnostics stay native; execution
+  authority, selection commitment and original-command recovery are unchanged.
+- RF1 verification: 628 focused passes, 5,854 ordinary passes/four skips plus
+  the corrected service-fixture module's 40 passes, twelve import contracts,
+  and all 35 installed cases across the main run and one unchanged focus retry.
+  Independent review found no remaining substantive defect.
+
 #### Deliver M1-9 inventory review (2026-10-01 – 2026-10-02)
 
 - Complete the desktop inventory actions: same-task Refresh, exact item/folder

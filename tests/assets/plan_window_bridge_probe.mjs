@@ -67,6 +67,7 @@ const execution = {
   trash_location: null,
   started_at: null,
   ended_at: null,
+  refusal: null,
 };
 const baseWindow = (size) => ({
   disposition: "current",
@@ -151,5 +152,33 @@ for (const invalid of [
 }
 if (requests.length !== 13 || requests.some((request) => request.command !== "get_plan_window")) {
   throw new Error(`unexpected bridge command receipt: ${requests.length}`);
+}
+const refusedExecution = {
+  ...terminalExecution,
+  result: { ...terminalResult, headline: "failed", filesystem: "refused", disposition: "unrun" },
+  refusal: { origin: "preflight", codes: ["insufficient_space", "root_unavailable"] },
+};
+for (const refusal of [refusedExecution.refusal,
+  { origin: "commitment", codes: [] }, { origin: "other", codes: [] }]) {
+  responseResult = { ...baseWindow(null), execution: { ...refusedExecution, refusal } };
+  const accepted = await bridge.getPlanWindow(taskId, 0, 0, 1);
+  if (JSON.stringify(accepted.execution.refusal) !== JSON.stringify(refusal)) {
+    throw new Error("bounded refusal disclosure was not preserved");
+  }
+}
+for (const refusal of [null, { origin: "preflight", codes: [] },
+  { origin: "preflight", codes: ["unknown"] },
+  { origin: "preflight", codes: ["source_drift", "source_drift"] },
+  { origin: "commitment", codes: ["source_drift"] },
+  { origin: "other", codes: [], detail: "private" }]) {
+  responseResult = { ...baseWindow(null), execution: { ...refusedExecution, refusal } };
+  const rejected = await bridge.getPlanWindow(taskId, 0, 0, 1).then(() => null, (error) => error);
+  if (rejected === null) throw new Error("invalid refusal disclosure was accepted");
+}
+responseResult = { ...baseWindow(null), execution: {
+  ...terminalExecution, refusal: refusedExecution.refusal,
+} };
+if (await bridge.getPlanWindow(taskId, 0, 0, 1).then(() => null, (error) => error) === null) {
+  throw new Error("completed execution accepted a refusal disclosure");
 }
 console.log("ok");

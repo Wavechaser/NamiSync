@@ -1009,6 +1009,7 @@ class LocalWorkflowRuntime:
                 result,
                 plan,
                 selection,
+                details=self._execution_details.get(binding.run_id),
             )
             self._retained_execution_reviews[binding.task_id] = review
             return review.summary

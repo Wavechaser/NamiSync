@@ -213,6 +213,15 @@ const EXECUTION_EVIDENCE_STATES = Object.freeze([
   "recorded-copy", "already-verified", "unrecorded", "superseded",
   "not-applicable",
 ]);
+const PREFLIGHT_REFUSAL_CODES = Object.freeze([
+  "incomplete_source_scan", "incomplete_target_scan", "root_unavailable",
+  "root_changed", "roots_overlap", "volume_clone_ambiguous", "selection_not_closed",
+  "operation_blocked", "blocked_correspondence", "dependency_unavailable",
+  "observation_unavailable", "source_drift", "target_drift", "destination_appeared",
+  "type_changed", "identity_changed", "size_changed", "mtime_changed", "metadata_changed",
+  "insufficient_space", "trash_unavailable", "trash_escape", "trash_off_volume",
+  "trash_not_writable", "trash_reparse", "path_escape", "path_unrepresentable",
+]);
 const ERROR_MESSAGES = Object.freeze({
   invalid_request: "The desktop request is invalid.",
   unsupported_version: "Restart NamiSync to load a compatible desktop page.",
@@ -2986,7 +2995,7 @@ function validatePlanViewSummary(value) {
 function validateExecutionSummary(value) {
   if (!isExactObject(value, [
     "execution_revision", "session_id", "result", "failed_operation_count",
-    "disk_capacity_failure_count", "gap", "trash_location", "started_at", "ended_at",
+    "disk_capacity_failure_count", "gap", "trash_location", "started_at", "ended_at", "refusal",
   ]) || !isNonnegativeInteger(value.execution_revision)
       || !(value.session_id === null
         || (typeof value.session_id === "string" && ID_PATTERN.test(value.session_id)))) {
@@ -2997,14 +3006,17 @@ function validateExecutionSummary(value) {
     && value.disk_capacity_failure_count === null
     && value.trash_location === null
     && value.started_at === null
-    && value.ended_at === null;
+    && value.ended_at === null && value.refusal === null;
   const terminalPresent = validateOperationResultView(value.result)
     && isNonnegativeInteger(value.failed_operation_count)
     && isNonnegativeInteger(value.disk_capacity_failure_count)
     && value.disk_capacity_failure_count <= value.failed_operation_count
     && isBoundedPath(value.trash_location)
     && (value.started_at === null || isUtcTimestamp(value.started_at))
-    && isUtcTimestamp(value.ended_at);
+    && isUtcTimestamp(value.ended_at)
+    && (value.result?.filesystem === "refused" && value.result.disposition === "unrun"
+      ? validateExecutionRefusal(value.refusal)
+      : value.refusal === null);
   return (terminalAbsent || terminalPresent)
     && (value.session_id !== null || terminalAbsent)
     && (value.gap === null || (
@@ -3016,6 +3028,15 @@ function validateExecutionSummary(value) {
       && isNonnegativeInteger(value.gap.maximum_first_missed_seq)
       && value.gap.maximum_first_missed_seq >= value.gap.minimum_first_missed_seq
     ));
+}
+
+function validateExecutionRefusal(value) {
+  return isExactObject(value, ["origin", "codes"])
+    && ["preflight", "commitment", "other"].includes(value.origin)
+    && Array.isArray(value.codes) && value.codes.length <= PREFLIGHT_REFUSAL_CODES.length
+    && value.codes.every((code) => PREFLIGHT_REFUSAL_CODES.includes(code))
+    && new Set(value.codes).size === value.codes.length
+    && (value.codes.length > 0) === (value.origin === "preflight");
 }
 
 function validateItemRecording(result, recording, reason, detail) {
@@ -3248,13 +3269,17 @@ function validatePlanAnchor(value) {
 
 function validateExecutionAdmission(value) {
   if (validateStartPlanResult(value)) return true;
-  return isExactObject(value, ["disposition", "revision", "state", "session"])
-    && ["in-flight", "frozen", "conflict", "confirmation-required"].includes(value.disposition)
+  return isExactObject(value, ["disposition", "revision", "state", "session", "refusal"])
+    && ["in-flight", "frozen", "conflict", "confirmation-required", "preflight-refused"].includes(value.disposition)
     && isNonnegativeInteger(value.revision)
     && ["reviewing", "committing", "committed"].includes(value.state)
     && (value.session === null || (isExactObject(value.session, ["request_id", "session_id"])
       && typeof value.session.request_id === "string" && ID_PATTERN.test(value.session.request_id)
-      && typeof value.session.session_id === "string" && ID_PATTERN.test(value.session.session_id)));
+      && typeof value.session.session_id === "string" && ID_PATTERN.test(value.session.session_id)))
+    && (value.disposition === "preflight-refused"
+      ? value.state === "reviewing" && value.session === null
+        && validateExecutionRefusal(value.refusal) && value.refusal.origin === "preflight"
+      : value.refusal === null);
 }
 
 function validateControlReceipt(value, sessionId) {

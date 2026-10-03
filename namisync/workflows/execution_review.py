@@ -11,7 +11,7 @@ from namisync.core.execution import ExecutionReason
 from namisync.core.integrity import IntegrityOutcome
 from namisync.core.pathing import normalize_relative_path
 from namisync.core.planning import OperationKind, Plan
-from namisync.core.session import OperationResult
+from namisync.core.session import Disposition, OperationResult, SessionState
 from namisync.db.repositories import (
     EXECUTION_EVIDENCE_SUBJECT_LIMIT,
     ExecutionEvidenceKey,
@@ -23,6 +23,8 @@ from namisync.db.repositories import (
 )
 
 from .models import (
+    ExecutionDetails,
+    ExecutionRefusalView,
     ExecutionEvidenceResult,
     ExecutionEvidenceState,
     ExecutionEvidenceSubject,
@@ -62,6 +64,8 @@ def build_retained_execution_review(
     result: OperationResult,
     plan: Plan,
     selection: frozenset[str],
+    *,
+    details: ExecutionDetails | None = None,
 ) -> RetainedExecutionReview:
     """Validate and index one exact task-bound terminal execution result."""
 
@@ -116,6 +120,12 @@ def build_retained_execution_review(
             ),
             trash_location=str(
                 Path(plan.target_root.path) / ".synctrash" / binding.run_id
+            ),
+            refusal=(
+                ExecutionRefusalView.from_details(details or ExecutionDetails(binding.run_id))
+                if result.status is SessionState.REFUSED
+                and result.disposition is Disposition.UNRUN
+                else None
             ),
         ),
         operations,

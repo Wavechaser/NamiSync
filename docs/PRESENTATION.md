@@ -30,7 +30,9 @@ item-free result axes, typed failure counts, location-only trash context and
 bounded retained item/evidence reads. Missing retained items remain unknown.
 The adapter adds the matching delivered terminal record's UTC start and end
 times to that Plan summary after capture. Both remain null before retained
-terminal truth exists; an unrun refusal retains a null start and a real end.
+terminal truth exists; a refusal retains the exact dispatcher timestamps.
+An unrun filesystem result may have a worker start time; a worker that never
+started retains a null start.
 
 Every Plan row with an operation identity receives that operation's compact
 overlay, including an operation-bearing container. Structural rows remain null.
@@ -272,6 +274,16 @@ executable readiness. Execute independently requires preflight readiness and a
 nonempty executable selection. A strictly empty plan says **Plan is empty**;
 a nonempty plan with no search/filter matches says **No items match these filters**.
 Neither navigation nor these labels change execution eligibility or selection.
+
+The planning page distinguishes execution preflight refusal, an invalid
+execution commitment and another unrun refusal. It explains each closed
+preflight code using fixed actionable wording and guides the user to resolve
+the issue and use **Plan again**. The existing retained execution summary
+preserves that diagnosis after terminal release and navigation. A refusal
+after admission keeps selection committed; the page never implies that
+the old plan can be edited or executed again. A refused reviewed plan rejected
+before admission keeps its existing reviewing state. BRIDGE owns the bounded
+origin/code disclosure and exact lifecycle relationships.
 
 ## Focused scale acceptance
 

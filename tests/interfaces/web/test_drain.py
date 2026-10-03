@@ -3648,9 +3648,11 @@ def test_terminal_session_release_retains_start_response_replay() -> None:
         registry.drain(start.task_id, SESSION, DRAIN, replay_from=None)
 
 
+@pytest.mark.parametrize("refusal_origin", ["preflight", "commitment", "review-preflight"])
 def test_m1_7_fast_refused_execution_reaches_task_drain_and_release(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    refusal_origin: str,
 ) -> None:
     source = tmp_path / "source"
     target = tmp_path / "target"
@@ -3660,6 +3662,18 @@ def test_m1_7_fast_refused_execution_reaches_task_drain_and_release(
     service = NamiSyncService(tmp_path / "ledger.db", tmp_path / "history.db")
     registry = _make_registry(service, drain_wait=0.2)
     drain_ids = iter(f"{index:032x}" for index in range(100, 120))
+
+    def refuse_execution(_review, world, **_kwargs):
+        return Verdict(False, (
+            Refusal(RefusalCode.INSUFFICIENT_SPACE, detail="private detail"),
+            Refusal(RefusalCode.ROOT_UNAVAILABLE, detail="private root"),
+            Refusal(RefusalCode.INSUFFICIENT_SPACE),
+        ), world)
+
+    if refusal_origin == "review-preflight":
+        monkeypatch.setattr(service._runtime, "_deps", replace(
+            service._runtime._deps, preflight=refuse_execution,
+        ))
 
     try:
         planned = registry.start_plan(
@@ -3679,18 +3693,20 @@ def test_m1_7_fast_refused_execution_reaches_task_drain_and_release(
 
         original_dependencies = service._runtime._deps
 
-        def refuse_execution(_review, world, **_kwargs):
-            return Verdict(
-                False,
-                (Refusal(RefusalCode.INSUFFICIENT_SPACE),),
-                world,
-            )
+        if refusal_origin == "preflight":
+            monkeypatch.setattr(service._runtime, "_deps", replace(
+                original_dependencies, preflight=refuse_execution,
+            ))
+        elif refusal_origin == "commitment":
+            original_commit = service._runtime.commit_plan
 
-        monkeypatch.setattr(
-            service._runtime,
-            "_deps",
-            replace(original_dependencies, preflight=refuse_execution),
-        )
+            def invalid_commit(*args, **kwargs):
+                request = original_commit(*args, **kwargs)
+                xset = request.execution_set
+                xset.commitment = replace(xset.commitment, plan_fingerprint="invalid")
+                return request
+
+            monkeypatch.setattr(service._runtime, "commit_plan", invalid_commit)
         execution = registry.start_execution(
             planned.task_id,
             request_id=planned.request_id,
@@ -3699,6 +3715,19 @@ def test_m1_7_fast_refused_execution_reaches_task_drain_and_release(
             command_id=f"{2:032x}",
             wire_intent=(planned.task_id, planned.request_id, 0, False),
         )
+        expected_refusal = {
+            "origin": "commitment" if refusal_origin == "commitment" else "preflight",
+            "codes": [] if refusal_origin == "commitment" else ["insufficient_space", "root_unavailable"],
+        }
+        if refusal_origin == "review-preflight":
+            assert execution.disposition == "preflight-refused"
+            assert execution.state == "reviewing" and execution.session is None
+            assert execution.refusal.origin == "preflight"
+            assert list(execution.refusal.codes) == expected_refusal["codes"]
+            assert registry.list_tasks().tasks[0].session_id == planned.session_id
+            assert list(target.iterdir()) == []
+            assert registry.open_plan_view(planned.task_id)["selection_state"] == "reviewing"
+            return
         _wait_terminal(service._dispatcher, execution.session_id)
         updates = _drain_until_record(
             registry,
@@ -3720,6 +3749,17 @@ def test_m1_7_fast_refused_execution_reaches_task_drain_and_release(
         summary = registry.list_tasks().tasks[0]
         assert summary.session_state == "refused"
         assert summary.session_released is True
+        retained = registry.open_plan_view(planned.task_id)
+        assert retained["selection_state"] == "committed"
+        assert retained["execution"]["refusal"] == expected_refusal
+        assert retained["execution"]["started_at"] == terminal.started_at
+        assert retained["execution"]["ended_at"] is not None
+        assert retained["execution"]["result"].disposition == "unrun"
+        assert list(target.iterdir()) == []
+        assert service.get_execution_details(execution.request_id).refusals == ()
+        window = registry.get_plan_window(planned.task_id,
+            expected_revision=retained["view_revision"], offset=0, limit=1)
+        assert window["execution"]["refusal"] == expected_refusal
     finally:
         registry.begin_close()
         service.close(timeout=2)
