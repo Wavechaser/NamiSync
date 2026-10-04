@@ -1512,6 +1512,7 @@ window.addEventListener("unhandledrejection", (event) => {
     planReviewPanel.render(renderedGalleryTask);
   };
 
+  let diagnosticDefaultRailWidth = null;
   async function diagnosticLayout(caseName, blockSize, expanded, populated) {
     if (blockSize === null) planReviewPanel.element.style.removeProperty("block-size");
     else planReviewPanel.element.style.blockSize = `${blockSize}px`;
@@ -1668,18 +1669,27 @@ window.addEventListener("unhandledrejection", (event) => {
     }
     const previousLeft = list.scrollLeft;
     const headerControls = [...list.querySelectorAll(".nami-file-list__header button")];
-    const headersReachable = headerControls.every((control) => {
+    const headerScrollObservations = [];
+    const headersReachable = headerControls.map((control) => {
+      const observation = () => {
+        const rect = control.getBoundingClientRect();
+        return [list.scrollLeft, rect.left, rect.right, listBounds.left,
+          listBounds.left + list.clientWidth].map((value) => Number(value.toFixed(3)));
+      };
       list.scrollLeft = 0;
-      if (hitTableControl(control)) return true;
+      const start = observation();
       list.scrollLeft = list.scrollWidth;
+      const end = observation();
+      list.scrollLeft += control.getBoundingClientRect().left - listBounds.left;
+      headerScrollObservations.push([...start, ...end, ...observation()]);
       return hitTableControl(control);
-    });
+    }).every(Boolean);
     list.scrollLeft = previousLeft;
     const noHorizontalControlClipping = otherControlsFit && rowActivationReachable && headersReachable;
     const cardinalityExact = diagnostics.hidden === (visibleCount === 0)
       && visibleColumns.length === visibleCount
-      && (visibleCount === 0 || visibleColumns[1].getBoundingClientRect().left
-        >= visibleColumns[0].getBoundingClientRect().right - 1);
+      && (visibleCount === 0 || visibleColumns[1].getBoundingClientRect().top
+        >= visibleColumns[0].getBoundingClientRect().bottom - 1);
     const issuesContentComplete = !expanded || !populated || (
       issueRegion.textContent.includes(longDiagnostic)
     );
@@ -1781,6 +1791,42 @@ window.addEventListener("unhandledrejection", (event) => {
       toggle.click();
       await new Promise((resolve) => requestAnimationFrame(resolve));
     }
+    const header = planReviewPanel.element.querySelector(".nami-plan-review__plan");
+    const centralWidths = () => [header, summary, table].map((node) =>
+      Number(node.getBoundingClientRect().width.toFixed(3)));
+    const activeWidths = centralWidths();
+    toggle.click();
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    const oppositeWidths = centralWidths();
+    toggle.click();
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    const scrollPositions = () => [globalDiagnostics, detailRegion, viewport, planReviewPanel.element]
+      .map((node) => Number(node.scrollTop.toFixed(3)));
+    const savedCardScrolls = [globalDiagnostics.scrollTop, detailRegion.scrollTop];
+    globalDiagnostics.scrollTop = 0;
+    detailRegion.scrollTop = 0;
+    const cardScrollPositions = [scrollPositions()];
+    globalDiagnostics.scrollTop = globalDiagnostics.scrollHeight;
+    cardScrollPositions.push(scrollPositions());
+    detailRegion.scrollTop = detailRegion.scrollHeight;
+    cardScrollPositions.push(scrollPositions());
+    globalDiagnostics.scrollTop = savedCardScrolls[0];
+    detailRegion.scrollTop = savedCardScrolls[1];
+    const railWidth = galleryRail.element.getBoundingClientRect().width;
+    if (diagnosticDefaultRailWidth === null) diagnosticDefaultRailWidth = railWidth;
+    const railAligned = [...galleryRail.element.querySelectorAll(".nami-task-rail__row")].every((row) => {
+      const card = row.querySelector(".nami-task-card");
+      const close = row.querySelector(".nami-task-rail__close");
+      const bounds = row.getBoundingClientRect();
+      const paths = [...card.querySelectorAll(".nami-labeled-path__value")];
+      return Math.abs(card.getBoundingClientRect().width - bounds.width) <= 1
+        && close.getBoundingClientRect().right <= bounds.right + 1
+        && paths.length === 2 && Math.abs(paths[0].getBoundingClientRect().left
+          - paths[1].getBoundingClientRect().left) <= 1
+        && [...card.querySelectorAll(".nami-task-card__status, .nami-task-card__paths, .nami-task-card__progress")]
+          .every((field) => Math.abs(card.getBoundingClientRect().right
+            - field.getBoundingClientRect().right - 18) <= 1);
+    });
     const layoutResult = {
       case: caseName,
       block_size: Number(rootBounds.height.toFixed(3)),
@@ -1804,6 +1850,16 @@ window.addEventListener("unhandledrejection", (event) => {
       detail_matches_focused_row: detailMatchesFocusedRow,
       title_action_aligned: titleActionAligned,
       status_details_same_row: statusDetailsSameRow,
+      details_rectangles: [header, summary, table, diagnostics, globalDiagnostics, detailRegion].map(rectangle),
+      central_widths: expanded ? [oppositeWidths, activeWidths] : [activeWidths, oppositeWidths],
+      card_scroll_positions: cardScrollPositions,
+      rem_size: parseFloat(getComputedStyle(document.documentElement).fontSize),
+      rail_widths: [diagnosticDefaultRailWidth, railWidth],
+      rail_aligned: railAligned,
+      header_scroll_observations: headerScrollObservations,
+      global_content_rows: [issueRegion.clientHeight, issueRegion.scrollHeight,
+        trashRegion.clientHeight, trashRegion.scrollHeight,
+        issueRegion.getBoundingClientRect().bottom, trashRegion.getBoundingClientRect().top],
       collapse_focus_restored: collapseFocusRestored,
       table_state_preserved: tableStatePreserved,
       visible_count: visibleCount,
@@ -1826,6 +1882,7 @@ window.addEventListener("unhandledrejection", (event) => {
       ),
     };
     window.scrollTo(pageScroll.x, pageScroll.y);
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     return layoutResult;
   }
 
@@ -2928,8 +2985,7 @@ window.addEventListener("unhandledrejection", (event) => {
   renderText(minimumHeading, "NamiSync");
   renderText(minimumStatus, "Execution review");
   minimumHeader.append(minimumHeading, minimumStatus);
-  const minimumRail = document.createElement("aside");
-  minimumRail.className = "nami-task-rail";
+  const minimumRail = galleryRail.element;
   const minimumWork = document.createElement("main");
   minimumWork.className = "nami-work-panel";
   const minimumWorkBody = document.createElement("div");
@@ -3414,7 +3470,9 @@ window.addEventListener("unhandledrejection", (event) => {
   }
   reportParts.push(
     { name: "lifecycle_progress", value: lifecycleProgress },
-    { name: "control_contract", value: controlContract },
+    { name: "diagnostic_layout", value: controlContract.diagnostic_layout },
+    { name: "control_contract", value: Object.fromEntries(Object.entries(controlContract)
+      .filter(([name]) => name !== "diagnostic_layout")) },
     {
       name: "motion",
       value: Object.freeze({

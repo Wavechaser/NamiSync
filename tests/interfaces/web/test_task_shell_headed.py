@@ -259,6 +259,16 @@ def test_m1_4_installed_task_shell_navigation_closure_and_recovery(
     assert second["closed"]["task_count"] == 46
 
     plan_review = report["plan_review"]
+    details = plan_review["detailsLayout"]
+    assert details["focusRestored"] is True
+    assert details["foldedWidths"] == pytest.approx([details["foldedWidths"][0]] * 3, abs=1)
+    assert details["expandedWidths"] == pytest.approx([details["expandedWidths"][0]] * 3, abs=1)
+    assert details["foldedWidths"][0] > details["expandedWidths"][0] > 0
+    header, summary, table, pane = details["rectangles"]
+    assert pane[1] == pytest.approx(header[1], abs=1)
+    assert pane[3] == pytest.approx(table[3], abs=1)
+    assert pane[0] > max(header[2], summary[2], table[2])
+    assert 0 < pane[2] - pane[0] <= 24 * details["rem"] + 1
     move_pill = plan_review["movePill"]
     geometry = move_pill["geometry"]
     tolerance = 1 / geometry["devicePixelRatio"]

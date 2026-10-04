@@ -411,8 +411,9 @@ const planDiagnostics = findByClass(panel.element, "nami-plan-review__diagnostic
 const planItemPane = findByClass(panel.element, "nami-plan-review__detail");
 const cardProgress = findByClass(panel.element, "nami-plan-review__progress");
 assert.ok(planDisclosure.parentElement === statusMeta, "disclosure shares the detailed status line");
-assert.ok(statusCard.children.indexOf(planDiagnostics) < statusCard.children.indexOf(cardProgress),
-  "expanded facts precede progress in the same card");
+assert.ok(planDiagnostics.parentElement === panel.element && !statusCard.contains(planDiagnostics),
+  "Details spans the central cards as a Plan-root sibling");
+assert.ok(cardProgress.parentElement === statusCard, "progress remains in the central status card");
 planDisclosure.dispatch("click");
 assert.equal(planDiagnostics.hidden, false, "Plan exposes the shared Details area");
 assert.ok(findText(planItemPane, "Highlight an item"), "unfocused Plan has an item placeholder");
@@ -420,6 +421,18 @@ review.summary = { ...summary, highlight_focus_node_id: row.node_id, highlight_r
 panel.render(task);
 assert.ok(findText(planItemPane, "Planned action"), "focused Plan row reveals planned facts");
 assert.ok(findText(planItemPane, hostile.replace("\u202e", "⟦U+202E⟧")));
+assert.ok(findText(planItemPane, "Dependencies"));
+assert.ok(findText(planItemPane, "1 of 2 selected"));
+assert.ok(findText(planItemPane, "Operations"));
+assert.ok(findText(findByClass(panel.element, "nami-plan-review__plan-breakdown"), "Copy 100"));
+assert.ok(findText(findByClass(panel.element, "nami-plan-review__global-status"), review.message));
+row.mtime_ns = "0";
+panel.render(task);
+assert.ok(findText(planItemPane, "Modified"));
+assert.ok(findText(planItemPane, findByClass(panel.element, "nami-plan-row__modified").textContent));
+row.mtime_ns = null;
+panel.render(task);
+assert.ok(!findText(planItemPane, "Modified"), "missing time has no invented detail");
 planDisclosure.dispatch("click");
 assert.equal(planDiagnostics.hidden, true);
 review.summary = summary;
@@ -1150,8 +1163,8 @@ assert.ok(executionContent, "table and diagnostics share one bounded content reg
 assert.ok(executionDiagnostics, "variable diagnostics share one explicit grid row");
 assert.ok(findByClass(executionPanel.element, "nami-plan-review__table-card").parentElement === executionContent,
   "the table remains in the bounded content region");
-assert.ok(executionDiagnostics.parentElement === executionStatusCard,
-  "the inline Details pane expands the existing status card");
+assert.ok(executionDiagnostics.parentElement === executionPanel.element,
+  "the full-height Details pane belongs to the Plan grid");
 assert.ok(globalDiagnostics.parentElement === executionDiagnostics,
   "global execution facts occupy one Details column");
 assert.ok(executionIssues.parentElement === globalDiagnostics,
@@ -1175,6 +1188,8 @@ assert.equal(executionTrash.tabIndex, 0, "the literal trash location remains key
 assert.equal(executionTrash.ariaLabel, "Trash location");
 assert.equal(executionDetailCard.tabIndex, 0, "operation detail remains keyboard-scrollable");
 assert.equal(executionDetailCard.ariaLabel, "Item details");
+assert.equal(globalDiagnostics.tabIndex, 0, "global card remains keyboard-scrollable");
+assert.equal(globalDiagnostics.ariaLabel, "Task details");
 assert.ok(findText(executionPanel.element, "Execution needs review"));
 assert.ok(findText(executionPanel.element, "Filesystem: Failed"));
 assert.ok(findText(executionPanel.element, "Automatic verification: Mismatch"));

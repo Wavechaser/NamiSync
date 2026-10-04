@@ -1798,6 +1798,18 @@ def test_component_gallery_report_parser_is_exact_and_nested(
                     "detail_matches_focused_row": True,
                     "title_action_aligned": True,
                     "status_details_same_row": True,
+                    "details_rectangles": [[0, 0, 600, 50], [0, 60, 600, 140],
+                        [0, 150, 600, block_size], [612, 0, 996, block_size],
+                        [612, 0, 996, block_size / 2 - 6],
+                        [612, block_size / 2 + 6, 996, block_size]],
+                    "central_widths": [[996, 996, 996], [600, 600, 600]],
+                    "card_scroll_positions": [[0, 0, 9600, 0], [120, 0, 9600, 0], [120, 120, 9600, 0]],
+                    "rem_size": 16,
+                    "rail_widths": [288, 240 if size == "minimum" else 288],
+                    "rail_aligned": True,
+                    "header_scroll_observations": [[0, 20, 100, 0, 400,
+                        400, -380, -300, 0, 400, 20, 0, 80, 0, 400]] * 3,
+                    "global_content_rows": [120, 120, 120, 120, 120, 128],
                 }
                 for size, block_size in (("default", 640), ("minimum", 501))
                 for disclosure in ("folded", "expanded")
@@ -1953,7 +1965,9 @@ def test_component_gallery_report_parser_is_exact_and_nested(
             for offset in range(0, len(controls), chunk_rows)
         ),
         ("lifecycle_progress", report["lifecycle_progress"]),
-        ("control_contract", report["control_contract"]),
+        ("diagnostic_layout", report["control_contract"]["diagnostic_layout"]),
+        ("control_contract", {name: value for name, value in report["control_contract"].items()
+                              if name != "diagnostic_layout"}),
         ("motion", report["motion"]),
         ("icons", report["icons"]),
     ]
@@ -2105,6 +2119,22 @@ def test_component_gallery_report_parser_is_exact_and_nested(
     with pytest.raises(AssertionError, match="status_details_same_row"):
         _assert_diagnostic_layout(report["control_contract"]["diagnostic_layout"])
     report["control_contract"]["diagnostic_layout"][0]["status_details_same_row"] = True
+    detail_layout = report["control_contract"]["diagnostic_layout"][3]
+    detail_layout["card_scroll_positions"][2][1] = 0
+    assert component_gallery_child._valid_complete_report(report) is True
+    with pytest.raises(AssertionError):
+        _assert_diagnostic_layout(report["control_contract"]["diagnostic_layout"])
+    detail_layout["card_scroll_positions"][2][1] = 120
+    detail_layout["details_rectangles"][3][1] = 50
+    assert component_gallery_child._valid_complete_report(report) is True
+    with pytest.raises(AssertionError):
+        _assert_diagnostic_layout(report["control_contract"]["diagnostic_layout"])
+    detail_layout["details_rectangles"][3][1] = 0
+    detail_layout["global_content_rows"][0] = 20
+    assert component_gallery_child._valid_complete_report(report) is True
+    with pytest.raises(AssertionError):
+        _assert_diagnostic_layout(report["control_contract"]["diagnostic_layout"])
+    detail_layout["global_content_rows"][0] = 120
     report["controls"][0]["state"] = "invented"
     assert component_gallery_child._valid_complete_report(report) is False
 
@@ -3946,8 +3976,42 @@ def _assert_diagnostic_layout(diagnostic_layout: list[dict[str, object]]) -> Non
             "disclosure_reachable", "row_activation_reachable",
             "placeholder_present", "detail_matches_focused_row",
             "title_action_aligned", "status_details_same_row",
+            "rail_aligned",
         ):
             assert case[field] is True, f'{case["case"]}.{field}'
+        folded, expanded_widths = case["central_widths"]
+        assert folded == pytest.approx([folded[0]] * 3, abs=1)
+        assert expanded_widths == pytest.approx([expanded_widths[0]] * 3, abs=1)
+        assert folded[0] > expanded_widths[0] > 0
+        for observations in case["header_scroll_observations"]:
+            _scroll, left, right, viewport_left, viewport_right = observations[10:]
+            assert right > left >= viewport_left - 1
+            assert right <= viewport_right + 1
+        default_rail, rail = case["rail_widths"]
+        assert 0 < rail <= 18 * case["rem_size"] + 1
+        if case["case"].startswith("minimum"):
+            assert rail < default_rail
+        if case["expanded"]:
+            header, summary, table, pane, global_card, item_card = case["details_rectangles"]
+            assert pane[1] == pytest.approx(header[1], abs=1)
+            assert pane[3] == pytest.approx(table[3], abs=1)
+            assert 0 < pane[2] - pane[0] <= 24 * case["rem_size"] + 1
+            assert pane[0] > max(header[2], summary[2], table[2])
+            assert global_card[1] == pytest.approx(pane[1], abs=1)
+            assert item_card[3] == pytest.approx(pane[3], abs=1)
+            assert global_card[3] < item_card[1]
+            assert global_card[0] == pytest.approx(item_card[0], abs=1)
+            assert global_card[2] == pytest.approx(item_card[2], abs=1)
+            if case["populated"]:
+                issue_height, issue_scroll, trash_height, trash_scroll, issue_end, trash_start = case["global_content_rows"]
+                assert issue_height > 0 and issue_height >= issue_scroll - 1
+                assert trash_height > 0 and trash_height >= trash_scroll - 1
+                assert issue_end <= trash_start
+                before, global_scroll, item_scroll = case["card_scroll_positions"]
+                assert global_scroll[0] > before[0]
+                assert global_scroll[1:] == before[1:]
+                assert item_scroll[1] > global_scroll[1]
+                assert [item_scroll[i] for i in (0, 2, 3)] == [global_scroll[i] for i in (0, 2, 3)]
 
 
 def _assert_complete_gallery_matrix(report: dict[str, object]) -> None:

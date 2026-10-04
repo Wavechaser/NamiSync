@@ -769,6 +769,8 @@ window.addEventListener("error", (event) => {
   await control("checkpoint", "plan_again");
   await control("track_review_task");
   const fresh = document.querySelector(".nami-plan-review");
+  const detailsToggle = fresh.querySelector(".nami-plan-review__details-toggle");
+  if (detailsToggle.ariaExpanded === "true") detailsToggle.click();
   // Finite layout witness: feedback is presentation-only and restored before gestures.
   const statusCard = fresh.querySelector(".nami-plan-review__summary");
   const statusDetail = fresh.querySelector(".nami-plan-review__status-summary");
@@ -800,6 +802,23 @@ window.addEventListener("error", (event) => {
   statusDetail.textContent = savedDetail;
   feedback.textContent = savedFeedback.text;
   feedback.hidden = savedFeedback.hidden;
+  const centralCards = [fresh.querySelector(".nami-plan-review__plan"), statusCard,
+    fresh.querySelector(".nami-plan-review__table-card")];
+  const centralWidths = () => centralCards.map((node) => node.getBoundingClientRect().width);
+  const detailsLayout = { foldedWidths: centralWidths() };
+  detailsToggle.click();
+  await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  const detailsPane = fresh.querySelector(".nami-plan-review__diagnostics");
+  detailsLayout.expandedWidths = centralWidths();
+  detailsLayout.rectangles = [...centralCards, detailsPane].map((node) => {
+    const rect = node.getBoundingClientRect();
+    return [rect.left, rect.top, rect.right, rect.bottom];
+  });
+  detailsLayout.rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
+  fresh.querySelector(".nami-plan-review__global-diagnostics").focus();
+  detailsToggle.click();
+  await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  detailsLayout.focusRestored = document.activeElement === detailsToggle && detailsPane.hidden;
   const metadataRow = fresh.querySelector(".nami-plan-review__rows [data-node-id]");
   const metadataColors = [".nami-file-row__size", ".nami-plan-row__modified", ".nami-file-row__notes"]
     .map((selector) => getComputedStyle(metadataRow.querySelector(selector)).color);
@@ -1110,6 +1129,7 @@ window.addEventListener("error", (event) => {
   const emptyPlanMessage = emptyReview.textContent.toLowerCase().includes("empty");
   await control("record", {
     plan_review: {
+      detailsLayout,
       initial,
       movePill,
       refused,

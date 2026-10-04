@@ -1,59 +1,51 @@
 # Latest session — GUI alignment
 
-2026-10-05 on `milestone1`, base `999a568`. The user ratified the seven-point
-GUI alignment register in [M1_PLAN](M1_PLAN.md). A1–A5 are active, in order;
-execution-to-Verify navigation (A6) is deferred to M1-10, and all previous-
-location/rename redesign (A7) is deferred to a focused session. Standalone
-Verify stays on Integrity with Sync disabled. No A7 presentation-boundary
-exception was approved.
+2026-10-05 on `milestone1`, base `999a568`. The user ratified seven
+GUI units in [M1_PLAN](M1_PLAN.md): A1–A5 active; execution-to-Verify
+navigation (A6) deferred to M1-10; all previous-location/rename redesign
+(A7) deferred to a focused session. Standalone Verify remains on Integrity
+with Sync disabled. No A7 presentation-boundary exception was approved.
 
-## Current checkpoint
+## Integrated work
 
-A1, committed as `4f314b2`, corrects move-reveal recovery in `assets/app.js`. A still-current rejected
-or revision-mismatched follow-up window retains the last coherent display and
-offers Refresh. A coherent conflict scrolls to the loaded offset. Stale
-task/navigation replies remain inert; no retries or bridge changes were added.
-Direct shell/renderer probes cover failure recovery and offset-zero scrolling.
+- A1 `4f314b2`: visible recovery after an incoherent move-reveal window and
+  conflict scrolling. Seven focused, 1,921 interfaces and both installed
+  task-shell cases pass.
+- A2 `498eb24`: first-visible column snapshot lets only Filename absorb
+  enlargement, preserving bounded manual resizing. Thirty-six focused,
+  1,921 interfaces and six installed task-shell/gallery cases pass.
+- A3 `49801f7`: shared counted Filter menu and pinned Regular icons.
+  Eighty-four focused, 2,286 interfaces/tools (three skips), pinned icon
+  provenance and seven installed task-shell/gallery/Inventory cases pass.
+- A4, the atomic delivery containing this handoff: optional full-height right
+  details column with two independent card scrollers; category/status and
+  supplied item facts; capped shrinking details and task rail. Eighty-nine
+  focused, 1,921 interfaces and all six installed cases pass across the final
+  gallery run and unchanged retained default/larger shell evidence.
 
-Evidence lives in `build/gui-alignment-20261005/`, whose README defines naming
-and retention. The red probe fails the intended missing-refresh assertion;
-seven focused seam cases, all 1,921 interfaces tests and both installed task-shell
-cases pass. `a1-headed-native.xml` records the native default/larger pass;
-earlier headed receipts retain dependency-cache and sandbox EnumWindows failures
-before the native interaction seam. Product/test bytes were unchanged across
-those attempts. Independent review approved the atomic A1 delivery in
-`a1-review.md`.
+Evidence lives in `build/gui-alignment-20261005/`; `a1-review.md` through
+`a4-review.md` own independent review decisions. A4's final source is bound by
+`a4-frozen-final-03.json`; native gallery is `a4-gallery-final-03.xml`,
+shell passes are in `a4-native-final.xml`, and department results are
+`a4-interfaces-final.xml`. All 277 installed files match between the retained
+shell and final gallery builds. Failed/superseded receipts remain: A4's natural
+row-height overlap was corrected; its obsolete endpoint-only table-header
+detector and queued-scroll gallery ordering were migrated without weakening
+visibility, hit, dismissal or ingress guarantees. Evidence owns that chronology.
 
-A2, committed as `498eb24`, snapshots non-filename Plan column widths on the first visible loaded
-layout. It reuses the existing width and resize mechanism without CSS/token
-changes. The direct probe covers delayed layout and retained widths; installed
-task-shell geometry observes passive widening before any resize gesture,
-restoration, overflow and existing manual resize behavior. Thirty-six focused
-tests, all 1,921 interfaces tests and all six installed task-shell/gallery checks
-pass. `a2-native.xml` records the native pass; copied raw receipts retain
-`plan_review.initial.passiveSizing` and wheel/installation identity. All frozen
-product/test hashes match after acceptance. Independent review approved in
-`a2-review.md`.
+## Immediate next work
 
-A3 delivers the shared counted checkbox Filter menu and pinned Regular Filter
-icon for Plan and Inventory. The frozen candidate passes 84 focused and 2,286
-interfaces/tools checks (three documented tool skips), pinned icon provenance
-and all seven installed task-shell/gallery/Inventory cases. Source review
-approved; the final review record is `a3-review.md`. The atomic A3 commit contains
-this handoff. Raw/frozen evidence uses `a3-*-final*` under the session evidence
-root. Pending Escape focus and minimum-window clipping were corrected before
-delivery; the menu now uses the known work-panel bounds and dismisses on resize
-or outside scrolling, preserving internal scrolling. Replaced filter code/CSS
-was removed. Retain the earlier fixture/setup/foreground failures and initial
-clipping observation alongside the passing final receipts; none replaces them.
+A5 is designed read-only and awaits A4 integration before implementation.
+M1_PLAN contains its finite population and gate. Align standalone Inventory/
+Verify with the settled setup/status/table/details surfaces, move Refresh
+actions to status, reuse semantic labels and five-column sizing, and expose the
+already-recorded checksum through the bounded window/bridge contract. Preserve
+scan versus verification truth, current/prior publication and acknowledgement
+scope. Refresh A4's integrated layout and report seams before writing.
 
-## Next work
-
-After A3 integration, A4 moves details to a full-height optional right column,
-and A5 aligns standalone Inventory/Verify and exposes recorded checksum data.
-M1_PLAN owns exact scope, dependencies and gates. Shared source/tests and native
-acceptance runs remain serialized; evidence reuse follows dependency identity.
-
-No product changes for A4–A7 have begun. No push, PR or new domain/integrity
-feature is authorized. Previous diagnostic catalog repair is committed in
-`999a568`; its evidence remains under `build/bridge-catalog-20261004/`.
+Finish A5's focused/composition/department/native gates and fresh review, then
+the ordinary suite/import checks for batch integration. Source/test writers
+and native acceptance remain serialized. Cleanup only exact task-owned external
+roots after retained evidence accounting; `integration.md`, frozen manifests
+and `a3-temp-ownership.json` record ownership. No task worktrees or branches have
+been created. No push, PR or new domain/integrity feature is authorized.

@@ -348,7 +348,7 @@ _CONTROL_REPORT_CHUNK_COUNT = math.ceil(
 _REPORT_PART_NAMES = (
     ("lifecycles", "intents")
     + ("controls",) * _CONTROL_REPORT_CHUNK_COUNT
-    + ("lifecycle_progress", "control_contract", "motion", "icons")
+    + ("lifecycle_progress", "diagnostic_layout", "control_contract", "motion", "icons")
 )
 
 
@@ -716,6 +716,7 @@ def _test_report_spec(
                         "intents",
                         "lifecycle_progress",
                         "controls",
+                        "diagnostic_layout",
                     }
                     and type(value) is not list
                 )
@@ -736,6 +737,8 @@ def _test_report_spec(
                     raise CommandPayloadError(
                         "component gallery report is invalid"
                     )
+            if name == "control_contract" and "diagnostic_layout" in value:
+                raise CommandPayloadError("component gallery report is invalid")
             return dict(payload)
         if payload["phase"] != "complete" or set(payload) != {
             "phase",
@@ -837,7 +840,9 @@ def _test_report_spec(
             "intents": values["intents"],
             "controls": controls,
             "lifecycle_progress": values["lifecycle_progress"],
-            "control_contract": values["control_contract"],
+            "control_contract": {
+                **values["control_contract"], "diagnostic_layout": values["diagnostic_layout"],
+            },
             "motion": values["motion"],
             "icons": values["icons"],
         }
@@ -1811,6 +1816,9 @@ def _valid_diagnostic_layout(value: object) -> bool:
         "row_activation_reachable", "placeholder_present",
         "detail_matches_focused_row",
         "title_action_aligned", "status_details_same_row",
+        "details_rectangles", "central_widths", "card_scroll_positions",
+        "rem_size", "rail_widths", "rail_aligned",
+        "header_scroll_observations", "global_content_rows",
     }
     return (
         type(value) is list
@@ -1823,6 +1831,15 @@ def _valid_diagnostic_layout(value: object) -> bool:
             and type(item["block_size"]) in {int, float}
             and math.isfinite(item["block_size"])
             and item["block_size"] > 0
+            and _finite_number_matrix(item["details_rectangles"], 6, 4)
+            and _finite_number_matrix(item["central_widths"], 2, 3)
+            and _finite_number_matrix(item["card_scroll_positions"], 3, 4)
+            and _finite_number_matrix([item["rail_widths"]], 1, 2)
+            and _finite_number_matrix(item["header_scroll_observations"], 3, 15)
+            and _finite_number_matrix([item["global_content_rows"]], 1, 6)
+            and type(item["rem_size"]) in {int, float}
+            and math.isfinite(item["rem_size"])
+            and item["rem_size"] > 0
             and type(item["visible_count"]) is int
             and 0 <= item["visible_count"] <= 2
             and type(item["expanded"]) is bool
@@ -1839,10 +1856,22 @@ def _valid_diagnostic_layout(value: object) -> bool:
                 for name in keys - {
                     "case", "block_size", "visible_count", "expanded", "populated",
                     "logical_rows", "loaded_rows", "row_height",
+                    "details_rectangles", "central_widths", "card_scroll_positions",
+                    "rem_size", "rail_widths",
+                    "header_scroll_observations", "global_content_rows",
                 }
             )
             for item in value
         )
+    )
+
+
+def _finite_number_matrix(value: object, rows: int, columns: int) -> bool:
+    return (
+        type(value) is list and len(value) == rows
+        and all(type(row) is list and len(row) == columns
+                and all(type(number) in {int, float} and math.isfinite(number)
+                        for number in row) for row in value)
     )
 
 

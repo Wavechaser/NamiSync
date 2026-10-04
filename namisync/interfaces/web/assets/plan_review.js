@@ -44,6 +44,13 @@ const HIDDEN_REASONS = new Set([
 const displayLabel = (value) => Object.prototype.hasOwnProperty.call(DISPLAY_LABELS, value) ? DISPLAY_LABELS[value] : value;
 const reasonLabel = (value) => Object.prototype.hasOwnProperty.call(REASON_LABELS, value) ? REASON_LABELS[value] : value;
 
+function modifiedText(mtime) {
+  if (mtime === null) return "";
+  const date = new Date(Number(BigInt(mtime) / 1000000n));
+  const pad = (value) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
 const EXECUTION_LABELS = Object.freeze({
   succeeded: "Completed", skipped: "Skipped", failed: "Failed", canceled: "Canceled",
   deferred: "Deferred", blocked: "Blocked", verified: "Verified", baselined: "Baselined",
@@ -137,11 +144,7 @@ function rowView(row, busy, committed, progressPresentation = null) {
   ].filter((value) => typeof value === "string" && value !== ""))].join(" · ");
   const risk = row.risk === "none" ? "" : `Risk: ${row.risk}`;
   const intent = row.operation_kind ?? (row.row_kind === "notice" ? "notice" : "");
-  const modified = row.mtime_ns === null ? "" : (() => {
-    const date = new Date(Number(BigInt(row.mtime_ns) / 1000000n));
-    const pad = (value) => String(value).padStart(2, "0");
-    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
-  })();
+  const modified = modifiedText(row.mtime_ns);
   const activeProgress = projectActiveOperationProgress(progressPresentation, row.operation_id);
   const lifecycle = activeProgress?.lifecycleKey ?? execution.lifecycle;
   return {
@@ -285,12 +288,12 @@ export function createPlanReviewPanel(callbacks) {
   const executionAxes = document.createElement("p");
   executionAxes.className = "nami-plan-review__execution-axes";
   const executionIssues = document.createElement("p");
-  executionIssues.className = "nami-card nami-plan-review__execution-issues";
+  executionIssues.className = "nami-plan-review__execution-issues";
   executionIssues.hidden = true;
   executionIssues.tabIndex = 0;
   executionIssues.ariaLabel = "Execution issues";
   const executionTrash = document.createElement("p");
-  executionTrash.className = "nami-card nami-plan-review__execution-trash";
+  executionTrash.className = "nami-plan-review__execution-trash";
   executionTrash.hidden = true;
   executionTrash.tabIndex = 0;
   executionTrash.ariaLabel = "Trash location";
@@ -461,14 +464,23 @@ export function createPlanReviewPanel(callbacks) {
   diagnostics.className = "nami-plan-review__diagnostics";
   diagnostics.hidden = true;
   const globalDiagnostics = document.createElement("div");
-  globalDiagnostics.className = "nami-plan-review__global-diagnostics";
+  globalDiagnostics.className = "nami-card nami-plan-review__global-diagnostics";
+  globalDiagnostics.tabIndex = 0;
+  globalDiagnostics.ariaLabel = "Task details";
+  const globalTitle = document.createElement("h2");
+  renderText(globalTitle, "Task details");
   const planDiagnostics = document.createElement("p");
   planDiagnostics.className = "nami-plan-review__plan-diagnostics";
-  globalDiagnostics.append(planDiagnostics, executionReview, executionIssues, executionTrash);
+  const planBreakdown = document.createElement("p");
+  planBreakdown.className = "nami-plan-review__plan-breakdown";
+  const globalStatus = document.createElement("p");
+  globalStatus.className = "nami-plan-review__global-status";
+  globalDiagnostics.append(globalTitle, globalStatus, planDiagnostics, planBreakdown,
+    executionReview, executionIssues, executionTrash);
   diagnostics.append(globalDiagnostics, detailCard);
-  summary.append(diagnostics, progress);
+  summary.append(progress);
   content.append(tableCard);
-  element.append(header, summary, content);
+  element.append(header, summary, content, diagnostics);
 
   let current = null;
   let detailsExpanded = false;
@@ -831,6 +843,14 @@ export function createPlanReviewPanel(callbacks) {
     }
     appendDetailFact("Planned action", displayLabel(row.operation_kind ?? row.row_kind));
     if (row.size !== null) appendDetailFact("Size", formatByteCount(row.size));
+    if (row.mtime_ns !== null) appendDetailFact("Modified", modifiedText(row.mtime_ns));
+    if (row.dependency_count > 0) appendDetailFact("Dependencies", String(row.dependency_count));
+    if (row.is_container) {
+      appendDetailFact("Operations", String(row.operation_count));
+      appendDetailFact("Selection", `${row.selected_operation_count} of ${row.selectable_operation_count} selected`);
+    } else if (row.selection === "selected" || row.selection === "unselected") {
+      appendDetailFact("Selection", row.selection === "selected" ? "Selected" : "Not selected");
+    }
     if (row.risk !== "none") appendDetailFact("Risk", executionLabel(row.risk));
     if (row.reason !== null) appendDetailFact("Reason", reasonLabel(row.reason));
     if (row.blocked_reason !== null) appendDetailFact("Blocked", reasonLabel(row.blocked_reason));
@@ -1120,6 +1140,8 @@ export function createPlanReviewPanel(callbacks) {
       updateText(executionTrash, "");
       executionTrash.hidden = true;
       planDiagnostics.hidden = true;
+      planBreakdown.hidden = true;
+      updateText(globalStatus, "");
       renderDetail(null, null);
       floatingControls.hidden = true;
       return;
@@ -1163,6 +1185,10 @@ export function createPlanReviewPanel(callbacks) {
     const planFacts = `${review.summary.selected_operation_count} of ${review.summary.selectable_operation_count} selected · ${formatByteCount(review.summary.required_bytes)} required · ${planningIssues} planning issues`;
     updateText(planDiagnostics, `Plan: ${review.summary.preflight_refusal_count} refusals · ${review.summary.warning_count} warnings · ${review.summary.destructive_operation_count} destructive operations`);
     planDiagnostics.hidden = task.executionStarted;
+    const breakdown = FILTERS.filter((key) => review.summary.filter_counts?.[key] > 0)
+      .map((key) => `${displayLabel(key)} ${review.summary.filter_counts[key]}`);
+    updateText(planBreakdown, `Plan actions: ${breakdown.join(" · ")}`);
+    planBreakdown.hidden = breakdown.length === 0;
     const { snapshot, sessionState, execution } = selectTaskExecution(task);
     const executionState = task.executionStarted ? sessionState : null;
     const canExecuteSelection = review.summary.preflight_ready
@@ -1270,6 +1296,7 @@ export function createPlanReviewPanel(callbacks) {
       : review.pending === "plan-again" ? task.form?.attempt?.recovery : review.recovery;
     const actionMessage = [primaryRecovery?.message ?? review.message,
       independentCancel?.recovery?.message ?? independentCancel?.message].filter(Boolean).join(" ");
+    updateText(globalStatus, [facts.textContent, actionMessage].filter(Boolean).join(" · "));
     updateText(status, actionMessage);
     status.title = actionMessage;
     status.hidden = actionMessage.length === 0;

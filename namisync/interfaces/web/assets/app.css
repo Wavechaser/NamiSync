@@ -22,7 +22,7 @@ body {
   grid-template-areas:
     "header header"
     "rail work";
-  grid-template-columns: minmax(12rem, 18rem) minmax(0, 1fr);
+  grid-template-columns: minmax(0, min(18rem, 25%)) minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr);
   min-block-size: 100vh;
   overflow: hidden;
@@ -454,9 +454,18 @@ body {
   block-size: 100%;
   display: grid;
   gap: var(--space-4);
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto minmax(0, auto) minmax(13rem, 1fr);
   min-block-size: 0;
   min-inline-size: 0;
+}
+
+.nami-plan-review:has(.nami-plan-review__diagnostics:not([hidden])) {
+  grid-template-columns: minmax(0, 1fr) minmax(0, min(24rem, 40%));
+}
+
+.nami-plan-review > :is(.nami-plan-review__plan, .nami-plan-review__summary, .nami-plan-review__content) {
+  grid-column: 1;
 }
 
 .nami-plan-review [hidden] {
@@ -483,22 +492,29 @@ body {
 .nami-plan-review__diagnostics {
   display: grid;
   gap: var(--space-4);
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-column: 2;
+  grid-row: 1 / -1;
+  grid-template-rows: repeat(2, minmax(0, 1fr));
   min-block-size: 0;
   min-inline-size: 0;
-  max-block-size: min(32vh, 14rem);
-  overflow: auto;
-  padding-block-end: var(--space-2);
-  scrollbar-gutter: stable;
+  overflow: hidden;
 }
 
 .nami-plan-review__global-diagnostics {
+  align-content: start;
   display: grid;
   gap: var(--space-2);
+  grid-auto-rows: max-content;
   min-block-size: 0;
   min-inline-size: 0;
   overflow-y: auto;
   scrollbar-gutter: stable;
+}
+
+.nami-plan-review__global-diagnostics > h2 {
+  font-size: var(--font-size-body);
+  margin: 0;
+  overflow-wrap: anywhere;
 }
 
 .nami-plan-review__plan,
@@ -710,6 +726,8 @@ body {
 
 .nami-plan-review__execution > p,
 .nami-plan-review__plan-diagnostics,
+.nami-plan-review__plan-breakdown,
+.nami-plan-review__global-status,
 .nami-plan-review__global-diagnostics > :is(
   .nami-plan-review__execution-issues,
   .nami-plan-review__execution-trash
@@ -718,13 +736,6 @@ body {
   font-size: var(--font-size-caption);
   margin: 0;
   overflow-wrap: anywhere;
-}
-
-.nami-plan-review__execution-issues,
-.nami-plan-review__execution-trash {
-  min-block-size: 0;
-  overflow-y: auto;
-  scrollbar-gutter: stable;
 }
 
 .nami-plan-review__diagnostics[data-status="attention"] .nami-plan-review__execution-issues {
@@ -736,9 +747,11 @@ body {
 }
 
 .nami-plan-review__detail {
+  align-content: start;
   display: grid;
   gap: var(--space-3);
   min-block-size: 0;
+  min-inline-size: 0;
   overflow-y: auto;
   scrollbar-gutter: stable;
 }
@@ -766,11 +779,12 @@ body {
   display: grid;
   font-size: var(--font-size-caption);
   gap: var(--space-1) var(--space-3);
-  grid-template-columns: max-content minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
 }
 
 .nami-plan-review__detail-body > dt {
   color: var(--color-neutral-foreground-secondary);
+  overflow-wrap: anywhere;
 }
 
 .nami-plan-review__detail-body > dd {
@@ -1530,12 +1544,6 @@ body {
     overflow: visible;
     text-overflow: clip;
     white-space: normal;
-  }
-}
-
-@container plan-summary (max-width: 34rem) {
-  .nami-plan-review__diagnostics {
-    grid-template-columns: minmax(0, 1fr);
   }
 }
 

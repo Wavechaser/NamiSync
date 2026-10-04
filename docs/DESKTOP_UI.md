@@ -1726,16 +1726,27 @@ invented; presentation estimates do not become durable execution facts.
 
 The status title and primary action share one row at the native minimum width;
 active controls may occupy the next row. The detailed status line places its
-Details disclosure at the right. Expanded diagnostics follow that line, and
-progress follows the expanded area. The shared card is used by Plan, live and
+Details disclosure at the right. Progress follows the status line. The shared
+card is used by Plan, live and
 terminal execution; the same presentation remains available to a future Verify
-view without implementing that view here. Details starts collapsed. Its bounded
-two-column pane shows global plan/execution diagnostics, issues, omissions and
-trash location on one side and the highlighted item's facts on the other. The
+view without implementing that view here. Details starts collapsed. Its optional
+right column spans Setup, status and table, capped at 24rem and shrinking with
+the available width. Hiding it returns that width to all three central cards.
+Two stacked cards scroll independently: global plan/execution diagnostics,
+the supplied detailed status and action messages, nonzero canonical plan-action
+counts, issues, omissions and trash location above the highlighted item's facts.
+Action recovery and Gap guidance also remain visible in the central status card
+while Details is hidden. This
+uses the supplemental, simultaneous-interaction pattern in Microsoft's
+[inline drawer guidance](https://fluent2.microsoft.design/components/web/react/core/drawer/usage).
+The task rail keeps its 18rem cap and narrows in smaller windows while retaining
+tab, path-label and close-control alignment. The
 item pane always exists while expanded and prompts for a highlight when none is
 active. The server-owned highlight focus, including the last focus in a range,
 chooses the item; a row click does not force a deliberately collapsed pane open.
-Checkbox selection remains independent. Planned facts appear before execution;
+Checkbox selection remains independent. Planned facts include supplied size,
+Modified time, positive dependency count and applicable selection/folder totals;
+they never infer a missing planned path. Planned facts appear before execution;
 later the one retained operation response adds distinct operation, automatic
 verification and stored-evidence truth. Ordinary detail omits the operation ID
 and has no sticky shaded title or per-row Details/Close buttons. The whole area
@@ -1748,8 +1759,9 @@ Terminal detail includes a concise outcome, local completion time when known,
 and nonnegative elapsed wall time from the matching session's end and start;
 null or invalid timing is omitted, and overlapping error categories are never
 summed into an invented total.
-The default/minimum windows remain 1280×800/1024×640; expansion can lengthen the
-card with bounded scrolling. Fine visual tuning follows integration closure.
+The default/minimum windows remain 1280×800/1024×640; Details preserves the
+bounded table viewport and its virtual scrolling at both sizes. The global and
+item cards wrap long text and retain separately reachable scrolling and focus.
 
 [M1_PLAN](M1_PLAN.md#m1-8-execution-review-closure) owns M1-8 delivery status and its finite
 acceptance. The superseded `76f9281` allocation and its rejected layout evidence

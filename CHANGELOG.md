@@ -195,6 +195,11 @@ explicit, reviewable and regression-backed.
   Add pinned Regular Filter icons and remove the replaced controls and styles.
   Verify 84 focused, 2,286 interfaces/tools and seven installed UI cases, plus
   pinned icon provenance and independent review.
+- Move Details into an optional full-height right column with separate scrolling
+  task and item cards. Restore category counts and supplied item facts; let the
+  capped details column and task rail narrow as the window shrinks.
+  Pass 89 focused, 1,921 interfaces and six installed cases across retained runs;
+  correct natural text-row sizing and migrate gallery layout observations.
 - Ratify seven GUI units in M1_PLAN. Execution-to-Verify navigation remains
   deferred to M1-10; previous-location/rename redesign awaits a focused session.
 
