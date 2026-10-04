@@ -648,7 +648,8 @@ Lifecycle cases do not become file rows. All fixtures pass exact display-ready
 presentation values directly to production components/renderers; they do not
 derive planner, dispatcher, or verifier meaning.
 
-The icon foundation includes the selected Regular glyph vocabulary, vendored
+The icon foundation includes the selected Regular glyph vocabulary and the
+explicit Filled Stop alias used only for armed execution cancellation, vendored
 locally from `@fluentui/svg-icons@1.1.334` with exact package/file URLs,
 per-file SHA-256 hashes, and license. A frozen
 `icons.js` registry maps visual glyph names to fixed component classes; the
@@ -1365,8 +1366,9 @@ the tab's right edge; title and close-button positioning remain unchanged.
 
 Plan action/filter labels use sentence case and friendly names without changing
 canonical transport keys: `noop` is **No change**, `mkdir` is **Create folder**,
-`recase` is **Change name casing**, `move_update` is **Move + update**, `trash`
-is **Move to trash**, and `delete` is **Delete permanently**. Group filters retain
+`recase` is **Recase**, `move_update` is **Move + update**, `trash`
+is **Move to trash**, and `delete` is **Delete**. Destructive confirmation and
+the irreversible risk detail remain unchanged. Group filters retain
 All, Copy, Move, Update, Remove and Error; menus retain individual counters.
 The Notes policy is explicit and fail-visible:
 
@@ -1569,6 +1571,16 @@ An accepted pause renders **Pausing…** until custody actually reaches
 **Paused**; repeat pause/resume is disabled during the drain and cancellation
 remains available. Terminal presentation releases only that exact session while
 review artifacts remain.
+
+Execution uses one stable Pause/Resume button with visible action text and
+Regular Pause/Play artwork. Running Pause is neutral; authoritative Paused
+switches it to accented Resume. Waiting and pausing keep the button unavailable
+while existing lifecycle feedback remains truthful. Cancel is neutral with
+Regular Stop artwork. Its first click arms an accent fill with Filled Stop for
+five seconds; a second click within that monotonic deadline submits cancellation.
+Arming does not submit a command. Ordinary renders never extend the deadline;
+expiry, task/session replacement, unavailable controls, leaving the panel and
+submission disarm it. The expiry timer changes only the Cancel button.
 
 Execution-control attempts belong to the task and session across review refreshes.
 A replacement review retains pending and relevant accepted/refused/uncertain

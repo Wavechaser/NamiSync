@@ -243,6 +243,7 @@ def _adapt_execution_feedback(script: str) -> str:
         '  } else if (metric === "ui_get_plan_window_one_row_receipt") {',
         '''    let prepared = await prepareExecutionControl(0, action);
     let review = prepared.review;
+    if (action === "cancel") review.querySelector('[data-action="cancel"]').click();
     let observation = uFeedback.observeControl(prepared.row, action);
     await timedClick(review.querySelector(`[data-action="${action}"]`), review,
       action, observation,
@@ -259,6 +260,7 @@ def _adapt_execution_feedback(script: str) -> str:
       `${action} warmup settlement`);
     prepared = await prepareExecutionControl(1, action);
     review = prepared.review;
+    if (action === "cancel") review.querySelector('[data-action="cancel"]').click();
     observation = uFeedback.observeControl(prepared.row, action);
     const feedback = await timedClick(
       review.querySelector(`[data-action="${action}"]`), review, action,

@@ -736,6 +736,36 @@
       "upstream_sha256": "275a6fd17298b9bad3e1b07083f27b5d7d4a504f3779db2ba912d4e8c009b0b2",
       "packaged_sha256": "d501e9cdc5ed5b20f4bb67933d3c7232c896ea2175d5a520c6b544c56a37f68c"
     },
+    "stop_16_filled.svg": {
+      "source_url": "https://unpkg.com/@fluentui/svg-icons@1.1.334/icons/stop_16_filled.svg",
+      "upstream_sha256": "9bd0ee786a6e4a41830fca0766426df4aafa4b0632e39d199a8fa2257660730a",
+      "packaged_sha256": "a2135a309b2ed8deafbf2bdd7ee9ceed63235cc8b39d8e3fae556ba03940adcd"
+    },
+    "stop_16_regular.svg": {
+      "source_url": "https://unpkg.com/@fluentui/svg-icons@1.1.334/icons/stop_16_regular.svg",
+      "upstream_sha256": "004d854200563c5c5fab116c2133b33efc9dbe8bf3265654e968261aa572bff2",
+      "packaged_sha256": "996103f82d3fa1e33a4cb9d7c2c9b2eef30dc26843beb2f40800b4a581673544"
+    },
+    "stop_20_filled.svg": {
+      "source_url": "https://unpkg.com/@fluentui/svg-icons@1.1.334/icons/stop_20_filled.svg",
+      "upstream_sha256": "b54642df37c444d9f289cc000611e1f3be524c98e4a7c8bbcb07012640e8e619",
+      "packaged_sha256": "6353b092f354dd19ab5daa254833fdc338a6ccc0157e6c71ff9df9e0536b0c86"
+    },
+    "stop_20_regular.svg": {
+      "source_url": "https://unpkg.com/@fluentui/svg-icons@1.1.334/icons/stop_20_regular.svg",
+      "upstream_sha256": "62cb426a6747a1df0509a07e8d385eb7efa1f7a55067a61954c43082ef6bd64c",
+      "packaged_sha256": "b250be58cc180afa3ce8975a43b9c3974f148dc4828f817f0642cb39d5561300"
+    },
+    "stop_24_filled.svg": {
+      "source_url": "https://unpkg.com/@fluentui/svg-icons@1.1.334/icons/stop_24_filled.svg",
+      "upstream_sha256": "28a7c302f17233fc643c028cf1fae850d09f676ab54d69f0a0bf3165fafef11f",
+      "packaged_sha256": "aa807526a89896203966fa1159e7659bfda05b72f1781785ab0f950283883301"
+    },
+    "stop_24_regular.svg": {
+      "source_url": "https://unpkg.com/@fluentui/svg-icons@1.1.334/icons/stop_24_regular.svg",
+      "upstream_sha256": "6d63442e72cabec243733b3c4d11f16b8b2a68c81c2eaca9220ef5fb69c0568e",
+      "packaged_sha256": "2428266b685e5f81dd0ffe8f482471bfe330ceee942967ecbb6a0ee13d81566a"
+    },
     "subtract_16_regular.svg": {
       "source_url": "https://unpkg.com/@fluentui/svg-icons@1.1.334/icons/subtract_16_regular.svg",
       "upstream_sha256": "e2b20234d678b9d3e66fc40973aa3ead41fc19debefdf41f6026542374fcd09f",

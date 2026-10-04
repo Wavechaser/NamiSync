@@ -13,65 +13,27 @@ certify their recorded build and dependencies only.
 
 ## Plan GUI refinements — 2026-10-04
 
-User-authorized three-unit batch from `99e65c8` on `milestone1`. Each unit
-includes its direct contract/fixture migrations and one independently reviewed
-atomic commit. Shared frontend and delivery documents are edited serially.
+Completed user-authorized three-unit batch from `99e65c8` on `milestone1`.
+Each unit includes direct production/test/tool contract migrations, matching
+component documentation and independent adversarial review.
 
-| ID | Outcome and preserved guarantees | Verification | Status |
-| --- | --- | --- | --- |
-| GUI-RF1 | Surface execution preflight refusal codes/details on the planning page, distinguish commitment/admission failures; preserve effect authority and original-command recovery. | Focused 628 pass; ordinary 5,854 pass/four skips plus corrected fixture module 40 pass; 12 import contracts; installed 34 pass plus unchanged foreground-focus retry pass. Independent review approved. | Complete |
-| GUI-RF2 | Place informational prior-move groups at the deepest surviving on-disk target ancestor, root fallback; capped relative purple destination pills reveal canonical rows, clearing obstructing search/filters. Preserve expandable contents, selection/count/byte exclusion, stable navigation and bounded windows. | Projection/scale 311 pass; frontend 367 pass; ordinary 5,866 pass/four skips plus corrected host 84 and catalog consumers 96 pass; 12 import contracts. All 35 installed cases pass across dependency-scoped runs. Independent review approved. | Complete |
-| GUI-RF3 | Shorten the delete badge to Delete and recase badge to Recase; use neutral Pause/play toggle with accented Resume when paused, and neutral regular Stop/Cancel armed for five seconds in accent with filled Stop before a second click submits cancel. Preserve authoritative control state, pending/recovery and task/session ownership. | Control/timer/retirement page probes, icon generator/provenance checks, consumer fixtures, affected departments and installed controls/gallery witnesses. | Pending |
+| ID | Shipped outcome and preserved guarantees | Commit / verification |
+| --- | --- | --- |
+| GUI-RF1 | Bounded preflight refusal codes and origin reach Plan review; distinguish commitment/admission failures while preserving effect authority and original-command recovery. | `1865d66`; focused 628, ordinary 5,854/four skips plus corrected fixture module 40, 12 import contracts, all 35 installed cases across retained runs. |
+| GUI-RF2 | Informational prior-move groups attach beneath the deepest surviving scanned ancestor, with root fallback and one capped relative purple pill per move target parent. Reveal canonical destinations and clear only obstructing query settings; preserve expansion and selection/count/byte exclusion. Root destinations reveal the first canonical moved item. | `53fb959`; projection/scale 311, frontend 367, ordinary 5,866/four skips plus corrected host/catalog modules 84/96, 12 import contracts, all 35 installed cases across retained runs. |
+| GUI-RF3 | Delete/Recase labels; regular Pause/play toggle with accented Resume; neutral regular Stop/Cancel arms for five seconds with accented filled Stop before a second click cancels. Preserve authoritative state, pending/recovery and task/session ownership; ordinary renders retain the deadline and retirement disarms. | Atomic RF3 delivery commit containing this record; ordinary 5,875/four skips, focused consumers, pinned archive, 12 import contracts, all 35 installed cases across retained runs. Independent final review approved. |
+
+Evidence and reviews: `build/gui-refinements-20261004/`. RF3's final inventory
+case passed unchanged on resumption; failed foreground-prerequisite receipts
+remain alongside the successful receipt. Its recovery candidate was rebuilt on
+`milestone1`, without merging or cherry-picking the WIP. Git retains the finite
+implementation populations and recovery chronology.
 
 No execution-policy, commitment-authority, persisted-state or unrelated feature
-changes. Contract migrations needed for these accepted presentations are in scope;
-new safety/effect models or architectural owners require adjudication. Repository
-safety and recurrence stops apply. Elaborate each pending unit's finite owners,
-consumers and regression checks before implementation; retain failed attempts
-and review evidence under ignored `build/gui-refinements-20261004/`.
-
-RF1 owners/population: retained execution summary in workflow models/runtime/
-execution_review, service execution admission, web Plan review/drain/commands,
-bridge/app/Plan renderer and their direct Python/JavaScript/headed fixtures;
-BRIDGE/PRESENTATION/DESKTOP_UI describe the migrated view. Reuse existing
-ExecutionDetails and release-time capture, carrying closed refusal origins and
-codes with fixed actionable text rather than raw exception/path strings. No
-task-snapshot protocol migration. Regression checks cover pre-admission refusal,
-post-admission unrun committed refusal, invalid commitment, fast terminal/release,
-navigation, stale replies and retained original-command recovery. Baseline
-installed default task-shell passed; one RF1 commit includes all these consumers.
-
-RF2 grouping decision: one group per surviving old ancestor and move's target
-parent, including separate groups for distinct target parents. Moving a directory
-counts as one item. Root destinations reveal the first canonical moved item;
-other groups reveal the target parent row. User confirmed this interpretation.
-
-RF1 shipped as `1865d66`. RF2 starts from that integrated revision and refreshes
-the earlier `99e65c8` design at the shared bridge/page seams. Its population: workflow
-plan_projection; web plan_review/drain/commands; bridge/app/Plan row renderer,
-styles and tokens; projection/selection/navigation/bridge/page/headed tests and
-their direct fixtures. Current performance Plan/execution-receipt helpers that
-name the old group must migrate; frozen receipts remain historical. Use scanned
-target directory facts, excluding unblocked directory removal/move/recase old
-prefixes, to find surviving ancestors with Windows path keys. Preserve reviewed
-intent independently of selection toggles, add missing structural context, and
-keep prior rows excluded from counts/bytes/selection. A dedicated revisioned
-reveal operation preserves ordinary anchor semantics and clears only obstructing
-query settings. Regression gate includes deepest survival, multiple destinations,
-root fallback, unchanged totals, sorting, stale/off-window/filtered navigation,
-the existing large projection/folder-size witnesses and installed Plan/gallery.
-
-RF3 design population (inspected `1865d66`, refresh after RF2): Plan renderer;
-icon catalog/generator and generated registry, CSS, provenance and native-size
-Stop SVGs; frontend/icon-maintenance tests, gallery and installed task-shell
-fixtures; current Plan/execution-UI performance helpers and their tests.
-DESKTOP_UI and TOOLS own the behavior/catalog changes. Keep one authoritative
-Pause/Resume button and panel-local five-second Cancel arming; timeout is checked
-at activation as well as by timer. Task/session retirement and unavailable
-controls discard arming. The catalog declares only the filled Stop alias while
-retaining pinned upstream provenance and regular artwork elsewhere. Verification
-covers first/second/expired clicks, ordinary rerenders, pending control truth,
-retirement, generated-asset checks, affected departments and installed controls.
+changes. The optional benchmark's seven pre-existing inventory-command catalog
+omissions remain deferred in BUGS and `rf2-command-catalog-audit.json`; this batch
+claims no new quantitative benchmark result. No later milestone, push or PR is
+authorized by this batch.
 
 ## Open-bug resolutions — 2026-10-01
 

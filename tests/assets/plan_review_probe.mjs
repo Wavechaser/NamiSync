@@ -204,7 +204,7 @@ const panel = createPlanReviewPanel(callbacks);
 const planAgainButton = findAction(panel.element, "plan-again");
 const planAgainIcon = planAgainButton.children[0];
 assert.ok(planAgainIcon?.classList.contains("nami-icon--arrow-reset"));
-for (const action of ["execute", "plan-again", "pause", "resume", "cancel"]) {
+for (const action of ["execute", "plan-again", "pause", "cancel"]) {
   assert.equal(findAction(panel.element, action).disabled, true,
     `fresh panel must not advertise ${action} before a review loads`);
 }
@@ -337,7 +337,7 @@ assert.equal(findByClass(panel.element, "nami-plan-review__execution-alert").hid
   "a Plan-session Gap cannot be labeled as execution history loss");
 assert.equal(findByClass(panel.element, "nami-plan-review__execution").hidden, true);
 panel.render({ ...task, review: null, reviewLoading: true });
-for (const action of ["execute", "plan-again", "pause", "resume", "cancel"]) {
+for (const action of ["execute", "plan-again", "pause", "cancel"]) {
   const control = findAction(panel.element, action);
   assert.equal(control.disabled, true, `loading review must disable ${action}`);
   const beforeClick = calls.length;
@@ -699,29 +699,121 @@ assert.ok(findByDataset(panel.element, "action", "destructive-confirmation") ===
 task.executionStarted = true;
 task.sessionState = "active";
 panel.render(task);
-findAction(panel.element, "pause").dispatch("click");
+const pauseToggle = findAction(panel.element, "pause");
+assert.ok(pauseToggle.classList.contains("nami-button--secondary"));
+assert.equal(findByClass(pauseToggle, "nami-icon--pause").hidden, false);
+assert.equal(findByClass(pauseToggle, "nami-icon--play").hidden, true);
+assert.equal(pauseToggle.children.at(-1).textContent, "Pause");
+pauseToggle.dispatch("click");
 assert.deepEqual(calls.at(-1), ["onControl", review, "pause"]);
 task.executionControlState = "pausing";
 panel.render(task);
 assert.equal(findAction(panel.element, "pause").disabled, true);
-assert.equal(findAction(panel.element, "resume").hidden, true);
+assert.equal(findByDataset(panel.element, "action", "resume"), null);
 assert.equal(findAction(panel.element, "cancel").disabled, false);
 task.executionControlState = "paused";
 panel.render(task);
+assertSameNode(findAction(panel.element, "resume"), pauseToggle,
+  "authoritative pause retains the toggle and its focus identity");
+assert.ok(pauseToggle.classList.contains("nami-button--primary"));
+assert.equal(pauseToggle.children.at(-1).textContent, "Resume");
+assert.equal(findByClass(pauseToggle, "nami-icon--play").hidden, false);
+assert.equal(findByClass(pauseToggle, "nami-icon--pause").hidden, true);
 findAction(panel.element, "resume").dispatch("click");
 assert.deepEqual(calls.at(-1), ["onControl", review, "resume"]);
 task.executionControlState = "pending";
 panel.render(task);
 assert.equal(findAction(panel.element, "pause").disabled, true);
-assert.equal(findAction(panel.element, "resume").hidden, true);
+assert.equal(findByDataset(panel.element, "action", "resume"), null);
 assert.equal(findAction(panel.element, "cancel").disabled, false);
 task.executionControlState = "running";
 panel.render(task);
-findAction(panel.element, "cancel").dispatch("click");
+const cancelButton = findAction(panel.element, "cancel");
+const originalNow = performance.now;
+const originalSetTimeout = globalThis.setTimeout;
+const originalClearTimeout = globalThis.clearTimeout;
+let controlNow = 0;
+let cancelTimeout = null;
+performance.now = () => controlNow;
+globalThis.setTimeout = (callback, delay) => {
+  assert.equal(delay, 5000);
+  cancelTimeout = callback;
+  return callback;
+};
+globalThis.clearTimeout = (callback) => {
+  if (cancelTimeout === callback) cancelTimeout = null;
+};
+const beforeArm = calls.length;
+assert.ok(cancelButton.classList.contains("nami-button--secondary"));
+assert.equal(findByClass(cancelButton, "nami-icon--stop").hidden, false);
+assert.equal(findByClass(cancelButton, "nami-icon--stop-filled").hidden, true);
+cancelButton.dispatch("click");
+assert.equal(calls.length, beforeArm, "first Cancel click arms without a command");
+assert.ok(cancelButton.classList.contains("nami-button--primary"));
+assert.equal(findByClass(cancelButton, "nami-icon--stop-filled").hidden, false);
+controlNow = 4999;
+panel.render(task);
+cancelButton.dispatch("click");
 assert.deepEqual(calls.at(-1), ["onControl", review, "cancel"]);
+assert.equal(cancelButton.ariaPressed, "false", "submission disarms immediately");
+assert.equal(cancelTimeout, null);
+
+cancelButton.dispatch("click");
+const beforeExpiry = calls.length;
+const rowsBeforeExpiry = findByClass(panel.element, "nami-plan-review__rows").children;
+controlNow += 5000;
+cancelTimeout();
+assert.equal(cancelButton.ariaPressed, "false");
+assert.equal(findByClass(panel.element, "nami-plan-review__rows").children, rowsBeforeExpiry,
+  "expiry repaints only the Cancel button");
+assert.equal(calls.length, beforeExpiry);
+cancelButton.dispatch("click");
+controlNow += 4999;
+panel.render(task);
+controlNow += 1;
+cancelButton.dispatch("click");
+assert.equal(calls.length, beforeExpiry,
+  "ordinary renders do not extend the deadline, even when its timer is late");
+assert.equal(cancelButton.ariaPressed, "true", "an expired click starts a fresh arm");
+const taskIdBeforeArm = task.taskId;
+task.taskId = "task-cancel-switch";
+panel.render(task);
+assert.equal(cancelButton.ariaPressed, "false", "switching tasks disarms");
+task.taskId = taskIdBeforeArm;
+panel.render(task);
+cancelButton.dispatch("click");
+const sessionBeforeArm = task.sessionId;
+task.sessionId = "cancel-session-switch";
+panel.render(task);
+assert.equal(cancelButton.ariaPressed, "false", "switching sessions disarms");
+task.sessionId = sessionBeforeArm;
+panel.render(task);
+cancelButton.dispatch("click");
+review.pending = "selection";
+panel.render(task);
+assert.equal(cancelButton.ariaPressed, "false", "unavailable controls disarm");
+review.pending = null;
+panel.render(task);
+cancelButton.dispatch("click");
 task.drainUnavailable = true;
 panel.render(task);
-for (const action of ["pause", "resume", "cancel"]) {
+assert.equal(cancelButton.ariaPressed, "false", "a stopped drain disarms");
+task.drainUnavailable = false;
+const disposalPanel = createPlanReviewPanel(callbacks);
+disposalPanel.render(task);
+const disposalCancel = findAction(disposalPanel.element, "cancel");
+disposalCancel.dispatch("click");
+disposalPanel.dispose();
+assert.equal(disposalCancel.ariaPressed, "false", "leaving the panel disarms");
+assert.equal(cancelTimeout, null);
+panel.render(task);
+performance.now = originalNow;
+globalThis.setTimeout = originalSetTimeout;
+globalThis.clearTimeout = originalClearTimeout;
+document.defaultView.flushAnimationFrame();
+task.drainUnavailable = true;
+panel.render(task);
+for (const action of ["pause", "cancel"]) {
   assert.equal(findAction(panel.element, action).disabled, true,
     "a stopped task drain offers no execution controls");
 }
@@ -885,8 +977,8 @@ assert.ok(findText(terminologyRow({ selection_exclusion_reason: "incomplete-scan
 assert.ok(findText(terminologyRow({ notice: "metadata_match" }), "metadata_match"), "free-form notices are never hidden or rewritten");
 assert.ok(findText(terminologyRow({ notice: hostile }), hostile), "unknown notes stay inert and visible");
 assert.ok(findText(terminologyRow({ row_kind: "prior-operation", move_peer_id: row.node_id }), "Previous location"));
-for (const [operation_kind, label] of [["mkdir", "Create folder"], ["recase", "Change name casing"],
-  ["trash", "Move to trash"], ["delete", "Delete permanently"], ["move_update", "Move + update"]]) {
+for (const [operation_kind, label] of [["mkdir", "Create folder"], ["recase", "Recase"],
+  ["trash", "Move to trash"], ["delete", "Delete"], ["move_update", "Move + update"]]) {
   assert.ok(findText(terminologyRow({ operation_kind }), label));
 }
 terminologyPanel.dispose();
@@ -1304,6 +1396,7 @@ const liveReview = {
 const liveTask = {
   ...executionTask, review: liveReview, sessionState: "active",
   sessionId: "8".repeat(32),
+  reviewSessionId: "8".repeat(32),
   executionControlState: "running",
   progressPresentation: {
     phase: "execute", activeItem: { item_id: operationId, item_type: "operation" },

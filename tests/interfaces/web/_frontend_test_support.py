@@ -20,7 +20,7 @@ ICON_CATALOG = json.loads(ICON_CATALOG_PATH.read_text(encoding="utf-8"))
 ICON_GLYPHS = tuple(ICON_CATALOG["glyphs"])
 ICON_MASK_FILES = {
     f"{glyph}:{size}": (
-        f"{glyph.replace('-', '_')}_{ICON_CATALOG['fallbacks'].get(glyph, {}).get(size, native)}_regular.svg"
+        f"{ICON_CATALOG['filled'].get(glyph, glyph).replace('-', '_')}_{ICON_CATALOG['fallbacks'].get(glyph, {}).get(size, native)}_{'filled' if glyph in ICON_CATALOG['filled'] else 'regular'}.svg"
     )
     for glyph in ICON_GLYPHS
     for size, native in (("sm", 16), ("md", 20), ("lg", 24))

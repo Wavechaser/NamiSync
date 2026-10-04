@@ -223,18 +223,17 @@ const uFeedback = (() => {
 
   function controlSuccessor(review, row, action, frame) {
     if (frame.pending !== "" || !frame.connected || currentReview(row, review) === null) return false;
-    const pause = review.querySelector('[data-action="pause"]');
-    const resume = review.querySelector('[data-action="resume"]');
+    const toggle = review.querySelector('[data-control="pause-resume"]');
     const cancel = review.querySelector('[data-action="cancel"]');
     if (action === "pause") {
-      return (frame.status === "Pausing execution…" && pause?.disabled === true)
+      return (frame.status === "Pausing execution…" && toggle?.dataset.action === "pause" && toggle.disabled === true)
         || (frame.status === "Execution paused. Resume available."
-          && resume?.hidden === false && resume.disabled === false);
+          && toggle?.dataset.action === "resume" && toggle.disabled === false);
     }
     if (action === "resume") {
-      return (frame.status === "Execution waiting." && pause?.disabled === true)
+      return (frame.status === "Execution waiting." && toggle?.dataset.action === "pause" && toggle.disabled === true)
         || (frame.status === "Execution running."
-          && pause?.hidden === false && pause.disabled === false);
+          && toggle?.dataset.action === "pause" && toggle.disabled === false);
     }
     return (frame.status === "Canceling execution…" && cancel?.disabled === true)
       || (frame.status === "Execution canceled." && cancel?.disabled === true);
@@ -252,7 +251,7 @@ const uFeedback = (() => {
   function startedSuccessor(row, frame, confirmed) {
     const review = currentReview(row);
     const status = review?.querySelector(".nami-plan-review__status")?.textContent ?? "";
-    const pause = review?.querySelector('[data-action="pause"]');
+    const toggle = review?.querySelector('[data-control="pause-resume"]');
     const dialog = document.querySelector("#execution-confirmation");
     const modalMatches = confirmed
       ? dialog?.open === true && document.querySelector("#app")?.inert === true
@@ -260,8 +259,8 @@ const uFeedback = (() => {
       : dialog?.open !== true;
     return frame.pending === "" && review?.isConnected === true
       && (status === "Execution running." || status === "Execution waiting.")
-      && pause?.hidden === false
-      && pause.disabled === (status === "Execution waiting.")
+      && toggle?.dataset.action === "pause"
+      && toggle.disabled === (status === "Execution waiting.")
       && modalMatches;
   }
 

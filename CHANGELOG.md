@@ -332,6 +332,19 @@ Integrity controls, manual post-copy handoff and beta packaging remain open.
   35 installed cases across retained runs. Independent review approved. The
   benchmark's older missing inventory-command catalog is recorded separately in
   BUGS; no new quantitative benchmark result is claimed.
+- GUI-RF3 shortens action badges
+  to Delete and Recase. Pause/Resume shares one
+  toggle with regular Fluent pause/play artwork and accented Resume while paused.
+  Cancel arms for five seconds on its first click, showing accented Filled Stop;
+  its second click submits cancellation. Expiry and task/session/panel retirement
+  disarm it, while ordinary renders preserve the deadline. Stop's pinned Regular
+  and Filled assets are generated through the catalog; control and timing
+  consumers retain authoritative lifecycle/recovery behavior.
+- RF3 verification: 5,875 ordinary passes/four skips, focused control and timing
+  consumers, pinned icon archive and twelve import contracts pass. All 35
+  installed cases pass across retained runs, including the unchanged inventory
+  retry after desktop foreground availability returned. Independent review
+  approved; the recovery candidate was rebuilt as one verified atomic unit.
 
 #### Deliver M1-9 inventory review (2026-10-01 – 2026-10-02)
 

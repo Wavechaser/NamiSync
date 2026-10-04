@@ -1027,14 +1027,31 @@ window.addEventListener("error", (event) => {
     selectionPreserved: JSON.stringify(await control('follow_snapshot')) === JSON.stringify(selectionBeforeFollow)
       && selectedTitle() === titleBeforeFollow,
   };
-  live.querySelector('[data-action="pause"]').click();
-  await until(() => !live.querySelector('[data-action="resume"]').hidden, "paused execution");
+  const executionToggle = live.querySelector('[data-action="pause"]');
+  const controlsAppearance = {
+    runningNeutral: executionToggle.classList.contains("nami-button--secondary"),
+    pauseRegular: !executionToggle.querySelector(".nami-icon--pause").hidden,
+  };
+  executionToggle.click();
+  await until(() => live.querySelector('[data-action="resume"]')?.disabled === false, "paused execution");
   await control("checkpoint", "plan_paused");
   const paused = live.querySelector(".nami-plan-review__status").textContent;
-  live.querySelector('[data-action="resume"]').click();
-  await until(() => live.querySelector('[data-action="resume"]').hidden, "resumed execution");
+  controlsAppearance.sameToggle = live.querySelector('[data-action="resume"]') === executionToggle;
+  controlsAppearance.pausedAccent = executionToggle.classList.contains("nami-button--primary");
+  controlsAppearance.playRegular = !executionToggle.querySelector(".nami-icon--play").hidden;
+  executionToggle.click();
+  await until(() => live.querySelector('[data-action="pause"]')?.disabled === false, "resumed execution");
+  const resumed = executionToggle.dataset.action === "pause";
   await control("checkpoint", "plan_resumed");
-  live.querySelector('[data-action="cancel"]').click();
+  const cancelControl = live.querySelector('[data-action="cancel"]');
+  controlsAppearance.cancelNeutral = cancelControl.classList.contains("nami-button--secondary");
+  controlsAppearance.stopRegular = !cancelControl.querySelector(".nami-icon--stop").hidden;
+  cancelControl.click();
+  controlsAppearance.cancelArmed = cancelControl.classList.contains("nami-button--primary")
+    && !cancelControl.querySelector(".nami-icon--stop-filled").hidden;
+  controlsAppearance.firstClickDidNotCancel = live.dataset.pending === ""
+    && !cancelControl.disabled && statusFor("Task 54") === "Executing";
+  cancelControl.click();
   await until(() => statusFor("Task 54") === "Canceled", "canceled execution");
   await until(
     () => live.querySelector(".nami-plan-review__execution")?.textContent.includes("Filesystem: Canceled"),
@@ -1076,7 +1093,8 @@ window.addEventListener("error", (event) => {
       },
       confirmationInput: window.__namiConfirmationInputEvidence,
       paused: paused.length > 0,
-      resumed: live.querySelector('[data-action="resume"]').hidden,
+      resumed,
+      controlsAppearance,
       canceled: statusFor("Task 54") === "Canceled",
       canceledExecutionHeader,
       followNavigation,
@@ -1789,8 +1807,7 @@ def _drive_plan_confirmation(
         diagnostic_expression = r"""
 (() => {
   const execute = document.querySelector('.nami-plan-review [data-action="execute"]');
-  const pause = document.querySelector('.nami-plan-review [data-action="pause"]');
-  const resume = document.querySelector('.nami-plan-review [data-action="resume"]');
+  const pause = document.querySelector('.nami-plan-review [data-control="pause-resume"]');
   const dialog = document.querySelector("#execution-confirmation");
   const active = document.activeElement;
   const moveViewport = document.querySelector(".nami-plan-review__rows");
@@ -1809,8 +1826,8 @@ def _drive_plan_confirmation(
     move_bottom_gap: Number.isFinite(moveGap) && Math.abs(moveGap) <= 1000000 ? moveGap : null,
     review_pending: ['','pause','resume','execute','view','selection','confirmation','plan-again'].includes(document.querySelector('.nami-plan-review')?.dataset.pending) ? document.querySelector('.nami-plan-review').dataset.pending : null,
     pause_disabled: pause instanceof HTMLButtonElement ? pause.disabled : null,
-    pause_hidden: pause instanceof HTMLButtonElement ? pause.hidden : null,
-    resume_hidden: resume instanceof HTMLButtonElement ? resume.hidden : null,
+    pause_hidden: pause instanceof HTMLButtonElement ? pause.dataset.action !== 'pause' : null,
+    resume_hidden: pause instanceof HTMLButtonElement ? pause.dataset.action !== 'resume' : null,
     controls_hidden: pause?.closest('.nami-plan-review__control-group')?.hidden ?? null,
     active_element: activeElement,
     dialog_open: dialog?.open === true,

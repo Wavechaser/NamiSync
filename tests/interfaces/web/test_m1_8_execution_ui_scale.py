@@ -188,6 +188,62 @@ def test_ui_generated_script_parses_and_selection_warmup_uses_typed_observer(tmp
     assert completed.returncode == 0, completed.stdout + completed.stderr
 
 
+@pytest.mark.parametrize("adapted", [False, True])
+def test_cancel_click_measurement_arms_before_timing_submission(adapted: bool) -> None:
+    node = _node_executable()
+    assert node is not None, "Node.js is required for the Cancel timing seam"
+    factory = adapter._rootless_probe_script if adapted else adapter.legacy._headed_probe_script
+    script = factory("ui_control_cancel_click_feedback")
+    branch = script.split('  } else if (metric.endsWith("_click_feedback")) {', 1)[1].split(
+        '  } else if (metric === "ui_get_plan_window_one_row_receipt") {', 1,
+    )[0]
+    harness = r"""
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const [branch, adapted] = JSON.parse(fs.readFileSync(0, 'utf8'));
+const events = [];
+let timed = false;
+async function prepareExecutionControl(index) {
+  let armed = false;
+  const review = {dataset: {pending: ''}};
+  const cancel = {disabled: false, click() {
+    if (!armed) {armed = true; events.push('arm'); return;}
+    events.push(timed ? 'timed-submit' : 'warmup-submit');
+    cancel.disabled = true;
+    armed = false;
+  }};
+  review.querySelector = () => cancel;
+  return {review, row: {index}};
+}
+async function timedClick(element) {
+  timed = true;
+  element.click();
+  timed = false;
+  return adapted ? {elapsedNs: 1, outcome: 'pending'} : 1;
+}
+const until = async (predicate) => assert.equal(predicate(), true);
+const samples = [];
+const sample = (...args) => args;
+const uFeedback = {
+  observeControl: () => ({finish: async () => {}, dispose() {}}),
+  controlSuccessor: () => true,
+};
+const AsyncFunction = Object.getPrototypeOf(async function() {}).constructor;
+new AsyncFunction('metric', 'prepareExecutionControl', 'timedClick', 'until',
+  'samples', 'sample', 'uFeedback', branch)('ui_control_cancel_click_feedback',
+  prepareExecutionControl, timedClick, until, samples, sample, uFeedback).then(() => {
+    assert.deepEqual(events, ['arm', adapted ? 'timed-submit' : 'warmup-submit', 'arm', 'timed-submit']);
+    assert.equal(samples.length, 1);
+  }).catch((error) => {console.error(error); process.exitCode = 1;});
+"""
+    completed = subprocess.run(
+        (str(node), "--max-old-space-size=128", "-e", harness),
+        input=json.dumps([branch, adapted]), capture_output=True, text=True,
+        timeout=20, check=False,
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+
+
 
 def test_ui_generated_timed_observer_accepts_both_orders_and_rejects_false_actions() -> None:
     node = _node_executable()
@@ -228,8 +284,7 @@ async function run(kind, order, fault = null) {
   const row = {task_id: TASK, session_id: SESSION, request_id: REQUEST,
     source_path: 'C:/source', target_path: 'D:/target'};
   const controls = {
-    pause: {hidden: false, disabled: false},
-    resume: {hidden: true, disabled: true},
+    toggle: {dataset: {action: action === 'resume' ? 'resume' : 'pause'}, disabled: false},
     cancel: {hidden: false, disabled: false},
   };
   const sortHeader = {ariaSort: 'none', isConnected: true};
@@ -243,6 +298,7 @@ async function run(kind, order, fault = null) {
       if (selector === '.nami-plan-review__status') return {textContent: status};
       if (selector === '.nami-plan-review__path--source .nami-labeled-path__value') return source;
       if (selector === '.nami-plan-review__path--target .nami-labeled-path__value') return target;
+      if (selector === '[data-control="pause-resume"]') return controls.toggle;
       const control = selector.match(/data-action="([a-z]+)"/);
       return control ? controls[control[1]] : null;
     },
@@ -287,11 +343,12 @@ async function run(kind, order, fault = null) {
     else if (start) status = 'Execution running.';
     else if (action === 'pause') {
       status = fault === 'advanced-progress' ? 'Execution paused. Resume available.' : 'Pausing execution…';
-      controls.pause.disabled = true;
-      if (fault === 'advanced-progress') {controls.resume.hidden = false; controls.resume.disabled = false;}
+      controls.toggle.disabled = true;
+      if (fault === 'advanced-progress') {controls.toggle.dataset.action = 'resume'; controls.toggle.disabled = false;}
     } else if (action === 'resume') {
       status = fault === 'advanced-progress' ? 'Execution running.' : 'Execution waiting.';
-      controls.pause.disabled = fault !== 'advanced-progress';
+      controls.toggle.dataset.action = 'pause';
+      controls.toggle.disabled = fault !== 'advanced-progress';
     } else {
       status = fault === 'advanced-progress' ? 'Execution canceled.' : 'Canceling execution…';
       controls.cancel.disabled = true;

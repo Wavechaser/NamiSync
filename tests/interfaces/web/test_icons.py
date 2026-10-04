@@ -54,6 +54,7 @@ def test_supplemental_node_icon_registry_rejects_unknown_authority() -> None:
 
 
 def test_sh_g_14_receipt_matches_catalog_and_packaged_bytes() -> None:
+    assert ICON_CATALOG["filled"] == {"stop-filled": "stop"}
     assert {path.name for path in ICON_ROOT.iterdir()} == ICON_DIRECTORY_FILES
     provenance = json.loads((ICON_ROOT / "SOURCE.json").read_text(encoding="utf-8"))
     upstream = ICON_CATALOG["upstream"]

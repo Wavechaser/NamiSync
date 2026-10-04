@@ -26,6 +26,12 @@ and command evidence belong in ignored `build/`.
 Edit `tools/icons.json` to select glyph names and declare missing-size fallbacks,
 then synchronize and review the generated diff:
 
+Catalog schema 2 keeps existing glyph names Regular by default. Its `filled`
+map explicitly binds a selected alias to an upstream glyph; the sole selected
+alias is `stop-filled` to `stop`. This generates fixed local Filled artwork
+without a runtime style selector. Remove an alias from both `glyphs` and
+`filled` when retiring it. Package provenance retains its existing schema.
+
 ```powershell
 .\.venv\Scripts\python.exe tools/icons.py sync
 .\.venv\Scripts\python.exe tools/icons.py check

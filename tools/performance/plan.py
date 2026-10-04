@@ -2491,9 +2491,11 @@ def _headed_probe_script(metric_id: str) -> str:
     const action = metric.includes("pause") ? "pause"
         : metric.includes("resume") ? "resume" : "cancel";
     let review = (await prepareExecutionControl(0, action)).review;
+    if (action === "cancel") review.querySelector('[data-action="cancel"]').click();
     review.querySelector(`[data-action="${action}"]`).click();
     await until(() => review.dataset.pending === "", `${action} warmup settlement`);
     review = (await prepareExecutionControl(1, action)).review;
+    if (action === "cancel") review.querySelector('[data-action="cancel"]').click();
     const elapsed = await timedClick(
       review.querySelector(`[data-action="${action}"]`),
       action,

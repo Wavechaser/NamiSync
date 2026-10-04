@@ -1096,6 +1096,18 @@ body {
   --nami-icon-mask-lg: url("./icons/shifts_activity_24_regular.svg");
 }
 
+.nami-icon--stop {
+  --nami-icon-mask-sm: url("./icons/stop_16_regular.svg");
+  --nami-icon-mask-md: url("./icons/stop_20_regular.svg");
+  --nami-icon-mask-lg: url("./icons/stop_24_regular.svg");
+}
+
+.nami-icon--stop-filled {
+  --nami-icon-mask-sm: url("./icons/stop_16_filled.svg");
+  --nami-icon-mask-md: url("./icons/stop_20_filled.svg");
+  --nami-icon-mask-lg: url("./icons/stop_24_filled.svg");
+}
+
 .nami-icon--subtract {
   --nami-icon-mask-sm: url("./icons/subtract_16_regular.svg");
   --nami-icon-mask-md: url("./icons/subtract_20_regular.svg");

@@ -50,6 +50,8 @@ const GLYPH_CLASSES = Object.freeze({
   "search": "nami-icon--search",
   "settings": "nami-icon--settings",
   "shifts-activity": "nami-icon--shifts-activity",
+  "stop": "nami-icon--stop",
+  "stop-filled": "nami-icon--stop-filled",
   "subtract": "nami-icon--subtract",
   "subtract-circle": "nami-icon--subtract-circle",
   "timeline": "nami-icon--timeline",

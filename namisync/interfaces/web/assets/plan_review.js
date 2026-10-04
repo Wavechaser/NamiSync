@@ -23,8 +23,8 @@ const ROW_HEIGHT = 24;
 const DISPLAY_LABELS = Object.freeze({
   all: "All", copy: "Copy", move: "Move", update: "Update", remove: "Remove",
   error: "Error", noop: "No change", notice: "Notice", mkdir: "Create folder",
-  recase: "Change name casing", move_update: "Move + update", trash: "Move to trash",
-  delete: "Delete permanently", unsupported: "Unsupported", blocked: "Blocked",
+  recase: "Recase", move_update: "Move + update", trash: "Move to trash",
+  delete: "Delete", unsupported: "Unsupported", blocked: "Blocked",
 });
 const REASON_LABELS = Object.freeze({
   source_only: "Only in source", metadata_match: "Metadata matches",
@@ -473,12 +473,22 @@ export function createPlanReviewPanel(callbacks) {
   planAgain.ariaLabel = "Plan again";
   planAgain.title = "Plan again";
   planAgain.dataset.action = "plan-again";
-  const pause = button("Pause", "nami-button nami-button--secondary");
+  const pause = button("", "nami-button nami-button--secondary");
   pause.dataset.action = "pause";
-  const resume = button("Resume", "nami-button nami-button--secondary");
-  resume.dataset.action = "resume";
-  const cancel = button("Cancel", "nami-button nami-button--secondary");
+  pause.dataset.control = "pause-resume";
+  const pauseIcon = createIcon(document, "pause", "sm");
+  const playIcon = createIcon(document, "play", "sm");
+  const pauseLabel = document.createElement("span");
+  renderText(pauseLabel, "Pause");
+  playIcon.hidden = true;
+  pause.append(pauseIcon, playIcon, pauseLabel);
+  const cancel = button("", "nami-button nami-button--secondary");
   cancel.dataset.action = "cancel";
+  const stopIcon = createIcon(document, "stop", "sm");
+  const filledStopIcon = createIcon(document, "stop-filled", "sm");
+  const cancelLabel = document.createElement("span");
+  renderText(cancelLabel, "Cancel");
+  cancel.append(stopIcon, filledStopIcon, cancelLabel);
   const status = document.createElement("p");
   status.className = "nami-shell__guidance nami-plan-review__status";
   status.setAttribute("role", "status");
@@ -488,7 +498,7 @@ export function createPlanReviewPanel(callbacks) {
   retryOutcome.hidden = true;
   const controls = document.createElement("div");
   controls.className = "nami-plan-review__control-group";
-  controls.append(pause, resume, cancel);
+  controls.append(pause, cancel);
   const primary = document.createElement("div");
   primary.className = "nami-plan-review__control-group";
   primary.append(planAgain, execute);
@@ -522,13 +532,33 @@ export function createPlanReviewPanel(callbacks) {
   let scrollGeneration = 0;
   let pendingWindowOffset = null;
   let renderedRows = null;
+  let controlTaskId = null;
+  let controlSessionId = null;
+  let cancelDeadline = null;
+  let cancelTimer = null;
+  function paintCancel() {
+    const armed = cancelDeadline !== null;
+    cancel.className = `nami-button nami-button--${armed ? "primary" : "secondary"}`;
+    stopIcon.hidden = armed;
+    filledStopIcon.hidden = !armed;
+    cancel.ariaPressed = String(armed);
+    cancel.ariaLabel = armed ? "Confirm cancellation" : "Cancel execution";
+    cancel.title = armed ? "Click Cancel again within 5 seconds to stop execution." : "Cancel execution";
+  }
+  function disarmCancel() {
+    if (cancelTimer !== null) clearTimeout(cancelTimer);
+    cancelTimer = null;
+    cancelDeadline = null;
+    paintCancel();
+  }
+  paintCancel();
   function disableActions() {
     execute.disabled = true;
     planAgain.disabled = true;
     pause.disabled = true;
-    resume.disabled = true;
     cancel.disabled = true;
     controls.hidden = true;
+    disarmCancel();
   }
   disableActions();
   const renderedText = new WeakMap();
@@ -792,9 +822,21 @@ export function createPlanReviewPanel(callbacks) {
   planAgain.addEventListener("click", () => {
     if (current !== null) callbacks.onPlanAgain(current);
   });
-  pause.addEventListener("click", () => current !== null && callbacks.onControl(current, "pause"));
-  resume.addEventListener("click", () => current !== null && callbacks.onControl(current, "resume"));
-  cancel.addEventListener("click", () => current !== null && callbacks.onControl(current, "cancel"));
+  pause.addEventListener("click", () => {
+    if (current !== null && !pause.disabled) callbacks.onControl(current, pause.dataset.action);
+  });
+  cancel.addEventListener("click", () => {
+    if (current === null || cancel.disabled || controls.hidden) return;
+    if (cancelDeadline !== null && performance.now() < cancelDeadline) {
+      disarmCancel();
+      callbacks.onControl(current, "cancel");
+      return;
+    }
+    disarmCancel();
+    cancelDeadline = performance.now() + 5000;
+    cancelTimer = setTimeout(disarmCancel, 5000);
+    paintCancel();
+  });
   retryOutcome.addEventListener("click", () => {
     if (current !== null) callbacks.onRetryOutcome?.(current);
   });
@@ -1119,6 +1161,11 @@ export function createPlanReviewPanel(callbacks) {
   }
 
   function render(task) {
+    if (controlTaskId !== task.taskId || controlSessionId !== task.sessionId) {
+      disarmCancel();
+      controlTaskId = task.taskId;
+      controlSessionId = task.sessionId;
+    }
     if (!resizeObserved) {
       resizeObserver.observe(body);
       resizeObserved = true;
@@ -1324,15 +1371,20 @@ export function createPlanReviewPanel(callbacks) {
     planAgain.title = planAgainLabel;
     planAgain.disabled = (review.pending !== null && !checkPlanAgain) || task.canPlanAgain !== true;
     controls.hidden = !activeExecution;
-    pause.hidden = task.executionControlState === "paused";
-    resume.hidden = task.executionControlState !== "paused";
+    const paused = task.executionControlState === "paused";
+    pause.dataset.action = paused ? "resume" : "pause";
+    updateText(pauseLabel, paused ? "Resume" : "Pause");
+    pause.className = `nami-button nami-button--${paused ? "primary" : "secondary"}`;
+    pause.ariaPressed = String(paused);
+    pauseIcon.hidden = paused;
+    playIcon.hidden = !paused;
     pause.disabled = review.pending !== null || controlUnavailable
-      || task.executionControlState !== "running";
-    resume.disabled = review.pending !== null || controlUnavailable
-      || task.executionControlState !== "paused";
+      || !["running", "paused"].includes(task.executionControlState);
     cancel.disabled = (review.pending !== null && !task.canCancelAfterFixedReviewOutcome)
       || controlUnavailable
       || task.executionControlState === "canceling";
+    if (controls.hidden || cancel.disabled
+        || (cancelDeadline !== null && performance.now() >= cancelDeadline)) disarmCancel();
     const controlAttempt = task.executionControlAttempt?.sessionId === task.sessionId
       ? task.executionControlAttempt : null;
     const independentCancel = controlAttempt?.independent ? controlAttempt : null;
@@ -1371,6 +1423,9 @@ export function createPlanReviewPanel(callbacks) {
   }
 
   function dispose() {
+    disarmCancel();
+    controlTaskId = null;
+    controlSessionId = null;
     closeFilterMenus();
     finishResize?.();
     resizeObserver.disconnect();

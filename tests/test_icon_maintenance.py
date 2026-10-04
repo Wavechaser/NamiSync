@@ -37,16 +37,16 @@ def _archive(members: list[tuple[str, bytes, bytes]], metadata: dict | None = No
     return stream.getvalue()
 
 
-def _members(glyph: str = "add") -> list[tuple[str, bytes, bytes]]:
+def _members(glyph: str = "add", style: str = "regular") -> list[tuple[str, bytes, bytes]]:
     return [
-        (f"package/icons/{glyph}_{size}_regular.svg", _svg(size), tarfile.REGTYPE)
+        (f"package/icons/{glyph}_{size}_{style}.svg", _svg(size), tarfile.REGTYPE)
         for size in (16, 20, 24)
     ]
 
 
 def _catalog(archive: bytes, glyphs: list[str] | None = None) -> dict:
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "upstream": {
             "version": "1.1.334",
             "git_commit": "a" * 40,
@@ -55,6 +55,7 @@ def _catalog(archive: bytes, glyphs: list[str] | None = None) -> dict:
         },
         "glyphs": glyphs or ["add"],
         "fallbacks": {},
+        "filled": {},
     }
 
 
@@ -143,6 +144,57 @@ def test_missing_native_requires_explicit_fallback_and_does_not_copy_invented_as
     catalog["upstream"] = _catalog(native_archive)["upstream"]
     with pytest.raises(ValueError, match="fallback"):
         icons.plan_outputs(workspace, catalog, native_archive)
+
+
+def test_filled_alias_uses_native_variant_and_retires_only_its_owned_assets(workspace: Path) -> None:
+    archive = _archive(_members("stop") + _members("stop", "filled"))
+    catalog = _catalog(archive, ["stop", "stop-filled"])
+    catalog["filled"] = {"stop-filled": "stop"}
+    (workspace / "upstream.tgz").write_bytes(archive)
+    _save_catalog(workspace, catalog)
+    assert _run(workspace, "sync") == 0
+    assert _run(workspace, "check") == 0
+    assert icons.icon_mapping(catalog) == {
+        f"{glyph}:{key}": f"stop_{size}_{style}.svg"
+        for glyph, style in (("stop", "regular"), ("stop-filled", "filled"))
+        for key, size in (("sm", 16), ("md", 20), ("lg", 24))
+    }
+    receipt = json.loads((workspace / ASSETS / "icons/SOURCE.json").read_bytes())
+    assert receipt["schema_version"] == 1
+    assert set(receipt["files"]) == {
+        f"stop_{size}_{style}.svg" for size in (16, 20, 24) for style in ("regular", "filled")
+    }
+    for filename, evidence in receipt["files"].items():
+        assert evidence["source_url"].endswith("/" + filename)
+        assert evidence["packaged_sha256"] == hashlib.sha256(
+            (workspace / ASSETS / "icons" / filename).read_bytes()
+        ).hexdigest()
+    _save_catalog(workspace, _catalog(archive, ["stop"]))
+    assert _run(workspace, "sync") == 0
+    assert not list((workspace / ASSETS / "icons").glob("*_filled.svg"))
+    assert len(list((workspace / ASSETS / "icons").glob("stop_*_regular.svg"))) == 3
+    assert _run(workspace, "check") == 0
+
+
+def test_filled_alias_cannot_silently_use_regular_artwork(workspace: Path) -> None:
+    archive = _archive(_members("stop") + _members("stop", "filled")[1:])
+    catalog = _catalog(archive, ["stop", "stop-filled"])
+    catalog["filled"] = {"stop-filled": "stop"}
+    with pytest.raises(ValueError, match="fallback"):
+        icons.plan_outputs(workspace, catalog, archive)
+    catalog["fallbacks"] = {"stop-filled": {"sm": 20}}
+    assert icons.icon_mapping(catalog)["stop-filled:sm"] == "stop_20_filled.svg"
+    assert (ASSETS / "icons/stop_16_regular.svg").as_posix() in icons.plan_outputs(workspace, catalog, archive)
+
+
+@pytest.mark.parametrize("filled", [{"stop-filled": "../stop"}, {"stop-filled": "add"},
+                                  {"missing-filled": "stop"}, {"stop-filled": 1}])
+def test_catalog_rejects_invalid_filled_alias(workspace: Path, filled: dict) -> None:
+    catalog = _catalog((workspace / "upstream.tgz").read_bytes(), ["stop", "stop-filled"])
+    catalog["filled"] = filled
+    _save_catalog(workspace, catalog)
+    with pytest.raises(ValueError, match="filled"):
+        icons.load_catalog(workspace / "tools/icons.json")
 
 
 @pytest.mark.parametrize("corruption", ["archive", "license", "markers", "duplicate", "symlink", "script", "external-fill"])

@@ -18,7 +18,7 @@ ASSETS = "namisync/interfaces/web/assets"
 SIZES = {"sm": 16, "md": 20, "lg": 24}
 REGISTRY_MARKERS = ("// BEGIN GENERATED ICON REGISTRY", "// END GENERATED ICON REGISTRY")
 MASK_MARKERS = ("/* BEGIN GENERATED ICON MASKS */", "/* END GENERATED ICON MASKS */")
-FILENAME = re.compile(r"[a-z0-9]+(?:_[a-z0-9]+)*_(?:16|20|24)_regular\.svg")
+FILENAME = re.compile(r"[a-z0-9]+(?:_[a-z0-9]+)*_(?:16|20|24)_(?:regular|filled)\.svg")
 MAX_ARCHIVE_BYTES = 64 * 1024 * 1024
 MAX_MEMBER_BYTES = 256 * 1024
 
@@ -43,9 +43,9 @@ def _json(payload: bytes) -> dict:
 def load_catalog(path: Path) -> dict:
     catalog = _json(path.read_bytes())
     _require(type(catalog) is dict and set(catalog) == {
-        "schema_version", "upstream", "glyphs", "fallbacks",
+        "schema_version", "upstream", "glyphs", "fallbacks", "filled",
     }, "Invalid catalog fields")
-    _require(type(catalog["schema_version"]) is int and catalog["schema_version"] == 1,
+    _require(type(catalog["schema_version"]) is int and catalog["schema_version"] == 2,
              "Unsupported catalog schema")
     pin = catalog["upstream"]
     _require(type(pin) is dict and set(pin) == {
@@ -64,6 +64,10 @@ def load_catalog(path: Path) -> dict:
     _require(all(type(glyph) is str and re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", glyph)
                  for glyph in glyphs), "Invalid glyph name")
     _require(len(glyphs) == len(set(glyphs)), "Duplicate glyph")
+    filled = catalog["filled"]
+    _require(type(filled) is dict and set(filled) <= set(glyphs), "Invalid filled alias")
+    _require(all(type(base) is str and base in glyphs and alias == base + "-filled"
+                 and base not in filled for alias, base in filled.items()), "Invalid filled source")
     fallbacks = catalog["fallbacks"]
     _require(type(fallbacks) is dict and set(fallbacks) <= set(glyphs), "Invalid fallback glyph")
     for glyph, sizes in fallbacks.items():
@@ -74,9 +78,15 @@ def load_catalog(path: Path) -> dict:
     return catalog
 
 
+def _native_filename(catalog: dict, glyph: str, size: int) -> str:
+    base = catalog["filled"].get(glyph, glyph)
+    style = "filled" if glyph in catalog["filled"] else "regular"
+    return f"{base.replace('-', '_')}_{size}_{style}.svg"
+
+
 def icon_mapping(catalog: dict) -> dict[str, str]:
     return {
-        f"{glyph}:{size}": f"{glyph.replace('-', '_')}_{catalog['fallbacks'].get(glyph, {}).get(size, native)}_regular.svg"
+        f"{glyph}:{size}": _native_filename(catalog, glyph, catalog['fallbacks'].get(glyph, {}).get(size, native))
         for glyph in catalog["glyphs"] for size, native in SIZES.items()
     }
 
@@ -139,7 +149,7 @@ def plan_outputs(root: Path, catalog: dict, archive_bytes: bytes) -> dict[str, b
     mapping = icon_mapping(catalog)
     required = set(mapping.values())
     native_paths = {
-        f"{glyph.replace('-', '_')}_{native}_regular.svg"
+        _native_filename(catalog, glyph, native)
         for glyph in catalog["glyphs"] for native in SIZES.values()
     }
     members = {}
@@ -167,7 +177,7 @@ def plan_outputs(root: Path, catalog: dict, archive_bytes: bytes) -> dict[str, b
              "Archive package identity does not match pin")
     for glyph in catalog["glyphs"]:
         for size, native in SIZES.items():
-            name = f"{glyph.replace('-', '_')}_{native}_regular.svg"
+            name = _native_filename(catalog, glyph, native)
             fallback = size in catalog["fallbacks"].get(glyph, {})
             _require((name not in members) == fallback, f"Missing or stale fallback: {glyph}:{size}")
     _require(required <= members.keys(), "Missing selected native SVG")

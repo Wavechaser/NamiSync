@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "upstream": {
     "version": "1.1.334",
     "git_commit": "d7e5f224125e5638df10610d7c2755d709113e55",
@@ -57,11 +57,16 @@
     "search",
     "settings",
     "shifts-activity",
+    "stop",
+    "stop-filled",
     "subtract",
     "subtract-circle",
     "timeline",
     "warning"
   ],
+  "filled": {
+    "stop-filled": "stop"
+  },
   "fallbacks": {
     "arrow-reset": {
       "sm": 20

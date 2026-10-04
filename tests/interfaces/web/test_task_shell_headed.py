@@ -361,6 +361,11 @@ def test_m1_4_installed_task_shell_navigation_closure_and_recovery(
     }
     assert plan_review["paused"] is True
     assert plan_review["resumed"] is True
+    assert plan_review["controlsAppearance"] == {
+        "runningNeutral": True, "pauseRegular": True, "sameToggle": True,
+        "pausedAccent": True, "playRegular": True, "cancelNeutral": True,
+        "stopRegular": True, "cancelArmed": True, "firstClickDidNotCancel": True,
+    }
     assert plan_review["canceled"] is True
     assert "Filesystem: Canceled" in plan_review["canceledExecutionHeader"]
     assert plan_review["emptyPlanMessage"] is True
