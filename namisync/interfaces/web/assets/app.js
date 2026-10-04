@@ -1865,14 +1865,19 @@ async function revealPlanMoveDestination(review, nodeId) {
     });
     if (!stillCurrent()) return;
     const window = await getPlanWindow(task.taskId, result.summary.view_revision, result.index ?? 0, 256);
-    if (!stillCurrent() || window.disposition !== "current"
+    if (!stillCurrent()) return;
+    if (window.disposition !== "current"
         || window.view_revision !== result.summary.view_revision
-        || window.highlight_revision !== result.summary.highlight_revision) return;
+        || window.highlight_revision !== result.summary.highlight_revision) {
+      review.refreshAvailable = true;
+      review.message = "Review changed before the destination could be shown. Refresh to read the current review.";
+      return;
+    }
     review.summary = result.summary;
     adoptExecutionWindow(review, window);
     review.refreshAvailable = false;
     review.follow.eligible = planFollowEligible(review);
-    review.moveScrollOffset = result.index;
+    review.moveScrollOffset = result.index ?? window.offset;
     review.message = result.summary.disposition === "conflict"
       ? "View changed. Click the move destination again." : null;
   } catch (_error) {

@@ -1496,6 +1496,22 @@ await until(() => liveReview.pending === null);
 assert.equal(liveReview.window, moveWindowBeforeStale);
 assert.equal(planWindows.length, moveWindowBase + 1);
 taskButton("Task 7").click();
+const staleMoveUpdateBase = planViewUpdates.length;
+const staleMoveWindowBase = planWindows.length;
+globalThis.planReviewHarness.callbacks.onRevealMove(liveReview, `node-${"9".repeat(32)}`);
+await until(() => planViewUpdates.length === staleMoveUpdateBase + 1);
+planViewUpdates.at(-1).resolve({ summary: moveSummary, node_id: `node-${"8".repeat(32)}`, index: 500 });
+await until(() => planWindows.length === staleMoveWindowBase + 1);
+taskButton("Task 6").click();
+const staleMoveMessage = liveReview.message;
+planWindows.at(-1).resolve({ ...executionWindow(moveSummary, 500, 6), disposition: "conflict" });
+await until(() => liveReview.pending === null);
+assert.equal(liveReview.window, moveWindowBeforeStale);
+assert.equal(liveReview.summary, moveSummary);
+assert.equal(liveReview.refreshAvailable, false, "obsolete reveal windows do not offer recovery");
+assert.equal(liveReview.message, staleMoveMessage, "obsolete reveal windows remain silent");
+assert.equal(liveReview.foregroundWindowReaders, 0);
+taskButton("Task 7").click();
 planViewUpdates.splice(moveUpdateBase);
 planWindows.splice(moveWindowBase);
 const followWindowBase = planWindows.length;
@@ -2164,6 +2180,65 @@ await until(() => planWindows.length === highlightReloadWindowBase + 1);
 planWindows.at(-1).resolve(planWindow(highlightReview.summary));
 await until(() => highlightTask.review !== highlightReview);
 assert.equal(highlightTask.review.recovery?.state === "fixed-unknown", false);
+
+const revealRecoveryReview = highlightTask.review;
+const retainedRevealSummary = revealRecoveryReview.summary;
+const retainedRevealWindow = revealRecoveryReview.window;
+const retainedRevealScroll = revealRecoveryReview.moveScrollOffset;
+const changedRevealSummary = { ...retainedRevealSummary,
+  view_revision: retainedRevealSummary.view_revision + 1, search_query: "changed query" };
+for (const failure of ["conflict", "view", "highlight", "unavailable"]) {
+  const updateBase = planViewUpdates.length;
+  const windowBase = planWindows.length;
+  globalThis.planReviewHarness.callbacks.onRevealMove(revealRecoveryReview, `node-${"9".repeat(32)}`);
+  await until(() => planViewUpdates.length === updateBase + 1);
+  planViewUpdates.at(-1).resolve({ summary: changedRevealSummary,
+    node_id: `node-${"8".repeat(32)}`, index: 400 });
+  await until(() => planWindows.length === windowBase + 1);
+  const candidate = planWindow(changedRevealSummary, 400);
+  if (failure === "unavailable") planWindows.at(-1).reject(new Error("destination window unavailable"));
+  else {
+    if (failure === "conflict") candidate.disposition = "conflict";
+    if (failure === "view") candidate.view_revision += 1;
+    if (failure === "highlight") candidate.highlight_revision += 1;
+    planWindows.at(-1).resolve(candidate);
+  }
+  await until(() => revealRecoveryReview.pending === null);
+  assert.equal(revealRecoveryReview.summary, retainedRevealSummary, failure);
+  assert.equal(revealRecoveryReview.window, retainedRevealWindow, failure);
+  assert.equal(revealRecoveryReview.moveScrollOffset, retainedRevealScroll, failure);
+  assert.equal(revealRecoveryReview.foregroundWindowReaders, 0, failure);
+  assert.equal(revealRecoveryReview.refreshAvailable, true, failure);
+  assert.match(revealRecoveryReview.message, /Refresh to read the current review/, failure);
+  assert.doesNotMatch(revealRecoveryReview.message, /Opening/, failure);
+  await turns();
+  assert.equal(planViewUpdates.length, updateBase + 1, "failed reveal does not resubmit");
+  assert.equal(planWindows.length, windowBase + 1, "failed reveal does not poll");
+}
+const revealRefreshOpenBase = planOpens.length;
+const revealRefreshWindowBase = planWindows.length;
+const revealCallsBeforeRefresh = calls.filter(([name]) => name === "reveal-move").length;
+globalThis.planReviewHarness.callbacks.onRetryOutcome(revealRecoveryReview);
+await until(() => planOpens.length === revealRefreshOpenBase + 1);
+planOpens.at(-1).resolve(changedRevealSummary);
+await until(() => planWindows.length === revealRefreshWindowBase + 1);
+planWindows.at(-1).resolve(planWindow(changedRevealSummary));
+await until(() => highlightTask.review !== revealRecoveryReview);
+assert.equal(highlightTask.review.summary, changedRevealSummary);
+assert.equal(highlightTask.review.refreshAvailable, false);
+assert.equal(calls.filter(([name]) => name === "reveal-move").length, revealCallsBeforeRefresh,
+  "Refresh reads authoritative state without replaying reveal");
+const conflictRevealReview = highlightTask.review;
+globalThis.planReviewHarness.callbacks.onRevealMove(conflictRevealReview, `node-${"9".repeat(32)}`);
+const conflictRevealSummary = { ...changedRevealSummary, disposition: "conflict" };
+planViewUpdates.at(-1).resolve({ summary: conflictRevealSummary, node_id: null, index: null });
+await until(() => planWindows.length === revealRefreshWindowBase + 2);
+assert.deepEqual(calls.at(-1), ["plan-window", highlightTask.taskId, changedRevealSummary.view_revision, 0, 256]);
+planWindows.at(-1).resolve(planWindow(conflictRevealSummary));
+await until(() => conflictRevealReview.pending === null);
+assert.equal(conflictRevealReview.moveScrollOffset, 0, "conflict viewport follows the loaded offset");
+assert.equal(conflictRevealReview.window.offset, 0);
+assert.equal(conflictRevealReview.message, "View changed. Click the move destination again.");
 
 const unknownPauseTask = await openActiveUnknownOutcomeTask("1");
 const pauseReview = unknownPauseTask.review;

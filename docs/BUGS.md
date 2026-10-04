@@ -887,6 +887,15 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Plan review windowing
 
+- MINOR - FIXED (2026-10-05). Follow-up reveal recovery omission. A move
+  reveal could change the server view before its bounded window was read; a
+  conflicting or mismatched window then left the old rows and Opening message
+  without a recovery action. The browser now retains its coherent summary/rows
+  and offers Refresh review for a still-current refusal. A coherent conflict
+  also scrolls to its loaded offset instead of retaining an unrelated viewport.
+  Direct browser probes cover rejection, revision mismatches, explicit Refresh
+  without replay, conflict scroll and obsolete-response silence.
+
 - MINOR - FIXED (2026-09-24). Null-state control retention. A newly loading
   or reused Plan panel could show Execute and other actions enabled without a
   review; their guarded handlers did nothing. The short headed driver mistook

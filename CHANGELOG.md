@@ -177,6 +177,17 @@ behavioral evidence.
 Safety, settlement and authority work made high-consequence release claims
 explicit, reviewable and regression-backed.
 
+#### Align desktop review surfaces and recovery (2026-10-05)
+
+- Make a stale move-destination follow-up read visibly refreshable while
+  retaining the last coherent review. A coherent conflict response now scrolls
+  to its loaded window instead of leaving the viewport at an unrelated offset.
+  Preserve task/revision ownership and original-command recovery without retries.
+- Verify the narrow recovery fix with seven focused cases, 1,921 interfaces
+  tests and both installed task-shell window-size journeys.
+- Ratify seven GUI units in M1_PLAN. Execution-to-Verify navigation remains
+  deferred to M1-10; previous-location/rename redesign awaits a focused session.
+
 #### Repair bridge diagnostic composition receipts (2026-10-04)
 
 - Include the seven pre-existing inventory commands in the optional installed

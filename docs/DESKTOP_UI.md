@@ -1402,6 +1402,10 @@ purple text in Dark, and system colors in forced colors. Activation reveals the
 canonical destination, expanding its ancestors and clearing only obstructing
 search/filters. Root destinations jump to the first canonical moved item.
 The pill and its contents stay outside execution selection and totals.
+If the destination's follow-up window no longer matches, retain the last coherent
+review and offer **Refresh review** with an explanation. A coherent conflict
+response aligns the viewport with the loaded offset before asking the user to
+click the destination again; obsolete task/navigation responses remain silent.
 
 Row highlighting is distinct from execution selection. Pointer and keyboard
 gestures replace, toggle, extend, or add ranges in the complete server-owned

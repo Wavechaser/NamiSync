@@ -11,6 +11,42 @@ retains investigation, rejected proposals and superseded execution recipes;
 the decisions still governing delivery are below. Historical observations
 certify their recorded build and dependencies only.
 
+## GUI alignment batch — 2026-10-05
+
+User-ratified seven-point register from `999a568` on `milestone1`. Units
+GUI-A1–A5 are active; A6 and A7 are deferred as stated below. Each active unit
+includes its direct consumers and fixtures, matching documentation, required
+verification and fresh independent review before its own atomic commit.
+Shared files and acceptance runs are serialized. Evidence belongs under
+`build/gui-alignment-20261005/`; HANDOFF owns immediate resumption context.
+
+| ID | Accepted outcome / finite owners and consumers | Dependency, gate and status |
+| --- | --- | --- |
+| GUI-A1 | Narrow move-reveal recovery: report a still-current rejected/mismatched follow-up window as refreshable; preserve the last coherent summary/window; align conflict viewport with the loaded offset. `assets/app.js`, task-shell and Plan-review probes, their frontend/native consumers, DESKTOP_UI and BUGS. No retries, new bridge fields or lifecycle changes. | Delivery commit containing this record: seven focused, 1,921 interfaces and both installed task-shell cases passed; independent review approved in `a1-review.md`. Evidence `a1-*`. |
+| GUI-A2 | Table enlargement gives extra width only to Filename, preserving header/body alignment, horizontal scrolling and deliberate column resizing. `assets/plan_review.js`, shared table CSS/tokens or a bounded shared layout helper, gallery sizing consumers and frontend/native tests. Apply the same behavior when A5 migrates Inventory. | Before table reuse. Focused sizing/resize probes, interfaces department, installed gallery and Plan/task-shell sizing witnesses; pending. |
+| GUI-A3 | One Fluent Filter menu with multi-select categories and per-category counts, All clearing filters, active-category count excluding All/search, accented active trigger and neutral inactive trigger. Keep open after selection; dismiss on outside interaction, Escape, foreground loss and retirement. `plan_review.js`, `inventory_review.js`, shared menu helper only where reused, CSS, icon catalog/generated assets, direct probes/gallery/native helpers, DESKTOP_UI/TOOLS. Preserve server filter and query semantics. | After A2; A5 reuses it. Interfaces and icon/tool gates, pinned icon archive check, installed gallery and affected Plan/Inventory interaction witnesses; pending. |
+| GUI-A4 | Full-height optional right details column, toggled by Details; central Setup/status/table regain width when hidden. Separate independently scrollable global and item cards. Cap details at 24rem with shrink allowance; let the capped task rail narrow without breaking tab alignment. Reuse existing projected details and restore useful already-available item facts. `plan_review.js`, shell/panel composition only as needed, app CSS, direct renderer/gallery/native layout consumers, DESKTOP_UI. | After A3; A5 adopts this layout. Interfaces department plus installed gallery/task-shell layout, resize, focus and retirement witnesses; pending. |
+| GUI-A5 | Align standalone Verify/Inventory Setup, status and table with Plan/Execution; put whole/selected Refresh on status; reuse semantic row labels and shared sizing/filter/details components. Add a nullable bounded recorded-baseline checksum to window rows, matching bridge validation and fixtures; show shortened checksum with full stored evidence accessible. Standalone Verify stays on Integrity with Sync disabled. Remove only code made obsolete by this migration. `inventory_review.py`, browser inventory/bridge/panel/status owners, direct Python/JS probes, installed Inventory/gallery helpers, DESKTOP_UI/PRESENTATION/BRIDGE/FEATURES. | After A2–A4. Existing real-service Inventory publication/recovery cases first, interfaces department, installed Inventory and gallery witnesses; shared Plan consumers rerun where dependencies change. Pending. |
+| GUI-A6 | Execution-to-Verify navigation. Current inventory reads/actions require an inventory task and captured inventory publication; Refresh requires inventory settlement and no retained plan token. Same-task execution navigation needs new association, retention and lifecycle policy. | Deferred to M1-10 under the user's permitted fallback. No enabling switch or new lifecycle behavior in this batch. |
+| GUI-A7 | Previous-location/rename redesign: action-shaped complete destination badges, canonical moved-from/renamed-from annotation, initial collapse and exclusion of same-parent renames/recases from prior groups. | Entire outcome deferred by the user for a focused session. No projection/DTO/grouping/default-collapse changes or partial styling work here. The proposed presentation-boundary exception is not approved. |
+
+Preserve revision/task/session ownership, coherent bounded 256-row windows,
+authoritative selection and its counts/bytes, literal search, existing sort and
+collapse behavior except where expressly changed above, safe text rendering,
+original-command recovery and current integrity/visibility action scopes.
+Checksum means stored baseline evidence, not current bytes or fresh verification.
+No hashing, baseline/rebaseline controls, manual post-copy verification, domain
+operation changes, new persistence, M1-10 activation, push or PR is authorized.
+Use Microsoft's Fluent guidance and existing repository components; no framework
+dependency or general UI rewrite. Apply AGENTS mandatory and recurrence stops;
+new effects or ownership changes outside these rows require adjudication.
+
+Before each pending row's implementation, settle its exact source/test/helper
+population against the integrated predecessor. Tests follow TESTS: broaden to
+the ordinary suite/import checks if a shared contract crosses departments or
+blast radius is uncertain. Retain failed evidence and reuse passes only when
+their product, producer, checker and driver dependencies remain unchanged.
+
 ## Plan GUI refinements — 2026-10-04
 
 Completed user-authorized three-unit batch from `99e65c8` on `milestone1`.

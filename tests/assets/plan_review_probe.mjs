@@ -1013,6 +1013,13 @@ assert.equal(moveCalls.at(-1)[2].collapseNodeId, moveRow.node_id);
 moveReview.pending = "view";
 movePanel.render({ ...task, review: moveReview });
 assert.equal(movePill.disabled, true);
+const moveViewport = findByClass(movePanel.element, "nami-plan-review__rows");
+moveViewport.scrollTop = ROW_HEIGHT * 400;
+moveReview.pending = null;
+moveReview.moveScrollOffset = 0;
+movePanel.render({ ...task, review: moveReview });
+assert.equal(moveViewport.scrollTop, 0, "move conflict restores the loaded first window to the viewport");
+assert.equal(moveReview.moveScrollOffset, null, "the move viewport instruction is consumed once");
 movePanel.dispose();
 
 const detailCalls = [];
