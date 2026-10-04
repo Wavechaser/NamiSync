@@ -36,7 +36,7 @@ def _replace_section(script: str, start: str, end: str, after: str, label: str) 
 def _rootless_probe_script(metric_id: str) -> str:
     original = _original_headed_probe_script(metric_id)
     script = _replace_once(
-        original, "initialWindow.total !== 120000", "initialWindow.total !== 119999",
+        original, "initialWindow.total !== 120000", "initialWindow.total !== 119968",
         "rootless selection fixture",
     )
     helper = _FEEDBACK_HELPER.read_text(encoding="utf-8")

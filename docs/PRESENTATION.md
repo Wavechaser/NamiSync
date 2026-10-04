@@ -95,6 +95,16 @@ Trees are pure workflow-derived projections. Node identity is deterministic, sco
 
 A path may contain multiple direct plan operations. The path node remains the path index; it becomes a container and exposes each direct operation exactly once as an immediate member child. Member order is deterministic before any view sort, and view sorting does not alter canonical indexes, membership, or execution order. Move decomposition renders one paired annotation rather than a second selection or paging unit. Structural folders never impersonate an operation.
 
+The Plan projection classifies display actions independently of immutable
+operations. RECASE and pure MOVE operations whose old and new parent paths
+have the same Windows path key display and filter as `rename`; root-level
+renames follow the same rule. Cross-parent MOVE remains `move`, and MOVE_UPDATE
+remains `move_update` even in place because it changes content. Canonical rows
+retain the actual operation kind and root-relative prior path. The table uses
+the derived kind and shows `renamed from` the old filename or `moved from` the
+old path; item details, execution results and diagnostics retain operation truth.
+This changes no operation, dependency, selection or execution behavior.
+
 Prior-location groups attach to the deepest proper old-path ancestor observed
 as a target directory that survives at the same Windows path key in immutable
 reviewed intent; root is the fallback. Unblocked directory removal, move or
@@ -102,7 +112,10 @@ recase excludes its old prefix and descendants, independently of selection.
 Newly created replacements and inferred destination ancestors are not evidence
 of old-directory survival. Missing surviving context is added structurally.
 Each attachment groups by the move's target parent; a directory move counts as
-one item. Groups and their expandable prior contents are informational and
+one item. Presentation renames have no prior-location group; MOVE_UPDATE keeps
+its group, including an in-place update. Groups start collapsed when a fresh
+Plan view opens, and reopening an existing view retains its expansion state.
+Groups and their expandable prior contents are informational and
 contribute no execution selection, facet counts or folder bytes. Their label
 uses a relative destination, and the group peer resolves its canonical target
 parent, or the first canonical moved item for a root destination.
@@ -261,7 +274,7 @@ required bytes, and planning issues (preflight refusals plus scan notices).
 The short task-tab digest uses selected operations, not scanned items; zero
 selected items does not make a nonempty plan empty. Each row exposes its
 server-provided risk alongside its reason or notice. `filter_counts` is a complete-plan facet mapping `all` plus every
-canonical Plan filter (`copy`, `mkdir`, `move`, `recase`, `update`,
+canonical Plan filter (`copy`, `mkdir`, `move`, `rename`, `update`,
 `move_update`, `trash`, `delete`, `noop`, `blocked`, `unsupported`, `error`, and `notice`) to direct-row
 counts. It is independent of search, active filters, collapse, sorting, and
 the loaded window. Container rollups, prior-path context, and other structural

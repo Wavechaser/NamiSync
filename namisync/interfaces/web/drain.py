@@ -1243,6 +1243,10 @@ class TaskRegistry:
             irreversible_operation_count=selection.irreversible_operation_count,
             destructive_operation_counts=selection.destructive_operation_counts,
             required_bytes=selection.required_bytes,
+            collapsed_node_ids=frozenset(
+                node.node_id for node in projection.nodes
+                if node.row_kind == "prior-group"
+            ),
         )
         with self._condition:
             if self._closing or self._tasks.get(task_id) is not task:

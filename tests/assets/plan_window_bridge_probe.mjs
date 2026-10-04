@@ -38,6 +38,8 @@ const baseRow = {
   row_kind: "operation",
   operation_id: "3".repeat(32),
   operation_kind: "copy",
+  presentation_kind: "copy",
+  prior_path: null,
   reason: null,
   blocked_reason: null,
   selection: "selected",
@@ -183,7 +185,7 @@ if (await bridge.getPlanWindow(taskId, 0, 0, 1).then(() => null, (error) => erro
   throw new Error("completed execution accepted a refusal disclosure");
 }
 const groupRow = { ...baseRow, row_kind: "prior-group", operation_id: null,
-  operation_kind: null, execution: null, size: null, is_container: true,
+  operation_kind: null, presentation_kind: null, execution: null, size: null, is_container: true,
   selection: "disabled", selectable_operation_count: 0, selected_operation_count: 0,
   operation_count: 0, move_peer_id: `node-${"9".repeat(32)}`,
   move_group: { count: 1, destination: "" } };
@@ -202,7 +204,7 @@ const revealSummary = {
   highlighted_count: 0, source_path: "C:\\source", target_path: "D:\\target",
   selected_operation_count: 1, selectable_operation_count: 1, operation_count: 1,
   scope_selected_operation_count: 1, scope_selectable_operation_count: 1,
-  filter_counts: Object.fromEntries(["all", "copy", "mkdir", "move", "recase", "update", "move_update",
+  filter_counts: Object.fromEntries(["all", "copy", "mkdir", "move", "rename", "update", "move_update",
     "trash", "delete", "noop", "blocked", "unsupported", "error", "notice"].map((key) => [key, key === "all" || key === "copy" ? 1 : 0])),
   preflight_ready: true, preflight_refusal_count: 0, warning_count: 0,
   requires_destructive_confirmation: false, destructive_operation_count: 0,
@@ -221,6 +223,18 @@ for (const value of [{ ...responseResult, index: 600 }, { ...responseResult, nod
   responseResult = value;
   if (await bridge.revealPlanMove(taskId, 0, groupRow.node_id).then(() => null, (error) => error) === null) {
     throw new Error("invalid move destination reply was accepted");
+  }
+}
+responseResult = { ...baseWindow(null), rows: [{ ...baseRow, size: null,
+  operation_kind: "recase", presentation_kind: "rename", prior_path: "folder\\old.txt" }] };
+const renamed = await bridge.getPlanWindow(taskId, 0, 0, 1);
+if (renamed.rows[0].operation_kind !== "recase" || renamed.rows[0].presentation_kind !== "rename"
+    || renamed.rows[0].prior_path !== "folder\\old.txt") throw new Error("rename presentation lost raw operation identity");
+for (const patch of [{ presentation_kind: undefined }, { presentation_kind: 1 },
+  { prior_path: undefined }, { prior_path: 1 }]) {
+  responseResult = { ...baseWindow(null), rows: [{ ...baseRow, size: null, ...patch }] };
+  if (await bridge.getPlanWindow(taskId, 0, 0, 1).then(() => null, (error) => error) === null) {
+    throw new Error("invalid rename presentation shape was accepted");
   }
 }
 console.log("ok");

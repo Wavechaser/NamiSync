@@ -853,6 +853,7 @@ def test_plan_row_renderer_is_active_and_consumes_only_projected_views(
         "mkdir",
         "move",
         "recase",
+        "rename",
         "update",
         "move_update",
         "trash",

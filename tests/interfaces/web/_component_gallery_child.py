@@ -1291,15 +1291,20 @@ def _valid_recent_ui(value: object) -> bool:
             "destination", "title", "revealed_node", "expanded", "checkable", "message",
             "prior_child_visible", "destination_highlighted",
             "revealed_destination", "prior_action", "prior_metadata", "prior_selection_disabled",
-            "hierarchy", "row_indexes",
+            "hierarchy", "row_indexes", "initial_collapsed", "path_in_badge",
+            "badge_matches_action_radius", "path_clipped", "moved_annotation",
+            "renamed_annotation", "rename_action", "annotations_purple",
+            "long_origin_keeps_filename", "long_origin_clipped",
         }
         and all(text(move[key]) for key in ("destination", "title", "revealed_node", "expanded", "message", "destination_highlighted", "revealed_destination", "prior_action", "prior_metadata"))
         and type(move["checkable"]) is bool
         and type(move["prior_child_visible"]) is bool
         and type(move["prior_selection_disabled"]) is bool
-        and type(move["hierarchy"]) is list and len(move["hierarchy"]) == 4
+        and all(type(move[key]) is bool for key in ("initial_collapsed", "path_in_badge", "badge_matches_action_radius", "path_clipped", "annotations_purple", "long_origin_keeps_filename", "long_origin_clipped"))
+        and all(text(move[key]) for key in ("moved_annotation", "renamed_annotation", "rename_action"))
+        and type(move["hierarchy"]) is list and len(move["hierarchy"]) == 5
         and all(type(row) is list and len(row) == 6 and all(item is None or type(item) is int for item in row) for row in move["hierarchy"])
-        and type(move["row_indexes"]) is list and len(move["row_indexes"]) == 4
+        and type(move["row_indexes"]) is list and len(move["row_indexes"]) == 5
         and all(text(item) for item in move["row_indexes"])
         and type(value["commands_after_arm"]) is int
         and 0 <= value["commands_after_arm"] <= 2
@@ -1314,7 +1319,7 @@ def _valid_recent_ui(value: object) -> bool:
     for panel in layout:
         if type(panel) is not dict or set(panel) != {"panel", "status", "viewport", "horizontal_scroll", "controls", "rows"} or not text(panel["horizontal_scroll"]):
             return False
-        if not all(type(panel[key]) is list and len(panel[key]) <= 4 for key in ("controls", "rows")):
+        if not all(type(panel[key]) is list and len(panel[key]) <= 5 for key in ("controls", "rows")):
             return False
         for bounds in [panel["panel"], panel["status"], panel["viewport"], *panel["controls"], *panel["rows"]]:
             if type(bounds) is not list or len(bounds) != 4 or not all(type(item) in {int, float} and math.isfinite(item) for item in bounds):

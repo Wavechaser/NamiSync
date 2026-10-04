@@ -14,13 +14,14 @@ certify their recorded build and dependencies only.
 ## GUI alignment batch — 2026-10-05
 
 User-ratified seven-point register from `999a568` on `milestone1`. Units
-GUI-A1–A5 are complete; A6 and A7 are deferred as stated below. Each delivered
+GUI-A1–A5 and A7 are complete; A6 remains deferred. Each delivered
 unit includes its direct consumers and fixtures, matching documentation,
 verification and fresh independent review in its own atomic commit.
 Shared-file writers and native acceptance runs are serialized. An ordinary
 suite may read the same frozen inputs independently with isolated temporary
-roots and receipts; it cannot overlap source or checker edits. Evidence belongs under
-`build/gui-alignment-20261005/`; HANDOFF owns immediate resumption context.
+roots and receipts; it cannot overlap source or checker edits. A1–A5 evidence belongs
+under `build/gui-alignment-20261005/`; A7 uses `build/rename-move-20261005/`.
+HANDOFF owns immediate resumption context.
 
 | ID | Accepted outcome / finite owners and consumers | Dependency, gate and status |
 | --- | --- | --- |
@@ -30,7 +31,7 @@ roots and receipts; it cannot overlap source or checker edits. Evidence belongs 
 | GUI-A4 | Full-height optional right details column, toggled by Details; central Setup/status/table regain width when hidden. Separate independently scrollable global and item cards, category/status and supplied item facts. Details capped at 24rem and task rail at 18rem, both shrinking with the window while preserving tab alignment. UI-only renderer/CSS and direct consumer migration. | `4a39789`; 89 focused, 1,921 interfaces and all six installed gallery/task-shell cases pass across retained runs. Fresh review `a4-review.md`; final source `a4-frozen-final-03.json`. A5 adopts this layout. |
 | GUI-A5 | Align standalone Verify/Inventory Setup, status and table with Plan/Execution; put whole/selected Refresh on status; reuse semantic row labels and shared sizing/filter/details components. Add a nullable bounded recorded-baseline checksum to window rows, matching bridge validation and fixtures; show shortened checksum with full stored evidence accessible. Standalone Verify stays on Integrity with Sync disabled. Remove only code made obsolete by this migration. `inventory_review.py`, browser inventory/bridge/panel/status owners, direct Python/JS probes, installed Inventory/gallery helpers, DESKTOP_UI/PRESENTATION/BRIDGE/FEATURES. | Closing A5 commit: 23 early service, 84 focused, 12 token and all seven installed checks pass; 5,887 ordinary tests (four privilege skips) cover interfaces and batch integration; all 12 import contracts pass. Fresh review `a5-review.md`; frozen source `a5-frozen-03.json`, native `a5-native-final-03.xml`, ordinary/import `a5-integration-final.*` / `a5-imports-final.*`. Commit identity is retained in `integration.md`. |
 | GUI-A6 | Execution-to-Verify navigation. Current inventory reads/actions require an inventory task and captured inventory publication; Refresh requires inventory settlement and no retained plan token. Same-task execution navigation needs new association, retention and lifecycle policy. | Deferred to M1-10 under the user's permitted fallback. No enabling switch or new lifecycle behavior in this batch. |
-| GUI-A7 | Previous-location/rename redesign: action-shaped complete destination badges, canonical moved-from/renamed-from annotation, initial collapse and exclusion of same-parent renames/recases from prior groups. | Entire outcome deferred by the user for a focused session. No projection/DTO/grouping/default-collapse changes or partial styling work here. The proposed presentation-boundary exception is not approved. |
+| GUI-A7 | Projection-owned Rename classification and matching filters; pure same-parent moves/recases have prior-name annotations without origin groups. Genuine move groups begin collapsed; action-shaped purple destination badges contain their paths, while bounded canonical origin annotations preserve filename space. Raw operation kinds and backend behavior stay unchanged. | Closing A7 commit from `37d89ef`: 304 server, 94 frontend and 60 consumer-focused checks; 5,903 ordinary passes/four privilege skips, six installed gallery/shell checks and 12 import contracts. Independent review in `build/rename-move-20261005/rename-review.md`; commit identity in `integration.md`. Claude could not authenticate; the user approved internal-review completion. |
 
 Preserve revision/task/session ownership, coherent bounded 256-row windows,
 authoritative selection and its counts/bytes, literal search, existing sort and
@@ -79,7 +80,32 @@ and domain effects remain unchanged. The actual Inventory gallery checks all
 five column edges, scroll ownership, status placement, semantic labels, checksum,
 disclosure, sizing and virtual paging. `a5-frozen-03.json`, `a5-review.md` and
 the retained native receipts bind the final candidate and reviewed corrections;
-they do not authorize a general CSS redesign or A6/A7 implementation.
+they do not authorize a general CSS redesign or A6 implementation.
+
+**A7 delivered boundary.** The user explicitly extended presentation classification
+into the Python server and plan projection. RECASE and pure MOVE with the same
+Windows parent display/filter as Rename; cross-parent MOVE remains Move and
+MOVE_UPDATE stays distinct even in place. Details and execution retain real
+operation kinds. Rename rows have no prior groups; genuine groups preserve
+surviving-ancestor/target-parent grouping, initial collapse with retained reopen
+state, and revisioned reveal/recovery. Canonical origin annotations are bounded
+to preserve filenames. No browser row hiding, domain behavior, persistence,
+execution authority, A6 activation or new performance acceptance was introduced.
+
+Projection/server, bridge/renderers, direct tests, gallery and installed shell
+consumers were migrated together. The shell now uses actual cross-parent MOVE
+fixtures. Current measurement adapters use the actual collapsed fixture's full
+first-row facts, including correction of their previously stale target-parent
+id/label; legacy drivers and historical measurement JSON remain unchanged.
+PRESENTATION/BRIDGE/DESKTOP_UI own the shipped contracts; Git retains the finite
+population and implementation register. Final source manifests and raw gates are
+`ordinary-02-*` and `native-02-*` under `build/rename-move-20261005/`.
+
+The requested `claude-opus-5-5` / `xhigh` review did not run: OAuth had expired.
+The user authorized completion with independent internal review. The narrowed
+review package produced zero model usage/cost; original hashes/status matched
+afterward and the exact copy was removed. Raw failure and cleanup receipts remain.
+No external approval is claimed. A6 remains deferred to M1-10.
 
 ## Plan GUI refinements — 2026-10-04
 

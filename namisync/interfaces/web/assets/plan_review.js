@@ -12,7 +12,7 @@ import {
 } from "./task_status.js";
 
 const FILTERS = Object.freeze([
-  "copy", "mkdir", "move", "recase", "update", "move_update", "trash", "delete",
+  "copy", "mkdir", "move", "rename", "update", "move_update", "trash", "delete",
   "error", "unsupported", "blocked", "noop", "notice",
 ]);
 const WINDOW_LIMIT = 256;
@@ -20,7 +20,7 @@ const ROW_HEIGHT = 24;
 const DISPLAY_LABELS = Object.freeze({
   all: "All", copy: "Copy", move: "Move", update: "Update", remove: "Remove",
   error: "Error", noop: "No change", notice: "Notice", mkdir: "Create folder",
-  recase: "Recase", move_update: "Move + update", trash: "Move to trash",
+  recase: "Recase", rename: "Rename", move_update: "Move + update", trash: "Move to trash",
   delete: "Delete", unsupported: "Unsupported", blocked: "Blocked",
 });
 const REASON_LABELS = Object.freeze({
@@ -144,7 +144,7 @@ function rowView(row, busy, committed, progressPresentation = null) {
     reason, ...execution.notes,
   ].filter((value) => typeof value === "string" && value !== ""))].join(" · ");
   const risk = row.risk === "none" ? "" : `Risk: ${row.risk}`;
-  const intent = row.operation_kind ?? (row.row_kind === "notice" ? "notice" : "");
+  const intent = row.presentation_kind ?? (row.row_kind === "notice" ? "notice" : "");
   const modified = modifiedText(row.mtime_ns);
   const activeProgress = projectActiveOperationProgress(progressPresentation, row.operation_id);
   const lifecycle = activeProgress?.lifecycleKey ?? execution.lifecycle;
@@ -963,16 +963,28 @@ export function createPlanReviewPanel(callbacks) {
       addGroupDisclosure(element, row, () => callbacks.onViewChange(review, {
         collapseNodeId: row.node_id, collapsed: row.expanded === true,
       }));
+      if (row.prior_path !== null) {
+        const previous = document.createElement("span");
+        previous.className = "nami-plan-row__previous";
+        const renamed = row.presentation_kind === "rename";
+        const path = renamed ? row.prior_path.split(/[\\/]/).at(-1) : row.prior_path;
+        renderFilesystemText(previous, `${renamed ? "renamed" : "moved"} from ${path}`);
+        previous.title = previous.textContent;
+        element.querySelector(".nami-file-row__name").append(previous);
+      }
       if (row.row_kind === "prior-group" && row.move_peer_id !== null) {
         const pill = button("", "nami-plan-move-pill");
         const badge = document.createElement("span");
         badge.className = "nami-badge";
         badge.dataset.form = "fill";
-        renderText(badge, `${row.move_group.count} ${row.move_group.count === 1 ? "item" : "items"} moved to`);
+        const count = document.createElement("span");
+        count.className = "nami-plan-move-pill__count";
+        renderText(count, `${row.move_group.count} ${row.move_group.count === 1 ? "item" : "items"} moved to`);
         const destination = document.createElement("span");
         destination.className = "nami-plan-move-pill__destination";
         renderFilesystemText(destination, row.move_group.destination || "root");
-        pill.append(badge, destination);
+        badge.append(count, destination);
+        pill.append(badge);
         pill.title = row.display;
         pill.ariaLabel = row.display;
         pill.disabled = disabled;

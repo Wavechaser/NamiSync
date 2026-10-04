@@ -1191,7 +1191,7 @@ window.addEventListener("unhandledrejection", (event) => {
         search_query: "",
         filters: ["update", "move_update"],
         filter_counts: {
-          all: 21, copy: 4, mkdir: 1, move: 3, recase: 1, update: 2,
+          all: 21, copy: 4, mkdir: 1, move: 3, rename: 1, update: 2,
           move_update: 1, trash: 2, delete: 1, noop: 2, error: 0,
           unsupported: 1, blocked: 2, notice: 1,
         },
@@ -1229,6 +1229,7 @@ window.addEventListener("unhandledrejection", (event) => {
     depth: 0, is_container: true, visible_index: 0, parent_visible_index: null,
     first_child_visible_index: null, position_in_set: 1, set_size: 1,
     expanded: false, row_kind: "prior-group", operation_id: null, operation_kind: null,
+    presentation_kind: null, prior_path: null,
     reason: null, blocked_reason: null, selection: "disabled", highlighted: false,
     selectable_operation_count: 0, selected_operation_count: 0, operation_count: 0,
     size: null, mtime_ns: null, dependency_count: 0, risk: "none",
@@ -1463,7 +1464,7 @@ window.addEventListener("unhandledrejection", (event) => {
     is_container: false, visible_index: 0, parent_visible_index: null,
     first_child_visible_index: null, position_in_set: 1, set_size: 1000,
     expanded: false, row_kind: "operation", operation_id: "5".repeat(32),
-    operation_kind: "copy", reason: null, blocked_reason: null,
+    operation_kind: "copy", presentation_kind: "copy", prior_path: null, reason: null, blocked_reason: null,
     selection: "selected", selectable_operation_count: 1,
     selected_operation_count: 1, operation_count: 1, size: "4096",
     mtime_ns: "1000000000", dependency_count: 0, risk: "none",
@@ -3298,7 +3299,7 @@ window.addEventListener("unhandledrejection", (event) => {
   });
   const priorRow = {
     ...planReviewTask.review.window.rows[0], display: `1 item moved to ${galleryMovePath}`,
-    expanded: false, position_in_set: 1, set_size: 2,
+    expanded: false, position_in_set: 1, set_size: 3,
     move_group: { count: 1, destination: galleryMovePath },
   };
   const destinationRow = {
@@ -3309,7 +3310,7 @@ window.addEventListener("unhandledrejection", (event) => {
   };
   const priorChild = {
     ...priorRow, node_id: `node-${"a".repeat(32)}`, display: "old-report.pdf",
-    operation_kind: "move", row_kind: "prior-operation", depth: 1, is_container: false,
+    operation_kind: "move", presentation_kind: "move", row_kind: "prior-operation", depth: 1, is_container: false,
     operation_count: 1, reason: "identity_rename",
     move_peer_id: `node-${"b".repeat(32)}`, move_group: null,
     parent_visible_index: 0, position_in_set: 1, set_size: 1,
@@ -3317,18 +3318,25 @@ window.addEventListener("unhandledrejection", (event) => {
   const canonicalRow = {
     ...priorChild, node_id: priorChild.move_peer_id, display: "report.pdf",
     row_kind: "operation", operation_id: "5".repeat(32), move_peer_id: priorChild.node_id,
+    prior_path: "previous\\old-report.pdf",
     selection: "selected", selectable_operation_count: 1,
     selected_operation_count: 1, operation_count: 1, size: "4096", mtime_ns: "1000000000",
     execution: { operation: null, automatic_verification: null, evidence: null },
   };
+  const renamedRow = {
+    ...canonicalRow, node_id: `node-${"c".repeat(32)}`, operation_id: "6".repeat(32),
+    display: "Logo.PNG", operation_kind: "recase", presentation_kind: "rename",
+    prior_path: "logo.png", move_peer_id: null, depth: 0, parent_visible_index: null,
+    position_in_set: 3, set_size: 3,
+  };
   const moveTask = recentTask();
-  moveTask.review.summary.selected_operation_count = 1;
-  moveTask.review.summary.selectable_operation_count = 1;
-  moveTask.review.summary.scope_selected_operation_count = 1;
-  moveTask.review.summary.scope_selectable_operation_count = 1;
-  moveTask.review.summary.required_bytes = "4096";
+  moveTask.review.summary.selected_operation_count = 2;
+  moveTask.review.summary.selectable_operation_count = 2;
+  moveTask.review.summary.scope_selected_operation_count = 2;
+  moveTask.review.summary.scope_selectable_operation_count = 2;
+  moveTask.review.summary.required_bytes = "8192";
   moveTask.review.summary.filter_counts = {
-    all: 1, copy: 0, mkdir: 0, move: 1, recase: 0, update: 0, move_update: 0,
+    all: 2, copy: 0, mkdir: 0, move: 1, rename: 1, update: 0, move_update: 0,
     trash: 0, delete: 0, noop: 0, error: 0, unsupported: 0, blocked: 0, notice: 0,
   };
   let revealedNode = null;
@@ -3339,6 +3347,7 @@ window.addEventListener("unhandledrejection", (event) => {
       ...(expanded ? [priorChild] : []),
       { ...destinationRow, highlighted: revealed, first_child_visible_index: destinationIndex + 1 },
       { ...canonicalRow, parent_visible_index: destinationIndex },
+      renamedRow,
     ].map((row, index) => ({ ...row, visible_index: index }));
     moveTask.review.window = { ...moveTask.review.window, rows, total: rows.length };
     moveTask.review.summary.highlight_focus_node_id = revealed ? destinationRow.node_id : null;
@@ -3358,8 +3367,15 @@ window.addEventListener("unhandledrejection", (event) => {
   });
   renderMoveRows(false, false);
   const movePill = movePanel.element.querySelector(".nami-plan-move-pill");
+  const initialCollapsed = movePanel.element.querySelector(".nami-file-row__disclosure").ariaExpanded === "false";
   movePill.click();
   movePanel.element.querySelector(".nami-file-row__disclosure").click();
+  const livePill = movePanel.element.querySelector(".nami-plan-move-pill");
+  const liveBadge = livePill.querySelector(".nami-badge");
+  const livePath = livePill.querySelector(".nami-plan-move-pill__destination");
+  const movedAnnotation = movePanel.element.querySelector(`[data-node-id="${canonicalRow.node_id}"] .nami-plan-row__previous`);
+  const renamedAnnotation = movePanel.element.querySelector(`[data-node-id="${renamedRow.node_id}"] .nami-plan-row__previous`);
+  const actionStyle = getComputedStyle(movePanel.element.querySelector(".nami-file-state-label"));
   const moveEvidence = {
     destination: movePill.querySelector(".nami-plan-move-pill__destination").textContent,
     title: movePill.title, revealed_node: revealedNode,
@@ -3372,11 +3388,36 @@ window.addEventListener("unhandledrejection", (event) => {
     prior_metadata: movePanel.element.querySelector(`[data-node-id="${priorChild.node_id}"] .nami-file-row__size`).textContent
       + movePanel.element.querySelector(`[data-node-id="${priorChild.node_id}"] .nami-plan-row__modified`).textContent,
     prior_selection_disabled: movePanel.element.querySelector(`[data-node-id="${priorChild.node_id}"] .nami-checkbox`).disabled,
+    initial_collapsed: initialCollapsed,
+    path_in_badge: livePath.parentElement === liveBadge,
+    badge_matches_action_radius: getComputedStyle(liveBadge).borderRadius === actionStyle.borderRadius,
+    path_clipped: livePath.scrollWidth > livePath.clientWidth && getComputedStyle(livePath).textOverflow === "ellipsis",
+    moved_annotation: movedAnnotation.textContent,
+    renamed_annotation: renamedAnnotation.textContent,
+    rename_action: movePanel.element.querySelector(`[data-node-id="${renamedRow.node_id}"] .nami-plan-row__intent`).textContent,
+    annotations_purple: getComputedStyle(movedAnnotation).color === getComputedStyle(renamedAnnotation).color
+      && getComputedStyle(renamedAnnotation).color === getComputedStyle(movePanel.element.querySelector(`[data-node-id="${renamedRow.node_id}"] .nami-file-state-label`)).color,
     hierarchy: moveTask.review.window.rows.map((row) => [row.visible_index, row.depth,
       row.parent_visible_index, row.first_child_visible_index, row.position_in_set, row.set_size]),
     row_indexes: [...movePanel.element.querySelectorAll("[data-node-id]")].map((row) => row.ariaRowIndex),
     message: movePanel.element.querySelector(".nami-plan-review__status").textContent,
   };
+  const moveGrid = movePanel.element.querySelector(".nami-file-list__grid");
+  const savedNameWidth = moveGrid.style.getPropertyValue("--nami-file-column-name");
+  const savedPriorPath = canonicalRow.prior_path;
+  moveGrid.style.setProperty("--nami-file-column-name", "320px");
+  canonicalRow.prior_path = `${"folder\\".repeat(300)}old-report.pdf`;
+  renderMoveRows(true, true);
+  const longOriginRow = movePanel.element.querySelector(`[data-node-id="${canonicalRow.node_id}"]`);
+  const longOrigin = longOriginRow.querySelector(".nami-plan-row__previous");
+  const retainedFilename = longOriginRow.querySelector(".nami-file-row__name-text");
+  moveEvidence.long_origin_keeps_filename = retainedFilename.clientWidth >= retainedFilename.scrollWidth;
+  moveEvidence.long_origin_clipped = longOrigin.clientWidth < longOrigin.scrollWidth
+    && getComputedStyle(longOrigin).textOverflow === "ellipsis";
+  canonicalRow.prior_path = savedPriorPath;
+  if (savedNameWidth === "") moveGrid.style.removeProperty("--nami-file-column-name");
+  else moveGrid.style.setProperty("--nami-file-column-name", savedNameWidth);
+  renderMoveRows(true, true);
   moveTask.review.message = "Click the move pill to preview revealing its destination. Expand the prior group independently.";
   movePanel.render(moveTask);
   const controlTask = recentTask();

@@ -123,6 +123,8 @@ class PlanProjectionNode:
     is_directory: bool = False
     move_item_count: int = 0
     move_destination_path: str | None = None
+    presentation_kind: str | None = None
+    prior_path: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -253,6 +255,8 @@ class _PlanProjectionDraft:
     is_directory: bool = False
     move_item_count: int = 0
     move_destination_path: str | None = None
+    presentation_kind: str | None = None
+    prior_path: str | None = None
 
 
 def build_plan_projection(
@@ -310,7 +314,9 @@ def build_plan_projection(
     del target_tree, target_draft_by_tree_position
 
     prior_operations = tuple(
-        item for item in plan.operations if item.prior_target_rel_path is not None
+        item for item in plan.operations
+        if item.prior_target_rel_path is not None
+        and _presentation_kind(item) != "rename"
     )
     groups = _prior_move_groups(artifact, prior_operations)
     target_directories = (
@@ -588,6 +594,19 @@ def apply_plan_projection_selection(
 
 def _parent_path(path: str) -> str:
     return path.replace('/', '\\').rpartition('\\')[0]
+
+
+def _presentation_kind(operation: PlanOperation) -> str:
+    if operation.kind is OperationKind.RECASE:
+        return "rename"
+    if (
+        operation.kind is OperationKind.MOVE
+        and operation.prior_target_rel_path is not None
+        and fold_validated_path(_parent_path(operation.target_rel_path))
+        == fold_validated_path(_parent_path(operation.prior_target_rel_path))
+    ):
+        return "rename"
+    return operation.kind.value
 
 
 def _prior_move_groups(
@@ -910,6 +929,8 @@ def _operation_draft(
         row_kind=row_kind,
         operation_id=None if operation is None or prior else str(operation.op_id),
         operation_kind=None if operation is None else operation.kind.value,
+        presentation_kind=None if operation is None else _presentation_kind(operation),
+        prior_path=None if operation is None or prior else operation.prior_target_rel_path,
         reason=None if operation is None else operation.reason.value,
         blocked_reason=(
             None
@@ -1023,6 +1044,8 @@ def _materialize_projection(
             is_directory=draft.is_directory,
             move_item_count=draft.move_item_count,
             move_destination_path=draft.move_destination_path,
+            presentation_kind=draft.presentation_kind,
+            prior_path=draft.prior_path,
         ))
         drafts[index] = None  # type: ignore[list-item]
     frozen_nodes = tuple(nodes)

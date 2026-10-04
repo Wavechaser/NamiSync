@@ -83,6 +83,40 @@ def test_task_shell_child_preserves_the_production_stack_and_bounded_seams() -> 
     assert "terminate_process_tree(process, deadline=deadline)" in launch
 
 
+def test_task_shell_move_fixture_reaches_real_cross_parent_planner(tmp_path: Path) -> None:
+    from types import SimpleNamespace
+    from namisync.core.planning import OperationKind, SyncOptions
+    from namisync.core.session import RunContext
+    from namisync.workflows import PlanRequest, build_plan_projection
+    from namisync.workflows.runtime import LocalWorkflowRuntime
+
+    runtime = LocalWorkflowRuntime(tmp_path / "ledger.db", tmp_path / "history.db")
+    try:
+        control = child._Control(None, tmp_path / "source", tmp_path / "target")
+        control.service = SimpleNamespace(_runtime=runtime)
+        control._start_plan_review()
+        request = PlanRequest("a" * 32, str(control.source), str(control.target),
+                              SyncOptions(propagate_source_casing=True))
+        runtime.open_plan(runtime.prepare_plan(request).checkpoint).run(
+            RunContext(lambda _event: None, lambda: None),
+        )
+        artifact = runtime.get_plan(request.request_id)
+        moves = tuple(item for item in artifact.plan.operations if item.kind is OperationKind.MOVE)
+        assert {(item.target_rel_path, item.prior_target_rel_path) for item in moves} == {
+            ("ZzzMove.txt", r"old-root\ZzzMove.txt"),
+            (r"move-parent\Move.txt", r"move-parent\old\Move.txt"),
+        }
+        projection = build_plan_projection(request.request_id, artifact)
+        groups = tuple(node for node in projection.nodes if node.row_kind == "prior-group")
+        assert {node.move_destination_path for node in groups} == {"", "move-parent"}
+        nested = next(node for node in groups if node.move_destination_path == "move-parent")
+        assert projection.nodes[nested.parent_index].display == "move-parent"
+        assert all(projection.node_for_id(projection.operation_node_id_by_id[str(item.op_id)]).presentation_kind == "move"
+                   for item in moves)
+    finally:
+        runtime.close()
+
+
 def test_task_shell_failure_records_do_not_expose_private_text(tmp_path: Path) -> None:
     paths = EvidencePaths(tmp_path.resolve())
     recorder = child._Recorder(paths)
@@ -283,6 +317,7 @@ def test_m1_4_installed_task_shell_navigation_closure_and_recovery(
     assert {key: value for key, value in move_pill.items()
             if key not in {"background", "foreground", "geometry"}} == {
         "badgeText": "1 item moved to", "destinationText": "move-parent",
+        "destinationInBadge": True, "initiallyCollapsed": True,
         "selectionAbsent": True, "accessibleLabel": "1 item moved to move-parent",
         "collapsed": True, "revealedParent": "move-parent", "rootReveal": True, "filteredFarScroll": True,
     }

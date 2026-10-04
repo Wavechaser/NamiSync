@@ -16,6 +16,7 @@ const INTENT_KEYS = Object.freeze(new Set([
   "mkdir",
   "move",
   "recase",
+  "rename",
   "update",
   "move_update",
   "trash",

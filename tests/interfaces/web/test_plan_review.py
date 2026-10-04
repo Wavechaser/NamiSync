@@ -56,6 +56,7 @@ def _node(
         None,
         0,
         "none",
+        presentation_kind=kind,
     )
 
 
@@ -204,6 +205,66 @@ def test_move_reveal_expands_destination_and_clears_only_obstructing_query(query
         state.reveal_move(expected_revision=state.view_revision, node_id=outer.node_id)
 
 
+def test_rename_filters_own_labels_counts_and_complete_offwindow_selection() -> None:
+    renames = [
+        operation(OperationKind.MOVE, target_path=rf"folder\new-{index:03}.bin",
+                  prior_target_path=rf"FOLDER\old-{index:03}.bin",
+                  target=file_stat(size=1, identity_index=index + 1))
+        for index in range(300)
+    ]
+    recase = operation(OperationKind.RECASE, target_path=r"folder\case.bin",
+                       prior_target_path=r"folder\CASE.bin", target=file_stat())
+    moved = operation(OperationKind.MOVE, target_path=r"folder\moved.bin",
+                      prior_target_path=r"old\moved.bin", target=file_stat())
+    updated = operation(OperationKind.MOVE_UPDATE, target_path=r"folder\updated.bin",
+                        prior_target_path=r"folder\previous.bin",
+                        source=file_stat(size=13), target=file_stat(size=7))
+    state = _file_fact_state([*renames, recase, moved, updated])
+    counts = state.summary()["filter_counts"]
+    assert counts["rename"] == 301
+    assert counts["move"] == counts["move_update"] == 1
+    assert counts["all"] == 303
+    assert "recase" not in counts
+    folder = next(node for node in state.projection.nodes if node.rel_path_key == "FOLDER")
+    expected = {
+        "rename": {str(item.op_id) for item in (*renames, recase)},
+        "move": {str(moved.op_id)},
+        "move_update": {str(updated.op_id)},
+    }
+    for category, identifiers in expected.items():
+        summary = state.update(
+            expected_revision=state.view_revision, search_query="",
+            filters=frozenset({category}), sort_column=PlanSortColumn.FILENAME,
+            sort_direction=SortDirection.DESCENDING,
+            collapse_node_id=None, collapsed=None,
+        )
+        assert summary["scope_selectable_operation_count"] == len(identifiers)
+        rows = []
+        for offset in range(0, summary["visible_row_count"], 256):
+            rows.extend(state.window(expected_revision=state.view_revision,
+                                     offset=offset, limit=256)["rows"])
+        operation_rows = [row for row in rows if row["operation_id"] is not None]
+        assert {row["operation_id"] for row in operation_rows} == identifiers
+        assert all(row["presentation_kind"] == category for row in operation_rows)
+        assert all(row["prior_path"] is not None for row in operation_rows)
+        assert set(state.selection_scope(expected_view_revision=state.view_revision,
+                                         expected_selection_revision=0)) == identifiers
+        if category == "rename":
+            assert {row["operation_kind"] for row in operation_rows} == {"move", "recase"}
+            state.update(expected_revision=state.view_revision, search_query="",
+                         filters=frozenset({category}), sort_column=PlanSortColumn.PATH,
+                         sort_direction=SortDirection.ASCENDING,
+                         collapse_node_id=folder.node_id, collapsed=True)
+            assert set(state.selection_scope(expected_view_revision=state.view_revision,
+                                             expected_selection_revision=0)) == identifiers
+            state.update(expected_revision=state.view_revision, search_query="",
+                         filters=frozenset({category}), sort_column=PlanSortColumn.PATH,
+                         sort_direction=SortDirection.ASCENDING,
+                         collapse_node_id=folder.node_id, collapsed=False)
+    assert state.projection.selected_operation_ids == frozenset().union(*expected.values())
+    assert state.summary()["filter_counts"] == counts
+
+
 def test_plan_review_state_derives_revisioned_filters_windows_and_anchor() -> None:
     state = PlanReviewState(
         "task-" + "1" * 32,
@@ -273,7 +334,7 @@ def test_plan_summary_filter_counts_are_complete_direct_categories() -> None:
         "copy": 0,
         "mkdir": 0,
         "move": 0,
-        "recase": 0,
+        "rename": 0,
         "update": 0,
         "move_update": 0,
         "trash": 0,

@@ -891,6 +891,21 @@ def test_m1_7_plan_commands_refuse_unbounded_or_noncanonical_payloads(command, p
         _invoke(commands[command], payload)
 
 
+def test_plan_filter_contract_admits_rename_and_rejects_retired_recase() -> None:
+    commands, _slots, service = _commands()
+    payload = {
+        "task_id": TASK_ID, "expected_revision": 0, "search_query": "",
+        "filters": ["rename"], "sort_column": "path",
+        "sort_direction": "ascending", "collapse_node_id": None, "collapsed": None,
+    }
+    _invoke(commands["update_plan_view"], payload)
+    assert service.calls[-1][2]["filters"] == frozenset({"rename"})
+    before = len(service.calls)
+    with pytest.raises(CommandPayloadError):
+        _invoke(commands["update_plan_view"], {**payload, "filters": ["recase"]})
+    assert len(service.calls) == before
+
+
 def test_plan_scope_command_has_constant_size_and_refuses_operation_id_lists() -> None:
     import json
 

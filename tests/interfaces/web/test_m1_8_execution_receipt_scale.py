@@ -22,17 +22,17 @@ def _registry(*, wrong: str | None = None):
         "target_path": r"D:\target",
     }
     expected = hashlib.blake2b(digest_size=16, person=b"NamiSyncPriorV1")
-    encoded = request_id.encode()
-    expected.update(len(encoded).to_bytes(4, "big"))
-    expected.update(encoded)
-    expected.update((0).to_bytes(4, "big"))
-    expected.update((0).to_bytes(4, "big"))
+    destination = "\\".join(f"target{index:02d}" for index in range(31))
+    for value in (request_id, "", destination.upper()):
+        encoded = value.encode()
+        expected.update(len(encoded).to_bytes(4, "big"))
+        expected.update(encoded)
     first = {
         "node_id": "node-" + expected.hexdigest(),
-        "row_kind": "prior-group", "display": "1 item moved to root",
+        "row_kind": "prior-group", "display": f"1 item moved to {destination}",
         "operation_id": None, "operation_kind": None,
         "visible_index": 0, "depth": 0,
-        "parent_visible_index": None, "first_child_visible_index": 1,
+        "parent_visible_index": None, "first_child_visible_index": None, "expanded": False,
     }
     summary = {
         "disposition": "opened", "task_id": row["task_id"],
@@ -41,7 +41,7 @@ def _registry(*, wrong: str | None = None):
     }
     window = {
         "disposition": "current", "view_revision": 0, "offset": 0,
-        "total": 119_999, "rows": [first, *({"node_id": str(i)} for i in range(255))],
+        "total": 119_968, "rows": [first, *({"node_id": str(i)} for i in range(255))],
     }
     if wrong == "prior-id":
         first["node_id"] = "node-" + "0" * 32
@@ -49,6 +49,12 @@ def _registry(*, wrong: str | None = None):
         window["total"] = 120_000
     elif wrong == "first-row-kind":
         first["row_kind"] = "folder"
+    elif wrong == "label":
+        first["display"] = "1 item moved to root"
+    elif wrong == "first-child":
+        first["first_child_visible_index"] = 1
+    elif wrong == "expanded":
+        first["expanded"] = True
     elif wrong == "view":
         summary["view_revision"] = 1
 
@@ -69,12 +75,16 @@ def _registry(*, wrong: str | None = None):
 def test_rootless_fixture_settles_real_public_row_shape() -> None:
     registry, row = _registry()
     observed = adapter._rootless_settlement(registry, row)
-    assert observed["window_total"] == 119_999
+    assert observed["window_total"] == 119_968
     assert observed["projection_node_count"] == 120_000
-    assert observed["first_row"]["display"] == "1 item moved to root"
+    assert observed["first_row"]["display"] == "1 item moved to " + "\\".join(
+        f"target{index:02d}" for index in range(31)
+    )
+    assert observed["first_row"]["expanded"] is False
+    assert observed["first_row"]["first_child_visible_index"] is None
 
 
-@pytest.mark.parametrize("wrong", ("prior-id", "public-total", "first-row-kind", "view"))
+@pytest.mark.parametrize("wrong", ("prior-id", "public-total", "first-row-kind", "label", "first-child", "expanded", "view"))
 def test_rootless_fixture_rejects_false_public_geometry(wrong: str) -> None:
     registry, row = _registry(wrong=wrong)
     with pytest.raises(AssertionError, match="initial view"):

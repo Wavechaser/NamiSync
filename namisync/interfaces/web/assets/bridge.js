@@ -2801,7 +2801,7 @@ const INVENTORY_FILTERS = new Set([
 
 function isPlanViewGesture(value) {
   const filters = new Set([
-    "copy", "mkdir", "move", "recase", "update", "move_update",
+    "copy", "mkdir", "move", "rename", "update", "move_update",
     "trash", "delete", "noop", "blocked", "error", "unsupported", "notice",
   ]);
   return isTreeViewGesture(value, filters);
@@ -2970,7 +2970,7 @@ function validatePlanViewSummary(value) {
       || value.highlight_focus_visible_index === null)
     && value.scope_selected_operation_count <= value.selected_operation_count
     && isExactObject(value.filter_counts, [
-      "all", "copy", "mkdir", "move", "recase", "update", "move_update",
+      "all", "copy", "mkdir", "move", "rename", "update", "move_update",
       "trash", "delete", "noop", "blocked", "error", "unsupported", "notice",
     ])
     && Object.values(value.filter_counts).every(isNonnegativeInteger)
@@ -3128,6 +3128,7 @@ function validatePlanWindowRow(value) {
     "node_id", "display", "depth", "is_container", "visible_index",
     "parent_visible_index", "first_child_visible_index", "position_in_set",
     "set_size", "expanded", "row_kind", "operation_id", "operation_kind",
+    "presentation_kind", "prior_path",
     "reason", "blocked_reason", "selection", "highlighted", "selectable_operation_count",
     "selected_operation_count", "operation_count", "size", "mtime_ns",
     "dependency_count", "risk", "move_peer_id", "move_group", "notice",
@@ -3143,6 +3144,8 @@ function validatePlanWindowRow(value) {
     && typeof value.row_kind === "string"
     && (value.operation_id === null || (typeof value.operation_id === "string" && ID_PATTERN.test(value.operation_id)))
     && (value.operation_kind === null || typeof value.operation_kind === "string")
+    && (value.presentation_kind === null || typeof value.presentation_kind === "string")
+    && (value.prior_path === null || isBoundedPath(value.prior_path))
     && (value.reason === null || typeof value.reason === "string")
     && (value.blocked_reason === null || typeof value.blocked_reason === "string")
     && ["selected", "unselected", "mixed", "disabled"].includes(value.selection)

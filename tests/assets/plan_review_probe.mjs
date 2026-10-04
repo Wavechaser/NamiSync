@@ -239,6 +239,8 @@ const row = {
   row_kind: "operation-group",
   operation_id: null,
   operation_kind: null,
+  presentation_kind: null,
+  prior_path: null,
   reason: null,
   blocked_reason: null,
   selection: "mixed",
@@ -282,7 +284,7 @@ const summary = {
   search_query: "",
   filters: [],
   filter_counts: { all: 180, copy: 100, move: 10, update: 5, trash: 2,
-    mkdir: 0, recase: 0, move_update: 0, delete: 0, noop: 0, blocked: 0,
+    mkdir: 0, rename: 0, move_update: 0, delete: 0, noop: 0, blocked: 0,
     error: 0, unsupported: 0, notice: 1 },
   sort_column: "path",
   sort_direction: "ascending",
@@ -603,7 +605,7 @@ const beforeOpen = calls.length;
 filterTrigger.dispatch("click");
 assert.equal(filterPopup.hidden, false);
 assert.equal(calls.length, beforeOpen, "opening the menu never filters");
-for (const key of ["copy", "mkdir", "move", "recase", "update", "move_update", "trash", "delete",
+for (const key of ["copy", "mkdir", "move", "rename", "update", "move_update", "trash", "delete",
   "error", "unsupported", "blocked", "noop", "notice"]) {
   const item = filterItem(key);
   item.focus();
@@ -1007,7 +1009,7 @@ const terminologyPanel = createPlanReviewPanel(Object.fromEntries([
   "onPlanAgain", "onHighlight", "onHighlightedSelect", "onExecutionDetail", "onFollowOverride", "onNavigateCurrent", "onRevealMove",
 ].map((name) => [name, () => {}])));
 function terminologyRow(patch) {
-  const specimen = { ...row, operation_kind: "noop", reason: null, ...patch };
+  const specimen = { ...row, operation_kind: "noop", presentation_kind: patch.operation_kind ?? "noop", reason: null, ...patch };
   terminologyPanel.render({ ...task, review: { ...review,
     window: { ...review.window, rows: [specimen] } } });
   return findByDataset(terminologyPanel.element, "nodeId", specimen.node_id);
@@ -1030,10 +1032,21 @@ assert.ok(findText(terminologyRow({ selection_exclusion_reason: "incomplete-scan
 assert.ok(findText(terminologyRow({ notice: "metadata_match" }), "metadata_match"), "free-form notices are never hidden or rewritten");
 assert.ok(findText(terminologyRow({ notice: hostile }), hostile), "unknown notes stay inert and visible");
 assert.ok(findText(terminologyRow({ row_kind: "prior-operation", move_peer_id: row.node_id }), "Previous location"));
-for (const [operation_kind, label] of [["mkdir", "Create folder"], ["recase", "Recase"],
+for (const [operation_kind, label] of [["mkdir", "Create folder"],
   ["trash", "Move to trash"], ["delete", "Delete"], ["move_update", "Move + update"]]) {
   assert.ok(findText(terminologyRow({ operation_kind }), label));
 }
+for (const [operation_kind, prior_path] of [["recase", "folder\\old-name.txt"], ["move", "folder/old-name.txt"]]) {
+  const renamed = terminologyRow({ operation_kind, presentation_kind: "rename", prior_path });
+  assert.ok(findText(renamed, "Rename"));
+  assert.equal(findByClass(renamed, "nami-plan-row__previous").textContent, "renamed from old-name.txt");
+}
+const moved = terminologyRow({ operation_kind: "move", presentation_kind: "move", prior_path: hostile });
+assert.equal(findByClass(moved, "nami-plan-row__previous").textContent, "moved from <img src=x onerror=alert(1)>⟦U+202E⟧海");
+assert.equal(findByClass(moved, "nami-plan-row__previous").title, "moved from <img src=x onerror=alert(1)>⟦U+202E⟧海");
+const changedMove = terminologyRow({ operation_kind: "move_update", presentation_kind: "move_update", prior_path: "folder\\old.txt" });
+assert.ok(findText(changedMove, "Move + update"));
+assert.equal(findByClass(changedMove, "nami-plan-row__previous").textContent, "moved from folder\\old.txt");
 terminologyPanel.dispose();
 
 const moveCalls = [];
@@ -1053,7 +1066,8 @@ const movePill = findByClass(moveElement, "nami-plan-move-pill");
 assert.ok(movePill);
 assert.equal(movePill.ariaLabel, moveRow.display);
 assert.equal(movePill.title, moveRow.display);
-assert.equal(findByClass(moveElement, "nami-badge").textContent, "2 items moved to");
+assert.equal(findByClass(moveElement, "nami-plan-move-pill__count").textContent, "2 items moved to");
+assertSameNode(findByClass(moveElement, "nami-plan-move-pill__destination").parentElement, findByClass(moveElement, "nami-badge"));
 assert.equal(findByClass(moveElement, "nami-plan-move-pill__destination").textContent, "destination\\nested");
 assert.equal(findByClass(moveElement, "nami-checkbox"), null);
 movePill.dispatch("click");
@@ -1101,7 +1115,7 @@ const executionSummary = {
 const executionRow = {
   ...row, node_id: `node-${"7".repeat(32)}`, display: "zero-byte.bin",
   is_container: true, row_kind: "operation-group", operation_id: operationId,
-  operation_kind: "copy", selection: "selected", selectable_operation_count: 1,
+  operation_kind: "copy", presentation_kind: "copy", selection: "selected", selectable_operation_count: 1,
   selected_operation_count: 1, operation_count: 1, size: "0",
   execution: {
     operation: { result: "succeeded", reason: null, recording: "degraded",

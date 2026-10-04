@@ -1048,7 +1048,7 @@ def test_sh_g_11_channel_selectors_keep_hue_and_form_semantics_scoped() -> None:
     )
     relocating = _block(
         source,
-        '[data-intent]:is([data-intent="move"], [data-intent="recase"]) ',
+        '[data-intent]:is([data-intent="move"], [data-intent="recase"], [data-intent="rename"]) ',
     )
     replacing = _block(
         source,

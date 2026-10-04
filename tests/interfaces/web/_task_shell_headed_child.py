@@ -542,8 +542,9 @@ window.addEventListener("error", (event) => {
   const pillBadge = nestedPill.querySelector(".nami-badge");
   const pillStyle = getComputedStyle(pillBadge);
   const movePill = {
-    badgeText: pillBadge.textContent,
+    badgeText: pillBadge.querySelector(".nami-plan-move-pill__count").textContent,
     destinationText: nestedPill.querySelector(".nami-plan-move-pill__destination").textContent,
+    destinationInBadge: pillBadge.contains(nestedPill.querySelector(".nami-plan-move-pill__destination")),
     background: pillStyle.backgroundColor, foreground: pillStyle.color,
     selectionAbsent: pillRow.querySelector("input") === null,
     accessibleLabel: nestedPill.ariaLabel,
@@ -551,7 +552,12 @@ window.addEventListener("error", (event) => {
   window.__namiMovePillReady = true;
   await until(() => window.__namiMovePillCaptured === true, "native move-pill screenshot");
   const disclosure = pillRow.querySelector(".nami-file-row__disclosure");
+  movePill.initiallyCollapsed = disclosure.ariaExpanded === "false";
   disclosure.click();
+  await until(() => review.dataset.pending === ""
+    && viewport.querySelector(`[data-node-id="${groupNodeId}"] .nami-file-row__disclosure`)?.ariaExpanded === "true",
+    "expanded initial prior contents");
+  viewport.querySelector(`[data-node-id="${groupNodeId}"] .nami-file-row__disclosure`).click();
   await until(() => review.dataset.pending === ""
     && viewport.querySelector(`[data-node-id="${groupNodeId}"] .nami-file-row__disclosure`)?.ariaExpanded === "false",
     "collapsed prior contents");
@@ -1633,6 +1639,7 @@ class _Control:
         self.terminal_task_id = self._registry().list_tasks().tasks[-1].task_id
 
     def _start_plan_review(self) -> None:
+        from namisync.core.planning import MappingPair
         from namisync.core.preflight import Refusal, RefusalCode, Verdict
 
         self.source.mkdir(parents=True, exist_ok=True)
@@ -1644,13 +1651,17 @@ class _Control:
         nested = self.source / "nested-folder" / "child-folder"
         nested.mkdir(parents=True)
         (nested / "child.txt").write_text("nested fixture", encoding="utf-8")
-        for relative, name in (("", "ZzzMove.txt"), ("move-parent", "Move.txt")):
+        move_paths = (
+            ("", "old-root", "ZzzMove.txt"),
+            ("move-parent", "move-parent/old", "Move.txt"),
+        )
+        for relative, previous, name in move_paths:
             source_folder = self.source / relative
-            target_folder = self.target / relative
+            target_folder = self.target / previous
             source_folder.mkdir(parents=True, exist_ok=True)
             target_folder.mkdir(parents=True, exist_ok=True)
             source_file = source_folder / name
-            target_file = target_folder / name.lower()
+            target_file = target_folder / name
             source_file.write_text("move fixture", encoding="utf-8")
             target_file.write_text("move fixture", encoding="utf-8")
             stamp = source_file.stat().st_mtime_ns
@@ -1658,6 +1669,26 @@ class _Control:
         self.review_deps = self._service()._runtime._deps
         original_preflight = self.review_deps.preflight
         original_executor = self.review_deps.executor
+        original_correspondence = self.review_deps.correspondence
+
+        def correspondence(source: object, target: object) -> object:
+            observed = original_correspondence(source, target)
+            source_files = {item.rel_path: item for item in source.files}
+            target_files = {item.rel_path: item for item in target.files}
+            pairs = []
+            for relative, previous, name in move_paths:
+                source_path = str(Path(relative) / name)
+                target_path = str(Path(previous) / name)
+                current = source_files.get(source_path)
+                prior = target_files.get(target_path)
+                if current is not None and prior is not None:
+                    # Supply the fixture's prior pairing, using actual scanner
+                    # identities; the production planner decides MOVE intent.
+                    pairs.append(MappingPair(
+                        prior.rel_path_key, prior.rel_path, prior.rel_path_key,
+                        current.file_identity, prior.file_identity,
+                    ))
+            return replace(observed, pairs=(*observed.pairs, *pairs))
 
         def preflight(review: object, world: object, **kwargs: object) -> object:
             if self.force_preflight_refusal:
@@ -1700,6 +1731,7 @@ class _Control:
 
         self._service()._runtime._deps = replace(
             self.review_deps,
+            correspondence=correspondence,
             preflight=preflight,
             executor=executor,
         )

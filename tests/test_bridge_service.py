@@ -789,6 +789,48 @@ def test_plan_projection_reuses_complete_retained_decision_at_each_revision(
     assert len(changed.operations) == 4
 
 
+def test_service_rename_projection_preserves_selection_and_operation_truth() -> None:
+    from namisync.interfaces.web.plan_review import PlanReviewState
+    from namisync.workflows import PlanSortColumn, SortDirection
+
+    renamed = operation(OperationKind.MOVE, target_path=r"folder\renamed.txt",
+                        prior_target_path=r"folder\old.txt", target=file_stat())
+    recased = operation(OperationKind.RECASE, target_path=r"folder\case.txt",
+                        prior_target_path=r"folder\CASE.txt", target=file_stat())
+    moved = operation(OperationKind.MOVE, target_path=r"folder\moved.txt",
+                      prior_target_path=r"other\moved.txt", target=file_stat())
+    updated = operation(OperationKind.MOVE_UPDATE, target_path=r"folder\updated.txt",
+                        prior_target_path=r"folder\before.txt",
+                        source=file_stat(size=13), target=file_stat(size=7))
+    artifact = _projection_artifact(plan((renamed, recased, moved, updated)))
+    runtime = _PlanRuntime(artifact)
+    service = _service(runtime)
+    projection, summary, source, target = service.get_plan_projection(REQUEST_ID)
+    view = PlanReviewState("task-" + "1" * 32, REQUEST_ID, projection,
+                           summary.revision, summary.state, source, target)
+    filtered = view.update(expected_revision=0, search_query="",
+                           filters=frozenset({"rename"}),
+                           sort_column=PlanSortColumn.PATH,
+                           sort_direction=SortDirection.ASCENDING,
+                           collapse_node_id=None, collapsed=None)
+    scope = view.selection_scope(expected_view_revision=filtered["view_revision"],
+                                 expected_selection_revision=summary.revision)
+    assert set(scope) == {str(renamed.op_id), str(recased.op_id)}
+    changed = service.mutate_selection(REQUEST_ID, summary.revision,
+                                       deselect=scope).preview
+    after, after_summary, _, _ = service.get_plan_projection(REQUEST_ID)
+    assert after_summary.revision == changed.revision
+    assert after.selected_operation_ids == frozenset({moved.op_id, updated.op_id})
+    assert after_summary.required_bytes == summary.required_bytes == "13"
+    assert dict(after_summary.destructive_operation_counts) == dict(summary.destructive_operation_counts)
+    assert {node.presentation_kind for node in after.nodes
+            if node.operation_id in scope} == {"rename"}
+    assert {node.operation_kind for node in after.nodes
+            if node.operation_id in scope} == {"move", "recase"}
+    assert runtime.artifact is artifact
+    assert artifact.plan.operations == (renamed, recased, moved, updated)
+
+
 def test_plan_projection_refuses_artifact_replacement_during_build(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

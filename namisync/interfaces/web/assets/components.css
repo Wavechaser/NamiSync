@@ -1513,7 +1513,7 @@ body {
   --nami-state-foreground: var(--intent-additive-foreground);
 }
 
-[data-intent]:is([data-intent="move"], [data-intent="recase"]) {
+[data-intent]:is([data-intent="move"], [data-intent="recase"], [data-intent="rename"]) {
   --nami-state-foreground: var(--intent-relocating-foreground);
 }
 

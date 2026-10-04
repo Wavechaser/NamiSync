@@ -167,6 +167,57 @@ def test_move_group_directory_reads_do_not_grow_with_group_count() -> None:
     assert directories.visits <= 900  # bounded scans, not directories times groups
 
 
+@pytest.mark.parametrize("kind,old_path,target_path,presentation", [
+    (OperationKind.RECASE, r"folder\old.TXT", r"folder\old.txt", "rename"),
+    (OperationKind.MOVE, "old.txt", "new.txt", "rename"),
+    (OperationKind.MOVE, r"Folder\old.txt", "folder/new.txt", "rename"),
+    (OperationKind.MOVE, r"old\file.txt", r"new\file.txt", "move"),
+    (OperationKind.MOVE, r"Straße\file.txt", r"STRASSE\file.txt", "move"),
+    (OperationKind.MOVE_UPDATE, r"folder\old.txt", r"folder\new.txt", "move_update"),
+    (OperationKind.MOVE_UPDATE, r"old\file.txt", r"new\file.txt", "move_update"),
+])
+def test_rename_classification_preserves_operations_and_only_removes_rename_origins(
+    kind, old_path, target_path, presentation,
+) -> None:
+    item = operation(kind, prior_target_path=old_path, target_path=target_path,
+                     target=file_stat(size=7), source=file_stat(size=13))
+    artifact = _artifact(item)
+    projection = build_plan_projection(REQUEST_ID, artifact)
+    node = projection.node_for_id(projection.operation_node_id_by_id[str(item.op_id)])
+    assert node.operation_kind == kind.value
+    assert node.presentation_kind == presentation
+    assert node.prior_path == old_path
+    assert artifact.plan.operations == (item,)
+    assert projection.selected_operation_ids == frozenset({item.op_id})
+    assert projection.nodes[0].operation_count == 1
+    assert projection.nodes[0].selected_operation_count == 1
+    if presentation == "rename":
+        assert node.move_peer_id is None
+        assert not any(row.row_kind.startswith("prior-") for row in projection.nodes)
+    else:
+        prior = projection.node_for_id(node.move_peer_id)
+        assert prior.prior_path is None
+        assert prior.operation_id is None
+        assert prior.selection == "disabled"
+        assert prior.move_peer_id == node.node_id
+        group = next(row for row in projection.nodes if row.row_kind == "prior-group")
+        assert group.move_item_count == 1
+
+
+def test_rename_classification_and_prior_path_survive_selection_refresh() -> None:
+    renamed = operation(OperationKind.MOVE, prior_target_path="old.txt",
+                        target_path="new.txt", target=file_stat())
+    projection = build_plan_projection(REQUEST_ID, _artifact(renamed))
+    refreshed = apply_plan_projection_selection(
+        projection, selected_operation_ids=frozenset(), exclusion_reasons={},
+    )
+    node = refreshed.node_for_id(refreshed.operation_node_id_by_id[str(renamed.op_id)])
+    assert (node.operation_kind, node.presentation_kind, node.prior_path) == (
+        "move", "rename", "old.txt",
+    )
+    assert node.selection == "unselected"
+
+
 def test_plan_projection_reuses_exact_workflow_selection_membership() -> None:
     copied = operation(
         OperationKind.COPY,

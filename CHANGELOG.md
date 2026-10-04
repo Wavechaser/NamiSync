@@ -211,7 +211,17 @@ explicit, reviewable and regression-backed.
   5,887 ordinary passes (four Windows symlink-privilege skips), all 12 import
   contracts and independent review.
 - Ratify seven GUI units in M1_PLAN. Execution-to-Verify navigation remains
-  deferred to M1-10; previous-location/rename redesign awaits a focused session.
+  deferred to M1-10. Resume previous-location/rename presentation as a focused
+  unit with explicit Python-server and projection scope: classify recase and
+  pure same-parent moves as Rename, align row labels and filters, and keep
+  Move + update distinct. Preserve real operation kinds and execution behavior.
+  Start informational move groups collapsed, fit destination paths inside
+  action-shaped purple badges, and show previous names/paths beside canonical
+  filenames. Migrate projection, bridge, navigation and gallery consumers together.
+  Preserve filename space for long origin annotations; verify 5,903 ordinary
+  passes (four privilege skips), six installed UI checks and all 12 import
+  contracts. Complete independent internal review; the requested Claude review
+  was unavailable because its OAuth session expired.
 
 #### Repair bridge diagnostic composition receipts (2026-10-04)
 

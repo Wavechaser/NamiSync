@@ -1625,13 +1625,28 @@ body {
 
 .nami-plan-move-pill .nami-badge {
   background: var(--move-pill-background);
+  border-radius: var(--radius-small);
   color: var(--move-pill-foreground);
+  gap: var(--space-1);
+  min-inline-size: 0;
+  padding-inline: var(--space-2);
+}
+
+.nami-plan-move-pill__count {
   flex: 0 0 auto;
 }
 
-.nami-plan-move-pill__destination {
+.nami-plan-move-pill__destination,
+.nami-plan-row__previous {
+  min-inline-size: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.nami-plan-row__previous {
+  color: var(--intent-relocating-foreground);
+  font-weight: var(--font-weight-regular);
+  max-inline-size: 50%;
 }
 
 .nami-plan-move-pill:hover {

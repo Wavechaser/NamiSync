@@ -278,7 +278,7 @@ reversibility because reversibility best predicts user regret.
 | Class | Members | Hue | Form |
 | --- | --- | --- | --- |
 | Additive | `copy`, `mkdir` | blue | text |
-| Relocating | `move`, `recase` | purple | text |
+| Relocating | `move`, `rename`, `recase` | purple | text |
 | Replacing | `update`, `move_update` | yellow | text |
 | Removing — recoverable | `trash` | red | text |
 | Removing — permanent | `delete` | red | fill |
@@ -548,7 +548,7 @@ views, not bridge envelopes or compatibility contracts. Callers supply native
 checkbox state, mixed state and accessible labels; depth, folder and expanded
 state; display-ready basename and size text; list-specific status text; and
 notes. `renderPlanRow` accepts an empty `intentKey` for a plain row, exact operation
-keys `copy`, `mkdir`, `move`, `recase`, `update`, `move_update`, `trash`,
+and presentation keys `copy`, `mkdir`, `move`, `rename`, `recase`, `update`, `move_update`, `trash`,
 `delete`, and `noop`, or exact exception keys `error`, `unsupported`, and
 `blocked`. A projected execution row may instead supply exact lifecycle key
 `executing` or `completed`. An `executing` row additionally requires a finite,
@@ -1388,11 +1388,15 @@ icon button is square. Plan and task-tab Source/Target labels use equal-width
 Task-tab details, paths and progress end 18px inside
 the tab's right edge; title and close-button positioning remain unchanged.
 
-Plan action/filter labels use sentence case and friendly names without changing
-canonical transport keys: `noop` is **No change**, `mkdir` is **Create folder**,
-`recase` is **Recase**, `move_update` is **Move + update**, `trash`
+Plan action/filter labels use sentence case and friendly names:
+`noop` is **No change**, `mkdir` is **Create folder**,
+`rename` is **Rename**, `move_update` is **Move + update**, `trash`
 is **Move to trash**, and `delete` is **Delete**. Destructive confirmation and
-the irreversible risk detail remain unchanged. The single Filter menu retains
+the irreversible risk detail remain unchanged. Plan projection classifies recase
+and pure same-parent moves as Rename; their row labels and Rename filter agree.
+Cross-parent moves remain Move, while Move + update stays distinct even in place.
+Item details and execution diagnostics retain the actual operation kind, including
+Recase. The single Filter menu retains
 all thirteen canonical Plan categories independently and their counters; the
 former grouped shortcuts are replaced by those explicit checkbox choices.
 The Notes policy is explicit and fail-visible:
@@ -1408,12 +1412,13 @@ The Notes policy is explicit and fail-visible:
 | Non-neutral risk, free-form notices, partial/overflow totals | Show unchanged. |
 | Any unrecognized or future reason/notice | Show verbatim as inert text; hiding never follows a broad pattern. |
 
-Known reason-code labels are translated only at rendering; backend facts, search,
-selection, filter membership and execution authority remain unchanged.
+Known reason-code labels are translated only at rendering; backend facts,
+selection and execution authority remain unchanged.
 
-Prior groups show a clickable count badge (`N items moved to`) and relative
-destination text in one filename-area button, with separate expand/collapse
-disclosure. The target parent is the destination even for a directory move.
+Prior groups start collapsed and show one clickable badge containing both the
+count (`N items moved to`) and relative destination in the filename area, with
+separate expand/collapse disclosure. Its 4 px corners and inner padding match
+the compact action badges. The target parent is the destination even for a directory move.
 Cap the relative text with an ellipsis and retain the full
 relative label in its tooltip and accessible name. Use purple background/text:
 light purple badge fill with dark purple text in Light, dark purple fill with light
@@ -1421,6 +1426,12 @@ purple text in Dark, and system colors in forced colors. Activation reveals the
 canonical destination, expanding its ancestors and clearing only obstructing
 search/filters. Root destinations jump to the first canonical moved item.
 The pill and its contents stay outside execution selection and totals.
+Canonical move rows append purple **moved from [relative path]** text after the
+filename. Rename rows instead show **renamed from [previous name]** and have no
+prior-location groups. The browser renders projection-supplied classification
+and prior paths; it never hides rows or derives filter membership. Long origin
+annotations ellipsize and retain their full text in a tooltip.
+They use at most half the Filename cell so long origins leave the filename readable.
 If the destination's follow-up window no longer matches, retain the last coherent
 review and offer **Refresh review** with an explanation. A coherent conflict
 response aligns the viewport with the loaded offset before asking the user to

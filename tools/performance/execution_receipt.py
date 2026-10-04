@@ -16,15 +16,15 @@ from . import plan as legacy
 
 CONTRACT_PATH = legacy.CONTRACT_PATH
 CASES = ("ui_get_plan_window_one_row_receipt", "ui_start_execution_receipt")
+_PRIOR_DESTINATION = "\\".join(f"target{index:02d}" for index in range(31))
 
 
 def _prior_group_node_id(request_id: str) -> str:
     digest = hashlib.blake2b(digest_size=16, person=b"NamiSyncPriorV1")
-    encoded = request_id.encode("utf-8")
-    digest.update(len(encoded).to_bytes(4, "big"))
-    digest.update(encoded)
-    digest.update((0).to_bytes(4, "big"))
-    digest.update((0).to_bytes(4, "big"))
+    for value in (request_id, "", _PRIOR_DESTINATION.upper()):
+        encoded = value.encode("utf-8")
+        digest.update(len(encoded).to_bytes(4, "big"))
+        digest.update(encoded)
     return f"node-{digest.hexdigest()}"
 
 
@@ -42,13 +42,15 @@ def _rootless_settlement(registry: object, row: Mapping[str, object]) -> dict[st
         or summary["source_path"] != row["source_path"] or summary["target_path"] != row["target_path"]
         or summary["view_revision"] != 0 or window["disposition"] != "current"
         or window["view_revision"] != 0 or window["offset"] != 0
-        or len(view.projection.nodes) != 120_000 or window["total"] != 119_999
+        or len(view.projection.nodes) != 120_000 or window["total"] != 119_968
         or len(rows) != 256 or not isinstance(first, dict)
         or first["node_id"] != _prior_group_node_id(row["request_id"])
-        or first["row_kind"] != "prior-group" or first["display"] != "1 item moved to root"
+        or first["row_kind"] != "prior-group"
+        or first["display"] != f"1 item moved to {_PRIOR_DESTINATION}"
         or first["operation_id"] is not None or first["operation_kind"] is not None
         or first["visible_index"] != 0 or first["depth"] != 0
-        or first["parent_visible_index"] is not None or first["first_child_visible_index"] != 1
+        or first["parent_visible_index"] is not None
+        or first["first_child_visible_index"] is not None or first["expanded"] is not False
     ):
         raise AssertionError("rootless headed fixture initial view was not settled exactly")
     return {

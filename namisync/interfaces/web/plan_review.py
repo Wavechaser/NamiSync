@@ -36,7 +36,7 @@ PLAN_FILTERS = frozenset(
         "copy",
         "mkdir",
         "move",
-        "recase",
+        "rename",
         "update",
         "move_update",
         "trash",
@@ -55,7 +55,7 @@ _PLAN_FILTER_COUNT_CATEGORIES = (
     "copy",
     "mkdir",
     "move",
-    "recase",
+    "rename",
     "update",
     "move_update",
     "trash",
@@ -801,7 +801,7 @@ def _direct_filter_count(node: PlanProjectionNode, filters: frozenset[str]) -> i
             "unsupported" if node.blocked_reason == "unsupported" else "blocked"
         )
         return int(category in filters)
-    return int(node.operation_kind in filters)
+    return int(node.presentation_kind in filters)
 
 
 def _plan_filter_counts(projection: PlanProjection) -> Mapping[str, int]:
@@ -826,7 +826,7 @@ def _plan_filter_counts(projection: PlanProjection) -> Mapping[str, int]:
                 "unsupported" if node.blocked_reason == "unsupported" else "blocked"
             )
         else:
-            category = node.operation_kind
+            category = node.presentation_kind
         if category not in PLAN_FILTERS:
             raise ValueError("plan projection contains an unknown filter category")
         counts[category] += 1
@@ -899,6 +899,8 @@ def _row_view(
         "row_kind": node.row_kind,
         "operation_id": node.operation_id,
         "operation_kind": node.operation_kind,
+        "presentation_kind": node.presentation_kind,
+        "prior_path": node.prior_path,
         "reason": node.reason,
         "blocked_reason": node.blocked_reason,
         "selection": node.selection if selection is None else selection,

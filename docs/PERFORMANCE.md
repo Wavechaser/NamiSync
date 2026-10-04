@@ -188,10 +188,12 @@ and the other contract correctness witnesses remain checked; no historical JSON
 or contract byte was rewritten.
 
 The M1-8 receipt adapter settles the installed rootless public view with
-119,999 visible rows from 120,000 projection nodes. Its first group is the
-independently derived `NamiSyncPriorV1` root-to-root group (`1 item moved to root`),
-with request, old-ancestor and target-parent identity components. Its prior rows
-retain the historical fixture population; changed projection/helper bytes require
+119,968 visible rows from 120,000 projection nodes: the initially collapsed
+prior group hides its 31 descendants. Its first group attaches at root and
+targets `target00\…\target30`; the independently derived `NamiSyncPriorV1`
+identity includes request, old-ancestor and that target-parent path. It has no
+visible first child while collapsed. Its prior rows retain the historical
+fixture population; changed projection/helper bytes require
 fresh observations rather than authenticating the old receipts. Each selected
 receipt case uses six samples after an equivalent untimed warmup. The execution
 UI adapter keeps eight cold click-feedback and five warm receipt endpoints;

@@ -635,6 +635,16 @@ index, guarded by task, view and foreground generations.
 Plan window rows carry `move_group:null|{count:positive-SafeInt,destination:string}`;
 only prior groups carry it, and their `move_peer_id` is the canonical reveal
 target. Destination is root-relative (empty for root), never path authority.
+Rows also carry nullable `presentation_kind` and `prior_path` alongside the
+unchanged `operation_kind`. Projection supplies the display/filter kind:
+`rename` combines RECASE and same-Windows-parent pure MOVE, `move` is
+cross-parent MOVE, and `move_update` stays distinct. Other kinds retain their
+operation spelling. Structural rows have no presentation kind; prior rows
+retain their display kind but have no `prior_path`. Canonical operation rows
+carry their root-relative prior path when available, without granting path
+authority. The Plan filter and count category `rename` replaces `recase`;
+`recase` is no longer an admitted Plan filter. Selection and execution continue
+using original operation identities and kinds.
 
 `PlanViewSummary` also carries `highlight_revision`,
 `highlight_anchor_node_id`, `highlight_focus_node_id`,

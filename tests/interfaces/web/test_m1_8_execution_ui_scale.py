@@ -147,7 +147,7 @@ def test_ui_script_adapter_changes_scoped_feedback_and_retains_other_endpoints(
     adapted = adapter._rootless_probe_script(metric_id)
     assert original.count("initialWindow.total !== 120000") == 1
     assert adapted != original
-    assert adapted.count("initialWindow.total !== 119999") == 1
+    assert adapted.count("initialWindow.total !== 119968") == 1
     assert adapted.count("const uFeedback =") == 1
     assert adapted.count("feedback_frame: true") == 5
     assert adapted.count("uFeedback.controlCorrectness") == 2
@@ -607,7 +607,7 @@ const receipt = {value: {task_id: TASK, request_id: RUN, session_id: SESSION}};
 def test_ui_script_adapter_refuses_changed_site(monkeypatch: pytest.MonkeyPatch, site: str) -> None:
     original = adapter.legacy._headed_probe_script(adapter.CASES[1])
     if site == "total":
-        changed = original.replace("initialWindow.total !== 120000", "initialWindow.total !== 119999")
+        changed = original.replace("initialWindow.total !== 120000", "initialWindow.total !== 119968")
     else:
         changed = original.replace("warmupCheckbox.click();", "warmupCheckbox.dispatch();")
     monkeypatch.setattr(adapter, "_original_headed_probe_script", lambda *_args, **_kwargs: changed)

@@ -510,6 +510,7 @@ class _ExecutionOverlayService(_Service):
             "node-" + "2" * 32, "copy.txt", "copy.txt", 1, 1, 0, 2,
             True, "operation", self.operation_id, "copy", None, None,
             "selected", 1, 1, 1, 4, None, 0, "none",
+            presentation_kind="copy",
         )
         projection = PlanProjection(
             request_id,
@@ -4429,6 +4430,51 @@ def test_m1_7_reopen_retains_view_identity_and_execution_commit_revision() -> No
     assert execution.session_id == "b" * 32
 
 
+def test_new_plan_view_collapses_move_groups_and_reopen_preserves_expansion() -> None:
+    from _db_fixtures import file_stat, operation, plan
+    from namisync.workflows import build_plan_projection
+    from namisync.workflows.models import PlanArtifact, PlanRequest
+
+    moved = operation(OperationKind.MOVE, target_path=r"new\file.txt",
+                      prior_target_path=r"old\file.txt", target=file_stat())
+    value = plan((moved,))
+
+    class Service(_Service):
+        def get_plan_projection(self, request_id):
+            self.projection_calls += 1
+            artifact = PlanArtifact(
+                PlanRequest(request_id, value.source_root.path, value.target_root.path),
+                SimpleNamespace(warnings=()), SimpleNamespace(warnings=(), directories=()),
+                value, Verdict(True, (), SimpleNamespace()),
+            )
+            return (build_plan_projection(request_id, artifact),
+                    _plan_selection_summary(), "source", "target")
+
+    registry, service = _registry(Service())
+    started = _start(registry)
+    _mark_terminal_drained(registry, started)
+    registry.release_terminal_session(started.task_id, started.session_id)
+    opened = registry.open_plan_view(started.task_id)
+    assert opened["collapsed_count"] == 1
+    window = registry.get_plan_window(started.task_id, expected_revision=0,
+                                      offset=0, limit=256)
+    group = next(row for row in window["rows"] if row["row_kind"] == "prior-group")
+    assert group["expanded"] is False
+    assert not any(row["row_kind"] == "prior-operation" for row in window["rows"])
+    changed = registry.update_plan_view(
+        started.task_id, expected_revision=0, search_query="", filters=frozenset(),
+        sort_column=PlanSortColumn.PATH, sort_direction=SortDirection.ASCENDING,
+        collapse_node_id=group["node_id"], collapsed=False,
+    )
+    reopened = registry.open_plan_view(started.task_id)
+    assert reopened["view_revision"] == changed["view_revision"] == 1
+    assert reopened["collapsed_count"] == 0
+    assert service.projection_calls == 1
+    rows = registry.get_plan_window(started.task_id, expected_revision=1,
+                                   offset=0, limit=256)["rows"]
+    assert any(row["row_kind"] == "prior-operation" for row in rows)
+
+
 def test_plan_scope_mutation_guards_both_revisions_and_keeps_hidden_selection() -> None:
     class Service(_Service):
         def __init__(self) -> None:
@@ -4449,6 +4495,7 @@ def test_plan_scope_mutation_guards_both_revisions_and_keeps_hidden_selection() 
                     "node-" + str(index) * 32, name, name, index, 1, 0,
                     index + 1, False, "operation", str(index) * 32, kind,
                     None, None, "selected", 1, 1, 1, None, None, 0, "none",
+                    presentation_kind=kind,
                 )
                 for index, (name, kind) in enumerate(
                     (("copy.txt", "copy"), ("delete.txt", "delete")), start=1
