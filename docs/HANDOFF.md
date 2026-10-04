@@ -1,43 +1,35 @@
-# Latest session — RF3 verification and delivery
+# Latest session — Gallery synchronization
 
-2026-10-04 on `milestone1`. The three authorized Plan GUI units are complete:
+2026-10-04 on `milestone1`, from `3c0378a`. The user requested that galleries
+reflect the delivered RF1/RF2/RF3 GUI changes, with a reviewed commit afterward.
 
-- RF1, `1865d66`: bounded preflight refusal codes and origin reach Plan review,
-  distinguishing commitment/admission failures without changing effect authority.
-- RF2, `53fb959`: prior-move groups attach to surviving ancestors, with purple
-  destination pills grouped by the move target parent. Reveal clears obstructing
-  query settings; informational rows remain outside selection and byte totals.
-- RF3, the atomic delivery commit containing this handoff: Delete/Recase labels,
-  authoritative Pause/Resume toggle and five-second two-click Cancel with pinned
-  Fluent regular/filled Stop assets. Direct test/tool consumers migrate together.
+The component gallery now retains production-rendered specimens for preflight,
+commitment and other refusals; expandable informational move context and canonical
+destination reveal; and interactive Pause/Resume and five-second two-click Cancel.
+Delete/Recase labels remain aligned. Callbacks update local display fixtures only;
+no production behavior, bridge command or domain authority changed. The existing
+layout matrix remains intact. Light/dark/forced-color/reduced-motion observations
+include the retained specimens' controls, icons and visible geometry.
 
-RF3 resumed from recovery `3ec5bcb` on
-`codex/wip-20261004-0610-execution-controls`, based on `53fb959`. The unchanged
-inventory headed case passed once foreground availability returned. No product
-or test correction was needed. Recovery files were restored as uncommitted
-changes on `milestone1` and delivery docs finalized, without merging or
-cherry-picking the WIP. All task-owned changes are accounted for; no unrelated
-work was included. The disposable recovery ref can be removed after verifying
-the delivery commit.
+Independent review corrected the move fixture's inherited selection/statistics
+and hierarchy to match the production display contract. Final verification and
+review receipts are under `build/gallery-sync-20261004/`. The initial interfaces
+invocation used an in-repository temporary directory that custody tests reject;
+its failed receipt is retained. The corrected invocation uses external TEMP.
 
-Verification under `build/gui-refinements-20261004/`:
+Final gates: 26 focused checks (`focused-4.xml`), 1,915 interfaces tests with no
+failures or skips (`interfaces-2.xml`), and all four installed gallery tests
+(`headed-4.xml`) pass. Independent review approved the final source and all four
+mode reports. Earlier geometry-check failures remain recorded; the final check
+respects horizontal table scrolling and uses production's narrow wrapped status
+layout for readable refusal specimens. Documentation links and diff checks pass.
+`builder.md` and `review.md` retain commands, corrections and review evidence;
+`final-*-ready.json`, `final-*-final.json` and `final-report-identities.json`
+preserve the native receipts and copy identities.
 
-- `rf3-ordinary-01.log`: 5,875 passed, four skips, 35 headed deselected.
-- Focused consumers: 194 passes plus the corrected timing-witness module's
-  42 passes; all twelve import contracts and pinned icon archive checks pass.
-- All 35 installed headed cases pass across dependency-valid runs: two task-shell
-  sizes, 32 other cases, and the resumed inventory case (one pass in 25.24s).
-  This is combined evidence, not one clean full headed invocation.
-- Successful inventory receipts and authenticated wheel/install identities:
-  `rf3-inventory-resume01-headed-receipts/`; log `rf3-inventory-resume-01.log`.
-  Earlier foreground-prerequisite failures remain preserved.
-- Independent source/evidence review: `rf3-review.md` and
-  `rf3-resume-review.md`. Final source/test/tool Git blobs match the reviewed
-  recovery candidate; checkout line-ending conversion changes raw hashes only.
-  Documentation, links and final diff were checked.
-
-The optional benchmark's pre-existing seven missing inventory-command catalog
-entries remain deferred in BUGS (`rf2-command-catalog-audit.json`). No new
-quantitative benchmark result is claimed. No later milestone, push or PR was
-requested. M1_PLAN records the completed outcomes and exclusions; component
-documents own current behavior.
+The preceding product units remain `1865d66` (refusals), `53fb959` (move pills)
+and `3c0378a` (controls/labels), with their evidence under
+`build/gui-refinements-20261004/`. The recovery branch was accounted for and
+removed after RF3 integration. The optional benchmark's pre-existing inventory
+command-catalog omissions remain deferred in BUGS; no benchmark result is claimed.
+No push, PR or later milestone was requested.

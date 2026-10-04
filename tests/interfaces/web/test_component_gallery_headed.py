@@ -61,6 +61,90 @@ _TEST_ONLY_MARKERS = (
     b"NAMISYNC_TEST_ONLY_INTEGRITY_ROWS_7A26DB6506CC49D8",
 )
 _OPEN_CONTEXT = ReadinessContext(CommandPhase.OPEN, 0)
+_RECENT_MOVE_PATH = "projects\\archive\\a-long-relative-destination-that-remains-available-in-the-tooltip"
+_RECENT_REFUSAL_MESSAGES = (
+    "Execution preflight refused. The target has insufficient free space. Free space on its drive. A source item changed after review. Resolve these issues, then click Plan again.",
+    "Execution commitment is invalid. Click Plan again and review the new plan before executing.",
+    "Execution was refused before it started. Click Plan again and review the new plan.",
+)
+
+
+def _recent_ui_sample() -> dict[str, object]:
+    def action(label: str, primary: bool, disabled: bool, glyph: str) -> dict[str, object]:
+        return {"label": label, "primary": primary, "disabled": disabled, "mask": f'url("/{glyph}")'}
+
+    return {
+        "refusals": [
+            {"origin": origin, "codes": codes, "message": message, "title": "Execution did not start"}
+            for origin, codes, message in zip(
+                ("preflight", "commitment", "other"),
+                (["insufficient_space", "source_drift"], [], []),
+                _RECENT_REFUSAL_MESSAGES, strict=True,
+            )
+        ],
+        "move": {
+            "destination": _RECENT_MOVE_PATH, "title": f"1 item moved to {_RECENT_MOVE_PATH}",
+            "revealed_node": f'node-{"8" * 32}', "expanded": "true", "checkable": False,
+            "prior_child_visible": True, "destination_highlighted": "true",
+            "revealed_destination": f'node-{"9" * 32}', "prior_action": "Move",
+            "prior_metadata": "", "prior_selection_disabled": True,
+            "hierarchy": [[0, 0, None, 1, 1, 2], [1, 1, 0, None, 1, 1],
+                          [2, 0, None, 3, 2, 2], [3, 1, 2, None, 1, 1]],
+            "row_indexes": ["2", "3", "4", "5"],
+            "message": f"Gallery preview: destination {_RECENT_MOVE_PATH} revealed. No files were changed.",
+        },
+        "pause": [
+            action("Pause", False, False, "pause_16_regular.svg"),
+            action("Resume", True, False, "play_16_regular.svg"),
+            action("Pause", False, True, "pause_16_regular.svg"),
+        ],
+        "cancel": [
+            action("Cancel", armed, False, f'stop_16_{"filled" if armed else "regular"}.svg')
+            for armed in (False, True, False, False)
+        ],
+        "commands_after_arm": 2, "commands": ["pause", "resume", "cancel"], "retained_panels": 5,
+        "layout": [{"panel": [0, 0, 900, 480], "status": [12, 50, 880, 70], "viewport": [12, 100, 888, 470], "horizontal_scroll": "auto", "controls": [], "rows": []} for _ in range(5)],
+    }
+
+
+def _assert_recent_ui(value: dict[str, object]) -> None:
+    expected = _recent_ui_sample()
+    for key in ("refusals", "move", "commands_after_arm", "commands", "retained_panels"):
+        assert value[key] == expected[key], key
+    for key in ("pause", "cancel"):
+        for observed, sample in zip(value[key], expected[key], strict=True):
+            assert {name: observed[name] for name in ("label", "primary", "disabled")} == {
+                name: sample[name] for name in ("label", "primary", "disabled")
+            }
+            assert sample["mask"].split("/")[-1].rstrip('")') in observed["mask"]
+    for panel in value["layout"]:
+        left, top, right, bottom = panel["panel"]
+        assert right > left and bottom > top
+        for bounds in [panel["status"], panel["viewport"], *panel["controls"]]:
+            assert bounds[0] >= left - 1 and bounds[1] >= top - 1, "recent specimen clipped"
+            assert bounds[2] <= right + 1 and bounds[3] <= bottom + 1, "recent specimen clipped"
+        assert panel["horizontal_scroll"] == "auto"
+        for bounds in panel["rows"]:
+            assert bounds[1] >= panel["viewport"][1] - 1 and bounds[3] <= panel["viewport"][3] + 1, "recent row clipped vertically"
+
+
+def test_component_gallery_recent_ui_report_separates_shape_from_verdict() -> None:
+    sample = _recent_ui_sample()
+    assert component_gallery_child._valid_recent_ui(sample)
+    _assert_recent_ui(sample)
+    sample["move"]["destination_highlighted"] = "false"
+    assert component_gallery_child._valid_recent_ui(sample)
+    with pytest.raises(AssertionError, match="move"):
+        _assert_recent_ui(sample)
+    sample["move"]["unknown"] = True
+    assert not component_gallery_child._valid_recent_ui(sample)
+    sample = _recent_ui_sample()
+    sample["layout"][0]["status"][3] = 482
+    assert component_gallery_child._valid_recent_ui(sample)
+    with pytest.raises(AssertionError, match="recent specimen clipped"):
+        _assert_recent_ui(sample)
+
+
 _LIFECYCLE_CASES = {
     "new": ("neutral", "text"),
     "planned": ("neutral", "text"),
@@ -1635,6 +1719,7 @@ def test_component_gallery_report_parser_is_exact_and_nested(
             )
         ],
         "control_contract": {
+            "recent_ui": _recent_ui_sample(),
             "accent": {
                 "fill": "rgb(0, 103, 192)",
                 "fill_hover": "rgba(0, 103, 192, 0.9)",
@@ -2181,6 +2266,7 @@ def test_sh_g_11_component_gallery_uses_installed_tokens_and_non_color_cues(
         for name in ("hdr", "advanced_color")
     )
     for report in (light, dark, forced):
+        _assert_recent_ui(report["control_contract"]["recent_ui"])
         theme = "dark" if report["media"]["dark"] else "light"
         _assert_complete_gallery_matrix(report)
         _assert_icon_registry_evidence(
@@ -2780,6 +2866,7 @@ def test_sh_g_13_component_gallery_honors_reduced_motion(
 ) -> None:
     light = component_gallery_evidence.result("light")["report"]
     reduced = component_gallery_evidence.result("reduced")["report"]
+    _assert_recent_ui(reduced["control_contract"]["recent_ui"])
 
     assert light["media"]["reduced"] is False
     assert reduced["media"]["reduced"] is True

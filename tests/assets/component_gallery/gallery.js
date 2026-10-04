@@ -2976,7 +2976,211 @@ window.addEventListener("unhandledrejection", (event) => {
   app.style.overflow = catalogRootStyle.overflow;
   planReviewPanel.element.style.blockSize = catalogPanelStyle.blockSize;
   planReviewPanel.element.style.gridColumn = catalogPanelStyle.gridColumn;
+  galleryMeasurementStep = "recent_ui_specimens";
+  galleryFailureReason = "layout_invariant";
+  // These panels remain in the manual gallery after the measurement matrix.
+  const recentSection = document.createElement("section");
+  recentSection.dataset.gallerySection = "recent_ui";
+  recentSection.style.gridColumn = "1 / -1";
+  const recentHeading = document.createElement("h2");
+  renderText(recentHeading, "Execution refusals, prior moves and controls");
+  recentSection.append(recentHeading);
+  app.append(recentSection);
+  const recentPanels = [];
+  function recentPanel(label, task, overrides = {}) {
+    const heading = document.createElement("h3");
+    renderText(heading, label);
+    const callbacks = Object.fromEntries(Object.keys(planReviewCallbacks).map((name) => [name, () => {}]));
+    const panel = createPlanReviewPanel({ ...callbacks, ...overrides });
+    panel.element.style.blockSize = "480px";
+    panel.element.style.inlineSize = "min(100%, 48rem)";
+    panel.render(task);
+    recentSection.append(heading, panel.element);
+    recentPanels.push(panel.element);
+    return panel;
+  }
+  function recentTask(rows = []) {
+    return {
+      ...planReviewTask, taskId: "gallery-recent", sessionId: "6".repeat(32),
+      reviewSessionId: "6".repeat(32),
+      review: {
+        ...planReviewTask.review, message: "",
+        summary: { ...planReviewTask.review.summary, filters: [], highlight_focus_node_id: null },
+        window: { ...planReviewTask.review.window, total: rows.length, rows },
+      },
+    };
+  }
+  // Display-ready messages mirror the app's fixed guidance; no refusal policy runs here.
+  const refusalCases = [
+    { origin: "preflight", codes: ["insufficient_space", "source_drift"], message: "Execution preflight refused. The target has insufficient free space. Free space on its drive. A source item changed after review. Resolve these issues, then click Plan again." },
+    { origin: "commitment", codes: [], message: "Execution commitment is invalid. Click Plan again and review the new plan before executing." },
+    { origin: "other", codes: [], message: "Execution was refused before it started. Click Plan again and review the new plan." },
+  ];
+  const refusalEvidence = refusalCases.map((fixture) => {
+    const task = recentTask();
+    task.executionStarted = true;
+    task.sessionState = "refused";
+    task.review.summary.selection_state = "committed";
+    task.review.message = fixture.message;
+    task.review.window.execution = {
+      ...task.review.window.execution, session_id: task.sessionId,
+      result: { ...calmExecutionResult, headline: "refused", filesystem: "refused", disposition: "unrun" },
+      refusal: { origin: fixture.origin, codes: fixture.codes },
+    };
+    const panel = recentPanel(`${fixture.origin} refusal`, task);
+    return {
+      origin: task.review.window.execution.refusal.origin,
+      codes: task.review.window.execution.refusal.codes,
+      message: panel.element.querySelector(".nami-plan-review__status").textContent,
+      title: panel.element.querySelector(".nami-plan-review__status-title").textContent,
+    };
+  });
+  const priorRow = {
+    ...planReviewTask.review.window.rows[0], display: `1 item moved to ${galleryMovePath}`,
+    expanded: false, position_in_set: 1, set_size: 2,
+    move_group: { count: 1, destination: galleryMovePath },
+  };
+  const destinationRow = {
+    ...priorRow, node_id: priorRow.move_peer_id, display: galleryMovePath.split("\\").at(-1),
+    row_kind: "folder", expanded: true, move_peer_id: null, move_group: null,
+    position_in_set: 2, size: "4096", selection: "selected",
+    selectable_operation_count: 1, selected_operation_count: 1, operation_count: 1,
+  };
+  const priorChild = {
+    ...priorRow, node_id: `node-${"a".repeat(32)}`, display: "old-report.pdf",
+    operation_kind: "move", row_kind: "prior-operation", depth: 1, is_container: false,
+    operation_count: 1, reason: "identity_rename",
+    move_peer_id: `node-${"b".repeat(32)}`, move_group: null,
+    parent_visible_index: 0, position_in_set: 1, set_size: 1,
+  };
+  const canonicalRow = {
+    ...priorChild, node_id: priorChild.move_peer_id, display: "report.pdf",
+    row_kind: "operation", operation_id: "5".repeat(32), move_peer_id: priorChild.node_id,
+    selection: "selected", selectable_operation_count: 1,
+    selected_operation_count: 1, operation_count: 1, size: "4096", mtime_ns: "1000000000",
+    execution: { operation: null, automatic_verification: null, evidence: null },
+  };
+  const moveTask = recentTask();
+  moveTask.review.summary.selected_operation_count = 1;
+  moveTask.review.summary.selectable_operation_count = 1;
+  moveTask.review.summary.scope_selected_operation_count = 1;
+  moveTask.review.summary.scope_selectable_operation_count = 1;
+  moveTask.review.summary.required_bytes = "4096";
+  moveTask.review.summary.filter_counts = {
+    all: 1, copy: 0, mkdir: 0, move: 1, recase: 0, update: 0, move_update: 0,
+    trash: 0, delete: 0, noop: 0, error: 0, unsupported: 0, blocked: 0, notice: 0,
+  };
+  let revealedNode = null;
+  function renderMoveRows(expanded, revealed) {
+    const destinationIndex = expanded ? 2 : 1;
+    const rows = [
+      { ...priorRow, expanded, first_child_visible_index: expanded ? 1 : null },
+      ...(expanded ? [priorChild] : []),
+      { ...destinationRow, highlighted: revealed, first_child_visible_index: destinationIndex + 1 },
+      { ...canonicalRow, parent_visible_index: destinationIndex },
+    ].map((row, index) => ({ ...row, visible_index: index }));
+    moveTask.review.window = { ...moveTask.review.window, rows, total: rows.length };
+    moveTask.review.summary.highlight_focus_node_id = revealed ? destinationRow.node_id : null;
+    moveTask.review.summary.highlight_revision = (moveTask.review.summary.highlight_revision ?? 0) + 1;
+    movePanel.render(moveTask);
+  }
+  const movePanel = recentPanel("Prior location — reveal destination preview", moveTask, {
+    onRevealMove: (review, nodeId) => {
+      revealedNode = nodeId;
+      review.message = `Gallery preview: destination ${galleryMovePath} revealed. No files were changed.`;
+      renderMoveRows(review.window.rows[0].expanded, true);
+    },
+    onViewChange: (review, patch) => {
+      const expanded = patch.collapsed !== true;
+      renderMoveRows(expanded, revealedNode !== null);
+    },
+  });
+  renderMoveRows(false, false);
+  const movePill = movePanel.element.querySelector(".nami-plan-move-pill");
+  movePill.click();
+  movePanel.element.querySelector(".nami-file-row__disclosure").click();
+  const moveEvidence = {
+    destination: movePill.querySelector(".nami-plan-move-pill__destination").textContent,
+    title: movePill.title, revealed_node: revealedNode,
+    expanded: movePanel.element.querySelector(".nami-file-row__disclosure").ariaExpanded,
+    checkable: movePanel.element.querySelector(`[data-node-id="${priorRow.node_id}"] .nami-checkbox`) !== null,
+    prior_child_visible: movePanel.element.querySelector(`[data-node-id="${priorChild.node_id}"]`) !== null,
+    destination_highlighted: movePanel.element.querySelector(`[data-node-id="${destinationRow.node_id}"]`).ariaSelected,
+    revealed_destination: destinationRow.node_id,
+    prior_action: movePanel.element.querySelector(`[data-node-id="${priorChild.node_id}"] .nami-plan-row__intent`).textContent,
+    prior_metadata: movePanel.element.querySelector(`[data-node-id="${priorChild.node_id}"] .nami-file-row__size`).textContent
+      + movePanel.element.querySelector(`[data-node-id="${priorChild.node_id}"] .nami-plan-row__modified`).textContent,
+    prior_selection_disabled: movePanel.element.querySelector(`[data-node-id="${priorChild.node_id}"] .nami-checkbox`).disabled,
+    hierarchy: moveTask.review.window.rows.map((row) => [row.visible_index, row.depth,
+      row.parent_visible_index, row.first_child_visible_index, row.position_in_set, row.set_size]),
+    row_indexes: [...movePanel.element.querySelectorAll("[data-node-id]")].map((row) => row.ariaRowIndex),
+    message: movePanel.element.querySelector(".nami-plan-review__status").textContent,
+  };
+  moveTask.review.message = "Click the move pill to preview revealing its destination. Expand the prior group independently.";
+  movePanel.render(moveTask);
+  const controlTask = recentTask();
+  controlTask.executionStarted = true;
+  controlTask.sessionState = "active";
+  controlTask.review.summary.selection_state = "committed";
+  controlTask.review.window.execution = { ...controlTask.review.window.execution, session_id: controlTask.sessionId };
+  const localCommands = [];
+  const controlPanel = recentPanel("Pause / Resume and two-click Cancel preview", controlTask, {
+    onControl: (review, action) => {
+      localCommands.push(action);
+      controlTask.executionControlState = action === "pause" ? "paused" : "running";
+      review.message = action === "cancel"
+        ? "Gallery preview canceled. No files were changed; controls are ready to try again."
+        : `Gallery preview ${action === "pause" ? "paused" : "resumed"}. No files were changed.`;
+      controlPanel.render(controlTask);
+    },
+  });
+  function actionSnapshot(action) {
+    const button = controlPanel.element.querySelector(`[data-action="${action}"]`);
+    const icon = [...button.querySelectorAll(".nami-icon")].find((glyph) => !glyph.hidden);
+    return { label: button.textContent, primary: button.classList.contains("nami-button--primary"), disabled: button.disabled, mask: getComputedStyle(icon).maskImage };
+  }
+  const pauseStates = [actionSnapshot("pause")];
+  controlPanel.element.querySelector('[data-action="pause"]').click();
+  pauseStates.push(actionSnapshot("resume"));
+  controlPanel.element.querySelector('[data-action="resume"]').click();
+  controlTask.executionControlState = "pausing";
+  controlPanel.render(controlTask);
+  pauseStates.push(actionSnapshot("pause"));
+  controlTask.executionControlState = "running";
+  controlPanel.render(controlTask);
+  const cancelStates = [actionSnapshot("cancel")];
+  const cancelButton = controlPanel.element.querySelector('[data-action="cancel"]');
+  cancelButton.click();
+  cancelStates.push(actionSnapshot("cancel"));
+  const commandsAfterArm = localCommands.length;
+  cancelButton.click();
+  cancelStates.push(actionSnapshot("cancel"));
+  cancelButton.click();
+  await new Promise((resolve) => setTimeout(resolve, 5050));
+  cancelStates.push(actionSnapshot("cancel"));
+  const recentUiEvidence = {
+    refusals: refusalEvidence, move: moveEvidence, pause: pauseStates,
+    cancel: cancelStates, commands_after_arm: commandsAfterArm,
+    commands: [...localCommands], retained_panels: recentSection.querySelectorAll(".nami-plan-review").length,
+  };
+  localCommands.length = 0;
+  controlTask.review.message = "Gallery preview only: Pause switches to Resume. Click Cancel twice within five seconds to preview cancellation.";
+  controlPanel.render(controlTask);
+  await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  function rectangle(element) {
+    const bounds = element.getBoundingClientRect();
+    return [bounds.left, bounds.top, bounds.right, bounds.bottom].map((value) => Number(value.toFixed(3)));
+  }
+  recentUiEvidence.layout = recentPanels.map((panel) => ({
+    panel: rectangle(panel), status: rectangle(panel.querySelector(".nami-plan-review__status")),
+    viewport: rectangle(panel.querySelector(".nami-plan-review__list")),
+    horizontal_scroll: getComputedStyle(panel.querySelector(".nami-plan-review__list")).overflowX,
+    controls: [...panel.querySelectorAll('[data-action="execute"], [data-action="plan-again"], [data-action="pause"], [data-action="resume"], [data-action="cancel"]')]
+      .filter((control) => control.closest("[hidden]") === null).map(rectangle),
+    rows: [...panel.querySelectorAll("[data-node-id]")].map(rectangle),
+  }));
   const controlContract = {
+    recent_ui: recentUiEvidence,
     accent: accentTokens,
     tri_state: {
       aria_checked: mixedCheckbox.getAttribute("aria-checked"),

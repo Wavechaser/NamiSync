@@ -345,6 +345,12 @@ Integrity controls, manual post-copy handoff and beta packaging remain open.
   installed cases pass across retained runs, including the unchanged inventory
   retry after desktop foreground availability returned. Independent review
   approved; the recovery candidate was rebuilt as one verified atomic unit.
+- Synchronize the component gallery with persistent refusal, prior-move and
+  execution-control specimens using production renderers. Local preview callbacks
+  expose informational expansion, destination reveal, Pause/Resume and five-second
+  two-click Cancel without domain commands; Delete/Recase labels remain aligned.
+  Independent review approved after 1,915 interfaces tests and all four installed
+  gallery tests passed across light, dark, forced-color and reduced-motion modes.
 
 #### Deliver M1-9 inventory review (2026-10-01 – 2026-10-02)
 

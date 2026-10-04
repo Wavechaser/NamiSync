@@ -260,6 +260,7 @@ _FAILURE_STEPS = frozenset(
         "execution_axes",
         "segmented_state",
         "report_assembly",
+        "recent_ui_specimens",
         "child",
     }
 )
@@ -1257,6 +1258,70 @@ def _equal_positive_css_pixel_widths(left: object, right: object) -> bool:
     )
 
 
+def _valid_recent_ui(value: object) -> bool:
+    if type(value) is not dict or set(value) != {
+        "refusals", "move", "pause", "cancel", "commands_after_arm",
+        "commands", "retained_panels", "layout",
+    }:
+        return False
+    def text(item: object) -> bool:
+        return type(item) is str and len(item) <= 1024
+
+    refusals = value["refusals"]
+    move = value["move"]
+    if not (
+        type(refusals) is list and len(refusals) == 3
+        and all(
+            type(row) is dict and set(row) == {"origin", "codes", "message", "title"}
+            and all(text(row[key]) for key in ("origin", "message", "title"))
+            and type(row["codes"]) is list and len(row["codes"]) <= 2
+            and all(text(code) for code in row["codes"])
+            for row in refusals
+        )
+        and type(move) is dict and set(move) == {
+            "destination", "title", "revealed_node", "expanded", "checkable", "message",
+            "prior_child_visible", "destination_highlighted",
+            "revealed_destination", "prior_action", "prior_metadata", "prior_selection_disabled",
+            "hierarchy", "row_indexes",
+        }
+        and all(text(move[key]) for key in ("destination", "title", "revealed_node", "expanded", "message", "destination_highlighted", "revealed_destination", "prior_action", "prior_metadata"))
+        and type(move["checkable"]) is bool
+        and type(move["prior_child_visible"]) is bool
+        and type(move["prior_selection_disabled"]) is bool
+        and type(move["hierarchy"]) is list and len(move["hierarchy"]) == 4
+        and all(type(row) is list and len(row) == 6 and all(item is None or type(item) is int for item in row) for row in move["hierarchy"])
+        and type(move["row_indexes"]) is list and len(move["row_indexes"]) == 4
+        and all(text(item) for item in move["row_indexes"])
+        and type(value["commands_after_arm"]) is int
+        and 0 <= value["commands_after_arm"] <= 2
+        and type(value["commands"]) is list and len(value["commands"]) <= 3
+        and all(text(command) for command in value["commands"])
+        and type(value["retained_panels"]) is int and 0 <= value["retained_panels"] <= 5
+    ):
+        return False
+    layout = value["layout"]
+    if type(layout) is not list or len(layout) != 5:
+        return False
+    for panel in layout:
+        if type(panel) is not dict or set(panel) != {"panel", "status", "viewport", "horizontal_scroll", "controls", "rows"} or not text(panel["horizontal_scroll"]):
+            return False
+        if not all(type(panel[key]) is list and len(panel[key]) <= 4 for key in ("controls", "rows")):
+            return False
+        for bounds in [panel["panel"], panel["status"], panel["viewport"], *panel["controls"], *panel["rows"]]:
+            if type(bounds) is not list or len(bounds) != 4 or not all(type(item) in {int, float} and math.isfinite(item) for item in bounds):
+                return False
+    return all(
+        type(value[key]) is list and len(value[key]) == count
+        and all(
+            type(row) is dict and set(row) == {"label", "primary", "disabled", "mask"}
+            and text(row["label"]) and text(row["mask"])
+            and type(row["primary"]) is bool and type(row["disabled"]) is bool
+            for row in value[key]
+        )
+        for key, count in (("pause", 3), ("cancel", 4))
+    )
+
+
 def _valid_control_contract(value: object) -> bool:
     if type(value) is not dict or set(value) != {
         "accent",
@@ -1270,6 +1335,7 @@ def _valid_control_contract(value: object) -> bool:
         "task_rail",
         "file_list",
         "integrity_list",
+        "recent_ui",
     }:
         return False
     accent = value["accent"]
@@ -1284,7 +1350,8 @@ def _valid_control_contract(value: object) -> bool:
     file_list = value["file_list"]
     integrity_list = value["integrity_list"]
     return (
-        type(accent) is dict
+        _valid_recent_ui(value["recent_ui"])
+        and type(accent) is dict
         and set(accent) == {"fill", "fill_hover", "fill_pressed", "foreground"}
         and all(type(color) is str and bool(color) for color in accent.values())
         and type(tri_state) is dict

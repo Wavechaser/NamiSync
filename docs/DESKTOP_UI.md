@@ -641,6 +641,12 @@ without a temporary data channel to preserve or remove.
 The gallery keeps the rail, Plan review controls, status card, and row fixtures
 visually and semantically parallel with production; its gallery-only callbacks
 perform no domain-backend writes and its plan data remains presentation-owned.
+Persistent production Plan panels show preflight, commitment and other refusal
+guidance, expandable prior-location contents with a destination-reveal preview,
+and interactive Pause/Resume plus two-click Cancel. Their callbacks only update
+gallery presentation values. Installed checks retain the refusal disclosures,
+move navigation and selection observations, control labels/tones/glyphs, and
+Cancel's five-second expiry alongside the existing gallery matrix.
 The same gallery
 gives every lifecycle case its own task-card/status specimen
 and separately exercises active, resumed, paused, and canceled progress.
