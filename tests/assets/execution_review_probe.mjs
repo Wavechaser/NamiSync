@@ -18,7 +18,9 @@ const taskStatusSource = (await readFile(process.argv[3], "utf8"))
 const taskStatusUrl = moduleUrl(taskStatusSource);
 const filterUrl = moduleUrl((await readFile(join(dirname(process.argv[2]), "filter_menu.js"), "utf8"))
   .replace("./icons.js", iconsUrl).replace("./render.js", renderUrl));
+const tableColumnsUrl = moduleUrl(await readFile(join(dirname(process.argv[2]), "table_columns.js"), "utf8"));
 const source = (await readFile(process.argv[2], "utf8"))
+  .replace("./table_columns.js", tableColumnsUrl)
   .replace("./filter_menu.js", filterUrl)
   .replace("./plan.js", planUrl)
   .replace("./icons.js", iconsUrl)

@@ -55,12 +55,12 @@ def test_installed_inventory_refresh_acknowledge_restore_and_close(
         assert initial["report"]["native_clicks"] == {
             "refresh": True, "filter-open": True, "filter-present": True,
             "filter-escape": True, "filter-reopen": True, "filter-all": True,
-            "acknowledge": True, "restore": True,
+            "details": True, "acknowledge": True, "restore-details": True, "restore": True,
         }
         assert initial["report"]["foreground_owned"] == {
             "refresh": True, "filter-open": True, "filter-present": True,
             "filter-escape": True, "filter-reopen": True, "filter-all": True,
-            "acknowledge": True, "restore": True,
+            "details": True, "acknowledge": True, "restore-details": True, "restore": True,
         }
         assert initial["report"]["filter_menu"] == {
             "neutral": True, "staysOpen": True, "accented": True, "escapeFocus": True,

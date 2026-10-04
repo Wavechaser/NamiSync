@@ -36,7 +36,11 @@ class ElementFake {
     return null;
   }
   contains(value) { return value === this || this.children.some((child) => child.contains(value)); }
-  getBoundingClientRect() { return { top: 200, bottom: 232 }; }
+  getBoundingClientRect() { return { top: 200, bottom: 232, width: 160 }; }
+  querySelector(selector) {
+    return this.children.find((value) => value.classList.contains(selector.slice(1)))
+      ?? this.children.map((value) => value.querySelector(selector)).find(Boolean) ?? null;
+  }
   remove() {
     if (this.parentElement !== null) this.parentElement.children = this.parentElement.children.filter((value) => value !== this);
     this.parentElement = null;
@@ -74,6 +78,8 @@ globalThis.document = {
     },
   },
 };
+globalThis.window = document.defaultView;
+globalThis.getComputedStyle = () => ({fontSize: "16px"});
 globalThis.Element = ElementFake;
 globalThis.HTMLElement = ElementFake;
 const timers = new Map();
@@ -87,7 +93,11 @@ const treeUrl = moduleUrl((await readFile(join(assetRoot, "tree.js"), "utf8")).r
 const iconsUrl = moduleUrl(await readFile(join(assetRoot, "icons.js"), "utf8"));
 const filterUrl = moduleUrl((await readFile(join(assetRoot, "filter_menu.js"), "utf8"))
   .replace("./render.js", renderUrl).replace("./icons.js", iconsUrl));
+const tableColumnsUrl = moduleUrl(await readFile(join(assetRoot, "table_columns.js"), "utf8"));
+const inventoryTaskStatusUrl = moduleUrl((await readFile(join(assetRoot, "task_status.js"), "utf8")).replace("./render.js", renderUrl));
 const source = (await readFile(join(assetRoot, "inventory_review.js"), "utf8"))
+  .replace("./task_status.js", inventoryTaskStatusUrl)
+  .replace("./table_columns.js", tableColumnsUrl)
   .replace("./filter_menu.js", filterUrl)
   .replace("./render.js", renderUrl).replace("./tree.js", treeUrl).replace("./icons.js", iconsUrl);
 const { createInventoryReviewPanel } = await import(moduleUrl(source));
@@ -150,7 +160,7 @@ for (const [scope, expected] of [
 review.summary = fixture.views.default.summary;
 pane.render(task);
 assert.ok(!rowElements().some((value) => text(value).includes("missing.txt")));
-assert.ok(rowElements().every((value) => value.children.length === 4));
+assert.ok(rowElements().every((value) => value.children.length === 5));
 const real = fixture.views.default.window.rows.find((row) => row.row_id === "1");
 const realElement = rowElements().find((value) => value.dataset.nodeId === real.node_id);
 realElement.click();
@@ -201,20 +211,38 @@ assert.equal(documentListeners.get("pointerdown").length, 0);
 assert.equal(viewListeners.get("blur").length, 0);
 pane.render(task);
 for (const column of ["filename", "size", "mtime"]) {
-  for (const dir of ["ascending", "descending"]) {
-    const sort = find((value) => value.ariaLabel === "Inventory sort column");
-    const direction = find((value) => value.ariaLabel === "Inventory sort direction");
-    sort.value = column; direction.value = dir; sort.dispatch("change");
-    assert.deepEqual(viewChanges.at(-1)[1], { sortColumn: column, sortDirection: dir });
+  for (const [currentColumn, currentDirection, expectedColumn, expectedDirection] of [
+    ["path", "ascending", column, "ascending"],
+    [column, "ascending", column, "descending"],
+    [column, "descending", "path", "ascending"],
+  ]) {
+    review.summary = {...review.summary, sort_column: currentColumn, sort_direction: currentDirection};
+    pane.render(task);
+    action(`inventory-sort-${column}`).click();
+    assert.deepEqual(viewChanges.at(-1)[1], {sortColumn: expectedColumn, sortDirection: expectedDirection});
   }
 }
-action("inventory-sort-reset").click();
-assert.deepEqual(viewChanges.at(-1)[1], { sortColumn: "path", sortDirection: "ascending" });
+review.summary = fixture.views.default.summary;
 review.detail = { row: real, state: "current", response: fixture.detail };
 pane.render(task);
 action("inventory-refresh-selected").click();
 assert.deepEqual(refreshes.at(-1), [review, real.node_id]);
 const detail = find((value) => value.ariaLabel === "Inventory item details");
+const diagnostics = find((value) => value.classList.contains("nami-inventory-review__diagnostics"));
+assert.equal(diagnostics.hidden, true, "details start hidden without dropping selected evidence");
+action("inventory-details").click();
+assert.equal(diagnostics.hidden, false);
+detail.focus();
+action("inventory-details").click();
+assert.equal(document.activeElement, action("inventory-details"));
+assert.equal(diagnostics.hidden, true);
+action("inventory-details").click();
+assert.equal(action("inventory-refresh-selected").parentElement.parentElement.parentElement.classList.contains("nami-plan-review__summary"), true);
+const modes = walk(pane.element).filter((value) => value.getAttribute("role") === "radio");
+assert.deepEqual(modes.map((value) => [value.textContent, value.ariaChecked, value.disabled]), [["Sync", "false", true], ["Integrity", "true", false]]);
+const checksumCell = realElement.children[2];
+assert.equal(checksumCell.textContent, real.recorded_checksum.slice(0, 8));
+assert.ok(checksumCell.title.includes(real.recorded_checksum));
 assert.match(text(detail), new RegExp(fixture.detail.detail.attestation.content.digest));
 assert.match(text(detail), new RegExp(`Provenance ${fixture.detail.detail.attestation.content.provenance}`));
 assert.match(text(detail), /Observed modified.*9223372036854775807 ns/);
@@ -294,7 +322,7 @@ document.querySelector = (key) => {
 };
 document.body = document.createElement("body");
 document.documentElement = document.createElement("html");
-globalThis.window = { chrome: { webview: {} }, addEventListener() {} };
+globalThis.window = { ...document.defaultView, chrome: { webview: {} }, addEventListener() {} };
 let viewportReply = null;
 const viewportCalls = [];
 globalThis.inventoryViewportHarness = {

@@ -177,6 +177,7 @@ class InventoryReviewState:
                 "presence": None if row is None else row.presence.value,
                 "verification_state": None if row is None else row.verification_state.value,
                 "has_baseline": row is not None and row.attestation is not None,
+                "recorded_checksum": None if row is None or row.attestation is None else row.attestation.content.digest.hex(),
                 "acknowledged": row is not None and row.acknowledged_at is not None,
                 "reappeared": row is not None and row.reappeared_at is not None,
                 "size": None if node.size is None else str(node.size),

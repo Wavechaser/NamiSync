@@ -261,9 +261,10 @@ def test_modules_use_only_local_explicit_js_imports(
         "integrity.js": ["./file_row.js", "./render.js"],
         "panels.js": ["./render.js", "./setup.js", "./plan_review.js", "./inventory_review.js"],
         "filter_menu.js": ["./icons.js", "./render.js"],
-        "inventory_review.js": ["./filter_menu.js", "./icons.js", "./tree.js", "./render.js"],
+        "inventory_review.js": ["./table_columns.js", "./task_status.js", "./filter_menu.js", "./icons.js", "./tree.js", "./render.js"],
         "plan.js": ["./file_row.js", "./render.js"],
-        "plan_review.js": ["./plan.js", "./filter_menu.js", "./icons.js", "./render.js", "./task_status.js"],
+        "table_columns.js": [],
+        "plan_review.js": ["./table_columns.js", "./plan.js", "./filter_menu.js", "./icons.js", "./render.js", "./task_status.js"],
         "rail.js": ["./icons.js", "./render.js", "./task_status.js"],
         "task_status.js": ["./render.js"],
         "readiness.js": [],
@@ -519,7 +520,7 @@ def test_inventory_reads_validate_production_windows_and_current_evidence(tmp_pa
 @pytest.mark.parametrize(
     ("probe_name", "asset_names"),
     (
-        ("plan_review_probe.mjs", ("plan_review.js", "render.js", "icons.js")),
+        ("plan_review_probe.mjs", ("plan_review.js", "render.js", "icons.js", "table_columns.js")),
         ("task_shell_probe.mjs", ("app.js", "rail.js", "panels.js")),
     ),
 )

@@ -248,7 +248,7 @@ _PAGE = r"""
     return pane?.isConnected && !pane.querySelector('[data-action="inventory-refresh"]')?.disabled
       && pane.querySelector('.nami-inventory-review__rows [data-node-id]') ? pane : null;
   }, 'initial-inventory-view');
-  const nativeClicks = Object.fromEntries(['refresh', 'filter-open', 'filter-present', 'filter-escape', 'filter-reopen', 'filter-all', 'acknowledge', 'restore'].map(name => [name, false]));
+  const nativeClicks = Object.fromEntries(['refresh', 'filter-open', 'filter-present', 'filter-escape', 'filter-reopen', 'filter-all', 'details', 'acknowledge', 'restore-details', 'restore'].map(name => [name, false]));
   async function stage(name) {
     await until(() => document.hasFocus(), 'document-focus');
     let listenedControl = null;
@@ -256,6 +256,7 @@ _PAGE = r"""
       const selector = name === 'filter-open' || name === 'filter-reopen' ? '[data-action="filter-menu"]'
         : name === 'filter-present' || name === 'filter-escape' ? '.nami-filter-menu__popup [data-filter="present"]'
         : name === 'filter-all' ? '.nami-filter-menu__popup [data-filter="all"]'
+        : name === 'restore-details' ? '[data-action="inventory-details"]'
         : `[data-action="inventory-${name}"]`;
       const control = review.querySelector(selector);
       if (control === null) return {point:null, facts:{connected:false}};
@@ -350,6 +351,7 @@ _PAGE = r"""
   const folder = () => row(fixture.folder_node_id);
   const folderRow = await until(folder, 'folder-row');
   folderRow.click();
+  await stage('details');
   await until(() => {
     const control = review.querySelector('[data-action="inventory-acknowledge"]');
     return control && !control.hidden && !control.disabled ? control : null;
@@ -359,6 +361,7 @@ _PAGE = r"""
     && !review.querySelector('[data-action="inventory-refresh"]').disabled, 'acknowledged-hidden');
   const nextFolder = await until(folder, 'folder-after-acknowledge');
   nextFolder.click();
+  await stage('restore-details');
   await until(() => {
     const control = review.querySelector('[data-action="inventory-restore"]');
     return control && !control.hidden && !control.disabled ? control : null;
@@ -382,7 +385,7 @@ def _drive(window: object, phase: _InventoryPhase, recorder: _Recorder,
     page_result: dict[str, object] | None = None
     observed_handle: int | None = None
     click_target: dict[str, object] | None = None
-    foreground_owned = {name: False for name in ("refresh", "filter-open", "filter-present", "filter-escape", "filter-reopen", "filter-all", "acknowledge", "restore")}
+    foreground_owned = {name: False for name in ("refresh", "filter-open", "filter-present", "filter-escape", "filter-reopen", "filter-all", "details", "acknowledge", "restore-details", "restore")}
 
     def fail(error: BaseException, task: object | None, step: str, _method: str) -> None:
         nonlocal failed
@@ -401,7 +404,7 @@ def _drive(window: object, phase: _InventoryPhase, recorder: _Recorder,
         )
 
     cdp = NativeCdp(native, core, retained, fail)
-    stage_names = ("refresh", "filter-open", "filter-present", "filter-escape", "filter-reopen", "filter-all", "acknowledge", "restore")
+    stage_names = ("refresh", "filter-open", "filter-present", "filter-escape", "filter-reopen", "filter-all", "details", "acknowledge", "restore-details", "restore")
 
     def next_stage(index: int) -> None:
         if index == len(stage_names):

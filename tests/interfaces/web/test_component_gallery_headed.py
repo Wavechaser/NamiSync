@@ -54,6 +54,8 @@ _ASSET_NAMES = (
     "integrity.js",
     "plan.js",
     "execution_confirmation.js",
+    "inventory_review.js",
+    "table_columns.js",
 )
 _TEST_ONLY_MARKERS = (
     b"NAMISYNC_TEST_ONLY_COMPONENT_GALLERY_5CE45567A17F4D74",
@@ -1719,6 +1721,7 @@ def test_component_gallery_report_parser_is_exact_and_nested(
             )
         ],
         "control_contract": {
+            "inventory_panel": _inventory_panel_sample(),
             "recent_ui": _recent_ui_sample(),
             "accent": {
                 "fill": "rgb(0, 103, 192)",
@@ -1966,8 +1969,9 @@ def test_component_gallery_report_parser_is_exact_and_nested(
         ),
         ("lifecycle_progress", report["lifecycle_progress"]),
         ("diagnostic_layout", report["control_contract"]["diagnostic_layout"]),
+        ("inventory_panel", report["control_contract"]["inventory_panel"]),
         ("control_contract", {name: value for name, value in report["control_contract"].items()
-                              if name != "diagnostic_layout"}),
+                              if name not in {"diagnostic_layout", "inventory_panel"}}),
         ("motion", report["motion"]),
         ("icons", report["icons"]),
     ]
@@ -4014,6 +4018,73 @@ def _assert_diagnostic_layout(diagnostic_layout: list[dict[str, object]]) -> Non
                 assert [item_scroll[i] for i in (0, 2, 3)] == [global_scroll[i] for i in (0, 2, 3)]
 
 
+def _inventory_panel_sample() -> dict[str, object]:
+    return {
+        "headers": ["Filename", "State", "Checksum", "Size", "Modified"], "checkbox_count": 0,
+        "switcher": [{"text": "Sync", "selected": "false", "disabled": True},
+                     {"text": "Integrity", "selected": "true", "disabled": False}],
+        "labels": [{"case": name, "text": name, "foreground": "rgb(0, 0, 0)",
+                    "background": "rgba(0, 0, 0, 0)", "height": 18.0}
+                   for name in ("verified", "unverified", "modified", "reappeared", "unsupported", "missing", "mismatched")],
+        "checksum": {"text": "01234567", "title": "Stored baseline checksum: 0123456789abcdef0123456789abcdef", "absent": "—"},
+        "first_widths": [480.0, 128.0, 112.0, 80.0, 120.0], "row_widths": [480.0, 128.0, 112.0, 80.0, 120.0],
+        "grown_widths": [680.0, 128.0, 112.0, 80.0, 120.0], "manual_before": [672.0, 128.0, 112.0, 80.0, 128.0],
+        "manual_after": [680.0, 128.0, 112.0, 80.0, 120.0],
+        "header_positions": [[0.0, 100.0, 480.0, 128.0], [480.0, 100.0, 608.0, 128.0], [608.0, 100.0, 720.0, 128.0], [720.0, 100.0, 800.0, 128.0], [800.0, 100.0, 920.0, 128.0]],
+        "row_positions": [[0.0, 128.0, 480.0, 156.0], [480.0, 128.0, 608.0, 156.0], [608.0, 128.0, 720.0, 156.0], [720.0, 128.0, 800.0, 156.0], [800.0, 128.0, 920.0, 156.0]],
+        "status_rectangles": [[0.0, 0.0, 400.0, 32.0], [500.0, 0.0, 920.0, 32.0], [0.0, 40.0, 500.0, 64.0], [850.0, 40.0, 920.0, 64.0]],
+        "scroll_owners": {"outer_x": "auto", "body_x": "hidden", "body_y": "auto"},
+        "details": {"initially_hidden": True, "expanded": True, "root_height": 640.0, "column_height": 640.0,
+                    "root_width": 1200.0, "column_width": 384.0, "global_overflow": "auto", "item_overflow": "auto",
+                    "placeholder": True, "focus_restored": True},
+        "refresh_on_status": True, "root_fits": True, "viewport_height": 300.0,
+        "viewport_scroll_height": 8400.0, "adopted_offset": 218, "window_requests": [218], "row_height": 28.0,
+    }
+
+
+def _assert_inventory_panel(evidence: dict[str, object], integrity: dict[str, object]) -> None:
+    assert component_gallery_child._valid_inventory_panel(evidence)
+    assert evidence["headers"] == ["Filename", "State", "Checksum", "Size", "Modified"]
+    assert evidence["checkbox_count"] == 0
+    assert evidence["switcher"] == [
+        {"text": "Sync", "selected": "false", "disabled": True},
+        {"text": "Integrity", "selected": "true", "disabled": False},
+    ]
+    assert evidence["row_widths"] == pytest.approx(evidence["first_widths"], abs=1)
+    for header, row in zip(evidence["header_positions"], evidence["row_positions"], strict=True):
+        assert [row[0], row[2]] == pytest.approx([header[0], header[2]], abs=1)
+    assert evidence["scroll_owners"] == {"outer_x": "auto", "body_x": "hidden", "body_y": "auto"}
+    title, actions, facts, toggle = evidence["status_rectangles"]
+    assert (title[1] + title[3]) / 2 == pytest.approx((actions[1] + actions[3]) / 2, abs=1)
+    assert (facts[1] + facts[3]) / 2 == pytest.approx((toggle[1] + toggle[3]) / 2, abs=1)
+    assert title[2] <= actions[0] and facts[2] <= toggle[0]
+    assert evidence["grown_widths"][0] > evidence["first_widths"][0]
+    assert evidence["grown_widths"][1:] == pytest.approx(evidence["first_widths"][1:], abs=1)
+    before, after = evidence["manual_before"], evidence["manual_after"]
+    assert after[0] - before[0] == pytest.approx(8, abs=1)
+    assert before[4] - after[4] == pytest.approx(8, abs=1)
+    assert after[1:4] == pytest.approx(before[1:4], abs=1)
+    assert evidence["checksum"] == _inventory_panel_sample()["checksum"]
+    specimen = {row["case"]: row for row in integrity["rows"]}
+    for row in evidence["labels"]:
+        reference = specimen[row["case"]]
+        assert row["text"]
+        assert row["foreground"] == reference["primary_foreground"]
+        assert row["background"] == reference["primary_background"]
+        if reference["primary_form"] == "fill":
+            assert row["height"] == pytest.approx(18, abs=0.5)
+    details = evidence["details"]
+    for key in ("initially_hidden", "expanded", "placeholder", "focus_restored"):
+        assert details[key] is True
+    assert details["column_height"] == pytest.approx(details["root_height"], abs=1)
+    assert 0 < details["column_width"] <= min(384, details["root_width"] * 0.4) + 1
+    assert details["global_overflow"] == details["item_overflow"] == "auto"
+    assert evidence["refresh_on_status"] is True and evidence["root_fits"] is True
+    assert 28 <= evidence["viewport_height"] < evidence["viewport_scroll_height"]
+    assert evidence["window_requests"] and evidence["adopted_offset"] > 0
+    assert evidence["row_height"] == pytest.approx(28, abs=0.5)
+
+
 def _assert_complete_gallery_matrix(report: dict[str, object]) -> None:
     assert set(report) == {
         "phase",
@@ -4105,6 +4176,7 @@ def _assert_complete_gallery_matrix(report: dict[str, object]) -> None:
         "wheel_blocked": True,
     }
     _assert_diagnostic_layout(report["control_contract"]["diagnostic_layout"])
+    _assert_inventory_panel(report["control_contract"]["inventory_panel"], report["control_contract"]["integrity_list"])
     minimum_window = report["control_contract"]["minimum_window"]
     filter_menu = minimum_window["filter_menu"]
     assert all(filter_menu[key] is True for key in (

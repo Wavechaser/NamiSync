@@ -10,7 +10,7 @@ from namisync.core.pathing import normalize_relative_path
 from namisync.db.repositories import InventoryPresence, InventorySnapshot
 from namisync.interfaces.web.inventory_review import InventoryReviewState
 from namisync.workflows import PlanSortColumn, SortDirection, build_inventory_projection
-from _db_fixtures import NOW, file_stat
+from _db_fixtures import NOW, attestation, file_stat
 
 
 def _row(row_id, path, **changes):
@@ -107,3 +107,26 @@ def test_acknowledged_folder_remains_only_as_required_ancestor_context():
     assert [(row["row_id"], row["acknowledged"]) for row in rows] == [("1", True), ("2", False)]
     _update(view, search_query="no matching descendant")
     assert view.window(expected_revision=2, offset=0, limit=256)["rows"] == []
+
+
+@pytest.mark.parametrize("state", ["present", "missing", "modified", "reappeared", "mismatched"])
+def test_window_keeps_recorded_checksum_independent_of_observation_state(state):
+    from namisync.core.integrity import VerificationInvalidation, VerificationInvalidationReason
+    stat = file_stat()
+    changes = {"attestation": attestation(stat)}
+    if state == "missing":
+        changes.update(presence=InventoryPresence.MISSING, observed=None)
+    elif state in {"modified", "mismatched"}:
+        changes["invalidation"] = VerificationInvalidation(NOW,
+            VerificationInvalidationReason.METADATA_DRIFT if state == "modified"
+            else VerificationInvalidationReason.HASH_MISMATCH)
+    elif state == "reappeared":
+        changes["reappeared_at"] = NOW
+    row = _row("1", r"folder\subject.txt", **changes)
+    view = InventoryReviewState("task-" + "1" * 32, "2" * 32,
+        build_inventory_projection(1, (row, _row("2", "unverified.txt")), (
+            ScanWarning(ScanWarningCode.ACCESS_DENIED, "unreadable", "read failed"),)),
+        r"C:\root", True, 2, 0)
+    rows = view.window(expected_revision=0, offset=0, limit=256)["rows"]
+    assert next(item for item in rows if item["row_id"] == "1")["recorded_checksum"] == row.attestation.content.digest.hex()
+    assert all(item["recorded_checksum"] is None for item in rows if item["row_id"] != "1")

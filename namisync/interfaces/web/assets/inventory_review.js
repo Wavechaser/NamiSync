@@ -1,3 +1,5 @@
+import { createTableColumns } from "./table_columns.js";
+import { taskStatusDigest } from "./task_status.js";
 import { createFilterMenu } from "./filter_menu.js";
 import { createIcon } from "./icons.js";
 import { createTree } from "./tree.js";
@@ -40,10 +42,29 @@ function rollupText(rollup) {
 export function createInventoryReviewPanel(callbacks) {
   const pane = element("section", "nami-inventory-review");
   pane.ariaLabel = "Inventory review";
-  const header = element("div", "nami-card nami-inventory-review__header");
-  const title = element("h2", "", "Inventory");
-  const rootPath = element("p", "nami-shell__guidance");
-  const facts = element("p", "nami-shell__guidance");
+  const header = element("div", "nami-card nami-plan-review__plan nami-inventory-review__header");
+  const switcher = element("div", "nami-segmented nami-plan-review__view-switcher");
+  switcher.setAttribute("role", "radiogroup");
+  switcher.ariaLabel = "Task type";
+  for (const [text, selected] of [["Sync", false], ["Integrity", true]]) {
+    const option = button(text, "inventory-mode");
+    option.className = "nami-segmented__item";
+    option.setAttribute("role", "radio");
+    option.ariaChecked = String(selected);
+    option.disabled = !selected;
+    switcher.append(option);
+  }
+  const paths = element("div", "nami-plan-review__paths");
+  const rootLine = element("p", "nami-plan-review__path nami-labeled-path");
+  const rootPath = element("span", "nami-labeled-path__value");
+  rootLine.append(element("span", "", "Root:"), rootPath);
+  paths.append(rootLine);
+  header.append(switcher, paths);
+  const summary = element("div", "nami-card nami-plan-review__summary");
+  const title = element("p", "nami-plan-review__status-title", "Inventory");
+  title.setAttribute("role", "status");
+  title.tabIndex = -1;
+  const facts = element("p", "nami-shell__guidance nami-plan-review__status-summary");
   const scanFacts = element("p", "nami-shell__guidance");
   const scanState = element("p", "nami-shell__guidance");
   const message = element("p", "nami-shell__guidance");
@@ -51,13 +72,28 @@ export function createInventoryReviewPanel(callbacks) {
   const actionStatus = element("p", "nami-shell__guidance");
   actionStatus.setAttribute("role", "status");
   const refresh = button("Refresh inventory", "inventory-refresh");
+  const refreshSelected = button("Refresh selected", "inventory-refresh-selected");
+  refresh.classList.add("nami-button--primary");
   const check = button("Check original outcome", "inventory-check-outcome");
   const reload = button("Reload inventory view", "inventory-reload");
-  header.append(title, rootPath, scanState, facts, scanFacts, message, actionStatus, refresh, check, reload);
+  const statusActions = element("div", "nami-plan-review__actions");
+  const actions = element("div", "nami-inventory-review__actions");
+  actions.append(refreshSelected, refresh);
+  statusActions.append(title, actions);
+  const statusMeta = element("div", "nami-plan-review__status-meta");
+  const detailsToggle = button("Details", "inventory-details");
+  detailsToggle.classList.add("nami-button--clear", "nami-plan-review__details-toggle");
+  detailsToggle.ariaExpanded = "false";
+  statusMeta.append(facts, detailsToggle);
+  const progress = element("div", "nami-progress nami-plan-review__progress");
+  progress.ariaHidden = "true";
+  const progressBar = element("div", "nami-progress__bar");
+  progress.append(progressBar);
+  summary.append(statusActions, statusMeta, scanState, scanFacts, message, actionStatus, check, reload, progress);
 
-  const table = element("div", "nami-card nami-inventory-review__table");
-  const toolbar = element("div", "nami-inventory-review__toolbar");
-  const filters = element("div", "nami-inventory-review__filters");
+  const table = element("div", "nami-card nami-plan-review__table-card nami-inventory-review__table");
+  const toolbar = element("div", "nami-plan-review__toolbar");
+  const filters = element("div", "nami-plan-review__filters");
   filters.ariaLabel = "Inventory filters";
   const filterMenu = createFilterMenu(FACETS, (selected) => {
     if (current !== null && !blocked()) callbacks.onViewChange(current, { filters: [...selected] });
@@ -81,53 +117,78 @@ export function createInventoryReviewPanel(callbacks) {
   searchBox.append(search, clear, submit);
   toolbar.append(filters, searchBox);
 
-  const sortBar = element("div", "nami-inventory-review__sort");
-  const sortLabel = element("label", "", "Sort by ");
-  const sort = element("select", "nami-select");
-  sort.ariaLabel = "Inventory sort column";
-  for (const [key, text] of [["path", "Path"], ["filename", "Name"], ["size", "Size"], ["mtime", "Modified"]]) {
-    const option = element("option", "", text);
-    option.value = key;
-    sort.append(option);
+  const list = element("div", "nami-file-list nami-table-scroll nami-inventory-review__list");
+  const grid = element("div", "nami-file-list__grid nami-table-layout nami-inventory-review__grid");
+  const columnHeader = element("div", "nami-file-list__header nami-table__header nami-inventory-review__columns");
+  const columnNames = ["name", "primary", "secondary", "size", "modified"];
+  const sortHeaders = new Map();
+  for (const [index, [text, column]] of [
+    ["Filename", "filename"], ["State", null], ["Checksum", null], ["Size", "size"], ["Modified", "mtime"],
+  ].entries()) {
+    const cell = element("div", "nami-file-list__header-cell");
+    if (column === null) renderText(cell, text);
+    else {
+      const sortButton = button("", `inventory-sort-${column}`);
+      sortButton.className = "nami-plan-review__sort";
+      sortButton.dataset.sortColumn = column;
+      const up = createIcon(document, "chevron-up", "sm");
+      const down = createIcon(document, "chevron-down", "sm");
+      up.hidden = true;
+      down.hidden = true;
+      sortButton.append(element("span", "", text), up, down);
+      cell.append(sortButton);
+      sortHeaders.set(column, { cell, sortButton, up, down });
+    }
+    if (index < columnNames.length - 1) {
+      const resizer = element("div", "nami-file-list__column-resizer");
+      resizer.dataset.columnIndex = String(index);
+      resizer.dataset.column = columnNames[index];
+      resizer.setAttribute("role", "separator");
+      resizer.ariaOrientation = "vertical";
+      resizer.ariaLabel = `Resize ${text} column`;
+      resizer.tabIndex = 0;
+      cell.append(resizer);
+    }
+    columnHeader.append(cell);
   }
-  sortLabel.append(sort);
-  const directionLabel = element("label", "", "Direction ");
-  const direction = element("select", "nami-select");
-  direction.ariaLabel = "Inventory sort direction";
-  for (const [key, text] of [["ascending", "Ascending"], ["descending", "Descending"]]) {
-    const option = element("option", "", text);
-    option.value = key;
-    direction.append(option);
-  }
-  directionLabel.append(direction);
-  const reset = button("Reset sort", "inventory-sort-reset");
-  sortBar.append(sortLabel, directionLabel, reset);
-  const columns = element("div", "nami-inventory-review__columns");
-  columns.ariaHidden = "true";
-  for (const text of ["Name", "State", "Size", "Modified"]) columns.append(element("span", "", text));
-  const rows = element("div", "nami-inventory-review__rows");
+  const rows = element("div", "nami-table__body nami-inventory-review__rows");
   rows.ariaLabel = "Inventory items";
+  grid.append(columnHeader, rows);
+  list.append(grid);
+  const columns = createTableColumns(grid, [...columnHeader.children], columnNames, [12, 8, 7, 5, 7], 0, 4);
   const empty = element("p", "nami-shell__guidance", "No items match this view.");
-  table.append(toolbar, sortBar, columns, rows, empty);
+  table.append(toolbar, list, empty);
 
-  const detail = element("section", "nami-card nami-inventory-review__detail");
+  const detail = element("section", "nami-card nami-plan-review__detail nami-inventory-review__detail");
   detail.tabIndex = 0;
   detail.ariaLabel = "Inventory item details";
   const detailTitle = element("h2", "", "Item details");
+  const detailHeader = element("div", "nami-plan-review__detail-header");
+  detailHeader.append(detailTitle);
   const detailStatus = element("p", "nami-shell__guidance");
   detailStatus.setAttribute("role", "status");
   const detailActions = element("div", "nami-inventory-review__actions");
-  const refreshSelected = button("Refresh selected", "inventory-refresh-selected");
   const acknowledge = button("Acknowledge missing", "inventory-acknowledge");
   const restore = button("Restore visibility", "inventory-restore");
-  detailActions.append(refreshSelected, acknowledge, restore);
+  detailActions.append(acknowledge, restore);
   const scopeHint = element("p", "nami-shell__guidance");
   const detailBody = element("dl", "nami-plan-review__detail-body");
-  detail.append(detailTitle, detailStatus, detailActions, scopeHint, detailBody);
+  detail.append(detailHeader, detailStatus, detailActions, scopeHint, detailBody);
   const content = element("div", "nami-inventory-review__content");
-  content.append(table, detail);
-  pane.append(header, content);
+  content.append(table);
+  const diagnostics = element("div", "nami-plan-review__diagnostics nami-inventory-review__diagnostics");
+  diagnostics.hidden = true;
+  const globalDetails = element("section", "nami-card nami-plan-review__global-diagnostics");
+  globalDetails.tabIndex = 0;
+  globalDetails.ariaLabel = "Inventory task details";
+  const globalFacts = element("p", "nami-shell__guidance");
+  const globalScanFacts = element("p", "nami-shell__guidance");
+  const globalScanState = element("p", "nami-shell__guidance");
+  globalDetails.append(element("h2", "", "Task details"), globalScanState, globalScanFacts, globalFacts);
+  diagnostics.append(globalDetails, detail);
+  pane.append(header, summary, content, diagnostics);
 
+  let detailsExpanded = false;
   let current = null;
   let task = null;
   let tree = null;
@@ -160,19 +221,25 @@ export function createInventoryReviewPanel(callbacks) {
     search.focus();
     submitSearch();
   });
-  const changeSort = () => {
-    if (current !== null && !blocked()) callbacks.onViewChange(current, {
-      sortColumn: sort.value,
-      sortDirection: sort.value === "path" ? "ascending" : direction.value,
+  for (const [column, { sortButton }] of sortHeaders) {
+    sortButton.addEventListener("click", () => {
+      if (current === null || blocked()) return;
+      const same = current.summary.sort_column === column;
+      callbacks.onViewChange(current, same && current.summary.sort_direction === "descending"
+        ? { sortColumn: "path", sortDirection: "ascending" }
+        : { sortColumn: column, sortDirection: same ? "descending" : "ascending" });
     });
-  };
-  sort.addEventListener("change", changeSort);
-  direction.addEventListener("change", changeSort);
-  reset.addEventListener("click", () => {
-    if (current !== null && !blocked()) callbacks.onViewChange(current, {
-      sortColumn: "path", sortDirection: "ascending",
-    });
+  }
+  detailsToggle.addEventListener("click", () => {
+    detailsExpanded = !detailsExpanded;
+    detailsToggle.ariaExpanded = String(detailsExpanded);
+    if (!detailsExpanded && diagnostics.contains(document.activeElement)) detailsToggle.focus();
+    diagnostics.hidden = !detailsExpanded;
   });
+  const resizeObserver = new window.ResizeObserver(() => {
+    if (current !== null) { columns.freeze(); columns.refresh(); }
+  });
+  resizeObserver.observe(rows);
   reload.addEventListener("click", () => { if (task !== null) callbacks.onReload(task); });
   refresh.addEventListener("click", () => {
     if (task !== null && current !== null && !blocked()) callbacks.onRefresh(current, null);
@@ -201,9 +268,14 @@ export function createInventoryReviewPanel(callbacks) {
     const stateText = row.warning !== null ? "Notice" : row.row_id === null ? "Folder"
       : [row.acknowledged ? "Acknowledged" : label(row.presence), label(row.verification_state),
         row.reappeared ? "Reappeared" : null].filter(Boolean).join(" · ");
-    const state = element("span", "nami-inventory-row__state", stateText);
-    state.dataset.integrity = row.warning !== null ? "" : row.acknowledged ? "missing"
-      : row.presence === "present" ? row.verification_state : row.presence;
+    const state = element("span", "nami-inventory-row__state nami-integrity-row__presence");
+    state.append(element("span", "nami-file-state-label", stateText));
+    state.dataset.integrity = row.warning !== null || row.row_id === null ? ""
+      : row.presence !== "present" ? row.presence
+      : row.reappeared && ["unverified", "modified"].includes(row.verification_state)
+        ? "reappeared" : row.verification_state;
+    const checksum = element("span", "nami-inventory-row__checksum nami-integrity-row__checksum", row.recorded_checksum?.slice(0, 8) ?? "—");
+    checksum.title = row.recorded_checksum === null ? "No stored baseline evidence" : `Stored baseline checksum: ${row.recorded_checksum}`;
     state.title = stateText;
     const sizeText = row.warning !== null ? "" : row.is_container
       ? bytes(row.rollup.size) + (row.rollup.size_overflow ? " (overflow)" : row.rollup.size_partial ? " (partial)" : "")
@@ -214,7 +286,7 @@ export function createInventoryReviewPanel(callbacks) {
       : `Own file size: ${sizeText}.`;
     const modified = element("span", "nami-inventory-row__modified", row.warning === null ? modifiedTime(row.mtime_ns) : "");
     modified.title = row.mtime_ns === null ? "" : `Own modified time: ${row.mtime_ns} ns`;
-    rowElement.append(state, size, modified);
+    rowElement.append(state, checksum, size, modified);
   }
 
   function ensureTree() {
@@ -257,8 +329,11 @@ export function createInventoryReviewPanel(callbacks) {
   function renderDetails() {
     detailBody.replaceChildren();
     const selected = current?.detail ?? null;
-    detail.hidden = selected === null;
-    if (selected === null) return;
+    if (selected === null) {
+      renderText(detailTitle, "Item details");
+      renderText(detailStatus, "Select an item to see its details.");
+      return;
+    }
     renderFilesystemText(detailTitle, selected.row.display);
     renderText(detailStatus, selected.state === "loading" ? "Loading current evidence…"
       : selected.state === "unavailable" ? "This item has no current ledger row. Select another item."
@@ -305,6 +380,11 @@ export function createInventoryReviewPanel(callbacks) {
 
   function dispose() {
     filterMenu.dispose();
+    columns.dispose();
+    resizeObserver.disconnect();
+    detailsExpanded = false;
+    diagnostics.hidden = true;
+    detailsToggle.ariaExpanded = "false";
     clearTimeout(searchTimer);
     searchTimer = null;
     if (current !== null) current.scrollTop = rows.scrollTop;
@@ -317,11 +397,16 @@ export function createInventoryReviewPanel(callbacks) {
   }
 
   function render(value) {
+    const focusInDetails = diagnostics.contains(document.activeElement);
     const review = value.inventoryReview ?? null;
     if (current !== review || task?.taskId !== value.taskId) dispose();
     task = value;
     const first = current !== review;
     current = review;
+    resizeObserver.observe(rows);
+    if (focusInDetails && !detailsExpanded) title.focus();
+    detailsToggle.hidden = review === null;
+    diagnostics.hidden = review === null || !detailsExpanded;
     const available = review !== null;
     content.hidden = !available;
     reload.hidden = !value.inventoryError && !review?.message;
@@ -336,7 +421,17 @@ export function createInventoryReviewPanel(callbacks) {
     check.hidden = value.inventoryAction?.recovery?.canCheck !== true;
     check.disabled = value.inventoryAction?.recovery?.checking === true;
     renderFilesystemText(rootPath, review?.summary.root_path ?? value.form?.source?.text ?? "");
-    renderText(title, value.sessionState === "active" ? "Inventory scan in progress" : "Inventory");
+    rootLine.title = review?.summary.root_path ?? value.form?.source?.text ?? "";
+    const digest = taskStatusDigest(value);
+    summary.dataset.status = value.inventoryError ? "attention" : digest.state;
+    renderText(title, value.sessionState === "active" ? "Inventory scan in progress"
+      : value.sessionState === "refused" ? "Inventory scan did not start"
+        : value.sessionState === "failed" ? "Inventory scan failed"
+          : value.sessionState === "canceled" ? "Inventory scan canceled" : "Inventory scan completed");
+    progress.hidden = value.sessionState !== "active";
+    progress.dataset.status = digest.state;
+    progress.dataset.indeterminate = String(digest.progress.indeterminate);
+    progressBar.style.setProperty("--nami-progress-value", `${digest.progress.value}%`);
     renderText(scanState, `Current scan: ${value.sessionState === "active" ? "in progress" : value.sessionState}.`);
     renderText(facts, available ? `${rollupText(review.summary.rollup)} · ${review.summary.visible_row_count} visible rows` : "");
     facts.title = available && !review.summary.filters.includes("acknowledged")
@@ -347,7 +442,15 @@ export function createInventoryReviewPanel(callbacks) {
       : scanScope?.kind === "folder" ? `Folder: ${scanScope.path} (including subfolders)` : "Selected items";
     renderFilesystemText(scanFacts, available
       ? `${review.summary.request_id === value.requestId ? "Displayed scan" : "Previous published scan"}: ${scopeLabel} · ${review.summary.scan_complete ? "complete" : "incomplete"} · ${review.summary.observed_count} observed · ${review.summary.missing_count} missing · ${review.summary.warning_count} notices from this scan.${scanScope.kind === "location" ? "" : " Other inventory items were not rescanned."}` : "");
-    if (!available) { filterMenu.render([], {}, true); return; }
+    renderText(globalScanState, scanState.textContent);
+    renderText(globalScanFacts, scanFacts.textContent);
+    if (!available) {
+      filterMenu.render([], {}, true);
+      refreshSelected.disabled = true;
+      detailActions.hidden = true;
+      return;
+    }
+    renderText(globalFacts, `${rollupText(review.summary.rollup)}. ${review.summary.rollup.acknowledged} acknowledged items. Stored checksums are baseline evidence; a scan does not verify current bytes.`);
     const selected = review.detail?.row ?? null;
     const domain = selected !== null && selected.warning === null;
     const currentPublication = review.summary.request_id === value.requestId && !value.inventoryViewUnconfirmed;
@@ -374,11 +477,13 @@ export function createInventoryReviewPanel(callbacks) {
     submit.disabled = search.disabled;
     clear.disabled = search.disabled;
     clear.hidden = search.value === "";
-    sort.value = review.summary.sort_column;
-    direction.value = review.summary.sort_direction;
-    sort.disabled = Boolean(blocked());
-    direction.disabled = Boolean(blocked()) || sort.value === "path";
-    reset.disabled = Boolean(blocked());
+    for (const [column, { cell, sortButton, up, down }] of sortHeaders) {
+      const direction = review.summary.sort_column === column ? review.summary.sort_direction : null;
+      cell.ariaSort = direction ?? "none";
+      up.hidden = direction !== "ascending";
+      down.hidden = direction !== "descending";
+      sortButton.disabled = Boolean(blocked());
+    }
     empty.hidden = review.window.total !== 0;
     ensureTree();
     if (committedWindow !== review.window) {
@@ -387,6 +492,8 @@ export function createInventoryReviewPanel(callbacks) {
       committedWindow = review.window;
       rows.scrollTop = review.scrollTop ?? 0;
     }
+    columns.freeze();
+    columns.refresh();
     renderDetails();
   }
 

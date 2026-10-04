@@ -29,6 +29,8 @@ _ASSET_NAMES = (
     "integrity.js",
     "plan.js",
     "execution_confirmation.js",
+    "inventory_review.js",
+    "table_columns.js",
 )
 _MEDIA_FEATURES: dict[str, tuple[tuple[str, str], ...]] = {
     "light": (
@@ -225,6 +227,7 @@ _FAILURE_STEPS = frozenset(
         "not_started",
         "plan_list_construction",
         "plan_review_construction",
+        "inventory_panel",
         "plan_review_initial_render",
         "plan_review_static_contract",
         "plan_review_filter_spacing",
@@ -348,7 +351,7 @@ _CONTROL_REPORT_CHUNK_COUNT = math.ceil(
 _REPORT_PART_NAMES = (
     ("lifecycles", "intents")
     + ("controls",) * _CONTROL_REPORT_CHUNK_COUNT
-    + ("lifecycle_progress", "diagnostic_layout", "control_contract", "motion", "icons")
+    + ("lifecycle_progress", "diagnostic_layout", "inventory_panel", "control_contract", "motion", "icons")
 )
 
 
@@ -721,7 +724,7 @@ def _test_report_spec(
                     and type(value) is not list
                 )
                 or (
-                    name in {"control_contract", "motion", "icons"}
+                    name in {"inventory_panel", "control_contract", "motion", "icons"}
                     and type(value) is not dict
                 )
             ):
@@ -737,7 +740,7 @@ def _test_report_spec(
                     raise CommandPayloadError(
                         "component gallery report is invalid"
                     )
-            if name == "control_contract" and "diagnostic_layout" in value:
+            if name == "control_contract" and {"diagnostic_layout", "inventory_panel"}.intersection(value):
                 raise CommandPayloadError("component gallery report is invalid")
             return dict(payload)
         if payload["phase"] != "complete" or set(payload) != {
@@ -842,6 +845,7 @@ def _test_report_spec(
             "lifecycle_progress": values["lifecycle_progress"],
             "control_contract": {
                 **values["control_contract"], "diagnostic_layout": values["diagnostic_layout"],
+                "inventory_panel": values["inventory_panel"],
             },
             "motion": values["motion"],
             "icons": values["icons"],
@@ -1334,6 +1338,7 @@ def _valid_control_contract(value: object) -> bool:
         "dialog_exit",
         "confirmation_preview",
         "diagnostic_layout",
+        "inventory_panel",
         "minimum_window",
         "segmented",
         "combobox",
@@ -1356,6 +1361,7 @@ def _valid_control_contract(value: object) -> bool:
     integrity_list = value["integrity_list"]
     return (
         _valid_recent_ui(value["recent_ui"])
+        and _valid_inventory_panel(value["inventory_panel"])
         and type(accent) is dict
         and set(accent) == {"fill", "fill_hover", "fill_pressed", "foreground"}
         and all(type(color) is str and bool(color) for color in accent.values())
@@ -1790,6 +1796,52 @@ def _install_minimum_window_scheduler(
     if window.native is not native:
         raise RuntimeError("component gallery native window ownership changed")
     scheduler["value"] = schedule_minimum_window
+
+
+def _valid_inventory_panel(value: object) -> bool:
+    if type(value) is not dict or set(value) != {
+        "headers", "checkbox_count", "switcher", "labels", "checksum",
+        "first_widths", "row_widths", "grown_widths", "manual_before", "manual_after",
+        "header_positions", "row_positions", "status_rectangles", "scroll_owners",
+        "details", "refresh_on_status", "root_fits", "viewport_height",
+        "viewport_scroll_height", "adopted_offset", "window_requests", "row_height",
+    }:
+        return False
+    details = value["details"]
+    return (
+        type(value["headers"]) is list and len(value["headers"]) == 5
+        and all(type(text) is str and len(text) <= 32 for text in value["headers"])
+        and type(value["checkbox_count"]) is int and 0 <= value["checkbox_count"] <= 10
+        and type(value["switcher"]) is list and len(value["switcher"]) == 2
+        and all(type(item) is dict and set(item) == {"text", "selected", "disabled"}
+                and type(item["text"]) is str and item["selected"] in {"true", "false"}
+                and type(item["disabled"]) is bool for item in value["switcher"])
+        and type(value["labels"]) is list and len(value["labels"]) == 7
+        and all(type(item) is dict and set(item) == {"case", "text", "foreground", "background", "height"}
+                and all(type(item[key]) is str and len(item[key]) <= 128
+                        for key in ("case", "text", "foreground", "background"))
+                and _finite_number_matrix([[item["height"]]], 1, 1) for item in value["labels"])
+        and type(value["checksum"]) is dict and set(value["checksum"]) == {"text", "title", "absent"}
+        and all(type(text) is str and len(text) <= 128 for text in value["checksum"].values())
+        and all(_finite_number_matrix([value[key]], 1, 5)
+                for key in ("first_widths", "row_widths", "grown_widths", "manual_before", "manual_after"))
+        and all(_finite_number_matrix(value[key], 5, 4) for key in ("header_positions", "row_positions"))
+        and _finite_number_matrix(value["status_rectangles"], 4, 4)
+        and type(value["scroll_owners"]) is dict and set(value["scroll_owners"]) == {"outer_x", "body_x", "body_y"}
+        and all(type(text) is str and len(text) <= 32 for text in value["scroll_owners"].values())
+        and type(details) is dict and set(details) == {
+            "initially_hidden", "expanded", "root_height", "column_height", "root_width", "column_width",
+            "global_overflow", "item_overflow", "placeholder", "focus_restored",
+        }
+        and all(type(details[key]) is bool for key in ("initially_hidden", "expanded", "placeholder", "focus_restored"))
+        and all(type(details[key]) is str and len(details[key]) <= 32 for key in ("global_overflow", "item_overflow"))
+        and _finite_number_matrix([[details[key] for key in ("root_height", "column_height", "root_width", "column_width")]], 1, 4)
+        and all(type(value[key]) is bool for key in ("refresh_on_status", "root_fits"))
+        and _finite_number_matrix([[value[key] for key in ("viewport_height", "viewport_scroll_height", "row_height")]], 1, 3)
+        and type(value["adopted_offset"]) is int and 0 <= value["adopted_offset"] <= 300
+        and type(value["window_requests"]) is list and len(value["window_requests"]) <= 100
+        and all(type(offset) is int and 0 <= offset <= 300 for offset in value["window_requests"])
+    )
 
 
 def _valid_diagnostic_layout(value: object) -> bool:

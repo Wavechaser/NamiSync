@@ -38,6 +38,7 @@ const gesture = {searchQuery: "", filters: [], sortColumn: "path", sortDirection
 assert.deepEqual(await bridge.updateInventoryView(task, 0, gesture), fixture.summary);
 response = fixture.window;
 assert.deepEqual(await bridge.getInventoryWindow(task, 0, 0, 256), fixture.window);
+assert.equal(fixture.window.rows.find(row => row.row_id === "1").recorded_checksum, fixture.detail.detail.attestation.content.digest);
 response = fixture.detail;
 const node = fixture.detail.node_id;
 assert.deepEqual(await bridge.getInventoryDetail(task, 0, node), fixture.detail);
@@ -49,6 +50,9 @@ for (const patch of [
   {rows: [{...fixture.window.rows[0], size: "9223372036854775808"}]},
   {rows: [{...fixture.window.rows[0], row_id: 1}]},
   {rows: [{...fixture.window.rows[0], node_id: "foreign"}]},
+  ...["f".repeat(31), "f".repeat(33), "F".repeat(32), 1, "z".repeat(32)].map(recorded_checksum => ({rows: [{...fixture.window.rows[0], recorded_checksum}]})),
+  {rows: [{...fixture.window.rows[0], has_baseline: false}]},
+  {rows: [{...fixture.window.rows[0], recorded_checksum: null}]},
 ]) {
   response = {...fixture.window, ...patch};
   await assert.rejects(bridge.getInventoryWindow(task, 0, 0, 256));

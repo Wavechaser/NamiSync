@@ -180,7 +180,11 @@ when the total population is larger.
 Inventory read views retain one immutable workflow projection, its complete sort
 permutation and its derived `VisibleSequence` at task scope. Repeated windows
 reuse these values and serialize only the requested slice; current detail uses
-one exact ledger row read. View updates stage replacement sequence values before
+one exact ledger row read. Window checksum presentation uses only the immutable
+row's recorded attestation: nullable lowercase full digest, rendered as an eight
+character prefix with the full value in a tooltip. Presence/freshness changes
+do not erase that evidence or trigger per-row reads or hashing. View updates
+stage replacement sequence values before
 advancing their revision. Open, update, window, detail and same-task Refresh are
 available through the production bridge. The desktop read renderer is
 implemented, including whole/selected Refresh and missing-item visibility

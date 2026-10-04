@@ -508,7 +508,12 @@ state. Scan scope is a bounded descriptor naming the entire location, one exact
 item, one recursive folder, or a multi-subject selection; it carries at most one
 path, never the complete scope arrays. It belongs to the producing publication,
 including while a newer scan is running or refused. `InventoryWindowRow` supplies server-derived frames and domain status,
-raw size/mtime and rollup, or an informational warning. The source-owned exact
+raw size/mtime and rollup, or an informational warning. Its nullable
+`recorded_checksum` is the stored attestation's 16-byte XXH3-128 digest as exactly
+32 lowercase hex characters; it is null when there is no baseline, on synthetic
+ancestors and on notices. It remains stored baseline evidence for modified,
+missing and reappeared rows and never claims verification of current bytes.
+The source-owned exact
 shapes are serialized by `inventory_review.py` and validated by `bridge.js`.
 `InventoryFilter` admits present, unverified, verified, modified, reappeared,
 unsupported, missing, mismatched, acknowledged and notice. Path sort is ascending

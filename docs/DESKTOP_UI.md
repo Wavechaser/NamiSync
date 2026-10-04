@@ -1853,16 +1853,33 @@ and anchor behavior are defined here and in [PRESENTATION.md](PRESENTATION.md); 
 Inventory remains distinct from plan review. Released terminal inventory tasks
 open their own read pane, including when selected again. It supports backend
 literal search, counted server facets, collapse, bounded windows and explicit
-sibling filename/own-size/own-mtime sorting in both directions. Reset returns to
-canonical path order. The Default facet view hides acknowledged direct matches;
+sibling filename/own-size/own-mtime sorting through the Filename, Size and Modified
+headers: ascending, descending, then canonical path order. The Default facet view hides acknowledged direct matches;
 their complete count and Acknowledged facet remain available, and necessary
 folder ancestors remain visible. Neither browsing nor hidden rows changes
 complete folder rollups. The browser retains at most 256 rows and reuses the
 28 px tree controller's keyboard, scroll and stale-generation behavior; it adds
-state, size and modified cells without selection checkboxes. Folder Size shows
+Filename, State, Checksum, Size and Modified columns without selection checkboxes.
+Checksum shows eight characters of recorded baseline evidence, with the full
+stored digest in its tooltip; no evidence shows an em dash. Missing, modified or
+reappeared rows retain their stored checksum. A scan does not verify current bytes.
+State labels reuse the gallery's integrity semantics and retain presence,
+verification, acknowledgement and reappearance text. Filename alone absorbs
+passive width growth. Manual resizing transfers width from Modified down to its
+7rem minimum; Filename retains its 12rem minimum. Plan retains its separate Notes
+donor and 14rem floor. Folder Size shows
 complete file bytes while its tooltip and Details distinguish own object facts.
 
-Activate a row with click or Enter for Details. Domain subjects load fresh exact
+The frozen Setup, status and table align with Plan review. The standalone task's
+switcher selects Integrity and disables Sync. Whole and selected Refresh are
+status actions. Details starts hidden and opens a full-height optional right
+column using Plan's two independently scrolling cards: task facts above and item
+details below, with a selection placeholder. Hiding Details restores focus when
+it was inside that column. The existing 24rem/40% cap and minimum-size chain
+preserve table scrolling. Acknowledgement and restore controls remain with the
+selected item's details.
+
+Activate a row with click or Enter to load its detail selection. Domain subjects load fresh exact
 ledger evidence with observed and attested facts, full digest, provenance,
 evidence observation time, verification freshness and invalidation. Synthetic
 folders show complete rollups; notices show their informational warning only.

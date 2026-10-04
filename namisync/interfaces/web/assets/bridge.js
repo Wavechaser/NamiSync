@@ -2869,7 +2869,7 @@ function validateInventoryWindow(value) {
 function validateInventoryRow(value) {
   return isExactObject(value, ["node_id", "display", "depth", "is_container", "visible_index",
     "parent_visible_index", "first_child_visible_index", "position_in_set", "set_size", "expanded",
-    "row_kind", "row_id", "presence", "verification_state", "has_baseline", "acknowledged",
+    "row_kind", "row_id", "presence", "verification_state", "has_baseline", "recorded_checksum", "acknowledged",
     "reappeared", "size", "mtime_ns", "rollup", "warning"])
     && isNodeId(value.node_id) && isValidUnicode(value.display)
     && [value.depth, value.visible_index, value.position_in_set, value.set_size].every(isNonnegativeInteger)
@@ -2885,6 +2885,8 @@ function validateInventoryRow(value) {
     && ((value.row_id === null) === (value.presence === null))
     && ((value.row_id === null) === (value.verification_state === null))
     && [value.has_baseline, value.acknowledged, value.reappeared].every((item) => typeof item === "boolean")
+    && (value.recorded_checksum === null || (typeof value.recorded_checksum === "string" && /^[0-9a-f]{32}$/.test(value.recorded_checksum)))
+    && value.has_baseline === (value.recorded_checksum !== null)
     && [value.size, value.mtime_ns].every((item) => item === null || isScalar64(item))
     && validateInventoryRollup(value.rollup)
     && (value.warning === null || (isExactObject(value.warning, ["code", "path", "detail"])

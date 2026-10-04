@@ -1,3 +1,4 @@
+import { createTableColumns } from "./table_columns.js";
 import { renderPlanRow } from "./plan.js";
 import { createFilterMenu } from "./filter_menu.js";
 import { createIcon } from "./icons.js";
@@ -532,86 +533,7 @@ export function createPlanReviewPanel(callbacks) {
   }
   const headerCells = [...columnHeader.children];
   const scopeCheckbox = columnHeader.querySelector(".nami-plan-review__scope-checkbox");
-  const resizers = headerCells.slice(0, -1).map(
-    (cell) => cell.querySelector(".nami-file-list__column-resizer"),
-  );
-  const columnMinimums = [2, 12, 6, 7, 5, 7, 14];
-  let columnWidths = null;
-  let finishResize = null;
-
-  function minimumWidth(index) {
-    return columnMinimums[index] * parseFloat(getComputedStyle(document.documentElement).fontSize);
-  }
-
-  function applyColumnWidths() {
-    if (columnWidths === null) return;
-    for (const [index, name] of columnNames.entries()) {
-      if (name === "name") continue;
-      grid.style.setProperty(`--nami-file-column-${name}`, `${columnWidths[index].toFixed(3)}px`);
-    }
-    grid.dataset.columnsFrozen = "true";
-  }
-
-  function refreshResizers() {
-    const notesWidth = columnWidths?.[6] ?? headerCells[6].getBoundingClientRect().width;
-    for (const resizer of resizers) {
-      const index = Number(resizer.dataset.columnIndex);
-      const currentWidth = headerCells[index].getBoundingClientRect().width;
-      resizer.ariaValueMin = String(Math.round(minimumWidth(index)));
-      resizer.ariaValueMax = String(Math.round(currentWidth + Math.max(0, notesWidth - minimumWidth(6))));
-      resizer.ariaValueNow = String(Math.round(currentWidth));
-    }
-  }
-
-  function freezeColumns() {
-    if (columnWidths !== null) return;
-    const widths = headerCells.map((cell) => cell.getBoundingClientRect().width);
-    if (!widths.every((width) => width > 0)) return;
-    columnWidths = widths;
-    applyColumnWidths();
-  }
-
-  function resizeColumn(index, requestedDelta, startWidths, startNameWidth) {
-    const minimumDelta = index === 1
-      ? minimumWidth(1) - startNameWidth
-      : minimumWidth(index) - startWidths[index];
-    const maximumDelta = startWidths[6] - minimumWidth(6);
-    const delta = Math.max(minimumDelta, Math.min(maximumDelta, requestedDelta));
-    columnWidths = [...startWidths];
-    if (index !== 1) columnWidths[index] += delta;
-    columnWidths[6] -= delta;
-    applyColumnWidths();
-    refreshResizers();
-  }
-
-  for (const resizer of resizers) {
-    const index = Number(resizer.dataset.columnIndex);
-    resizer.addEventListener("pointerdown", (event) => {
-      event.preventDefault();
-      freezeColumns();
-      const startX = event.clientX;
-      const startWidths = [...columnWidths];
-      const startNameWidth = headerCells[1].getBoundingClientRect().width;
-      const move = (moveEvent) => resizeColumn(
-        index, moveEvent.clientX - startX, startWidths, startNameWidth,
-      );
-      finishResize?.();
-      finishResize = () => {
-        window.removeEventListener("pointermove", move);
-        window.removeEventListener("pointerup", finishResize);
-        finishResize = null;
-      };
-      window.addEventListener("pointermove", move);
-      window.addEventListener("pointerup", finishResize);
-    });
-    resizer.addEventListener("keydown", (event) => {
-      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-      event.preventDefault();
-      freezeColumns();
-      resizeColumn(index, event.key === "ArrowRight" ? 8 : -8,
-        [...columnWidths], headerCells[1].getBoundingClientRect().width);
-    });
-  }
+  const columns = createTableColumns(grid, headerCells, columnNames, [2, 12, 6, 7, 5, 7, 14], 1, 6);
   const viewChange = (patch) => {
     if (current !== null) callbacks.onViewChange(current, patch);
   };
@@ -685,8 +607,8 @@ export function createPlanReviewPanel(callbacks) {
   });
   const resizeObserver = new window.ResizeObserver(() => {
     if (current !== null) {
-      freezeColumns();
-      refreshResizers();
+      columns.freeze();
+      columns.refresh();
     }
     scheduleViewportCheck();
   });
@@ -1322,8 +1244,8 @@ export function createPlanReviewPanel(callbacks) {
       else if (focusedPlanRow?.node_id !== focusNodeId) focusedPlanRow = null;
     }
     renderDetail(review.executionDetail ?? null, focusedPlanRow);
-    freezeColumns();
-    refreshResizers();
+    columns.freeze();
+    columns.refresh();
     scheduleViewportCheck();
   }
 
@@ -1332,7 +1254,7 @@ export function createPlanReviewPanel(callbacks) {
     controlTaskId = null;
     controlSessionId = null;
     filterMenu.dispose();
-    finishResize?.();
+    columns.dispose();
     resizeObserver.disconnect();
     resizeObserved = false;
     if (searchTimer !== null) clearTimeout(searchTimer);

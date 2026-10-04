@@ -1,7 +1,7 @@
 # Latest session — GUI alignment
 
 2026-10-05 on `milestone1`, base `999a568`. The user ratified seven
-GUI units in [M1_PLAN](M1_PLAN.md): A1–A5 active; execution-to-Verify
+GUI units in [M1_PLAN](M1_PLAN.md): A1–A5 complete; execution-to-Verify
 navigation (A6) deferred to M1-10; all previous-location/rename redesign
 (A7) deferred to a focused session. Standalone Verify remains on Integrity
 with Sync disabled. No A7 presentation-boundary exception was approved.
@@ -9,43 +9,41 @@ with Sync disabled. No A7 presentation-boundary exception was approved.
 ## Integrated work
 
 - A1 `4f314b2`: visible recovery after an incoherent move-reveal window and
-  conflict scrolling. Seven focused, 1,921 interfaces and both installed
-  task-shell cases pass.
+  conflict scrolling.
 - A2 `498eb24`: first-visible column snapshot lets only Filename absorb
-  enlargement, preserving bounded manual resizing. Thirty-six focused,
-  1,921 interfaces and six installed task-shell/gallery cases pass.
+  enlargement, preserving bounded manual resizing.
 - A3 `49801f7`: shared counted Filter menu and pinned Regular icons.
-  Eighty-four focused, 2,286 interfaces/tools (three skips), pinned icon
-  provenance and seven installed task-shell/gallery/Inventory cases pass.
-- A4, the atomic delivery containing this handoff: optional full-height right
-  details column with two independent card scrollers; category/status and
-  supplied item facts; capped shrinking details and task rail. Eighty-nine
-  focused, 1,921 interfaces and all six installed cases pass across the final
-  gallery run and unchanged retained default/larger shell evidence.
+- A4 `4a39789`: optional full-height right details column with independent
+  task/item card scrollers and capped shrinking details/task-rail widths.
+- A5, this closing commit: aligned standalone Inventory surfaces, status Refresh,
+  semantic labels, five columns and optional Details. Bounded stored-baseline
+  checksum and shared column sizing preserve scan/evidence truth, tree ownership,
+  action scopes and Plan's Notes donor. Direct consumers and component docs migrated.
+
+## Verification and evidence
 
 Evidence lives in `build/gui-alignment-20261005/`; `a1-review.md` through
-`a4-review.md` own independent review decisions. A4's final source is bound by
-`a4-frozen-final-03.json`; native gallery is `a4-gallery-final-03.xml`,
-shell passes are in `a4-native-final.xml`, and department results are
-`a4-interfaces-final.xml`. All 277 installed files match between the retained
-shell and final gallery builds. Failed/superseded receipts remain: A4's natural
-row-height overlap was corrected; its obsolete endpoint-only table-header
-detector and queued-scroll gallery ordering were migrated without weakening
-visibility, hit, dismissal or ingress guarantees. Evidence owns that chronology.
+`a5-review.md` own independent review decisions, and `integration.md` records
+commit identities. The final A5 gate passed 5,887 ordinary tests with four
+Windows symlink-privilege skips, all 12 import contracts, and all seven installed
+Inventory/gallery/task-shell cases. It also passed 23 early real-service cases,
+84 focused consumers and 12 token checks. The ordinary run includes the primary
+interfaces population and closes batch integration.
 
-## Immediate next work
+Final identities are `a5-frozen-03.json` and `a5-source-binding-03.json`;
+receipts are `a5-native-final-03.xml`, `a5-integration-final.xml` and
+`a5-imports-final.log`. Failed/superseded receipts remain. The user ratified
+the combined correction of inherited CSS alignment; final geometry checks
+column edges and scroll ownership. A duplicate dimension literal now consumes
+its existing token. Native foreground failures stopped before input and were
+resolved by selecting the test window; the replacement-Details fixture was
+migrated without weakening hit/ownership checks. Evidence owns the chronology.
 
-A5 is designed read-only and awaits A4 integration before implementation.
-M1_PLAN contains its finite population and gate. Align standalone Inventory/
-Verify with the settled setup/status/table/details surfaces, move Refresh
-actions to status, reuse semantic labels and five-column sizing, and expose the
-already-recorded checksum through the bounded window/bridge contract. Preserve
-scan versus verification truth, current/prior publication and acknowledgement
-scope. Refresh A4's integrated layout and report seams before writing.
+## Immediate operational context
 
-Finish A5's focused/composition/department/native gates and fresh review, then
-the ordinary suite/import checks for batch integration. Source/test writers
-and native acceptance remain serialized. Cleanup only exact task-owned external
-roots after retained evidence accounting; `integration.md`, frozen manifests
-and `a3-temp-ownership.json` record ownership. No task worktrees or branches have
-been created. No push, PR or new domain/integrity feature is authorized.
+No active GUI batch unit remains. A6 stays with M1-10; A7 needs the user's
+future focused session. No new domain/integrity action, push or PR was added.
+No task worktrees or branches were created. Exact external test roots and raw
+evidence are retained; `a3-temp-ownership.json`, `a4-temp-ownership.json` and
+`a5-temp-accounting.json` record ownership and exclusions. No scratch deletion
+was attempted; unclaimed or access-limited roots remain excluded from cleanup.

@@ -281,7 +281,7 @@ window.addEventListener("unhandledrejection", (event) => {
     dispatchInteractive,
     readCosmeticSection,
     replaceCosmeticSection,
-  }, { renderText }, iconModule, { renderPlanRow }, { renderIntegrityRow }, { createTaskRail }, { createExecutionConfirmation }, { createPlanReviewPanel }] = await Promise.all([
+  }, { renderText }, iconModule, { renderPlanRow }, { renderIntegrityRow }, { createTaskRail }, { createExecutionConfirmation }, { createPlanReviewPanel }, { createInventoryReviewPanel }] = await Promise.all([
     import("/bridge.js"),
     import("/render.js"),
     import("/icons.js"),
@@ -290,6 +290,7 @@ window.addEventListener("unhandledrejection", (event) => {
     import("/rail.js"),
     import("/execution_confirmation.js"),
     import("/plan_review.js"),
+    import("/inventory_review.js"),
   ]);
   const { createIcon, ICON_NAMES } = iconModule;
   if (
@@ -1886,6 +1887,126 @@ window.addEventListener("unhandledrejection", (event) => {
     return layoutResult;
   }
 
+  async function inventoryPanelObservation() {
+    const pageScroll = { x: window.scrollX, y: window.scrollY };
+    const settled = () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    const checksum = "0123456789abcdef0123456789abcdef";
+    const cases = ["verified", "unverified", "modified", "reappeared", "unsupported", "missing", "mismatched"];
+    const rollup = { domain_count: 300, file_count: 300, size: 3000, size_overflow: false, size_partial: false,
+      present: 298, unverified: 2, verified: 294, modified: 1, reappeared: 1, unsupported: 1,
+      missing: 1, mismatched: 1, acknowledged: 0 };
+    const rowAt = (index) => {
+      const state = cases[index] ?? "verified";
+      return { node_id: String(index + 1), row_id: String(index + 1), display: `evidence-${index}.txt`,
+        depth: 0, visible_index: index, parent_visible_index: null, first_child_visible_index: null,
+        position_in_set: index + 1, set_size: 300, expanded: null, is_container: false, kind: "file",
+        presence: ["unsupported", "missing"].includes(state) ? state : "present",
+        verification_state: ["unsupported", "missing", "reappeared"].includes(state) ? "unverified" : state,
+        reappeared: state === "reappeared", acknowledged: false, size: 10, mtime_ns: "1000000000",
+        has_baseline: state !== "unverified", recorded_checksum: state === "unverified" ? null : checksum,
+        warning: null, rollup };
+    };
+    const windowAt = (offset) => ({ offset, total: 300,
+      rows: Array.from({ length: Math.min(64, 300 - offset) }, (_, index) => rowAt(offset + index)) });
+    const review = { summary: { root_path: "C:\\recorded", request_id: "1".repeat(32),
+      rollup, visible_row_count: 300, filters: [], scan_scope: { kind: "location" }, scan_complete: true,
+      observed_count: 299, missing_count: 1, warning_count: 0, search_query: "",
+      sort_column: "path", sort_direction: "ascending" }, window: windowAt(0), detail: null,
+      pending: null, message: null, queuedSearchQuery: null };
+    const inventoryTask = { taskId: "task-" + "2".repeat(32), requestId: "1".repeat(32),
+      sessionState: "completed", sessionReleased: true, taskKind: "inventory", inventoryReview: review };
+    const requests = [];
+    const panel = createInventoryReviewPanel({
+      onWindow: async (_owner, offset) => { requests.push(offset); return windowAt(offset); },
+      onDetail() {}, onViewChange() {}, onRefresh() {}, onReload() {}, onCheckOutcome() {}, onVisibility() {},
+    });
+    const root = panel.element;
+    root.dataset.gallerySection = "inventory_panel";
+    root.style.gridColumn = "1 / -1";
+    root.style.inlineSize = "1000px";
+    root.style.blockSize = "640px";
+    app.append(root);
+    panel.render(inventoryTask);
+    await settled();
+    const headers = [...root.querySelectorAll(".nami-inventory-review__columns > div")];
+    const viewport = root.querySelector(".nami-inventory-review__rows");
+    const widths = () => headers.map((value) => Number(value.getBoundingClientRect().width.toFixed(3)));
+    const firstRow = () => viewport.querySelector(".nami-inventory-row");
+    const rectangle = (value) => {
+      const rect = value.getBoundingClientRect();
+      return [rect.left, rect.top, rect.right, rect.bottom].map((number) => Number(number.toFixed(3)));
+    };
+    const firstWidths = widths();
+    const rowWidths = [...firstRow().children].map((value) => Number(value.getBoundingClientRect().width.toFixed(3)));
+    const headerPositions = headers.map(rectangle);
+    const rowPositions = [...firstRow().children].map(rectangle);
+    const statusRectangles = [".nami-plan-review__status-title", ".nami-plan-review__actions > .nami-inventory-review__actions",
+      ".nami-plan-review__status-summary", '[data-action="inventory-details"]'].map((selector) => rectangle(root.querySelector(selector)));
+    const scrollOwners = { outer_x: getComputedStyle(root.querySelector(".nami-inventory-review__list")).overflowX,
+      body_x: getComputedStyle(viewport).overflowX, body_y: getComputedStyle(viewport).overflowY };
+    const labels = cases.map((name, index) => {
+      const state = viewport.querySelector(`[data-node-id="${index + 1}"] .nami-file-state-label`);
+      const style = getComputedStyle(state);
+      return { case: name, text: state.textContent, foreground: style.color, background: style.backgroundColor,
+        height: Number(state.getBoundingClientRect().height.toFixed(3)) };
+    });
+    const checksumCell = firstRow().querySelector(".nami-inventory-row__checksum");
+    const checksumEvidence = { text: checksumCell.textContent, title: checksumCell.title,
+      absent: viewport.querySelector('[data-node-id="2"] .nami-inventory-row__checksum').textContent };
+    root.style.inlineSize = "1200px";
+    await settled();
+    const grownWidths = widths();
+    const handle = headers[0].querySelector("[role=separator]");
+    handle.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+    await settled();
+    const manualBefore = widths();
+    handle.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    await settled();
+    const manualAfter = widths();
+    const diagnostics = root.querySelector(".nami-inventory-review__diagnostics");
+    const initiallyHidden = diagnostics.hidden;
+    const toggle = root.querySelector('[data-action="inventory-details"]');
+    toggle.click();
+    await settled();
+    const rootBounds = root.getBoundingClientRect();
+    const detailsBounds = diagnostics.getBoundingClientRect();
+    const global = diagnostics.querySelector(".nami-plan-review__global-diagnostics");
+    const item = diagnostics.querySelector(".nami-plan-review__detail");
+    const detailEvidence = { initially_hidden: initiallyHidden, expanded: !diagnostics.hidden,
+      root_height: rootBounds.height, column_height: detailsBounds.height,
+      root_width: rootBounds.width, column_width: detailsBounds.width,
+      global_overflow: getComputedStyle(global).overflowY, item_overflow: getComputedStyle(item).overflowY,
+      placeholder: item.textContent.includes("Select an item to see its details.") };
+    item.focus();
+    toggle.click();
+    detailEvidence.focus_restored = document.activeElement === toggle && diagnostics.hidden;
+    await settled();
+    const viewportHeight = viewport.clientHeight;
+    viewport.scrollTop = 250 * 28;
+    viewport.dispatchEvent(new Event("scroll"));
+    await settled();
+    await settled();
+    const evidence = { headers: headers.map((value) => value.textContent), checkbox_count: root.querySelectorAll('input[type="checkbox"]').length,
+      switcher: [...root.querySelectorAll(".nami-segmented__item")].map((value) => ({ text: value.textContent,
+        selected: value.ariaChecked, disabled: value.disabled })), labels, checksum: checksumEvidence,
+      first_widths: firstWidths, row_widths: rowWidths, grown_widths: grownWidths,
+      header_positions: headerPositions, row_positions: rowPositions,
+      status_rectangles: statusRectangles, scroll_owners: scrollOwners,
+      manual_before: manualBefore, manual_after: manualAfter, details: detailEvidence,
+      refresh_on_status: [...root.querySelectorAll('[data-action="inventory-refresh"], [data-action="inventory-refresh-selected"]')]
+        .every((value) => value.closest(".nami-plan-review__summary") !== null),
+      root_fits: root.scrollHeight <= root.clientHeight + 1,
+      viewport_height: viewportHeight, viewport_scroll_height: viewport.scrollHeight,
+      adopted_offset: review.window.offset, window_requests: requests,
+      row_height: firstRow().getBoundingClientRect().height };
+    panel.dispose();
+    root.remove();
+    window.scrollTo(pageScroll.x, pageScroll.y);
+    await settled();
+    return evidence;
+  }
+  galleryMeasurementStep = "inventory_panel";
+  const inventoryPanelEvidence = await inventoryPanelObservation();
   const diagnosticLayoutEvidence = [];
   // These Plan-pane block sizes model the available area at default and supported-minimum
   // windows; they do not set a product viewport or restore the retired file-list width.
@@ -3340,6 +3461,7 @@ window.addEventListener("unhandledrejection", (event) => {
     dialog_exit: dialogExit,
     confirmation_preview: confirmationPreviewEvidence,
     diagnostic_layout: diagnosticLayoutEvidence,
+    inventory_panel: inventoryPanelEvidence,
     minimum_window: minimumWindowEvidence,
     segmented: (() => {
       galleryMeasurementStep = "segmented_state";
@@ -3471,8 +3593,9 @@ window.addEventListener("unhandledrejection", (event) => {
   reportParts.push(
     { name: "lifecycle_progress", value: lifecycleProgress },
     { name: "diagnostic_layout", value: controlContract.diagnostic_layout },
+    { name: "inventory_panel", value: controlContract.inventory_panel },
     { name: "control_contract", value: Object.fromEntries(Object.entries(controlContract)
-      .filter(([name]) => name !== "diagnostic_layout")) },
+      .filter(([name]) => !["diagnostic_layout", "inventory_panel"].includes(name))) },
     {
       name: "motion",
       value: Object.freeze({

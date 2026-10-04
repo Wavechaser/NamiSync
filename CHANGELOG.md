@@ -200,6 +200,16 @@ explicit, reviewable and regression-backed.
   capped details column and task rail narrow as the window shrinks.
   Pass 89 focused, 1,921 interfaces and six installed cases across retained runs;
   correct natural text-row sizing and migrate gallery layout observations.
+- Align standalone Verify/Inventory with the shared Setup, status, table and
+  details surfaces. Move Refresh actions to status, reuse semantic state labels,
+  sort through column headers and show stored baseline checksums without
+  implying current-byte verification. Share bounded column sizing with Plan;
+  remove the replaced Inventory controls and migrate their direct consumers.
+  Correct inherited tree/header styling through the ratified combined review;
+  verify actual column edges, scroll owners and status placement. Pass 23 early
+  service, 84 focused, 12 token and all seven installed checks; finish with
+  5,887 ordinary passes (four Windows symlink-privilege skips), all 12 import
+  contracts and independent review.
 - Ratify seven GUI units in M1_PLAN. Execution-to-Verify navigation remains
   deferred to M1-10; previous-location/rename redesign awaits a focused session.
 
