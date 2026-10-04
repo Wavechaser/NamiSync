@@ -1690,6 +1690,9 @@ cases; `python -m tools performance bridge-event installed --json
 build/bridge-event.json` runs the bridge case. It stages driver and page assets from the
 working tree but builds the measured product wheel from archived HEAD; the
 report labels `driver_source` and `product_source` separately. The v5 fixture
+requires exact production and extended command catalogs, including inventory
+commands. Its positive receipt test obtains names from production composition;
+missing, extra or duplicate names still invalidate the observation. The fixture
 decodes its 1–1,500 byte coordinates, checks item-free terminal facts, and
 retains ordered ItemOutcome IDs as its independent item witness. Its bounded
 native child publishes the first browser report failure before Close and keeps
@@ -1697,6 +1700,12 @@ partial sample and producer streams when cancellation ends the fixture early.
 An incomplete or v4-only observation does not satisfy current event-v5
 transport correctness or the frozen SH-G-8 custody claim. Use the unchanged
 custody tests and their authority below for that gate.
+
+The 2026-10-04 command-catalog repair run used archived product `5b62ee5` and
+the corrected working-tree driver. `build/bridge-catalog-20261004/installed.json`
+records `status=complete`, `measurement_valid=true`, four valid sessions and
+complete runtime diagnostics. `event_passed` and `passed` remain false; this
+verifies receipt compatibility, not new timing, memory or custody acceptance.
 
 The 2026-09-27 repair verification used archived product `639b2ea` and the
 IR-BRIDGE working-tree driver. `build/admission-bridge-closeout-20260927/bridge-full-final.json`

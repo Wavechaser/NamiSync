@@ -19,6 +19,7 @@ import pytest
 
 from _headed_evidence import EvidencePaths, EvidencePublisher, EvidenceReader
 from _frontend_test_support import _node_executable, run_node_probe
+from namisync.interfaces.web.commands import production_command_specs
 from namisync.interfaces.web.readiness import CommandPhase, ReadinessContext
 
 
@@ -1349,6 +1350,14 @@ def test_bridge_event_benchmark_installs_with_clean_python_env(
 
 
 def _passing_evidence(benchmark):
+    production = production_command_specs(
+        picker=lambda: None,
+        slots=object(),
+        registry=object(),
+        cosmetics=object(),
+        shell_ready=lambda _generation: None,
+        readiness_echo=lambda _generation, _challenge: False,
+    )
     samples = []
     session_ids = [f"{index + 1:032x}" for index in range(4)]
     terminal_event_latencies = []
@@ -1532,70 +1541,10 @@ def _passing_evidence(benchmark):
         "webview2": "test",
         "startup_errors": [],
         "exit_code": 0,
-        "production_command_names": [
-            "admit_location",
-            "close_task",
-            "control_execution",
-            "create_task",
-            "get_execution_detail",
-            "get_plan_anchor",
-            "get_plan_window",
-            "list_tasks",
-            "mutate_plan_highlight",
-            "mutate_plan_highlighted_selection",
-            "mutate_plan_scope",
-            "mutate_plan_selection",
-            "next_events",
-            "open_plan_view",
-            "pick_folder",
-            "plan_again",
-            "prepare_setup",
-            "probe_recent_pairs",
-            "read_cosmetic_section",
-            "read_setup",
-            "readiness_echo",
-            "release_terminal_session",
-            "replace_cosmetic_section",
-            "reveal_plan_move",
-            "shell_ready",
-            "start_execution",
-            "start_inventory",
-            "start_plan",
-            "update_plan_view",
-        ],
-        "combined_command_names": [
-            "admit_location",
-            "benchmark_report",
-            "benchmark_start",
-            "close_task",
-            "control_execution",
-            "create_task",
-            "get_execution_detail",
-            "get_plan_anchor",
-            "get_plan_window",
-            "list_tasks",
-            "mutate_plan_highlight",
-            "mutate_plan_highlighted_selection",
-            "mutate_plan_scope",
-            "mutate_plan_selection",
-            "next_events",
-            "open_plan_view",
-            "pick_folder",
-            "plan_again",
-            "prepare_setup",
-            "probe_recent_pairs",
-            "read_cosmetic_section",
-            "read_setup",
-            "readiness_echo",
-            "release_terminal_session",
-            "replace_cosmetic_section",
-            "reveal_plan_move",
-            "shell_ready",
-            "start_execution",
-            "start_inventory",
-            "start_plan",
-            "update_plan_view",
-        ],
+        "production_command_names": sorted(production),
+        "combined_command_names": sorted([
+            *production, "benchmark_report", "benchmark_start",
+        ]),
     }
     raw_memory = [
         {
@@ -1684,6 +1633,7 @@ def test_bridge_event_benchmark_summary_enforces_event_contract(
 
     assert result["passed"] is True
     assert result["event_passed"] is True
+    assert result["measurement_valid"] is True
     assert result["gate"] == (
         "SH-G-8 event limb / BR-G-42 bridge event envelope"
     )
@@ -1726,6 +1676,33 @@ def test_bridge_event_benchmark_summary_enforces_event_contract(
         job_memory=job_memory,
     )
     assert refused["event_passed"] is False
+
+
+@pytest.mark.parametrize("field", ("production_command_names", "combined_command_names"))
+@pytest.mark.parametrize("corruption", ("missing", "extra", "duplicate"))
+def test_bridge_event_benchmark_rejects_command_catalog_drift(
+    monkeypatch, field: str, corruption: str,
+) -> None:
+    benchmark = _benchmark_module()
+    monkeypatch.setattr(
+        benchmark, "_machine", lambda _root: {"reference_profile_match": True},
+    )
+    evidence, job_memory = _passing_evidence(benchmark)
+    if corruption == "missing":
+        evidence[field].remove("acknowledge_inventory")
+    else:
+        evidence[field].append(
+            "unexpected_command" if corruption == "extra" else "acknowledge_inventory"
+        )
+        evidence[field].sort()
+
+    result = benchmark._summarize(
+        evidence, benchmark_root=ROOT, commit="a" * 40,
+        status=(), job_memory=job_memory,
+    )
+
+    assert result["measurement_valid"] is False
+    assert result["event_passed"] is False
 
 
 def test_bridge_event_benchmark_reports_runtime_diagnostic_refusal_separately(

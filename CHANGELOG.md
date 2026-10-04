@@ -177,6 +177,17 @@ behavioral evidence.
 Safety, settlement and authority work made high-consequence release claims
 explicit, reviewable and regression-backed.
 
+#### Repair bridge diagnostic composition receipts (2026-10-04)
+
+- Include the seven pre-existing inventory commands in the optional installed
+  bridge-event diagnostic's expected catalog. Generate positive test receipt
+  names from real production composition, and reject missing, extra or duplicate
+  names in either receipt catalog. Product commands and benchmark authority are
+  unchanged.
+- Reproduce the old refusal, pass 41 focused and 2,286 tools/interfaces tests,
+  and complete the installed diagnostic with four valid sessions. Timing and
+  custody acceptance remain separate from receipt compatibility.
+
 #### Correct inventory lifecycle feedback (2026-10-02)
 
 - Label each displayed scan with its producing scope, qualify scoped completion

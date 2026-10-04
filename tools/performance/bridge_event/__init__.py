@@ -1930,11 +1930,14 @@ def _summarize(
         <= _MEMORY_MAX_BLIND_INTERVAL_SECONDS
     )
     production_names = [
+        "acknowledge_inventory",
         "admit_location",
         "close_task",
         "control_execution",
         "create_task",
         "get_execution_detail",
+        "get_inventory_detail",
+        "get_inventory_window",
         "get_plan_anchor",
         "get_plan_window",
         "list_tasks",
@@ -1943,6 +1946,7 @@ def _summarize(
         "mutate_plan_scope",
         "mutate_plan_selection",
         "next_events",
+        "open_inventory_view",
         "open_plan_view",
         "pick_folder",
         "plan_again",
@@ -1951,13 +1955,16 @@ def _summarize(
         "read_cosmetic_section",
         "read_setup",
         "readiness_echo",
+        "refresh_inventory",
         "release_terminal_session",
         "replace_cosmetic_section",
+        "restore_inventory",
         "reveal_plan_move",
         "shell_ready",
         "start_execution",
         "start_inventory",
         "start_plan",
+        "update_inventory_view",
         "update_plan_view",
     ]
     combined_names = sorted(
