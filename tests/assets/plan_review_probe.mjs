@@ -109,7 +109,7 @@ class ElementFake {
     const index = this.parentElement?.children.indexOf(this) ?? -1;
     const widths = [32, 300, 130, 112, 100, 112, 300];
     return { width: this.classList.contains("nami-file-list__header-cell")
-      ? widths[index] : 100 };
+      ? this.measuredWidth ?? widths[index] : 100 };
   }
 
   setAttribute(name, value) { this.attributes.set(name, String(value)); }
@@ -1466,13 +1466,33 @@ const resizePanel = createPlanReviewPanel({
   ...callbacks, onWindow: (_review, offset) => resizeCalls.push(offset),
 });
 const resizeBody = findByClass(resizePanel.element, "nami-plan-review__rows");
+const resizeGrid = findByClass(resizePanel.element, "nami-file-list__grid");
+const resizeHeader = findByClass(resizePanel.element, "nami-file-list__header");
 const resizeObserver = document.defaultView.observers.at(-1);
 const resizeTask = { ...task, review };
+for (const cell of resizeHeader.children) cell.measuredWidth = 0;
 resizePanel.render(resizeTask);
 document.defaultView.flushAnimationFrame();
+assert.equal(resizeGrid.dataset.columnsFrozen, undefined,
+  "an unlaid-out table does not retain zero column widths");
+const fittedWidths = [32, 320, 128, 112, 100, 112, 256];
+resizeHeader.children.forEach((cell, index) => { cell.measuredWidth = fittedWidths[index]; });
+resizeObserver.trigger();
+document.defaultView.flushAnimationFrame();
+assert.equal(resizeGrid.style.getPropertyValue("--nami-file-column-size"), "100.000px",
+  "first visible layout freezes fitted non-filename widths without a gesture");
+assert.equal(resizeGrid.style.getPropertyValue("--nami-file-column-notes"), "256.000px");
+assert.equal(resizeGrid.style.getPropertyValue("--nami-file-column-name"), "",
+  "Filename retains its flexible track");
+resizeHeader.children[4].measuredWidth = 180;
+resizePanel.render(resizeTask);
+assert.equal(resizeGrid.style.getPropertyValue("--nami-file-column-size"), "100.000px",
+  "ordinary renders retain the first fitted layout");
 resizePanel.dispose();
 resizePanel.render(resizeTask);
 document.defaultView.flushAnimationFrame();
+assert.equal(resizeGrid.style.getPropertyValue("--nami-file-column-size"), "100.000px",
+  "a reused panel retains its column widths");
 resizeBody.clientHeight = 700;
 resizeObserver.trigger();
 document.defaultView.flushAnimationFrame();

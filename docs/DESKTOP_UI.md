@@ -1355,8 +1355,13 @@ matching the active search/filter query, not merely the
 loaded or expanded rows. Folder checkboxes target matching descendants;
 changing views alone never changes selection. Its separate header and body share the Setup table's stable
 gutter and thin-to-wide scrollbar styling, so the scrollbar does not overlay
-the header. Production columns use the gallery's constrained pointer/keyboard
-resizing, with Notes yielding width. Action's 6rem minimum is shared by its
+the header. At the first visible loaded layout, production freezes the fitted
+non-Name widths; subsequent table growth goes entirely to Name. Hidden or
+disconnected rendering defers that snapshot, and panel reuse retains it.
+Production columns use the gallery's constrained pointer/keyboard resizing,
+with Notes yielding width. When Notes is already at its minimum, a positive
+fixed-column resize stays clamped until a deliberate reduction creates Notes
+space. Action's 6rem minimum is shared by its
 default track and pointer/keyboard constraints. Name, Size and Modified headers cycle
 ascending, descending, canonical path order with catalog chevrons; a different
 header starts ascending. Sort buttons fill the padded header cell, with the

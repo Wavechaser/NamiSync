@@ -276,7 +276,23 @@ def test_m1_4_installed_task_shell_navigation_closure_and_recovery(
         "selectionAbsent": True, "accessibleLabel": "1 item moved to move-parent",
         "collapsed": True, "revealedParent": "move-parent", "rootReveal": True, "filteredFarScroll": True,
     }
-    assert plan_review["initial"] == {
+    sizing = plan_review["initial"]["passiveSizing"]
+    fitted, widened, restored, overflow = (
+        sizing[key] for key in ("fitted", "widened", "restored", "overflow")
+    )
+    width_delta = widened["usableWidth"] - fitted["usableWidth"]
+    assert width_delta > 32
+    assert widened["widths"][1] - fitted["widths"][1] == pytest.approx(width_delta, abs=1)
+    for index in (0, 2, 3, 4, 5, 6):
+        assert widened["widths"][index] == pytest.approx(fitted["widths"][index], abs=0.5)
+    assert restored["widths"] == pytest.approx(fitted["widths"], abs=0.5)
+    for observed in sizing.values():
+        assert len(observed["widths"]) == 7
+        assert observed["headerLefts"] == pytest.approx(observed["rowLefts"], abs=0.5)
+    assert overflow["scrollWidth"] > overflow["clientWidth"]
+    assert overflow["scrollLeft"] > 0
+    assert {key: value for key, value in plan_review["initial"].items()
+            if key != "passiveSizing"} == {
         "planningIssuesVisible": True,
         "refusalNotice": True,
         "redundantStatusCountsAbsent": True,

@@ -185,6 +185,10 @@ explicit, reviewable and regression-backed.
   Preserve task/revision ownership and original-command recovery without retries.
 - Verify the narrow recovery fix with seven focused cases, 1,921 interfaces
   tests and both installed task-shell window-size journeys.
+- Keep non-filename Plan columns at their first visible fitted widths, letting
+  Filename absorb later enlargement. Preserve existing minimum widths,
+  horizontal scrolling and Notes-limited manual resizing.
+  Pass 36 focused, 1,921 interfaces and six installed task-shell/gallery checks.
 - Ratify seven GUI units in M1_PLAN. Execution-to-Verify navigation remains
   deferred to M1-10; previous-location/rename redesign awaits a focused session.
 

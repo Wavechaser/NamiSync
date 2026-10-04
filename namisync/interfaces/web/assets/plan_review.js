@@ -603,7 +603,9 @@ export function createPlanReviewPanel(callbacks) {
 
   function freezeColumns() {
     if (columnWidths !== null) return;
-    columnWidths = headerCells.map((cell) => cell.getBoundingClientRect().width);
+    const widths = headerCells.map((cell) => cell.getBoundingClientRect().width);
+    if (!widths.every((width) => width > 0)) return;
+    columnWidths = widths;
     applyColumnWidths();
   }
 
@@ -773,7 +775,13 @@ export function createPlanReviewPanel(callbacks) {
     manualScrollIntent = false;
     scheduleViewportCheck();
   });
-  const resizeObserver = new window.ResizeObserver(scheduleViewportCheck);
+  const resizeObserver = new window.ResizeObserver(() => {
+    if (current !== null) {
+      freezeColumns();
+      refreshResizers();
+    }
+    scheduleViewportCheck();
+  });
   resizeObserver.observe(body);
   let resizeObserved = true;
 
@@ -1418,6 +1426,7 @@ export function createPlanReviewPanel(callbacks) {
       else if (focusedPlanRow?.node_id !== focusNodeId) focusedPlanRow = null;
     }
     renderDetail(review.executionDetail ?? null, focusedPlanRow);
+    freezeColumns();
     refreshResizers();
     scheduleViewportCheck();
   }

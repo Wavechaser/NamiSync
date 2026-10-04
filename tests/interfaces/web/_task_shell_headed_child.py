@@ -613,9 +613,31 @@ window.addEventListener("error", (event) => {
   const spacerAligned = parseFloat(topSpacer.style.blockSize) === expectedOffset * 24;
   const table = review.querySelector(".nami-plan-review__list");
   const tableCard = review.querySelector(".nami-plan-review__table-card");
-  tableCard.style.inlineSize = "80rem";
   const tableHeader = review.querySelector(".nami-file-list__header");
   const tableCells = [...tableHeader.children];
+  const sizingGeometry = () => ({
+    widths: tableCells.map((cell) => cell.getBoundingClientRect().width),
+    headerLefts: tableCells.map((cell) => cell.getBoundingClientRect().left),
+    rowLefts: [...firstOffsetRow.children].map((cell) => cell.getBoundingClientRect().left),
+    usableWidth: tableHeader.clientWidth,
+    scrollWidth: table.scrollWidth,
+    clientWidth: table.clientWidth,
+    scrollLeft: table.scrollLeft,
+  });
+  const fittedGeometry = sizingGeometry();
+  tableCard.style.inlineSize = "80rem";
+  const widenedGeometry = sizingGeometry();
+  tableCard.style.removeProperty("inline-size");
+  const restoredGeometry = sizingGeometry();
+  tableCard.style.inlineSize = "32rem";
+  table.scrollLeft = table.scrollWidth;
+  const overflowGeometry = sizingGeometry();
+  table.scrollLeft = 0;
+  tableCard.style.inlineSize = "80rem";
+  const passiveSizing = {
+    fitted: fittedGeometry, widened: widenedGeometry, restored: restoredGeometry,
+    overflow: overflowGeometry,
+  };
   const columnOrder = [...firstOffsetRow.children].map((cell) => cell.dataset.fileColumn).join(",");
   const sortTarget = tableCells[1].querySelector("button");
   const sortTargetFillsCell = Math.abs(sortTarget.getBoundingClientRect().width
@@ -629,6 +651,11 @@ window.addEventListener("error", (event) => {
     && getComputedStyle(viewport).overflowY === "auto"
     && getComputedStyle(tableHeader).scrollbarGutter === "stable"
     && getComputedStyle(viewport).scrollbarGutter === "stable";
+  // A narrow fitted layout can leave Notes at its minimum; create resize room.
+  const nameResizeHandle = review.querySelector('.nami-file-list__column-resizer[data-column="name"]');
+  nameResizeHandle.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, clientX: 100 }));
+  window.dispatchEvent(new PointerEvent("pointermove", { clientX: 76 }));
+  window.dispatchEvent(new PointerEvent("pointerup", { clientX: 76 }));
   const resizeHandle = review.querySelector('.nami-file-list__column-resizer[data-column="size"]');
   const sizeBefore = tableCells[4].getBoundingClientRect().width;
   resizeHandle.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, clientX: 100 }));
@@ -678,6 +705,7 @@ window.addEventListener("error", (event) => {
     headerScrollClear,
     pointerResizeWorked,
     keyboardResizeWorked,
+    passiveSizing,
     chevronsVisible,
     changedSortStartsAscending,
     planGeometry,
