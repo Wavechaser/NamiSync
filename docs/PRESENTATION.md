@@ -268,14 +268,16 @@ the sum of the mutually exclusive operation and notice categories. Filtering
 and windowing cannot redefine these summary facts. All is active when no
 category filter is active; clicking it clears category filters without changing
 search, sort, or selection. Activating any other filter deactivates All. The
-All, Copy, Move, Update and Remove controls remain visible even at zero; other
-categories appear only when their count is positive. Group toggles combine
-Copy/Mkdir, Move/Recase, Update/Move update, Trash/Delete (Remove), and
-Error/Unsupported/Blocked (Error). Their main buttons toggle the whole group;
-only the arrow opens a counted detail menu. A detail choice replaces that group's
-facets, leaving other groups alone; the menu's All choice restores the whole
-group. All, Noop and Notice remain ordinary toggles. Inactive Remove text turns
-red only when its count exceeds one. Search keeps its 150 ms trailing debounce;
+shared Filter menu exposes every canonical category independently, including
+zero counts. Selecting a category adds/removes only its canonical key; there are
+no aggregate group toggles. The trigger always shows the number of selected
+canonical categories, including zero, excluding All and search. It is accented
+only with active categories. Plan's All item retains the complete-plan counter.
+Inventory reuses the menu with its existing ten facets and authoritative
+rollup/notice counts; those categories overlap and are never summed into an All
+counter. Inventory's All clears its category settings and retains the default
+acknowledged-row visibility policy. Menu interaction changes no selection,
+effect scope or server query semantics. Search keeps its 150 ms trailing debounce;
 Enter or the inset search button submits immediately with a shared 150 ms guard
 against repeated manual gestures. Pending refreshes retain the newest query.
 The browser formats those exact decimal byte facts into binary display units

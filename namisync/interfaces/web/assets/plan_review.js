@@ -1,4 +1,5 @@
 import { renderPlanRow } from "./plan.js";
+import { createFilterMenu } from "./filter_menu.js";
 import { createIcon } from "./icons.js";
 import { formatByteCount, renderFilesystemText, renderText } from "./render.js";
 import {
@@ -10,14 +11,9 @@ import {
 } from "./task_status.js";
 
 const FILTERS = Object.freeze([
-  "all", "copy", "move", "update", "remove", "error", "noop", "notice",
+  "copy", "mkdir", "move", "recase", "update", "move_update", "trash", "delete",
+  "error", "unsupported", "blocked", "noop", "notice",
 ]);
-const FILTER_GROUPS = Object.freeze({
-  copy: ["copy", "mkdir"], move: ["move", "recase"],
-  update: ["update", "move_update"], remove: ["trash", "delete"],
-  error: ["error", "unsupported", "blocked"],
-});
-const ALWAYS_VISIBLE_FILTERS = new Set(["all", "copy", "move", "update", "remove"]);
 const WINDOW_LIMIT = 256;
 const ROW_HEIGHT = 24;
 const DISPLAY_LABELS = Object.freeze({
@@ -126,16 +122,6 @@ function button(label, className = "nami-button") {
   element.type = "button";
   element.className = className;
   renderText(element, label);
-  return element;
-}
-
-function countedButton(label, className) {
-  const element = button("", className);
-  const text = document.createElement("span");
-  renderText(text, label);
-  const count = document.createElement("span");
-  count.className = "nami-filter-count";
-  element.append(text, count);
   return element;
 }
 
@@ -363,46 +349,10 @@ export function createPlanReviewPanel(callbacks) {
   searchBox.append(search, searchClear, searchSubmit);
   const filters = document.createElement("div");
   filters.className = "nami-plan-review__filters";
-  const filterList = document.createElement("div");
-  filterList.className = "nami-plan-review__filter-list";
-  const filterButtons = new Map();
-  const filterMenus = new Map();
-  for (const value of FILTERS) {
-    const filter = countedButton(displayLabel(value), "nami-button nami-plan-review__filter");
-    filter.dataset.operation = value === "remove" ? "trash" : value === "error" ? "blocked" : value;
-    filter.dataset.filter = value;
-    filter.ariaPressed = "false";
-    const members = FILTER_GROUPS[value];
-    if (members === undefined) {
-      filterList.append(filter);
-    } else {
-      const split = document.createElement("div");
-      split.className = "nami-plan-filter-split";
-      const dropdown = button("", "nami-button nami-plan-review__filter nami-plan-filter-split__arrow");
-      dropdown.dataset.operation = filter.dataset.operation;
-      dropdown.ariaLabel = `${displayLabel(value)} filters`;
-      dropdown.ariaHasPopup = "menu";
-      dropdown.ariaExpanded = "false";
-      dropdown.append(createIcon(document, "chevron-down", "sm"));
-      const menu = document.createElement("div");
-      menu.className = "nami-menu nami-plan-filter-split__menu";
-      menu.setAttribute("role", "menu");
-      menu.hidden = true;
-      const choices = new Map();
-      for (const key of ["all", ...members]) {
-        const item = countedButton("", "nami-menu__item");
-        item.setAttribute("role", "menuitemradio");
-        item.dataset.filterDetail = key;
-        menu.append(item);
-        choices.set(key, item);
-      }
-      split.append(filter, dropdown, menu);
-      filterList.append(split);
-      filterMenus.set(value, { split, dropdown, menu, choices });
-    }
-    filterButtons.set(value, filter);
-  }
-  filters.append(filterList);
+  const filterMenu = createFilterMenu(FILTERS.map((key) => [key, displayLabel(key)]), (selected) => {
+    if (current !== null && current.pending === null) viewChange({ filters: selected });
+  });
+  filters.append(filterMenu.element);
   toolbar.append(filters, searchBox);
 
   const list = document.createElement("div");
@@ -692,60 +642,6 @@ export function createPlanReviewPanel(callbacks) {
     search.focus();
     viewChange({ searchQuery: "" });
   });
-  function closeFilterMenus() {
-    for (const { dropdown, menu } of filterMenus.values()) {
-      menu.hidden = true;
-      dropdown.ariaExpanded = "false";
-    }
-  }
-  function selectFilterGroup(value, detail = null) {
-    if (current === null || current.pending !== null) return;
-    closeFilterMenus();
-    const selected = new Set(current.summary.filters);
-    if (value === "all") selected.clear();
-    else {
-      const members = FILTER_GROUPS[value] ?? [value];
-      const active = members.every((member) => selected.has(member));
-      for (const member of members) selected.delete(member);
-      if (detail !== null || !active) {
-        for (const member of detail === null || detail === "all" ? members : [detail]) selected.add(member);
-      }
-    }
-    viewChange({ filters: selected });
-  }
-  for (const [value, filter] of filterButtons) {
-    filter.addEventListener("click", () => selectFilterGroup(value));
-  }
-  for (const [value, { split, dropdown, menu, choices }] of filterMenus) {
-    dropdown.addEventListener("click", () => {
-      const open = menu.hidden;
-      closeFilterMenus();
-      menu.hidden = !open;
-      dropdown.ariaExpanded = String(open);
-      if (open) choices.get("all").focus();
-    });
-    for (const [key, item] of choices) item.addEventListener("click", () => {
-      selectFilterGroup(value, key);
-      dropdown.focus();
-    });
-    split.addEventListener("focusout", (event) => {
-      if (!split.contains(event.relatedTarget)) closeFilterMenus();
-    });
-    menu.addEventListener("keydown", (event) => {
-      const items = [...choices.values()];
-      const index = items.indexOf(document.activeElement);
-      if (event.key === "Escape") {
-        event.preventDefault();
-        closeFilterMenus();
-        dropdown.focus();
-      } else if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
-        event.preventDefault();
-        const next = event.key === "Home" ? 0 : event.key === "End" ? items.length - 1
-          : (index + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
-        items[next].focus();
-      }
-    });
-  }
   for (const [column, { sortButton }] of sortHeaders) {
     sortButton.addEventListener("click", () => {
       const same = current?.summary.sort_column === column;
@@ -1170,6 +1066,7 @@ export function createPlanReviewPanel(callbacks) {
 
   function render(task) {
     if (controlTaskId !== task.taskId || controlSessionId !== task.sessionId) {
+      filterMenu.close();
       disarmCancel();
       controlTaskId = task.taskId;
       controlSessionId = task.sessionId;
@@ -1180,6 +1077,7 @@ export function createPlanReviewPanel(callbacks) {
     }
     const focusInDetails = diagnostics.contains(document.activeElement);
     if (current !== task.review) {
+      filterMenu.close();
       if (searchTimer !== null) clearTimeout(searchTimer);
       searchTimer = null;
       scrollGeneration += 1;
@@ -1196,6 +1094,7 @@ export function createPlanReviewPanel(callbacks) {
       (current === null ? statusTitle : detailsToggle).focus?.();
     }
     if (current === null) {
+      filterMenu.render([], {}, true);
       disableActions();
       delete element.dataset.pending;
       updateText(sourceValue, "Loading reviewed plan…");
@@ -1317,37 +1216,7 @@ export function createPlanReviewPanel(callbacks) {
       down.hidden = direction !== "descending";
       sortButton.disabled = review.pending !== null;
     }
-    for (const [value, filter] of filterButtons) {
-      const members = FILTER_GROUPS[value] ?? [value];
-      const active = value === "all"
-        ? review.summary.filters.length === 0
-        : members.some((member) => review.summary.filters.includes(member));
-      const count = members.reduce((total, member) => total + (review.summary.filter_counts?.[member] ?? 0), 0);
-      filter.ariaPressed = String(active);
-      filter.disabled = review.pending !== null;
-      const hidden = !ALWAYS_VISIBLE_FILTERS.has(value) && count === 0;
-      filter.hidden = hidden;
-      filter.dataset.trashAlert = String(value === "remove" && !active && count > 1);
-      updateText(filter.children[0], displayLabel(value));
-      updateText(filter.children[1], String(count));
-      filter.ariaLabel = `${displayLabel(value)} ${count}`;
-      const grouped = filterMenus.get(value);
-      if (grouped !== undefined) {
-        grouped.split.hidden = hidden;
-        grouped.dropdown.disabled = filter.disabled;
-        grouped.dropdown.ariaPressed = String(active);
-        for (const [key, item] of grouped.choices) {
-          const itemCount = key === "all" ? count : review.summary.filter_counts?.[key] ?? 0;
-          const label = key === "all" ? `All ${value === "copy" ? "copies" : value === "remove" ? "removals" : `${value}s`}` : displayLabel(key);
-          updateText(item.children[0], label);
-          updateText(item.children[1], String(itemCount));
-          item.ariaLabel = `${label} ${itemCount}`;
-          item.ariaChecked = String(key === "all"
-            ? members.every((member) => review.summary.filters.includes(member))
-            : review.summary.filters.includes(key) && members.filter((member) => review.summary.filters.includes(member)).length === 1);
-        }
-      }
-    }
+    filterMenu.render(review.summary.filters, review.summary.filter_counts, review.pending !== null);
     if (scopeCheckbox instanceof HTMLInputElement) {
       const scopeSelectable = review.summary.scope_selectable_operation_count;
       const scopeSelected = review.summary.scope_selected_operation_count;
@@ -1435,7 +1304,7 @@ export function createPlanReviewPanel(callbacks) {
     disarmCancel();
     controlTaskId = null;
     controlSessionId = null;
-    closeFilterMenus();
+    filterMenu.dispose();
     finishResize?.();
     resizeObserver.disconnect();
     resizeObserved = false;

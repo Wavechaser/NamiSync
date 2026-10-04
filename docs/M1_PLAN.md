@@ -23,8 +23,8 @@ Shared files and acceptance runs are serialized. Evidence belongs under
 | ID | Accepted outcome / finite owners and consumers | Dependency, gate and status |
 | --- | --- | --- |
 | GUI-A1 | Narrow move-reveal recovery: report a still-current rejected/mismatched follow-up window as refreshable; preserve the last coherent summary/window; align conflict viewport with the loaded offset. `assets/app.js`, task-shell and Plan-review probes, their frontend/native consumers, DESKTOP_UI and BUGS. No retries, new bridge fields or lifecycle changes. | `4f314b2`: seven focused, 1,921 interfaces and both installed task-shell cases passed; independent review approved in `a1-review.md`. Evidence `a1-*`. |
-| GUI-A2 | Table enlargement gives extra width only to Filename, preserving header/body alignment, horizontal scrolling and deliberate column resizing. First-visible snapshot in `assets/plan_review.js`; direct Plan probe, installed task-shell child/parent and DESKTOP_UI. No CSS/token/helper redesign. Keep Notes-limited resizing: a narrow snapshot at Notes minimum needs deliberate space transfer before positive fixed-column resizing. Apply the same sizing behavior when A5 migrates Inventory. | Delivery commit containing this record: focused 36, interfaces 1,921 and six installed task-shell/gallery checks passed; independent review approved in `a2-review.md`. Evidence `a2-*`. |
-| GUI-A3 | One Fluent Filter menu with multi-select categories and per-category counts, All clearing filters, active-category count excluding All/search, accented active trigger and neutral inactive trigger. Keep open after selection; dismiss on outside interaction, Escape, foreground loss and retirement. `plan_review.js`, `inventory_review.js`, shared menu helper only where reused, CSS, icon catalog/generated assets, direct probes/gallery/native helpers, DESKTOP_UI/TOOLS. Preserve server filter and query semantics. | After A2; A5 reuses it. Interfaces and icon/tool gates, pinned icon archive check, installed gallery and affected Plan/Inventory interaction witnesses; pending. |
+| GUI-A2 | Table enlargement gives extra width only to Filename, preserving header/body alignment, horizontal scrolling and deliberate column resizing. First-visible snapshot in `assets/plan_review.js`; direct Plan probe, installed task-shell child/parent and DESKTOP_UI. No CSS/token/helper redesign. Keep Notes-limited resizing: a narrow snapshot at Notes minimum needs deliberate space transfer before positive fixed-column resizing. Apply the same sizing behavior when A5 migrates Inventory. | `498eb24`: focused 36, interfaces 1,921 and six installed task-shell/gallery checks passed; independent review approved in `a2-review.md`. Evidence `a2-*`. |
+| GUI-A3 | One shared counted Fluent Filter menu for Plan/Inventory with independent canonical categories, All reset, retained search/selection/default visibility, stable pending focus and existing request guards. Pinned Regular icons; neutral/accent trigger; known work-panel popup bounds; outside interaction, resize, Escape, focus/foreground and retirement dismissal. No Python/bridge/query-policy changes. | Atomic A3 delivery commit containing this record, after `498eb24`; 84 focused, 2,286 interfaces/tools (three skips), pinned icon archive and seven installed gallery/task-shell/Inventory checks passed. Fresh review in `a3-review.md`; frozen and raw evidence `a3-*-final*`. A5 reuses it. |
 | GUI-A4 | Full-height optional right details column, toggled by Details; central Setup/status/table regain width when hidden. Separate independently scrollable global and item cards. Cap details at 24rem with shrink allowance; let the capped task rail narrow without breaking tab alignment. Reuse existing projected details and restore useful already-available item facts. `plan_review.js`, shell/panel composition only as needed, app CSS, direct renderer/gallery/native layout consumers, DESKTOP_UI. | After A3; A5 adopts this layout. Interfaces department plus installed gallery/task-shell layout, resize, focus and retirement witnesses; pending. |
 | GUI-A5 | Align standalone Verify/Inventory Setup, status and table with Plan/Execution; put whole/selected Refresh on status; reuse semantic row labels and shared sizing/filter/details components. Add a nullable bounded recorded-baseline checksum to window rows, matching bridge validation and fixtures; show shortened checksum with full stored evidence accessible. Standalone Verify stays on Integrity with Sync disabled. Remove only code made obsolete by this migration. `inventory_review.py`, browser inventory/bridge/panel/status owners, direct Python/JS probes, installed Inventory/gallery helpers, DESKTOP_UI/PRESENTATION/BRIDGE/FEATURES. | After A2–A4. Existing real-service Inventory publication/recovery cases first, interfaces department, installed Inventory and gallery witnesses; shared Plan consumers rerun where dependencies change. Pending. |
 | GUI-A6 | Execution-to-Verify navigation. Current inventory reads/actions require an inventory task and captured inventory publication; Refresh requires inventory settlement and no retained plan token. Same-task execution navigation needs new association, retention and lifecycle policy. | Deferred to M1-10 under the user's permitted fallback. No enabling switch or new lifecycle behavior in this batch. |
@@ -46,6 +46,29 @@ population against the integrated predecessor. Tests follow TESTS: broaden to
 the ordinary suite/import checks if a shared contract crosses departments or
 blast radius is uncertain. Retain failed evidence and reuse passes only when
 their product, producer, checker and driver dependencies remain unchanged.
+
+**A4 implementation boundary.** Read-only design inspected `498eb24` and A3's
+shared-menu seams; refresh those seams against A3's integrated commit before
+writing. Move diagnostics to a Plan-root sibling spanning Setup/status/table,
+with stacked global/item card scroll owners. Preserve default-hidden state,
+disclosure focus restoration, highlighted-item ownership, one retained detail
+response, selection, virtual windows and central recovery/Gap guidance. Restore
+only supplied Modified, dependency and relevant selection/folder facts; no
+inferred paths, new DTOs or operation IDs in ordinary detail. Production owners
+are `assets/plan_review.js` and `app.css`; change shared scrollbar CSS only if
+the new scroll owners require it. Direct consumers are the Plan probe, existing
+frontend wrapper, gallery scenario/report child/parent and installed task-shell
+child/parent. Panel/app composition and asset manifests are read-only seams
+unless an actual direct migration is required. DESKTOP_UI owns behavior text.
+Migrate obsolete summary-child/horizontal-card assertions to right-column and
+stacked-card observations. Verify independent scroll, shown/hidden central
+widths, 24rem cap, populated rail/tab alignment at native minimum, focus,
+overflow and virtual-row reachability in the existing four-mode gallery and
+default/larger task-shell cases. Keep the bounded table height chain and the
+folded-status feedback-wrap witness. Focused consumers, interfaces, those
+installed cases and fresh independent review close one atomic commit; A5 waits
+for integration. Historical horizontal-card recipes are superseded, while the
+archived intrinsic virtual-spacer-height regression remains a required seam.
 
 ## Plan GUI refinements — 2026-10-04
 

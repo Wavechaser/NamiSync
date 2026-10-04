@@ -226,58 +226,63 @@ body {
   color: var(--color-neutral-surface);
 }
 
-/* Plan filters use the ordinary button class for semantics; keep the visual
-   contract on the view-specific hook so the renderer need not expose a chip
-   primitive. */
-.nami-button.nami-plan-review__filter {
-  --nami-chip-active-background: var(--color-accent-fill);
-  --nami-chip-active-foreground: var(--color-accent-fill-foreground);
-  align-items: center;
-  border-radius: var(--radius-small);
-  display: inline-flex;
-  gap: var(--space-3);
-}
-
-.nami-plan-filter-split {
-  display: inline-flex;
+.nami-filter-menu {
   position: relative;
+  display: inline-flex;
 }
 
-.nami-plan-filter-split > .nami-plan-review__filter:first-child {
-  border-start-end-radius: 0;
-  border-end-end-radius: 0;
+.nami-filter-menu__trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
 }
 
-.nami-plan-filter-split > .nami-plan-filter-split__arrow {
-  border-start-start-radius: 0;
-  border-end-start-radius: 0;
-  margin-inline-start: -1px;
-  padding-inline: var(--space-2);
+.nami-filter-menu__trigger[data-active="true"][aria-disabled="false"] {
+  background: var(--color-accent-fill);
+  color: var(--color-accent-fill-foreground);
 }
 
-.nami-plan-filter-split__menu {
+.nami-filter-menu__trigger[data-active="true"][aria-disabled="false"]:hover {
+  background: var(--color-accent-fill-hover);
+}
+
+.nami-filter-menu__trigger[data-active="true"][aria-disabled="false"]:active {
+  background: var(--color-accent-fill-pressed);
+}
+
+.nami-filter-menu__popup {
   position: absolute;
-  inset-block-start: calc(100% + var(--space-1));
   inset-inline-start: 0;
-  min-inline-size: 11rem;
+  min-inline-size: 13rem;
+  max-inline-size: 18.75rem;
+  overflow-y: auto;
   z-index: 10;
 }
 
-.nami-plan-filter-split__menu .nami-menu__item {
-  display: flex;
+.nami-filter-menu__item {
+  display: grid;
+  grid-template-columns: 1rem minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-5);
+  gap: var(--space-3);
   inline-size: 100%;
   text-align: start;
 }
 
-.nami-filter-count {
-  font-variant-numeric: tabular-nums;
+.nami-filter-menu__item[aria-checked="true"] {
+  background: var(--color-neutral-surface-selected);
 }
 
-.nami-plan-filter-split__menu [aria-checked="true"] {
-  background: var(--color-neutral-surface-selected);
+.nami-filter-menu__item[aria-checked="false"] .nami-filter-menu__check {
+  visibility: hidden;
+}
+
+.nami-filter-menu__trigger[aria-disabled="true"],
+.nami-filter-menu__item[aria-disabled="true"] {
+  color: var(--color-neutral-foreground-disabled);
+}
+
+.nami-filter-count {
+  font-variant-numeric: tabular-nums;
 }
 
 .nami-button {
@@ -712,19 +717,6 @@ body {
   padding: var(--space-1) var(--space-3);
 }
 
-.nami-plan-review__filter:not([aria-pressed="true"]) {
-  background: var(--color-button-fill);
-  color: var(--color-neutral-foreground);
-}
-
-.nami-plan-review__filter:not([aria-pressed="true"]):not(:disabled):hover {
-  background: var(--color-button-fill-hover);
-}
-
-.nami-plan-review__filter:not([aria-pressed="true"]):not(:disabled):active {
-  background: var(--color-button-fill-pressed);
-}
-
 .nami-chip[aria-pressed="true"] {
   background: var(--nami-chip-active-background);
   color: var(--nami-chip-active-foreground);
@@ -738,19 +730,6 @@ body {
 .nami-chip[aria-pressed="true"]:active {
   background: var(--color-accent-fill-pressed);
   color: var(--nami-chip-active-foreground);
-}
-
-.nami-plan-review__filter[aria-pressed="true"] {
-  background: var(--nami-chip-active-background);
-  color: var(--nami-chip-active-foreground);
-}
-
-.nami-plan-review__filter[aria-pressed="true"]:not(:disabled):hover {
-  filter: brightness(0.94);
-}
-
-.nami-plan-review__filter[aria-pressed="true"]:not(:disabled):active {
-  filter: brightness(0.87);
 }
 
 .nami-icon-button {
@@ -944,6 +923,12 @@ body {
   --nami-icon-mask-sm: url("./icons/eye_16_regular.svg");
   --nami-icon-mask-md: url("./icons/eye_20_regular.svg");
   --nami-icon-mask-lg: url("./icons/eye_24_regular.svg");
+}
+
+.nami-icon--filter {
+  --nami-icon-mask-sm: url("./icons/filter_16_regular.svg");
+  --nami-icon-mask-md: url("./icons/filter_20_regular.svg");
+  --nami-icon-mask-lg: url("./icons/filter_24_regular.svg");
 }
 
 .nami-icon--folder {
@@ -1175,11 +1160,6 @@ body {
 .nami-tree-row[data-active="true"] {
   background: var(--color-neutral-surface-selected);
   font-weight: var(--font-weight-medium);
-}
-
-.nami-inventory-review__filters .nami-button[aria-pressed="true"] {
-  background: var(--color-neutral-surface-selected);
-  border-color: var(--color-accent-fill);
 }
 
 .nami-tree {
@@ -1711,61 +1691,6 @@ body {
   color: var(--nami-chip-active-foreground);
 }
 
-/* The production Plan renderer exposes this hook instead of nami-chip. */
-.nami-plan-review__filter[data-operation] {
-  --nami-chip-active-foreground: var(--filter-active-foreground);
-}
-
-.nami-plan-review__filter[data-operation="all"] {
-  --nami-chip-active-foreground: var(--color-accent-fill-foreground);
-}
-
-.nami-plan-review__filter[data-operation="copy"],
-.nami-plan-review__filter[data-operation="mkdir"] {
-  --nami-chip-active-background: var(--filter-copy-background);
-}
-
-.nami-plan-review__filter[data-operation="update"],
-.nami-plan-review__filter[data-operation="move_update"] {
-  --nami-chip-active-background: var(--filter-update-background);
-}
-
-.nami-plan-review__filter[data-operation="move"],
-.nami-plan-review__filter[data-operation="recase"] {
-  --nami-chip-active-background: var(--filter-move-background);
-  --nami-chip-active-foreground: var(--filter-purple-active-foreground);
-}
-
-.nami-plan-review__filter[data-operation="trash"],
-.nami-plan-review__filter[data-operation="delete"],
-.nami-plan-review__filter[data-operation="blocked"] {
-  --nami-chip-active-background: var(--filter-trash-background);
-}
-
-.nami-plan-review__filter[data-operation="notice"] {
-  --nami-chip-active-background: var(--filter-update-background);
-}
-
-.nami-plan-review__filter[data-operation="delete"] {
-  --nami-chip-active-foreground: var(--filter-delete-active-foreground);
-}
-
-.nami-plan-review__filter[data-operation="noop"] {
-  --nami-chip-active-background: var(--filter-noop-background);
-  --nami-chip-active-foreground: var(--filter-noop-foreground);
-}
-
-.nami-plan-review__filter[data-operation="trash"][data-trash-alert="true"]:not([aria-pressed="true"]) {
-  color: var(--filter-delete-foreground);
-}
-
-.nami-plan-review__filter:disabled,
-.nami-plan-review__filter[data-operation="trash"][data-trash-alert="true"]:not([aria-pressed="true"]):disabled {
-  background: var(--color-neutral-disabled-background);
-  color: var(--color-neutral-foreground-disabled);
-  filter: none;
-}
-
 [data-intent="copy"] .nami-state-cue::before {
   content: "C";
 }
@@ -2088,7 +2013,6 @@ body {
   }
 
   .nami-button--primary:not(:disabled):active,
-  .nami-plan-review__filter[aria-pressed="true"]:is(:hover, :active),
   .nami-segmented__item[aria-checked="true"]:not(:disabled):active {
     filter: none;
   }
@@ -2150,7 +2074,7 @@ body {
   .nami-button:not(:disabled):hover,
   .nami-button:not(:disabled):active,
   .nami-chip[data-operation][aria-pressed="true"]:not(:disabled),
-  .nami-plan-review__filter[aria-pressed="true"]:not(:disabled),
+  .nami-filter-menu__trigger[data-active="true"][aria-disabled="false"],
   .nami-segmented__item[aria-checked="true"]:not(:disabled),
   .nami-task-card:not([aria-disabled="true"]):hover,
   .nami-task-card:not([aria-disabled="true"]):active {

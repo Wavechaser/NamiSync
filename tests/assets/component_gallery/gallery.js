@@ -1260,8 +1260,8 @@ window.addEventListener("unhandledrejection", (event) => {
   const semanticSettings = planReviewPanel.element.querySelector(".nami-plan-review__settings");
   const filterSpecimen = planReviewPanel.element.querySelector('[data-filter="noop"]');
   galleryMeasurementStep = "plan_review_filter_spacing";
-  if (filterSpecimen.children[0].textContent !== "No change"
-      || filterSpecimen.children[1].textContent !== "2"
+  if (filterSpecimen.children[1].textContent !== "No change"
+      || filterSpecimen.children[2].textContent !== "2"
       || getComputedStyle(filterSpecimen).wordSpacing !== "0px") {
     throw new Error("filter label/count spacing must not stretch words");
   }
@@ -1360,13 +1360,57 @@ window.addEventListener("unhandledrejection", (event) => {
     throw new Error("ready Plan progress must return to idle");
   }
   galleryMeasurementStep = "plan_review_filter_menu";
-  planReviewPanel.element.querySelector('[data-filter="update"]')?.parentElement
-    ?.querySelector(".nami-plan-filter-split__arrow")?.click();
-  const menuCounts = [...planReviewPanel.element.querySelectorAll('.nami-plan-filter-split__menu:not([hidden]) .nami-filter-count')];
+  const filterTrigger = planReviewPanel.element.querySelector('[data-action="filter-menu"]');
+  if (filterTrigger.children[2].textContent !== "2" || filterTrigger.dataset.active !== "true") {
+    throw new Error("Filter trigger must count canonical categories");
+  }
+  filterTrigger.scrollIntoView({block: "center"});
+  await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  filterTrigger.click();
+  const menuCounts = [...planReviewPanel.element.querySelectorAll('.nami-filter-menu__popup:not([hidden]) .nami-filter-count')];
   if (menuCounts.length < 2 || menuCounts.some((count) =>
     Math.abs(count.getBoundingClientRect().right - menuCounts[0].getBoundingClientRect().right) > 0.5)) {
     throw new Error("filter menu counts must align right");
   }
+
+  await new Promise(resolve => setTimeout(resolve, durationMilliseconds(getComputedStyle(filterTrigger).transitionDuration) + 30));
+  const filterColorReference = document.createElement("span");
+  filterColorReference.style.cssText = "position:fixed;visibility:hidden;forced-color-adjust:none";
+  filterColorReference.style.backgroundColor = "var(--color-accent-fill)";
+  filterColorReference.style.color = "var(--color-accent-fill-foreground)";
+  app.append(filterColorReference);
+  const activeFilterStyle = getComputedStyle(filterTrigger);
+  const primaryFilterStyle = getComputedStyle(filterColorReference);
+  const filterAccentPair = activeFilterStyle.backgroundColor === primaryFilterStyle.backgroundColor
+    && activeFilterStyle.color === primaryFilterStyle.color;
+  const activeFilterFill = activeFilterStyle.backgroundColor;
+  const popup = planReviewPanel.element.querySelector(".nami-filter-menu__popup");
+  const selectedFilter = popup.querySelector('[data-filter="update"]');
+  selectedFilter.focus();
+  planReviewTask.review.pending = "view";
+  planReviewPanel.render(planReviewTask);
+  if (popup.hidden || document.activeElement !== selectedFilter) throw new Error("pending filter focus lost");
+  popup.dispatchEvent(new KeyboardEvent("keydown", {key: "Escape", bubbles: true}));
+  if (!popup.hidden || document.activeElement !== filterTrigger) throw new Error("pending Escape focus lost");
+  planReviewTask.review.pending = null;
+  planReviewPanel.render(planReviewTask);
+  const savedFilters = planReviewTask.review.summary.filters;
+  planReviewTask.review.summary.filters = [];
+  planReviewPanel.render(planReviewTask);
+  if (filterTrigger.children[2].textContent !== "0" || filterTrigger.dataset.active !== "false") {
+    throw new Error("inactive Filter counter must remain visible");
+  }
+  await new Promise(resolve => setTimeout(resolve, durationMilliseconds(getComputedStyle(filterTrigger).transitionDuration) + 30));
+  filterColorReference.style.backgroundColor = "var(--color-button-fill)";
+  filterColorReference.style.color = "var(--color-neutral-foreground)";
+  const inactiveFilterStyle = getComputedStyle(filterTrigger);
+  const neutralFilterStyle = getComputedStyle(filterColorReference);
+  const filterNeutralPair = inactiveFilterStyle.backgroundColor === neutralFilterStyle.backgroundColor
+    && inactiveFilterStyle.color === neutralFilterStyle.color;
+  const inactiveFilterFill = inactiveFilterStyle.backgroundColor;
+  filterColorReference.remove();
+  planReviewTask.review.summary.filters = savedFilters;
+  planReviewPanel.render(planReviewTask);
 
   const longDiagnostic = `literal terminal diagnostic ${"x".repeat(1600)}`;
   const longTrashLocation = `D:\\${"segment\\".repeat(4095)}file`;
@@ -1561,7 +1605,7 @@ window.addEventListener("unhandledrejection", (event) => {
         && bounds.left >= rootBounds.left - 1 && bounds.right <= rootBounds.right + 1;
     }
     const hiddenMenuControl = planReviewPanel.element.querySelector(
-      ".nami-plan-filter-split__menu[hidden] button",
+      ".nami-filter-menu__popup[hidden] button",
     );
     const hiddenDescendantExempt = hiddenMenuControl instanceof HTMLButtonElement
       && controlFits(hiddenMenuControl);
@@ -2903,6 +2947,45 @@ window.addEventListener("unhandledrejection", (event) => {
     await diagnosticLayout("minimum-expanded-populated", null, true, true),
   ];
   diagnosticLayoutEvidence.push(...minimumLayoutEvidence);
+  const minimumFilterTrigger = planReviewPanel.element.querySelector('[data-action="filter-menu"]');
+  const minimumFilterPopup = planReviewPanel.element.querySelector('.nami-filter-menu__popup');
+  minimumFilterTrigger.click();
+  minimumFilterPopup.dispatchEvent(new KeyboardEvent('keydown', {key:'Home', bubbles:true}));
+  await new Promise(resolve => requestAnimationFrame(resolve));
+  const firstFilter = minimumFilterPopup.querySelector('[data-filter="all"]');
+  const firstFilterBounds = firstFilter.getBoundingClientRect();
+  const firstFilterHit = document.elementFromPoint((firstFilterBounds.left + firstFilterBounds.right) / 2,
+    (firstFilterBounds.top + firstFilterBounds.bottom) / 2);
+  minimumFilterPopup.dispatchEvent(new KeyboardEvent('keydown', {key:'End', bubbles:true}));
+  await new Promise(resolve => requestAnimationFrame(resolve));
+  const finalFilter = minimumFilterPopup.querySelector('[data-filter="notice"]');
+  const menuBounds = minimumFilterPopup.getBoundingClientRect();
+  const finalFilterBounds = finalFilter.getBoundingClientRect();
+  const clipBounds = minimumWork.getBoundingClientRect();
+  const finalFilterHit = document.elementFromPoint((finalFilterBounds.left + finalFilterBounds.right) / 2,
+    (finalFilterBounds.top + finalFilterBounds.bottom) / 2);
+  const filterMenuGeometry = {
+    accent_pair: filterAccentPair, neutral_pair: filterNeutralPair,
+    active_fill: activeFilterFill, inactive_fill: inactiveFilterFill,
+    popup_inside: menuBounds.top >= clipBounds.top && menuBounds.bottom <= clipBounds.bottom
+      && menuBounds.left >= clipBounds.left && menuBounds.right <= clipBounds.right,
+    first_reachable: firstFilterBounds.top >= menuBounds.top && firstFilterBounds.bottom <= menuBounds.bottom
+      && firstFilter.contains(firstFilterHit),
+    end_reachable: document.activeElement === finalFilter && finalFilterBounds.top >= menuBounds.top
+      && finalFilterBounds.bottom <= menuBounds.bottom && finalFilter.contains(finalFilterHit),
+    rectangles: [rectangle(minimumFilterTrigger), rectangle(minimumFilterPopup), rectangle(minimumWork),
+      [firstFilterBounds.left, firstFilterBounds.top, firstFilterBounds.right, firstFilterBounds.bottom]
+        .map(value => Math.round(value * 1000) / 1000), rectangle(finalFilter)],
+  };
+  minimumFilterPopup.dispatchEvent(new Event('scroll'));
+  filterMenuGeometry.internal_scroll_preserved = !minimumFilterPopup.hidden;
+  window.dispatchEvent(new Event('resize'));
+  filterMenuGeometry.resize_closed = minimumFilterPopup.hidden;
+  if (!minimumFilterPopup.hidden) minimumFilterTrigger.click();
+  minimumFilterTrigger.click();
+  minimumWorkBody.dispatchEvent(new Event('scroll'));
+  filterMenuGeometry.outside_scroll_closed = minimumFilterPopup.hidden;
+  if (!minimumFilterPopup.hidden) minimumFilterTrigger.click();
   const minimumAllDiagnostics = minimumLayoutEvidence.at(-1);
   if (minimumAllDiagnostics === undefined) throw new Error("native minimum A1 evidence is missing");
   galleryMeasurementStep = "native_minimum_keyboard";
@@ -2940,6 +3023,7 @@ window.addEventListener("unhandledrejection", (event) => {
   }
   const axesLineHeight = parseFloat(getComputedStyle(executionAxes).lineHeight);
   minimumWindowEvidence = {
+    filter_menu: filterMenuGeometry,
     default_outer_width: defaultWindowSize.outer_width,
     default_outer_height: defaultWindowSize.outer_height,
     native_default_owner_scale: nativeDefault.owner_scale,

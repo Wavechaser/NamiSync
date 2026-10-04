@@ -651,13 +651,6 @@ body {
   min-inline-size: 0;
 }
 
-.nami-plan-review__filter-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  padding-block-start: 0;
-}
-
 .nami-plan-review__search {
   align-items: center;
   display: flex;

@@ -1,3 +1,4 @@
+import { createFilterMenu } from "./filter_menu.js";
 import { createIcon } from "./icons.js";
 import { createTree } from "./tree.js";
 import { formatByteCount, renderFilesystemText, renderText } from "./render.js";
@@ -58,24 +59,10 @@ export function createInventoryReviewPanel(callbacks) {
   const toolbar = element("div", "nami-inventory-review__toolbar");
   const filters = element("div", "nami-inventory-review__filters");
   filters.ariaLabel = "Inventory filters";
-  const all = button("Default", "inventory-all");
-  all.ariaPressed = "true";
-  filters.append(all);
-  const facetButtons = new Map();
-  for (const [key, text] of FACETS) {
-    const control = button(text, `inventory-filter-${key}`);
-    control.dataset.filter = key;
-    control.ariaPressed = "false";
-    control.addEventListener("click", () => {
-      if (current === null || blocked()) return;
-      const chosen = new Set(current.summary.filters);
-      if (chosen.has(key)) chosen.delete(key);
-      else chosen.add(key);
-      callbacks.onViewChange(current, { filters: [...chosen] });
-    });
-    facetButtons.set(key, control);
-    filters.append(control);
-  }
+  const filterMenu = createFilterMenu(FACETS, (selected) => {
+    if (current !== null && !blocked()) callbacks.onViewChange(current, { filters: [...selected] });
+  });
+  filters.append(filterMenu.element);
   const searchBox = element("div", "nami-plan-review__search");
   const search = element("input", "nami-input");
   search.type = "search";
@@ -172,9 +159,6 @@ export function createInventoryReviewPanel(callbacks) {
     clear.hidden = true;
     search.focus();
     submitSearch();
-  });
-  all.addEventListener("click", () => {
-    if (current !== null && !blocked()) callbacks.onViewChange(current, { filters: [] });
   });
   const changeSort = () => {
     if (current !== null && !blocked()) callbacks.onViewChange(current, {
@@ -320,6 +304,7 @@ export function createInventoryReviewPanel(callbacks) {
   }
 
   function dispose() {
+    filterMenu.dispose();
     clearTimeout(searchTimer);
     searchTimer = null;
     if (current !== null) current.scrollTop = rows.scrollTop;
@@ -362,7 +347,7 @@ export function createInventoryReviewPanel(callbacks) {
       : scanScope?.kind === "folder" ? `Folder: ${scanScope.path} (including subfolders)` : "Selected items";
     renderFilesystemText(scanFacts, available
       ? `${review.summary.request_id === value.requestId ? "Displayed scan" : "Previous published scan"}: ${scopeLabel} · ${review.summary.scan_complete ? "complete" : "incomplete"} · ${review.summary.observed_count} observed · ${review.summary.missing_count} missing · ${review.summary.warning_count} notices from this scan.${scanScope.kind === "location" ? "" : " Other inventory items were not rescanned."}` : "");
-    if (!available) return;
+    if (!available) { filterMenu.render([], {}, true); return; }
     const selected = review.detail?.row ?? null;
     const domain = selected !== null && selected.warning === null;
     const currentPublication = review.summary.request_id === value.requestId && !value.inventoryViewUnconfirmed;
@@ -380,14 +365,9 @@ export function createInventoryReviewPanel(callbacks) {
       ? "Folder actions include all missing items below it, including hidden and off-window items. Restore visibility does not restore files."
       : domain && acknowledgedCount > 0 ? "Restore visibility does not restore the missing file." : "");
     scopeHint.hidden = scopeHint.textContent === "";
-    all.ariaPressed = String(review.summary.filters.length === 0);
-    all.disabled = Boolean(blocked());
-    for (const [key, control] of facetButtons) {
-      const count = key === "notice" ? review.summary.warning_count : review.summary.rollup[key];
-      renderText(control, `${label(key)} ${count}`);
-      control.ariaPressed = String(review.summary.filters.includes(key));
-      control.disabled = Boolean(blocked());
-    }
+    const counts = Object.fromEntries(FACETS.map(([key]) => [key,
+      key === "notice" ? review.summary.warning_count : review.summary.rollup[key]]));
+    filterMenu.render(review.summary.filters, counts, Boolean(blocked()));
     if (first || (!searchDraft && review.pending !== "view")) search.value = review.summary.search_query;
     if (review.queuedSearchQuery === null && review.pending === null && search.value === review.summary.search_query) searchDraft = false;
     search.disabled = value.closePending || value.inventoryLoading;

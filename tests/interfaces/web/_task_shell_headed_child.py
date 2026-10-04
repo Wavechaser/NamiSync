@@ -680,7 +680,8 @@ window.addEventListener("error", (event) => {
   await until(() => tableCells[4].ariaSort === "descending" && review.dataset.pending === "", "second Size sort");
   sizeSort.click();
   await until(() => tableCells[4].ariaSort === "none" && review.dataset.pending === "", "canonical Plan header reset");
-  const noticeFilter = review.querySelector('.nami-plan-review__filter-list [data-operation="notice"]');
+  review.querySelector('[data-action="filter-menu"]').click();
+  const noticeFilter = review.querySelector('.nami-filter-menu__popup [data-filter="notice"]');
   noticeFilter.click();
   await until(() => viewport.textContent.includes("insufficient_space")
     && review.dataset.pending === ""

@@ -36,6 +36,7 @@ INITIAL_ASSETS = {
     "components.css",
     "execution_confirmation.js",
     "file_row.js",
+    "filter_menu.js",
     "icons.js",
     "icons/LICENSE.txt",
     "icons/SOURCE.json",

@@ -29,6 +29,14 @@ class ElementFake {
     for (const child of this.children) child.parentElement = null;
     this.children = []; this.append(...values);
   }
+  closest(selector) {
+    for (let value = this; value !== null; value = value.parentElement) {
+      if (value.classList.contains(selector.slice(1))) return value;
+    }
+    return null;
+  }
+  contains(value) { return value === this || this.children.some((child) => child.contains(value)); }
+  getBoundingClientRect() { return { top: 200, bottom: 232 }; }
   remove() {
     if (this.parentElement !== null) this.parentElement.children = this.parentElement.children.filter((value) => value !== this);
     this.parentElement = null;
@@ -48,10 +56,17 @@ class ElementFake {
 }
 const frames = [];
 const observers = [];
+const documentListeners = new Map();
+const viewListeners = new Map();
 globalThis.document = {
+  addEventListener(key, callback) { documentListeners.set(key, [...(documentListeners.get(key) ?? []), callback]); },
+  removeEventListener(key, callback) { documentListeners.set(key, (documentListeners.get(key) ?? []).filter((value) => value !== callback)); },
   activeElement: null,
   createElement(tag) { return new ElementFake(tag, this); },
   defaultView: {
+    innerHeight: 800,
+    addEventListener(key, callback) { viewListeners.set(key, [...(viewListeners.get(key) ?? []), callback]); },
+    removeEventListener(key, callback) { viewListeners.set(key, (viewListeners.get(key) ?? []).filter((value) => value !== callback)); },
     requestAnimationFrame(callback) { frames.push(callback); },
     ResizeObserver: class {
       constructor(callback) { this.callback = callback; this.disconnected = false; observers.push(this); }
@@ -70,7 +85,10 @@ const assetRoot = process.argv[2];
 const renderUrl = moduleUrl(await readFile(join(assetRoot, "render.js"), "utf8"));
 const treeUrl = moduleUrl((await readFile(join(assetRoot, "tree.js"), "utf8")).replace("./render.js", renderUrl));
 const iconsUrl = moduleUrl(await readFile(join(assetRoot, "icons.js"), "utf8"));
+const filterUrl = moduleUrl((await readFile(join(assetRoot, "filter_menu.js"), "utf8"))
+  .replace("./render.js", renderUrl).replace("./icons.js", iconsUrl));
 const source = (await readFile(join(assetRoot, "inventory_review.js"), "utf8"))
+  .replace("./filter_menu.js", filterUrl)
   .replace("./render.js", renderUrl).replace("./tree.js", treeUrl).replace("./icons.js", iconsUrl);
 const { createInventoryReviewPanel } = await import(moduleUrl(source));
 const fixture = JSON.parse(await readFile(process.argv[3], "utf8"));
@@ -102,8 +120,13 @@ assert.deepEqual(refreshes.at(-1), [review, null]);
 assert.equal(rowElements().length, fixture.views.default.window.rows.length);
 assert.equal(find((value) => value.getAttribute("role") === "tree").tabIndex, 0);
 assert.equal(find((value) => value.tagName === "INPUT" && value.type === "checkbox"), undefined);
-assert.equal(action("inventory-all").textContent, "Default");
-assert.match(text(pane.element), /Acknowledged 1/);
+const filterTrigger = action("filter-menu");
+const filterPopup = find((value) => value.classList.contains("nami-filter-menu__popup"));
+const filterItem = (key) => find((value) => value.dataset.filter === key);
+assert.equal(filterTrigger.children[2].textContent, "0");
+assert.equal(filterPopup.children.length, 11);
+assert.equal(filterItem("all").children[2].hidden, true, "reset does not invent a count");
+assert.equal(filterItem("acknowledged").ariaLabel, "Acknowledged 1");
 assert.match(text(pane.element), /Displayed scan: Entire location · incomplete/);
 assert.match(text(pane.element), /1 notices from this scan/);
 assert.doesNotMatch(text(pane.element), /Other inventory items were not rescanned/);
@@ -148,8 +171,35 @@ assert.deepEqual(viewChanges.at(-1)[1], { searchQuery: "  literal.*  " });
 action("inventory-search-clear").click();
 assert.deepEqual(viewChanges.at(-1)[1], { searchQuery: "" });
 assert.equal(document.activeElement, search);
-action("inventory-filter-acknowledged").click();
+filterTrigger.click();
+filterItem("acknowledged").focus();
+filterItem("acknowledged").click();
 assert.deepEqual(viewChanges.at(-1)[1], { filters: ["acknowledged"] });
+review.pending = "view";
+pane.render(task);
+assert.equal(filterPopup.hidden, false);
+assert.equal(document.activeElement, filterItem("acknowledged"));
+const pendingChanges = viewChanges.length;
+filterItem("present").click();
+assert.equal(viewChanges.length, pendingChanges);
+review.pending = null;
+review.summary = { ...review.summary, filters: ["acknowledged"] };
+pane.render(task);
+assert.equal(filterTrigger.children[2].textContent, "1");
+assert.equal(filterPopup.hidden, false);
+filterItem("present").click();
+assert.deepEqual(viewChanges.at(-1)[1], { filters: ["acknowledged", "present"] });
+filterItem("all").click();
+assert.deepEqual(viewChanges.at(-1)[1], { filters: [] });
+review.summary = fixture.views.default.summary;
+pane.render(task);
+assert.equal(filterTrigger.children[2].textContent, "0");
+assert.ok(!rowElements().some((value) => text(value).includes("missing.txt")), "All preserves default acknowledged hiding");
+pane.dispose();
+assert.equal(filterPopup.hidden, true);
+assert.equal(documentListeners.get("pointerdown").length, 0);
+assert.equal(viewListeners.get("blur").length, 0);
+pane.render(task);
 for (const column of ["filename", "size", "mtime"]) {
   for (const dir of ["ascending", "descending"]) {
     const sort = find((value) => value.ariaLabel === "Inventory sort column");

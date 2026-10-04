@@ -24,7 +24,7 @@ before the native interaction seam. Product/test bytes were unchanged across
 those attempts. Independent review approved the atomic A1 delivery in
 `a1-review.md`.
 
-A2 now snapshots non-filename Plan column widths on the first visible loaded
+A2, committed as `498eb24`, snapshots non-filename Plan column widths on the first visible loaded
 layout. It reuses the existing width and resize mechanism without CSS/token
 changes. The direct probe covers delayed layout and retained widths; installed
 task-shell geometry observes passive widening before any resize gesture,
@@ -33,16 +33,27 @@ tests, all 1,921 interfaces tests and all six installed task-shell/gallery check
 pass. `a2-native.xml` records the native pass; copied raw receipts retain
 `plan_review.initial.passiveSizing` and wheel/installation identity. All frozen
 product/test hashes match after acceptance. Independent review approved in
-`a2-review.md`; the commit containing this record closes A2.
+`a2-review.md`.
+
+A3 delivers the shared counted checkbox Filter menu and pinned Regular Filter
+icon for Plan and Inventory. The frozen candidate passes 84 focused and 2,286
+interfaces/tools checks (three documented tool skips), pinned icon provenance
+and all seven installed task-shell/gallery/Inventory cases. Source review
+approved; the final review record is `a3-review.md`. The atomic A3 commit contains
+this handoff. Raw/frozen evidence uses `a3-*-final*` under the session evidence
+root. Pending Escape focus and minimum-window clipping were corrected before
+delivery; the menu now uses the known work-panel bounds and dismisses on resize
+or outside scrolling, preserving internal scrolling. Replaced filter code/CSS
+was removed. Retain the earlier fixture/setup/foreground failures and initial
+clipping observation alongside the passing final receipts; none replaces them.
 
 ## Next work
 
-After A2 review and commit, A3
-consolidates filters, A4 moves details to a full-height optional right column,
+After A3 integration, A4 moves details to a full-height optional right column,
 and A5 aligns standalone Inventory/Verify and exposes recorded checksum data.
 M1_PLAN owns exact scope, dependencies and gates. Shared source/tests and native
 acceptance runs remain serialized; evidence reuse follows dependency identity.
 
-No product changes for A3–A7 have begun. No push, PR or new domain/integrity
+No product changes for A4–A7 have begun. No push, PR or new domain/integrity
 feature is authorized. Previous diagnostic catalog repair is committed in
 `999a568`; its evidence remains under `build/bridge-catalog-20261004/`.

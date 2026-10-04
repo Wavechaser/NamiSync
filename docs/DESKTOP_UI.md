@@ -227,11 +227,10 @@ be measured rather than claimed accessible, and be recorded here. Light-theme
 main text in the blue, green, yellow, and red families can fall below the
 normal-text target on pale zebra rows. Dark relocating text therefore uses
 purple-light while Light retains purple-main. These are explicit text-form
-exceptions, not accessible-color claims. The inactive Delete filter
+exceptions, not accessible-color claims. The generic inactive Delete chip
 is the same kind of explicit red-main foreground exception on its neutral
-resting fill. Plan uses button-shaped filters instead: inactive Remove text is
-red only when its count exceeds one; active categories use opaque family fills
-and All uses the accent fill. Filled
+resting fill. Plan and Inventory use a neutral Filter trigger with an accent
+fill only when canonical category settings are active. Filled
 semantic forms deliberately pair main-colored text with a supporting family
 surface; the Light red/yellow pairs are authored visual exceptions below the
 normal-text target for this review pass. Their words carry meaning independently
@@ -452,17 +451,17 @@ that foreground through interaction, so text never reverses. The selected
 Sync/Integrity half, checked boxes, and toggles use the same state ladder;
 progress and selection markers consume only the base fill. Forced colors use
 the system `Highlight`/`HighlightText` pair.
-Filter
-pills are likewise borderless: inactive pills use an inverse grayscale surface
-and text pairing, while an active operation filter uses that operation family's
+The gallery's generic operation-chip specimens are likewise borderless:
+inactive chips use an inverse grayscale surface and text pairing, while an
+active operation chip uses that operation family's
 exact main swatch at rest with contrast-selected grayscale text. Delete is the
 deliberate exception only at rest: its inactive label is exact red-main in both
 ordinary themes, while its active red-main surface uses the same contrast-safe
-neutral label policy as other selected filters.
+neutral label policy as other selected chips.
 Active operation-chip hover/press cues retain the same main RGB at 90%/80%
 strength, matching other colored clickable controls; they do not lift or scale.
 Inactive Delete retains red-main text but otherwise uses the same distinct
-grayscale hover and pressed backgrounds as every other inactive filter.
+grayscale hover and pressed backgrounds as every other inactive chip.
 Plain pressed chips likewise
 retain their active label color rather than carrying a latent state inversion.
 Channel-scoped labels use colored text or the borderless 18 logical px filled
@@ -1311,7 +1310,7 @@ the decorative icons use the pinned Microsoft Fluent assets, not substitute glyp
 Plan paths and semantic labels use 12px caption text. The semantic field is
 7rem wide, shifting its icon edge right to align optically with Plan again.
 A Status card shows selected/byte/planning-issue facts and execution controls;
-one table card owns search, toggle-button filters and the grid, without a footer.
+one table card owns search, the shared Filter menu and the grid, without a footer.
 While no reviewed plan is available, execution and replan actions are not
 actionable; a loading or unavailable panel cannot retain a previous task's
 enabled controls. Reusing the Plan panel also restores viewport resize
@@ -1322,11 +1321,25 @@ a 6 px outer radius. At default (1280×800) and larger window sizes the natural-
 Plan and Status cards leave the remaining work-panel height to the table card;
 the table body scrolls rather than the page. Search is a narrower right-aligned
 box with inset submit and Clear icons styled like Setup path-box controls.
-Clear restores input focus and immediately clears the query. Filter controls use ordinary button dimensions
-and fills, following Microsoft's [ToggleSplitButton reference](https://learn.microsoft.com/en-us/windows/apps/develop/ui/controls/buttons)
-for split toggle anatomy, with counted groups and detail menus
-as defined in PRESENTATION. Their main actions toggle groups rather than opening
-menus; ungrouped categories remain toggles. The Sync/Integrity outer corner radius
+Clear restores input focus and immediately clears the query. Plan and Inventory
+share one ordinary-sized Filter button with regular Filter and chevron icons.
+Its visible count includes zero and counts selected canonical categories only,
+excluding All and search. It stays neutral at zero and uses the accent fill when
+categories are active. The popup reuses the existing menu surface and follows
+Microsoft's [checkbox menu guidance](https://fluent2.microsoft.design/components/web/react/core/menu/usage)
+for multiple filter criteria. Every canonical category has a checkmark and its
+authoritative count, including zero; All clears category settings. Inventory's
+All has no counter and retains its acknowledged-item default visibility policy.
+Stable items keep the popup open and focused through pending/settled updates;
+pending guards refuse another gesture without introducing a query queue.
+The popup has a bounded scrollable height within its owning work panel and
+viewport and opens above when more room is available there. Resize or scrolling
+outside the menu dismisses its old geometry; scrolling inside remains usable. Up/Down/Home/End navigate, Enter/Space toggle, and Escape closes
+and returns trigger focus, including while pending. The pending trigger remains
+focusable with aria-disabled and refuses opening. Outside pointer interaction,
+focus leaving, window blur/hidden document, context replacement and retirement
+close the popup and remove its document/window listeners. Panel reuse restores
+normal interaction. The Sync/Integrity outer corner radius
 includes its inset so it is concentric with the inner buttons. Status-card actions
 align right alongside the large status title, with an arrow-reset Plan again
 button before Execute. It stays icon-only when used to Check the original
@@ -1379,8 +1392,9 @@ Plan action/filter labels use sentence case and friendly names without changing
 canonical transport keys: `noop` is **No change**, `mkdir` is **Create folder**,
 `recase` is **Recase**, `move_update` is **Move + update**, `trash`
 is **Move to trash**, and `delete` is **Delete**. Destructive confirmation and
-the irreversible risk detail remain unchanged. Group filters retain
-All, Copy, Move, Update, Remove and Error; menus retain individual counters.
+the irreversible risk detail remain unchanged. The single Filter menu retains
+all thirteen canonical Plan categories independently and their counters; the
+former grouped shortcuts are replaced by those explicit checkbox choices.
 The Notes policy is explicit and fail-visible:
 
 | Input | Display policy |

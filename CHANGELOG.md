@@ -189,6 +189,12 @@ explicit, reviewable and regression-backed.
   Filename absorb later enlargement. Preserve existing minimum widths,
   horizontal scrolling and Notes-limited manual resizing.
   Pass 36 focused, 1,921 interfaces and six installed task-shell/gallery checks.
+- Replace Plan and Inventory filter buttons with one counted Fluent checkbox
+  menu. Keep category choices open for multiple selections, preserve search
+  when All clears filters, and retain authoritative counts and request guards.
+  Add pinned Regular Filter icons and remove the replaced controls and styles.
+  Verify 84 focused, 2,286 interfaces/tools and seven installed UI cases, plus
+  pinned icon provenance and independent review.
 - Ratify seven GUI units in M1_PLAN. Execution-to-Verify navigation remains
   deferred to M1-10; previous-location/rename redesign awaits a focused session.
 

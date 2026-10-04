@@ -248,12 +248,16 @@ _PAGE = r"""
     return pane?.isConnected && !pane.querySelector('[data-action="inventory-refresh"]')?.disabled
       && pane.querySelector('.nami-inventory-review__rows [data-node-id]') ? pane : null;
   }, 'initial-inventory-view');
-  const nativeClicks = {refresh:false, acknowledge:false, restore:false};
+  const nativeClicks = Object.fromEntries(['refresh', 'filter-open', 'filter-present', 'filter-escape', 'filter-reopen', 'filter-all', 'acknowledge', 'restore'].map(name => [name, false]));
   async function stage(name) {
     await until(() => document.hasFocus(), 'document-focus');
     let listenedControl = null;
     window.__inventoryNativeCheck = async () => {
-      const control = review.querySelector(`[data-action="inventory-${name}"]`);
+      const selector = name === 'filter-open' || name === 'filter-reopen' ? '[data-action="filter-menu"]'
+        : name === 'filter-present' || name === 'filter-escape' ? '.nami-filter-menu__popup [data-filter="present"]'
+        : name === 'filter-all' ? '.nami-filter-menu__popup [data-filter="all"]'
+        : `[data-action="inventory-${name}"]`;
+      const control = review.querySelector(selector);
       if (control === null) return {point:null, facts:{connected:false}};
       control.focus();
       await new Promise(resolve => requestAnimationFrame(resolve));
@@ -264,7 +268,7 @@ _PAGE = r"""
         enabled:!control.disabled, visible:!control.hidden, active:document.activeElement === control,
         hit_owned:control.contains(hit) || hit === control, sized:rect.width > 0 && rect.height > 0};
       if (listenedControl !== control) {
-        control.addEventListener('click', event => { nativeClicks[name] ||= event.isTrusted; }, {once:true});
+        control.addEventListener(name === 'filter-escape' ? 'keydown' : 'click', event => { nativeClicks[name] ||= event.isTrusted; }, {once:true});
         listenedControl = control;
       }
       return {point, facts};
@@ -274,6 +278,68 @@ _PAGE = r"""
     await until(() => nativeClicks[name], `trusted-${name}`);
   }
   await stage('refresh');
+  const filterTrigger = review.querySelector('[data-action="filter-menu"]');
+  const filterPopup = review.querySelector('.nami-filter-menu__popup');
+  await until(() => !review.querySelector('[data-action="inventory-refresh"]').disabled, 'filter-ready');
+  const colorReference = document.createElement('span');
+  colorReference.style.cssText = 'position:fixed;visibility:hidden;forced-color-adjust:none';
+  colorReference.style.backgroundColor = 'var(--color-button-fill)';
+  colorReference.style.color = 'var(--color-neutral-foreground)';
+  review.append(colorReference);
+  await new Promise(resolve => setTimeout(resolve, 150));
+  const neutralStyle = getComputedStyle(filterTrigger);
+  const neutral = filterTrigger.children[2].textContent === '0' && filterTrigger.dataset.active === 'false'
+    && neutralStyle.backgroundColor === getComputedStyle(colorReference).backgroundColor
+    && neutralStyle.color === getComputedStyle(colorReference).color;
+  const neutralColors = [neutralStyle.backgroundColor, neutralStyle.color];
+  await stage('filter-open');
+  await until(() => !filterPopup.hidden, 'filter-open');
+  const menuGeometry = {};
+  const rectangle = element => {
+    const rect = element.getBoundingClientRect();
+    return [rect.left, rect.top, rect.right, rect.bottom].map(value => Number(value.toFixed(3)));
+  };
+  for (const [name, key] of [['first', 'all'], ['last', 'notice']]) {
+    const item = filterPopup.querySelector(`[data-filter="${key}"]`);
+    item.focus();
+    await new Promise(resolve => requestAnimationFrame(resolve));
+    const rect = item.getBoundingClientRect();
+    const hit = document.elementFromPoint((rect.left + rect.right) / 2, (rect.top + rect.bottom) / 2);
+    menuGeometry[name] = {rectangle: rectangle(item), hit: item.contains(hit)};
+  }
+  menuGeometry.trigger = rectangle(filterTrigger);
+  menuGeometry.popup = rectangle(filterPopup);
+  menuGeometry.work = rectangle(review.closest('.nami-work-panel'));
+  const popupInside = menuGeometry.popup[1] >= menuGeometry.work[1]
+    && menuGeometry.popup[3] <= menuGeometry.work[3]
+    && menuGeometry.popup[0] >= menuGeometry.work[0] && menuGeometry.popup[2] <= menuGeometry.work[2];
+  await stage('filter-present');
+  await until(() => filterTrigger.children[2].textContent === '1'
+    && filterPopup.querySelector('[data-filter="present"]').ariaChecked === 'true', 'filter-settled');
+  const staysOpen = !filterPopup.hidden;
+  colorReference.style.backgroundColor = 'var(--color-accent-fill)';
+  colorReference.style.color = 'var(--color-accent-fill-foreground)';
+  await new Promise(resolve => setTimeout(resolve, 150));
+  const activeStyle = getComputedStyle(filterTrigger);
+  const accented = filterTrigger.dataset.active === 'true'
+    && activeStyle.backgroundColor === getComputedStyle(colorReference).backgroundColor
+    && activeStyle.color === getComputedStyle(colorReference).color;
+  const filterColors = {neutral: neutralColors, active: [activeStyle.backgroundColor, activeStyle.color]};
+  colorReference.remove();
+  await stage('filter-escape');
+  await until(() => filterPopup.hidden && document.activeElement === filterTrigger, 'filter-Escape');
+  await stage('filter-reopen');
+  await stage('filter-all');
+  await until(() => filterTrigger.children[2].textContent === '0'
+    && filterPopup.querySelector('[data-filter="all"]').ariaChecked === 'true', 'filter-reset');
+  const allKeepsOpen = !filterPopup.hidden;
+  const allNoCount = filterPopup.querySelector('[data-filter="all"] .nami-filter-count').hidden;
+  filterTrigger.focus();
+  review.querySelector('[data-action="inventory-search"]').focus();
+  const focusAwayClosed = filterPopup.hidden;
+  const filterMenu = {neutral, staysOpen, accented, escapeFocus:true, allKeepsOpen, allNoCount, focusAwayClosed,
+    firstReachable:menuGeometry.first.hit, lastReachable:menuGeometry.last.hit, popupInside};
+  if (Object.values(filterMenu).some(value => value !== true)) throw new Error('filter menu contract failed');
   const fixture = window.__inventoryFixture;
   const row = id => [...review.querySelectorAll('.nami-inventory-review__rows [data-node-id]')]
     .find(value => value.dataset.nodeId === id);
@@ -300,7 +366,7 @@ _PAGE = r"""
   await stage('restore');
   await until(() => missing()?.querySelector('[data-integrity="missing"]')
     && !review.querySelector('[data-action="inventory-refresh"]').disabled, 'restored-visible');
-  return {native_clicks:nativeClicks, pane_visible:review.isConnected && !review.hidden,
+  return {filter_geometry:menuGeometry, filter_colors:filterColors, filter_menu:filterMenu, native_clicks:nativeClicks, pane_visible:review.isConnected && !review.hidden,
     refreshed_missing:true, acknowledged_hidden:true, restored_missing:true};
 })()
 """
@@ -316,7 +382,7 @@ def _drive(window: object, phase: _InventoryPhase, recorder: _Recorder,
     page_result: dict[str, object] | None = None
     observed_handle: int | None = None
     click_target: dict[str, object] | None = None
-    foreground_owned = {"refresh": False, "acknowledge": False, "restore": False}
+    foreground_owned = {name: False for name in ("refresh", "filter-open", "filter-present", "filter-escape", "filter-reopen", "filter-all", "acknowledge", "restore")}
 
     def fail(error: BaseException, task: object | None, step: str, _method: str) -> None:
         nonlocal failed
@@ -335,7 +401,7 @@ def _drive(window: object, phase: _InventoryPhase, recorder: _Recorder,
         )
 
     cdp = NativeCdp(native, core, retained, fail)
-    stage_names = ("refresh", "acknowledge", "restore")
+    stage_names = ("refresh", "filter-open", "filter-present", "filter-escape", "filter-reopen", "filter-all", "acknowledge", "restore")
 
     def next_stage(index: int) -> None:
         if index == len(stage_names):
@@ -366,6 +432,12 @@ def _drive(window: object, phase: _InventoryPhase, recorder: _Recorder,
                 foreground_owned[name] = True
                 def released(_value: object) -> None:
                     cdp.evaluate(f"window.__inventoryNativeAck='{name}';true", lambda _ack: next_stage(index + 1), f"ack-{name}")
+                if name == "filter-escape":
+                    shared = {"key": "Escape", "code": "Escape", "windowsVirtualKeyCode": 27, "nativeVirtualKeyCode": 27}
+                    cdp.call("Input.dispatchKeyEvent", {"type": "rawKeyDown", **shared},
+                        lambda _value: cdp.call("Input.dispatchKeyEvent", {"type": "keyUp", **shared},
+                            released, "filter-escape-up"), "filter-escape-down")
+                    return
                 cdp.call("Input.dispatchMouseEvent", {"type": "mousePressed", "button": "left",
                     "buttons": 1, "clickCount": 1, **point},
                     lambda _value: cdp.call("Input.dispatchMouseEvent", {"type": "mouseReleased",
@@ -400,10 +472,8 @@ def _drive(window: object, phase: _InventoryPhase, recorder: _Recorder,
         checkpoint = "page-result"
         if type(value) is dict:
             page_result = {key: value.get(key) for key in
-                           ("native_clicks", "pane_visible", "refreshed_missing", "acknowledged_hidden", "restored_missing")}
-        if type(value) is not dict or value.get("native_clicks") != {
-            "refresh": True, "acknowledge": True, "restore": True,
-        } or any(value.get(key) is not True for key in
+                           ("filter_geometry", "filter_colors", "filter_menu", "native_clicks", "pane_visible", "refreshed_missing", "acknowledged_hidden", "restored_missing")}
+        if type(value) is not dict or value.get("native_clicks") != {name: True for name in stage_names} or any(value.get(key) is not True for key in
                  ("pane_visible", "refreshed_missing", "acknowledged_hidden", "restored_missing")):
             raise RuntimeError("native inventory page result is invalid")
         checkpoint = "phase-report"

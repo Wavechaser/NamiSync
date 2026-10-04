@@ -1832,6 +1832,14 @@ def test_component_gallery_report_parser_is_exact_and_nested(
                 "keyboard_scroll_after": 120.0,
                 "keyboard_capture_width": 1008,
                 "keyboard_capture_height": 601,
+                "filter_menu": {
+                    "accent_pair": True, "neutral_pair": True,
+                    "active_fill": "rgb(0, 103, 192)", "inactive_fill": "rgba(255, 255, 255, 0.7)",
+                    "popup_inside": True, "first_reachable": True, "end_reachable": True,
+                    "rectangles": [[400, 200, 500, 232], [400, 236, 610, 450],
+                                   [360, 80, 1000, 700], [406, 240, 604, 268], [406, 418, 604, 446]],
+                    "internal_scroll_preserved": True, "resize_closed": True, "outside_scroll_closed": True,
+                },
             },
             "segmented": {
                 "group_role": "radiogroup",
@@ -4034,6 +4042,11 @@ def _assert_complete_gallery_matrix(report: dict[str, object]) -> None:
     }
     _assert_diagnostic_layout(report["control_contract"]["diagnostic_layout"])
     minimum_window = report["control_contract"]["minimum_window"]
+    filter_menu = minimum_window["filter_menu"]
+    assert all(filter_menu[key] is True for key in (
+        "accent_pair", "neutral_pair", "popup_inside", "first_reachable", "end_reachable",
+        "internal_scroll_preserved", "resize_closed", "outside_scroll_closed",
+    )), filter_menu
     assert minimum_window["long_trash_length"] == 32767
     assert minimum_window["keyboard_scroll_after"] > minimum_window["keyboard_scroll_before"]
     assert minimum_window["keyboard_capture_width"] > 0

@@ -53,10 +53,19 @@ def test_installed_inventory_refresh_acknowledge_restore_and_close(
             pytest.fail(f"inventory journey child failed: {initial}")
         assert milestone == "ready"
         assert initial["report"]["native_clicks"] == {
-            "refresh": True, "acknowledge": True, "restore": True,
+            "refresh": True, "filter-open": True, "filter-present": True,
+            "filter-escape": True, "filter-reopen": True, "filter-all": True,
+            "acknowledge": True, "restore": True,
         }
         assert initial["report"]["foreground_owned"] == {
-            "refresh": True, "acknowledge": True, "restore": True,
+            "refresh": True, "filter-open": True, "filter-present": True,
+            "filter-escape": True, "filter-reopen": True, "filter-all": True,
+            "acknowledge": True, "restore": True,
+        }
+        assert initial["report"]["filter_menu"] == {
+            "neutral": True, "staysOpen": True, "accented": True, "escapeFocus": True,
+            "allKeepsOpen": True, "allNoCount": True, "focusAwayClosed": True,
+            "firstReachable": True, "lastReachable": True, "popupInside": True,
         }
         assert initial["report"]["results"]["refresh"]["request_id"] != initial["report"]["initial"]["request_id"]
         assert initial["report"]["results"]["acknowledge"]["applied"] == 1

@@ -72,6 +72,12 @@ class ElementFake {
   }
 
   focus() { this.ownerDocument.activeElement = this; }
+  closest(selector) {
+    for (let value = this; value !== null; value = value.parentElement) {
+      if (value.classList.contains(selector.slice(1))) return value;
+    }
+    return null;
+  }
   contains(value) { return value === this || this.children.some((child) => child.contains(value)); }
 
   replaceChildren(...values) {
@@ -108,7 +114,7 @@ class ElementFake {
   getBoundingClientRect() {
     const index = this.parentElement?.children.indexOf(this) ?? -1;
     const widths = [32, 300, 130, 112, 100, 112, 300];
-    return { width: this.classList.contains("nami-file-list__header-cell")
+    return { top: 200, bottom: 232, width: this.classList.contains("nami-file-list__header-cell")
       ? this.measuredWidth ?? widths[index] : 100 };
   }
 
@@ -129,7 +135,9 @@ class DocumentFake {
   constructor() {
     this.activeElement = null;
     this.documentElement = new ElementFake("html", this);
+    this.listeners = new Map();
     this.defaultView = {
+      innerHeight: 800,
       frames: [],
       observers: [],
       listeners: new Map(),
@@ -164,6 +172,9 @@ class DocumentFake {
       },
     };
   }
+  addEventListener(name, callback) { this.listeners.set(name, [...(this.listeners.get(name) ?? []), callback]); }
+  removeEventListener(name, callback) { this.listeners.set(name, (this.listeners.get(name) ?? []).filter((value) => value !== callback)); }
+  dispatch(name, event = {}) { for (const callback of this.listeners.get(name) ?? []) callback(event); }
   createElement(tagName) { return new ElementFake(tagName, this); }
   createDocumentFragment() { return new ElementFake("#fragment", this); }
 }
@@ -188,7 +199,10 @@ const fileRowUrl = moduleUrl((await readFile(join(dirname(process.argv[2]), "fil
   .replace("./render.js", renderUrl));
 const planUrl = moduleUrl((await readFile(join(dirname(process.argv[2]), "plan.js"), "utf8"))
   .replace("./file_row.js", fileRowUrl).replace("./render.js", renderUrl));
+const filterUrl = moduleUrl((await readFile(join(dirname(process.argv[2]), "filter_menu.js"), "utf8"))
+  .replace("./icons.js", iconsUrl).replace("./render.js", renderUrl));
 const source = (await readFile(process.argv[2], "utf8"))
+  .replace("./filter_menu.js", filterUrl)
   .replace("./plan.js", planUrl)
   .replace("./icons.js", iconsUrl)
   .replace("./task_status.js", taskStatusUrl)
@@ -558,78 +572,102 @@ nameSort.dispatch("click");
 assert.deepEqual(calls.at(-1), ["onViewChange", review,
   { sortColumn: "path", sortDirection: "ascending" }]);
 
-const noticeFilter = findByDataset(panel.element, "operation", "notice");
-const allFilter = findByDataset(panel.element, "operation", "all");
-const copyFilter = findByDataset(panel.element, "operation", "copy");
-const mkdirFilter = findByDataset(panel.element, "filterDetail", "mkdir");
-const trashFilter = findByDataset(panel.element, "operation", "trash");
-assert.equal(allFilter.ariaPressed, "true");
+const filterTrigger = findAction(panel.element, "filter-menu");
+const filterPopup = findByClass(panel.element, "nami-filter-menu__popup");
+const filterItem = (key) => findByDataset(filterPopup, "filter", key);
+const noticeFilter = filterItem("notice");
+const allFilter = filterItem("all");
+assert.equal(allFilter.ariaChecked, "true");
 assert.equal(allFilter.ariaLabel, "All 180");
-assert.equal(copyFilter.ariaLabel, "Copy 100");
-assert.equal(mkdirFilter.ariaLabel, "Create folder 0");
-assert.equal(allFilter.children[0].textContent, "All");
-assert.equal(allFilter.children[1].textContent, "180");
-assert.equal(noticeFilter.hidden, false);
-assert.equal(trashFilter.hidden, false);
-assert.equal(trashFilter.dataset.trashAlert, "true");
-copyFilter.dispatch("click");
-assert.deepEqual(calls.at(-1), ["onViewChange", review,
-  { filters: new Set(["copy", "mkdir"]) }]);
-mkdirFilter.dispatch("click");
-assert.deepEqual(calls.at(-1), ["onViewChange", review,
-  { filters: new Set(["mkdir"]) }]);
-for (const [group, members] of Object.entries({
-  update: ["update", "move_update"], move: ["move", "recase"],
-  copy: ["copy", "mkdir"], remove: ["trash", "delete"],
-  error: ["error", "unsupported", "blocked"],
-})) {
-  const main = findByDataset(panel.element, "filter", group);
-  const split = main.parentElement;
-  const arrow = findByClass(split, "nami-plan-filter-split__arrow");
-  const menu = findByClass(split, "nami-plan-filter-split__menu");
-  const beforeOpen = calls.length;
-  arrow.dispatch("click");
-  assert.equal(menu.hidden, false);
-  assert.equal(calls.length, beforeOpen, "opening a detail menu never filters");
-  menu.dispatch("keydown", { key: "End" });
-  assert.equal(document.activeElement.dataset.filterDetail, members.at(-1));
-  menu.dispatch("keydown", { key: "Escape" });
-  assert.equal(menu.hidden, true);
-  assert.ok(document.activeElement === arrow, "Escape returns focus to the filter arrow");
-  review.summary = { ...summary, filters: ["notice", members.at(-1)] };
+assert.equal(filterItem("copy").ariaLabel, "Copy 100");
+assert.equal(filterItem("mkdir").ariaLabel, "Create folder 0");
+assert.equal(filterTrigger.children[2].textContent, "0");
+assert.equal(filterTrigger.dataset.active, "false");
+assert.equal(filterPopup.children.length, 14);
+const beforeOpen = calls.length;
+filterTrigger.dispatch("click");
+assert.equal(filterPopup.hidden, false);
+assert.equal(calls.length, beforeOpen, "opening the menu never filters");
+for (const key of ["copy", "mkdir", "move", "recase", "update", "move_update", "trash", "delete",
+  "error", "unsupported", "blocked", "noop", "notice"]) {
+  const item = filterItem(key);
+  item.focus();
+  item.dispatch("click");
+  assert.deepEqual(calls.at(-1)[2].filters, new Set([...review.summary.filters, key]));
+  review.pending = "view";
   panel.render(task);
-  main.dispatch("click");
-  assert.deepEqual(calls.at(-1)[2].filters, new Set(["notice", ...members]));
-  review.summary = { ...summary, filters: ["notice", ...members] };
+  assert.equal(filterPopup.hidden, false, "pending renders retain the popup");
+  assertSameNode(document.activeElement, item, "pending retains category focus");
+  const beforePendingClick = calls.length;
+  item.dispatch("click");
+  assert.equal(calls.length, beforePendingClick, "pending selection cannot enqueue a request");
+  review.pending = null;
+  review.summary = { ...review.summary, filters: [...review.summary.filters, key] };
   panel.render(task);
-  main.dispatch("click");
-  assert.deepEqual(calls.at(-1)[2].filters, new Set(["notice"]));
-  findByDataset(menu, "filterDetail", "all").dispatch("click");
-  assert.deepEqual(calls.at(-1)[2].filters, new Set(["notice", ...members]));
+  assert.equal(filterPopup.hidden, false);
+  assert.equal(item.ariaChecked, "true");
+  assertSameNode(document.activeElement, item, "settlement retains category focus");
 }
-review.summary = summary;
-review.summary = {
-  ...review.summary,
-  filter_counts: { ...review.summary.filter_counts, trash: 1, notice: 0 },
-};
-panel.render(task);
-assert.equal(trashFilter.dataset.trashAlert, "false");
-assert.equal(noticeFilter.hidden, true);
-review.summary = summary;
-panel.render(task);
-noticeFilter.dispatch("click");
-assert.deepEqual(calls.at(-1), ["onViewChange", review,
-  { filters: new Set(["notice"]) }]);
-review.summary = { ...review.summary, filters: ["notice"] };
-panel.render(task);
-assert.equal(noticeFilter.ariaPressed, "true");
+assert.equal(filterTrigger.children[2].textContent, "13");
+assert.equal(filterTrigger.dataset.active, "true");
+filterItem("copy").dispatch("click");
+assert.deepEqual(calls.at(-1)[2].filters, new Set(review.summary.filters.filter((key) => key !== "copy")));
 allFilter.dispatch("click");
-assert.deepEqual(calls.at(-1), ["onViewChange", review,
-  { filters: new Set() }]);
-review.summary = { ...review.summary, filters: [] };
+assert.deepEqual(calls.at(-1)[2].filters, new Set());
+assert.equal(filterPopup.hidden, false, "All also keeps the menu open");
+review.summary = { ...summary, search_query: "literal search", filters: [] };
 panel.render(task);
-assert.equal(noticeFilter.ariaPressed, "false");
-assert.equal(allFilter.ariaPressed, "true");
+assert.equal(filterTrigger.children[2].textContent, "0", "search never counts as a category");
+filterPopup.dispatch("keydown", { key: "End" });
+assertSameNode(document.activeElement, noticeFilter);
+filterPopup.dispatch("keydown", { key: "Home" });
+assertSameNode(document.activeElement, allFilter);
+filterPopup.dispatch("keydown", { key: "ArrowUp" });
+assertSameNode(document.activeElement, noticeFilter);
+review.pending = "view";
+panel.render(task);
+assert.equal(filterTrigger.ariaDisabled, "true");
+assert.equal(filterTrigger.disabled, false, "pending trigger remains a valid Escape focus target");
+filterPopup.dispatch("keydown", { key: "Escape" });
+assert.equal(filterPopup.hidden, true);
+assertSameNode(document.activeElement, filterTrigger, "Escape returns trigger focus");
+review.pending = null;
+panel.render(task);
+filterTrigger.dispatch("keydown", { key: "ArrowUp" });
+assertSameNode(document.activeElement, noticeFilter);
+document.dispatch("pointerdown", { target: panel.element });
+assert.equal(filterPopup.hidden, true);
+filterTrigger.dispatch("click");
+filterTrigger.parentElement.dispatch("focusout", { relatedTarget: panel.element });
+assert.equal(filterPopup.hidden, true);
+filterTrigger.dispatch("click");
+document.dispatch("scroll", { target: filterPopup });
+assert.equal(filterPopup.hidden, false, "menu scrolling stays usable");
+document.dispatch("scroll", { target: panel.element });
+assert.equal(filterPopup.hidden, true, "outside scrolling dismisses");
+filterTrigger.dispatch("click");
+document.defaultView.dispatch("resize");
+assert.equal(filterPopup.hidden, true, "resizing dismisses the old geometry");
+filterTrigger.dispatch("click");
+document.defaultView.dispatch("blur");
+assert.equal(filterPopup.hidden, true);
+filterTrigger.dispatch("click");
+document.hidden = true;
+document.dispatch("visibilitychange");
+assert.equal(filterPopup.hidden, true);
+document.hidden = false;
+filterTrigger.dispatch("click");
+panel.dispose();
+assert.equal(filterPopup.hidden, true);
+assert.equal(document.listeners.get("pointerdown").length, 0);
+assert.equal(document.defaultView.listeners.get("blur").length, 0);
+panel.render(task);
+filterTrigger.dispatch("click");
+panel.render({ ...task, taskId: "another-task" });
+assert.equal(filterPopup.hidden, true, "context replacement closes the menu");
+panel.render(task);
+review.summary = summary;
+panel.render(task);
 assert.equal(
   calls.filter(([name]) => name === "onScopeSelect").length,
   1,

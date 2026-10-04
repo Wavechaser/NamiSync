@@ -1421,7 +1421,7 @@ def _valid_control_contract(value: object) -> bool:
             "work_width", "work_content_width", "work_height",
             "review_width", "review_height",
             "work_content_aligned",
-            "axes_wrapped", "long_trash_length",
+            "axes_wrapped", "long_trash_length", "filter_menu",
             "keyboard_scroll_before", "keyboard_scroll_after",
             "keyboard_capture_width", "keyboard_capture_height",
         }
@@ -1446,6 +1446,22 @@ def _valid_control_contract(value: object) -> bool:
         and type(minimum_window["keyboard_scroll_after"]) in {int, float}
         and minimum_window["keyboard_scroll_before"] >= 0
         and minimum_window["keyboard_scroll_after"] > minimum_window["keyboard_scroll_before"]
+        and type(minimum_window["filter_menu"]) is dict
+        and set(minimum_window["filter_menu"]) == {
+            "accent_pair", "neutral_pair", "active_fill", "inactive_fill", "popup_inside",
+            "first_reachable", "end_reachable", "rectangles", "internal_scroll_preserved", "resize_closed", "outside_scroll_closed",
+        }
+        and all(type(minimum_window["filter_menu"][key]) is bool for key in (
+            "accent_pair", "neutral_pair", "popup_inside", "first_reachable", "end_reachable",
+            "internal_scroll_preserved", "resize_closed", "outside_scroll_closed",
+        ))
+        and all(type(minimum_window["filter_menu"][key]) is str and len(minimum_window["filter_menu"][key]) <= 100
+                for key in ("active_fill", "inactive_fill"))
+        and type(minimum_window["filter_menu"]["rectangles"]) is list
+        and len(minimum_window["filter_menu"]["rectangles"]) == 5
+        and all(type(rect) is list and len(rect) == 4
+                and all(type(value) in {int, float} and math.isfinite(value) for value in rect)
+                for rect in minimum_window["filter_menu"]["rectangles"])
         and minimum_window["axes_wrapped"] is True
         and minimum_window["long_trash_length"] == 32767
         and minimum_window["work_content_aligned"] is True

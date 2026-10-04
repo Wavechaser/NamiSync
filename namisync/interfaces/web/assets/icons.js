@@ -25,6 +25,7 @@ const GLYPH_CLASSES = Object.freeze({
   "dismiss-circle": "nami-icon--dismiss-circle",
   "error-circle": "nami-icon--error-circle",
   "eye": "nami-icon--eye",
+  "filter": "nami-icon--filter",
   "folder": "nami-icon--folder",
   "folder-holder": "nami-icon--folder-holder",
   "folder-open": "nami-icon--folder-open",

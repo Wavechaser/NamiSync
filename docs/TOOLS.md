@@ -23,6 +23,10 @@ and independently check catalog/output correspondence, SVG safety, packaging
 and rendering without a second glyph/hash catalog. Temporary archives, fixtures
 and command evidence belong in ignored `build/`.
 
+The shared Plan/Inventory Filter trigger uses the catalog-selected `filter`
+Regular artwork at its native 16/20/24 px sizes; it does not upgrade the package
+pin or use a generated custom glyph.
+
 Edit `tools/icons.json` to select glyph names and declare missing-size fallbacks,
 then synchronize and review the generated diff:
 
