@@ -138,6 +138,12 @@ preserve original path spelling and a source/target discriminator for the path;
 they do not infer a warning's root from operation metadata. The read is one
 node-id lookup under the current task/view revision, without filesystem or ledger
 I/O. Execution detail remains separately guarded by its execution revision.
+The browser joins these relative facts to established summary roots only for
+detail display, preserving machine values and original spelling. Plan path
+origin selects its source or target root; previous, destination and execution
+path facts use target. Inventory detail and global scan-scope paths use its
+nullable published root, retaining relative text when unavailable. Joining adds
+no filesystem access, disclosure context or action authority.
 
 ## Views, windows, and selection
 

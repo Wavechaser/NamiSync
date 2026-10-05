@@ -318,7 +318,7 @@ class _ExecutionReviewPhase:
             "sessionId": self.execution["session_id"],
             "executionRevision": self.detail["execution_revision"],
             "rowName": self.window["row_display"],
-            "operationPath": self.detail["operation_path"],
+            "operationPath": str(self.target / self.detail["operation_path"]),
             "rowHighlighted": True, "detailVisible": True,
             "disclosureVisible": True, "disclosureExpanded": True,
             "operationFactPresent": True, "recordingFactPresent": True,

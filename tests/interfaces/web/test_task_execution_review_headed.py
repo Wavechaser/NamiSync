@@ -419,6 +419,8 @@ def test_execution_review_phase_accepts_latest_settled_receipt_and_stable_captur
     assert phase.release["completed"] < phase.window["admitted"]
     assert phase.capture_ready() is True
     identity = phase._expected_identity_locked()
+    assert phase.detail["operation_path"] == "one.txt"
+    assert identity["operationPath"] == str(phase.target / "one.txt")
     phase.set_identity("pre", identity)
     with pytest.raises(RuntimeError, match="identity"):
         phase.set_identity("post", {**identity, "operationPath": "other.txt"})

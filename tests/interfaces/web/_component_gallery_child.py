@@ -1852,10 +1852,13 @@ def _valid_inventory_panel(value: object) -> bool:
         and type(details) is dict and set(details) == {
             "initially_hidden", "expanded", "root_height", "column_height", "root_width", "column_width",
             "global_overflow", "item_overflow", "placeholder", "focus_restored",
+            "card_rectangles", "rem_size",
         }
         and all(type(details[key]) is bool for key in ("initially_hidden", "expanded", "placeholder", "focus_restored"))
         and all(type(details[key]) is str and len(details[key]) <= 32 for key in ("global_overflow", "item_overflow"))
         and _finite_number_matrix([[details[key] for key in ("root_height", "column_height", "root_width", "column_width")]], 1, 4)
+        and _finite_number_matrix(details["card_rectangles"], 2, 4)
+        and _finite_number_matrix([[details["rem_size"]]], 1, 1)
         and all(type(value[key]) is bool for key in ("refresh_on_status", "root_fits"))
         and _finite_number_matrix([[value[key] for key in ("viewport_height", "viewport_scroll_height", "row_height")]], 1, 3)
         and type(value["adopted_offset"]) is int and 0 <= value["adopted_offset"] <= 300

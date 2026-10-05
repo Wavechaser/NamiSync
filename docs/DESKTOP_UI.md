@@ -1421,7 +1421,7 @@ separate expand/collapse disclosure. Its 4 px corners and inner padding match
 the compact action badges. The target parent is the destination even for a directory move.
 The destination label is a basename with an ellipsis prefix when ancestors are
 omitted, bounded to 255 UTF-16 units; its tooltip and accessible name use the
-same compact label. Full relative destinations are available in the highlighted
+same compact label. Full filesystem destinations are available in the highlighted
 group's item details. Use purple background/text:
 light purple badge fill with dark purple text in Light, dark purple fill with light
 purple text in Dark, and system colors in forced colors. Activation reveals the
@@ -1443,8 +1443,12 @@ click the destination again; obsolete task/navigation responses remain silent.
 Window display and notice labels are bounded to 300 UTF-16 units. A separate
 read for the highlighted node supplies complete original-case relative paths,
 its source/target origin, previous path, move destination and full notice without
-filesystem access. Item details show these facts before execution; root prefixes
-are a separate presentation concern. Node, view, session, action, navigation and
+filesystem access. Item details join paths to the reviewed source or target root
+according to their supplied origin; previous paths and move destinations use the
+target root. Execution operation, automatic verification and the five supplied
+backup/mutation destination/prior/published/trash path fields also use that target
+root. The global trash location is already absolute. Joining is display-only,
+without filesystem probes or parsing diagnostic prose. Node, view, session, action, navigation and
 Close guards reject obsolete replies. Returning to a retained Plan reads its
 highlighted node again; retired paths never reappear from a cached detail.
 Reads never fan out across visible rows.
@@ -1754,11 +1758,13 @@ Details disclosure at the right. Progress follows the status line. The shared
 card is used by Plan, live and
 terminal execution; the same presentation remains available to a future Verify
 view without implementing that view here. Details starts collapsed. Its optional
-right column spans Setup, status and table, capped at 24rem and shrinking with
-the available width. Hiding it returns that width to all three central cards.
+right column spans Setup, status and table, capped at 20rem and 40% of the
+available width. Hiding it returns that width to all three central cards.
 Two stacked cards scroll independently: global plan/execution diagnostics,
 the supplied detailed status and action messages, nonzero canonical plan-action
 counts, issues, omissions and trash location above the highlighted item's facts.
+The item card receives three parts of the available card height to the global
+card's two, preserving independent scrolling.
 Action recovery and Gap guidance also remain visible in the central status card
 while Details is hidden. This
 uses the supplemental, simultaneous-interaction pattern in Microsoft's
@@ -1913,14 +1919,19 @@ state stops animation without inventing a completion percentage. Supplied known
 progress retains the task snapshot's value. Details starts hidden and opens a full-height optional right
 column using Plan's two independently scrolling cards: task facts above and item
 details below, with a selection placeholder. Hiding Details restores focus when
-it was inside that column. The existing 24rem/40% cap and minimum-size chain
+it was inside that column. The shared 20rem/40% cap, 2:3 global/item allocation and minimum-size chain
 preserve table scrolling. Acknowledgement and restore controls remain with the
 selected item's details.
 
 Activate a row with click or Enter to load its detail selection. Domain subjects load fresh exact
 ledger evidence with observed and attested facts, full digest, provenance,
 evidence observation time, verification freshness and invalidation. Synthetic
-folders show complete rollups; notices show their informational warning only.
+folders show complete rollups and their path; notices show their informational warning only.
+Ledger, synthetic-folder and non-null notice paths use the published summary's
+root for full filesystem display. Missing roots retain relative text, and a null
+notice path remains unavailable. Global detailed scan scope also uses that root;
+the central status scope, item titles and table text retain their existing form.
+These joins use existing facts without new reads, path probes or detail contracts.
 Task navigation, view changes and Close retire details before late replies can
 restore them. A failed read normally offers Reload inventory view, which reads
 current publication without starting another scan. If a refused Refresh has no

@@ -3,7 +3,7 @@ import { taskStatusDigest } from "./task_status.js";
 import { createFilterMenu } from "./filter_menu.js";
 import { createIcon } from "./icons.js";
 import { createTree } from "./tree.js";
-import { formatByteCount, formatLocalDateTime, renderFilesystemText, renderText } from "./render.js";
+import { formatByteCount, formatFilesystemPath, formatLocalDateTime, renderFilesystemText, renderText } from "./render.js";
 
 const FACETS = Object.freeze([
   ["present", "Present"], ["unverified", "Unverified"], ["verified", "Verified"],
@@ -339,7 +339,7 @@ export function createInventoryReviewPanel(callbacks) {
     const row = selected.row;
     if (row.warning !== null) {
       appendDetail("Notice", row.warning.code);
-      appendDetail("Path", row.warning.path, true);
+      appendDetail("Path", formatFilesystemPath(current.summary.root_path, row.warning.path), true);
       appendDetail("Details", row.warning.detail);
       return;
     }
@@ -349,10 +349,13 @@ export function createInventoryReviewPanel(callbacks) {
         if (key !== "notice") appendDetail(`Folder ${text.toLowerCase()}`, String(row.rollup[key]));
       }
     }
-    if (row.row_id === null) return;
+    if (row.row_id === null) {
+      if (row.is_container) appendDetail("Path", formatFilesystemPath(current.summary.root_path, row.display), true);
+      return;
+    }
     if (selected.state !== "current") return;
     const value = selected.response.detail;
-    appendDetail("Path", value.row.path, true);
+    appendDetail("Path", formatFilesystemPath(current.summary.root_path, value.row.path), true);
     appendDetail("Presence", label(value.row.presence));
     appendDetail("Verification state", label(value.row.verification_state));
     subjectDetails("Observed", value.observed);
@@ -437,6 +440,10 @@ export function createInventoryReviewPanel(callbacks) {
       : scanScope?.kind === "folder" ? `Folder: ${scanScope.path} (including subfolders)` : "Selected items";
     const publication = available
       ? `${review.summary.request_id === value.requestId ? "Displayed scan" : "Previous published scan"}: ${scopeLabel}` : "";
+    const detailScopeLabel = scanScope?.kind === "item" ? `Item: ${formatFilesystemPath(review.summary.root_path, scanScope.path)}`
+      : scanScope?.kind === "folder" ? `Folder: ${formatFilesystemPath(review.summary.root_path, scanScope.path)} (including subfolders)` : scopeLabel;
+    const detailPublication = available
+      ? `${review.summary.request_id === value.requestId ? "Displayed scan" : "Previous published scan"}: ${detailScopeLabel}` : "";
     const scanCounts = available
       ? `${review.summary.observed_count} observed · ${review.summary.missing_count} missing · ${review.summary.warning_count} notices from this scan.${scanScope.kind === "location" ? "" : " Other inventory items were not rescanned."}` : "";
     const guidance = value.inventoryError ?? review?.message
@@ -447,7 +454,7 @@ export function createInventoryReviewPanel(callbacks) {
     ].filter(Boolean))].join(" · "));
     renderText(globalScanState, `Current scan: ${value.sessionState === "active" ? "in progress" : value.sessionState}.`);
     renderFilesystemText(globalScanFacts, available
-      ? `${publication} · ${review.summary.scan_complete ? "complete" : "incomplete"} · ${scanCounts}` : "");
+      ? `${detailPublication} · ${review.summary.scan_complete ? "complete" : "incomplete"} · ${scanCounts}` : "");
     if (!available) {
       filterMenu.render([], {}, true);
       refreshSelected.disabled = true;

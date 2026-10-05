@@ -26,7 +26,18 @@ const modulePath = process.argv[2];
 assert.ok(modulePath, "render module path is required");
 const source = await readFile(modulePath, "utf8");
 const moduleUrl = `data:text/javascript;base64,${Buffer.from(source).toString("base64")}`;
-const { renderFilesystemText, renderText } = await import(moduleUrl);
+const { formatFilesystemPath, renderFilesystemText, renderText } = await import(moduleUrl);
+
+for (const [root, path, expected] of [
+  ["D:\\Target", "Case\\File.txt", "D:\\Target\\Case\\File.txt"],
+  ["D:\\", "File.txt", "D:\\File.txt"],
+  ["D:\\Target\\", "File.txt", "D:\\Target\\File.txt"],
+  ["\\\\server\\share", "Case\\File.txt", "\\\\server\\share\\Case\\File.txt"],
+  ["\\\\?\\D:\\Target", "Case\\File.txt", "\\\\?\\D:\\Target\\Case\\File.txt"],
+  ["D:\\Target", "", "D:\\Target"],
+  [null, "Case\\File.txt", "Case\\File.txt"],
+  ["D:\\Target", null, null],
+]) assert.equal(formatFilesystemPath(root, path), expected);
 
 let coercions = 0;
 const coerciveText = {

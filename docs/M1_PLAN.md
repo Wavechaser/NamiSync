@@ -25,8 +25,8 @@ its implementation against its integrated predecessor.
 | GUI-B1 | Restore bounded plan-window labels, validate presentation enums/relationships, and migrate detail disclosure and all direct consumers. Full paths belong to individual details; Rename keeps its prior basename, Move uses a generic origin note, and previous-location destinations use compact labels. Preserve projection classification, node-id reveal, selection, revisions and the existing response wall. | Complete in `53e1abb`: 5,913 ordinary passes/four privilege skips, 12 import contracts and 12 installed gallery/shell/transport passes (`b1-*-02`). Independent review includes the corrected row-kind validator and final input binding. |
 | GUI-B2 | Align Verify table with Plan/gallery row geometry, zebra, disabled checkbox affordances, Notes, concise Presence labels, hierarchical basenames, typography and semantic tones. Preserve inventory evidence, scope, sorting, windowing and recovery. | **Deferred by the user for separate review** after recurrence analysis below. No B2 product/test changes. Functional checkboxes remain M1-10; proposed disabled visuals are also deferred with B2. |
 | GUI-B3 | Match Verify Setup height and reorganize status into summary plus one stable detailed line, with shared progress presentation and existing Refresh/recovery actions. Retain published/current scan distinctions without duplicate routine prose. | Complete in `2828b8b`: 41 focused, 1,943 interfaces and seven installed gallery/shell/Inventory checks (`b3-*-01`); independent review and source binding. |
-| GUI-B4 | Use local `yyyy-MM-DD HH:mm` display for UI timestamps, including Verify mtime, terminal completion and both detail panes; retain raw machine values where explicitly diagnostic. | Complete from `2828b8b`: 13 focused, 1,944 interfaces and seven installed gallery/Inventory/execution checks (`b4-*-01`); independent review and input binding. Commit identity in batch evidence. |
-| GUI-B5 | Cap details at 20rem, allocate more height to item details, and show full paths joined to the correct known root without filesystem probes. | After B1/B4; root/action mapping tests and installed responsive pane/scroll checks. Pending. |
+| GUI-B4 | Use local `yyyy-MM-DD HH:mm` display for UI timestamps, including Verify mtime, terminal completion and both detail panes; retain raw machine values where explicitly diagnostic. | Complete in `0f87f6a`: 13 focused, 1,944 interfaces and seven installed gallery/Inventory/execution checks (`b4-*-01`); independent review and input binding. |
+| GUI-B5 | Cap details at 20rem, allocate more height to item details, and show full paths joined to the correct known root without filesystem probes. | Complete from `0f87f6a`: six focused, 1,944 interfaces and all nine installed obligations across `b5-native-01` (eight passes) and unchanged-input larger-shell rerun `b5-native-larger-02`. Initial readiness timeout retained; independent review/input binding. Commit identity in batch evidence. |
 | GUI-B6 | Row context menus reuse existing menu styling and existing Show details, Select/Deselect where allowed, and folder Expand/Collapse actions. Verify additionally offers Refresh selected and Acknowledge missing for missing rows, through existing node-scoped commands. | After B5 against the unchanged Inventory contract; keyboard/pointer, dismissal, pending/retired ownership and informational-row restrictions; installed gesture witness. Inventory has no Select/Deselect action. No clipboard or new filesystem actions. Pending. |
 
 All units retain safe filesystem-text rendering, server-owned action scope,
@@ -175,6 +175,24 @@ embedded-prose parsing or deferred B2 context contract. Include execution native
 display-identity assertions and inaccurate absolute-path fixtures in the finite
 migration, retaining raw machine paths. Gate: direct root/path/hostile-text cases,
 interfaces, gallery/pane ratios, both shell sizes, Inventory and real execution.
+
+B6's read-only design at `0f87f6a` uses one `row_menu.js` controller and existing
+menu classes, with Plan/Inventory action descriptors, a tree-owned context callback
+for its active keyboard row, and a narrow Inventory app admission migration.
+The latter accepts the exact current-window domain row or existing owned detail
+row while retaining all task/view/publication/pending/Close guards. Opening a menu
+performs no detail read or selection effect; actions capture/recheck row and
+window ownership. Inventory context acknowledgement is limited to an eligible
+row whose own presence is missing; its existing toolbar folder-rollup actions
+remain unchanged. No selection checkbox, Restore context item or new command.
+Direct Plan/Inventory/app/tree/shell probes, asset/import catalogs and installed
+gallery/shell/Inventory consumers migrate together. A real Inventory right-click
+and keyboard journey must distinguish the clicked missing node from previously
+selected folder details, retain original-command counts and restore visibility
+through the existing action. Final gate includes interfaces, affected installed
+checks, ordinary/import batch integration and independent review. Refresh these
+seams after B5 before implementation; archived wrong-target/blank-space menu
+findings guide tests without importing obsolete architecture.
 
 ## GUI alignment batch — 2026-10-05
 

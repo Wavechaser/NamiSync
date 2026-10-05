@@ -2,8 +2,8 @@
 
 2026-10-05 on `milestone1`, base `583f14d`. The user ratified GUI-B1–B6 in
 M1_PLAN, then explicitly deferred all of B2 for separate review. B1 is committed
-as `53e1abb`; B3 is committed as `2828b8b`. B4 timestamp formatting passed its
-final gates and is ready for atomic commit; B5–B6 remain authorized. No B2 work is included.
+as `53e1abb`, B3 as `2828b8b`, and B4 as `0f87f6a`. B5 details layout/full-path
+display passed final gates and is ready for atomic commit; B6 remains authorized. No B2 work is included.
 
 ## Delivered B1
 
@@ -62,6 +62,22 @@ review found no actionable defect and bound frozen inputs. Preliminary failed re
 temporary-root denial and corrected test-only window-identity ordering; no
 production cache behavior changed.
 
+## B5 delivery
+
+Details uses a 20rem/40% cap and 2:3 global/item height allocation. A pure display
+join uses the existing known root for planned/execution/Inventory path facts,
+preserving source/target origin, null facts, raw receipts and absolute global
+trash. Inventory status, table and titles retain their existing form. Six focused
+checks passed, including actual composed execution and capture identity. Gallery
+producer/checker/fixtures now enforce the new cap/ratio; a schema sample color
+migration failure is retained as `b5-focused-02`, followed by passing `-03`.
+`b5-interfaces-01` passed 1,944 tests. Eight installed cases passed in
+`b5-native-01`; the larger shell stopped at initial readiness before pane checks.
+Its unchanged-input focused rerun `b5-native-larger-02` passed, completing all
+nine obligations across retained runs. No product/driver/assertion change was
+made for the timeout. Independent review found no actionable defect; raw reports,
+input binding and the failed receipt remain in evidence.
+
 ## Deferred B2 and next work
 
 Read-only Inventory review reproduced the same full-path replication mechanism:
@@ -74,8 +90,7 @@ population and raw reproducer are in BUGS, M1_PLAN and `b2-design-inventory-enve
 The earlier disabled-checkbox proposal is deferred with B2; functionality remains
 M1-10. Execution-to-Verify navigation/A6 remains deferred too.
 
-Current B4: shared local date/time display, preserving machine values and elapsed
-calculations. Next B5: 20rem details pane, 3:2 item/global height and
+Current B5: 20rem details pane, 3:2 item/global height and
 root-correct full paths; B6 row context menus. Menus use existing actions only:
 Show details, Plan Select/Deselect where allowed, folder Expand/Collapse, and
 Verify Refresh selected/Acknowledge missing. Inventory keeps its existing single

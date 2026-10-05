@@ -241,6 +241,12 @@ explicit, reviewable and regression-backed.
   values, unavailable states, nanosecond conversion order and elapsed durations.
   Pass 13 focused, 1,944 interfaces and seven installed presentation checks,
   including local-time boundaries and representative gallery dates.
+- Narrow Details to 20rem, give item details three-fifths of the card height,
+  and retain separate scrolling. Join detail paths to their established source,
+  target or Inventory root without filesystem probes; preserve raw receipts,
+  nullable facts and the existing compact status presentation.
+  Pass six focused, 1,944 interfaces and nine installed obligations across
+  retained runs, including an unchanged-input retry of an initial readiness timeout.
 
 #### Repair bridge diagnostic composition receipts (2026-10-04)
 

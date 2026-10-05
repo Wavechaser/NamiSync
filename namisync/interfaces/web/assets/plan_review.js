@@ -2,7 +2,7 @@ import { createTableColumns } from "./table_columns.js";
 import { renderPlanRow } from "./plan.js";
 import { createFilterMenu } from "./filter_menu.js";
 import { createIcon } from "./icons.js";
-import { formatByteCount, formatLocalDateTime, renderFilesystemText, renderText } from "./render.js";
+import { formatByteCount, formatFilesystemPath, formatLocalDateTime, renderFilesystemText, renderText } from "./render.js";
 import {
   isCapacityOnlyExecution,
   projectActiveOperationProgress,
@@ -782,9 +782,10 @@ export function createPlanReviewPanel(callbacks) {
         : planned.state === "error" ? planned.message : "";
       if (planned.state === "current") {
         const paths = planned.response.detail;
-        if (paths.path !== null) appendDetailFact("Planned path", paths.path || "root", true);
-        if (paths.prior_path !== null) appendDetailFact("Previous path", paths.prior_path || "root", true);
-        if (paths.move_destination_path !== null) appendDetailFact("Move destination", paths.move_destination_path || "root", true);
+        const root = paths.path_origin === "source" ? current.summary.source_path : current.summary.target_path;
+        if (paths.path !== null) appendDetailFact("Planned path", formatFilesystemPath(root, paths.path), true);
+        if (paths.prior_path !== null) appendDetailFact("Previous path", formatFilesystemPath(current.summary.target_path, paths.prior_path), true);
+        if (paths.move_destination_path !== null) appendDetailFact("Move destination", formatFilesystemPath(current.summary.target_path, paths.move_destination_path), true);
         if (paths.notice !== null) appendDetailFact("Notice", paths.notice);
       }
     }
@@ -816,18 +817,20 @@ export function createPlanReviewPanel(callbacks) {
     const operation = response.operation;
     if (operation !== null) {
       appendDetailFact("Operation", `${executionLabel(operation.result)} · ${executionLabel(operation.kind)}${operation.reason === null ? "" : ` · ${executionLabel(operation.reason)}`}`);
-      appendDetailFact("Path", operation.path, true);
+      appendDetailFact("Path", formatFilesystemPath(current.summary.target_path, operation.path), true);
       appendDetailFact("Operation recording", `${executionLabel(operation.recording)}${operation.recording_reason === null ? "" : ` · ${executionLabel(operation.recording_reason)}`}${operation.recording_detail === null ? "" : ` · ${operation.recording_detail}`}`);
       for (const [key, value] of Object.entries(operation.detail)) {
         const text = Array.isArray(value) ? value.join(", ") : String(value);
-        appendDetailFact(executionLabel(key), text, key.endsWith("_path") || key === "mutation_destination");
+        const filesystem = key.endsWith("_path") || key === "mutation_destination";
+        const targetPath = ["backup_path", "mutation_destination", "prior_path", "published_path", "trash_path"].includes(key);
+        appendDetailFact(executionLabel(key), targetPath ? formatFilesystemPath(current.summary.target_path, text) : text, filesystem);
       }
       if (operation.detail_omitted_count > 0) appendDetailFact("Operation details omitted", String(operation.detail_omitted_count));
     } else appendDetailFact("Operation", "Unknown");
     const automatic = response.automatic_verification;
     if (automatic !== null) {
       appendDetailFact("Automatic verification", `${executionLabel(automatic.result)}${automatic.reason === null ? "" : ` · ${executionLabel(automatic.reason)}`}`);
-      appendDetailFact("Verification path", automatic.path, true);
+      appendDetailFact("Verification path", formatFilesystemPath(current.summary.target_path, automatic.path), true);
       if (automatic.detail !== null) appendDetailFact("Verification detail", automatic.detail);
       appendDetailFact("Verification recording", executionLabel(automatic.recording));
       if (automatic.detail_omitted_count > 0) appendDetailFact("Verification details omitted", String(automatic.detail_omitted_count));

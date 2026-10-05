@@ -1810,9 +1810,9 @@ def test_component_gallery_report_parser_is_exact_and_nested(
                     "status_details_same_row": True,
                     "completion_local": True,
                     "details_rectangles": [[0, 0, 600, 50], [0, 60, 600, 140],
-                        [0, 150, 600, block_size], [612, 0, 996, block_size],
-                        [612, 0, 996, block_size / 2 - 6],
-                        [612, block_size / 2 + 6, 996, block_size]],
+                        [0, 150, 600, block_size], [612, 0, 932, block_size],
+                        [612, 0, 932, (block_size - 12) * 0.4],
+                        [612, (block_size - 12) * 0.4 + 12, 932, block_size]],
                     "central_widths": [[996, 996, 996], [600, 600, 600]],
                     "card_scroll_positions": [[0, 0, 9600, 0], [120, 0, 9600, 0], [120, 120, 9600, 0]],
                     "rem_size": 16,
@@ -2147,6 +2147,29 @@ def test_component_gallery_report_parser_is_exact_and_nested(
     with pytest.raises(AssertionError):
         _assert_diagnostic_layout(report["control_contract"]["diagnostic_layout"])
     detail_layout["details_rectangles"][3][1] = 0
+    detail_layout["details_rectangles"][3][2] += 20
+    with pytest.raises(AssertionError):
+        _assert_diagnostic_layout(report["control_contract"]["diagnostic_layout"])
+    detail_layout["details_rectangles"][3][2] -= 20
+    detail_layout["details_rectangles"][5][1] += 8
+    with pytest.raises(AssertionError):
+        _assert_diagnostic_layout(report["control_contract"]["diagnostic_layout"])
+    detail_layout["details_rectangles"][5][1] -= 8
+    inventory_panel = report["control_contract"]["inventory_panel"]
+    integrity_list = report["control_contract"]["integrity_list"]
+    integrity_rows = {row["case"]: row for row in integrity_list["rows"]}
+    for row in inventory_panel["labels"]:
+        row["foreground"] = integrity_rows[row["case"]]["primary_foreground"]
+        row["background"] = integrity_rows[row["case"]]["primary_background"]
+    _assert_inventory_panel(inventory_panel, integrity_list, reduced=False)
+    inventory_panel["details"]["column_width"] += 20
+    with pytest.raises(AssertionError):
+        _assert_inventory_panel(inventory_panel, integrity_list, reduced=False)
+    inventory_panel["details"]["column_width"] -= 20
+    inventory_panel["details"]["card_rectangles"][1][1] += 8
+    with pytest.raises(AssertionError):
+        _assert_inventory_panel(inventory_panel, integrity_list, reduced=False)
+    inventory_panel["details"]["card_rectangles"][1][1] -= 8
     detail_layout["global_content_rows"][0] = 20
     assert component_gallery_child._valid_complete_report(report) is True
     with pytest.raises(AssertionError):
@@ -4013,13 +4036,16 @@ def _assert_diagnostic_layout(diagnostic_layout: list[dict[str, object]]) -> Non
             header, summary, table, pane, global_card, item_card = case["details_rectangles"]
             assert pane[1] == pytest.approx(header[1], abs=1)
             assert pane[3] == pytest.approx(table[3], abs=1)
-            assert 0 < pane[2] - pane[0] <= 24 * case["rem_size"] + 1
+            assert 0 < pane[2] - pane[0] <= 20 * case["rem_size"] + 1
             assert pane[0] > max(header[2], summary[2], table[2])
             assert global_card[1] == pytest.approx(pane[1], abs=1)
             assert item_card[3] == pytest.approx(pane[3], abs=1)
             assert global_card[3] < item_card[1]
             assert global_card[0] == pytest.approx(item_card[0], abs=1)
             assert global_card[2] == pytest.approx(item_card[2], abs=1)
+            assert item_card[3] - item_card[1] == pytest.approx(
+                (global_card[3] - global_card[1]) * 1.5, abs=1,
+            )
             if case["populated"]:
                 issue_height, issue_scroll, trash_height, trash_scroll, issue_end, trash_start = case["global_content_rows"]
                 assert issue_height > 0 and issue_height >= issue_scroll - 1
@@ -4056,7 +4082,8 @@ def _inventory_panel_sample() -> dict[str, object]:
                    "track_height": 8.0, "terminal_value": "0%"},
         "scroll_owners": {"outer_x": "auto", "body_x": "hidden", "body_y": "auto"},
         "details": {"initially_hidden": True, "expanded": True, "root_height": 640.0, "column_height": 640.0,
-                    "root_width": 1200.0, "column_width": 384.0, "global_overflow": "auto", "item_overflow": "auto",
+                    "root_width": 1200.0, "column_width": 320.0, "global_overflow": "auto", "item_overflow": "auto",
+                    "card_rectangles": [[880.0, 0.0, 1200.0, 251.2], [880.0, 263.2, 1200.0, 640.0]], "rem_size": 16.0,
                     "placeholder": True, "focus_restored": True},
         "refresh_on_status": True, "root_fits": True, "viewport_height": 300.0,
         "viewport_scroll_height": 8400.0, "adopted_offset": 218, "window_requests": [218], "row_height": 28.0,
@@ -4113,7 +4140,12 @@ def _assert_inventory_panel(evidence: dict[str, object], integrity: dict[str, ob
     for key in ("initially_hidden", "expanded", "placeholder", "focus_restored"):
         assert details[key] is True
     assert details["column_height"] == pytest.approx(details["root_height"], abs=1)
-    assert 0 < details["column_width"] <= min(384, details["root_width"] * 0.4) + 1
+    assert 0 < details["column_width"] <= min(20 * details["rem_size"], details["root_width"] * 0.4) + 1
+    global_card, item_card = details["card_rectangles"]
+    assert global_card[3] < item_card[1]
+    assert item_card[3] - item_card[1] == pytest.approx(
+        (global_card[3] - global_card[1]) * 1.5, abs=1,
+    )
     assert details["global_overflow"] == details["item_overflow"] == "auto"
     assert evidence["refresh_on_status"] is True and evidence["root_fits"] is True
     assert 28 <= evidence["viewport_height"] < evidence["viewport_scroll_height"]

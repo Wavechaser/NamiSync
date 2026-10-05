@@ -16,6 +16,12 @@ export function formatLocalDateTime(value) {
   return `${String(date.getFullYear()).padStart(4, "0")}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
+export function formatFilesystemPath(root, relativePath) {
+  if (relativePath === null || root === null || root === undefined || root === "") return relativePath;
+  if (relativePath === "") return root;
+  return `${root}${/[\\/]$/.test(root) ? "" : "\\"}${relativePath}`;
+}
+
 const BYTE_UNITS = Object.freeze(["B", "KiB", "MiB", "GiB", "TiB", "PiB", "EiB"]);
 
 function byteCountInteger(value) {

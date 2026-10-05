@@ -1005,6 +1005,12 @@ function findText(root, text) {
   return walk(root).some((item) => item.textContent.includes(text));
 }
 
+function detailFact(root, label) {
+  const body = findByClass(root, "nami-plan-review__detail-body");
+  const index = body.children.findIndex((item) => item.tagName === "DT" && item.textContent === label);
+  return index === -1 ? null : body.children[index + 1].textContent;
+}
+
 const terminologyPanel = createPlanReviewPanel(Object.fromEntries([
   "onViewChange", "onWindow", "onSelect", "onScopeSelect", "onExecute", "onControl",
   "onPlanAgain", "onHighlight", "onHighlightedSelect", "onExecutionDetail", "onFollowOverride", "onNavigateCurrent", "onRevealMove",
@@ -1138,11 +1144,29 @@ const executionReviewState = {
 };
 executionPanel.render({ ...task, review: { ...executionReviewState,
   window: { ...executionReviewState.window, execution: { ...executionSummary, session_id: null } } } });
-assert.ok(findText(executionPanel.element, `Case\\${hostile.replace("\u202e", "⟦U+202E⟧")}`),
+assert.ok(findText(executionPanel.element, `D:\\target\\Case\\${hostile.replace("\u202e", "⟦U+202E⟧")}`),
   "full planned paths remain safely visible before execution");
-assert.ok(findText(executionPanel.element, "Previous\\OriginalCase.txt"),
+assert.ok(findText(executionPanel.element, "D:\\target\\Previous\\OriginalCase.txt"),
   "planned details retain the complete original-case previous path");
 assert.ok(findText(executionPanel.element, hostile), "full diagnostic text remains inert before execution");
+const targetPlannedDetail = executionReviewState.planDetail;
+for (const [origin, path, expected] of [
+  ["source", "SourceCase\\Notice.txt", `C:\\${hostile.replace("\u202e", "⟦U+202E⟧")}\\SourceCase\\Notice.txt`],
+  ["target", "TargetCase\\Notice.txt", "D:\\target\\TargetCase\\Notice.txt"],
+  ["source", "", `C:\\${hostile.replace("\u202e", "⟦U+202E⟧")}`],
+  ["target", "", "D:\\target"],
+]) {
+  executionReviewState.planDetail = { ...targetPlannedDetail, response: { detail: {
+    path, path_origin: origin, prior_path: "Previous\\OriginalCase.txt",
+    move_destination_path: "", notice: null,
+  } } };
+  executionPanel.render({ ...task, review: { ...executionReviewState,
+    window: { ...executionReviewState.window, execution: { ...executionSummary, session_id: null } } } });
+  assert.equal(detailFact(executionPanel.element, "Planned path"), expected, `${origin} planned path uses its established root`);
+  assert.equal(detailFact(executionPanel.element, "Previous path"), "D:\\target\\Previous\\OriginalCase.txt");
+  assert.equal(detailFact(executionPanel.element, "Move destination"), "D:\\target", "root destination uses the target root");
+}
+executionReviewState.planDetail = targetPlannedDetail;
 const executionTask = { ...task, review: executionReviewState, executionStarted: true,
   sessionState: "failed" };
 const liveTerminalReview = { ...executionReviewState, window: {
@@ -1240,14 +1264,17 @@ executionReviewState.executionDetail = {
     disposition: "current", execution_revision: 9, operation_id: operationId,
     operation: {
       item_type: "operation", phase: "execute", item_id: operationId, kind: "copy",
-      path: `C:\\${hostile}`, result: "succeeded", reason: null,
-      detail: { message: hostile, continued: false }, recording: "degraded",
+      path: `OperationCase\\${hostile}`, result: "succeeded", reason: null,
+      detail: { message: hostile, continued: false,
+        backup_path: ".synctrash\\backup.txt", mutation_destination: "Moved\\Destination.txt",
+        prior_path: "Previous\\Original.txt", published_path: "Published\\Current.txt",
+        trash_path: ".synctrash\\removed.txt" }, recording: "degraded",
       recording_reason: "record-write-failed", recording_detail: hostile,
       detail_omitted_count: 1,
     },
     automatic_verification: {
       item_type: "integrity", phase: "verify", item_id: operationId,
-      row_id: null, location_id: null, kind: "integrity", path: `D:\\${hostile}`,
+      row_id: null, location_id: null, kind: "integrity", path: `VerificationCase\\${hostile}`,
       result: "mismatched", reason: "hash-mismatch", detail: hostile,
       read_strategy: "windows-unbuffered", recording: "ok",
       record_disposition: "noop", detail_omitted_count: 1,
@@ -1257,6 +1284,13 @@ executionReviewState.executionDetail = {
 };
 executionPanel.render(executionTask);
 const detailBody = findByClass(executionPanel.element, "nami-plan-review__detail-body");
+for (const [label, path] of [["Path", `OperationCase\\${hostile}`], ["Verification path", `VerificationCase\\${hostile}`],
+  ["Backup path", ".synctrash\\backup.txt"], ["Mutation destination", "Moved\\Destination.txt"],
+  ["Prior path", "Previous\\Original.txt"], ["Published path", "Published\\Current.txt"],
+  ["Trash path", ".synctrash\\removed.txt"]]) {
+  assert.equal(detailFact(executionPanel.element, label), `D:\\target\\${path.replace("\u202e", "⟦U+202E⟧")}`,
+    "execution path facts belong to the reviewed target");
+}
 assert.ok(findText(detailBody, hostile), "hostile detail remains literal text");
 assert.equal(walk(detailBody).some((item) => item.tagName === "IMG"), false);
 const retainedPlanDetail = executionReviewState.planDetail;

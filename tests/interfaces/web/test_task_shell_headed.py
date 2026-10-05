@@ -302,7 +302,7 @@ def test_m1_4_installed_task_shell_navigation_closure_and_recovery(
     assert pane[1] == pytest.approx(header[1], abs=1)
     assert pane[3] == pytest.approx(table[3], abs=1)
     assert pane[0] > max(header[2], summary[2], table[2])
-    assert 0 < pane[2] - pane[0] <= 24 * details["rem"] + 1
+    assert 0 < pane[2] - pane[0] <= 20 * details["rem"] + 1
     move_pill = plan_review["movePill"]
     geometry = move_pill["geometry"]
     tolerance = 1 / geometry["devicePixelRatio"]

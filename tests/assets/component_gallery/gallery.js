@@ -1449,7 +1449,7 @@ window.addEventListener("unhandledrejection", (event) => {
       disposition: "current", execution_revision: 1,
       operation_id: "5".repeat(32),
       operation: {
-        kind: "copy", path: "C:\\source\\long-diagnostic.bin",
+        kind: "copy", path: "long-diagnostic.bin",
         result: "failed", reason: "io-error",
         detail: { diagnostic: longDiagnostic },
         recording: "degraded", recording_detail: longDiagnostic,
@@ -2033,6 +2033,8 @@ window.addEventListener("unhandledrejection", (event) => {
     const detailEvidence = { initially_hidden: initiallyHidden, expanded: !diagnostics.hidden,
       root_height: rootBounds.height, column_height: detailsBounds.height,
       root_width: rootBounds.width, column_width: detailsBounds.width,
+      card_rectangles: [global, item].map(rectangle),
+      rem_size: parseFloat(getComputedStyle(document.documentElement).fontSize),
       global_overflow: getComputedStyle(global).overflowY, item_overflow: getComputedStyle(item).overflowY,
       placeholder: item.textContent.includes("Select an item to see its details.") };
     item.focus();
