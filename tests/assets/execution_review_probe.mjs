@@ -6,11 +6,8 @@ function moduleUrl(source) {
   return `data:text/javascript;base64,${Buffer.from(source).toString("base64")}`;
 }
 
-const renderUrl = moduleUrl(`
-  export const formatByteCount = (value) => String(value);
-  export const renderFilesystemText = (element, value) => { element.textContent = value; };
-  export const renderText = (element, value) => { element.textContent = value; };
-`);
+process.env.TZ = "UTC";
+const renderUrl = moduleUrl(await readFile(join(dirname(process.argv[2]), "render.js"), "utf8"));
 const planUrl = moduleUrl("export const renderPlanRow = () => {};");
 const iconsUrl = moduleUrl("export const createIcon = () => ({});");
 const taskStatusSource = (await readFile(process.argv[3], "utf8"))
@@ -117,24 +114,32 @@ const completedAt = "2026-09-22T02:01:05+00:00";
 const startedAt = "2026-09-22T02:00:00+00:00";
 assert.equal(terminalStatusLine(summary(result(), {
   started_at: startedAt, ended_at: completedAt,
-})), `Execution OK · Completed ${new Date(completedAt).toLocaleString()} · 1m 5s elapsed`);
+})), "Execution OK · Completed 2026-09-22 02:01 · 1m 5s elapsed");
 assert.equal(terminalStatusLine(summary(result({ recording: "degraded" }), {
   started_at: null, ended_at: completedAt,
-})), `Recording degraded · Completed ${new Date(completedAt).toLocaleString()}`,
+})), "Recording degraded · Completed 2026-09-22 02:01",
 "unrun/null-start completion omits elapsed");
 assert.equal(terminalStatusLine(summary(result({ headline: "failed" }), {
   started_at: completedAt, ended_at: startedAt,
-})), `Execution failed · Completed ${new Date(startedAt).toLocaleString()}`,
+})), "Execution failed · Completed 2026-09-22 02:00",
 "negative elapsed is unavailable");
 assert.equal(terminalStatusLine(summary(result({ headline: "failed" }), {
   started_at: null, ended_at: null,
 })), "Execution failed", "missing timestamps do not fabricate completion");
 assert.equal(terminalStatusLine(summary(null, {
   started_at: startedAt, ended_at: completedAt,
-}), "failed"), `Execution failed · Completed ${new Date(completedAt).toLocaleString()} · 1m 5s elapsed`,
+}), "failed"), "Execution failed · Completed 2026-09-22 02:01 · 1m 5s elapsed",
 "terminal state and matching record time remain truthful without an execution result");
 assert.equal(terminalStatusLine(summary(null), null), null,
 "a live result-free session does not acquire a terminal outcome");
+assert.equal(terminalStatusLine(summary(result(), {
+  started_at: "invalid", ended_at: "invalid",
+})), "Execution OK", "invalid dates do not fabricate completion or elapsed time");
+process.env.TZ = "Asia/Shanghai";
+assert.equal(terminalStatusLine(summary(result(), {
+  started_at: "2026-12-31T23:59:30+00:00", ended_at: "2027-01-01T00:00:35+00:00",
+})), "Execution OK · Completed 2027-01-01 08:00 · 1m 5s elapsed");
+process.env.TZ = "UTC";
 
 assert.deepEqual(projectExecutionSummary(summary(null)), {
   title: "Execution in progress", status: "executing",
@@ -362,6 +367,7 @@ class RowElement {
 }
 const rowDocument = { createElement: (tag) => new RowElement(tag, rowDocument) };
 globalThis.HTMLElement = RowElement;
+globalThis.Element = RowElement;
 const rowAssets = dirname(process.argv[2]);
 const fileRowUrl = moduleUrl((await readFile(join(rowAssets, "file_row.js"), "utf8"))
   .replace("./render.js", renderUrl));

@@ -1,4 +1,4 @@
-import { formatByteCount } from "./render.js";
+import { formatByteCount, formatLocalDateTime } from "./render.js";
 
 function pathValue(value) {
   return typeof value === "string" && value.trim() !== "" ? value : "-";
@@ -116,8 +116,8 @@ export function terminalStatusLine(execution, sessionState = null) {
             : result.headline === "success" || result.headline === "all-noop" ? "Execution OK"
               : "Execution needs review";
   const ended = Date.parse(execution.ended_at);
-  const completed = Number.isFinite(ended)
-    ? `Completed ${new Date(ended).toLocaleString()}` : null;
+  const completionTime = formatLocalDateTime(ended);
+  const completed = completionTime === null ? null : `Completed ${completionTime}`;
   const started = Date.parse(execution.started_at);
   const elapsed = Number.isFinite(started) && Number.isFinite(ended) && ended >= started
     ? Math.floor((ended - started) / 1000) : null;

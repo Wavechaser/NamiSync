@@ -236,6 +236,11 @@ explicit, reviewable and regression-backed.
   totals and keep terminal progress visible without manufacturing a percentage.
   Pass 41 focused, 1,943 interfaces and seven installed gallery/shell/Inventory
   checks, including actual setup-height and progress observations.
+- Standardize existing UI timestamps to local `yyyy-MM-DD HH:mm`, including
+  Verify mtime/evidence details and execution completion. Preserve raw timestamp
+  values, unavailable states, nanosecond conversion order and elapsed durations.
+  Pass 13 focused, 1,944 interfaces and seven installed presentation checks,
+  including local-time boundaries and representative gallery dates.
 
 #### Repair bridge diagnostic composition receipts (2026-10-04)
 

@@ -24,8 +24,8 @@ its implementation against its integrated predecessor.
 | --- | --- | --- |
 | GUI-B1 | Restore bounded plan-window labels, validate presentation enums/relationships, and migrate detail disclosure and all direct consumers. Full paths belong to individual details; Rename keeps its prior basename, Move uses a generic origin note, and previous-location destinations use compact labels. Preserve projection classification, node-id reveal, selection, revisions and the existing response wall. | Complete in `53e1abb`: 5,913 ordinary passes/four privilege skips, 12 import contracts and 12 installed gallery/shell/transport passes (`b1-*-02`). Independent review includes the corrected row-kind validator and final input binding. |
 | GUI-B2 | Align Verify table with Plan/gallery row geometry, zebra, disabled checkbox affordances, Notes, concise Presence labels, hierarchical basenames, typography and semantic tones. Preserve inventory evidence, scope, sorting, windowing and recovery. | **Deferred by the user for separate review** after recurrence analysis below. No B2 product/test changes. Functional checkboxes remain M1-10; proposed disabled visuals are also deferred with B2. |
-| GUI-B3 | Match Verify Setup height and reorganize status into summary plus one stable detailed line, with shared progress presentation and existing Refresh/recovery actions. Retain published/current scan distinctions without duplicate routine prose. | Complete from `53e1abb`: 41 focused, 1,943 interfaces and seven installed gallery/shell/Inventory checks (`b3-*-01`); independent review and source binding. Commit identity in batch evidence. |
-| GUI-B4 | Use local `yyyy-MM-DD HH:mm` display for UI timestamps, including Verify mtime, terminal completion and both detail panes; retain raw machine values where explicitly diagnostic. | After B3; shared formatter, direct consumers and relevant installed presentation. Pending. |
+| GUI-B3 | Match Verify Setup height and reorganize status into summary plus one stable detailed line, with shared progress presentation and existing Refresh/recovery actions. Retain published/current scan distinctions without duplicate routine prose. | Complete in `2828b8b`: 41 focused, 1,943 interfaces and seven installed gallery/shell/Inventory checks (`b3-*-01`); independent review and source binding. |
+| GUI-B4 | Use local `yyyy-MM-DD HH:mm` display for UI timestamps, including Verify mtime, terminal completion and both detail panes; retain raw machine values where explicitly diagnostic. | Complete from `2828b8b`: 13 focused, 1,944 interfaces and seven installed gallery/Inventory/execution checks (`b4-*-01`); independent review and input binding. Commit identity in batch evidence. |
 | GUI-B5 | Cap details at 20rem, allocate more height to item details, and show full paths joined to the correct known root without filesystem probes. | After B1/B4; root/action mapping tests and installed responsive pane/scroll checks. Pending. |
 | GUI-B6 | Row context menus reuse existing menu styling and existing Show details, Select/Deselect where allowed, and folder Expand/Collapse actions. Verify additionally offers Refresh selected and Acknowledge missing for missing rows, through existing node-scoped commands. | After B5 against the unchanged Inventory contract; keyboard/pointer, dismissal, pending/retired ownership and informational-row restrictions; installed gesture witness. Inventory has no Select/Deselect action. No clipboard or new filesystem actions. Pending. |
 
@@ -162,6 +162,19 @@ semantics. Direct consumers include Plan/Inventory/execution probes and startup/
 Setup renderer stubs. Fixed expected UTC/non-UTC/date-boundary cases plus installed
 Inventory/gallery/execution presentation verify the format; no new detail facts,
 calendar admission, bridge or backend changes. Refresh this corpus after B3.
+
+B5's read-only design at `2828b8b` keeps the existing 40% responsive limit while
+reducing only the details cap to 20rem and setting global/item tracks to 2:3.
+One display-only separator join uses established summary roots; a missing root
+retains relative text. Plan notice origin selects source/target; prior/move and
+execution operation/verification/known path-detail fields use target. Existing
+absolute global trash text is untouched. Inventory ledger/synthetic/warning
+facts and global detailed scan scope use its nullable summary root; null warning
+paths remain unavailable, and the status-card scope stays compact. No probing,
+embedded-prose parsing or deferred B2 context contract. Include execution native
+display-identity assertions and inaccurate absolute-path fixtures in the finite
+migration, retaining raw machine paths. Gate: direct root/path/hostile-text cases,
+interfaces, gallery/pane ratios, both shell sizes, Inventory and real execution.
 
 ## GUI alignment batch — 2026-10-05
 

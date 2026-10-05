@@ -5,6 +5,7 @@ import { assertSameNode } from "./fake_dom_assertions.mjs";
 import { fakeRecoveryHandle } from "./fake_recovery_handle.mjs";
 
 const ROW_HEIGHT = 24;
+process.env.TZ = "UTC";
 
 class ClassList {
   constructor(owner) { this.owner = owner; this.values = new Set(); }
@@ -433,7 +434,7 @@ assert.ok(findText(findByClass(panel.element, "nami-plan-review__global-status")
 row.mtime_ns = "0";
 panel.render(task);
 assert.ok(findText(planItemPane, "Modified"));
-assert.ok(findText(planItemPane, findByClass(panel.element, "nami-plan-row__modified").textContent));
+assert.ok(findText(planItemPane, "1970-01-01 00:00"));
 row.mtime_ns = null;
 panel.render(task);
 assert.ok(!findText(planItemPane, "Modified"), "missing time has no invented detail");
@@ -1162,7 +1163,7 @@ executionPanel.render({ ...executionTask, review: liveTerminalReview,
   sessionId: executionSummary.session_id,
   snapshot: terminalPageSnapshot(terminalResult, { progress_inconsistent: true }) });
 assert.equal(findByClass(executionPanel.element, "nami-plan-review__status-summary").textContent,
-  `Execution needs review · Completed ${new Date("2026-09-23T01:01:05+00:00").toLocaleString()} · 1m 5s elapsed · Some progress updates were inconsistent.`,
+  "Execution needs review · Completed 2026-09-23 01:01 · 1m 5s elapsed · Some progress updates were inconsistent.",
   "terminal snapshot updates the card before retained-window capture");
 assert.ok(findText(executionPanel.element, "Some progress updates were inconsistent."));
 executionPanel.render({ ...executionTask, review: liveTerminalReview,
@@ -1603,4 +1604,20 @@ resizeObserver.trigger();
 document.defaultView.flushAnimationFrame();
 assert.deepEqual(resizeCalls, [0, 0], "one settled resize does not duplicate the window read");
 resizePanel.dispose();
+const timePanel = createPlanReviewPanel(callbacks);
+const timeReview = { ...review,
+  summary: { ...summary, highlight_focus_node_id: row.node_id, highlight_revision: 1 },
+};
+const timeTask = { ...task, review: timeReview };
+for (const [mtime, expected] of [["0", "1970-01-01 00:00"],
+  ["9223372019999999999", "2262-04-11 23:46"],
+  ["9223372036854775807", "2262-04-11 23:47"], [null, ""]]) {
+  timeReview.window = { ...review.window, rows: [{ ...row, mtime_ns: mtime }] };
+  timePanel.render(timeTask);
+  assert.equal(findByClass(timePanel.element, "nami-plan-row__modified").textContent, expected);
+  const timeDetails = findByClass(timePanel.element, "nami-plan-review__detail");
+  if (mtime === null) assert.ok(!findText(timeDetails, "Modified"));
+  else assert.ok(findText(timeDetails, expected));
+}
+timePanel.dispose();
 process.stdout.write("ok");

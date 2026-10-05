@@ -1805,7 +1805,7 @@ def _install_minimum_window_scheduler(
 
 def _valid_inventory_panel(value: object) -> bool:
     if type(value) is not dict or set(value) != {
-        "headers", "checkbox_count", "switcher", "labels", "checksum",
+        "headers", "checkbox_count", "switcher", "labels", "checksum", "timestamps",
         "first_widths", "row_widths", "grown_widths", "manual_before", "manual_after",
         "header_positions", "row_positions", "status_rectangles", "scroll_owners",
         "details", "refresh_on_status", "root_fits", "viewport_height",
@@ -1829,6 +1829,10 @@ def _valid_inventory_panel(value: object) -> bool:
                 and _finite_number_matrix([[item["height"]]], 1, 1) for item in value["labels"])
         and type(value["checksum"]) is dict and set(value["checksum"]) == {"text", "title", "absent"}
         and all(type(text) is str and len(text) <= 128 for text in value["checksum"].values())
+        and type(value["timestamps"]) is dict and set(value["timestamps"]) == {
+            "modified", "subject", "observed", "expected_modified", "expected_observed",
+        }
+        and all(type(text) is str and len(text) <= 64 for text in value["timestamps"].values())
         and all(_finite_number_matrix([value[key]], 1, 5)
                 for key in ("first_widths", "row_widths", "grown_widths", "manual_before", "manual_after"))
         and all(_finite_number_matrix(value[key], 5, 4) for key in ("header_positions", "row_positions"))
@@ -1883,7 +1887,7 @@ def _valid_diagnostic_layout(value: object) -> bool:
         "readable_body", "disclosure_reachable",
         "row_activation_reachable", "placeholder_present",
         "detail_matches_focused_row",
-        "title_action_aligned", "status_details_same_row",
+        "title_action_aligned", "status_details_same_row", "completion_local",
         "details_rectangles", "central_widths", "card_scroll_positions",
         "rem_size", "rail_widths", "rail_aligned",
         "header_scroll_observations", "global_content_rows",

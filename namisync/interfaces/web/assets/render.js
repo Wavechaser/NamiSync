@@ -8,6 +8,14 @@ export function renderText(element, text) {
   element.textContent = text;
 }
 
+export function formatLocalDateTime(value) {
+  if (typeof value !== "string" && typeof value !== "number") return null;
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return null;
+  const pad = (part) => String(part).padStart(2, "0");
+  return `${String(date.getFullYear()).padStart(4, "0")}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
 const BYTE_UNITS = Object.freeze(["B", "KiB", "MiB", "GiB", "TiB", "PiB", "EiB"]);
 
 function byteCountInteger(value) {

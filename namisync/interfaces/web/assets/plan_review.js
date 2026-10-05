@@ -2,7 +2,7 @@ import { createTableColumns } from "./table_columns.js";
 import { renderPlanRow } from "./plan.js";
 import { createFilterMenu } from "./filter_menu.js";
 import { createIcon } from "./icons.js";
-import { formatByteCount, renderFilesystemText, renderText } from "./render.js";
+import { formatByteCount, formatLocalDateTime, renderFilesystemText, renderText } from "./render.js";
 import {
   isCapacityOnlyExecution,
   projectActiveOperationProgress,
@@ -47,9 +47,7 @@ const reasonLabel = (value) => Object.prototype.hasOwnProperty.call(REASON_LABEL
 
 function modifiedText(mtime) {
   if (mtime === null) return "";
-  const date = new Date(Number(BigInt(mtime) / 1000000n));
-  const pad = (value) => String(value).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  return formatLocalDateTime(Number(BigInt(mtime) / 1000000n)) ?? "";
 }
 
 const EXECUTION_LABELS = Object.freeze({

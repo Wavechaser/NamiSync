@@ -284,7 +284,8 @@ async function loadScenario({
     process.argv[2].replace(/app\.js$/, "task_status.js"),
     "utf8",
   );
-  taskStatusSource = taskStatusSource.replace("./render.js", renderUrl);
+  const taskStatusRender = moduleUrl(await readFile(process.argv[2].replace(/app\.js$/, "render.js"), "utf8"));
+  taskStatusSource = taskStatusSource.replace("./render.js", taskStatusRender);
   const taskStatusUrl = moduleUrl(taskStatusSource);
   let source = await readFile(process.argv[2], "utf8");
   source = source.replace(

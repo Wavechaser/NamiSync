@@ -1808,6 +1808,7 @@ def test_component_gallery_report_parser_is_exact_and_nested(
                     "detail_matches_focused_row": True,
                     "title_action_aligned": True,
                     "status_details_same_row": True,
+                    "completion_local": True,
                     "details_rectangles": [[0, 0, 600, 50], [0, 60, 600, 140],
                         [0, 150, 600, block_size], [612, 0, 996, block_size],
                         [612, 0, 996, block_size / 2 - 6],
@@ -2130,6 +2131,11 @@ def test_component_gallery_report_parser_is_exact_and_nested(
     with pytest.raises(AssertionError, match="status_details_same_row"):
         _assert_diagnostic_layout(report["control_contract"]["diagnostic_layout"])
     report["control_contract"]["diagnostic_layout"][0]["status_details_same_row"] = True
+    report["control_contract"]["diagnostic_layout"][0]["completion_local"] = False
+    assert component_gallery_child._valid_complete_report(report) is True
+    with pytest.raises(AssertionError, match="completion_local"):
+        _assert_diagnostic_layout(report["control_contract"]["diagnostic_layout"])
+    report["control_contract"]["diagnostic_layout"][0]["completion_local"] = True
     detail_layout = report["control_contract"]["diagnostic_layout"][3]
     detail_layout["card_scroll_positions"][2][1] = 0
     assert component_gallery_child._valid_complete_report(report) is True
@@ -3987,7 +3993,7 @@ def _assert_diagnostic_layout(diagnostic_layout: list[dict[str, object]]) -> Non
             "detail_keyboard_reachable", "readable_body",
             "disclosure_reachable", "row_activation_reachable",
             "placeholder_present", "detail_matches_focused_row",
-            "title_action_aligned", "status_details_same_row",
+            "title_action_aligned", "status_details_same_row", "completion_local",
             "rail_aligned",
         ):
             assert case[field] is True, f'{case["case"]}.{field}'
@@ -4035,6 +4041,9 @@ def _inventory_panel_sample() -> dict[str, object]:
                     "background": "rgba(0, 0, 0, 0)", "height": 18.0}
                    for name in ("verified", "unverified", "modified", "reappeared", "unsupported", "missing", "mismatched")],
         "checksum": {"text": "01234567", "title": "Stored baseline checksum: 0123456789abcdef0123456789abcdef", "absent": "—"},
+        "timestamps": {"modified": "1970-01-01 00:00", "subject": "1970-01-01 00:00 (1000000000 ns)",
+                       "observed": "2026-12-31 23:04", "expected_modified": "1970-01-01 00:00",
+                       "expected_observed": "2026-12-31 23:04"},
         "first_widths": [480.0, 128.0, 112.0, 80.0, 120.0], "row_widths": [480.0, 128.0, 112.0, 80.0, 120.0],
         "grown_widths": [680.0, 128.0, 112.0, 80.0, 120.0], "manual_before": [672.0, 128.0, 112.0, 80.0, 128.0],
         "manual_after": [680.0, 128.0, 112.0, 80.0, 120.0],
@@ -4086,6 +4095,12 @@ def _assert_inventory_panel(evidence: dict[str, object], integrity: dict[str, ob
     assert before[4] - after[4] == pytest.approx(8, abs=1)
     assert after[1:4] == pytest.approx(before[1:4], abs=1)
     assert evidence["checksum"] == _inventory_panel_sample()["checksum"]
+    timestamps = evidence["timestamps"]
+    assert timestamps["modified"] == timestamps["expected_modified"]
+    assert timestamps["subject"] == f'{timestamps["expected_modified"]} (1000000000 ns)'
+    assert timestamps["observed"] == timestamps["expected_observed"]
+    assert re.fullmatch(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}", timestamps["modified"])
+    assert re.fullmatch(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}", timestamps["observed"])
     specimen = {row["case"]: row for row in integrity["rows"]}
     for row in evidence["labels"]:
         reference = specimen[row["case"]]

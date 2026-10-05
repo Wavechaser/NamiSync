@@ -201,7 +201,8 @@ let taskStatusSource = await readFile(
   process.argv[2].replace(/app\.js$/, "task_status.js"),
   "utf8",
 );
-taskStatusSource = taskStatusSource.replace("./render.js", renderStub);
+const taskStatusRender = moduleUrl(await readFile(process.argv[2].replace(/app\.js$/, "render.js"), "utf8"));
+taskStatusSource = taskStatusSource.replace("./render.js", taskStatusRender);
 const taskStatusStub = moduleUrl(taskStatusSource);
 source = source.replace(
   /import \{[\s\S]*?\} from "\.\/bridge\.js";/,

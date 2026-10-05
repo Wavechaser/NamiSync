@@ -1135,6 +1135,16 @@ def test_supplemental_node_byte_formatter_uses_binary_units_and_bigints() -> Non
     assert completed.returncode == 0, completed.stdout + completed.stderr
 
 
+def test_shared_date_formatter_uses_local_minutes_and_omits_unavailable_values() -> None:
+    node = _node_executable()
+    assert node is not None, "Node.js is required for date formatting"
+    completed = run_node_probe([
+        str(node), str(PROJECT_ROOT / "tests/assets/render_date_formatter_probe.mjs"),
+        str(PROJECT_ROOT / ASSET_ROOT / "render.js"),
+    ], timeout=10)
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+
+
 @pytest.mark.parametrize(
     "mutation",
     [

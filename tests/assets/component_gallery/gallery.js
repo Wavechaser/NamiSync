@@ -1516,6 +1516,11 @@ window.addEventListener("unhandledrejection", (event) => {
   };
 
   let diagnosticDefaultRailWidth = null;
+  function expectedLocalTime(value) {
+    return new Date(value).toLocaleString("sv-SE", {
+      year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+    });
+  }
   async function diagnosticLayout(caseName, blockSize, expanded, populated) {
     if (blockSize === null) planReviewPanel.element.style.removeProperty("block-size");
     else planReviewPanel.element.style.blockSize = `${blockSize}px`;
@@ -1853,6 +1858,7 @@ window.addEventListener("unhandledrejection", (event) => {
       detail_matches_focused_row: detailMatchesFocusedRow,
       title_action_aligned: titleActionAligned,
       status_details_same_row: statusDetailsSameRow,
+      completion_local: statusSummary.textContent.includes(`Completed ${expectedLocalTime("2026-09-23T08:00:04+00:00")} · 4s elapsed`),
       details_rectangles: [header, summary, table, diagnostics, globalDiagnostics, detailRegion].map(rectangle),
       central_widths: expanded ? [oppositeWidths, activeWidths] : [activeWidths, oppositeWidths],
       card_scroll_positions: cardScrollPositions,
@@ -1968,6 +1974,22 @@ window.addEventListener("unhandledrejection", (event) => {
     const viewport = root.querySelector(".nami-inventory-review__rows");
     const widths = () => headers.map((value) => Number(value.getBoundingClientRect().width.toFixed(3)));
     const firstRow = () => viewport.querySelector(".nami-inventory-row");
+    const observedAt = "2026-12-31T23:04:59.999999+00:00";
+    review.detail = { row: rowAt(0), state: "current", response: { detail: {
+      row: { path: "evidence-0.txt", presence: "present", verification_state: "verified",
+        last_observed_at: observedAt, last_verified_at: null, missing_since: null,
+        acknowledged_at: null, reappeared_at: null, verification_invalidated_at: null,
+        verification_invalidated_reason: null, unsupported_reason: null },
+      observed: { kind: "file", size: 10, mtime_ns: "1000000000", file_identity: null }, attestation: null,
+    } } };
+    panel.render(inventoryTask);
+    const detailValue = (label) => [...root.querySelectorAll(".nami-plan-review__detail dt")]
+      .find((term) => term.textContent === label).nextElementSibling.textContent;
+    const timestamps = { modified: firstRow().querySelector(".nami-inventory-row__modified").textContent,
+      subject: detailValue("Observed modified"), observed: detailValue("Last observed"),
+      expected_modified: expectedLocalTime(1000), expected_observed: expectedLocalTime(observedAt) };
+    review.detail = null;
+    panel.render(inventoryTask);
     const rectangle = (value) => {
       const rect = value.getBoundingClientRect();
       return [rect.left, rect.top, rect.right, rect.bottom].map((number) => Number(number.toFixed(3)));
@@ -2023,7 +2045,7 @@ window.addEventListener("unhandledrejection", (event) => {
     await settled();
     await settled();
     const evidence = { headers: headers.map((value) => value.textContent), checkbox_count: root.querySelectorAll('input[type="checkbox"]').length,
-      switcher: [...root.querySelectorAll(".nami-segmented__item")].map((value) => ({ text: value.textContent,
+      timestamps, switcher: [...root.querySelectorAll(".nami-segmented__item")].map((value) => ({ text: value.textContent,
         selected: value.ariaChecked, disabled: value.disabled })), labels, checksum: checksumEvidence,
       first_widths: firstWidths, row_widths: rowWidths, grown_widths: grownWidths,
       header_positions: headerPositions, row_positions: rowPositions,

@@ -3,7 +3,7 @@ import { taskStatusDigest } from "./task_status.js";
 import { createFilterMenu } from "./filter_menu.js";
 import { createIcon } from "./icons.js";
 import { createTree } from "./tree.js";
-import { formatByteCount, renderFilesystemText, renderText } from "./render.js";
+import { formatByteCount, formatLocalDateTime, renderFilesystemText, renderText } from "./render.js";
 
 const FACETS = Object.freeze([
   ["present", "Present"], ["unverified", "Unverified"], ["verified", "Verified"],
@@ -16,8 +16,7 @@ const bytes = (value) => value === null ? "Unavailable" : formatByteCount(value)
 
 function modifiedTime(value) {
   if (value === null) return "Unavailable";
-  const date = new Date(Number(BigInt(value) / 1000000n));
-  return Number.isNaN(date.getTime()) ? "Unavailable" : date.toLocaleString();
+  return formatLocalDateTime(Number(BigInt(value) / 1000000n)) ?? "Unavailable";
 }
 
 function element(tag, className = "", text = "") {
@@ -357,12 +356,12 @@ export function createInventoryReviewPanel(callbacks) {
     appendDetail("Presence", label(value.row.presence));
     appendDetail("Verification state", label(value.row.verification_state));
     subjectDetails("Observed", value.observed);
-    appendDetail("Last observed", value.row.last_observed_at);
-    appendDetail("Last verified", value.row.last_verified_at);
-    appendDetail("Missing since", value.row.missing_since);
-    appendDetail("Acknowledged", value.row.acknowledged_at);
-    appendDetail("Reappeared", value.row.reappeared_at);
-    appendDetail("Verification invalidated", value.row.verification_invalidated_at);
+    appendDetail("Last observed", formatLocalDateTime(value.row.last_observed_at));
+    appendDetail("Last verified", formatLocalDateTime(value.row.last_verified_at));
+    appendDetail("Missing since", formatLocalDateTime(value.row.missing_since));
+    appendDetail("Acknowledged", formatLocalDateTime(value.row.acknowledged_at));
+    appendDetail("Reappeared", formatLocalDateTime(value.row.reappeared_at));
+    appendDetail("Verification invalidated", formatLocalDateTime(value.row.verification_invalidated_at));
     appendDetail("Invalidation reason", value.row.verification_invalidated_reason);
     appendDetail("Unsupported reason", value.row.unsupported_reason);
     if (value.attestation === null) {
@@ -372,7 +371,7 @@ export function createInventoryReviewPanel(callbacks) {
     appendDetail("Stored digest", value.attestation.content.digest);
     appendDetail("Algorithm", value.attestation.content.algorithm);
     appendDetail("Provenance", value.attestation.content.provenance);
-    appendDetail("Evidence observed", value.attestation.content.observed_at);
+    appendDetail("Evidence observed", formatLocalDateTime(value.attestation.content.observed_at));
     subjectDetails("Attested", value.attestation.subject);
   }
 

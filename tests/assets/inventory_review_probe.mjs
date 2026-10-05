@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 
+process.env.TZ = "UTC";
+
 class Style {
   constructor() { this.values = new Map(); }
   setProperty(key, value) { this.values.set(key, String(value)); }
@@ -198,6 +200,8 @@ assert.ok(!rowElements().some((value) => text(value).includes("missing.txt")));
 assert.ok(rowElements().every((value) => value.children.length === 5));
 const real = fixture.views.default.window.rows.find((row) => row.row_id === "1");
 const realElement = rowElements().find((value) => value.dataset.nodeId === real.node_id);
+assert.equal(realElement.children[4].textContent, "2262-04-11 23:47");
+assert.equal(realElement.children[4].title, "Own modified time: 9223372036854775807 ns");
 realElement.click();
 assert.equal(details.at(-1)[1], real.node_id);
 const root = find((value) => value.getAttribute("role") === "tree");
@@ -280,9 +284,26 @@ assert.equal(checksumCell.textContent, real.recorded_checksum.slice(0, 8));
 assert.ok(checksumCell.title.includes(real.recorded_checksum));
 assert.match(text(detail), new RegExp(fixture.detail.detail.attestation.content.digest));
 assert.match(text(detail), new RegExp(`Provenance ${fixture.detail.detail.attestation.content.provenance}`));
-assert.match(text(detail), /Observed modified.*9223372036854775807 ns/);
-assert.match(text(detail), /Attested modified.*9223372036854775807 ns/);
-assert.match(text(detail), /Last verified/);
+assert.match(text(detail), /Observed modified 2262-04-11 23:47 \(9223372036854775807 ns\)/);
+assert.match(text(detail), /Attested modified 2262-04-11 23:47 \(9223372036854775807 ns\)/);
+for (const key of ["Last observed", "Last verified", "Evidence observed"]) {
+  assert.ok(text(detail).includes(`${key} 2026-01-02 03:04`));
+}
+for (const key of ["Missing since", "Acknowledged", "Reappeared", "Verification invalidated"]) {
+  assert.ok(text(detail).includes(`${key} Unavailable`));
+}
+const dateKeys = ["last_observed_at", "last_verified_at", "missing_since", "acknowledged_at",
+  "reappeared_at", "verification_invalidated_at"];
+review.detail.response = { ...fixture.detail, detail: { ...fixture.detail.detail,
+  row: { ...fixture.detail.detail.row, ...Object.fromEntries(dateKeys.map((key) => [key, "2026-12-31T23:04:59.999999+00:00"])) },
+} };
+process.env.TZ = "Asia/Shanghai";
+pane.render(task);
+for (const key of ["Last observed", "Last verified", "Missing since", "Acknowledged", "Reappeared", "Verification invalidated"]) {
+  assert.ok(text(detail).includes(`${key} 2027-01-01 07:04`));
+}
+assert.match(text(detail), /Observed modified 2262-04-12 07:47/);
+process.env.TZ = "UTC";
 review.detail.response = fixture.invalidated_detail;
 pane.render(task);
 assert.match(text(detail), /Verification state Mismatch/);

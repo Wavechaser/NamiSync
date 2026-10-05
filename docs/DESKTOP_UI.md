@@ -1783,6 +1783,11 @@ Terminal detail includes a concise outcome, local completion time when known,
 and nonnegative elapsed wall time from the matching session's end and start;
 null or invalid timing is omitted, and overlapping error categories are never
 summed into an invented total.
+UI dates use local `yyyy-MM-DD HH:mm` consistently for Plan/Verify modified
+times, terminal completion and detail dates. Missing dates retain their existing
+blank, omitted or Unavailable presentation. Raw nanoseconds and operation
+diagnostics retain their machine values; sorting and elapsed time use the
+original facts rather than the minute-resolution display.
 The default/minimum windows remain 1280×800/1024×640; Details preserves the
 bounded table viewport and its virtual scrolling at both sizes. The global and
 item cards wrap long text and retain separately reachable scrolling and focus.

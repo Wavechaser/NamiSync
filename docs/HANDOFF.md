@@ -2,8 +2,8 @@
 
 2026-10-05 on `milestone1`, base `583f14d`. The user ratified GUI-B1–B6 in
 M1_PLAN, then explicitly deferred all of B2 for separate review. B1 is committed
-as `53e1abb`; B3 passed its final gates and is ready for atomic commit. B4–B6
-remain authorized.
+as `53e1abb`; B3 is committed as `2828b8b`. B4 timestamp formatting passed its
+final gates and is ready for atomic commit; B5–B6 remain authorized. No B2 work is included.
 
 ## Delivered B1
 
@@ -47,7 +47,20 @@ frontend checks passed 15 tests; the final focused set passed 41. Final gates
 passed 1,943 interfaces tests and seven installed gallery/shell/Inventory checks
 (`b3-*-01`). Independent review found no actionable defect; final source and
 closing-document binding is retained with its receipt. Source/tests/measurement/
-checker inputs are frozen. Local document links and diff checks pass.
+checker inputs matched the independent receipt. Local document links and diff
+checks pass. `b3-review-receipt.json` binds actual equal Setup heights at both
+widths, installed progress observations and the final inputs.
+
+## B4 delivery
+
+B4's final focused set passed 13 direct/composition/checker tests. The shared
+local formatter preserves unavailable values, nanosecond precision and original
+elapsed-time calculations. Representative installed gallery dates and direct
+UTC/non-UTC/boundary cases migrated together. `b4-interfaces-01` passed 1,944 tests;
+`b4-native-01` passed all seven gallery/Inventory/execution cases. Independent
+review found no actionable defect and bound frozen inputs. Preliminary failed receipts retain the sandbox
+temporary-root denial and corrected test-only window-identity ordering; no
+production cache behavior changed.
 
 ## Deferred B2 and next work
 
@@ -61,8 +74,8 @@ population and raw reproducer are in BUGS, M1_PLAN and `b2-design-inventory-enve
 The earlier disabled-checkbox proposal is deferred with B2; functionality remains
 M1-10. Execution-to-Verify navigation/A6 remains deferred too.
 
-After B3 closes: B4 consistent local timestamps;
-B5 20rem details pane, 3:2 item/global height and
+Current B4: shared local date/time display, preserving machine values and elapsed
+calculations. Next B5: 20rem details pane, 3:2 item/global height and
 root-correct full paths; B6 row context menus. Menus use existing actions only:
 Show details, Plan Select/Deselect where allowed, folder Expand/Collapse, and
 Verify Refresh selected/Acknowledge missing. Inventory keeps its existing single
