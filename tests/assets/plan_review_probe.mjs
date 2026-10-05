@@ -240,7 +240,7 @@ const row = {
   operation_id: null,
   operation_kind: null,
   presentation_kind: null,
-  prior_path: null,
+  prior_name: null,
   reason: null,
   blocked_reason: null,
   selection: "mixed",
@@ -1009,7 +1009,7 @@ const terminologyPanel = createPlanReviewPanel(Object.fromEntries([
   "onPlanAgain", "onHighlight", "onHighlightedSelect", "onExecutionDetail", "onFollowOverride", "onNavigateCurrent", "onRevealMove",
 ].map((name) => [name, () => {}])));
 function terminologyRow(patch) {
-  const specimen = { ...row, operation_kind: "noop", presentation_kind: patch.operation_kind ?? "noop", reason: null, ...patch };
+  const specimen = { ...row, row_kind: "operation", operation_id: "5".repeat(32), operation_kind: "noop", presentation_kind: patch.operation_kind ?? "noop", reason: null, ...patch };
   terminologyPanel.render({ ...task, review: { ...review,
     window: { ...review.window, rows: [specimen] } } });
   return findByDataset(terminologyPanel.element, "nodeId", specimen.node_id);
@@ -1036,17 +1036,17 @@ for (const [operation_kind, label] of [["mkdir", "Create folder"],
   ["trash", "Move to trash"], ["delete", "Delete"], ["move_update", "Move + update"]]) {
   assert.ok(findText(terminologyRow({ operation_kind }), label));
 }
-for (const [operation_kind, prior_path] of [["recase", "folder\\old-name.txt"], ["move", "folder/old-name.txt"]]) {
-  const renamed = terminologyRow({ operation_kind, presentation_kind: "rename", prior_path });
+for (const operation_kind of ["recase", "move"]) {
+  const renamed = terminologyRow({ operation_kind, presentation_kind: "rename", prior_name: "old-name.txt" });
   assert.ok(findText(renamed, "Rename"));
   assert.equal(findByClass(renamed, "nami-plan-row__previous").textContent, "renamed from old-name.txt");
 }
-const moved = terminologyRow({ operation_kind: "move", presentation_kind: "move", prior_path: hostile });
-assert.equal(findByClass(moved, "nami-plan-row__previous").textContent, "moved from <img src=x onerror=alert(1)>⟦U+202E⟧海");
-assert.equal(findByClass(moved, "nami-plan-row__previous").title, "moved from <img src=x onerror=alert(1)>⟦U+202E⟧海");
-const changedMove = terminologyRow({ operation_kind: "move_update", presentation_kind: "move_update", prior_path: "folder\\old.txt" });
+const moved = terminologyRow({ operation_kind: "move", presentation_kind: "move" });
+assert.equal(findByClass(moved, "nami-plan-row__previous").textContent, "moved from another folder");
+assert.equal(findByClass(moved, "nami-plan-row__previous").title, "moved from another folder");
+const changedMove = terminologyRow({ operation_kind: "move_update", presentation_kind: "move_update" });
 assert.ok(findText(changedMove, "Move + update"));
-assert.equal(findByClass(changedMove, "nami-plan-row__previous").textContent, "moved from folder\\old.txt");
+assert.equal(findByClass(changedMove, "nami-plan-row__previous").textContent, "previous location available in details");
 terminologyPanel.dispose();
 
 const moveCalls = [];
@@ -1058,7 +1058,7 @@ const moveRow = { ...row, row_kind: "prior-group", operation_kind: null,
   selection: "disabled", selectable_operation_count: 0, selected_operation_count: 0,
   operation_count: 0, display: "2 items moved to destination\\nested",
   move_peer_id: `node-${"9".repeat(32)}`,
-  move_group: { count: 2, destination: "destination\\nested" } };
+  move_group: { count: 2, destination_display: "…\\nested" } };
 const moveReview = { ...review, window: { ...review.window, rows: [moveRow] } };
 movePanel.render({ ...task, review: moveReview });
 const moveElement = findByDataset(movePanel.element, "nodeId", moveRow.node_id);
@@ -1068,7 +1068,7 @@ assert.equal(movePill.ariaLabel, moveRow.display);
 assert.equal(movePill.title, moveRow.display);
 assert.equal(findByClass(moveElement, "nami-plan-move-pill__count").textContent, "2 items moved to");
 assertSameNode(findByClass(moveElement, "nami-plan-move-pill__destination").parentElement, findByClass(moveElement, "nami-badge"));
-assert.equal(findByClass(moveElement, "nami-plan-move-pill__destination").textContent, "destination\\nested");
+assert.equal(findByClass(moveElement, "nami-plan-move-pill__destination").textContent, "…\\nested");
 assert.equal(findByClass(moveElement, "nami-checkbox"), null);
 movePill.dispatch("click");
 moveElement.dispatch("click", { target: movePill });
@@ -1130,7 +1130,18 @@ const executionReviewState = {
     highlight_focus_node_id: executionRow.node_id, highlight_revision: 1 },
   window: { ...review.window, execution: executionSummary, rows: [executionRow], total: 1 },
   executionDetail: null,
+  planDetail: { nodeId: executionRow.node_id, state: "current", response: { detail: {
+    path: `Case\\${hostile}`, prior_path: "Previous\\OriginalCase.txt",
+    move_destination_path: null, path_origin: "target", notice: hostile,
+  } } },
 };
+executionPanel.render({ ...task, review: { ...executionReviewState,
+  window: { ...executionReviewState.window, execution: { ...executionSummary, session_id: null } } } });
+assert.ok(findText(executionPanel.element, `Case\\${hostile.replace("\u202e", "⟦U+202E⟧")}`),
+  "full planned paths remain safely visible before execution");
+assert.ok(findText(executionPanel.element, "Previous\\OriginalCase.txt"),
+  "planned details retain the complete original-case previous path");
+assert.ok(findText(executionPanel.element, hostile), "full diagnostic text remains inert before execution");
 const executionTask = { ...task, review: executionReviewState, executionStarted: true,
   sessionState: "failed" };
 const liveTerminalReview = { ...executionReviewState, window: {
@@ -1247,6 +1258,15 @@ executionPanel.render(executionTask);
 const detailBody = findByClass(executionPanel.element, "nami-plan-review__detail-body");
 assert.ok(findText(detailBody, hostile), "hostile detail remains literal text");
 assert.equal(walk(detailBody).some((item) => item.tagName === "IMG"), false);
+const retainedPlanDetail = executionReviewState.planDetail;
+executionReviewState.planDetail = { nodeId: executionRow.node_id, state: "error",
+  message: "Plan changed. Select Refresh review to read current details." };
+executionPanel.render(executionTask);
+assert.ok(findText(executionDetailCard, "Plan changed. Select Refresh review to read current details."),
+  "planned-detail failures remain visible alongside a current execution detail");
+assert.ok(findText(detailBody, "Operation recording"), "execution facts remain available during planned-detail failure");
+executionReviewState.planDetail = retainedPlanDetail;
+executionPanel.render(executionTask);
 detailsToggle.dispatch("click");
 assert.equal(executionDiagnostics.hidden, true, "user collapse folds retained detail");
 executionPanel.render(executionTask);

@@ -1223,18 +1223,19 @@ window.addEventListener("unhandledrejection", (event) => {
   };
   galleryMeasurementStep = "plan_review_initial_render";
   const galleryMovePath = "projects\\archive\\a-long-relative-destination-that-remains-available-in-the-tooltip";
+  const galleryMoveDisplay = `…\\${galleryMovePath.split("\\").at(-1)}`;
   planReviewTask.review.window.total = 1;
   planReviewTask.review.window.rows = [{
-    node_id: `node-${"8".repeat(32)}`, display: `12 items moved to ${galleryMovePath}`,
+    node_id: `node-${"8".repeat(32)}`, display: `12 items moved to ${galleryMoveDisplay}`,
     depth: 0, is_container: true, visible_index: 0, parent_visible_index: null,
     first_child_visible_index: null, position_in_set: 1, set_size: 1,
     expanded: false, row_kind: "prior-group", operation_id: null, operation_kind: null,
-    presentation_kind: null, prior_path: null,
+    presentation_kind: null, prior_name: null,
     reason: null, blocked_reason: null, selection: "disabled", highlighted: false,
     selectable_operation_count: 0, selected_operation_count: 0, operation_count: 0,
     size: null, mtime_ns: null, dependency_count: 0, risk: "none",
     move_peer_id: `node-${"9".repeat(32)}`,
-    move_group: { count: 12, destination: galleryMovePath },
+    move_group: { count: 12, destination_display: galleryMoveDisplay },
     notice: null, selection_exclusion_reason: null, execution: null,
   }];
   planReviewPanel.render(planReviewTask);
@@ -1244,7 +1245,7 @@ window.addEventListener("unhandledrejection", (event) => {
   const galleryForced = matchMedia("(forced-colors: active)").matches;
   if (!galleryForced && (galleryMoveBadgeStyle.backgroundColor !== (galleryDark ? "rgb(51, 17, 85)" : "rgb(187, 136, 238)")
       || galleryMoveBadgeStyle.color !== (galleryDark ? "rgb(187, 136, 238)" : "rgb(51, 17, 85)"))
-      || galleryMovePill.title !== `12 items moved to ${galleryMovePath}`
+      || galleryMovePill.title !== `12 items moved to ${galleryMoveDisplay}`
       || galleryMovePill.ariaLabel !== galleryMovePill.title
       || getComputedStyle(galleryMovePill.querySelector(".nami-plan-move-pill__destination")).textOverflow !== "ellipsis") {
     throw new Error("move pill color, cap or accessible destination changed");
@@ -1464,7 +1465,7 @@ window.addEventListener("unhandledrejection", (event) => {
     is_container: false, visible_index: 0, parent_visible_index: null,
     first_child_visible_index: null, position_in_set: 1, set_size: 1000,
     expanded: false, row_kind: "operation", operation_id: "5".repeat(32),
-    operation_kind: "copy", presentation_kind: "copy", prior_path: null, reason: null, blocked_reason: null,
+    operation_kind: "copy", presentation_kind: "copy", prior_name: null, reason: null, blocked_reason: null,
     selection: "selected", selectable_operation_count: 1,
     selected_operation_count: 1, operation_count: 1, size: "4096",
     mtime_ns: "1000000000", dependency_count: 0, risk: "none",
@@ -3298,9 +3299,9 @@ window.addEventListener("unhandledrejection", (event) => {
     };
   });
   const priorRow = {
-    ...planReviewTask.review.window.rows[0], display: `1 item moved to ${galleryMovePath}`,
+    ...planReviewTask.review.window.rows[0], display: `1 item moved to ${galleryMoveDisplay}`,
     expanded: false, position_in_set: 1, set_size: 3,
-    move_group: { count: 1, destination: galleryMovePath },
+    move_group: { count: 1, destination_display: galleryMoveDisplay },
   };
   const destinationRow = {
     ...priorRow, node_id: priorRow.move_peer_id, display: galleryMovePath.split("\\").at(-1),
@@ -3318,7 +3319,7 @@ window.addEventListener("unhandledrejection", (event) => {
   const canonicalRow = {
     ...priorChild, node_id: priorChild.move_peer_id, display: "report.pdf",
     row_kind: "operation", operation_id: "5".repeat(32), move_peer_id: priorChild.node_id,
-    prior_path: "previous\\old-report.pdf",
+    prior_name: null,
     selection: "selected", selectable_operation_count: 1,
     selected_operation_count: 1, operation_count: 1, size: "4096", mtime_ns: "1000000000",
     execution: { operation: null, automatic_verification: null, evidence: null },
@@ -3326,7 +3327,7 @@ window.addEventListener("unhandledrejection", (event) => {
   const renamedRow = {
     ...canonicalRow, node_id: `node-${"c".repeat(32)}`, operation_id: "6".repeat(32),
     display: "Logo.PNG", operation_kind: "recase", presentation_kind: "rename",
-    prior_path: "logo.png", move_peer_id: null, depth: 0, parent_visible_index: null,
+    prior_name: "logo.png", move_peer_id: null, depth: 0, parent_visible_index: null,
     position_in_set: 3, set_size: 3,
   };
   const moveTask = recentTask();
@@ -3404,17 +3405,17 @@ window.addEventListener("unhandledrejection", (event) => {
   };
   const moveGrid = movePanel.element.querySelector(".nami-file-list__grid");
   const savedNameWidth = moveGrid.style.getPropertyValue("--nami-file-column-name");
-  const savedPriorPath = canonicalRow.prior_path;
+  const savedPriorName = renamedRow.prior_name;
   moveGrid.style.setProperty("--nami-file-column-name", "320px");
-  canonicalRow.prior_path = `${"folder\\".repeat(300)}old-report.pdf`;
+  renamedRow.prior_name = `${"x".repeat(247)}logo.png`;
   renderMoveRows(true, true);
-  const longOriginRow = movePanel.element.querySelector(`[data-node-id="${canonicalRow.node_id}"]`);
+  const longOriginRow = movePanel.element.querySelector(`[data-node-id="${renamedRow.node_id}"]`);
   const longOrigin = longOriginRow.querySelector(".nami-plan-row__previous");
   const retainedFilename = longOriginRow.querySelector(".nami-file-row__name-text");
   moveEvidence.long_origin_keeps_filename = retainedFilename.clientWidth >= retainedFilename.scrollWidth;
   moveEvidence.long_origin_clipped = longOrigin.clientWidth < longOrigin.scrollWidth
     && getComputedStyle(longOrigin).textOverflow === "ellipsis";
-  canonicalRow.prior_path = savedPriorPath;
+  renamedRow.prior_name = savedPriorName;
   if (savedNameWidth === "") moveGrid.style.removeProperty("--nami-file-column-name");
   else moveGrid.style.setProperty("--nami-file-column-name", savedNameWidth);
   renderMoveRows(true, true);

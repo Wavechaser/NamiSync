@@ -64,6 +64,7 @@ _TEST_ONLY_MARKERS = (
 )
 _OPEN_CONTEXT = ReadinessContext(CommandPhase.OPEN, 0)
 _RECENT_MOVE_PATH = "projects\\archive\\a-long-relative-destination-that-remains-available-in-the-tooltip"
+_RECENT_MOVE_DISPLAY = "…\\" + _RECENT_MOVE_PATH.rsplit("\\", 1)[-1]
 _RECENT_REFUSAL_MESSAGES = (
     "Execution preflight refused. The target has insufficient free space. Free space on its drive. A source item changed after review. Resolve these issues, then click Plan again.",
     "Execution commitment is invalid. Click Plan again and review the new plan before executing.",
@@ -85,14 +86,14 @@ def _recent_ui_sample() -> dict[str, object]:
             )
         ],
         "move": {
-            "destination": _RECENT_MOVE_PATH, "title": f"1 item moved to {_RECENT_MOVE_PATH}",
+            "destination": _RECENT_MOVE_DISPLAY, "title": f"1 item moved to {_RECENT_MOVE_DISPLAY}",
             "revealed_node": f'node-{"8" * 32}', "expanded": "true", "checkable": False,
             "prior_child_visible": True, "destination_highlighted": "true",
             "revealed_destination": f'node-{"9" * 32}', "prior_action": "Move",
             "prior_metadata": "", "prior_selection_disabled": True,
             "initial_collapsed": True, "path_in_badge": True,
             "badge_matches_action_radius": True, "path_clipped": True,
-            "moved_annotation": "moved from previous\\old-report.pdf",
+            "moved_annotation": "moved from another folder",
             "renamed_annotation": "renamed from logo.png", "rename_action": "Rename",
             "annotations_purple": True,
             "long_origin_keeps_filename": True, "long_origin_clipped": True,
@@ -3144,6 +3145,7 @@ def _run_gallery_mode(
         "get_inventory_detail",
         "get_inventory_window",
         "get_plan_anchor",
+        "get_plan_detail",
         "get_plan_window",
         "list_tasks",
         "mutate_plan_highlight",

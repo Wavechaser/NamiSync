@@ -272,6 +272,7 @@ class TaskAuthority(Protocol):
     def update_plan_view(self, *args, **kwargs) -> dict[str, object]: ...
 
     def get_plan_window(self, *args, **kwargs) -> dict[str, object]: ...
+    def get_plan_detail(self, *args, **kwargs) -> dict[str, object]: ...
 
     def get_execution_detail(self, *args, **kwargs) -> dict[str, object]: ...
 
@@ -512,6 +513,13 @@ class _PlanWindowPayload:
 
 @dataclass(frozen=True, slots=True)
 class _InventoryDetailPayload:
+    task_id: str
+    expected_revision: int
+    node_id: str
+
+
+@dataclass(frozen=True, slots=True)
+class _PlanDetailPayload:
     task_id: str
     expected_revision: int
     node_id: str
@@ -1056,6 +1064,14 @@ def production_command_specs(
             limit=payload.limit,
         )
 
+    def get_plan_detail(payload: object) -> object:
+        if type(payload) is not _PlanDetailPayload:
+            raise TypeError("get_plan_detail received an unvalidated payload")
+        return registry.get_plan_detail(
+            payload.task_id, expected_revision=payload.expected_revision,
+            node_id=payload.node_id,
+        )
+
     def get_execution_detail(payload: object) -> object:
         if type(payload) is not _ExecutionDetailPayload:
             raise TypeError("get_execution_detail received an unvalidated payload")
@@ -1468,6 +1484,15 @@ def production_command_specs(
                 revision=FieldRequirement.REQUIRED,
                 response_policy=CommandResponsePolicy.FEEDBACK_ONLY,
                 retry=CommandRetry.NONE,
+            ),
+            "get_plan_detail": CommandSpec(
+                validate_payload=_validate_plan_detail,
+                handler=get_plan_detail,
+                access=CommandAccess.READ_ONLY,
+                command_id=FieldRequirement.FORBIDDEN,
+                revision=FieldRequirement.REQUIRED,
+                response_policy=CommandResponsePolicy.LOCAL_5_SECONDS,
+                retry=CommandRetry.SAME_PAYLOAD_ONCE,
             ),
             "get_plan_window": CommandSpec(
                 validate_payload=_validate_plan_window,
@@ -1887,6 +1912,17 @@ def _validate_plan_window(value: object) -> _PlanWindowPayload:
     ):
         raise CommandPayloadError("get_plan_window payload is invalid")
     return _PlanWindowPayload(task_id, expected_revision, offset, limit)
+
+
+def _validate_plan_detail(value: object) -> _PlanDetailPayload:
+    if type(value) is not dict or set(value) != {"task_id", "expected_revision", "node_id"}:
+        raise CommandPayloadError("get_plan_detail payload is invalid")
+    task_id, revision, node_id = value["task_id"], value["expected_revision"], value["node_id"]
+    if (type(task_id) is not str or _TASK_ID.fullmatch(task_id) is None
+            or not _is_javascript_safe_integer(revision) or revision < 0
+            or type(node_id) is not str or re.fullmatch(r"node-[0-9a-f]{32}", node_id) is None):
+        raise CommandPayloadError("get_plan_detail payload is invalid")
+    return _PlanDetailPayload(task_id, revision, node_id)
 
 
 def _validate_inventory_detail(value: object) -> _InventoryDetailPayload:

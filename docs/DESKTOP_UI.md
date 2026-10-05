@@ -1416,26 +1416,39 @@ Known reason-code labels are translated only at rendering; backend facts,
 selection and execution authority remain unchanged.
 
 Prior groups start collapsed and show one clickable badge containing both the
-count (`N items moved to`) and relative destination in the filename area, with
+count (`N items moved to`) and compact destination in the filename area, with
 separate expand/collapse disclosure. Its 4 px corners and inner padding match
 the compact action badges. The target parent is the destination even for a directory move.
-Cap the relative text with an ellipsis and retain the full
-relative label in its tooltip and accessible name. Use purple background/text:
+The destination label is a basename with an ellipsis prefix when ancestors are
+omitted, bounded to 255 UTF-16 units; its tooltip and accessible name use the
+same compact label. Full relative destinations are available in the highlighted
+group's item details. Use purple background/text:
 light purple badge fill with dark purple text in Light, dark purple fill with light
 purple text in Dark, and system colors in forced colors. Activation reveals the
 canonical destination, expanding its ancestors and clearing only obstructing
 search/filters. Root destinations jump to the first canonical moved item.
 The pill and its contents stay outside execution selection and totals.
-Canonical move rows append purple **moved from [relative path]** text after the
-filename. Rename rows instead show **renamed from [previous name]** and have no
+Canonical move rows append purple **moved from another folder** text after the
+filename. Move + update uses **previous location available in details**, including
+same-folder updates. Rename rows show **renamed from [previous name]** and have no
 prior-location groups. The browser renders projection-supplied classification
-and prior paths; it never hides rows or derives filter membership. Long origin
-annotations ellipsize and retain their full text in a tooltip.
+and bounded prior basenames; it never hides rows or derives filter membership.
+Long Rename annotations ellipsize and retain their prior basename in a tooltip.
 They use at most half the Filename cell so long origins leave the filename readable.
 If the destination's follow-up window no longer matches, retain the last coherent
 review and offer **Refresh review** with an explanation. A coherent conflict
 response aligns the viewport with the loaded offset before asking the user to
 click the destination again; obsolete task/navigation responses remain silent.
+
+Window display and notice labels are bounded to 300 UTF-16 units. A separate
+read for the highlighted node supplies complete original-case relative paths,
+its source/target origin, previous path, move destination and full notice without
+filesystem access. Item details show these facts before execution; root prefixes
+are a separate presentation concern. Node, view, session, action, navigation and
+Close guards reject obsolete replies. Returning to a retained Plan reads its
+highlighted node again; retired paths never reappear from a cached detail.
+Reads never fan out across visible rows.
+Planned-detail loading or failure stays visible alongside execution-detail status.
 
 Row highlighting is distinct from execution selection. Pointer and keyboard
 gestures replace, toggle, extend, or add ranges in the complete server-owned

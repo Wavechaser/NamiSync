@@ -39,7 +39,7 @@ const baseRow = {
   operation_id: "3".repeat(32),
   operation_kind: "copy",
   presentation_kind: "copy",
-  prior_path: null,
+  prior_name: null,
   reason: null,
   blocked_reason: null,
   selection: "selected",
@@ -188,10 +188,10 @@ const groupRow = { ...baseRow, row_kind: "prior-group", operation_id: null,
   operation_kind: null, presentation_kind: null, execution: null, size: null, is_container: true,
   selection: "disabled", selectable_operation_count: 0, selected_operation_count: 0,
   operation_count: 0, move_peer_id: `node-${"9".repeat(32)}`,
-  move_group: { count: 1, destination: "" } };
+  move_group: { count: 1, destination_display: "" } };
 responseResult = { ...baseWindow(null), rows: [groupRow] };
 await bridge.getPlanWindow(taskId, 0, 0, 1);
-for (const move_group of [null, { count: 0, destination: "" }, { count: 1, destination: "relative", absolute: "private" }]) {
+for (const move_group of [null, { count: 0, destination_display: "" }, { count: 1, destination_display: "relative", absolute: "private" }]) {
   responseResult = { ...baseWindow(null), rows: [{ ...groupRow, move_group }] };
   if (await bridge.getPlanWindow(taskId, 0, 0, 1).then(() => null, (error) => error) === null) {
     throw new Error("invalid informational move group was accepted");
@@ -226,15 +226,97 @@ for (const value of [{ ...responseResult, index: 600 }, { ...responseResult, nod
   }
 }
 responseResult = { ...baseWindow(null), rows: [{ ...baseRow, size: null,
-  operation_kind: "recase", presentation_kind: "rename", prior_path: "folder\\old.txt" }] };
+  operation_kind: "recase", presentation_kind: "rename", prior_name: "old.txt" }] };
 const renamed = await bridge.getPlanWindow(taskId, 0, 0, 1);
 if (renamed.rows[0].operation_kind !== "recase" || renamed.rows[0].presentation_kind !== "rename"
-    || renamed.rows[0].prior_path !== "folder\\old.txt") throw new Error("rename presentation lost raw operation identity");
+    || renamed.rows[0].prior_name !== "old.txt") throw new Error("rename presentation lost raw operation identity");
 for (const patch of [{ presentation_kind: undefined }, { presentation_kind: 1 },
-  { prior_path: undefined }, { prior_path: 1 }]) {
+  { prior_name: undefined }, { prior_name: 1 }, { presentation_kind: "future" },
+  { presentation_kind: null }, { operation_kind: null }, { operation_kind: "future" },
+  { presentation_kind: "rename", prior_name: "old.txt" }, { prior_name: "old.txt" }]) {
   responseResult = { ...baseWindow(null), rows: [{ ...baseRow, size: null, ...patch }] };
   if (await bridge.getPlanWindow(taskId, 0, 0, 1).then(() => null, (error) => error) === null) {
     throw new Error("invalid rename presentation shape was accepted");
   }
 }
+for (const patch of [
+  { operation_kind: null, presentation_kind: null },
+  { operation_id: null, execution: null },
+  { row_kind: "folder", operation_id: null, execution: null },
+  { row_kind: "notice", operation_id: null, execution: null },
+  { row_kind: "operation-group" },
+  { row_kind: "prior-operation" },
+]) {
+  responseResult = { ...baseWindow(null), rows: [{ ...baseRow, size: null, ...patch }] };
+  if (await bridge.getPlanWindow(taskId, 0, 0, 1).then(() => null, (error) => error) === null) {
+    throw new Error("invalid row kind / operation identity relationship was accepted");
+  }
+}
+for (const row_kind of ["folder", "operation-group", "prior-folder", "prior-operation-group", "notice"]) {
+  responseResult = { ...baseWindow(null), rows: [{ ...baseRow, size: null, row_kind,
+    operation_id: null, operation_kind: null, presentation_kind: null, execution: null }] };
+  await bridge.getPlanWindow(taskId, 0, 0, 1);
+}
+responseResult = { ...baseWindow(null), rows: [{ ...baseRow, size: null,
+  row_kind: "prior-operation", operation_kind: "move", presentation_kind: "move",
+  operation_id: null, execution: null }] };
+await bridge.getPlanWindow(taskId, 0, 0, 1);
+responseResult = { ...baseWindow(null), rows: [{ ...baseRow, size: null, is_container: true }] };
+await bridge.getPlanWindow(taskId, 0, 0, 1);
+for (const prior_name of ["", "folder\\old.txt", "folder/old.txt", "x".repeat(256), "\ud800", "nul\0name"]) {
+  responseResult = { ...baseWindow(null), rows: [{ ...baseRow, size: null,
+    operation_kind: "recase", presentation_kind: "rename", prior_name }] };
+  if (await bridge.getPlanWindow(taskId, 0, 0, 1).then(() => null, (error) => error) === null) {
+    throw new Error("invalid prior basename was accepted");
+  }
+}
+responseResult = { ...baseWindow(null), rows: [{ ...baseRow, size: null,
+  operation_kind: "move", presentation_kind: "rename", prior_name: "😀".repeat(127) + "x" }] };
+await bridge.getPlanWindow(taskId, 0, 0, 1);
+for (const patch of [{ display: "x".repeat(301) },
+  { move_group: { count: 1, destination_display: "x".repeat(256) } },
+  { move_group: { count: 1, destination_display: "\ud800" } }]) {
+  responseResult = { ...baseWindow(null), rows: [{ ...groupRow, ...patch }] };
+  if (await bridge.getPlanWindow(taskId, 0, 0, 1).then(() => null, (error) => error) === null) {
+    throw new Error("unbounded or malformed group label was accepted");
+  }
+}
+for (const patch of [{ display: "x".repeat(301) }, { notice: "x".repeat(301) },
+  { notice: "\ud800" }, { row_kind: "future" }]) {
+  responseResult = { ...baseWindow(null), rows: [{ ...baseRow, size: null, ...patch }] };
+  if (await bridge.getPlanWindow(taskId, 0, 0, 1).then(() => null, (error) => error) === null) {
+    throw new Error("unbounded or malformed ordinary label was accepted");
+  }
+}
+const planDetail = { disposition: "current", view_revision: 0, node_id: baseRow.node_id,
+  detail: { path: "Case\\Current.txt", prior_path: "Case\\Previous.txt",
+    move_destination_path: null, path_origin: "target", notice: null } };
+responseResult = planDetail;
+const detailResult = await bridge.getPlanDetail(taskId, 0, baseRow.node_id);
+if (detailResult.detail.prior_path !== planDetail.detail.prior_path
+    || requests.at(-1).command !== "get_plan_detail") throw new Error("planned full paths were not preserved");
+for (const invalid of [{ ...planDetail, node_id: groupRow.move_peer_id },
+  { ...planDetail, detail: { ...planDetail.detail, path_origin: null } },
+  { ...planDetail, detail: { ...planDetail.detail, path: null } },
+  { ...planDetail, detail: { ...planDetail.detail, prior_path: "x".repeat(32768) } },
+  { ...planDetail, detail: { ...planDetail.detail, path: "\ud800" } },
+  { ...planDetail, detail: { ...planDetail.detail, path_origin: "other" } },
+  { ...planDetail, detail: { ...planDetail.detail, notice: 1 } },
+  { ...planDetail, detail: { ...planDetail.detail, notice: "\ud800" } },
+  { ...planDetail, detail: { ...planDetail.detail, notice: undefined } },
+  { ...planDetail, detail: { ...planDetail.detail, extra: true } },
+  { ...planDetail, disposition: "conflict" }, { ...planDetail, detail: null }]) {
+  responseResult = invalid;
+  if (await bridge.getPlanDetail(taskId, 0, baseRow.node_id).then(() => null, (error) => error) === null) {
+    throw new Error("invalid plan detail was accepted");
+  }
+}
+responseResult = { ...planDetail, detail: { ...planDetail.detail,
+  path: "😀".repeat(16383) + "x", notice: "full diagnostic ".repeat(1000) } };
+await bridge.getPlanDetail(taskId, 0, baseRow.node_id);
+responseResult = { ...planDetail, detail: { ...planDetail.detail,
+  path: null, prior_path: null, move_destination_path: "", path_origin: null } };
+await bridge.getPlanDetail(taskId, 0, baseRow.node_id);
+responseResult = { ...planDetail, disposition: "conflict", detail: null };
+await bridge.getPlanDetail(taskId, 0, baseRow.node_id);
 console.log("ok");

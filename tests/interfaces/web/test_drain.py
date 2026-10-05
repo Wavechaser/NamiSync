@@ -4430,6 +4430,122 @@ def test_m1_7_reopen_retains_view_identity_and_execution_commit_revision() -> No
     assert execution.session_id == "b" * 32
 
 
+@pytest.mark.parametrize("case", ("origins-ascii", "origins-cjk", "groups-cjk", "notices-cjk"))
+def test_supported_long_paths_remain_readable_through_production_plan_window(case) -> None:
+    from _db_fixtures import file_stat, operation, plan
+    from namisync.workflows import build_plan_projection
+    from namisync.workflows.models import PlanArtifact, PlanRequest
+    from namisync.interfaces.web.bridge import AdmissionGranted, BridgeDispatcher
+    from namisync.interfaces.web.commands import production_command_specs
+    from namisync.interfaces.web.readiness import CommandPhase, ReadinessContext
+
+    character = "a" if case == "origins-ascii" else "一"
+    prefix = (character * 254 + "\\") * 128
+    group_case = case == "groups-cjk"
+    notice_case = case == "notices-cjk"
+    operations = tuple(
+        operation(OperationKind.MOVE,
+                  target_path=prefix + f"d{index:03}\\f.txt" if group_case else f"new\\f{index:03}.txt",
+                  prior_target_path=f"old{index:03}.txt" if group_case else prefix + f"f{index:03}.txt",
+                  target=file_stat())
+        for index in range(256)
+    )
+    value = plan(operations)
+    from namisync.core.models import ScanWarning, ScanWarningCode
+    warnings = tuple(ScanWarning(ScanWarningCode.ACCESS_DENIED, prefix + "leaf.txt", "diagnostic")
+                     for _ in range(256)) if notice_case else ()
+    if notice_case:
+        value = plan(())
+    assert all(len(str(value.target_root.path) + "\\" + path) <= 32_767
+               for item in operations for path in (item.target_rel_path, item.prior_target_rel_path))
+
+    class Service(_Service):
+        def get_plan_projection(self, request_id):
+            artifact = PlanArtifact(
+                PlanRequest(request_id, value.source_root.path, value.target_root.path),
+                SimpleNamespace(warnings=warnings), SimpleNamespace(warnings=(), directories=()),
+                value, Verdict(True, (), SimpleNamespace()),
+            )
+            return (build_plan_projection(request_id, artifact),
+                    _plan_selection_summary(), r"C:\source", r"D:\target")
+
+    registry, service = _registry(Service())
+    started = _start(registry)
+    _mark_terminal_drained(registry, started)
+    registry.release_terminal_session(started.task_id, started.session_id)
+    registry.open_plan_view(started.task_id)
+    revision = 0
+    if group_case:
+        registry.update_plan_view(
+            started.task_id, expected_revision=0, search_query="moved to",
+            filters=frozenset(), sort_column=PlanSortColumn.PATH,
+            sort_direction=SortDirection.ASCENDING, collapse_node_id=None, collapsed=None,
+        )
+        revision = 1
+    commands = production_command_specs(
+        picker=lambda: None, slots=SimpleNamespace(), registry=registry,
+        cosmetics=SimpleNamespace(), shell_ready=lambda _: None,
+        readiness_echo=lambda *_: True,
+    )
+    dispatcher = BridgeDispatcher(
+        document=SimpleNamespace(require_trusted=lambda: None), commands=commands,
+        admit=lambda _: AdmissionGranted(ReadinessContext(CommandPhase.OPEN, 0)),
+    )
+    payload = {"task_id": started.task_id, "expected_revision": revision,
+               "offset": 0 if group_case or notice_case else 1, "limit": 256}
+    response = dispatcher.dispatch(json.dumps({
+        "schema_version": BRIDGE_SCHEMA_VERSION, "request_id": "a1" * 16,
+        "command": "get_plan_window", "payload": payload,
+    }))
+    assert response["ok"] is True
+    rows = response["result"]["rows"]
+    assert len(rows) == 256
+    assert all("prior_path" not in row for row in rows)
+    if group_case:
+        assert all(row["row_kind"] == "prior-group" for row in rows)
+        assert all(len(row["display"].encode("utf-16-le")) // 2 <= 300 for row in rows)
+        assert all(row["move_group"]["destination_display"].startswith("…\\") for row in rows)
+        assert all(len(row["move_group"]["destination_display"].encode("utf-16-le")) // 2 <= 255 for row in rows)
+        assert registry.get_plan_detail(started.task_id, expected_revision=revision,
+                                        node_id=rows[0]["node_id"])["detail"]["move_destination_path"].startswith(prefix)
+    elif notice_case:
+        assert all(row["row_kind"] == "notice" for row in rows)
+        assert all(len(row["display"].encode("utf-16-le")) // 2 <= 300 for row in rows)
+        assert all(len(row["notice"].encode("utf-16-le")) // 2 <= 300 for row in rows)
+        detail = registry.get_plan_detail(started.task_id, expected_revision=revision,
+                                          node_id=rows[0]["node_id"])["detail"]
+        assert detail["path"] == prefix + "leaf.txt" and detail["path_origin"] == "source"
+        assert prefix in detail["notice"] and detail["notice"].endswith(" — diagnostic")
+        registry.update_plan_view(
+            started.task_id, expected_revision=0, search_query=prefix[:1000],
+            filters=frozenset(), sort_column=PlanSortColumn.PATH,
+            sort_direction=SortDirection.ASCENDING, collapse_node_id=None, collapsed=None,
+        )
+        assert registry.get_plan_window(started.task_id, expected_revision=1,
+                                        offset=0, limit=256)["total"] == 256
+        revision = 1
+    else:
+        operation_row = next(row for row in rows if row["operation_id"] is not None)
+        detail = registry.get_plan_detail(started.task_id, expected_revision=revision,
+                                          node_id=operation_row["node_id"])
+        assert detail["detail"]["prior_path"].startswith(prefix)
+    stale = registry.get_plan_detail(started.task_id, expected_revision=revision + 1,
+                                     node_id=rows[0]["node_id"])
+    assert stale["disposition"] == "conflict" and stale["detail"] is None
+    exact_response = dispatcher.dispatch(json.dumps({
+        "schema_version": BRIDGE_SCHEMA_VERSION, "request_id": "b2" * 16,
+        "command": "get_plan_detail", "payload": {
+            "task_id": started.task_id, "expected_revision": revision,
+            "node_id": rows[0]["node_id"],
+        },
+    }))
+    assert exact_response["ok"] is True
+    assert exact_response["result"]["disposition"] == "current"
+    assert exact_response["result"]["detail"] == registry.get_plan_detail(
+        started.task_id, expected_revision=revision, node_id=rows[0]["node_id"],
+    )["detail"]
+
+
 def test_new_plan_view_collapses_move_groups_and_reopen_preserves_expansion() -> None:
     from _db_fixtures import file_stat, operation, plan
     from namisync.workflows import build_plan_projection

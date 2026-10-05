@@ -777,23 +777,39 @@ export function createPlanReviewPanel(callbacks) {
     if (row.reason !== null) appendDetailFact("Reason", reasonLabel(row.reason));
     if (row.blocked_reason !== null) appendDetailFact("Blocked", reasonLabel(row.blocked_reason));
     if (row.selection_exclusion_reason !== null) appendDetailFact("Excluded", reasonLabel(row.selection_exclusion_reason));
-    if (row.notice !== null) appendDetailFact("Notice", row.notice);
+    const planned = current.planDetail;
+    let plannedStatus = "Planned details are unavailable.";
+    if (planned?.nodeId === row.node_id) {
+      plannedStatus = planned.state === "loading" ? "Loading planned details…"
+        : planned.state === "error" ? planned.message : "";
+      if (planned.state === "current") {
+        const paths = planned.response.detail;
+        if (paths.path !== null) appendDetailFact("Planned path", paths.path || "root", true);
+        if (paths.prior_path !== null) appendDetailFact("Previous path", paths.prior_path || "root", true);
+        if (paths.move_destination_path !== null) appendDetailFact("Move destination", paths.move_destination_path || "root", true);
+        if (paths.notice !== null) appendDetailFact("Notice", paths.notice);
+      }
+    }
+    if (row.notice !== null && !(planned?.nodeId === row.node_id && planned.state === "current")) {
+      appendDetailFact("Notice", row.notice);
+    }
     if (row.operation_id === null || current.window.execution.session_id === null) {
-      updateText(detailStatus, "Execution detail is available after this item runs.");
-      detailStatus.hidden = false;
+      updateText(detailStatus, plannedStatus);
+      detailStatus.hidden = plannedStatus === "";
       updateDiagnostics();
       return;
     }
     if (detail === null || detail.operationId !== row.operation_id) {
-      updateText(detailStatus, "Operation detail is unavailable.");
+      updateText(detailStatus, [plannedStatus, "Operation detail is unavailable."].filter(Boolean).join(" "));
       detailStatus.hidden = false;
       updateDiagnostics();
       return;
     }
-    updateText(detailStatus, detail.state === "loading" ? "Loading operation detail…"
+    const executionStatus = detail.state === "loading" ? "Loading operation detail…"
       : detail.state === "not-retained" ? "Detail will be available after terminal release."
-        : detail.state === "error" ? detail.message : "");
-    detailStatus.hidden = detail.state === "current";
+        : detail.state === "error" ? detail.message : "";
+    updateText(detailStatus, [plannedStatus, executionStatus].filter(Boolean).join(" "));
+    detailStatus.hidden = plannedStatus === "" && executionStatus === "";
     if (detail.state !== "current") {
       updateDiagnostics();
       return;
@@ -963,12 +979,14 @@ export function createPlanReviewPanel(callbacks) {
       addGroupDisclosure(element, row, () => callbacks.onViewChange(review, {
         collapseNodeId: row.node_id, collapsed: row.expanded === true,
       }));
-      if (row.prior_path !== null) {
+      if (row.prior_name !== null || (row.operation_id !== null
+          && ["move", "move_update"].includes(row.presentation_kind))) {
         const previous = document.createElement("span");
         previous.className = "nami-plan-row__previous";
         const renamed = row.presentation_kind === "rename";
-        const path = renamed ? row.prior_path.split(/[\\/]/).at(-1) : row.prior_path;
-        renderFilesystemText(previous, `${renamed ? "renamed" : "moved"} from ${path}`);
+        renderFilesystemText(previous, renamed ? `renamed from ${row.prior_name}`
+          : row.presentation_kind === "move" ? "moved from another folder"
+            : "previous location available in details");
         previous.title = previous.textContent;
         element.querySelector(".nami-file-row__name").append(previous);
       }
@@ -982,7 +1000,7 @@ export function createPlanReviewPanel(callbacks) {
         renderText(count, `${row.move_group.count} ${row.move_group.count === 1 ? "item" : "items"} moved to`);
         const destination = document.createElement("span");
         destination.className = "nami-plan-move-pill__destination";
-        renderFilesystemText(destination, row.move_group.destination || "root");
+        renderFilesystemText(destination, row.move_group.destination_display || "root");
         badge.append(count, destination);
         pill.append(badge);
         pill.title = row.display;

@@ -596,6 +596,26 @@ class PlanReviewState:
         with self._lock:
             return self.projection.node_for_id(node_id)
 
+    def detail(self, *, expected_revision: int, node_id: str) -> dict[str, object]:
+        with self._lock:
+            response: dict[str, object] = {
+                "disposition": "conflict", "view_revision": self.view_revision,
+                "node_id": node_id, "detail": None,
+            }
+            if expected_revision != self.view_revision:
+                return response
+            node = self.projection.node_for_id(node_id)
+            if node.position == 0:
+                raise ValueError("synthetic Plan root has no public detail")
+            response["disposition"] = "current"
+            response["detail"] = {
+                "path": node.path, "prior_path": node.prior_path,
+                "move_destination_path": node.move_destination_path,
+                "path_origin": node.path_origin,
+                "notice": node.notice,
+            }
+            return response
+
     def reveal_move(self, *, expected_revision: int, node_id: str) -> dict[str, object]:
         """Reveal one informational group's server-owned canonical destination."""
 
@@ -877,6 +897,10 @@ def _row_view(
     highlighted: bool = False,
 ) -> dict[str, object]:
     node = row.node
+    destination_display = (
+        None if node.move_destination_path is None
+        else _destination_display(node.move_destination_path)
+    )
     parent_visible = row.parent_visible_index
     if rootless and parent_visible == 0:
         parent_visible = None
@@ -884,7 +908,10 @@ def _row_view(
         parent_visible -= 1
     return {
         "node_id": node.node_id,
-        "display": node.display,
+        "display": (
+            f"{node.move_item_count} {'item' if node.move_item_count == 1 else 'items'} moved to {destination_display or 'root'}"
+            if node.row_kind == "prior-group" else _tail_text(node.display, 300)
+        ),
         "depth": node.depth - int(rootless),
         "is_container": node.is_container,
         "visible_index": row.visible_index - int(rootless),
@@ -900,7 +927,11 @@ def _row_view(
         "operation_id": node.operation_id,
         "operation_kind": node.operation_kind,
         "presentation_kind": node.presentation_kind,
-        "prior_path": node.prior_path,
+        "prior_name": (
+            _tail_text(node.prior_path.replace('/', '\\').rsplit('\\', 1)[-1], 255)
+            if node.prior_path is not None and node.presentation_kind == "rename"
+            else None
+        ),
         "reason": node.reason,
         "blocked_reason": node.blocked_reason,
         "selection": node.selection if selection is None else selection,
@@ -914,11 +945,32 @@ def _row_view(
         "risk": node.risk,
         "move_peer_id": node.move_peer_id,
         "move_group": None if node.move_destination_path is None else {
-            "count": node.move_item_count, "destination": node.move_destination_path,
+            "count": node.move_item_count, "destination_display": destination_display,
         },
-        "notice": node.notice,
+        "notice": None if node.notice is None else _tail_text(node.notice, 300),
         "selection_exclusion_reason": node.selection_exclusion_reason,
     }
+
+
+def _tail_text(value: str, maximum_units: int) -> str:
+    if len(value.encode("utf-16-le")) // 2 <= maximum_units:
+        return value
+    units = 1
+    tail: list[str] = []
+    for character in reversed(value):
+        width = 2 if ord(character) > 0xFFFF else 1
+        if units + width > maximum_units:
+            break
+        tail.append(character)
+        units += width
+    return "…" + "".join(reversed(tail))
+
+
+def _destination_display(path: str) -> str:
+    canonical = path.replace('/', '\\')
+    if '\\' not in canonical:
+        return _tail_text(canonical, 255)
+    return "…\\" + _tail_text(canonical.rsplit('\\', 1)[-1], 253)
 
 
 __all__ = ["PLAN_FILTERS", "PlanReviewState"]

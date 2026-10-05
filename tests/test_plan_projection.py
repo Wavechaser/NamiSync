@@ -47,6 +47,40 @@ def _artifact(*operations, warnings=(), refusals=(), target_directories=()) -> P
     )
 
 
+def test_projection_keeps_original_spelling_and_notice_path_origin() -> None:
+    moved = operation(OperationKind.MOVE, target_path=r"Destination\Mixed.txt",
+                      prior_target_path=r"Surviving\Old\Mixed.txt", target=file_stat())
+    source_warning = ScanWarning(ScanWarningCode.ACCESS_DENIED, r"Source\Case.txt", "source warning")
+    target_warning = ScanWarning(ScanWarningCode.DISAPPEARED, r"Target\Case.txt", "target warning")
+    artifact = _artifact(moved, warnings=(source_warning,))
+    artifact = replace(artifact, target_scan=SimpleNamespace(warnings=(target_warning,), directories=()))
+    projection = build_plan_projection(REQUEST_ID, artifact)
+    canonical = projection.node_for_id(projection.operation_node_id_by_id[str(moved.op_id)])
+    assert (canonical.path, canonical.path_origin) == (r"Destination\Mixed.txt", "target")
+    prior = next(node for node in projection.nodes if node.row_kind == "prior-operation")
+    assert (prior.path, prior.path_origin) == (r"Surviving\Old\Mixed.txt", "target")
+    prior_folder = next(node for node in projection.nodes if node.row_kind == "prior-folder" and node.display == "Old")
+    assert prior_folder.path == r"Surviving\Old"
+    warnings = [node for node in projection.nodes if node.row_kind == "notice"]
+    assert [(node.path, node.path_origin) for node in warnings] == [
+        (r"Source\Case.txt", "source"), (r"Target\Case.txt", "target"),
+    ]
+    rebound = apply_plan_projection_selection(
+        projection, selected_operation_ids=frozenset(), exclusion_reasons={},
+    )
+    assert [(node.path, node.path_origin) for node in rebound.nodes] == [
+        (node.path, node.path_origin) for node in projection.nodes
+    ]
+    context = build_plan_projection(REQUEST_ID, replace(
+        artifact, target_scan=SimpleNamespace(
+            warnings=(), directories=(_directory(r"Surviving\Old"),),
+        ),
+    ))
+    inferred = next(node for node in context.nodes if node.rel_path_key == "SURVIVING")
+    assert inferred.path == "Surviving"
+    assert inferred.display == "SURVIVING"  # Existing raw search/display fact stays intact.
+
+
 def test_plan_projection_preserves_groups_selection_and_move_old_path_ancestry() -> None:
     copied = operation(
         OperationKind.COPY,

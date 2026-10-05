@@ -222,6 +222,14 @@ explicit, reviewable and regression-backed.
   passes (four privilege skips), six installed UI checks and all 12 import
   contracts. Complete independent internal review; the requested Claude review
   was unavailable because its OAuth session expired.
+- Restore compact Plan windows for supported long paths, including previous
+  locations and scan notices. Read complete original-case paths and notices for
+  one highlighted item through a revisioned projection-only command. Keep full
+  search text, selection and node-id reveal unchanged; validate closed display
+  kinds, their operation relationships and bounded row labels. Migrate command
+  catalogs, browser consumers and fixtures together. Pass 5,913 ordinary checks
+  (four privilege skips), 12 import contracts and 12 installed UI/transport cases;
+  independently review the contract and its corrected row-kind validation.
 
 #### Repair bridge diagnostic composition receipts (2026-10-04)
 

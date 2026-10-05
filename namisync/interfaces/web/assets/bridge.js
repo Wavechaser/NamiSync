@@ -47,6 +47,7 @@ const COMMAND_POLICY_JSON = `{
   "get_inventory_detail": {"response_policy": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
   "update_plan_view": {"response_policy": "feedback-only", "retry": "none", "phase": "open"},
   "get_plan_window": {"response_policy": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
+  "get_plan_detail": {"response_policy": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
   "get_execution_detail": {"response_policy": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
   "get_plan_anchor": {"response_policy": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
   "reveal_plan_move": {"response_policy": "feedback-only", "retry": "none", "phase": "open"},
@@ -873,6 +874,27 @@ export async function getExecutionDetail(
   );
   const submit = () => dispatchAttempt(
     "get_execution_detail", payload, validateResult, PLAN_VIEW_TIMEOUT_MS,
+  );
+  try {
+    return await submit();
+  } catch (error) {
+    if (!(error instanceof BridgeTransportError)) throw error;
+  }
+  return submit();
+}
+
+export async function getPlanDetail(taskId, expectedRevision, nodeId) {
+  requireTaskId(taskId, "getPlanDetail");
+  if (!isNonnegativeInteger(expectedRevision) || !isNodeId(nodeId)) {
+    throw new TypeError("getPlanDetail requires an exact revision and node");
+  }
+  const payload = Object.freeze({
+    task_id: taskId, expected_revision: expectedRevision, node_id: nodeId,
+  });
+  const submit = () => dispatchAttempt(
+    "get_plan_detail", payload,
+    (value) => validatePlanDetail(value) && value.node_id === nodeId,
+    PLAN_VIEW_TIMEOUT_MS,
   );
   try {
     return await submit();
@@ -3123,17 +3145,41 @@ function validateExecutionRow(value) {
     && (value.evidence === null || validateExecutionEvidence(value.evidence));
 }
 
+function isPlanComponent(value) {
+  return typeof value === "string" && value.length > 0 && value.length <= 255
+    && isValidUnicode(value) && !/[\\/\u0000]/.test(value);
+}
+
+function validatePlanKinds(value) {
+  const canonical = value.row_kind === "operation";
+  const prior = value.row_kind === "prior-operation";
+  if (!canonical && !prior) return value.operation_id === null
+    && value.operation_kind === null && value.presentation_kind === null
+    && value.prior_name === null;
+  if (canonical ? value.operation_id === null : value.operation_id !== null) return false;
+  const kinds = ["copy", "update", "move", "move_update", "recase", "mkdir", "trash", "delete", "noop"];
+  if (!kinds.includes(value.operation_kind)) return false;
+  const validPair = value.operation_kind === "recase"
+    ? value.presentation_kind === "rename"
+    : value.operation_kind === "move"
+      ? ["move", "rename"].includes(value.presentation_kind)
+      : value.presentation_kind === value.operation_kind;
+  const canonicalRename = canonical && value.presentation_kind === "rename";
+  return validPair && (canonicalRename ? isPlanComponent(value.prior_name) : value.prior_name === null);
+}
+
 function validatePlanWindowRow(value) {
   return isExactObject(value, [
     "node_id", "display", "depth", "is_container", "visible_index",
     "parent_visible_index", "first_child_visible_index", "position_in_set",
     "set_size", "expanded", "row_kind", "operation_id", "operation_kind",
-    "presentation_kind", "prior_path",
+    "presentation_kind", "prior_name",
     "reason", "blocked_reason", "selection", "highlighted", "selectable_operation_count",
     "selected_operation_count", "operation_count", "size", "mtime_ns",
     "dependency_count", "risk", "move_peer_id", "move_group", "notice",
     "selection_exclusion_reason", "execution",
   ]) && isNodeId(value.node_id) && isValidUnicode(value.display)
+    && value.display.length <= 300
     && isNonnegativeInteger(value.depth) && typeof value.is_container === "boolean"
     && isNonnegativeInteger(value.visible_index)
     && (value.parent_visible_index === null || isNonnegativeInteger(value.parent_visible_index))
@@ -3141,11 +3187,10 @@ function validatePlanWindowRow(value) {
     && isNonnegativeInteger(value.position_in_set) && value.position_in_set >= 1
     && isNonnegativeInteger(value.set_size) && value.position_in_set <= value.set_size
     && (value.expanded === null || typeof value.expanded === "boolean")
-    && typeof value.row_kind === "string"
+    && ["folder", "operation", "operation-group", "prior-folder", "prior-operation",
+      "prior-operation-group", "prior-group", "notice"].includes(value.row_kind)
     && (value.operation_id === null || (typeof value.operation_id === "string" && ID_PATTERN.test(value.operation_id)))
-    && (value.operation_kind === null || typeof value.operation_kind === "string")
-    && (value.presentation_kind === null || typeof value.presentation_kind === "string")
-    && (value.prior_path === null || isBoundedPath(value.prior_path))
+    && validatePlanKinds(value)
     && (value.reason === null || typeof value.reason === "string")
     && (value.blocked_reason === null || typeof value.blocked_reason === "string")
     && ["selected", "unselected", "mixed", "disabled"].includes(value.selection)
@@ -3160,14 +3205,30 @@ function validatePlanWindowRow(value) {
     && (value.move_peer_id === null || isNodeId(value.move_peer_id))
     && (value.move_group === null ? value.row_kind !== "prior-group"
       : value.row_kind === "prior-group" && value.move_peer_id !== null
-        && isExactObject(value.move_group, ["count", "destination"])
+        && isExactObject(value.move_group, ["count", "destination_display"])
         && isNonnegativeInteger(value.move_group.count) && value.move_group.count > 0
-        && (value.move_group.destination === "" || isBoundedPath(value.move_group.destination)))
-    && (value.notice === null || isValidUnicode(value.notice))
+        && typeof value.move_group.destination_display === "string"
+        && value.move_group.destination_display.length <= 255
+        && isValidUnicode(value.move_group.destination_display))
+    && (value.notice === null || (isValidUnicode(value.notice) && value.notice.length <= 300))
     && (value.selection_exclusion_reason === null
       || isValidUnicode(value.selection_exclusion_reason))
     && (value.execution === null || validateExecutionRow(value.execution))
     && ((value.operation_id === null) === (value.execution === null));
+}
+
+function validatePlanDetail(value) {
+  if (!isExactObject(value, ["disposition", "view_revision", "node_id", "detail"])
+      || !["current", "conflict"].includes(value.disposition)
+      || !isNonnegativeInteger(value.view_revision) || !isNodeId(value.node_id)) return false;
+  if (value.disposition === "conflict") return value.detail === null;
+  const detail = value.detail;
+  return isExactObject(detail, ["path", "prior_path", "move_destination_path", "path_origin", "notice"])
+    && [detail.path, detail.prior_path, detail.move_destination_path].every(
+      (path) => path === null || path === "" || isBoundedPath(path),
+    ) && [null, "source", "target"].includes(detail.path_origin)
+    && ((detail.path === null) === (detail.path_origin === null))
+    && (detail.notice === null || isValidUnicode(detail.notice));
 }
 
 function validatePlanWindow(value) {

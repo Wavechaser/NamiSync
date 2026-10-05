@@ -11,6 +11,137 @@ retains investigation, rejected proposals and superseded execution recipes;
 the decisions still governing delivery are below. Historical observations
 certify their recorded build and dependencies only.
 
+## GUI follow-up batch — 2026-10-05
+
+User-ratified six-unit follow-up from `583f14d` on `milestone1`. Implement,
+verify and independently review each unit before its own atomic commit; serialize
+overlapping renderer, gallery and bridge consumers. Evidence and the user's
+original uncommitted HANDOFF findings are preserved in
+`build/gui-followup-20261005/`. Elaborate each finite population and gate before
+its implementation against its integrated predecessor.
+
+| ID | Accepted outcome | Dependencies and verification |
+| --- | --- | --- |
+| GUI-B1 | Restore bounded plan-window labels, validate presentation enums/relationships, and migrate detail disclosure and all direct consumers. Full paths belong to individual details; Rename keeps its prior basename, Move uses a generic origin note, and previous-location destinations use compact labels. Preserve projection classification, node-id reveal, selection, revisions and the existing response wall. | Complete: 5,913 ordinary passes/four privilege skips, 12 import contracts and 12 installed gallery/shell/transport passes (`b1-*-02`). Independent review includes the corrected row-kind validator and final input binding. Atomic commit identity is recorded in batch evidence. |
+| GUI-B2 | Align Verify table with Plan/gallery row geometry, zebra, disabled checkbox affordances, Notes, concise Presence labels, hierarchical basenames, typography and semantic tones. Preserve inventory evidence, scope, sorting, windowing and recovery. | **Deferred by the user for separate review** after recurrence analysis below. No B2 product/test changes. Functional checkboxes remain M1-10; proposed disabled visuals are also deferred with B2. |
+| GUI-B3 | Match Verify Setup height and reorganize status into summary plus one stable detailed line, with shared progress presentation and existing Refresh/recovery actions. Retain published/current scan distinctions without duplicate routine prose. | Continue independently after B1 against the unchanged Inventory table/contract; pending/live/terminal/previous-publication/recovery probes and installed status/setup placement. Pending. |
+| GUI-B4 | Use local `yyyy-MM-DD HH:mm` display for UI timestamps, including Verify mtime, terminal completion and both detail panes; retain raw machine values where explicitly diagnostic. | After B3; shared formatter, direct consumers and relevant installed presentation. Pending. |
+| GUI-B5 | Cap details at 20rem, allocate more height to item details, and show full paths joined to the correct known root without filesystem probes. | After B1/B4; root/action mapping tests and installed responsive pane/scroll checks. Pending. |
+| GUI-B6 | Row context menus reuse existing menu styling and existing Show details, Select/Deselect where allowed, and folder Expand/Collapse actions. Verify additionally offers Refresh selected and Acknowledge missing for missing rows, through existing node-scoped commands. | After B5 against the unchanged Inventory contract; keyboard/pointer, dismissal, pending/retired ownership and informational-row restrictions; installed gesture witness. Inventory has no Select/Deselect action. No clipboard or new filesystem actions. Pending. |
+
+All units retain safe filesystem-text rendering, server-owned action scope,
+bounded windows, truthful publication/recovery, operation semantics and M1-10/A6
+deferrals. No hashing, persistence, new execution authority, push or PR. Apply
+AGENTS mandatory and recurrence stops. Trace producer/validator/fixture migrations
+together and retain failed evidence; test color alone does not classify defects.
+Use official Microsoft Fluent references and existing components. HANDOFF is
+updated at delivery, preserving the original user-authored finding in evidence.
+
+**B1 implementation boundary.** The inspected existing detail command is
+execution-only and cannot disclose planning/group paths. Add one revisioned
+`get_plan_detail` read for an exact retained projection node, available before
+execution with no filesystem or ledger I/O. Preserve original path spelling and
+its source/target origin in projection facts; B5 joins the known root for display.
+Replace window `prior_path` with canonical Rename-only `prior_name` (one component,
+at most 255 UTF-16 units). Use bounded `destination_display` (255 units) and group
+display (300 units); full projection text still owns search/reveal. Validate the
+closed operation/presentation mapping, null relationships and row placement.
+
+Finite population: `workflows/plan_projection.py`; web `plan_review.py`, `drain.py`,
+`commands.py`, assets `bridge.js`, `app.js`, `plan_review.js`; direct projection,
+review, drain, command and frontend probes; gallery/installed shell consumers;
+command catalogs in host, native-host, transport and gallery tests and the
+current `tools/performance/bridge_event` helper. Migrate their row/detail fixtures
+and exact catalogs together; historical receipts remain unchanged. Matching
+BRIDGE/PRESENTATION/DESKTOP_UI/BUGS plus delivery docs belong to this commit.
+Bounded read admission, stale/navigation/close suppression, safe text and unchanged
+selection/execution/navigation are required. Run the ordinary suite/import gate
+and affected installed gallery/shell/transport reads after source freeze.
+
+The initial real projection → registry → command → BridgeDispatcher reproducer
+returned `response_too_large`: one 256-row window containing 255 operations with
+supported 32,648-unit prior paths serialized to 8,563,406 ASCII bytes or 25,144,526
+CJK bytes, exceeding the existing 8,388,608-byte wall. This is a bounded display
+availability failure, not an escape of the correctly enforced response wall.
+Retain reproduction and compact-window/detail/malformed-input witnesses in B1
+evidence. New action authority, automatic detail fanout and path probes are excluded.
+
+The user additionally ratified the same correction for notice labels: a typed
+256-warning projection with supported long CJK paths produced a 50,250,888-byte
+response because both `display` and `notice` repeated the path. Bound both window
+labels to 300 UTF-16 units and disclose the full nullable notice in the same exact
+detail read. Preserve raw projection search text. Other variable row reasons are
+workflow enum values; no additional owner or command is needed. This is the one
+investigated additional instance of the label/payload amplification mechanism,
+now included in B1's finite migration and tests.
+
+**B2/B3 inspected next-unit boundaries (`583f14d`).** Inventory's generic tree
+uses 28px rows, while the file-row specimen uses 24px. B2 migrates the Inventory
+controller's geometry with its renderer; preserve the generic tree default and
+generation/keyboard rules. Reuse file-row/Integrity markup and tokens while
+retaining disclosure listeners/tree semantics. Checkbox visuals are explicitly
+disabled and unchecked, with selection functionality deferred by the user.
+Add Notes from existing warning/acknowledgement/partial-total facts; keep complete
+facts in details. Display basenames only, preserve search/identity, and let Notes
+donate manual resize width while only Filename grows passively. Presence uses one
+semantic label with mismatch precedence; Reappeared suppresses redundant Present
+and Unverified text without claiming fresh verification.
+
+B2/B3 population: assets `inventory_review.js`, `app.css`, `tree.js` (B2 geometry),
+existing file-row/Integrity owners only if necessary for shared rendering;
+inventory/tree Node probes and Python wrappers; gallery producer/parent validator
+and installed Inventory helper/parent; DESKTOP_UI/PRESENTATION and delivery docs.
+Early gate: real inventory refresh/release/scope composition plus frontend probes.
+Each commit requires the interfaces department and affected installed gallery/
+Inventory checks. B3 preserves the same action/recovery contracts, uses existing
+snapshot progress (unknown scan total stays indeterminate), reserves Plan-like
+Setup geometry, and puts loading/recovery feedback in the existing stable detail
+slot. Previous/incomplete/scoped scan provenance remains visible; the global
+details card carries the fuller breakdown. No backend inventory selection,
+hashing, fabricated progress percentage or new scan policy.
+
+**B2 recurrence review and user deferral.** Read-only examination found the same
+repeated-full-text mechanism in Inventory. The common bridge response wall
+correctly refuses these responses; each adapter's serializer owns compact windows
+and its exact detail route owns complete text. There is no common path-population
+limit enforced before those serializers, and widening the response wall is not a
+remedy. The finite inventory field review found full `display` and `warning.path`;
+remaining warning text is already bounded to 1,024 UTF-8 bytes.
+
+| Instance | Supported consequence | Owner / disposition |
+| --- | --- | --- |
+| Plan move/origin/notice labels | 8.56–50.25 MB windows refused by the 8 MiB wall | B1 adapter and exact detail migration; current authorized atomic outcome. |
+| Inventory domain display | 19,426,765-byte window; basename diagnostic 175,565 bytes admitted | Inventory adapter; no fix implemented. |
+| Inventory warning display/path | 38,691,017-byte window; basename alone still 19,439,817; removing repeated path gives 186,057 admitted | Inventory adapter plus rowless detail routing; no fix implemented. |
+
+The fixture uses 256 typed entries beneath supported 25,120-unit rooted CJK
+paths. Raw method/results: `b2-design-inventory-envelope.py` and `.json` under the
+batch evidence root. Proposed coherent reorganization: compact adapter display,
+remove repeated warning paths, and extend the existing Inventory detail response
+with explicitly snapshot-owned path/warning context for selected rowless nodes,
+separate from existing fresh ledger evidence. No new command, scan, filesystem
+probe or action authority. Following AGENTS recurrence review, the user chose
+**Defer B2 and review separately**. Preserve the proposal rather than beginning
+another local fix. B3–B6 remain independent authorized work on the existing table
+and contract; B2's above population/gates are inspected proposals, not authority.
+
+**B4/B5/B6 next-unit populations.** Revalidate against integrated predecessors.
+B4 uses `render.js`'s shared display helpers, Plan/Inventory/status renderers and
+their direct Node consumers; B5 uses Plan/Inventory renderers and `app.css`, with
+B1's exact path facts and current inventory details. Execution item paths and
+its relative backup/published/prior/trash fields belong to the target root;
+projection notice paths carry their explicit source/target origin. A standalone
+Inventory path uses its summary root. B5 preserves independently scrollable cards
+and hidden-pane width recovery; item/global height allocation is 3:2. B6 adds one
+shared framework-free row-menu controller using existing menu classes, Plan/
+Inventory wiring and app action routing where needed. Existing callbacks retain
+scope/command authority; no visual checkbox becomes a selector. Menus dismiss on
+outside interaction, Escape, foreground loss, scroll/resize or owner replacement;
+keyboard invocation and menu navigation remain available. Direct probes,
+gallery/installed shell/Inventory fixtures and package asset consumers follow
+each changed seam. All three update DESKTOP_UI/delivery docs, run interfaces and
+affected installed checks, and receive fresh independent review before commit.
+
 ## GUI alignment batch — 2026-10-05
 
 User-ratified seven-point register from `999a568` on `milestone1`. Units

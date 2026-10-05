@@ -316,6 +316,11 @@ class _Service:
         self.calls.append(("get-plan-window", task_id, kwargs))
         return {"disposition": "current", "rows": []}
 
+    def get_plan_detail(self, task_id, **kwargs):
+        self.calls.append(("get-plan-detail", task_id, kwargs))
+        return {"disposition": "current", "view_revision": kwargs["expected_revision"],
+                "node_id": kwargs["node_id"], "detail": None}
+
     def get_execution_detail(self, task_id, operation_id, **kwargs):
         self.calls.append(("get-execution-detail", task_id, operation_id, kwargs))
         return {
@@ -568,6 +573,7 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
         "get_inventory_window",
         "get_inventory_detail",
         "update_plan_view",
+        "get_plan_detail",
         "get_plan_window",
         "get_execution_detail",
         "reveal_plan_move",
@@ -788,6 +794,9 @@ def test_m1_7_plan_commands_validate_and_reach_task_authority() -> None:
             "expected_execution_revision": 2,
         },
     )
+    plan_detail = _invoke(commands["get_plan_detail"], {
+        "task_id": TASK_ID, "expected_revision": 1, "node_id": node_id,
+    })
     anchor = _invoke(
         commands["get_plan_anchor"],
         {"task_id": TASK_ID, "expected_revision": 1, "node_id": node_id},
@@ -832,6 +841,7 @@ def test_m1_7_plan_commands_validate_and_reach_task_authority() -> None:
     assert updated["disposition"] == "applied"
     assert window["rows"] == []
     assert detail["disposition"] == "not-retained"
+    assert plan_detail["node_id"] == node_id
     assert anchor["node_id"] == node_id
     assert mutation["disposition"] == "applied"
     assert scope_mutation["disposition"] == "applied"
@@ -859,6 +869,7 @@ def test_m1_7_plan_commands_validate_and_reach_task_authority() -> None:
         "update-plan-view",
         "get-plan-window",
         "get-execution-detail",
+        "get-plan-detail",
         "get-plan-anchor",
         "mutate-plan-selection",
         "mutate-plan-scope",
@@ -871,6 +882,9 @@ def test_m1_7_plan_commands_validate_and_reach_task_authority() -> None:
     ("command", "payload"),
     (
         ("get_plan_window", {"task_id": TASK_ID, "expected_revision": 0, "offset": 0, "limit": 257}),
+        ("get_plan_detail", {"task_id": TASK_ID, "expected_revision": True, "node_id": "node-" + "9" * 32}),
+        ("get_plan_detail", {"task_id": TASK_ID, "expected_revision": 0, "node_id": "foreign"}),
+        ("get_plan_detail", {"task_id": TASK_ID, "expected_revision": 0, "node_id": "node-" + "9" * 32, "path": "private"}),
         ("get_execution_detail", {"task_id": TASK_ID, "operation_id": "bad", "expected_execution_revision": 0}),
         ("update_plan_view", {"task_id": TASK_ID, "expected_revision": 0, "search_query": "x", "filters": [], "sort_column": "path", "sort_direction": "descending", "collapse_node_id": None, "collapsed": None}),
         ("mutate_plan_selection", {"task_id": TASK_ID, "command_id": COMMAND_ID, "expected_revision": 0, "node_id": "bad", "selected": False}),

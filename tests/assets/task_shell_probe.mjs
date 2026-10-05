@@ -128,6 +128,7 @@ const executionControls = [];
 const planAgainStarts = [];
 const setupReads = [];
 const executionDetails = [];
+const planDetails = [];
 const reviewRenders = [];
 const confirmationRequests = [];
 const executeInvoker = new HTMLElement("button");
@@ -188,6 +189,10 @@ globalThis.taskHarness = {
   getExecutionDetail(...args) {
     calls.push(["execution-detail", ...args]);
     return deferred(executionDetails);
+  },
+  getPlanDetail(...args) {
+    calls.push(["plan-detail", ...args]);
+    return deferred(planDetails);
   },
   updatePlanView(...args) {
     assert.equal(typeof args.at(-1), "function", "view mutation exposes delay feedback");
@@ -421,6 +426,7 @@ const bridgeUrl = moduleUrl(`
   export const getPlanOperationAnchor = (...args) => globalThis.taskHarness.getPlanOperationAnchor(...args);
   export const getPlanWindow = (...args) => globalThis.taskHarness.getPlanWindow(...args);
   export const getExecutionDetail = (...args) => globalThis.taskHarness.getExecutionDetail(...args);
+  export const getPlanDetail = (...args) => globalThis.taskHarness.getPlanDetail(...args);
   export const openInventoryView = () => Promise.reject(new Error("unused inventory read"));
   export const updateInventoryView = () => Promise.reject(new Error("unused inventory read"));
   export const getInventoryWindow = () => Promise.reject(new Error("unused inventory read"));
@@ -460,7 +466,7 @@ const themeUrl = moduleUrl(`
 let appSource = await readFile(process.argv[2], "utf8");
 appSource = appSource.replace(
   /import \{[\s\S]*?\} from "\.\/bridge\.js";/,
-  `import { acknowledgeShellReady, acknowledgeInventory, admitLocation, BridgeTransportError, closeTask, controlExecution, createTask, echoReadiness, getExecutionDetail, getInventoryDetail, getInventoryWindow, openInventoryView, refreshInventory, restoreInventory, updateInventoryView, getPlanAnchor, getPlanOperationAnchor, getPlanWindow, revealPlanMove, listTasks, markBridgeOperational, mutatePlanHighlight, mutatePlanSelection, openPlanView, OutcomeUnavailableError, pickFolder, planAgain, prepareSetup, readSetup, StartPlanUncertainError, startExecution, startInventory, startPlan, startTaskDrain, TaskCloseUncertainError, TaskCreateUncertainError, TerminalPresentationError, TerminalSessionReleaseError, updatePlanView, whenBridgeApiReady } from "${bridgeUrl}";`,
+  `import { acknowledgeShellReady, acknowledgeInventory, admitLocation, BridgeTransportError, closeTask, controlExecution, createTask, echoReadiness, getExecutionDetail, getPlanDetail, getInventoryDetail, getInventoryWindow, openInventoryView, refreshInventory, restoreInventory, updateInventoryView, getPlanAnchor, getPlanOperationAnchor, getPlanWindow, revealPlanMove, listTasks, markBridgeOperational, mutatePlanHighlight, mutatePlanSelection, openPlanView, OutcomeUnavailableError, pickFolder, planAgain, prepareSetup, readSetup, StartPlanUncertainError, startExecution, startInventory, startPlan, startTaskDrain, TaskCloseUncertainError, TaskCreateUncertainError, TerminalPresentationError, TerminalSessionReleaseError, updatePlanView, whenBridgeApiReady } from "${bridgeUrl}";`,
 );
 appSource = appSource
   .replace("./readiness.js", readinessUrl)
@@ -596,7 +602,7 @@ function planWindow(summary, offset = 0) {
       operation_id: null,
       operation_kind: null,
       presentation_kind: null,
-      prior_path: null,
+      prior_name: null,
       reason: null,
       blocked_reason: null,
       selection: "disabled",
@@ -909,6 +915,7 @@ globalThis.planReviewHarness.callbacks.onExecutionDetail(firstReview, null);
 assert.equal(firstReview.executionDetail, null);
 
 const retainedHighlightOffset = firstReview.window.offset;
+const plannedReadsBeforeHighlight = planDetails.length;
 const offWindowHighlight = planSummary({
   view_revision: firstReview.summary.view_revision,
   highlight_revision: firstReview.summary.highlight_revision,
@@ -938,12 +945,15 @@ await until(() => firstReview.pending === null);
 assert.equal(firstReview.window.offset, retainedHighlightOffset + 256);
 assert.equal(firstReview.foregroundWindowReaders, 0);
 assert.equal(executionDetails.length, 3, "planned-row highlight needs no execution-detail read");
+assert.equal(planDetails.length, plannedReadsBeforeHighlight + 1,
+  "highlight reads only the focused node's planned paths");
+const retiredPlannedRead = planDetails.at(-1);
 
 const pointerWindowOffset = firstReview.window.offset;
 const retainedPointerHighlight = planSummary({
   view_revision: firstReview.summary.view_revision,
   highlight_revision: firstReview.summary.highlight_revision,
-  highlight_focus_node_id: firstReview.window.rows[0].node_id,
+  highlight_focus_node_id: `node-${"c".repeat(32)}`,
   highlight_focus_visible_index: pointerWindowOffset,
 });
 nextHighlightSummary = retainedPointerHighlight;
@@ -958,9 +968,29 @@ assert.equal(
   pointerWindowOffset,
   "a pointer highlight refreshes the retained window offset",
 );
-planWindows[4].resolve(planWindow(retainedPointerHighlight, pointerWindowOffset));
+const pointerHighlightWindow = planWindow(retainedPointerHighlight, pointerWindowOffset);
+pointerHighlightWindow.rows[0].node_id = retainedPointerHighlight.highlight_focus_node_id;
+planWindows[4].resolve(pointerHighlightWindow);
 await until(() => firstReview.pending === null);
 assert.equal(firstReview.window.offset, pointerWindowOffset);
+assert.equal(planDetails.length, plannedReadsBeforeHighlight + 2,
+  "a new highlight owns a distinct planned-detail read");
+const plannedNodeId = firstReview.summary.highlight_focus_node_id;
+const plannedReply = { disposition: "current", view_revision: firstReview.summary.view_revision,
+  node_id: plannedNodeId, detail: { path: "Case\\Current.txt",
+    prior_path: "Case\\Previous.txt", move_destination_path: null, path_origin: "target", notice: null } };
+planDetails.at(-1).resolve(plannedReply);
+await until(() => firstReview.planDetail?.state === "current");
+retiredPlannedRead.reject(new Error("late obsolete planned detail"));
+await turns();
+assert.equal(firstReview.planDetail.response, plannedReply,
+  "late obsolete planned errors preserve the newer highlighted detail");
+settingsButton().click();
+assert.equal(firstReview.planDetail, null, "Settings retires planned paths");
+taskButton("Task 7").click();
+assert.equal(firstReview.planDetail.state, "loading", "navigation reads the focused node again");
+assert.equal(firstReview.planDetail.response, null, "navigation cannot restore retired planned paths");
+const navigationPlannedRead = planDetails.at(-1);
 
 globalThis.planReviewHarness.callbacks.onSelect(
   firstReview,
@@ -978,6 +1008,9 @@ await until(() => planWindows.length === 6);
 planWindows[5].resolve(planWindow(selectedReview));
 await until(() => firstReview.pending === null);
 assert.equal(firstReview.foregroundWindowReaders, 0);
+navigationPlannedRead.resolve(plannedReply);
+await turns();
+assert.equal(firstReview.planDetail, null, "a newer view discards the navigation detail reply");
 
 firstReview.summary = planSummary({
   disposition: "current",

@@ -125,6 +125,8 @@ class PlanProjectionNode:
     move_destination_path: str | None = None
     presentation_kind: str | None = None
     prior_path: str | None = None
+    path: str | None = None
+    path_origin: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -257,6 +259,8 @@ class _PlanProjectionDraft:
     move_destination_path: str | None = None
     presentation_kind: str | None = None
     prior_path: str | None = None
+    path: str | None = None
+    path_origin: str | None = None
 
 
 def build_plan_projection(
@@ -356,6 +360,12 @@ def build_plan_projection(
         )
         prior_draft_by_tree_position: dict[int, int] = {}
         prior_operation_draft_by_id: dict[str, int] = {}
+        prior_path = group_operations[0].prior_target_rel_path
+        assert prior_path is not None
+        path_prefix = (
+            "\\".join(prior_path.replace('/', '\\').split('\\')[:ancestor_key.count('\\') + 1])
+            if ancestor_key else ""
+        )
         _append_operation_tree(
             drafts,
             prior_tree,
@@ -368,6 +378,7 @@ def build_plan_projection(
             prior_operation_draft_by_id,
             parent_override=prior_group,
             row_prefix="prior-",
+            path_prefix=path_prefix,
         )
         del prior_tree, prior_draft_by_tree_position
         for operation_id, prior_draft in prior_operation_draft_by_id.items():
@@ -385,7 +396,10 @@ def build_plan_projection(
             display = f"{side}: {warning.rel_path or 'root'} — {warning.code.value}"
             if warning.detail:
                 display += f" — {warning.detail}"
-            drafts.append(_notice_draft(request_id, len(drafts), display))
+            draft = _notice_draft(request_id, len(drafts), display)
+            draft.path = warning.rel_path or ""
+            draft.path_origin = side
+            drafts.append(draft)
     for refusal in artifact.verdict.refusals:
         drafts.append(
             _notice_draft(
@@ -664,6 +678,10 @@ def _ensure_prior_attachment(
     for key in reversed(missing):
         record = records.get(key)
         path = key if record is None else record.rel_path.replace('/', '\\')
+        detail_path = path
+        if record is None:
+            ancestor = records[ancestor_key].rel_path.replace('/', '\\')
+            detail_path = "\\".join(ancestor.split('\\')[:key.count('\\') + 1])
         index = len(drafts)
         draft = _structural_draft(
             _projection_id(b"NamiSyncNodeV1", "plan", request_id, key),
@@ -671,6 +689,8 @@ def _ensure_prior_attachment(
             row_kind="folder", is_container=True,
         )
         draft.size = 0
+        draft.path = detail_path
+        draft.path_origin = "target"
         draft.mtime_ns = None if record is None else record.mtime_ns
         drafts.append(draft)
         paths[key] = index
@@ -743,6 +763,7 @@ def _append_operation_tree(
     *,
     parent_override: int | None,
     row_prefix: str,
+    path_prefix: str = "",
 ) -> None:
     start_position = 0 if parent_override is None else 1
     direct_selectable = [0] * len(tree.nodes)
@@ -847,6 +868,11 @@ def _append_operation_tree(
                 None if singular is None else excluded.get(str(singular.op_id)),
             )
         )
+        draft = drafts[draft_index]
+        draft.path = path_prefix + "\\" + node.rel_path if path_prefix else node.rel_path
+        draft.path_origin = "target"
+        if singular is not None:
+            draft.path = singular.prior_target_rel_path if row_prefix else singular.target_rel_path
         if row_prefix == "":
             draft = drafts[draft_index]
             draft.is_directory = singular_is_directory
@@ -898,6 +924,8 @@ def _append_operation_tree(
                         excluded.get(operation_id),
                     )
                 )
+                drafts[member_index].path = operation.prior_target_rel_path if row_prefix else operation.target_rel_path
+                drafts[member_index].path_origin = "target"
 
 
 def _operation_draft(
@@ -1046,6 +1074,8 @@ def _materialize_projection(
             move_destination_path=draft.move_destination_path,
             presentation_kind=draft.presentation_kind,
             prior_path=draft.prior_path,
+            path=draft.path,
+            path_origin=draft.path_origin,
         ))
         drafts[index] = None  # type: ignore[list-item]
     frozen_nodes = tuple(nodes)

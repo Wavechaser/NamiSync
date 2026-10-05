@@ -1397,6 +1397,14 @@ class TaskRegistry:
                 evidence,
             )
 
+    def get_plan_detail(
+        self, task_id: str, *, expected_revision: int, node_id: str,
+    ) -> dict[str, object]:
+        task, view = self._require_plan_view(task_id)
+        with task.condition:
+            self._require_plan_view_locked(task, view)
+            return view.detail(expected_revision=expected_revision, node_id=node_id)
+
     def get_execution_detail(
         self,
         task_id: str,

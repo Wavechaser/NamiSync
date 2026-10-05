@@ -1,52 +1,62 @@
-# Latest session — rename/move presentation
+# Latest session — GUI follow-up
 
-2026-10-05 on `milestone1`, base `37d89ef`. GUI-A7 is delivered in this
-closing commit; its identity is retained in `build/rename-move-20261005/integration.md`.
-The user explicitly authorized Python-server and plan-projection classification.
-A6 execution-to-Verify remains deferred to M1-10.
+2026-10-05 on `milestone1`, base `583f14d`. The user ratified GUI-B1–B6 in
+M1_PLAN, then explicitly deferred all of B2 for separate review. B1 passed final
+verification and is ready for its atomic commit; B3–B6 remain authorized work.
 
-## Delivered behavior
+## B1 candidate
 
-- Rename combines RECASE and pure same-Windows-parent MOVE for row labels,
-  filters/counts and filtered selection. MOVE_UPDATE stays distinct even in place.
-  Real operation kinds, execution behavior and diagnostics remain unchanged.
-- Rename rows have no previous-location groups. Genuine groups start collapsed
-  on fresh acquisition and retain expansion when reopened. Their purple badges
-  contain the relative destination with ellipsis and keep existing reveal recovery.
-- Canonical rows show previous names/paths safely; origin text is capped to
-  preserve the filename. Projection, bridge, gallery, native shell and current
-  measurement-fixture consumers were migrated together. Historical measurement
-  JSON, legacy drivers and backend policies remain unchanged.
+Plan windows carry compact display/notice/destination labels and Rename-only
+prior filenames. One revisioned exact-node detail read preserves original-case
+paths, their source/target origin and complete notices without filesystem or
+ledger I/O. Raw projection search, node-id reveal, selection and execution are
+unchanged. Bridge admission checks closed presentation kinds and their exact
+row/operation relationships. Command catalogs and direct fixtures migrated.
 
-## Verification and review
+Evidence: `build/gui-followup-20261005/`. The user's sole pre-existing dirty
+HANDOFF was preserved verbatim in `user-handoff.md`; its findings are addressed
+by B1 and the corresponding BUGS entry. Focused backend checks passed 601 tests
+and 12 import contracts before the final casing adjustment; its seven direct
+checks passed. Frontend/gallery checks passed 82 tests, followed by 56 after
+independent review corrected row-kind/identity validation. Reviewer evidence is
+`b1-review-*`; the independent correction witness rejects four invalid shapes
+while retaining legitimate prior-location operations.
 
-Evidence: `build/rename-move-20261005/`. Final `ordinary-02` passed 5,903 tests
-with four existing Windows symlink-privilege skips; its import check kept all
-12 contracts. `native-02` passed all six installed gallery/task-shell checks.
-Focused gates passed 304 server, 94 frontend and 60 consumer checks.
-The real 120,000-node fixture confirms the current collapsed adapter geometry;
-this is correctness evidence, not a new timing or memory claim.
+`b1-ordinary-01` passed 5,910 tests with four privilege skips, but three sandbox
+setup failures prevented acceptance. Two ACL fixtures targeted a different
+principal than the sandbox process and failed before reaching the executor;
+PowerShell policy blocked the third test before its version guard. All twelve
+`b1-native-01` cases stopped at window enumeration before input. No product or
+driver changes were made for these conditions. `b1-environment-disposition.md`
+records the evidence. Final `b1-ordinary-02` passed 5,913 tests with four privilege
+skips and 35 headed exclusions, followed by all 12 import contracts.
+`b1-native-02` passed all 12 affected installed gallery/shell/transport checks.
+Both ran outside the sandbox on frozen product/test inputs; closing documentation
+is bound separately by independent review. Local document links and diff checks pass.
 
-Fresh independent review is recorded in `rename-review.md`. It caught and closed
-the long-origin filename squeeze and incomplete current fixture migrations.
-Failed/superseded receipts remain. An initial dark-gallery report rejection did
-not reproduce with matching installed inputs; final unchanged admission checks
-passed. `ui-correction-evidence.md` records an overwritten diagnostic-output caveat;
-the fresh independently bound `long-origin-comparison-03` retains the final
-none-versus-cap comparison and exact profile cleanup.
+## Deferred B2 and next work
 
-The requested Claude reviewer (`claude-opus-5-5`, `xhigh`) could not authenticate
-because OAuth expired. The user explicitly authorized internal-review completion.
-No external review or approval is claimed; reported usage and cost are zero.
-The broad review copy was replaced with a scoped dependency package after
-automatic approval review, and the exact final copy was removed after original
-hash/status verification. No fixtures were created by Claude and no authentication
-settings were changed. Raw JSON and cleanup records are retained for manual follow-up.
+Read-only Inventory review reproduced the same full-path replication mechanism:
+supported domain/notices windows exceeded the bridge's existing 8 MiB wall.
+AGENTS recurrence review produced the consolidated mechanism table and proposed
+an existing-detail-response extension for warning/synthetic snapshot paths.
+The user chose **Defer B2 and review separately**. No Inventory table, checkbox,
+payload or detail-contract changes were made. The open defect, complete field
+population and raw reproducer are in BUGS, M1_PLAN and `b2-design-inventory-envelope.*`.
+The earlier disabled-checkbox proposal is deferred with B2; functionality remains
+M1-10. Execution-to-Verify navigation/A6 remains deferred too.
+
+After B1 closes: B3 Setup/status alignment on the current Inventory table;
+B4 consistent local timestamps; B5 20rem details pane, 3:2 item/global height and
+root-correct full paths; B6 row context menus. Menus use existing actions only:
+Show details, Plan Select/Deselect where allowed, folder Expand/Collapse, and
+Verify Refresh selected/Acknowledge missing. Inventory keeps its existing single
+highlighted-node scope; no clipboard, new filesystem effects or selection policy.
 
 ## Operational context
 
-No task branch/worktree, push or PR. Source resumed after the crash without reset;
-only initial documentation had existed at that point. No active A7 work remains.
-Exact retained test roots are recorded in `*-inputs.json`, `*.temp` and named
-focused/diagnostic scripts. Reviewer-owned Edge profiles were removed after
-verifying zero owned processes. Unrelated files and all historical evidence remain.
+No task worktree/branch, push or PR. Evidence/temp roots are owned and recorded by
+each run; retain failed receipts. Shared source/tests/validators are frozen for
+acceptance; future work must wait for the current coherent commit. No external
+Claude review was requested for this follow-up; each unit uses a fresh independent
+reviewer through execute-task. README phase synopsis and AGENTS need no changes.

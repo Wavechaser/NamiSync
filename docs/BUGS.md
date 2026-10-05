@@ -887,6 +887,16 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Plan review windowing
 
+- MODERATE - FIXED (2026-10-05). Repeated unbounded labels. Supported deep
+  prior paths, move-group destinations and scan-warning paths travelled in
+  every 256-row window; actual production bridge dispatch refused a window
+  above its 8 MiB response limit, preventing that part of the plan from loading.
+  Cause: row count bounded the population while full repeated strings bypassed
+  compact presentation. Window labels now have Unicode-safe bounds, rename
+  rows carry only an old name, and exact revisioned node details retain full
+  paths and diagnostics. Composition cases cover ASCII/CJK origins, groups
+  and notices; closed operation/presentation kind pairs are admitted together.
+
 - MINOR - FIXED (2026-10-05). Follow-up reveal recovery omission. A move
   reveal could change the server view before its bounded window was read; a
   conflicting or mismatched window then left the old rows and Opening message
@@ -1844,6 +1854,18 @@ defect, and move implementation-level test choreography out of the log.
   retry until completion.
 
 ## DATABASE AND INVENTORY
+
+### Inventory windowing
+
+- MODERATE - OPEN (2026-10-05). Repeated unbounded labels. Inventory domain
+  displays and warning paths repeat complete supported paths in 256-row windows.
+  With25112-unit relative paths (25120 including root,250-unit components),
+  production response admission rejects domain and notice envelopes of
+  19,426,765 and 38,691,017 bytes against its 8 MiB ceiling; those windows cannot
+  load. Cause: row-count bounds leave repeated full strings in window fields.
+  B2 and this Inventory correction are explicitly deferred for separate review.
+  Exact source hashes, inputs and admitted/refused variants remain in
+  `build/gui-followup-20261005/b2-design-inventory-envelope.json` and its driver.
 
 ### Planning evidence freshness
 

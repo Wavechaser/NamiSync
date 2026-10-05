@@ -11,6 +11,7 @@ import {
   getInventoryDetail,
   getInventoryWindow,
   getPlanAnchor,
+  getPlanDetail,
   getPlanOperationAnchor,
   getPlanWindow,
   listTasks,
@@ -373,7 +374,10 @@ function renderTasks() {
 function showSettings() {
   if (settingsVisible) return;
   const task = currentTask();
-  if (task?.review != null) retireExecutionDetail(task.review);
+  if (task?.review != null) {
+    retireExecutionDetail(task.review);
+    retirePlanDetail(task.review);
+  }
   if (task?.inventoryReview != null) retireInventoryDetail(task.inventoryReview);
   navigationRevision += 1;
   settingsVisible = true;
@@ -504,11 +508,18 @@ function selectTask(taskId) {
   }
   navigationRevision += 1;
   const previous = selectedTaskId === null ? null : tasks.get(selectedTaskId) ?? null;
-  if (previous?.review != null) retireExecutionDetail(previous.review);
+  if (previous?.review != null) {
+    retireExecutionDetail(previous.review);
+    retirePlanDetail(previous.review);
+  }
   if (previous?.inventoryReview != null) retireInventoryDetail(previous.inventoryReview);
   selectedTaskId = taskId;
   settingsVisible = false;
   renderTasks();
+  if (task.review !== null && task.reviewSessionId === task.sessionId
+      && task.review.summary.highlight_focus_node_id !== null) {
+    void readPlanDetail(task.review, { node_id: task.review.summary.highlight_focus_node_id });
+  }
   void loadTaskSetup(task);
   if (
     task.taskKind === "sync-plan"
@@ -1258,6 +1269,11 @@ function retireExecutionDetail(review) {
   review.executionDetail = null;
 }
 
+function retirePlanDetail(review) {
+  review.planDetailRevision = (review.planDetailRevision ?? 0) + 1;
+  review.planDetail = null;
+}
+
 function retireInventoryDetail(review) {
   review.detailRevision += 1;
   review.detail = null;
@@ -1551,6 +1567,13 @@ function adoptExecutionWindow(review, window) {
   review.window = window;
   const focusNodeId = review.summary.highlight_focus_node_id;
   const focusedRow = window.rows.find((row) => row.node_id === focusNodeId) ?? null;
+  if (focusNodeId === null || (review.planDetail != null
+      && (review.planDetail.nodeId !== focusNodeId
+        || review.planDetail.viewRevision !== window.view_revision))) retirePlanDetail(review);
+  if (focusedRow !== null && (review.planDetail?.nodeId !== focusNodeId
+      || review.planDetail?.actionRevision !== review.actionRevision)) {
+    void readPlanDetail(review, focusedRow);
+  }
   if (focusNodeId === null || (review.executionDetail !== null
       && review.executionDetail.focusNodeId !== focusNodeId)) {
     retireExecutionDetail(review);
@@ -1648,6 +1671,52 @@ async function refreshExecutionWindow(task) {
     if (task.executionWindowDirty && selectedTaskId === task.taskId && !settingsVisible) {
       void refreshExecutionWindow(task);
     }
+  }
+}
+
+async function readPlanDetail(review, row) {
+  const task = currentReviewTask(review);
+  if (task === null || settingsVisible || task.closePending) return;
+  const request = (review.planDetailRevision ?? 0) + 1;
+  review.planDetailRevision = request;
+  if (row === null) {
+    review.planDetail = null;
+    renderTasks();
+    return;
+  }
+  const viewRevision = review.summary.view_revision;
+  const sessionId = task.sessionId;
+  const requestId = review.summary.request_id;
+  const action = review.actionRevision;
+  const navigation = navigationRevision;
+  const detail = { nodeId: row.node_id, viewRevision, actionRevision: action,
+    state: "loading", response: null, message: null };
+  review.planDetail = detail;
+  const stillCurrent = () => currentReviewTask(review) === task
+    && review.planDetailRevision === request && review.planDetail === detail
+    && task.sessionId === sessionId && review.summary.request_id === requestId
+    && review.actionRevision === action && review.summary.view_revision === viewRevision
+    && review.summary.highlight_focus_node_id === row.node_id
+    && navigationRevision === navigation && !settingsVisible && !task.closePending;
+  renderTasks();
+  try {
+    const response = await getPlanDetail(task.taskId, viewRevision, row.node_id);
+    if (!stillCurrent()) return;
+    if (response.disposition === "current" && response.view_revision === viewRevision) {
+      detail.state = "current";
+      detail.response = response;
+    } else {
+      detail.state = "error";
+      detail.message = "Plan changed. Select Refresh review to read current details.";
+      review.refreshAvailable = true;
+    }
+  } catch (_error) {
+    if (stillCurrent()) {
+      detail.state = "error";
+      detail.message = "Highlight the item again to retry planned details.";
+    }
+  } finally {
+    if (stillCurrent()) renderTasks();
   }
 }
 
@@ -1785,6 +1854,8 @@ async function loadPlanReview(task, force = false) {
       foregroundWindowEpoch: 0,
       executionDetail: null,
       detailRevision: 0,
+      planDetail: null,
+      planDetailRevision: 0,
       follow: {
         enabled: retainedFollow === null ? task.executionStarted && eligibleFollow : retainedFollow.enabled,
         eligible: eligibleFollow,
@@ -1797,6 +1868,7 @@ async function loadPlanReview(task, force = false) {
       },
     };
     task.reviewSessionId = sessionId;
+    adoptExecutionWindow(task.review, window);
     task.executionWindowDirty = task.executionWindowDirtyRevision !== dirtyRevision;
     task.error = task.drainUnavailable
       ? task.sessionState === "active" && task.executionStarted
@@ -2136,6 +2208,9 @@ function queuePlanHighlight(review, gesture, nodeId) {
       adoptExecutionWindow(review, window);
       review.refreshAvailable = false;
       const focusedRow = window.rows.find((row) => row.node_id === summary.highlight_focus_node_id);
+      if (focusedRow !== undefined && review.planDetail?.state === "error") {
+        void readPlanDetail(review, focusedRow);
+      }
       if (focusedRow?.operation_id === review.executionDetail?.operationId
           && review.executionDetail?.state === "error") {
         void readExecutionDetail(review, focusedRow);

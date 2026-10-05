@@ -90,6 +90,51 @@ def _file_fact_state(operations, *, complete=True) -> PlanReviewState:
     )
 
 
+def test_plan_detail_keeps_original_paths_and_refuses_stale_or_root_reads() -> None:
+    moved = operation(OperationKind.MOVE, target_path=r"New\Mixed.txt",
+                      prior_target_path=r"Old\Mixed.txt", target=file_stat())
+    state = _file_fact_state([moved])
+    canonical = state.projection.operation_node_id_by_id[str(moved.op_id)]
+    detail = state.detail(expected_revision=0, node_id=canonical)
+    assert detail["detail"] == {
+        "path": r"New\Mixed.txt", "prior_path": r"Old\Mixed.txt",
+        "move_destination_path": None, "path_origin": "target",
+        "notice": None,
+    }
+    group = next(node for node in state.projection.nodes if node.row_kind == "prior-group")
+    assert state.detail(expected_revision=0, node_id=group.node_id)["detail"] == {
+        "path": None, "prior_path": None,
+        "move_destination_path": "New", "path_origin": None,
+        "notice": None,
+    }
+    prior = next(node for node in state.projection.nodes if node.row_kind == "prior-operation")
+    assert state.detail(expected_revision=0, node_id=prior.node_id)["detail"]["path"] == r"Old\Mixed.txt"
+    assert state.detail(expected_revision=1, node_id="foreign")["detail"] is None
+    with pytest.raises(KeyError):
+        state.detail(expected_revision=0, node_id="foreign")
+    with pytest.raises(ValueError, match="synthetic Plan root"):
+        state.detail(expected_revision=0, node_id=state.projection.nodes[0].node_id)
+
+
+def test_window_rename_name_and_group_destination_keep_utf16_bounds() -> None:
+    old_name = "😀" * 125 + "a.txt"
+    moved = operation(OperationKind.MOVE, target_path="new\\" + "😀" * 125 + "aaa",
+                      prior_target_path="Old.txt", target=file_stat())
+    renamed = operation(OperationKind.MOVE, target_path="Folder\\new.txt",
+                        prior_target_path="Folder\\" + old_name, target=file_stat())
+    state = _file_fact_state([moved, renamed])
+    rows = state.window(expected_revision=0, offset=0, limit=256)["rows"]
+    row = next(row for row in rows if row["operation_id"] == str(renamed.op_id))
+    assert row["prior_name"] == old_name
+    assert len(row["prior_name"].encode("utf-16-le")) // 2 == 255
+    assert "prior_path" not in row
+    # A maximum component behind an omitted ancestor still respects the hint bound.
+    hint = plan_review_module._destination_display("outer\\" + old_name)
+    assert hint.startswith("…\\") and len(hint.encode("utf-16-le")) // 2 <= 255
+    assert not any(0xD800 <= ord(character) <= 0xDFFF for character in hint)
+    assert plan_review_module._destination_display("") == ""
+
+
 @pytest.mark.parametrize("extra", [1, 2])
 def test_folder_size_boundary_survives_row_serialization(extra: int) -> None:
     maximum = (1 << 63) - 1
@@ -246,7 +291,9 @@ def test_rename_filters_own_labels_counts_and_complete_offwindow_selection() -> 
         operation_rows = [row for row in rows if row["operation_id"] is not None]
         assert {row["operation_id"] for row in operation_rows} == identifiers
         assert all(row["presentation_kind"] == category for row in operation_rows)
-        assert all(row["prior_path"] is not None for row in operation_rows)
+        assert all((row["prior_name"] is not None) == (category == "rename")
+                   for row in operation_rows)
+        assert all("prior_path" not in row for row in operation_rows)
         assert set(state.selection_scope(expected_view_revision=state.view_revision,
                                          expected_selection_revision=0)) == identifiers
         if category == "rename":

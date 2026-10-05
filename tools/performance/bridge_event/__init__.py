@@ -1939,6 +1939,7 @@ def _summarize(
         "get_inventory_detail",
         "get_inventory_window",
         "get_plan_anchor",
+        "get_plan_detail",
         "get_plan_window",
         "list_tasks",
         "mutate_plan_highlight",

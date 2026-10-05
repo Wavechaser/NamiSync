@@ -476,6 +476,7 @@ BOOTSTRAP rows, commands require OPEN.
 | `get_inventory_detail` | `{task_id:TaskId,expected_revision:SafeInt,node_id:NodeId}` | `{disposition:"current"\|"conflict"\|"unavailable",view_revision:SafeInt,node_id:NodeId,detail:null\|InventoryCurrentDetail}` | 5 s; one identical-payload retry |
 | `update_plan_view` | `{task_id:TaskId,expected_revision:SafeInt,search_query:string,filters:[PlanFilter],sort_column:"path"\|"filename"\|"size"\|"mtime",sort_direction:"ascending"\|"descending",collapse_node_id:null\|NodeId,collapsed:null\|boolean}` | `PlanViewSummary` | current-state recovery; 5 s feedback; no mutation replay |
 | `get_plan_window` | `{task_id:TaskId,expected_revision:SafeInt,offset:SafeInt,limit:1..256}` | `{disposition:"current"\|"conflict",view_revision:SafeInt,offset:SafeInt,total:SafeInt,execution:ExecutionSummary,rows:[PlanWindowRow]}` | 5 s; one identical-payload retry |
+| `get_plan_detail` | `{task_id:TaskId,expected_revision:SafeInt,node_id:NodeId}` | `{disposition:"current"\|"conflict",view_revision:SafeInt,node_id:NodeId,detail:null\|PlanNodeDetail}` | 5 s; one identical-payload retry |
 | `get_execution_detail` | `{task_id:TaskId,operation_id:HexId,expected_execution_revision:SafeInt}` | `{disposition:"current"\|"conflict"\|"not-retained",execution_revision:SafeInt,operation_id:HexId,operation:null\|OperationItemView,automatic_verification:null\|IntegrityOutcomeView,evidence:null\|ExecutionEvidence}` | 5 s; one identical-payload retry |
 | `get_plan_anchor` | `{task_id:TaskId,expected_revision:SafeInt,node_id:NodeId}` or `{task_id:TaskId,session_id:HexId,expected_revision:SafeInt,operation_id:HexId}` | `{disposition:"current"\|"conflict",view_revision:SafeInt,node_id:null\|NodeId,index:null\|SafeInt}` | 5 s; one identical-payload retry |
 | `reveal_plan_move` | `{task_id:TaskId,expected_revision:SafeInt,node_id:NodeId}` | `{summary:PlanViewSummary,node_id:null\|NodeId,index:null\|SafeInt}` | current-state recovery; 5 s feedback; no mutation replay |
@@ -632,19 +633,38 @@ revision. A stale request has no effect and returns a conflict summary with
 null node/index. This changes presentation only; selection and effects retain
 their ordinary authority. The browser refetches at most 256 rows at the returned
 index, guarded by task, view and foreground generations.
-Plan window rows carry `move_group:null|{count:positive-SafeInt,destination:string}`;
+Plan window rows carry `move_group:null|{count:positive-SafeInt,destination_display:string}`;
 only prior groups carry it, and their `move_peer_id` is the canonical reveal
-target. Destination is root-relative (empty for root), never path authority.
-Rows also carry nullable `presentation_kind` and `prior_path` alongside the
+target. Destination display is a hint of at most 255 UTF-16 units, empty for root;
+an omitted ancestor prefix is rendered as `…\\`. It is never path authority.
+All row displays and nullable notices are bounded to 300 UTF-16 units without
+splitting Unicode characters. Exact originals remain in the server projection.
+Rows also carry nullable `presentation_kind` and `prior_name` alongside the
 unchanged `operation_kind`. Projection supplies the display/filter kind:
 `rename` combines RECASE and same-Windows-parent pure MOVE, `move` is
 cross-parent MOVE, and `move_update` stays distinct. Other kinds retain their
 operation spelling. Structural rows have no presentation kind; prior rows
-retain their display kind but have no `prior_path`. Canonical operation rows
-carry their root-relative prior path when available, without granting path
-authority. The Plan filter and count category `rename` replaces `recase`;
+retain their display kind but have no `prior_name`. Only canonical rename rows
+carry the old filename, bounded to 255 UTF-16 units. The admitted kinds form a
+closed set: identity pairs except `recase→rename` and `move→move|rename`;
+operation and presentation kinds are null together. The Plan filter and count category `rename` replaces `recase`;
 `recase` is no longer an admitted Plan filter. Selection and execution continue
 using original operation identities and kinds.
+
+`PlanNodeDetail` is exactly `{path,prior_path,move_destination_path,path_origin,notice}`.
+The three path fields are nullable original-spelling root-relative paths, bounded
+by the existing 32,767 UTF-16-unit path contract (empty denotes root).
+`path_origin` is `source|target|null` and is null exactly when `path` is null.
+Canonical operations and prior-location nodes use target paths; scan notices
+retain the scanned side. Groups carry only their destination path and notices
+without a location carry no path origin. `notice` is nullable complete inert
+Unicode text. Scan-warning diagnostics retain their existing 1,024-byte source
+bound plus the supported path and fixed label text; refusal diagnostics have no
+separate source text ceiling. Exact detail uses the existing complete 8 MiB bridge
+response admission and explicitly refuses an oversized response.
+The read admits one opaque node id from the current immutable Plan projection,
+refuses the synthetic root, and returns null detail on a view-revision conflict.
+It performs no filesystem or ledger read and is available during planning.
 
 `PlanViewSummary` also carries `highlight_revision`,
 `highlight_anchor_node_id`, `highlight_focus_node_id`,

@@ -100,9 +100,11 @@ operations. RECASE and pure MOVE operations whose old and new parent paths
 have the same Windows path key display and filter as `rename`; root-level
 renames follow the same rule. Cross-parent MOVE remains `move`, and MOVE_UPDATE
 remains `move_update` even in place because it changes content. Canonical rows
-retain the actual operation kind and root-relative prior path. The table uses
-the derived kind and shows `renamed from` the old filename or `moved from` the
-old path; item details, execution results and diagnostics retain operation truth.
+retain the actual operation kind and root-relative prior path internally. The
+table uses the derived kind and shows `renamed from` the bounded old filename
+or a generic previous-location note for moves. Full paths and complete notice
+text are available through a revisioned exact one-node Plan detail read during
+planning; execution results and diagnostics retain operation truth.
 This changes no operation, dependency, selection or execution behavior.
 
 Prior-location groups attach to the deepest proper old-path ancestor observed
@@ -117,7 +119,8 @@ its group, including an in-place update. Groups start collapsed when a fresh
 Plan view opens, and reopening an existing view retains its expansion state.
 Groups and their expandable prior contents are informational and
 contribute no execution selection, facet counts or folder bytes. Their label
-uses a relative destination, and the group peer resolves its canonical target
+uses a bounded destination hint (empty for root, an ellipsis for omitted
+ancestors), and the group peer resolves its canonical target
 parent, or the first canonical moved item for a root destination.
 
 Explicit move-group reveal is revisioned presentation navigation. It expands
@@ -127,6 +130,14 @@ index with the updated summary. Ordinary anchors and execution follow keep their
 existing read-only nearest-visible-ancestor semantics.
 
 Nodes retain the structural data needed by presentation—preorder position, depth, parent index, subtree extent, and id-to-position lookup—so the adapter does not reconstruct ancestry from paths. Exact internal fields remain owned by the source codec. The emitted tree preserves valid Unicode; only the renderer projects fixed layout controls or marker delimiters into visible text. Search uses raw display text and never decodes that projection.
+
+Row serialization bounds display and notice labels to 300 UTF-16 units and rename
+names and destination hints to 255 without splitting Unicode characters. Search,
+sort and reveal retain the immutable complete server facts. Exact Plan details
+preserve original path spelling and a source/target discriminator for the path;
+they do not infer a warning's root from operation metadata. The read is one
+node-id lookup under the current task/view revision, without filesystem or ledger
+I/O. Execution detail remains separately guarded by its execution revision.
 
 ## Views, windows, and selection
 
