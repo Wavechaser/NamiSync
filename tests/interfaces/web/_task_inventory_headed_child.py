@@ -369,8 +369,15 @@ _PAGE = r"""
   await stage('restore');
   await until(() => missing()?.querySelector('[data-integrity="missing"]')
     && !review.querySelector('[data-action="inventory-refresh"]').disabled, 'restored-visible');
+  const summary = review.querySelector('.nami-plan-review__summary');
+  const track = summary.querySelector('.nami-plan-review__progress');
+  const status = {paragraphs:summary.querySelectorAll(':scope > p').length,
+    has_scope:summary.querySelector('.nami-inventory-review__status-line').textContent.includes('Displayed scan: Entire location'),
+    track_height:track.getBoundingClientRect().height,
+    animation:getComputedStyle(track.firstElementChild).animationName,
+    value:track.firstElementChild.style.getPropertyValue('--nami-progress-value')};
   return {filter_geometry:menuGeometry, filter_colors:filterColors, filter_menu:filterMenu, native_clicks:nativeClicks, pane_visible:review.isConnected && !review.hidden,
-    refreshed_missing:true, acknowledged_hidden:true, restored_missing:true};
+    refreshed_missing:true, acknowledged_hidden:true, restored_missing:true, status};
 })()
 """
 
@@ -475,7 +482,7 @@ def _drive(window: object, phase: _InventoryPhase, recorder: _Recorder,
         checkpoint = "page-result"
         if type(value) is dict:
             page_result = {key: value.get(key) for key in
-                           ("filter_geometry", "filter_colors", "filter_menu", "native_clicks", "pane_visible", "refreshed_missing", "acknowledged_hidden", "restored_missing")}
+                           ("filter_geometry", "filter_colors", "filter_menu", "native_clicks", "pane_visible", "refreshed_missing", "acknowledged_hidden", "restored_missing", "status")}
         if type(value) is not dict or value.get("native_clicks") != {name: True for name in stage_names} or any(value.get(key) is not True for key in
                  ("pane_visible", "refreshed_missing", "acknowledged_hidden", "restored_missing")):
             raise RuntimeError("native inventory page result is invalid")

@@ -1810,6 +1810,7 @@ def _valid_inventory_panel(value: object) -> bool:
         "header_positions", "row_positions", "status_rectangles", "scroll_owners",
         "details", "refresh_on_status", "root_fits", "viewport_height",
         "viewport_scroll_height", "adopted_offset", "window_requests", "row_height",
+        "setup_heights", "status",
     }:
         return False
     details = value["details"]
@@ -1832,6 +1833,16 @@ def _valid_inventory_panel(value: object) -> bool:
                 for key in ("first_widths", "row_widths", "grown_widths", "manual_before", "manual_after"))
         and all(_finite_number_matrix(value[key], 5, 4) for key in ("header_positions", "row_positions"))
         and _finite_number_matrix(value["status_rectangles"], 4, 4)
+        and _finite_number_matrix(value["setup_heights"], 2, 2)
+        and type(value["status"]) is dict and set(value["status"]) == {
+            "single_line", "loading_same_line", "active_animation", "active_indeterminate",
+            "terminal_animation", "terminal_track_visible", "track_height", "terminal_value",
+        }
+        and all(type(value["status"][key]) is bool for key in
+                ("single_line", "loading_same_line", "active_indeterminate", "terminal_track_visible"))
+        and all(type(value["status"][key]) is str and len(value["status"][key]) <= 64 for key in
+                ("active_animation", "terminal_animation", "terminal_value"))
+        and _finite_number_matrix([[value["status"]["track_height"]]], 1, 1)
         and type(value["scroll_owners"]) is dict and set(value["scroll_owners"]) == {"outer_x", "body_x", "body_y"}
         and all(type(text) is str and len(text) <= 32 for text in value["scroll_owners"].values())
         and type(details) is dict and set(details) == {

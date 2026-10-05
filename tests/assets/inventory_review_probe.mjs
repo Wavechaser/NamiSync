@@ -125,6 +125,41 @@ const rowElements = () => walk(pane.element).filter((value) => value.getAttribut
 const text = (root) => [root.textContent, ...root.children.map(text)].join(" ");
 const tick = async () => { await Promise.resolve(); await Promise.resolve(); };
 pane.render(task);
+const statusCard = find((value) => value.classList.contains("nami-plan-review__summary"));
+const statusLine = find((value) => value.classList.contains("nami-inventory-review__status-line"));
+const statusSummary = find((value) => value.classList.contains("nami-plan-review__status-summary"));
+const progressTrack = find((value) => value.classList.contains("nami-plan-review__progress"));
+assert.equal(statusCard.children.filter((value) => value.tagName === "P").length, 1);
+assert.doesNotMatch(statusSummary.textContent, /visible rows/);
+assert.doesNotMatch(statusLine.textContent, /Current scan:|completed/);
+assert.equal(progressTrack.hidden, false, "terminal track remains visible without inventing a percentage");
+assert.equal(progressTrack.classList.contains("nami-progress--indeterminate"), false);
+task.inventoryLoading = true;
+pane.render(task);
+assert.equal(find((value) => value.classList.contains("nami-inventory-review__status-line")), statusLine);
+assert.match(statusLine.textContent, /Loading inventory view…/);
+assert.equal(statusCard.children.filter((value) => value.tagName === "P").length, 1,
+  "loading uses the existing status line");
+task.inventoryLoading = false;
+task.sessionState = "active";
+pane.render(task);
+assert.equal(progressTrack.classList.contains("nami-progress--indeterminate"), true,
+  "a scan without totals uses the shared indeterminate class");
+task.sessionId = "a".repeat(32);
+task.snapshot = { session_id: task.sessionId, session_state: "active", phase: "inventory",
+  presentation: { value: 37, determinate: true, indeterminate: false,
+    items_done: 37, items_total: 100 }, terminal_result: null };
+pane.render(task);
+assert.equal(progressTrack.classList.contains("nami-progress--indeterminate"), false);
+assert.equal(progressTrack.children[0].style.values.get("--nami-progress-value"), "37%");
+task.snapshot = { ...task.snapshot, session_state: "completed" };
+task.sessionState = "completed";
+pane.render(task);
+assert.equal(progressTrack.hidden, false);
+assert.equal(progressTrack.children[0].style.values.get("--nami-progress-value"), "37%",
+  "terminal presentation retains the supplied value instead of fabricating 100%");
+task.snapshot = null;
+pane.render(task);
 action("inventory-refresh").click();
 assert.deepEqual(refreshes.at(-1), [review, null]);
 assert.equal(rowElements().length, fixture.views.default.window.rows.length);
@@ -295,6 +330,9 @@ assert.equal(action("inventory-refresh").disabled, false, "prior publication may
 assert.equal(action("inventory-acknowledge").disabled, true, "prior publication cannot mutate visibility");
 task.inventoryAction = { pending: true, recovery: { canCheck: true, checking: false }, message: "Original pending" };
 pane.render(task);
+assert.match(statusLine.textContent, /Original pending/);
+assert.match(statusLine.textContent, /Inventory unavailable/);
+assert.equal(statusCard.children.filter((value) => value.tagName === "P").length, 1);
 action("inventory-check-outcome").click();
 assert.equal(checks.at(-1), task);
 assert.equal(action("inventory-refresh").disabled, true);

@@ -1,10 +1,11 @@
 # Latest session — GUI follow-up
 
 2026-10-05 on `milestone1`, base `583f14d`. The user ratified GUI-B1–B6 in
-M1_PLAN, then explicitly deferred all of B2 for separate review. B1 passed final
-verification and is ready for its atomic commit; B3–B6 remain authorized work.
+M1_PLAN, then explicitly deferred all of B2 for separate review. B1 is committed
+as `53e1abb`; B3 passed its final gates and is ready for atomic commit. B4–B6
+remain authorized.
 
-## B1 candidate
+## Delivered B1
 
 Plan windows carry compact display/notice/destination labels and Rename-only
 prior filenames. One revisioned exact-node detail read preserves original-case
@@ -31,8 +32,22 @@ driver changes were made for these conditions. `b1-environment-disposition.md`
 records the evidence. Final `b1-ordinary-02` passed 5,913 tests with four privilege
 skips and 35 headed exclusions, followed by all 12 import contracts.
 `b1-native-02` passed all 12 affected installed gallery/shell/transport checks.
-Both ran outside the sandbox on frozen product/test inputs; closing documentation
-is bound separately by independent review. Local document links and diff checks pass.
+Both ran outside the sandbox on frozen product/test inputs. Independent approval
+and exact input binding are in `b1-review-final.md` and its binding JSON. Local
+document links and diff checks pass; `integration.md` records the atomic commit.
+
+## B3 delivery
+
+Verify Setup shares Plan's path-area minimum height. Status uses the current
+outcome, one rollup summary and one persistent detailed paragraph for publication
+scope/counts and loading/action/recovery guidance. Shared progress animates for
+unknown active totals and retains a static terminal track without inventing 100%.
+Table, payload, details and action scope remain unchanged. Direct composition and
+frontend checks passed 15 tests; the final focused set passed 41. Final gates
+passed 1,943 interfaces tests and seven installed gallery/shell/Inventory checks
+(`b3-*-01`). Independent review found no actionable defect; final source and
+closing-document binding is retained with its receipt. Source/tests/measurement/
+checker inputs are frozen. Local document links and diff checks pass.
 
 ## Deferred B2 and next work
 
@@ -46,8 +61,8 @@ population and raw reproducer are in BUGS, M1_PLAN and `b2-design-inventory-enve
 The earlier disabled-checkbox proposal is deferred with B2; functionality remains
 M1-10. Execution-to-Verify navigation/A6 remains deferred too.
 
-After B1 closes: B3 Setup/status alignment on the current Inventory table;
-B4 consistent local timestamps; B5 20rem details pane, 3:2 item/global height and
+After B3 closes: B4 consistent local timestamps;
+B5 20rem details pane, 3:2 item/global height and
 root-correct full paths; B6 row context menus. Menus use existing actions only:
 Show details, Plan Select/Deselect where allowed, folder Expand/Collapse, and
 Verify Refresh selected/Acknowledge missing. Inventory keeps its existing single

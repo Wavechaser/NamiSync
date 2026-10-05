@@ -230,6 +230,12 @@ explicit, reviewable and regression-backed.
   catalogs, browser consumers and fixtures together. Pass 5,913 ordinary checks
   (four privilege skips), 12 import contracts and 12 installed UI/transport cases;
   independently review the contract and its corrected row-kind validation.
+- Align Verify Setup height and consolidate scan, loading and recovery facts
+  into one persistent status-detail paragraph. Retain current/prior publication
+  distinctions and existing actions. Reuse shared progress animation for unknown
+  totals and keep terminal progress visible without manufacturing a percentage.
+  Pass 41 focused, 1,943 interfaces and seven installed gallery/shell/Inventory
+  checks, including actual setup-height and progress observations.
 
 #### Repair bridge diagnostic composition receipts (2026-10-04)
 

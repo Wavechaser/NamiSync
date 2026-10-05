@@ -1930,6 +1930,40 @@ window.addEventListener("unhandledrejection", (event) => {
     app.append(root);
     panel.render(inventoryTask);
     await settled();
+    const setupReference = document.createElement("section");
+    setupReference.className = "nami-plan-review";
+    setupReference.style.display = "block";
+    setupReference.style.blockSize = "auto";
+    setupReference.append(planReviewPanel.element.querySelector(".nami-plan-review__plan").cloneNode(true));
+    app.append(setupReference);
+    const setupHeights = [];
+    for (const width of [1000, 640]) {
+      root.style.inlineSize = `${width}px`;
+      setupReference.style.inlineSize = `${width}px`;
+      await settled();
+      setupHeights.push([root, setupReference].map((value) =>
+        Number(value.querySelector(".nami-plan-review__plan").getBoundingClientRect().height.toFixed(3))));
+    }
+    setupReference.remove();
+    root.style.inlineSize = "1000px";
+    await settled();
+    const statusLine = root.querySelector(".nami-inventory-review__status-line");
+    const statusCard = root.querySelector(".nami-plan-review__summary");
+    const track = root.querySelector(".nami-plan-review__progress");
+    const statusEvidence = { single_line: statusCard.querySelectorAll(":scope > p").length === 1 };
+    panel.render({ ...inventoryTask, sessionState: "active", sessionReleased: false, inventoryLoading: true });
+    await settled();
+    statusEvidence.loading_same_line = root.querySelector(".nami-inventory-review__status-line") === statusLine
+      && statusLine.textContent.includes("Loading inventory view…")
+      && statusCard.querySelectorAll(":scope > p").length === 1;
+    statusEvidence.active_animation = getComputedStyle(track.firstElementChild).animationName;
+    statusEvidence.active_indeterminate = track.classList.contains("nami-progress--indeterminate");
+    panel.render(inventoryTask);
+    await settled();
+    statusEvidence.terminal_animation = getComputedStyle(track.firstElementChild).animationName;
+    statusEvidence.terminal_track_visible = track.getBoundingClientRect().height > 0;
+    statusEvidence.track_height = Number(track.getBoundingClientRect().height.toFixed(3));
+    statusEvidence.terminal_value = track.firstElementChild.style.getPropertyValue("--nami-progress-value");
     const headers = [...root.querySelectorAll(".nami-inventory-review__columns > div")];
     const viewport = root.querySelector(".nami-inventory-review__rows");
     const widths = () => headers.map((value) => Number(value.getBoundingClientRect().width.toFixed(3)));
@@ -1993,7 +2027,7 @@ window.addEventListener("unhandledrejection", (event) => {
         selected: value.ariaChecked, disabled: value.disabled })), labels, checksum: checksumEvidence,
       first_widths: firstWidths, row_widths: rowWidths, grown_widths: grownWidths,
       header_positions: headerPositions, row_positions: rowPositions,
-      status_rectangles: statusRectangles, scroll_owners: scrollOwners,
+      status_rectangles: statusRectangles, setup_heights: setupHeights, status: statusEvidence, scroll_owners: scrollOwners,
       manual_before: manualBefore, manual_after: manualAfter, details: detailEvidence,
       refresh_on_status: [...root.querySelectorAll('[data-action="inventory-refresh"], [data-action="inventory-refresh-selected"]')]
         .every((value) => value.closest(".nami-plan-review__summary") !== null),

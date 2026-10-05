@@ -65,12 +65,8 @@ export function createInventoryReviewPanel(callbacks) {
   title.setAttribute("role", "status");
   title.tabIndex = -1;
   const facts = element("p", "nami-shell__guidance nami-plan-review__status-summary");
-  const scanFacts = element("p", "nami-shell__guidance");
-  const scanState = element("p", "nami-shell__guidance");
-  const message = element("p", "nami-shell__guidance");
-  message.setAttribute("role", "status");
-  const actionStatus = element("p", "nami-shell__guidance");
-  actionStatus.setAttribute("role", "status");
+  const statusLine = element("p", "nami-shell__guidance nami-inventory-review__status-line");
+  statusLine.setAttribute("role", "status");
   const refresh = button("Refresh inventory", "inventory-refresh");
   const refreshSelected = button("Refresh selected", "inventory-refresh-selected");
   refresh.classList.add("nami-button--primary");
@@ -89,7 +85,9 @@ export function createInventoryReviewPanel(callbacks) {
   progress.ariaHidden = "true";
   const progressBar = element("div", "nami-progress__bar");
   progress.append(progressBar);
-  summary.append(statusActions, statusMeta, scanState, scanFacts, message, actionStatus, check, reload, progress);
+  const recoveryActions = element("div", "nami-inventory-review__actions");
+  recoveryActions.append(check, reload);
+  summary.append(statusActions, statusMeta, statusLine, recoveryActions, progress);
 
   const table = element("div", "nami-card nami-plan-review__table-card nami-inventory-review__table");
   const toolbar = element("div", "nami-plan-review__toolbar");
@@ -411,15 +409,12 @@ export function createInventoryReviewPanel(callbacks) {
     content.hidden = !available;
     reload.hidden = !value.inventoryError && !review?.message;
     reload.disabled = value.inventoryLoading || value.closePending;
-    renderText(message, value.inventoryError ?? review?.message ?? (value.inventoryLoading ? "Loading inventory…" : ""));
-    message.hidden = message.textContent === "";
-    renderText(actionStatus, value.inventoryAction?.message ?? "");
-    actionStatus.hidden = actionStatus.textContent === "";
     const actionBlocked = !available || blocked() || !value.sessionReleased || value.sessionState === "active";
     refresh.disabled = actionBlocked;
     refresh.hidden = !available;
     check.hidden = value.inventoryAction?.recovery?.canCheck !== true;
     check.disabled = value.inventoryAction?.recovery?.checking === true;
+    recoveryActions.hidden = check.hidden && reload.hidden;
     renderFilesystemText(rootPath, review?.summary.root_path ?? value.form?.source?.text ?? "");
     rootLine.title = review?.summary.root_path ?? value.form?.source?.text ?? "";
     const digest = taskStatusDigest(value);
@@ -428,22 +423,32 @@ export function createInventoryReviewPanel(callbacks) {
       : value.sessionState === "refused" ? "Inventory scan did not start"
         : value.sessionState === "failed" ? "Inventory scan failed"
           : value.sessionState === "canceled" ? "Inventory scan canceled" : "Inventory scan completed");
-    progress.hidden = value.sessionState !== "active";
+    progress.className = "nami-progress nami-plan-review__progress"
+      + (digest.progress.indeterminate ? " nami-progress--indeterminate" : "");
     progress.dataset.status = digest.state;
     progress.dataset.indeterminate = String(digest.progress.indeterminate);
     progressBar.style.setProperty("--nami-progress-value", `${digest.progress.value}%`);
-    renderText(scanState, `Current scan: ${value.sessionState === "active" ? "in progress" : value.sessionState}.`);
-    renderText(facts, available ? `${rollupText(review.summary.rollup)} · ${review.summary.visible_row_count} visible rows` : "");
+    renderText(facts, available ? rollupText(review.summary.rollup) : "");
+    facts.hidden = !available;
     facts.title = available && !review.summary.filters.includes("acknowledged")
       ? `${review.summary.rollup.acknowledged} acknowledged items hidden as matches; folder context may remain. Show them with the Acknowledged filter.` : "";
     const scanScope = review?.summary.scan_scope;
     const scopeLabel = scanScope?.kind === "location" ? "Entire location"
       : scanScope?.kind === "item" ? `Item: ${scanScope.path}`
       : scanScope?.kind === "folder" ? `Folder: ${scanScope.path} (including subfolders)` : "Selected items";
-    renderFilesystemText(scanFacts, available
-      ? `${review.summary.request_id === value.requestId ? "Displayed scan" : "Previous published scan"}: ${scopeLabel} · ${review.summary.scan_complete ? "complete" : "incomplete"} · ${review.summary.observed_count} observed · ${review.summary.missing_count} missing · ${review.summary.warning_count} notices from this scan.${scanScope.kind === "location" ? "" : " Other inventory items were not rescanned."}` : "");
-    renderText(globalScanState, scanState.textContent);
-    renderText(globalScanFacts, scanFacts.textContent);
+    const publication = available
+      ? `${review.summary.request_id === value.requestId ? "Displayed scan" : "Previous published scan"}: ${scopeLabel}` : "";
+    const scanCounts = available
+      ? `${review.summary.observed_count} observed · ${review.summary.missing_count} missing · ${review.summary.warning_count} notices from this scan.${scanScope.kind === "location" ? "" : " Other inventory items were not rescanned."}` : "";
+    const guidance = value.inventoryError ?? review?.message
+      ?? (value.inventoryLoading ? "Loading inventory view…" : "");
+    renderFilesystemText(statusLine, [...new Set([
+      available ? `${publication} · ${review.summary.scan_complete ? "" : "incomplete · "}${scanCounts}` : "",
+      guidance, value.inventoryAction?.message,
+    ].filter(Boolean))].join(" · "));
+    renderText(globalScanState, `Current scan: ${value.sessionState === "active" ? "in progress" : value.sessionState}.`);
+    renderFilesystemText(globalScanFacts, available
+      ? `${publication} · ${review.summary.scan_complete ? "complete" : "incomplete"} · ${scanCounts}` : "");
     if (!available) {
       filterMenu.render([], {}, true);
       refreshSelected.disabled = true;

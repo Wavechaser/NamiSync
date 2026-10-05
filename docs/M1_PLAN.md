@@ -22,9 +22,9 @@ its implementation against its integrated predecessor.
 
 | ID | Accepted outcome | Dependencies and verification |
 | --- | --- | --- |
-| GUI-B1 | Restore bounded plan-window labels, validate presentation enums/relationships, and migrate detail disclosure and all direct consumers. Full paths belong to individual details; Rename keeps its prior basename, Move uses a generic origin note, and previous-location destinations use compact labels. Preserve projection classification, node-id reveal, selection, revisions and the existing response wall. | Complete: 5,913 ordinary passes/four privilege skips, 12 import contracts and 12 installed gallery/shell/transport passes (`b1-*-02`). Independent review includes the corrected row-kind validator and final input binding. Atomic commit identity is recorded in batch evidence. |
+| GUI-B1 | Restore bounded plan-window labels, validate presentation enums/relationships, and migrate detail disclosure and all direct consumers. Full paths belong to individual details; Rename keeps its prior basename, Move uses a generic origin note, and previous-location destinations use compact labels. Preserve projection classification, node-id reveal, selection, revisions and the existing response wall. | Complete in `53e1abb`: 5,913 ordinary passes/four privilege skips, 12 import contracts and 12 installed gallery/shell/transport passes (`b1-*-02`). Independent review includes the corrected row-kind validator and final input binding. |
 | GUI-B2 | Align Verify table with Plan/gallery row geometry, zebra, disabled checkbox affordances, Notes, concise Presence labels, hierarchical basenames, typography and semantic tones. Preserve inventory evidence, scope, sorting, windowing and recovery. | **Deferred by the user for separate review** after recurrence analysis below. No B2 product/test changes. Functional checkboxes remain M1-10; proposed disabled visuals are also deferred with B2. |
-| GUI-B3 | Match Verify Setup height and reorganize status into summary plus one stable detailed line, with shared progress presentation and existing Refresh/recovery actions. Retain published/current scan distinctions without duplicate routine prose. | Continue independently after B1 against the unchanged Inventory table/contract; pending/live/terminal/previous-publication/recovery probes and installed status/setup placement. Pending. |
+| GUI-B3 | Match Verify Setup height and reorganize status into summary plus one stable detailed line, with shared progress presentation and existing Refresh/recovery actions. Retain published/current scan distinctions without duplicate routine prose. | Complete from `53e1abb`: 41 focused, 1,943 interfaces and seven installed gallery/shell/Inventory checks (`b3-*-01`); independent review and source binding. Commit identity in batch evidence. |
 | GUI-B4 | Use local `yyyy-MM-DD HH:mm` display for UI timestamps, including Verify mtime, terminal completion and both detail panes; retain raw machine values where explicitly diagnostic. | After B3; shared formatter, direct consumers and relevant installed presentation. Pending. |
 | GUI-B5 | Cap details at 20rem, allocate more height to item details, and show full paths joined to the correct known root without filesystem probes. | After B1/B4; root/action mapping tests and installed responsive pane/scroll checks. Pending. |
 | GUI-B6 | Row context menus reuse existing menu styling and existing Show details, Select/Deselect where allowed, and folder Expand/Collapse actions. Verify additionally offers Refresh selected and Acknowledge missing for missing rows, through existing node-scoped commands. | After B5 against the unchanged Inventory contract; keyboard/pointer, dismissal, pending/retired ownership and informational-row restrictions; installed gesture witness. Inventory has no Select/Deselect action. No clipboard or new filesystem actions. Pending. |
@@ -125,6 +125,18 @@ probe or action authority. Following AGENTS recurrence review, the user chose
 another local fix. B3–B6 remain independent authorized work on the existing table
 and contract; B2's above population/gates are inspected proposals, not authority.
 
+**B3 execution boundary (`53e1abb`).** The independent design rechecked B1's
+integrated seams. Product ownership is limited to `inventory_review.js` and
+`app.css`: one persistent status-detail paragraph, existing progress primitives,
+and shared Setup path-area minimum height. The five-column 28px table, window
+and detail contracts, selection deferral and all action admission stay unchanged.
+Migrate the Inventory pane/app probes and gallery measurement/checker only where
+the card presentation changes. Verify current/prior/incomplete/scoped scans,
+loading/error/original-outcome guidance, unknown/known progress and actual Setup
+geometry. Acceptance is interfaces plus installed gallery, both shell sizes and
+the Inventory action journey, followed by independent review. DESKTOP_UI and
+delivery records accompany this one commit; no B2 correction is included.
+
 **B4/B5/B6 next-unit populations.** Revalidate against integrated predecessors.
 B4 uses `render.js`'s shared display helpers, Plan/Inventory/status renderers and
 their direct Node consumers; B5 uses Plan/Inventory renderers and `app.css`, with
@@ -141,6 +153,15 @@ keyboard invocation and menu navigation remain available. Direct probes,
 gallery/installed shell/Inventory fixtures and package asset consumers follow
 each changed seam. All three update DESKTOP_UI/delivery docs, run interfaces and
 affected installed checks, and receive fresh independent review before commit.
+
+B4's read-only design at `53e1abb` found nanosecond object mtimes and UTC ISO
+evidence/session timestamps. One local-time display formatter in `render.js`
+serves Plan/Inventory/status; divide nanoseconds before Number conversion and
+retain raw machine values, elapsed calculations, sorting and unavailable-value
+semantics. Direct consumers include Plan/Inventory/execution probes and startup/
+Setup renderer stubs. Fixed expected UTC/non-UTC/date-boundary cases plus installed
+Inventory/gallery/execution presentation verify the format; no new detail facts,
+calendar admission, bridge or backend changes. Refresh this corpus after B3.
 
 ## GUI alignment batch — 2026-10-05
 

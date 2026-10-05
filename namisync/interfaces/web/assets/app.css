@@ -506,9 +506,15 @@ body {
 
 .nami-plan-review__paths {
   font-size: var(--font-size-caption);
+  min-block-size: 2lh;
   overflow: hidden;
   min-inline-size: 0;
   unicode-bidi: isolate;
+}
+
+.nami-inventory-review__status-line {
+  font-size: var(--font-size-caption);
+  min-block-size: var(--line-height-caption);
 }
 
 .nami-plan-review__path {

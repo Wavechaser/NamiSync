@@ -75,6 +75,10 @@ def test_installed_inventory_refresh_acknowledge_restore_and_close(
         assert initial["report"]["refreshed_missing"] is True
         assert initial["report"]["acknowledged_hidden"] is True
         assert initial["report"]["restored_missing"] is True
+        assert initial["report"]["status"] == {
+            "paragraphs": 1, "has_scope": True, "track_height": 8,
+            "animation": "none", "value": "0%",
+        }
         assert initial["report"]["task_closed"] is True
         assert screenshot.is_file()
         close_window(window)

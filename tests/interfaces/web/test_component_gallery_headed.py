@@ -4041,6 +4041,10 @@ def _inventory_panel_sample() -> dict[str, object]:
         "header_positions": [[0.0, 100.0, 480.0, 128.0], [480.0, 100.0, 608.0, 128.0], [608.0, 100.0, 720.0, 128.0], [720.0, 100.0, 800.0, 128.0], [800.0, 100.0, 920.0, 128.0]],
         "row_positions": [[0.0, 128.0, 480.0, 156.0], [480.0, 128.0, 608.0, 156.0], [608.0, 128.0, 720.0, 156.0], [720.0, 128.0, 800.0, 156.0], [800.0, 128.0, 920.0, 156.0]],
         "status_rectangles": [[0.0, 0.0, 400.0, 32.0], [500.0, 0.0, 920.0, 32.0], [0.0, 40.0, 500.0, 64.0], [850.0, 40.0, 920.0, 64.0]],
+        "setup_heights": [[74.0, 74.0], [74.0, 74.0]],
+        "status": {"single_line": True, "loading_same_line": True, "active_animation": "nami-progress-indeterminate",
+                   "active_indeterminate": True, "terminal_animation": "none", "terminal_track_visible": True,
+                   "track_height": 8.0, "terminal_value": "0%"},
         "scroll_owners": {"outer_x": "auto", "body_x": "hidden", "body_y": "auto"},
         "details": {"initially_hidden": True, "expanded": True, "root_height": 640.0, "column_height": 640.0,
                     "root_width": 1200.0, "column_width": 384.0, "global_overflow": "auto", "item_overflow": "auto",
@@ -4050,7 +4054,7 @@ def _inventory_panel_sample() -> dict[str, object]:
     }
 
 
-def _assert_inventory_panel(evidence: dict[str, object], integrity: dict[str, object]) -> None:
+def _assert_inventory_panel(evidence: dict[str, object], integrity: dict[str, object], *, reduced: bool) -> None:
     assert component_gallery_child._valid_inventory_panel(evidence)
     assert evidence["headers"] == ["Filename", "State", "Checksum", "Size", "Modified"]
     assert evidence["checkbox_count"] == 0
@@ -4066,6 +4070,15 @@ def _assert_inventory_panel(evidence: dict[str, object], integrity: dict[str, ob
     assert (title[1] + title[3]) / 2 == pytest.approx((actions[1] + actions[3]) / 2, abs=1)
     assert (facts[1] + facts[3]) / 2 == pytest.approx((toggle[1] + toggle[3]) / 2, abs=1)
     assert title[2] <= actions[0] and facts[2] <= toggle[0]
+    for inventory_height, plan_height in evidence["setup_heights"]:
+        assert inventory_height == pytest.approx(plan_height, abs=1)
+    status = evidence["status"]
+    for key in ("single_line", "loading_same_line", "active_indeterminate", "terminal_track_visible"):
+        assert status[key] is True
+    assert status["active_animation"] == ("none" if reduced else "nami-progress-indeterminate")
+    assert status["terminal_animation"] == "none"
+    assert status["track_height"] == pytest.approx(8, abs=0.5)
+    assert status["terminal_value"] == "0%"
     assert evidence["grown_widths"][0] > evidence["first_widths"][0]
     assert evidence["grown_widths"][1:] == pytest.approx(evidence["first_widths"][1:], abs=1)
     before, after = evidence["manual_before"], evidence["manual_after"]
@@ -4184,7 +4197,8 @@ def _assert_complete_gallery_matrix(report: dict[str, object]) -> None:
         "wheel_blocked": True,
     }
     _assert_diagnostic_layout(report["control_contract"]["diagnostic_layout"])
-    _assert_inventory_panel(report["control_contract"]["inventory_panel"], report["control_contract"]["integrity_list"])
+    _assert_inventory_panel(report["control_contract"]["inventory_panel"], report["control_contract"]["integrity_list"],
+                            reduced=report["media"]["reduced"])
     minimum_window = report["control_contract"]["minimum_window"]
     filter_menu = minimum_window["filter_menu"]
     assert all(filter_menu[key] is True for key in (

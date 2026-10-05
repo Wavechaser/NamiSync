@@ -1896,7 +1896,16 @@ complete file bytes while its tooltip and Details distinguish own object facts.
 
 The frozen Setup, status and table align with Plan review. The standalone task's
 switcher selects Integrity and disables Sync. Whole and selected Refresh are
-status actions. Details starts hidden and opens a full-height optional right
+status actions. Setup's path region shares Plan's two-line minimum height while
+retaining one real Root line. The status card keeps the current scan outcome,
+complete inventory rollup summary and one persistent detailed status paragraph.
+That paragraph carries the displayed publication's scope and scan counts, marks
+incomplete coverage, and includes loading, action-result or recovery guidance
+without adding temporary paragraphs. The visible-row count remains a view fact,
+not a second inventory total. Its shared 8 px progress track remains visible;
+unknown active scan totals use the shared indeterminate animation, and terminal
+state stops animation without inventing a completion percentage. Supplied known
+progress retains the task snapshot's value. Details starts hidden and opens a full-height optional right
 column using Plan's two independently scrolling cards: task facts above and item
 details below, with a selection placeholder. Hiding Details restores focus when
 it was inside that column. The existing 24rem/40% cap and minimum-size chain
