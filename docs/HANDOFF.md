@@ -1,105 +1,59 @@
 # Latest session — GUI follow-up
 
-2026-10-05 on `milestone1`, base `583f14d`. The user ratified GUI-B1–B6 in
-M1_PLAN, then explicitly deferred all of B2 for separate review. B1 is committed
-as `53e1abb`, B3 as `2828b8b`, and B4 as `0f87f6a`. B5 details layout/full-path
-display passed final gates and is ready for atomic commit; B6 remains authorized. No B2 work is included.
+2026-10-05 on `milestone1`, base `583f14d`. The user ratified GUI-B1–B6,
+then explicitly deferred all of B2 for separate review. B1 and B3–B6 are
+delivered as separate reviewed atomic units. No B2 correction is included.
 
-## Delivered B1
+| Unit | Delivered change | Commit |
+| --- | --- | --- |
+| B1 | Bounded Plan window labels, strict presentation validators, exact-node full details and migrated consumers | `53e1abb` |
+| B3 | Shared Verify Setup height, stable consolidated status detail and truthful progress | `2828b8b` |
+| B4 | Local `yyyy-MM-DD HH:mm` timestamps with unchanged raw values and elapsed calculations | `0f87f6a` |
+| B5 | 20rem Details cap, 2:3 global/item height and full paths joined to the correct known root | `61a5cf5` |
+| B6 | Existing row actions through pointer/keyboard context menus; exact clicked-row scope | This commit; identity in `integration.md` |
 
-Plan windows carry compact display/notice/destination labels and Rename-only
-prior filenames. One revisioned exact-node detail read preserves original-case
-paths, their source/target origin and complete notices without filesystem or
-ledger I/O. Raw projection search, node-id reveal, selection and execution are
-unchanged. Bridge admission checks closed presentation kinds and their exact
-row/operation relationships. Command catalogs and direct fixtures migrated.
+## Verification and evidence
 
-Evidence: `build/gui-followup-20261005/`. The user's sole pre-existing dirty
-HANDOFF was preserved verbatim in `user-handoff.md`; its findings are addressed
-by B1 and the corresponding BUGS entry. Focused backend checks passed 601 tests
-and 12 import contracts before the final casing adjustment; its seven direct
-checks passed. Frontend/gallery checks passed 82 tests, followed by 56 after
-independent review corrected row-kind/identity validation. Reviewer evidence is
-`b1-review-*`; the independent correction witness rejects four invalid shapes
-while retaining legitimate prior-location operations.
+Evidence root: `build/gui-followup-20261005/`. The user's original uncommitted
+HANDOFF is preserved verbatim in `user-handoff.md`; `integration.md` records
+atomic commit identities. Each delivered unit has a fresh independent review
+and exact input binding in `b1-review-final*`, `b3-review-receipt.json`,
+`b4-review-receipt.json`, `b5-review*` and `b6-review*`.
 
-`b1-ordinary-01` passed 5,910 tests with four privilege skips, but three sandbox
-setup failures prevented acceptance. Two ACL fixtures targeted a different
-principal than the sandbox process and failed before reaching the executor;
-PowerShell policy blocked the third test before its version guard. All twelve
-`b1-native-01` cases stopped at window enumeration before input. No product or
-driver changes were made for these conditions. `b1-environment-disposition.md`
-records the evidence. Final `b1-ordinary-02` passed 5,913 tests with four privilege
-skips and 35 headed exclusions, followed by all 12 import contracts.
-`b1-native-02` passed all 12 affected installed gallery/shell/transport checks.
-Both ran outside the sandbox on frozen product/test inputs. Independent approval
-and exact input binding are in `b1-review-final.md` and its binding JSON. Local
-document links and diff checks pass; `integration.md` records the atomic commit.
+B1 passed 5,913 ordinary tests, 12 import contracts and 12 installed UI/transport
+checks. B3/B4 passed their interfaces gates and seven installed checks each;
+B5 passed 1,944 interfaces tests and nine installed obligations. The retained
+B5 larger-shell initial-readiness failure passed on unchanged-input retry.
+B1's earlier sandbox principal/policy/window-enumeration failures and B4/B5
+fixture corrections remain in evidence; they were not discarded or accepted
+as passes. B6's ordinary integration passed 5,914 tests (four privilege skips,
+35 headed exclusions) and all 12 import contracts. Final focused verification
+passed 86 cases. Its seven installed obligations passed across `b6-native-01`
+(two shell sizes), `b6-native-03` (Inventory) and `b6-native-04` (four gallery
+checks). Failed receipts and the corrected script/visibility/measurement causes
+remain in `b6-native-disposition.md` and `b6-gallery-rejection.md`. Product bytes
+remained unchanged after the ordinary gate; every changed test consumer was
+rerun. Native Inventory proves the clicked missing-file scope independently of
+the other selected folder's details, with one effect per original command.
 
-## B3 delivery
+## Deferred B2
 
-Verify Setup shares Plan's path-area minimum height. Status uses the current
-outcome, one rollup summary and one persistent detailed paragraph for publication
-scope/counts and loading/action/recovery guidance. Shared progress animates for
-unknown active totals and retains a static terminal track without inventing 100%.
-Table, payload, details and action scope remain unchanged. Direct composition and
-frontend checks passed 15 tests; the final focused set passed 41. Final gates
-passed 1,943 interfaces tests and seven installed gallery/shell/Inventory checks
-(`b3-*-01`). Independent review found no actionable defect; final source and
-closing-document binding is retained with its receipt. Source/tests/measurement/
-checker inputs matched the independent receipt. Local document links and diff
-checks pass. `b3-review-receipt.json` binds actual equal Setup heights at both
-widths, installed progress observations and the final inputs.
+The entire Verify table alignment is deferred, including row spacing, zebra,
+disabled checkbox visuals, Notes, Presence labels and basename rendering.
+Functional selection remains M1-10. Execution-to-Verify navigation/A6 also
+remains deferred.
 
-## B4 delivery
-
-B4's final focused set passed 13 direct/composition/checker tests. The shared
-local formatter preserves unavailable values, nanosecond precision and original
-elapsed-time calculations. Representative installed gallery dates and direct
-UTC/non-UTC/boundary cases migrated together. `b4-interfaces-01` passed 1,944 tests;
-`b4-native-01` passed all seven gallery/Inventory/execution cases. Independent
-review found no actionable defect and bound frozen inputs. Preliminary failed receipts retain the sandbox
-temporary-root denial and corrected test-only window-identity ordering; no
-production cache behavior changed.
-
-## B5 delivery
-
-Details uses a 20rem/40% cap and 2:3 global/item height allocation. A pure display
-join uses the existing known root for planned/execution/Inventory path facts,
-preserving source/target origin, null facts, raw receipts and absolute global
-trash. Inventory status, table and titles retain their existing form. Six focused
-checks passed, including actual composed execution and capture identity. Gallery
-producer/checker/fixtures now enforce the new cap/ratio; a schema sample color
-migration failure is retained as `b5-focused-02`, followed by passing `-03`.
-`b5-interfaces-01` passed 1,944 tests. Eight installed cases passed in
-`b5-native-01`; the larger shell stopped at initial readiness before pane checks.
-Its unchanged-input focused rerun `b5-native-larger-02` passed, completing all
-nine obligations across retained runs. No product/driver/assertion change was
-made for the timeout. Independent review found no actionable defect; raw reports,
-input binding and the failed receipt remain in evidence.
-
-## Deferred B2 and next work
-
-Read-only Inventory review reproduced the same full-path replication mechanism:
-supported domain/notices windows exceeded the bridge's existing 8 MiB wall.
-AGENTS recurrence review produced the consolidated mechanism table and proposed
-an existing-detail-response extension for warning/synthetic snapshot paths.
-The user chose **Defer B2 and review separately**. No Inventory table, checkbox,
-payload or detail-contract changes were made. The open defect, complete field
-population and raw reproducer are in BUGS, M1_PLAN and `b2-design-inventory-envelope.*`.
-The earlier disabled-checkbox proposal is deferred with B2; functionality remains
-M1-10. Execution-to-Verify navigation/A6 remains deferred too.
-
-Current B5: 20rem details pane, 3:2 item/global height and
-root-correct full paths; B6 row context menus. Menus use existing actions only:
-Show details, Plan Select/Deselect where allowed, folder Expand/Collapse, and
-Verify Refresh selected/Acknowledge missing. Inventory keeps its existing single
-highlighted-node scope; no clipboard, new filesystem effects or selection policy.
+Read-only recurrence review reproduced Inventory full-path replication exceeding
+the correctly enforced 8 MiB response wall. BUGS and M1_PLAN retain the open
+defect and one consolidated proposal: compact window basenames/warning paths
+and extend existing single-item details with separate snapshot path context.
+No B2 product, test or contract correction was implemented. Reproduction is in
+`b2-design-inventory-envelope.py` and `.json`; renewed user authority is needed
+before implementing the deferred proposal.
 
 ## Operational context
 
-No task worktree/branch, push or PR. Evidence/temp roots are owned and recorded by
-each run; retain failed receipts. Shared source/tests/validators are frozen for
-acceptance; future work must wait for the current coherent commit. No external
-Claude review was requested for this follow-up; each unit uses a fresh independent
-reviewer through execute-task. README phase synopsis and AGENTS need no changes.
+No task worktree/recovery branch, push or PR. Retain owned evidence and failed
+receipts. No external Claude review was requested for this follow-up; execute-task
+uses fresh independent reviewers for every unit. README's phase synopsis and
+AGENTS need no changes. M1_PLAN owns scope and DESKTOP_UI owns shipped behavior.

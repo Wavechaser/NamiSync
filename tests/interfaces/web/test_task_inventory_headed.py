@@ -56,11 +56,15 @@ def test_installed_inventory_refresh_acknowledge_restore_and_close(
             "refresh": True, "filter-open": True, "filter-present": True,
             "filter-escape": True, "filter-reopen": True, "filter-all": True,
             "details": True, "acknowledge": True, "restore-details": True, "restore": True,
+            "context-open": True, "context-escape": True, "context-keyboard": True,
+            "context-acknowledge": True, "context-restore-details": True, "context-restore": True,
         }
         assert initial["report"]["foreground_owned"] == {
             "refresh": True, "filter-open": True, "filter-present": True,
             "filter-escape": True, "filter-reopen": True, "filter-all": True,
             "details": True, "acknowledge": True, "restore-details": True, "restore": True,
+            "context-open": True, "context-escape": True, "context-keyboard": True,
+            "context-acknowledge": True, "context-restore-details": True, "context-restore": True,
         }
         assert initial["report"]["filter_menu"] == {
             "neutral": True, "staysOpen": True, "accented": True, "escapeFocus": True,
@@ -70,6 +74,26 @@ def test_installed_inventory_refresh_acknowledge_restore_and_close(
         assert initial["report"]["results"]["refresh"]["request_id"] != initial["report"]["initial"]["request_id"]
         assert initial["report"]["results"]["acknowledge"]["applied"] == 1
         assert initial["report"]["results"]["restore"]["applied"] == 1
+        assert initial["report"]["results"]["context_acknowledge"] == {
+            "node_id": initial["report"]["fixture"]["missing_node_id"], "applied": 1,
+        }
+        assert initial["report"]["results"]["context_restore"] == {
+            "node_id": initial["report"]["fixture"]["folder_node_id"], "applied": 1,
+        }
+        row_menu = initial["report"]["row_menu"]
+        assert {key: value for key, value in row_menu.items()
+                if key not in {"rectangles", "raw_rectangles"}} == {
+            "other_detail_preserved": True, "active_missing": True, "popup_inside": True,
+            "escape_focus": True, "own_missing_actions": True,
+            "acknowledged_hidden": True, "restored_missing": True,
+        }
+        assert len(row_menu["rectangles"]) == len(row_menu["raw_rectangles"]) == 2
+        for observed, raw in zip(row_menu["rectangles"], row_menu["raw_rectangles"], strict=True):
+            assert len(observed) == len(raw) == 4
+            assert observed == pytest.approx(raw, rel=0, abs=0.0005)
+        menu_edges, work_edges = row_menu["rectangles"]
+        assert menu_edges[0] >= work_edges[0] and menu_edges[2] <= work_edges[2]
+        assert menu_edges[1] >= work_edges[1] and menu_edges[3] <= work_edges[3]
         assert initial["report"]["publication"]["request_id"] == initial["report"]["results"]["refresh"]["request_id"]
         assert initial["report"]["pane_visible"] is True
         assert initial["report"]["refreshed_missing"] is True

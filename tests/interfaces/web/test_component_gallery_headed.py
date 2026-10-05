@@ -1863,6 +1863,12 @@ def test_component_gallery_report_parser_is_exact_and_nested(
                                    [360, 80, 1000, 700], [406, 240, 604, 268], [406, 418, 604, 446]],
                     "internal_scroll_preserved": True, "resize_closed": True, "outside_scroll_closed": True,
                 },
+                "row_menu": {
+                    "shared_style": True, "popup_inside": True, "committed_inert": True,
+                    "escape_focus": True, "keyboard_open": True, "end_focus": True, "resize_closed": True,
+                    "rectangles": [[400, 400, 600, 500], [360, 80, 1000, 700]],
+                    "raw_rectangles": [[400, 400, 600, 500], [360, 80, 1000, 700]],
+                },
             },
             "segmented": {
                 "group_role": "radiogroup",
@@ -2047,6 +2053,28 @@ def test_component_gallery_report_parser_is_exact_and_nested(
     assert recorded is not None
     assert recorded["schema_version"] == 6
     assert recorded["report"] == report
+
+    rejected_root = tmp_path / "rejected"
+    rejected_root.mkdir()
+    rejected_paths = EvidencePaths(rejected_root.resolve())
+    rejected = component_gallery_child._test_report_spec(
+        component_gallery_child._Recorder(rejected_paths, "dark"),
+        lambda _targets: None,
+        "dark",
+    )
+    for sequence, (name, value) in enumerate(part_values):
+        rejected.invoke(
+            {"phase": "part", "sequence": sequence, "name": name, "value": value},
+            context=_OPEN_CONTEXT,
+        )
+    with pytest.raises(CommandPayloadError, match="report is invalid"):
+        rejected.invoke(
+            {"phase": "complete", "mode": "light", "media": report["media"],
+             "cosmetic": report["cosmetic"], "part_count": len(part_values)},
+            context=_OPEN_CONTEXT,
+        )
+    assert json.loads((rejected_root / "rejected-complete-report.json").read_text(encoding="utf-8")) == report
+    assert EvidenceReader(rejected_paths).read_ready() is None
 
     incomplete_root = tmp_path / "incomplete"
     incomplete_root.mkdir()
@@ -4252,6 +4280,16 @@ def _assert_complete_gallery_matrix(report: dict[str, object]) -> None:
         "accent_pair", "neutral_pair", "popup_inside", "first_reachable", "end_reachable",
         "internal_scroll_preserved", "resize_closed", "outside_scroll_closed",
     )), filter_menu
+    row_menu = minimum_window["row_menu"]
+    assert all(row_menu[key] is True for key in (
+        "shared_style", "popup_inside", "committed_inert", "escape_focus",
+        "keyboard_open", "end_focus", "resize_closed",
+    )), row_menu
+    for observed, raw in zip(row_menu["rectangles"], row_menu["raw_rectangles"], strict=True):
+        assert observed == pytest.approx(raw, rel=0, abs=0.0005)
+    menu_edges, work_edges = row_menu["rectangles"]
+    assert menu_edges[0] >= work_edges[0] and menu_edges[2] <= work_edges[2]
+    assert menu_edges[1] >= work_edges[1] and menu_edges[3] <= work_edges[3]
     assert minimum_window["long_trash_length"] == 32767
     assert minimum_window["keyboard_scroll_after"] > minimum_window["keyboard_scroll_before"]
     assert minimum_window["keyboard_capture_width"] > 0

@@ -247,6 +247,18 @@ explicit, reviewable and regression-backed.
   nullable facts and the existing compact status presentation.
   Pass six focused, 1,944 interfaces and nine installed obligations across
   retained runs, including an unchanged-input retry of an initial readiness timeout.
+- Add shared row context menus for existing details, Plan selection, folder
+  expansion and Verify refresh/missing acknowledgement actions. Target the
+  clicked row independently of displayed details, with keyboard access and
+  pending/retired-owner guards. Preserve clipped-row scroll position and existing
+  toolbar actions; migrate gallery and installed gesture consumers together.
+  Pass 5,914 ordinary tests (four privilege skips), all 12 import contracts,
+  86 final focused checks and seven installed obligations across retained runs.
+  Correct test-driver visibility and coherent gallery measurement, retain failed
+  receipts, and complete independent review before the atomic commit.
+- Defer the entire further Verify table alignment (B2) for separate user review.
+  Preserve the recurrence investigation and consolidated proposal for Inventory
+  full-path window amplification; no checkbox or payload correction is included.
 
 #### Repair bridge diagnostic composition receipts (2026-10-04)
 

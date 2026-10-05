@@ -3068,6 +3068,45 @@ window.addEventListener("unhandledrejection", (event) => {
   const selectedBounds = selectedThemeOption.getBoundingClientRect();
   const triggerStyle = getComputedStyle(themeTrigger);
   const popupStyle = getComputedStyle(themePopup);
+  const comboboxEvidence = {
+    trigger_role: themeTrigger.getAttribute("role"),
+    popup_role: themePopup.getAttribute("role"),
+    expanded: themeTrigger.getAttribute("aria-expanded"),
+    selected: selectedThemeOption.getAttribute("aria-selected"),
+    option_count: themePopup.querySelectorAll(".nami-combobox__option").length,
+    popup_width_delta: Number(
+      Math.abs(popupBounds.width - triggerBounds.width).toFixed(3),
+    ),
+    popup_within_viewport: popupBounds.top >= 7.5
+      && popupBounds.left >= 7.5
+      && popupBounds.right <= window.innerWidth - 7.5
+      && popupBounds.bottom <= window.innerHeight - 7.5,
+    selected_center_error: Number(Math.abs(
+      (selectedBounds.top + selectedBounds.height / 2)
+      - (triggerBounds.top + triggerBounds.height / 2)
+    ).toFixed(3)),
+    placement_clamped: popupBounds.top <= 8.5
+      || popupBounds.bottom >= window.innerHeight - 8.5,
+    trigger_background_image: triggerStyle.backgroundImage,
+    trigger_outline_style: triggerStyle.outlineStyle,
+    popup_background: popupStyle.backgroundColor,
+    popup_border: popupStyle.borderColor,
+    popup_border_width: popupStyle.borderWidth,
+    popup_shadow: popupStyle.boxShadow,
+    popup_backdrop_filter: popupStyle.backdropFilter,
+    ordinary_option_background: ordinaryOptionRestBackground,
+    selected_option_background: getComputedStyle(
+      selectedThemeOption,
+    ).backgroundColor,
+    hovered_option_background: getComputedStyle(
+      hoveredThemeOption,
+    ).backgroundColor,
+    pressed_option_background: getComputedStyle(
+      pressedThemeOption,
+    ).backgroundColor,
+    selected_pill_width: selectionPill.getBoundingClientRect().width,
+    selected_pill_background: getComputedStyle(selectionPill).backgroundColor,
+  };
   galleryMeasurementStep = "task_rail_layout";
   galleryFailureReason = "task_rail_invariant";
   const taskCards = [...galleryRail.element.querySelectorAll(".nami-task-card")];
@@ -3223,6 +3262,32 @@ window.addEventListener("unhandledrejection", (event) => {
   minimumWorkBody.dispatchEvent(new Event('scroll'));
   filterMenuGeometry.outside_scroll_closed = minimumFilterPopup.hidden;
   if (!minimumFilterPopup.hidden) minimumFilterTrigger.click();
+  galleryMeasurementStep = "plan_review_row_menu";
+  const contextRow = planReviewPanel.element.querySelector('.nami-plan-review__rows [data-node-id]');
+  contextRow.dispatchEvent(new MouseEvent('contextmenu', {bubbles:true, cancelable:true,
+    clientX:clipBounds.right - 1, clientY:clipBounds.bottom - 1}));
+  const rowPopup = planReviewPanel.element.querySelector('.nami-row-menu');
+  const rowBounds = rowPopup.getBoundingClientRect();
+  const rowRawRectangles = [rowBounds, clipBounds].map(bounds =>
+    [bounds.left, bounds.top, bounds.right, bounds.bottom]);
+  const rowRectangles = rowRawRectangles.map(bounds => bounds.map(value => Number(value.toFixed(3))));
+  const [rowEdges, workEdges] = rowRectangles;
+  const rowMenuGeometry = {
+    shared_style:rowPopup.classList.contains('nami-menu')
+      && [...rowPopup.children].every(item => item.classList.contains('nami-menu__item')),
+    popup_inside:!rowPopup.hidden && rowEdges[0] >= workEdges[0] && rowEdges[2] <= workEdges[2]
+      && rowEdges[1] >= workEdges[1] && rowEdges[3] <= workEdges[3],
+    committed_inert:!rowPopup.querySelector('[data-action="row-selection"]'),
+    rectangles:rowRectangles, raw_rectangles:rowRawRectangles,
+  };
+  rowPopup.dispatchEvent(new KeyboardEvent('keydown', {key:'Escape', bubbles:true}));
+  rowMenuGeometry.escape_focus = rowPopup.hidden && document.activeElement === contextRow;
+  contextRow.dispatchEvent(new KeyboardEvent('keydown', {key:'F10', shiftKey:true, bubbles:true, cancelable:true}));
+  rowMenuGeometry.keyboard_open = !rowPopup.hidden;
+  rowPopup.dispatchEvent(new KeyboardEvent('keydown', {key:'End', bubbles:true}));
+  rowMenuGeometry.end_focus = document.activeElement === rowPopup.lastElementChild;
+  window.dispatchEvent(new Event('resize'));
+  rowMenuGeometry.resize_closed = rowPopup.hidden;
   const minimumAllDiagnostics = minimumLayoutEvidence.at(-1);
   if (minimumAllDiagnostics === undefined) throw new Error("native minimum A1 evidence is missing");
   galleryMeasurementStep = "native_minimum_keyboard";
@@ -3261,6 +3326,7 @@ window.addEventListener("unhandledrejection", (event) => {
   const axesLineHeight = parseFloat(getComputedStyle(executionAxes).lineHeight);
   minimumWindowEvidence = {
     filter_menu: filterMenuGeometry,
+    row_menu: rowMenuGeometry,
     default_outer_width: defaultWindowSize.outer_width,
     default_outer_height: defaultWindowSize.outer_height,
     native_default_owner_scale: nativeDefault.owner_scale,
@@ -3588,45 +3654,7 @@ window.addEventListener("unhandledrejection", (event) => {
         unselected_checked: unselected.getAttribute("aria-checked"),
       };
     })(),
-    combobox: {
-      trigger_role: themeTrigger.getAttribute("role"),
-      popup_role: themePopup.getAttribute("role"),
-      expanded: themeTrigger.getAttribute("aria-expanded"),
-      selected: selectedThemeOption.getAttribute("aria-selected"),
-      option_count: themePopup.querySelectorAll(".nami-combobox__option").length,
-      popup_width_delta: Number(
-        Math.abs(popupBounds.width - triggerBounds.width).toFixed(3),
-      ),
-      popup_within_viewport: popupBounds.top >= 7.5
-        && popupBounds.left >= 7.5
-        && popupBounds.right <= window.innerWidth - 7.5
-        && popupBounds.bottom <= window.innerHeight - 7.5,
-      selected_center_error: Number(Math.abs(
-        (selectedBounds.top + selectedBounds.height / 2)
-        - (triggerBounds.top + triggerBounds.height / 2)
-      ).toFixed(3)),
-      placement_clamped: popupBounds.top <= 8.5
-        || popupBounds.bottom >= window.innerHeight - 8.5,
-      trigger_background_image: triggerStyle.backgroundImage,
-      trigger_outline_style: triggerStyle.outlineStyle,
-      popup_background: popupStyle.backgroundColor,
-      popup_border: popupStyle.borderColor,
-      popup_border_width: popupStyle.borderWidth,
-      popup_shadow: popupStyle.boxShadow,
-      popup_backdrop_filter: popupStyle.backdropFilter,
-      ordinary_option_background: ordinaryOptionRestBackground,
-      selected_option_background: getComputedStyle(
-        selectedThemeOption,
-      ).backgroundColor,
-      hovered_option_background: getComputedStyle(
-        hoveredThemeOption,
-      ).backgroundColor,
-      pressed_option_background: getComputedStyle(
-        pressedThemeOption,
-      ).backgroundColor,
-      selected_pill_width: selectionPill.getBoundingClientRect().width,
-      selected_pill_background: getComputedStyle(selectionPill).backgroundColor,
-    },
+    combobox: comboboxEvidence,
     task_rail: {
       card_count: taskCards.length,
       outside_content_card: taskCards.every(

@@ -1253,6 +1253,24 @@ assert.equal(
   false,
 );
 
+const contextRoot = new TestDocument().createElement("div");
+contextRoot.clientHeight = 42;
+const contexts = [];
+const contextTree = createTree(contextRoot, {context: (nodeId, event, element) => {
+  event.preventDefault();
+  contexts.push([nodeId, element]);
+}});
+contextTree.commitWindow(contextTree.beginWindowRequest(), fixtureViews.head);
+contextRoot.scrollTop = 14;
+const clippedRow = treeItems(contextRoot)[0];
+clippedRow.dispatch("contextmenu", {preventDefault() {}, stopPropagation() {}});
+assert.equal(contextRoot.scrollTop, 14, "pointer context on a clipped row must not reveal/scroll it");
+assert.equal(contextRoot.getAttribute("aria-activedescendant"), clippedRow.id);
+assert.equal(contexts[0][0], clippedRow.dataset.nodeId);
+contextRoot.dispatch("keydown", {key: "F10", shiftKey: true, preventDefault() {}});
+assert.equal(contexts[1][0], clippedRow.dataset.nodeId, "keyboard context uses the same active row");
+contextTree.dispose();
+
 process.stdout.write(`${JSON.stringify({
   fixture_schema: fixture.schema,
   fixture_sha256: fixtureSha256,

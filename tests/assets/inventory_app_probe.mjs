@@ -152,6 +152,17 @@ assert.equal(review.detail.row, warning);
 assert.equal(calls.filter(([name]) => name === "detail").length, 0);
 await app.readInventoryDetail(review, folder.node_id);
 assert.equal(calls.filter(([name]) => name === "detail").length, 0);
+const beforeContext = calls.filter(([name]) => name === "refresh").length;
+refuseRefresh = true;
+await app.runInventoryAction(review, "refresh", warning.node_id);
+assert.equal(calls.filter(([name]) => name === "refresh").length, beforeContext,
+  "informational window rows cannot acquire a command");
+await app.runInventoryAction(review, "refresh", real.node_id);
+assert.equal(calls.filter(([name]) => name === "refresh").length, beforeContext + 1);
+assert.equal(calls.findLast(([name]) => name === "refresh")[5], real.node_id,
+  "explicit current row acts on itself while another row owns details");
+refuseRefresh = false;
+await app.readInventoryDetail(review, folder.node_id);
 delayedDetail = defer();
 const oldDetail = app.readInventoryDetail(review, real.node_id);
 assert.equal(review.detail.state, "loading");

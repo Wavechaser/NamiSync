@@ -38,7 +38,7 @@ class ElementFake {
     return null;
   }
   contains(value) { return value === this || this.children.some((child) => child.contains(value)); }
-  getBoundingClientRect() { return { top: 200, bottom: 232, width: 160 }; }
+  getBoundingClientRect() { return { left: 16, right: 176, height: 32, top: 200, bottom: 232, width: 160 }; }
   querySelector(selector) {
     return this.children.find((value) => value.classList.contains(selector.slice(1)))
       ?? this.children.map((value) => value.querySelector(selector)).find(Boolean) ?? null;
@@ -54,7 +54,7 @@ class ElementFake {
   removeAttribute(key) { this.attributes.delete(key); }
   focus() { document.activeElement = this; this.dispatch("focus"); }
   dispatch(key, fields = {}) {
-    const event = { target: this, preventDefault() {}, stopPropagation() { this.stopped = true; }, ...fields };
+    const event = { type: key, target: this, preventDefault() {}, stopPropagation() { this.stopped = true; }, ...fields };
     for (const callback of this.listeners.get(key) ?? []) callback(event);
     if (!event.stopped && this.parentElement !== null) this.parentElement.dispatch(key, event);
   }
@@ -71,6 +71,7 @@ globalThis.document = {
   createElement(tag) { return new ElementFake(tag, this); },
   defaultView: {
     innerHeight: 800,
+    innerWidth: 1280,
     addEventListener(key, callback) { viewListeners.set(key, [...(viewListeners.get(key) ?? []), callback]); },
     removeEventListener(key, callback) { viewListeners.set(key, (viewListeners.get(key) ?? []).filter((value) => value !== callback)); },
     requestAnimationFrame(callback) { frames.push(callback); },
@@ -95,12 +96,15 @@ const treeUrl = moduleUrl((await readFile(join(assetRoot, "tree.js"), "utf8")).r
 const iconsUrl = moduleUrl(await readFile(join(assetRoot, "icons.js"), "utf8"));
 const filterUrl = moduleUrl((await readFile(join(assetRoot, "filter_menu.js"), "utf8"))
   .replace("./render.js", renderUrl).replace("./icons.js", iconsUrl));
+const rowMenuUrl = moduleUrl((await readFile(join(assetRoot, "row_menu.js"), "utf8"))
+  .replace("./render.js", renderUrl));
 const tableColumnsUrl = moduleUrl(await readFile(join(assetRoot, "table_columns.js"), "utf8"));
 const inventoryTaskStatusUrl = moduleUrl((await readFile(join(assetRoot, "task_status.js"), "utf8")).replace("./render.js", renderUrl));
 const source = (await readFile(join(assetRoot, "inventory_review.js"), "utf8"))
   .replace("./task_status.js", inventoryTaskStatusUrl)
   .replace("./table_columns.js", tableColumnsUrl)
   .replace("./filter_menu.js", filterUrl)
+  .replace("./row_menu.js", rowMenuUrl)
   .replace("./render.js", renderUrl).replace("./tree.js", treeUrl).replace("./icons.js", iconsUrl);
 const { createInventoryReviewPanel } = await import(moduleUrl(source));
 const fixture = JSON.parse(await readFile(process.argv[3], "utf8"));
@@ -479,4 +483,82 @@ app.panel.render(liveTask);
 assert.equal(treeRoot.scrollTop, acceptedScroll, "rendering the accepted window preserves scrolling");
 assert.equal(firstLiveRow().dataset.nodeId, fixture.tail.rows[0].node_id);
 app.panel.renderSettings();
+const menuCalls = [];
+const menuPane = createInventoryReviewPanel({
+  onViewChange: (...args) => menuCalls.push(["view", ...args]),
+  onDetail: (...args) => menuCalls.push(["detail", ...args]),
+  onWindow: async () => null, onReload: () => {}, onCheckOutcome: () => {},
+  onRefresh: (...args) => menuCalls.push(["refresh", ...args]),
+  onVisibility: (...args) => menuCalls.push(["visibility", ...args]),
+});
+const menuRows = fixture.views.default.window.rows.map((row) => row.row_id === "1"
+  ? { ...row, presence: "missing", acknowledged: false } : row);
+const menuReview = { ...fixture.views.default, pending: null, detail: null,
+  window: { ...fixture.views.default.window, rows: menuRows } };
+const menuTask = { ...task, inventoryReview: menuReview, inventoryLoading: false,
+  closePending: false, closeRecovery: null, inventoryAction: null,
+  sessionState: "completed", sessionReleased: true,
+  requestId: menuReview.summary.request_id, inventoryViewUnconfirmed: false };
+menuPane.render(menuTask);
+const menuWalk = () => walk(menuPane.element);
+const menuTree = menuWalk().find((value) => value.getAttribute("role") === "tree");
+const menuPopup = menuWalk().find((value) => value.classList.contains("nami-row-menu"));
+const menuRow = (row) => menuWalk().find((value) => value.dataset.nodeId === row.node_id);
+const missingRow = menuRows.find((row) => row.row_id === "1");
+const menuFolder = menuRows.find((row) => row.row_kind === "folder");
+const menuNotice = menuRows.find((row) => row.warning !== null);
+menuReview.detail = { row: menuFolder, state: "current", response: null };
+menuPane.render(menuTask);
+const menuPointer = (row) => menuRow(row).dispatch("contextmenu", {clientX: 1279, clientY: 799});
+menuPointer(missingRow);
+assert.equal(menuCalls.length, 0, "right-click has no read or mutation effect");
+assert.equal(menuReview.detail.row, menuFolder, "opening context preserves unrelated details");
+assert.deepEqual(menuPopup.children.map((item) => item.textContent), ["Show details", "Refresh selected", "Acknowledge missing"]);
+assert.equal(menuTree.getAttribute("aria-activedescendant"), menuRow(missingRow).id);
+menuPopup.children[2].click();
+assert.deepEqual(menuCalls.at(-1), ["visibility", menuReview, "acknowledge", missingRow.node_id]);
+assert.equal(menuPopup.hidden, true);
+assert.equal(document.activeElement, menuTree);
+menuTree.dispatch("keydown", {key: "F10", shiftKey: true});
+assert.equal(menuPopup.hidden, false, "keyboard context uses the tree active row");
+menuPopup.children[0].click();
+assert.deepEqual(menuCalls.at(-1), ["detail", menuReview, missingRow.node_id]);
+assert.equal(menuWalk().find((value) => value.classList.contains("nami-plan-review__diagnostics")).hidden, false);
+menuPointer(missingRow);
+menuPopup.children[1].click();
+assert.deepEqual(menuCalls.at(-1), ["refresh", menuReview, missingRow.node_id]);
+menuPointer(menuFolder);
+assert.equal(menuPopup.children.some((value) => value.dataset.action === "row-acknowledge"), false,
+  "missing descendant counts do not authorize context acknowledgement of a present folder");
+assert.ok(menuPopup.children.some((value) => value.dataset.action === "row-refresh"));
+menuPointer(menuNotice);
+assert.deepEqual(menuPopup.children.map((item) => item.textContent), ["Show details"]);
+menuPointer(missingRow);
+const staleAcknowledge = menuPopup.children[2];
+menuReview.pending = "view";
+menuPane.render(menuTask);
+const menuBeforeStale = menuCalls.length;
+staleAcknowledge.click();
+assert.equal(menuCalls.length, menuBeforeStale);
+assert.equal(menuPopup.hidden, true);
+menuReview.pending = null;
+menuTask.inventoryViewUnconfirmed = true;
+menuPane.render(menuTask);
+menuPointer(missingRow);
+assert.deepEqual(menuPopup.children.map((item) => item.textContent), ["Show details", "Refresh selected"]);
+menuTask.closePending = true;
+menuPane.render(menuTask);
+assert.equal(menuPopup.hidden, true);
+menuTask.closePending = false;
+menuTask.inventoryViewUnconfirmed = false;
+menuPane.render(menuTask);
+menuPointer(missingRow);
+menuPopup.dispatch("keydown", {key: "Escape"});
+assert.equal(document.activeElement, menuTree);
+assert.equal(menuTree.getAttribute("aria-activedescendant"), menuRow(missingRow).id);
+menuTree.dispatch("keydown", {key: "ContextMenu"});
+assert.equal(menuPopup.hidden, false);
+menuPane.dispose();
+staleAcknowledge.click();
+assert.equal(menuCalls.length, menuBeforeStale);
 process.stdout.write("ok\n");

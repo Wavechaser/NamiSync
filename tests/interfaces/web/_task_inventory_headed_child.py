@@ -158,14 +158,14 @@ class _InventoryPhase:
             commands, failure, fixture = list(self.commands), self.failure, self.fixture
         if registry is None or initial is None or failure is not None or fixture is None:
             raise RuntimeError("inventory command evidence is incomplete")
-        def one(name: str) -> dict[str, object]:
+        def matching(name: str, expected: int) -> list[dict[str, object]]:
             matches = [item for item in commands if item["command"] == name]
-            if len(matches) != 1:
-                raise RuntimeError(f"inventory {name} did not have one original command")
-            return matches[0]
-        refresh = one("refresh_inventory")
-        acknowledge = one("acknowledge_inventory")
-        restore = one("restore_inventory")
+            if len(matches) != expected:
+                raise RuntimeError(f"inventory {name} original command count differs")
+            return matches
+        refresh = matching("refresh_inventory", 1)[0]
+        acknowledge, context_acknowledge = matching("acknowledge_inventory", 2)
+        restore, context_restore = matching("restore_inventory", 2)
         if (refresh["prior_request_id"] != initial["request_id"]
                 or refresh["request_id"] == initial["request_id"]
                 or acknowledge["request_id"] != refresh["request_id"]
@@ -174,7 +174,15 @@ class _InventoryPhase:
                 or restore["node_id"] != fixture["folder_node_id"]
                 or any(item["task_id"] != initial["task_id"] for item in commands)
                 or acknowledge["result"]["applied"] != 1
-                or restore["result"]["applied"] != 1):
+                or restore["result"]["applied"] != 1
+                or context_acknowledge["node_id"] != fixture["missing_node_id"]
+                or context_restore["node_id"] != fixture["folder_node_id"]
+                or context_acknowledge["request_id"] != refresh["request_id"]
+                or context_restore["request_id"] != refresh["request_id"]
+                or context_acknowledge["command_id"] == acknowledge["command_id"]
+                or context_restore["command_id"] == restore["command_id"]
+                or context_acknowledge["result"]["applied"] != 1
+                or context_restore["result"]["applied"] != 1):
             raise RuntimeError("inventory action identities or actual effects differ")
         view = registry.open_inventory_view(initial["task_id"])
         if view["request_id"] != refresh["request_id"]:
@@ -182,7 +190,11 @@ class _InventoryPhase:
         return {"initial": initial, "fixture": fixture,
                 "results": {"refresh": {"request_id": refresh["request_id"],
                                         "session_id": refresh["session_id"]},
-                            "acknowledge": acknowledge["result"], "restore": restore["result"]},
+                            "acknowledge": acknowledge["result"], "restore": restore["result"],
+                            "context_acknowledge": {"node_id": context_acknowledge["node_id"],
+                                                    "applied": context_acknowledge["result"]["applied"]},
+                            "context_restore": {"node_id": context_restore["node_id"],
+                                                "applied": context_restore["result"]["applied"]}},
                 "publication": {"request_id": view["request_id"],
                                 "view_revision": view["view_revision"],
                                 "missing": view["rollup"]["missing"],
@@ -248,7 +260,7 @@ _PAGE = r"""
     return pane?.isConnected && !pane.querySelector('[data-action="inventory-refresh"]')?.disabled
       && pane.querySelector('.nami-inventory-review__rows [data-node-id]') ? pane : null;
   }, 'initial-inventory-view');
-  const nativeClicks = Object.fromEntries(['refresh', 'filter-open', 'filter-present', 'filter-escape', 'filter-reopen', 'filter-all', 'details', 'acknowledge', 'restore-details', 'restore'].map(name => [name, false]));
+  const nativeClicks = Object.fromEntries(['refresh', 'filter-open', 'filter-present', 'filter-escape', 'filter-reopen', 'filter-all', 'details', 'acknowledge', 'restore-details', 'restore', 'context-open', 'context-escape', 'context-keyboard', 'context-acknowledge', 'context-restore-details', 'context-restore'].map(name => [name, false]));
   async function stage(name) {
     await until(() => document.hasFocus(), 'document-focus');
     let listenedControl = null;
@@ -256,20 +268,28 @@ _PAGE = r"""
       const selector = name === 'filter-open' || name === 'filter-reopen' ? '[data-action="filter-menu"]'
         : name === 'filter-present' || name === 'filter-escape' ? '.nami-filter-menu__popup [data-filter="present"]'
         : name === 'filter-all' ? '.nami-filter-menu__popup [data-filter="all"]'
-        : name === 'restore-details' ? '[data-action="inventory-details"]'
+        : name === 'restore-details' || name === 'context-restore-details' ? '[data-action="inventory-details"]'
+        : name === 'context-open' ? `.nami-inventory-review__rows [data-node-id="${window.__inventoryFixture.missing_node_id}"]`
+        : name === 'context-escape' ? '.nami-row-menu [data-action="row-details"]'
+        : name === 'context-keyboard' ? '.nami-inventory-review__rows'
+        : name === 'context-acknowledge' ? '.nami-row-menu [data-action="row-acknowledge"]'
+        : name === 'context-restore' ? '[data-action="inventory-restore"]'
         : `[data-action="inventory-${name}"]`;
       const control = review.querySelector(selector);
       if (control === null) return {point:null, facts:{connected:false}};
-      control.focus();
+      const focusTarget = name === 'context-open' ? review.querySelector('.nami-inventory-review__rows') : control;
+      focusTarget.focus();
       await new Promise(resolve => requestAnimationFrame(resolve));
       const rect = control.getBoundingClientRect();
       const point = {x:(rect.left+rect.right)/2, y:(rect.top+rect.bottom)/2};
       const hit = document.elementFromPoint(point.x, point.y);
       const facts = {document_focused:document.hasFocus(), connected:control.isConnected,
-        enabled:!control.disabled, visible:!control.hidden, active:document.activeElement === control,
+        enabled:!control.disabled, visible:!control.hidden, active:document.activeElement === focusTarget,
         hit_owned:control.contains(hit) || hit === control, sized:rect.width > 0 && rect.height > 0};
       if (listenedControl !== control) {
-        control.addEventListener(name === 'filter-escape' ? 'keydown' : 'click', event => { nativeClicks[name] ||= event.isTrusted; }, {once:true});
+        const gesture = name === 'context-open' ? 'contextmenu'
+          : ['filter-escape', 'context-escape', 'context-keyboard'].includes(name) ? 'keydown' : 'click';
+        control.addEventListener(gesture, event => { nativeClicks[name] ||= event.isTrusted; }, {once:true});
         listenedControl = control;
       }
       return {point, facts};
@@ -369,6 +389,41 @@ _PAGE = r"""
   await stage('restore');
   await until(() => missing()?.querySelector('[data-integrity="missing"]')
     && !review.querySelector('[data-action="inventory-refresh"]').disabled, 'restored-visible');
+  folder().click();
+  const itemHeading = () => review.querySelector('.nami-plan-review__detail h2');
+  await until(() => itemHeading()?.textContent === fixture.folder_display, 'context-other-details');
+  await stage('context-open');
+  const contextPopup = review.querySelector('.nami-row-menu');
+  await until(() => !contextPopup.hidden, 'context-open');
+  const otherDetailPreserved = itemHeading().textContent === fixture.folder_display;
+  const activeMissing = review.querySelector('.nami-inventory-review__rows').getAttribute('aria-activedescendant') === missing().id;
+  const menuRect = contextPopup.getBoundingClientRect();
+  const workRect = review.closest('.nami-work-panel').getBoundingClientRect();
+  const contextRawRectangles = [menuRect, workRect].map(bounds =>
+    [bounds.left, bounds.top, bounds.right, bounds.bottom]);
+  const contextRectangles = contextRawRectangles.map(bounds => bounds.map(value => Number(value.toFixed(3))));
+  const [contextEdges, contextWorkEdges] = contextRectangles;
+  const contextPopupInside = contextEdges[0] >= contextWorkEdges[0] && contextEdges[2] <= contextWorkEdges[2]
+    && contextEdges[1] >= contextWorkEdges[1] && contextEdges[3] <= contextWorkEdges[3];
+  await stage('context-escape');
+  const escapeFocus = contextPopup.hidden && document.activeElement === review.querySelector('.nami-inventory-review__rows');
+  await stage('context-keyboard');
+  await until(() => !contextPopup.hidden, 'context-keyboard');
+  const ownMissingActions = [...contextPopup.children].map(item => item.textContent).join('|') === 'Show details|Refresh selected|Acknowledge missing';
+  await stage('context-acknowledge');
+  await until(() => !missing() && !review.querySelector('[data-action="inventory-refresh"]').disabled, 'context-acknowledged-hidden');
+  folder().click();
+  await stage('context-restore-details');
+  await until(() => !review.querySelector('[data-action="inventory-restore"]').disabled, 'context-restore-ready');
+  await stage('context-restore');
+  await until(() => missing()?.querySelector('[data-integrity="missing"]')
+    && !review.querySelector('[data-action="inventory-refresh"]').disabled, 'context-restored-visible');
+  const rowMenu = {other_detail_preserved:otherDetailPreserved, active_missing:activeMissing,
+    popup_inside:contextPopupInside, escape_focus:escapeFocus, own_missing_actions:ownMissingActions,
+    acknowledged_hidden:true, restored_missing:true};
+  if (Object.values(rowMenu).some(value => value !== true)) throw new Error('row context menu contract failed');
+  rowMenu.rectangles = contextRectangles;
+  rowMenu.raw_rectangles = contextRawRectangles;
   const summary = review.querySelector('.nami-plan-review__summary');
   const track = summary.querySelector('.nami-plan-review__progress');
   const status = {paragraphs:summary.querySelectorAll(':scope > p').length,
@@ -376,7 +431,7 @@ _PAGE = r"""
     track_height:track.getBoundingClientRect().height,
     animation:getComputedStyle(track.firstElementChild).animationName,
     value:track.firstElementChild.style.getPropertyValue('--nami-progress-value')};
-  return {filter_geometry:menuGeometry, filter_colors:filterColors, filter_menu:filterMenu, native_clicks:nativeClicks, pane_visible:review.isConnected && !review.hidden,
+  return {filter_geometry:menuGeometry, filter_colors:filterColors, filter_menu:filterMenu, row_menu:rowMenu, native_clicks:nativeClicks, pane_visible:review.isConnected && !review.hidden,
     refreshed_missing:true, acknowledged_hidden:true, restored_missing:true, status};
 })()
 """
@@ -392,7 +447,7 @@ def _drive(window: object, phase: _InventoryPhase, recorder: _Recorder,
     page_result: dict[str, object] | None = None
     observed_handle: int | None = None
     click_target: dict[str, object] | None = None
-    foreground_owned = {name: False for name in ("refresh", "filter-open", "filter-present", "filter-escape", "filter-reopen", "filter-all", "details", "acknowledge", "restore-details", "restore")}
+    foreground_owned = {name: False for name in ("refresh", "filter-open", "filter-present", "filter-escape", "filter-reopen", "filter-all", "details", "acknowledge", "restore-details", "restore", "context-open", "context-escape", "context-keyboard", "context-acknowledge", "context-restore-details", "context-restore")}
 
     def fail(error: BaseException, task: object | None, step: str, _method: str) -> None:
         nonlocal failed
@@ -411,7 +466,7 @@ def _drive(window: object, phase: _InventoryPhase, recorder: _Recorder,
         )
 
     cdp = NativeCdp(native, core, retained, fail)
-    stage_names = ("refresh", "filter-open", "filter-present", "filter-escape", "filter-reopen", "filter-all", "details", "acknowledge", "restore-details", "restore")
+    stage_names = ("refresh", "filter-open", "filter-present", "filter-escape", "filter-reopen", "filter-all", "details", "acknowledge", "restore-details", "restore", "context-open", "context-escape", "context-keyboard", "context-acknowledge", "context-restore-details", "context-restore")
 
     def next_stage(index: int) -> None:
         if index == len(stage_names):
@@ -442,16 +497,20 @@ def _drive(window: object, phase: _InventoryPhase, recorder: _Recorder,
                 foreground_owned[name] = True
                 def released(_value: object) -> None:
                     cdp.evaluate(f"window.__inventoryNativeAck='{name}';true", lambda _ack: next_stage(index + 1), f"ack-{name}")
-                if name == "filter-escape":
-                    shared = {"key": "Escape", "code": "Escape", "windowsVirtualKeyCode": 27, "nativeVirtualKeyCode": 27}
+                if name in {"filter-escape", "context-escape", "context-keyboard"}:
+                    keyboard_menu = name == "context-keyboard"
+                    key, virtual_key = ("F10", 121) if keyboard_menu else ("Escape", 27)
+                    shared = {"key": key, "code": key, "windowsVirtualKeyCode": virtual_key,
+                              "nativeVirtualKeyCode": virtual_key, "modifiers": 8 if keyboard_menu else 0}
                     cdp.call("Input.dispatchKeyEvent", {"type": "rawKeyDown", **shared},
                         lambda _value: cdp.call("Input.dispatchKeyEvent", {"type": "keyUp", **shared},
                             released, "filter-escape-up"), "filter-escape-down")
                     return
-                cdp.call("Input.dispatchMouseEvent", {"type": "mousePressed", "button": "left",
-                    "buttons": 1, "clickCount": 1, **point},
+                mouse_button = "right" if name == "context-open" else "left"
+                cdp.call("Input.dispatchMouseEvent", {"type": "mousePressed", "button": mouse_button,
+                    "buttons": 2 if mouse_button == "right" else 1, "clickCount": 1, **point},
                     lambda _value: cdp.call("Input.dispatchMouseEvent", {"type": "mouseReleased",
-                        "button": "left", "buttons": 0, "clickCount": 1, **point},
+                        "button": mouse_button, "buttons": 0, "clickCount": 1, **point},
                         released, f"{name}-up"), f"{name}-down")
 
             def require_foreground() -> None:
@@ -482,7 +541,7 @@ def _drive(window: object, phase: _InventoryPhase, recorder: _Recorder,
         checkpoint = "page-result"
         if type(value) is dict:
             page_result = {key: value.get(key) for key in
-                           ("filter_geometry", "filter_colors", "filter_menu", "native_clicks", "pane_visible", "refreshed_missing", "acknowledged_hidden", "restored_missing", "status")}
+                           ("filter_geometry", "filter_colors", "filter_menu", "row_menu", "native_clicks", "pane_visible", "refreshed_missing", "acknowledged_hidden", "restored_missing", "status")}
         if type(value) is not dict or value.get("native_clicks") != {name: True for name in stage_names} or any(value.get(key) is not True for key in
                  ("pane_visible", "refreshed_missing", "acknowledged_hidden", "restored_missing")):
             raise RuntimeError("native inventory page result is invalid")

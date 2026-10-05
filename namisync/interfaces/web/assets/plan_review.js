@@ -1,6 +1,7 @@
 import { createTableColumns } from "./table_columns.js";
 import { renderPlanRow } from "./plan.js";
 import { createFilterMenu } from "./filter_menu.js";
+import { createRowMenu } from "./row_menu.js";
 import { createIcon } from "./icons.js";
 import { formatByteCount, formatFilesystemPath, formatLocalDateTime, renderFilesystemText, renderText } from "./render.js";
 import {
@@ -482,6 +483,8 @@ export function createPlanReviewPanel(callbacks) {
   element.append(header, summary, content, diagnostics);
 
   let current = null;
+  let currentTask = null;
+  const rowMenu = createRowMenu(element);
   let detailsExpanded = false;
   let focusedPlanRow = null;
   let focusedPlanRequestId = null;
@@ -689,6 +692,41 @@ export function createPlanReviewPanel(callbacks) {
     detailsToggle.hidden = current === null;
     detailsToggle.ariaExpanded = String(detailsExpanded);
     diagnostics.hidden = current === null || !detailsExpanded;
+  }
+
+  function openRowMenu(event, rowElement, review, row) {
+    const window = review.window;
+    const owner = currentTask;
+    const actionRevision = review.actionRevision;
+    const viewRevision = review.summary.view_revision;
+    const selectionState = review.summary.selection_state;
+    const sessionId = owner?.sessionId;
+    const isCurrent = () => current === review && currentTask === owner
+      && review.window === window && review.actionRevision === actionRevision
+      && review.summary.view_revision === viewRevision && review.summary.selection_state === selectionState
+      && owner?.sessionId === sessionId
+      && review.pending === null && owner?.executionAttempt == null
+      && !owner?.closePending && owner?.closeRecovery == null
+      && element.contains(rowElement);
+    const actions = [{ id: "row-details", label: "Show details", run: () => {
+      detailsExpanded = true;
+      updateDiagnostics();
+      callbacks.onHighlight(review, "replace", row.node_id);
+    } }];
+    if (row.selection !== "disabled" && review.summary.selection_state === "reviewing"
+        && !row.row_kind.startsWith("prior-")) {
+      const selected = row.selection !== "selected";
+      actions.push({ id: "row-selection", label: selected ? "Select" : "Deselect",
+        run: () => callbacks.onSelect(review, row, selected) });
+    }
+    if (row.is_container && row.expanded !== null) {
+      actions.push({ id: "row-collapse", label: row.expanded ? "Collapse" : "Expand",
+        run: () => callbacks.onViewChange(review, {
+          collapseNodeId: row.node_id, collapsed: row.expanded,
+        }) });
+    }
+    filterMenu.close();
+    rowMenu.open(event, rowElement, rowElement, actions, isCurrent);
   }
 
   function renderExecution(execution, terminalState, snapshot = null) {
@@ -960,7 +998,9 @@ export function createPlanReviewPanel(callbacks) {
       });
       element.addEventListener("keydown", (event) => {
         delete element.dataset.namiFocusOrigin;
-        if (event.key === "Escape") {
+        if (event.key === "ContextMenu" || (event.key === "F10" && event.shiftKey)) {
+          openRowMenu(event, element, review, row);
+        } else if (event.key === "Escape") {
           event.preventDefault();
           callbacks.onHighlight(review, "clear", null);
         } else if (event.key === "ArrowUp" || event.key === "ArrowDown") {
@@ -972,6 +1012,7 @@ export function createPlanReviewPanel(callbacks) {
           callbacks.onHighlight(review, gesture, null);
         }
       });
+      element.addEventListener("contextmenu", (event) => openRowMenu(event, element, review, row));
       element.querySelector(".nami-file-row__disclosure")?.addEventListener("click", () => {
         callbacks.onViewChange(review, {
           collapseNodeId: row.node_id, collapsed: row.expanded === true,
@@ -1038,6 +1079,7 @@ export function createPlanReviewPanel(callbacks) {
   }
 
   function render(task) {
+    currentTask = task;
     if (controlTaskId !== task.taskId || controlSessionId !== task.sessionId) {
       filterMenu.close();
       disarmCancel();
@@ -1063,6 +1105,7 @@ export function createPlanReviewPanel(callbacks) {
     }
     const previousWindow = renderedRows?.window ?? null;
     current = task.review;
+    rowMenu.reconcile();
     if (focusInDetails && (current === null || !detailsExpanded)) {
       (current === null ? statusTitle : detailsToggle).focus?.();
     }
@@ -1275,12 +1318,15 @@ export function createPlanReviewPanel(callbacks) {
       else if (focusedPlanRow?.node_id !== focusNodeId) focusedPlanRow = null;
     }
     renderDetail(review.executionDetail ?? null, focusedPlanRow);
+    rowMenu.reconcile();
     columns.freeze();
     columns.refresh();
     scheduleViewportCheck();
   }
 
   function dispose() {
+    rowMenu.dispose();
+    currentTask = null;
     disarmCancel();
     controlTaskId = null;
     controlSessionId = null;

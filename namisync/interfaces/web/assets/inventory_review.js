@@ -1,6 +1,7 @@
 import { createTableColumns } from "./table_columns.js";
 import { taskStatusDigest } from "./task_status.js";
 import { createFilterMenu } from "./filter_menu.js";
+import { createRowMenu } from "./row_menu.js";
 import { createIcon } from "./icons.js";
 import { createTree } from "./tree.js";
 import { formatByteCount, formatFilesystemPath, formatLocalDateTime, renderFilesystemText, renderText } from "./render.js";
@@ -192,6 +193,7 @@ export function createInventoryReviewPanel(callbacks) {
   let committedWindow = null;
   let searchTimer = null;
   let searchDraft = false;
+  const rowMenu = createRowMenu(pane);
 
   function blocked() { return task?.closePending || task?.inventoryLoading || current?.pending
     || task?.inventoryAction?.pending; }
@@ -290,6 +292,44 @@ export function createInventoryReviewPanel(callbacks) {
     if (tree !== null) return;
     tree = createTree(rows, {
       decorateRow,
+      context: (nodeId, event, rowElement) => {
+        const review = current;
+        const owner = task;
+        const window = review?.window;
+        const row = window?.rows.find((value) => value.node_id === nodeId);
+        if (row === undefined) return;
+        const actionRevision = review.actionRevision;
+        const viewRevision = review.summary.view_revision;
+        const publication = review.summary.request_id;
+        const sessionId = owner.sessionId;
+        const isCurrent = () => current === review && task === owner
+          && review.window === window && review.actionRevision === actionRevision
+          && review.summary.view_revision === viewRevision && review.summary.request_id === publication
+          && owner.sessionId === sessionId
+          && !blocked() && owner.closeRecovery == null && rows.contains(rowElement);
+        const actionBlocked = !owner.sessionReleased || owner.sessionState === "active";
+        const actions = [{ id: "row-details", label: "Show details", run: () => {
+          detailsExpanded = true;
+          detailsToggle.ariaExpanded = "true";
+          diagnostics.hidden = false;
+          callbacks.onDetail(review, nodeId);
+        } }];
+        if (row.is_container && row.expanded !== null) {
+          actions.push({ id: "row-collapse", label: row.expanded ? "Collapse" : "Expand",
+            run: () => callbacks.onViewChange(review, { collapseNodeId: nodeId, collapsed: row.expanded }) });
+        }
+        if (row.warning === null && !actionBlocked) {
+          actions.push({ id: "row-refresh", label: "Refresh selected",
+            run: () => callbacks.onRefresh(review, nodeId) });
+          if (row.presence === "missing" && !row.acknowledged
+              && review.summary.request_id === owner.requestId && !owner.inventoryViewUnconfirmed) {
+            actions.push({ id: "row-acknowledge", label: "Acknowledge missing",
+              run: () => callbacks.onVisibility(review, "acknowledge", nodeId) });
+          }
+        }
+        filterMenu.close();
+        rowMenu.open(event, rowElement, rows, actions, isCurrent);
+      },
       toggle: (nodeId, expanded) => {
         if (current !== null && !blocked()) callbacks.onViewChange(current, {
           collapseNodeId: nodeId, collapsed: !expanded,
@@ -379,6 +419,7 @@ export function createInventoryReviewPanel(callbacks) {
   }
 
   function dispose() {
+    rowMenu.dispose();
     filterMenu.dispose();
     columns.dispose();
     resizeObserver.disconnect();
@@ -456,6 +497,7 @@ export function createInventoryReviewPanel(callbacks) {
     renderFilesystemText(globalScanFacts, available
       ? `${detailPublication} · ${review.summary.scan_complete ? "complete" : "incomplete"} · ${scanCounts}` : "");
     if (!available) {
+      rowMenu.close();
       filterMenu.render([], {}, true);
       refreshSelected.disabled = true;
       detailActions.hidden = true;
@@ -506,6 +548,7 @@ export function createInventoryReviewPanel(callbacks) {
     columns.freeze();
     columns.refresh();
     renderDetails();
+    rowMenu.reconcile();
   }
 
   return Object.freeze({ element: pane, render, dispose });

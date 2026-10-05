@@ -240,6 +240,7 @@ _FAILURE_STEPS = frozenset(
         "plan_review_setting_states",
         "plan_review_session_states",
         "plan_review_filter_menu",
+        "plan_review_row_menu",
         "diagnostic_default_folded_empty",
         "diagnostic_default_folded_populated",
         "diagnostic_default_expanded_empty",
@@ -358,6 +359,7 @@ _REPORT_PART_NAMES = (
 class _Recorder:
     def __init__(self, evidence_paths: EvidencePaths, mode: str) -> None:
         self._publisher = EvidencePublisher(evidence_paths)
+        self._rejected_report_path = evidence_paths.root / "rejected-complete-report.json"
         self._lock = threading.Lock()
         self._initial: str | None = None
         self._post_ready_failure: dict[str, object] | None = None
@@ -374,6 +376,12 @@ class _Recorder:
     def append(self, name: str, value: Any) -> None:
         with self._lock:
             self._data.setdefault(name, []).append(value)
+
+    def rejected_report(self, report: dict[str, object]) -> None:
+        self._rejected_report_path.write_text(
+            json.dumps(report, ensure_ascii=False, allow_nan=False),
+            encoding="utf-8",
+        )
 
     def startup_error(self, message: str) -> None:
         del message
@@ -851,6 +859,7 @@ def _test_report_spec(
             "icons": values["icons"],
         }
         if not _valid_complete_report(complete, expected_mode=expected_mode):
+            recorder.rejected_report(complete)
             raise CommandPayloadError("component gallery report is invalid")
         completed = True
         recorder.set("report", complete)
@@ -1437,7 +1446,7 @@ def _valid_control_contract(value: object) -> bool:
             "work_width", "work_content_width", "work_height",
             "review_width", "review_height",
             "work_content_aligned",
-            "axes_wrapped", "long_trash_length", "filter_menu",
+            "axes_wrapped", "long_trash_length", "filter_menu", "row_menu",
             "keyboard_scroll_before", "keyboard_scroll_after",
             "keyboard_capture_width", "keyboard_capture_height",
         }
@@ -1463,6 +1472,25 @@ def _valid_control_contract(value: object) -> bool:
         and minimum_window["keyboard_scroll_before"] >= 0
         and minimum_window["keyboard_scroll_after"] > minimum_window["keyboard_scroll_before"]
         and type(minimum_window["filter_menu"]) is dict
+        and type(minimum_window["row_menu"]) is dict
+        and set(minimum_window["row_menu"]) == {
+            "shared_style", "popup_inside", "committed_inert", "escape_focus",
+            "keyboard_open", "end_focus", "resize_closed", "rectangles", "raw_rectangles",
+        }
+        and all(type(minimum_window["row_menu"][key]) is bool for key in (
+            "shared_style", "popup_inside", "committed_inert", "escape_focus",
+            "keyboard_open", "end_focus", "resize_closed",
+        ))
+        and type(minimum_window["row_menu"]["rectangles"]) is list
+        and len(minimum_window["row_menu"]["rectangles"]) == 2
+        and all(type(rect) is list and len(rect) == 4
+                and all(type(value) in {int, float} and math.isfinite(value) for value in rect)
+                for rect in minimum_window["row_menu"]["rectangles"])
+        and type(minimum_window["row_menu"]["raw_rectangles"]) is list
+        and len(minimum_window["row_menu"]["raw_rectangles"]) == 2
+        and all(type(rect) is list and len(rect) == 4
+                and all(type(value) in {int, float} and math.isfinite(value) for value in rect)
+                for rect in minimum_window["row_menu"]["raw_rectangles"])
         and set(minimum_window["filter_menu"]) == {
             "accent_pair", "neutral_pair", "active_fill", "inactive_fill", "popup_inside",
             "first_reachable", "end_reachable", "rectangles", "internal_scroll_preserved", "resize_closed", "outside_scroll_closed",

@@ -108,14 +108,14 @@ class ElementFake {
   }
 
   dispatch(name, properties = {}) {
-    const event = { target: this, currentTarget: this, preventDefault() {}, ...properties };
+    const event = { type: name, target: this, currentTarget: this, preventDefault() {}, stopPropagation() {}, ...properties };
     for (const callback of this.listeners.get(name) ?? []) callback(event);
   }
 
   getBoundingClientRect() {
     const index = this.parentElement?.children.indexOf(this) ?? -1;
     const widths = [32, 300, 130, 112, 100, 112, 300];
-    return { top: 200, bottom: 232, width: this.classList.contains("nami-file-list__header-cell")
+    return { left: 16, right: 116, height: 32, top: 200, bottom: 232, width: this.classList.contains("nami-file-list__header-cell")
       ? this.measuredWidth ?? widths[index] : 100 };
   }
 
@@ -139,6 +139,7 @@ class DocumentFake {
     this.listeners = new Map();
     this.defaultView = {
       innerHeight: 800,
+      innerWidth: 1280,
       frames: [],
       observers: [],
       listeners: new Map(),
@@ -202,10 +203,13 @@ const planUrl = moduleUrl((await readFile(join(dirname(process.argv[2]), "plan.j
   .replace("./file_row.js", fileRowUrl).replace("./render.js", renderUrl));
 const filterUrl = moduleUrl((await readFile(join(dirname(process.argv[2]), "filter_menu.js"), "utf8"))
   .replace("./icons.js", iconsUrl).replace("./render.js", renderUrl));
+const rowMenuUrl = moduleUrl((await readFile(join(dirname(process.argv[2]), "row_menu.js"), "utf8"))
+  .replace("./render.js", renderUrl));
 const tableColumnsUrl = moduleUrl(await readFile(join(dirname(process.argv[2]), "table_columns.js"), "utf8"));
 const source = (await readFile(process.argv[2], "utf8"))
   .replace("./table_columns.js", tableColumnsUrl)
   .replace("./filter_menu.js", filterUrl)
+  .replace("./row_menu.js", rowMenuUrl)
   .replace("./plan.js", planUrl)
   .replace("./icons.js", iconsUrl)
   .replace("./task_status.js", taskStatusUrl)
@@ -1654,4 +1658,78 @@ for (const [mtime, expected] of [["0", "1970-01-01 00:00"],
   else assert.ok(findText(timeDetails, expected));
 }
 timePanel.dispose();
+const contextCalls = [];
+const contextPanel = createPlanReviewPanel(Object.fromEntries(Object.keys(callbacks)
+  .map((name) => [name, (...args) => contextCalls.push([name, ...args])])));
+const contextReview = { ...review, pending: null,
+  summary: { ...summary, selection_state: "reviewing", highlight_focus_node_id: null },
+  window: { ...review.window, rows: [row, notice] } };
+const contextTask = { ...task, review: contextReview, executionAttempt: null, closePending: false, closeRecovery: null };
+contextPanel.render(contextTask);
+const contextRow = () => findByDataset(contextPanel.element, "nodeId", row.node_id);
+const contextPopup = findByClass(contextPanel.element, "nami-row-menu");
+const pointerMenu = () => contextRow().dispatch("contextmenu", {clientX: 1279, clientY: 799});
+pointerMenu();
+assert.equal(contextCalls.length, 0, "opening a row menu sends no command");
+assert.deepEqual(contextPopup.children.map((item) => item.textContent), ["Show details", "Select", "Collapse"]);
+assert.equal(contextPopup.style.getPropertyValue("left"), "1172px");
+assert.equal(contextPopup.style.getPropertyValue("top"), "760px");
+contextPopup.dispatch("keydown", {key: "End"});
+assertSameNode(document.activeElement, contextPopup.children[2]);
+contextPopup.dispatch("keydown", {key: "ArrowDown"});
+assertSameNode(document.activeElement, contextPopup.children[0]);
+contextPopup.dispatch("keydown", {key: "Home"});
+contextPopup.children[1].dispatch("click");
+assert.deepEqual(contextCalls.at(-1), ["onSelect", contextReview, row, true]);
+assert.equal(contextPopup.hidden, true);
+pointerMenu();
+contextPopup.children[0].dispatch("click");
+assert.deepEqual(contextCalls.at(-1), ["onHighlight", contextReview, "replace", row.node_id]);
+assert.equal(findByClass(contextPanel.element, "nami-plan-review__diagnostics").hidden, false);
+contextRow().dispatch("keydown", {key: "F10", shiftKey: true});
+contextPopup.dispatch("keydown", {key: "Escape"});
+assert.equal(contextPopup.hidden, true);
+assertSameNode(document.activeElement, contextRow());
+contextRow().dispatch("keydown", {key: "ContextMenu"});
+let trappedTab = false;
+contextPopup.dispatch("keydown", {key: "Tab", preventDefault() { trappedTab = true; }});
+assert.equal(trappedTab, false, "Tab closes the menu without trapping navigation");
+assert.equal(contextPopup.hidden, true);
+pointerMenu();
+const staleSelect = contextPopup.children[1];
+contextTask.closePending = true;
+contextPanel.render(contextTask);
+const beforeStale = contextCalls.length;
+staleSelect.dispatch("click");
+assert.equal(contextCalls.length, beforeStale, "retired menu buttons cannot dispatch");
+assert.equal(contextPopup.hidden, true);
+contextTask.closePending = false;
+contextReview.summary.selection_state = "committed";
+contextPanel.render(contextTask);
+pointerMenu();
+assert.equal(contextPopup.children.some((item) => item.dataset.action === "row-selection"), false);
+contextPopup.dispatch("keydown", {key: "Escape"});
+const noticeElement = findByDataset(contextPanel.element, "nodeId", notice.node_id);
+noticeElement.dispatch("contextmenu", {clientX: 200, clientY: 200});
+assert.deepEqual(contextPopup.children.map((item) => item.textContent), ["Show details"]);
+contextPopup.children[0].dispatch("click");
+assert.deepEqual(contextCalls.at(-1), ["onHighlight", contextReview, "replace", notice.node_id]);
+for (const dismissal of ["scroll", "pointerdown", "visibilitychange", "blur", "resize", "focusout"]) {
+  pointerMenu();
+  const focus = document.activeElement;
+  if (dismissal === "focusout") contextPopup.dispatch(dismissal, {relatedTarget: null});
+  else if (["blur", "resize"].includes(dismissal)) document.defaultView.dispatch(dismissal);
+  else {
+    document.hidden = dismissal === "visibilitychange";
+    document.dispatch(dismissal, {target: contextPanel.element});
+    document.hidden = false;
+  }
+  assert.equal(contextPopup.hidden, true, `${dismissal} dismisses the context menu`);
+  assertSameNode(document.activeElement, focus, "external dismissal does not steal focus");
+}
+pointerMenu();
+contextReview.window = { ...contextReview.window };
+contextPanel.render(contextTask);
+assert.equal(contextPopup.hidden, true, "window replacement retires the menu");
+contextPanel.dispose();
 process.stdout.write("ok");

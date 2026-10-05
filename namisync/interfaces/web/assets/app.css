@@ -1757,6 +1757,14 @@ body {
   font-size: var(--font-size-caption);
 }
 
+.nami-row-menu {
+  position: fixed;
+  z-index: 10;
+  min-inline-size: 0;
+  inline-size: max-content;
+  overflow: auto;
+}
+
 .nami-file-row__notes {
   color: var(--color-neutral-foreground-tertiary);
   font-size: var(--font-size-caption);

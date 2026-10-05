@@ -16,6 +16,7 @@ export function createTree(root, callbacks = {}) {
   const toggle = optionalCallback(callbacks, "toggle");
   const activate = optionalCallback(callbacks, "activate");
   const decorateRow = optionalCallback(callbacks, "decorateRow");
+  const context = optionalCallback(callbacks, "context");
   const requestFrame = document.defaultView.requestAnimationFrame.bind(
     document.defaultView,
   );
@@ -117,6 +118,10 @@ export function createTree(root, callbacks = {}) {
         acceptRenderedIntent(entry);
         root.focus();
         activate(row.node_id);
+      });
+      element.addEventListener("contextmenu", (event) => {
+        acceptRenderedIntent(entry, false);
+        context(row.node_id, event, element);
       });
       return entry;
     });
@@ -390,9 +395,9 @@ export function createTree(root, callbacks = {}) {
     clearPendingRequest();
   }
 
-  function acceptRenderedIntent(entry) {
+  function acceptRenderedIntent(entry, reveal = true) {
     invalidateInternalRequest();
-    setActive(entry);
+    setActive(entry, reveal);
   }
 
   function invalidateInternalRequest() {
@@ -437,6 +442,13 @@ export function createTree(root, callbacks = {}) {
       return;
     }
     const active = renderedByIndex.get(activeVisibleIndex);
+    if (event.key === "ContextMenu" || (event.key === "F10" && event.shiftKey)) {
+      if (active !== undefined) {
+        invalidateInternalRequest();
+        context(active.row.node_id, event, active.element);
+      }
+      return;
+    }
     switch (event.key) {
       case "ArrowDown":
         event.preventDefault();

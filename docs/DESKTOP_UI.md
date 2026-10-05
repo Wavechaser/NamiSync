@@ -1870,7 +1870,8 @@ purge action is implied.
 The Plan pane distinguishes immutable **Review snapshot** context from the
 current edited selection and the latest fresh-execution notices. Search,
 filters, collapse, and viewport never change selection. Notices are visible
-typed context but are inert for selection, path, detail, and execution.
+typed context. Their exact supplied notice/path facts are available in Details;
+they remain inert for selection and execution.
 Operation groups expose every operation once, with a distinct non-folder
 semantic; group/folder checkboxes operate on server-defined membership
 independent of the current window. Move peers, item/node anchors, dependencies,
@@ -1954,6 +1955,27 @@ suffix. An uncertain original action retains Check original outcome across task
 navigation. Visibility needs a confirmed current publication; Refresh can recover
 from a prior publication after a failed rebuild. Notices have no action controls.
 Baseline, Verify, Rebaseline and live integrity overlays remain future controls.
+
+Plan and Inventory rows offer a shared context menu using the existing menu
+surface and item styles. Right-click targets the row under the pointer without
+changing execution selection or loading details. Shift+F10 or the ContextMenu
+key targets the focused Plan row or Inventory tree's active row. Show details
+opens the existing Details pane for that exact row; Plan selection and container
+Expand/Collapse reuse the existing server-scoped actions. Committed, disabled
+and informational Plan rows have no selection action. Inventory has no
+selection action or checkbox. Its domain file/folder rows offer Refresh selected;
+Acknowledge missing is offered only for a currently eligible row whose own
+presence is missing, using the existing node-scoped visibility command. The
+toolbar retains its existing complete-folder actions. Notices offer details only.
+Opening a menu never initiates a command; stale, pending, closing or replaced
+owners cannot dispatch one.
+
+Menus remain inside the viewport and work area. Arrow keys and Home/End move
+within the menu; Escape restores the current invoker and Tab dismisses while
+continuing normal navigation. Outside interaction, focus/foreground loss,
+scroll, resize, task/view replacement and disposal dismiss without stealing
+focus. Inventory pointer invocation preserves a partially visible row's scroll
+position, while keyboard invocation reuses the tree's active-row authority.
 
 The accepted but unrealized policy admits eligible selected files with or
 without evidence to rebaseline. It always hashes and conditionally replaces or

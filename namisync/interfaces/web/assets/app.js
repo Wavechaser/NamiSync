@@ -1313,8 +1313,11 @@ async function runInventoryAction(review, kind, nodeId) {
       || (kind !== "refresh" && task.inventoryViewUnconfirmed) || review.pending !== null
       || !task.sessionReleased || task.sessionState === "active"
       || checkableOutcome(task.closeRecovery) || fixedOutcome(task.closeRecovery)) return;
-  if (nodeId !== null && (review.detail?.row?.node_id !== nodeId
-      || review.detail.row.warning !== null)) return;
+  if (nodeId !== null) {
+    const row = review.window.rows.find((value) => value.node_id === nodeId)
+      ?? (review.detail?.row?.node_id === nodeId ? review.detail.row : null);
+    if (row === null || row.warning !== null) return;
+  }
   if (kind !== "refresh" && review.summary.request_id !== task.requestId) return;
   const requestId = task.requestId;
   const revision = review.summary.view_revision;
