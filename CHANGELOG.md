@@ -179,6 +179,11 @@ explicit, reviewable and regression-backed.
 
 #### Align desktop review surfaces and recovery (2026-10-05 – 2026-10-06)
 
+- Make Inventory Refresh selected follow the current highlighted row, including
+  arrow navigation with Details hidden. Preserve item-card action scope and
+  disable the toolbar action when its current window has no eligible target.
+  Verify 64 focused and 1,951 interfaces tests, 12 import contracts and both
+  installed Inventory and shared-tree journeys; complete independent review.
 - Bound Inventory window labels and warning tails while retaining full-path
   search and complete scan-time paths in revision-guarded item details. Keep
   fresh ledger evidence separate. Preserve Plan scan-notice side/code in compact

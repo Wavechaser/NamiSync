@@ -239,6 +239,7 @@ assert.throws(
 const requested = [];
 const toggled = [];
 const activated = [];
+const activeChanges = [];
 const document = new TestDocument();
 const root = document.createElement("div");
 root.ariaLabel = "Plan";
@@ -251,6 +252,12 @@ tree = createTree(root, {
   },
   toggle: (...value) => toggled.push(value),
   activate: (nodeId) => activated.push(nodeId),
+  activeChanged: (nodeId) => {
+    activeChanges.push(nodeId);
+    const activeId = root.getAttribute("aria-activedescendant");
+    assert.equal(activeId === null ? null : treeItems(root).find((item) => item.id === activeId).dataset.nodeId,
+      nodeId, "active identity is published after its accessible row is current");
+  },
 });
 assert.equal(root.getAttribute("role"), "tree");
 assert.equal(root.role, undefined);
@@ -356,6 +363,7 @@ assert.equal(firstRows[0].ariaSetSize, "1");
 assert.equal(firstRows[0].ariaExpanded, "true");
 assert.equal(firstRows[0].dataset.active, "true");
 assert.equal(root.getAttribute("aria-activedescendant"), firstRows[0].id);
+assert.deepEqual(activeChanges, [fixtureViews.head.rows[0].node_id]);
 assert.equal(root.ariaActiveDescendant, undefined);
 for (const [index, element] of firstRows.entries()) {
   const sourceRow = fixtureViews.head.rows[index];
@@ -718,8 +726,10 @@ const scrollDocument = new TestDocument();
 const scrollRoot = scrollDocument.createElement("div");
 scrollRoot.clientHeight = 4 * ROW_H;
 const scrollRequests = [];
+const scrollActiveChanges = [];
 let scrollTree;
 scrollTree = createTree(scrollRoot, {
+  activeChanged: (nodeId) => scrollActiveChanges.push(nodeId),
   requestIndex: (index, generation) => {
     scrollRequests.push({index, generation});
   },
@@ -740,6 +750,7 @@ assert.equal(scrollDocument.defaultView.animationFrames.length, 1);
 scrollDocument.defaultView.flushAnimationFrame();
 assert.deepEqual(scrollRequests, [{index: 11, generation: 2}]);
 assert.equal(scrollRoot.getAttribute("aria-activedescendant"), null);
+assert.equal(scrollActiveChanges.at(-1), null, "viewport gaps retire the toolbar target");
 scrollRoot.focus();
 assert.equal(scrollRoot.scrollTop, 8 * ROW_H);
 assert.equal(scrollRoot.getAttribute("aria-activedescendant"), null);
@@ -757,6 +768,7 @@ assert.deepEqual(scrollRequests, [
 ]);
 assert.equal(scrollTree.commitWindow(2, unreadableWindow), false);
 assert.equal(staleReads, 0);
+assert.equal(scrollActiveChanges.at(-1), null, "stale windows cannot publish another active identity");
 
 scrollRoot.scrollTop = 0;
 scrollRoot.dispatch("scroll");
@@ -1166,6 +1178,7 @@ assert.equal(root.getAttribute("aria-activedescendant"), recycledActive);
 const emptyGeneration = tree.beginWindowRequest();
 assert.equal(tree.commitWindow(emptyGeneration, fixtureViews.empty), true);
 assert.equal(root.getAttribute("aria-activedescendant"), null);
+assert.equal(activeChanges.at(-1), null);
 assert.equal(treeItems(root).length, 0);
 root.focus();
 assert.equal(root.getAttribute("aria-activedescendant"), null);

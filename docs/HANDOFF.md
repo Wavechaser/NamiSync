@@ -14,10 +14,17 @@ foreground blocker. Keep both failed receipts; no input guard was weakened.
 The complete upper bounds remain 1,193,678 bytes Inventory and 2,395,485 bytes
 Plan including execution metadata, below the unchanged 8 MiB wall.
 
-Continue GUI-C2 through C5 under M1_PLAN: active-row Refresh selected, narrow
-menu corrections, Verify table alignment, loading measurements and justified
-optimizations. C2's read-only design was revalidated against integrated C1
-sources; its implementation is next. No functional checkbox selection,
+C2 now makes Refresh selected follow the tree's active eligible row while
+card actions retain their displayed item. The installed witness proves trusted
+arrows from A to B with hidden Details retaining A, then exactly one scoped
+Refresh of B. It passed 64 focused and 1,951 interfaces tests, 12 import
+contracts and both installed Inventory/shared-tree journeys. Independent review
+found no actionable issues; final commit accounting is in integration.md.
+
+Continue GUI-C3 through C5 under M1_PLAN: narrow menu corrections, Verify table
+alignment, loading measurements and justified optimizations. C3's inspected
+boundary is recorded; revalidate it against C2 before implementation.
+No functional checkbox selection,
 execution-to-Verify lifecycle, new actions or filesystem effects are authorized.
 
 Evidence remains build/gui-inventory-refinement-20261005/. The user's original

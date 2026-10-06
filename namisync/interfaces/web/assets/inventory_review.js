@@ -191,12 +191,21 @@ export function createInventoryReviewPanel(callbacks) {
   let task = null;
   let tree = null;
   let committedWindow = null;
+  let activeNodeId = null;
   let searchTimer = null;
   let searchDraft = false;
   const rowMenu = createRowMenu(pane);
 
   function blocked() { return task?.closePending || task?.inventoryLoading || current?.pending
     || task?.inventoryAction?.pending; }
+  function activeRow() {
+    return current?.window.rows.find((row) => row.node_id === activeNodeId) ?? null;
+  }
+  function updateRefreshSelected() {
+    const row = activeRow();
+    refreshSelected.disabled = row === null || row.warning !== null || Boolean(blocked())
+      || !task?.sessionReleased || task.sessionState === "active";
+  }
   function submitSearch() {
     clearTimeout(searchTimer);
     searchTimer = null;
@@ -247,8 +256,9 @@ export function createInventoryReviewPanel(callbacks) {
     if (task !== null) callbacks.onCheckOutcome(task);
   });
   refreshSelected.addEventListener("click", () => {
-    const row = current?.detail?.row;
-    if (row !== undefined && row.warning === null && !blocked()) callbacks.onRefresh(current, row.node_id);
+    updateRefreshSelected();
+    const row = activeRow();
+    if (!refreshSelected.disabled) callbacks.onRefresh(current, row.node_id);
   });
   acknowledge.addEventListener("click", () => {
     const row = current?.detail?.row;
@@ -292,6 +302,10 @@ export function createInventoryReviewPanel(callbacks) {
     if (tree !== null) return;
     tree = createTree(rows, {
       decorateRow,
+      activeChanged: (nodeId) => {
+        activeNodeId = nodeId;
+        updateRefreshSelected();
+      },
       context: (nodeId, event, rowElement) => {
         const review = current;
         const owner = task;
@@ -345,6 +359,7 @@ export function createInventoryReviewPanel(callbacks) {
         if (controller.commitWindow(generation, window)) {
           owner.window = window;
           committedWindow = window;
+          updateRefreshSelected();
         }
       },
     });
@@ -436,6 +451,7 @@ export function createInventoryReviewPanel(callbacks) {
     tree?.dispose();
     tree = null;
     committedWindow = null;
+    activeNodeId = null;
     current = null;
     task = null;
     searchDraft = false;
@@ -516,7 +532,6 @@ export function createInventoryReviewPanel(callbacks) {
     const acknowledgedCount = selected?.is_container ? selected.rollup.acknowledged
       : selected?.presence === "missing" && selected.acknowledged ? 1 : 0;
     detailActions.hidden = !domain;
-    refreshSelected.disabled = actionBlocked || !domain;
     acknowledge.hidden = !domain || missingCount === 0;
     acknowledge.disabled = actionBlocked || !currentPublication;
     restore.hidden = !domain || acknowledgedCount === 0;
@@ -549,6 +564,7 @@ export function createInventoryReviewPanel(callbacks) {
       committedWindow = review.window;
       rows.scrollTop = review.scrollTop ?? 0;
     }
+    updateRefreshSelected();
     columns.freeze();
     columns.refresh();
     renderDetails();

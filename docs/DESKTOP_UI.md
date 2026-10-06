@@ -1924,6 +1924,12 @@ it was inside that column. The shared 20rem/40% cap, 2:3 global/item allocation 
 preserve table scrolling. Acknowledgement and restore controls remain with the
 selected item's details.
 
+Refresh selected follows the tree's current active file or folder in its loaded
+window, including arrow-key navigation while Details is hidden. Arrows move
+highlight without reading or replacing item details. A cleared active row or an
+active notice disables Refresh selected. Acknowledge missing and Restore visibility
+continue to act on the item displayed in the details card.
+
 Activate a row with click or Enter to load its detail selection. Domain subjects load fresh exact
 ledger evidence with observed and attested facts, full digest, provenance,
 evidence observation time, verification freshness and invalidation. Synthetic

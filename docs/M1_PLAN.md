@@ -56,23 +56,37 @@ identity and accounting belong to `integration.md` in the evidence directory.
 Retain its disposable recovery ref until final batch accounting. BRIDGE,
 PRESENTATION, INVENTORY and DESKTOP_UI own shipped behavior.
 
-**C2 read-only design (`614cd19`, revalidate after C1).** The generic tree owns
-active identity; an optional identity-change callback lets Inventory resolve
-the toolbar target from its current window. Recompute eligibility after window
-adoption as well as active changes: tree commit precedes panel window assignment.
-Cleared/gap/notice targets disable Refresh selected. No detail read accompanies
-arrow navigation; item-card Acknowledge/Restore keep their existing detail row.
-Production edits are limited to assets `tree.js` and `inventory_review.js`;
-`app.js`'s original-command action route remains unchanged. Consumers are
-`tree_probe.mjs`, `inventory_review_probe.mjs`, their frontend/page fixtures,
-and the installed Inventory child/parent plus existing shell tree witness.
-The native regression extends the existing journey with A activation, hidden
-Details, trusted arrows to B, and one scoped Refresh of B; retain the earlier
-whole-refresh and visibility-action assertions. DESKTOP_UI/PRESENTATION,
-BUGS and delivery docs record targeting. Gate: focused tree/renderer/page
-regressions, installed Inventory seam, interfaces and affected installed shell,
-then independent review. Preserve row geometry, 256-row windows, stale-owner
-rejection and original-command effects; C3/C4/C5 edits wait their own boundaries.
+**C2 delivered boundary (from `9868f5c`).** Refresh selected resolves the tree's
+active eligible file/folder in its current window; arrows do not read details,
+cleared/notice targets disable Refresh, and item-card actions retain their own
+item. Optional tree notification plus post-window-adoption eligibility preserve
+revision/session/pending ownership and the existing original-command route.
+The real-page reproducer failed A versus B before correction. Final gates:
+64 focused, 1,951 interfaces, 12 import contracts and both installed Inventory
+and shared-tree journeys. The installed witness preserves hidden card A while
+trusted arrows activate B and exactly one scoped Refresh targets B; earlier
+whole-refresh and visibility assertions remain. Independent review and frozen
+input checks found no actionable issues. Evidence `c2-*`; commit identity in
+`integration.md`. No bridge, backend, selection or geometry contract changed.
+
+**C3 inspected boundary (`9868f5c`, refresh after C2).** Cancel an owned row
+gesture before shared-menu stale/empty eligibility and before Inventory's
+missing-window-row return. Production owners are `row_menu.js` and
+`inventory_review.js`; preserve default browser behavior outside owned rows.
+Plan/tree production changes are conditional on a demonstrated native event
+defect. Existing Plan/Inventory probes cover cancellation with no callbacks;
+a typed Inventory fixture distinguishes own-missing domain folders from
+present folders with missing descendants. Restore remains absent from menus.
+The installed Inventory child/parent retain pointer/Shift+F10 and add Menu;
+the existing task-shell child/parent gain bounded local Plan Menu/Shift+F10
+stages using their native CDP driver plus foreground/focus/hit-target checks.
+Record trusted key/context events and stable popup placement/focus through
+completed input before deciding whether duplicate-event handling is needed.
+No synthetic event substitutes for that characterization and no new general
+driver framework. Direct tree/execution probes, gallery and packaging remain
+consumer gates. Acceptance: native characterization, focused consumers,
+interfaces, affected installed Inventory/shell/gallery checks, matching
+DESKTOP_UI/BUGS/delivery docs and independent review; one atomic commit.
 
 ## GUI follow-up batch — 2026-10-05
 

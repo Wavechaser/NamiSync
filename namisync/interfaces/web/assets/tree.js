@@ -15,6 +15,7 @@ export function createTree(root, callbacks = {}) {
   const requestIndex = optionalCallback(callbacks, "requestIndex");
   const toggle = optionalCallback(callbacks, "toggle");
   const activate = optionalCallback(callbacks, "activate");
+  const activeChanged = optionalCallback(callbacks, "activeChanged");
   const decorateRow = optionalCallback(callbacks, "decorateRow");
   const context = optionalCallback(callbacks, "context");
   const requestFrame = document.defaultView.requestAnimationFrame.bind(
@@ -198,6 +199,7 @@ export function createTree(root, callbacks = {}) {
   }
 
   function setActive(entry, reveal = true) {
+    const changed = activeNodeId !== entry.row.node_id;
     if (activeElement !== null) {
       delete activeElement.dataset.active;
     }
@@ -210,6 +212,7 @@ export function createTree(root, callbacks = {}) {
     if (reveal) {
       revealActiveRow();
     }
+    if (changed) activeChanged(activeNodeId);
   }
 
   function revealActiveRow() {
@@ -230,6 +233,7 @@ export function createTree(root, callbacks = {}) {
   }
 
   function clearActive(suppressFocusInitialization = false) {
+    const changed = activeNodeId !== null;
     if (activeElement !== null) {
       delete activeElement.dataset.active;
     }
@@ -238,6 +242,7 @@ export function createTree(root, callbacks = {}) {
     activeVisibleIndex = null;
     initializedActive = suppressFocusInitialization;
     root.removeAttribute("aria-activedescendant");
+    if (changed) activeChanged(null);
   }
 
   function navigateTo(visibleIndex) {

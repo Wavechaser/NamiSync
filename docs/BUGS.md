@@ -885,6 +885,17 @@ defect, and move implementation-level test choreography out of the log.
 
 ## INTERFACES
 
+### Inventory action targeting
+
+- MINOR - FIXED (2026-10-06). Highlight/detail target divergence. Status-card
+  Refresh selected used the last activated detail row while arrow keys moved
+  the visible highlight; with Details hidden, the command could refresh an
+  unexpected file or folder without showing its target. The toolbar now resolves
+  the tree-owned active identity against the current window and disables itself
+  for absent or informational targets. Window adoption refreshes eligibility.
+  Item-card Acknowledge/Restore retain their displayed item. Direct page and
+  installed keyboard witnesses distinguish retained detail A from refreshed B.
+
 ### Plan review windowing
 
 - MODERATE - FIXED (2026-10-05). Repeated unbounded labels. Supported deep

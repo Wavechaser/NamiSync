@@ -58,6 +58,8 @@ def test_installed_inventory_refresh_acknowledge_restore_and_close(
             "details": True, "acknowledge": True, "restore-details": True, "restore": True,
             "context-open": True, "context-escape": True, "context-keyboard": True,
             "context-acknowledge": True, "context-restore-details": True, "context-restore": True,
+            "selected-activate": True, "selected-arrow-first": True,
+            "selected-arrow-second": True, "selected-refresh": True,
         }
         assert initial["report"]["foreground_owned"] == {
             "refresh": True, "filter-open": True, "filter-present": True,
@@ -65,6 +67,8 @@ def test_installed_inventory_refresh_acknowledge_restore_and_close(
             "details": True, "acknowledge": True, "restore-details": True, "restore": True,
             "context-open": True, "context-escape": True, "context-keyboard": True,
             "context-acknowledge": True, "context-restore-details": True, "context-restore": True,
+            "selected-activate": True, "selected-arrow-first": True,
+            "selected-arrow-second": True, "selected-refresh": True,
         }
         assert initial["report"]["filter_menu"] == {
             "neutral": True, "staysOpen": True, "accented": True, "escapeFocus": True,
@@ -94,7 +98,18 @@ def test_installed_inventory_refresh_acknowledge_restore_and_close(
         menu_edges, work_edges = row_menu["rectangles"]
         assert menu_edges[0] >= work_edges[0] and menu_edges[2] <= work_edges[2]
         assert menu_edges[1] >= work_edges[1] and menu_edges[3] <= work_edges[3]
-        assert initial["report"]["publication"]["request_id"] == initial["report"]["results"]["refresh"]["request_id"]
+        selected_refresh = initial["report"]["results"]["selected_refresh"]
+        assert selected_refresh["node_id"] == initial["report"]["fixture"]["missing_node_id"]
+        assert selected_refresh["prior_request_id"] == initial["report"]["results"]["refresh"]["request_id"]
+        assert selected_refresh["request_id"] != selected_refresh["prior_request_id"]
+        assert initial["report"]["selected_refresh"] == {
+            "details_hidden": True, "card_preserved": True,
+            "active_node_id": selected_refresh["node_id"],
+        }
+        assert initial["report"]["publication"]["request_id"] == selected_refresh["request_id"]
+        assert initial["report"]["publication"]["scan_scope"] == {
+            "kind": "item", "path": initial["report"]["fixture"]["missing_path"],
+        }
         assert initial["report"]["pane_visible"] is True
         assert initial["report"]["refreshed_missing"] is True
         assert initial["report"]["acknowledged_hidden"] is True

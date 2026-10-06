@@ -273,6 +273,7 @@ for (const column of ["filename", "size", "mtime"]) {
 review.summary = fixture.views.default.summary;
 review.detail = { row: real, state: "current", response: fixture.detail };
 pane.render(task);
+rowElements().find((value) => value.dataset.nodeId === real.node_id).click();
 action("inventory-refresh-selected").click();
 assert.deepEqual(refreshes.at(-1), [review, real.node_id]);
 const detail = find((value) => value.ariaLabel === "Inventory item details");
@@ -347,6 +348,7 @@ review.detail = { row: notice, state: "current", response: fixture.snapshots[not
 pane.render(task);
 assert.match(text(detail), /read failed/);
 assert.doesNotMatch(text(detail), /Stored digest/);
+rowElements().find((value) => value.dataset.nodeId === notice.node_id).click();
 assert.equal(action("inventory-refresh-selected").disabled, true);
 assert.equal(action("inventory-acknowledge").hidden, true);
 assert.equal(action("inventory-restore").hidden, true);
@@ -373,6 +375,7 @@ assert.equal(observers.at(-1).disconnected, true);
 task.inventoryReview = { ...fixture.views.empty, pending: null, message: null, detail: null, queuedSearchQuery: null };
 pane.render(task);
 assert.equal(rowElements().length, 0);
+assert.equal(action("inventory-refresh-selected").disabled, true, "empty windows have no current action target");
 assert.match(text(pane.element), /No items match/);
 task.inventoryError = "Inventory unavailable. Reload the inventory view to retry.";
 task.requestId = "f".repeat(32); task.sessionState = "refused";
@@ -417,11 +420,20 @@ document.documentElement = document.createElement("html");
 globalThis.window = { ...document.defaultView, chrome: { webview: {} }, addEventListener() {} };
 let viewportReply = null;
 const viewportCalls = [];
+const liveDetails = [], liveRefreshes = [];
 globalThis.inventoryViewportHarness = {
   openInventoryView: () => Promise.resolve(fixture.views.maximum.summary),
   getInventoryWindow: (...args) => {
     viewportCalls.push(args);
     return viewportReply?.promise ?? Promise.resolve(fixture.views.maximum.window);
+  },
+  getInventoryDetail: (...args) => {
+    liveDetails.push(args);
+    return Promise.resolve(fixture.snapshots[args[2]] ?? fixture.detail);
+  },
+  refreshInventory: (...args) => {
+    liveRefreshes.push(args.slice(0, 5));
+    return Promise.reject(Object.assign(new Error("capacity"), { code: "inventory_capacity" }));
   },
 };
 let appSource = await readFile(join(assetRoot, "app.js"), "utf8");
@@ -467,6 +479,8 @@ viewportReply = delayedViewport();
 treeRoot.scrollTop = 300 * 28; treeRoot.dispatch("scroll");
 while (frames.length) frames.shift()();
 assert.equal(viewportCalls.at(-1)[2], 268);
+assert.equal(walk(app.panel.element).find((value) => value.dataset.action === "inventory-refresh-selected").disabled,
+  true, "a viewport gap clears the current toolbar target");
 treeRoot.scrollTop = 0; treeRoot.dispatch("scroll");
 while (frames.length) frames.shift()();
 viewportReply.resolve(fixture.tail); await settle();
@@ -479,10 +493,40 @@ while (frames.length) frames.shift()();
 viewportReply.resolve(fixture.tail); await settle();
 assert.equal(liveReview.window === fixture.tail, true, "accepted viewport reply becomes the retained window");
 assert.equal(firstLiveRow().dataset.nodeId, fixture.tail.rows[0].node_id);
+assert.equal(walk(app.panel.element).find((value) => value.dataset.action === "inventory-refresh-selected").disabled,
+  false, "accepted viewport adopts eligibility after its window enters the page owner");
 const acceptedScroll = treeRoot.scrollTop;
 app.panel.render(liveTask);
 assert.equal(treeRoot.scrollTop, acceptedScroll, "rendering the accepted window preserves scrolling");
 assert.equal(firstLiveRow().dataset.nodeId, fixture.tail.rows[0].node_id);
+Object.assign(liveReview, fixture.views.default, { scrollTop: 0 });
+app.panel.render(liveTask);
+const liveFolder = fixture.views.default.window.rows.find((row) => row.row_kind === "folder");
+const liveFile = fixture.views.default.window.rows.find((row) => row.row_id === "1");
+const liveRow = (nodeId) => treeRoot.children.find((value) => value.dataset.nodeId === nodeId);
+liveRow(liveFolder.node_id).click();
+await settle();
+const cardSelection = liveReview.detail;
+assert.equal(cardSelection.row.node_id, liveFolder.node_id);
+assert.deepEqual(cardSelection.response, fixture.snapshots[liveFolder.node_id]);
+const liveDiagnostics = walk(app.panel.element).find((value) => value.classList.contains("nami-plan-review__diagnostics"));
+assert.equal(liveDiagnostics.hidden, true);
+const beforeArrowDetails = liveDetails.length;
+treeRoot.dispatch("keydown", {key: "ArrowDown"});
+assert.equal(treeRoot.getAttribute("aria-activedescendant"), liveRow(liveFile.node_id).id);
+assert.equal(liveReview.detail === cardSelection, true, "arrows preserve the card's displayed item");
+assert.equal(liveDetails.length, beforeArrowDetails, "highlight navigation does not read details");
+assert.equal(liveDiagnostics.hidden, true);
+const liveRefreshSelected = walk(app.panel.element).find((value) => value.dataset.action === "inventory-refresh-selected");
+assert.equal(liveRefreshSelected.disabled, false);
+liveRefreshSelected.click();
+liveRefreshSelected.click();
+await settle();
+assert.equal(liveRefreshes.length, 1, "the page submits one original Refresh despite a pending repeated click");
+assert.equal(liveRefreshes[0][0], liveTask.taskId);
+assert.equal(liveRefreshes[0][1], liveTask.requestId);
+assert.equal(liveRefreshes[0][3], liveReview.summary.view_revision);
+assert.equal(liveRefreshes[0][4], liveFile.node_id, "Refresh selected follows the current active row, not the card");
 app.panel.renderSettings();
 const menuCalls = [];
 const menuPane = createInventoryReviewPanel({
@@ -534,6 +578,20 @@ assert.equal(menuPopup.children.some((value) => value.dataset.action === "row-ac
 assert.ok(menuPopup.children.some((value) => value.dataset.action === "row-refresh"));
 menuPointer(menuNotice);
 assert.deepEqual(menuPopup.children.map((item) => item.textContent), ["Show details"]);
+menuReview.detail = { row: missingRow, state: "current", response: fixture.detail };
+menuPane.render(menuTask);
+assert.equal(menuWalk().find((value) => value.dataset.action === "inventory-refresh-selected").disabled,
+  true, "an active notice disables Refresh even when an eligible card is retained");
+menuPointer(menuFolder);
+menuWalk().find((value) => value.dataset.action === "inventory-acknowledge").click();
+assert.deepEqual(menuCalls.at(-1), ["visibility", menuReview, "acknowledge", missingRow.node_id],
+  "acknowledgement retains the card item while a different row is active");
+menuReview.detail = { ...menuReview.detail, row: { ...missingRow, acknowledged: true } };
+menuPane.render(menuTask);
+menuWalk().find((value) => value.dataset.action === "inventory-restore").click();
+assert.deepEqual(menuCalls.at(-1), ["visibility", menuReview, "restore", missingRow.node_id],
+  "Restore retains the card item while a different row is active");
+assert.equal(menuWalk().find((value) => value.dataset.action === "inventory-refresh-selected").disabled, false);
 menuPointer(missingRow);
 const staleAcknowledge = menuPopup.children[2];
 menuReview.pending = "view";
