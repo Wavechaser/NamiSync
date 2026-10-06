@@ -29,7 +29,7 @@ def _registry(*, wrong: str | None = None):
         expected.update(encoded)
     first = {
         "node_id": "node-" + expected.hexdigest(),
-        "row_kind": "prior-group", "display": f"1 item moved to {destination}",
+        "row_kind": "prior-group", "display": "1 item moved to …\\target30",
         "operation_id": None, "operation_kind": None,
         "visible_index": 0, "depth": 0,
         "parent_visible_index": None, "first_child_visible_index": None, "expanded": False,
@@ -77,9 +77,7 @@ def test_rootless_fixture_settles_real_public_row_shape() -> None:
     observed = adapter._rootless_settlement(registry, row)
     assert observed["window_total"] == 119_968
     assert observed["projection_node_count"] == 120_000
-    assert observed["first_row"]["display"] == "1 item moved to " + "\\".join(
-        f"target{index:02d}" for index in range(31)
-    )
+    assert observed["first_row"]["display"] == "1 item moved to …\\target30"
     assert observed["first_row"]["expanded"] is False
     assert observed["first_row"]["first_child_visible_index"] is None
 
@@ -96,6 +94,29 @@ def test_rootless_patch_is_scoped_to_measurement() -> None:
     with adapter._rootless_fixture_adapter():
         assert adapter.legacy._HeadedFixtureController._settle_initial_view is adapter._rootless_settlement
     assert adapter.legacy._HeadedFixtureController._settle_initial_view is original
+
+
+def test_rootless_helper_accepts_real_published_base_view(tmp_path: Path) -> None:
+    from namisync.interfaces.service import NamiSyncService
+    from namisync.interfaces.web.drain import TaskRegistry
+    from namisync.interfaces.web.commands import production_command_specs
+
+    service = NamiSyncService(tmp_path / "ledger.db", tmp_path / "history.db", settings_path=tmp_path / "settings.json")
+    try:
+        service.initialize_database_contracts()
+        registry = TaskRegistry(service)
+        production_command_specs(picker=lambda: None, slots=SimpleNamespace(), registry=registry,
+            cosmetics=SimpleNamespace(), shell_ready=lambda _payload: None, readiness_echo=lambda *_args: True)
+        with adapter._rootless_fixture_adapter():
+            controller = adapter.legacy._HeadedFixtureController({"id": "rootless-helper-control"}, tmp_path / "fixture", 1)
+            controller.bind(registry)
+        row = controller.published_fixture["rows"][0]
+        observed = row["initial_view_settlement"]
+        assert row["session_state"] == "completed" and row["session_released"]
+        assert observed["first_row"]["display"] == "1 item moved to …\\target30"
+        assert observed["window_total"] == 119_968 and observed["window_row_count"] == 256
+    finally:
+        assert service.close().complete
 
 
 def test_selected_receipt_rejects_false_action_even_with_fast_sample(

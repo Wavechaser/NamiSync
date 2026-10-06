@@ -46,7 +46,7 @@ def _rootless_settlement(registry: object, row: Mapping[str, object]) -> dict[st
         or len(rows) != 256 or not isinstance(first, dict)
         or first["node_id"] != _prior_group_node_id(row["request_id"])
         or first["row_kind"] != "prior-group"
-        or first["display"] != f"1 item moved to {_PRIOR_DESTINATION}"
+        or first["display"] != "1 item moved to …\\target30"
         or first["operation_id"] is not None or first["operation_kind"] is not None
         or first["visible_index"] != 0 or first["depth"] != 0
         or first["parent_visible_index"] is not None

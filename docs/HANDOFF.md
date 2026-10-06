@@ -20,10 +20,26 @@ passes. Exact dependencies support reuse; retain all failed receipts. Independen
 review and commit accounting belong to c4-review* and integration.md in
 build/gui-inventory-refinement-20261005/.
 
-Next is GUI-C5 under M1_PLAN: a bounded diagnostic table-loading method/baseline
-commit, then Inventory single-flight/latest-intent coalescing with identical
-remeasurement. Read-only design is recorded; revalidate against C4's final commit
-before any implementation. No C5 product/tools/tests or measurements exist yet.
+GUI-C5 is active under M1_PLAN after C4 commit `3c984b6`: a bounded diagnostic
+table-loading method/baseline commit, then Inventory single-flight/latest-intent
+coalescing with identical remeasurement. The builder revalidated the inspected
+seams against C4 and is implementing the tool/probe and focused controls. No C5
+product changes or loading measurements exist yet. A fresh disposable installed
+baseline is prepared at `build/gui-inventory-refinement-20261005/c5-install-baseline-01/`;
+its wheel/install identities and pinned runtime requirements are retained there.
+`c5-host-profile.json` records this machine without claiming verified idle or AC
+power. Earlier acceptance installations must not be instrumented.
+
+The first installed probe `c5-representative-plan-01` stopped before the page:
+the existing execution-receipt fixture helper expected the old full destination
+label. All prior-group identity/geometry facts match; the bounded display is
+`1 item moved to …\target30`. The helper and fake registry are migrated, with a
+real published projection/view witness. The separate correction passes 53 focused,
+1,952 interfaces and 12 import contracts. `c5-representative-plan-02` reaches the
+installed page after successful helper settlement, then the new collector stops
+at its startup handshake. That collector correction is next; no timing baseline
+is accepted. Its execution UI adapter remains a direct consumer. Failed raw logs,
+successful before/after installation checks and asset restoration are retained.
 Conditional placement/prefetch/placeholders require the resulting evidence.
 
 No functional checkbox selection, execution-to-Verify lifecycle, new actions or

@@ -101,7 +101,7 @@ Independent review and exact input binding close the atomic commit; commit
 accounting is in `integration.md`. DESKTOP_UI, PRESENTATION and FEATURES own
 current behavior. Functional checkboxes remain deferred.
 
-**C5 inspected boundary (`95ff419` plus C4 draft; refresh after C4).** First
+**C5 active boundary (revalidated at `3c984b6`).** First
 deliver a diagnostic `table-loading` family using existing installed-host,
 child-containment and fixture helpers, then deliver Inventory coalescing with
 identical remeasurement. Keep instrumentation in disposable installed assets
@@ -147,7 +147,22 @@ and tree probes plus installed Inventory/shared-tree witnesses own regression
 coverage; Plan stays the comparison consumer. Review method/baseline as one
 commit, then coalescing/repeated measurements as another. Placement/prefetch and
 noninteractive placeholders remain separate conditional outcomes only if those
-measurements demonstrate remaining gaps. C5 implementation waits for C4 closure.
+measurements demonstrate remaining gaps. C4 is closed; the diagnostic collector
+is under implementation. No loading measurements or coalescing changes are yet
+complete.
+
+The first C5 installed probe exposed a stale direct measurement consumer:
+`execution_receipt._rootless_settlement` and its fake registry still expected the
+unbounded prior-destination label. The helper and receipt-scale fixture now use
+the bounded display, preserving full destination hashing and rootless geometry.
+A real published-base-view control prevents the fake registry from silently
+retaining an obsolete contract. Its execution UI adapter remains a direct consumer.
+The separate helper correction passes 53 focused, 1,952 interfaces and 12 import
+contracts. Installed `c5-representative-plan-02` passes fixture settlement and
+reaches page evaluation, then stops at the new collector's startup handshake;
+it is helper evidence, not a completed timing sample. Independent review and
+commit accounting belong to `c5-helper-*` and `integration.md`. No product
+behavior changed. Failed receipts and verified installed-asset restoration remain.
 
 ## GUI follow-up batch — 2026-10-05
 

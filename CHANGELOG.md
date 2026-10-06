@@ -179,6 +179,9 @@ explicit, reviewable and regression-backed.
 
 #### Align desktop review surfaces and recovery (2026-10-05 – 2026-10-06)
 
+- Migrate the installed measurement helper's prior-location label expectation
+  to the bounded destination display, preserving full-path identity and rootless
+  geometry checks.
 - Align the Verify table with shared file rows: 24px geometry, zebra striping,
   disabled unchecked selection visuals, Notes, concise Presence and consistent
   typography. Preserve hierarchy and navigation; only Filename expands with
