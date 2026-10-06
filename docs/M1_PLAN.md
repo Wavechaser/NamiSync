@@ -69,24 +69,43 @@ whole-refresh and visibility assertions remain. Independent review and frozen
 input checks found no actionable issues. Evidence `c2-*`; commit identity in
 `integration.md`. No bridge, backend, selection or geometry contract changed.
 
-**C3 inspected boundary (`9868f5c`, refresh after C2).** Cancel an owned row
-gesture before shared-menu stale/empty eligibility and before Inventory's
-missing-window-row return. Production owners are `row_menu.js` and
-`inventory_review.js`; preserve default browser behavior outside owned rows.
-Plan/tree production changes are conditional on a demonstrated native event
-defect. Existing Plan/Inventory probes cover cancellation with no callbacks;
-a typed Inventory fixture distinguishes own-missing domain folders from
-present folders with missing descendants. Restore remains absent from menus.
-The installed Inventory child/parent retain pointer/Shift+F10 and add Menu;
-the existing task-shell child/parent gain bounded local Plan Menu/Shift+F10
-stages using their native CDP driver plus foreground/focus/hit-target checks.
-Record trusted key/context events and stable popup placement/focus through
-completed input before deciding whether duplicate-event handling is needed.
-No synthetic event substitutes for that characterization and no new general
-driver framework. Direct tree/execution probes, gallery and packaging remain
-consumer gates. Acceptance: native characterization, focused consumers,
-interfaces, affected installed Inventory/shell/gallery checks, matching
-DESKTOP_UI/BUGS/delivery docs and independent review; one atomic commit.
+**C3 delivered boundary (from `dfd9291`).** Owned row gestures cancel before
+stale/empty or missing-window returns; the custom menu cancels the Menu key's
+observed native follow-up context event. No Plan/tree product change or debounce
+was needed. Direct probes distinguish own-missing domain folders from present
+folders with missing descendants; Restore remains absent. Native Menu/Shift+F10
+checks preserve stable popup placement/focus and compare Escape with the live
+canonical row, not a replaced element. All original action and foreground guards
+remain. Gates: 67 focused, 1,951 interfaces, 12 import contracts and seven installed
+checks across `c3-native-01` (six) and unchanged Inventory retry
+`c3-native-inventory-02` (one). Retain failed/invalidated characterization and
+filter-target-readiness receipts; they are not product regression evidence.
+Independent review found no actionable issue and verified frozen dependencies.
+DESKTOP_UI and BUGS own behavior; raw evidence and commit accounting use `c3-*`
+and `integration.md`. C4 implementation waits for this commit.
+
+**C4 inspected boundary (`dfd9291`; refresh after C3).** Inventory retains its
+tree-owned row identities, disclosure and navigation while using seven columns:
+selection, Filename, Presence, Checksum, Size, Modified and Notes. Disabled,
+unchecked checkbox visuals carry no selection/action state. Pass 24px geometry
+to this tree only; preserve the generic 28px default and migrate viewport,
+spacer and keyboard calculations together. Reuse file-row cells and extract
+only the existing integrity state-cell rendering needed by both consumers.
+Only Filename grows passively; Notes is the deliberate resize donor, with the
+existing Filename/Notes/Modified minima and horizontal overflow preserved.
+Concise Presence retains missing/unsupported and mismatch precedence; full
+evidence remains in Details. Notes retain bounded warning/acknowledgement and
+partial/overflow facts. No wire, action, icon or backend change.
+Finite product owners: `inventory_review.js`, `tree.js`, `integrity.js` and
+`app.css`. Migrate Inventory/tree/static probes, existing component-gallery
+fixture and its child/parent geometry validators, plus installed Inventory
+child/parent together. Preserve C2 active-target and C3 trusted-menu witnesses.
+Acceptance: focused consumers, interfaces, installed Inventory/shared tree and
+Light/Dark/Forced/Reduced gallery; compare 24px rows, zebra, checkbox state,
+column edges, resize/overflow, Presence and typography with accepted specimens
+and Microsoft's Fluent Table/Checkbox references. Update DESKTOP_UI and
+PRESENTATION, inspect FEATURES, remove only renderer orphans, and independently
+review one atomic commit. No functional checkboxes or new state icons.
 
 ## GUI follow-up batch — 2026-10-05
 

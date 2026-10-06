@@ -179,6 +179,12 @@ explicit, reviewable and regression-backed.
 
 #### Align desktop review surfaces and recovery (2026-10-05 – 2026-10-06)
 
+- Suppress native context-menu fallback for stale/empty owned row gestures and
+  the Menu key's follow-up event on the custom menu. Preserve popup placement,
+  focus and existing command scope without duplicate-event machinery. Cover
+  own-missing domain-folder acknowledgement separately from descendant counts.
+  Pass 67 focused, 1,951 interfaces, 12 import contracts and seven installed
+  checks, retaining failed characterization and target-readiness receipts.
 - Make Inventory Refresh selected follow the current highlighted row, including
   arrow navigation with Details hidden. Preserve item-card action scope and
   disable the toolbar action when its current window has no eligible target.

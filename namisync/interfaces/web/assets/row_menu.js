@@ -30,9 +30,9 @@ export function createRowMenu(owner) {
 
   function open(event, anchor, returnFocus, actions, isCurrent) {
     close();
-    if (!isCurrent() || actions.length === 0) return;
     event.preventDefault();
     event.stopPropagation();
+    if (!isCurrent() || actions.length === 0) return;
     const context = { returnFocus, isCurrent };
     current = context;
     menu.replaceChildren();
@@ -75,6 +75,10 @@ export function createRowMenu(owner) {
   }
   menu.addEventListener("focusout", (event) => {
     if (!menu.contains(event.relatedTarget)) close();
+  });
+  menu.addEventListener("contextmenu", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
   });
   menu.addEventListener("keydown", (event) => {
     event.stopPropagation();

@@ -272,9 +272,27 @@ _PAGE = r"""
     return pane?.isConnected && !pane.querySelector('[data-action="inventory-refresh"]')?.disabled
       && pane.querySelector('.nami-inventory-review__rows [data-node-id]') ? pane : null;
   }, 'initial-inventory-view');
-  const nativeClicks = Object.fromEntries(['refresh', 'filter-open', 'filter-present', 'filter-escape', 'filter-reopen', 'filter-all', 'details', 'acknowledge', 'restore-details', 'restore', 'context-open', 'context-escape', 'context-keyboard', 'context-acknowledge', 'context-restore-details', 'context-restore', 'selected-activate', 'selected-arrow-first', 'selected-arrow-second', 'selected-refresh'].map(name => [name, false]));
+  const nativeClicks = Object.fromEntries(['refresh', 'filter-open', 'filter-present', 'filter-escape', 'filter-reopen', 'filter-all', 'details', 'acknowledge', 'restore-details', 'restore', 'context-open', 'context-escape', 'context-keyboard', 'context-keyboard-escape', 'context-menu', 'context-acknowledge', 'context-restore-details', 'context-restore', 'selected-activate', 'selected-arrow-first', 'selected-arrow-second', 'selected-refresh'].map(name => [name, false]));
+  const keyboardInput = [];
   async function stage(name) {
     await until(() => document.hasFocus(), 'document-focus');
+    const keyboardMenu = name === 'context-keyboard' || name === 'context-menu';
+    const popup = review.querySelector('.nami-row-menu');
+    const events = [];
+    let opened = null;
+    const observe = event => {
+      const fact = {type:event.type, key:event.key ?? null, trusted:event.isTrusted,
+        target:popup.contains(event.target) ? 'menu' : 'tree',
+        get default_prevented() { return event.defaultPrevented; }};
+      events.push(fact);
+    };
+    if (keyboardMenu) {
+      for (const type of ['keydown', 'keyup', 'contextmenu']) document.addEventListener(type, observe, true);
+      window.__inventoryContextDown = () => {
+        opened = {item:popup.firstElementChild,
+          rectangle:[popup.getBoundingClientRect().left, popup.getBoundingClientRect().top]};
+      };
+    }
     let listenedControl = null;
     window.__inventoryNativeCheck = async () => {
       const selector = name === 'filter-open' || name === 'filter-reopen' ? '[data-action="filter-menu"]'
@@ -282,8 +300,8 @@ _PAGE = r"""
         : name === 'filter-all' ? '.nami-filter-menu__popup [data-filter="all"]'
         : name === 'restore-details' || name === 'context-restore-details' ? '[data-action="inventory-details"]'
         : name === 'context-open' ? `.nami-inventory-review__rows [data-node-id="${window.__inventoryFixture.missing_node_id}"]`
-        : name === 'context-escape' ? '.nami-row-menu [data-action="row-details"]'
-        : name === 'context-keyboard' ? '.nami-inventory-review__rows'
+        : name === 'context-escape' || name === 'context-keyboard-escape' ? '.nami-row-menu [data-action="row-details"]'
+        : keyboardMenu ? '.nami-inventory-review__rows'
         : name === 'selected-activate' ? `.nami-inventory-review__rows [data-node-id="${window.__inventoryFixture.folder_node_id}"]`
         : name === 'selected-arrow-first' || name === 'selected-arrow-second' ? '.nami-inventory-review__rows'
         : name === 'selected-refresh' ? '[data-action="inventory-refresh-selected"]'
@@ -304,7 +322,7 @@ _PAGE = r"""
         hit_owned:control.contains(hit) || hit === control, sized:rect.width > 0 && rect.height > 0};
       if (listenedControl !== control) {
         const gesture = name === 'context-open' ? 'contextmenu'
-          : ['filter-escape', 'context-escape', 'context-keyboard', 'selected-arrow-first', 'selected-arrow-second'].includes(name) ? 'keydown' : 'click';
+          : ['filter-escape', 'context-escape', 'context-keyboard', 'context-keyboard-escape', 'context-menu', 'selected-arrow-first', 'selected-arrow-second'].includes(name) ? 'keydown' : 'click';
         control.addEventListener(gesture, event => {
           nativeClicks[name] ||= event.isTrusted
             && (!name.startsWith('selected-arrow-') || event.key === 'ArrowDown');
@@ -316,6 +334,14 @@ _PAGE = r"""
     window.__inventoryNativeStage = `${name}-ready`;
     await until(() => window.__inventoryNativeAck === name, `native-${name}`, name === 'refresh' ? 2800 : 1200);
     await until(() => nativeClicks[name], `trusted-${name}`);
+    if (keyboardMenu) {
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      for (const type of ['keydown', 'keyup', 'contextmenu']) document.removeEventListener(type, observe, true);
+      const rect = popup.getBoundingClientRect();
+      keyboardInput.push({name, events, popup_visible:!popup.hidden,
+        stable_focus:opened?.item === document.activeElement,
+        stable_position:opened?.rectangle[0] === rect.left && opened?.rectangle[1] === rect.top});
+    }
   }
   await stage('refresh');
   const filterTrigger = review.querySelector('[data-action="filter-menu"]');
@@ -428,6 +454,9 @@ _PAGE = r"""
   const escapeFocus = contextPopup.hidden && document.activeElement === review.querySelector('.nami-inventory-review__rows');
   await stage('context-keyboard');
   await until(() => !contextPopup.hidden, 'context-keyboard');
+  await stage('context-keyboard-escape');
+  await stage('context-menu');
+  await until(() => !contextPopup.hidden, 'context-menu');
   const ownMissingActions = [...contextPopup.children].map(item => item.textContent).join('|') === 'Show details|Refresh selected|Acknowledge missing';
   await stage('context-acknowledge');
   await until(() => !missing() && !review.querySelector('[data-action="inventory-refresh"]').disabled, 'context-acknowledged-hidden');
@@ -469,7 +498,7 @@ _PAGE = r"""
   await until(() => !review.querySelector('[data-action="inventory-refresh"]').disabled
     && review.querySelector('.nami-inventory-review__status-line').textContent.includes(`Displayed scan: Item: ${fixture.missing_path}`),
     'selected-item-publication');
-  return {filter_geometry:menuGeometry, filter_colors:filterColors, filter_menu:filterMenu, row_menu:rowMenu, native_clicks:nativeClicks, pane_visible:review.isConnected && !review.hidden,
+  return {filter_geometry:menuGeometry, filter_colors:filterColors, filter_menu:filterMenu, row_menu:rowMenu, keyboard_input:keyboardInput, native_clicks:nativeClicks, pane_visible:review.isConnected && !review.hidden,
     refreshed_missing:true, acknowledged_hidden:true, restored_missing:true, status, selected_refresh:selectedRefresh};
 })()
 """
@@ -485,7 +514,7 @@ def _drive(window: object, phase: _InventoryPhase, recorder: _Recorder,
     page_result: dict[str, object] | None = None
     observed_handle: int | None = None
     click_target: dict[str, object] | None = None
-    foreground_owned = {name: False for name in ("refresh", "filter-open", "filter-present", "filter-escape", "filter-reopen", "filter-all", "details", "acknowledge", "restore-details", "restore", "context-open", "context-escape", "context-keyboard", "context-acknowledge", "context-restore-details", "context-restore", "selected-activate", "selected-arrow-first", "selected-arrow-second", "selected-refresh")}
+    foreground_owned = {name: False for name in ("refresh", "filter-open", "filter-present", "filter-escape", "filter-reopen", "filter-all", "details", "acknowledge", "restore-details", "restore", "context-open", "context-escape", "context-keyboard", "context-keyboard-escape", "context-menu", "context-acknowledge", "context-restore-details", "context-restore", "selected-activate", "selected-arrow-first", "selected-arrow-second", "selected-refresh")}
 
     def fail(error: BaseException, task: object | None, step: str, _method: str) -> None:
         nonlocal failed
@@ -504,7 +533,7 @@ def _drive(window: object, phase: _InventoryPhase, recorder: _Recorder,
         )
 
     cdp = NativeCdp(native, core, retained, fail)
-    stage_names = ("refresh", "filter-open", "filter-present", "filter-escape", "filter-reopen", "filter-all", "details", "acknowledge", "restore-details", "restore", "context-open", "context-escape", "context-keyboard", "context-acknowledge", "context-restore-details", "context-restore", "selected-activate", "selected-arrow-first", "selected-arrow-second", "selected-refresh")
+    stage_names = ("refresh", "filter-open", "filter-present", "filter-escape", "filter-reopen", "filter-all", "details", "acknowledge", "restore-details", "restore", "context-open", "context-escape", "context-keyboard", "context-keyboard-escape", "context-menu", "context-acknowledge", "context-restore-details", "context-restore", "selected-activate", "selected-arrow-first", "selected-arrow-second", "selected-refresh")
 
     def next_stage(index: int) -> None:
         if index == len(stage_names):
@@ -535,15 +564,23 @@ def _drive(window: object, phase: _InventoryPhase, recorder: _Recorder,
                 foreground_owned[name] = True
                 def released(_value: object) -> None:
                     cdp.evaluate(f"window.__inventoryNativeAck='{name}';true", lambda _ack: next_stage(index + 1), f"ack-{name}")
-                if name in {"filter-escape", "context-escape", "context-keyboard", "selected-arrow-first", "selected-arrow-second"}:
+                if name in {"filter-escape", "context-escape", "context-keyboard", "context-keyboard-escape", "context-menu", "selected-arrow-first", "selected-arrow-second"}:
                     keyboard_menu = name == "context-keyboard"
                     key, virtual_key = (("ArrowDown", 40) if name.startswith("selected-arrow-")
-                                        else ("F10", 121) if keyboard_menu else ("Escape", 27))
+                                        else ("F10", 121) if keyboard_menu
+                                        else ("ContextMenu", 93) if name == "context-menu" else ("Escape", 27))
                     shared = {"key": key, "code": key, "windowsVirtualKeyCode": virtual_key,
                               "nativeVirtualKeyCode": virtual_key, "modifiers": 8 if keyboard_menu else 0}
-                    cdp.call("Input.dispatchKeyEvent", {"type": "rawKeyDown", **shared},
-                        lambda _value: cdp.call("Input.dispatchKeyEvent", {"type": "keyUp", **shared},
-                            released, "filter-escape-up"), "filter-escape-down")
+                    def key_up(_value: object) -> None:
+                        cdp.call("Input.dispatchKeyEvent", {"type": "keyUp", **shared}, released, f"{name}-up")
+
+                    def key_down(_value: object) -> None:
+                        if name in {"context-keyboard", "context-menu"}:
+                            cdp.evaluate("window.__inventoryContextDown();true", key_up, f"{name}-opened")
+                        else:
+                            key_up(_value)
+
+                    cdp.call("Input.dispatchKeyEvent", {"type": "rawKeyDown", **shared}, key_down, f"{name}-down")
                     return
                 mouse_button = "right" if name == "context-open" else "left"
                 cdp.call("Input.dispatchMouseEvent", {"type": "mousePressed", "button": mouse_button,
@@ -580,7 +617,7 @@ def _drive(window: object, phase: _InventoryPhase, recorder: _Recorder,
         checkpoint = "page-result"
         if type(value) is dict:
             page_result = {key: value.get(key) for key in
-                           ("filter_geometry", "filter_colors", "filter_menu", "row_menu", "native_clicks", "pane_visible", "refreshed_missing", "acknowledged_hidden", "restored_missing", "status", "selected_refresh")}
+                           ("filter_geometry", "filter_colors", "filter_menu", "row_menu", "keyboard_input", "native_clicks", "pane_visible", "refreshed_missing", "acknowledged_hidden", "restored_missing", "status", "selected_refresh")}
         if type(value) is not dict or value.get("native_clicks") != {name: True for name in stage_names} or any(value.get(key) is not True for key in
                  ("pane_visible", "refreshed_missing", "acknowledged_hidden", "restored_missing")):
             raise RuntimeError("native inventory page result is invalid")

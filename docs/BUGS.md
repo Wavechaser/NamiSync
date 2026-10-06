@@ -885,6 +885,20 @@ defect, and move implementation-level test choreography out of the log.
 
 ## INTERFACES
 
+### Row context menus
+
+- MINOR - FIXED (2026-10-06). Incomplete gesture cancellation. Owned row
+  context gestures can reach the WebView native menu when custom-menu
+  eligibility returns early. Installed characterization also shows the Menu
+  key emits a contextmenu on the newly focused custom-menu item after keyup,
+  despite canceled keydown; Shift+F10 does not emit that extra event. Popup
+  focus and placement remain stable, so duplicate row reopening is not
+  established. Cause: cancellation covered only successful row opening,
+  leaving early exits and the menu surface uncovered. Cancel before eligibility
+  and on the menu surface; direct probes and installed keyboard journeys verify
+  suppression with unchanged focus, placement and action scope. Release already
+  disables the native menu; no command or filesystem effect is introduced.
+
 ### Inventory action targeting
 
 - MINOR - FIXED (2026-10-06). Highlight/detail target divergence. Status-card

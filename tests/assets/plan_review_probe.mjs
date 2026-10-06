@@ -1668,7 +1668,14 @@ const contextTask = { ...task, review: contextReview, executionAttempt: null, cl
 contextPanel.render(contextTask);
 const contextRow = () => findByDataset(contextPanel.element, "nodeId", row.node_id);
 const contextPopup = findByClass(contextPanel.element, "nami-row-menu");
-const pointerMenu = () => contextRow().dispatch("contextmenu", {clientX: 1279, clientY: 799});
+function ownedContext(target, type, fields = {}) {
+  let prevented = false, stopped = false;
+  target.dispatch(type, {...fields,
+    preventDefault() { prevented = true; }, stopPropagation() { stopped = true; }});
+  assert.equal(prevented, true, "owned context gestures suppress browser fallback");
+  assert.equal(stopped, true, "owned context gestures do not reach another owner");
+}
+const pointerMenu = () => ownedContext(contextRow(), "contextmenu", {clientX: 1279, clientY: 799});
 pointerMenu();
 assert.equal(contextCalls.length, 0, "opening a row menu sends no command");
 assert.deepEqual(contextPopup.children.map((item) => item.textContent), ["Show details", "Select", "Collapse"]);
@@ -1700,6 +1707,9 @@ const staleSelect = contextPopup.children[1];
 contextTask.closePending = true;
 contextPanel.render(contextTask);
 const beforeStale = contextCalls.length;
+pointerMenu();
+ownedContext(contextRow(), "keydown", {key: "ContextMenu"});
+assert.equal(contextPopup.hidden, true);
 staleSelect.dispatch("click");
 assert.equal(contextCalls.length, beforeStale, "retired menu buttons cannot dispatch");
 assert.equal(contextPopup.hidden, true);
@@ -1728,8 +1738,35 @@ for (const dismissal of ["scroll", "pointerdown", "visibilitychange", "blur", "r
   assertSameNode(document.activeElement, focus, "external dismissal does not steal focus");
 }
 pointerMenu();
+const retiredContextRow = contextRow();
 contextReview.window = { ...contextReview.window };
 contextPanel.render(contextTask);
 assert.equal(contextPopup.hidden, true, "window replacement retires the menu");
+const beforeRetired = contextCalls.length;
+ownedContext(retiredContextRow, "contextmenu", {clientX: 200, clientY: 200});
+assert.equal(contextPopup.hidden, true);
+assert.equal(contextCalls.length, beforeRetired);
+pointerMenu();
+const menuFocus = document.activeElement;
+const menuPosition = [contextPopup.style.getPropertyValue("left"), contextPopup.style.getPropertyValue("top")];
+ownedContext(contextPopup, "contextmenu", {clientX: 0, clientY: 0});
+assertSameNode(document.activeElement, menuFocus);
+assert.deepEqual([contextPopup.style.getPropertyValue("left"), contextPopup.style.getPropertyValue("top")], menuPosition);
+assert.equal(contextCalls.length, beforeRetired);
 contextPanel.dispose();
+const { createRowMenu } = await import(rowMenuUrl);
+const emptyOwner = document.createElement("div");
+const emptyMenu = createRowMenu(emptyOwner);
+for (const [actions, isCurrent] of [[[], () => true],
+    [[{id: "never", label: "Never", run() { throw new Error("stale action ran"); }}], () => false]]) {
+  for (const type of ["contextmenu", "keydown"]) {
+    let prevented = false, stopped = false;
+    emptyMenu.open({type, preventDefault() { prevented = true; }, stopPropagation() { stopped = true; }},
+      emptyOwner, emptyOwner, actions, isCurrent);
+    assert.equal(prevented, true);
+    assert.equal(stopped, true);
+    assert.equal(findByClass(emptyOwner, "nami-row-menu").hidden, true);
+  }
+}
+emptyMenu.dispose();
 process.stdout.write("ok");

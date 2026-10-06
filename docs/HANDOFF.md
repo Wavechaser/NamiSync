@@ -21,9 +21,20 @@ Refresh of B. It passed 64 focused and 1,951 interfaces tests, 12 import
 contracts and both installed Inventory/shared-tree journeys. Independent review
 found no actionable issues; final commit accounting is in integration.md.
 
-Continue GUI-C3 through C5 under M1_PLAN: narrow menu corrections, Verify table
-alignment, loading measurements and justified optimizations. C3's inspected
-boundary is recorded; revalidate it against C2 before implementation.
+C3's narrow menu corrections now pass 67 focused tests, 1,951 interfaces checks,
+12 imports and all seven
+installed checks. Menu-key contextmenu on the focused custom menu is suppressed;
+no debounce or Plan product correction was needed. The native Plan witness now
+checks the live canonical row after Escape. Retain c3-characterization-01 as
+invalidated by helper writes during execution, c3-characterization-02 and the
+Escape diagnostic as cause evidence, and c3-native-01's unavailable filter target.
+Unchanged c3-native-inventory-02 passed. Independent review found no actionable
+issue and verified the frozen executable dependencies. Commit accounting is in
+the evidence directory's integration.md.
+
+Continue GUI-C4/C5 under M1_PLAN: Verify table alignment, loading measurements
+and justified optimizations. C4's finite design is recorded against dfd9291;
+revalidate shared menu/native helper seams against the final C3 commit.
 No functional checkbox selection,
 execution-to-Verify lifecycle, new actions or filesystem effects are authorized.
 

@@ -554,7 +554,14 @@ const menuFolder = menuRows.find((row) => row.row_kind === "folder");
 const menuNotice = menuRows.find((row) => row.warning !== null);
 menuReview.detail = { row: menuFolder, state: "current", response: { snapshot: { path: "folder", warning: null }, detail: null } };
 menuPane.render(menuTask);
-const menuPointer = (row) => menuRow(row).dispatch("contextmenu", {clientX: 1279, clientY: 799});
+function ownedContext(target, type, fields = {}) {
+  let prevented = false, stopped = false;
+  target.dispatch(type, {...fields, preventDefault() { prevented = true; },
+    stopPropagation() { stopped = true; this.stopped = true; }});
+  assert.equal(prevented, true, "owned context gestures suppress browser fallback");
+  assert.equal(stopped, true, "owned context gestures do not reach another owner");
+}
+const menuPointer = (row) => ownedContext(menuRow(row), "contextmenu", {clientX: 1279, clientY: 799});
 menuPointer(missingRow);
 assert.equal(menuCalls.length, 0, "right-click has no read or mutation effect");
 assert.equal(menuReview.detail.row, menuFolder, "opening context preserves unrelated details");
@@ -597,6 +604,9 @@ const staleAcknowledge = menuPopup.children[2];
 menuReview.pending = "view";
 menuPane.render(menuTask);
 const menuBeforeStale = menuCalls.length;
+menuPointer(missingRow);
+ownedContext(menuTree, "keydown", {key: "F10", shiftKey: true});
+assert.equal(menuPopup.hidden, true);
 staleAcknowledge.click();
 assert.equal(menuCalls.length, menuBeforeStale);
 assert.equal(menuPopup.hidden, true);
@@ -617,7 +627,38 @@ assert.equal(document.activeElement, menuTree);
 assert.equal(menuTree.getAttribute("aria-activedescendant"), menuRow(missingRow).id);
 menuTree.dispatch("keydown", {key: "ContextMenu"});
 assert.equal(menuPopup.hidden, false);
+const missingInvoker = menuRow(missingRow);
+menuReview.window = {...menuReview.window, rows:menuRows.filter(row => row !== missingRow)};
+const beforeMissingOwner = menuCalls.length;
+ownedContext(missingInvoker, "contextmenu", {clientX: 200, clientY: 200});
+assert.equal(menuCalls.length, beforeMissingOwner, "a missing current-window node cannot dispatch");
+menuPane.render(menuTask);
+assert.equal(menuPopup.hidden, true);
+ownedContext(missingInvoker, "contextmenu", {clientX: 200, clientY: 200});
+assert.equal(menuPopup.hidden, true);
+assert.equal(menuCalls.length, beforeMissingOwner);
 menuPane.dispose();
 staleAcknowledge.click();
 assert.equal(menuCalls.length, menuBeforeStale);
+const folderCalls = [];
+const folderPane = createInventoryReviewPanel({
+  onViewChange: () => {}, onDetail: () => {}, onWindow: async () => null,
+  onReload: () => {}, onCheckOutcome: () => {}, onRefresh: () => {},
+  onVisibility: (...args) => folderCalls.push(args),
+});
+const folderReview = {...fixture.missing_folder, pending:null, detail:null};
+const folderTask = {...menuTask, inventoryReview:folderReview,
+  requestId:folderReview.summary.request_id};
+folderPane.render(folderTask);
+const folderDomain = folderReview.window.rows.find(row => row.row_id === "3");
+assert.equal(folderDomain.is_container, true);
+assert.equal(folderDomain.presence, "missing");
+const folderElement = walk(folderPane.element).find(value => value.dataset.nodeId === folderDomain.node_id);
+ownedContext(folderElement, "contextmenu", {clientX: 200, clientY: 200});
+const folderPopup = walk(folderPane.element).find(value => value.classList.contains("nami-row-menu"));
+assert.ok(folderPopup.children.some(value => value.dataset.action === "row-acknowledge"));
+assert.equal(folderPopup.children.some(value => /restore/i.test(value.textContent)), false);
+folderPopup.children.find(value => value.dataset.action === "row-acknowledge").click();
+assert.deepEqual(folderCalls, [[folderReview, "acknowledge", folderDomain.node_id]]);
+folderPane.dispose();
 process.stdout.write("ok\n");

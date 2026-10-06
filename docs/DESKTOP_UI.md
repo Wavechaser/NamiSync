@@ -1976,10 +1976,14 @@ Expand/Collapse reuse the existing server-scoped actions. Committed, disabled
 and informational Plan rows have no selection action. Inventory has no
 selection action or checkbox. Its domain file/folder rows offer Refresh selected;
 Acknowledge missing is offered only for a currently eligible row whose own
-presence is missing, using the existing node-scoped visibility command. The
+presence is missing, including a domain folder, using the existing node-scoped
+visibility command. Missing descendants do not qualify a present folder. The
 toolbar retains its existing complete-folder actions. Notices offer details only.
 Opening a menu never initiates a command; stale, pending, closing or replaced
 owners cannot dispatch one.
+Owned row gestures suppress the browser context menu even when their current
+custom menu is stale or empty. The open menu also consumes the Menu key's native
+follow-up context gesture without moving the popup or its focus.
 
 Menus remain inside the viewport and work area. Arrow keys and Home/End move
 within the menu; Escape restores the current invoker and Tab dismisses while

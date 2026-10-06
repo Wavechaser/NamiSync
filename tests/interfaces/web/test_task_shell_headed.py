@@ -159,6 +159,7 @@ def test_task_shell_failure_records_do_not_expose_private_text(tmp_path: Path) -
         "trusted_keyup_count": 1,
         "browser_async_error": {"type": "TypeError", "line": 1608},
         "move_bottom_gap": None,
+        "plan_context_input": None,
     }
     child._write_driver_diagnostic(diagnostic_path, diagnostic)
     persisted = json.loads(diagnostic_path.read_text(encoding="utf-8"))
@@ -397,6 +398,15 @@ def test_m1_4_installed_task_shell_navigation_closure_and_recovery(
         "liveExecutePointInViewport": True,
         "liveExecuteHitTested": True,
     }
+    assert [item["name"] for item in plan_review["rowMenuInput"]] == ["shift", "menu"]
+    for item, key in zip(plan_review["rowMenuInput"], ("F10", "ContextMenu"), strict=True):
+        assert item["popup_visible"] and item["stable_focus"] and item["stable_position"], item
+        events = item["events"]
+        assert all(event["trusted"] for event in events), events
+        assert [event["key"] for event in events if event["type"] == "keydown"] == [key], events
+        assert [event["key"] for event in events if event["type"] == "keyup"] == [key], events
+        assert all(event["default_prevented"] for event in events
+                   if event["type"] in {"keydown", "contextmenu"}), events
     assert plan_review["refused"]["committed"] is True
     assert plan_review["refused"]["unrun"] is True
     assert "Execution preflight refused." in plan_review["refused"]["message"]

@@ -307,6 +307,8 @@ export function createInventoryReviewPanel(callbacks) {
         updateRefreshSelected();
       },
       context: (nodeId, event, rowElement) => {
+        event.preventDefault();
+        event.stopPropagation();
         const review = current;
         const owner = task;
         const window = review?.window;

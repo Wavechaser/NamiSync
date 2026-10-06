@@ -57,6 +57,7 @@ def test_installed_inventory_refresh_acknowledge_restore_and_close(
             "filter-escape": True, "filter-reopen": True, "filter-all": True,
             "details": True, "acknowledge": True, "restore-details": True, "restore": True,
             "context-open": True, "context-escape": True, "context-keyboard": True,
+            "context-keyboard-escape": True, "context-menu": True,
             "context-acknowledge": True, "context-restore-details": True, "context-restore": True,
             "selected-activate": True, "selected-arrow-first": True,
             "selected-arrow-second": True, "selected-refresh": True,
@@ -66,6 +67,7 @@ def test_installed_inventory_refresh_acknowledge_restore_and_close(
             "filter-escape": True, "filter-reopen": True, "filter-all": True,
             "details": True, "acknowledge": True, "restore-details": True, "restore": True,
             "context-open": True, "context-escape": True, "context-keyboard": True,
+            "context-keyboard-escape": True, "context-menu": True,
             "context-acknowledge": True, "context-restore-details": True, "context-restore": True,
             "selected-activate": True, "selected-arrow-first": True,
             "selected-arrow-second": True, "selected-refresh": True,
@@ -98,6 +100,16 @@ def test_installed_inventory_refresh_acknowledge_restore_and_close(
         menu_edges, work_edges = row_menu["rectangles"]
         assert menu_edges[0] >= work_edges[0] and menu_edges[2] <= work_edges[2]
         assert menu_edges[1] >= work_edges[1] and menu_edges[3] <= work_edges[3]
+        keyboard_input = initial["report"]["keyboard_input"]
+        assert [item["name"] for item in keyboard_input] == ["context-keyboard", "context-menu"]
+        for item, key in zip(keyboard_input, ("F10", "ContextMenu"), strict=True):
+            assert item["popup_visible"] and item["stable_focus"] and item["stable_position"], item
+            events = item["events"]
+            assert all(event["trusted"] for event in events), events
+            assert [event["key"] for event in events if event["type"] == "keydown"] == [key], events
+            assert [event["key"] for event in events if event["type"] == "keyup"] == [key], events
+            assert all(event["default_prevented"] for event in events
+                       if event["type"] in {"keydown", "contextmenu"}), events
         selected_refresh = initial["report"]["results"]["selected_refresh"]
         assert selected_refresh["node_id"] == initial["report"]["fixture"]["missing_node_id"]
         assert selected_refresh["prior_request_id"] == initial["report"]["results"]["refresh"]["request_id"]

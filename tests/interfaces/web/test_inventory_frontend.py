@@ -48,13 +48,21 @@ def _fixture() -> dict[str, object]:
         r"C:\root", True, 300, 0)
     views["maximum"] = {"summary": maximum.summary(), "window": maximum.window(expected_revision=0, offset=0, limit=256)}
     invalidated = replace(row, invalidation=VerificationInvalidation(NOW, VerificationInvalidationReason.HASH_MISMATCH))
+    missing_folder = replace(row, row_id="3", rel_path="missing_folder",
+        rel_path_key=normalize_relative_path("missing_folder"), entry_kind=EntryKind.DIRECTORY,
+        presence=InventoryPresence.MISSING, observed=replace(stat, kind=EntryKind.DIRECTORY),
+        attestation=None, last_verified_at=None, missing_since=NOW)
+    folder_view = InventoryReviewState(view.task_id, view.request_id,
+        build_inventory_projection(1, (missing_folder,)), r"C:\root", True, 0, 1)
     detail = {"disposition": "current", "view_revision": 0, "node_id": projection.node_id_by_row_id["1"],
               "snapshot": {"path": row.rel_path, "warning": None}}
     snapshots = {node.node_id: {"disposition": "current", "view_revision": 0, "node_id": node.node_id,
         "detail": None, "snapshot": {"path": node.warning.rel_path if node.warning else node.rel_path,
             "warning": None if node.warning is None else {"code": node.warning.code.value, "detail": node.warning.detail}}}
         for node in projection.nodes if node.position != 0 and node.row is None}
-    return {"views": views, "detail": {**detail, "detail": inventory_current_detail(row)},
+    return {"views": views, "missing_folder": {"summary": folder_view.summary(),
+        "window": folder_view.window(expected_revision=0, offset=0, limit=256)},
+        "detail": {**detail, "detail": inventory_current_detail(row)},
         "invalidated_detail": {**detail, "detail": inventory_current_detail(invalidated)},
         "snapshots": snapshots, "tail": maximum.window(expected_revision=0, offset=268, limit=256)}
 

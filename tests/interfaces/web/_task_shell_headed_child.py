@@ -81,6 +81,7 @@ _DRIVER_DIAGNOSTIC_KEYS = frozenset(
         "trusted_keydown_count", "trusted_keyup_count",
         "browser_async_error",
         "move_bottom_gap",
+        "plan_context_input",
     }
 )
 
@@ -918,6 +919,68 @@ window.addEventListener("error", (event) => {
   if (!pointerFocusSuppressed || !keyboardFocusRestored) {
     throw new Error("Plan row pointer focus ring modality did not transition correctly");
   }
+  const rowMenuInput = [];
+  window.__namiPlanContextEvidence = rowMenuInput;
+  const contextPopup = fresh.querySelector('.nami-row-menu');
+  const contextNodeId = pointerRow.dataset.nodeId;
+  const contextInvoker = () => fresh.querySelector(`[data-node-id="${contextNodeId}"]`);
+  for (const name of ['shift', 'menu']) {
+    const events = [];
+    let opened = null;
+    let invoker = null;
+    const observe = event => {
+      const fact = {type:event.type, key:event.key ?? null, trusted:event.isTrusted,
+        target:event.target.closest('[data-node-id]')?.dataset.nodeId === contextNodeId
+          ? 'row' : contextPopup.contains(event.target) ? 'menu' : 'other',
+        get default_prevented() { return event.defaultPrevented; }};
+      events.push(fact);
+    };
+    for (const type of ['keydown', 'keyup', 'contextmenu']) document.addEventListener(type, observe, true);
+    window.__namiPlanContextDown = () => {
+      opened = {item:contextPopup.firstElementChild,
+        rectangle:[contextPopup.getBoundingClientRect().left, contextPopup.getBoundingClientRect().top]};
+    };
+    window.__namiPlanContextCheck = async () => {
+      invoker = contextInvoker();
+      if (invoker === null) return {connected:false};
+      invoker.focus();
+      await new Promise(resolve => requestAnimationFrame(resolve));
+      invoker = contextInvoker();
+      if (invoker === null) return {connected:false};
+      const rect = invoker.getBoundingClientRect();
+      const point = {x:(rect.left + rect.right) / 2, y:(rect.top + rect.bottom) / 2};
+      return {document_focused:document.hasFocus(), connected:invoker.isConnected,
+        visible:rect.width > 0 && rect.height > 0, focused:document.activeElement === invoker,
+        hit_owned:invoker.contains(document.elementFromPoint(point.x, point.y))};
+    };
+    window.__namiPlanContextStage = `${name}-ready`;
+    await until(() => window.__namiPlanContextAck === name, `native Plan ${name} roundtrip`);
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    for (const type of ['keydown', 'keyup', 'contextmenu']) document.removeEventListener(type, observe, true);
+    const rect = contextPopup.getBoundingClientRect();
+    rowMenuInput.push({name, events, popup_visible:!contextPopup.hidden,
+      stable_focus:opened?.item === document.activeElement,
+      stable_position:opened?.rectangle[0] === rect.left && opened?.rectangle[1] === rect.top});
+    window.__namiPlanContextCheck = () => {
+      const item = document.activeElement;
+      const rect = item.getBoundingClientRect();
+      return {document_focused:document.hasFocus(), connected:contextPopup.isConnected,
+        visible:!contextPopup.hidden && rect.width > 0 && rect.height > 0,
+        focused:contextPopup.contains(item),
+        hit_owned:item.contains(document.elementFromPoint((rect.left + rect.right) / 2, (rect.top + rect.bottom) / 2))};
+    };
+    window.__namiPlanContextStage = `${name}-escape-ready`;
+    await until(() => window.__namiPlanContextAck === `${name}-escape`, `native Plan ${name} Escape`);
+    const canonicalInvoker = contextInvoker();
+    rowMenuInput.at(-1).escape = {popup_hidden:contextPopup.hidden,
+      invoker_connected:invoker.isConnected, invoker_canonical:canonicalInvoker === invoker,
+      focused_invoker:document.activeElement === invoker,
+      focused_canonical:document.activeElement === canonicalInvoker,
+      active_node_id:document.activeElement?.dataset?.nodeId ?? null,
+      active_class:String(document.activeElement?.className ?? '').slice(0, 120),
+      popup_focused:contextPopup.contains(document.activeElement), pending:fresh.dataset.pending};
+    if (!contextPopup.hidden || canonicalInvoker === null || document.activeElement !== canonicalInvoker) throw new Error('Plan menu Escape failed');
+  }
   const changedRows = fresh.querySelector(".nami-plan-review__rows").textContent;
   const freshExecute = fresh.querySelector('[data-action="execute"]');
   await control("refuse_execution");
@@ -1147,6 +1210,7 @@ window.addEventListener("error", (event) => {
         newTaskTitle: rowByTitle("Task 54")?.querySelector(".nami-task-card")?.dataset.taskLabel ?? null,
       },
       confirmationInput: window.__namiConfirmationInputEvidence,
+      rowMenuInput,
       paused: paused.length > 0,
       resumed,
       controlsAppearance,
@@ -1827,6 +1891,7 @@ def _drive_plan_confirmation(
     screenshot: Path,
 ) -> Callable[[BaseException, object | None], None]:
     from System import Action
+    from _headed_native import foreground_window_handle
 
     failed = False
     last_driver_step = "start"
@@ -1884,6 +1949,7 @@ def _drive_plan_confirmation(
             "trusted_keyup_count": None,
             "browser_async_error": None,
             "move_bottom_gap": None,
+            "plan_context_input": None,
         }
         diagnostic_expression = r"""
 (() => {
@@ -1922,6 +1988,7 @@ def _drive_plan_confirmation(
     trusted_click_count: Number.isSafeInteger(counters.click) ? counters.click : null,
     trusted_keydown_count: Number.isSafeInteger(counters.keydown) ? counters.keydown : null,
     trusted_keyup_count: Number.isSafeInteger(counters.keyup) ? counters.keyup : null,
+    plan_context_input: window.__namiPlanContextEvidence ?? null,
   };
 })()
 """
@@ -1938,6 +2005,7 @@ def _drive_plan_confirmation(
                     "trusted_keydown_count", "trusted_keyup_count",
                     "pause_disabled", "pause_hidden", "resume_hidden", "controls_hidden", "review_pending",
                     "move_bottom_gap",
+                    "plan_context_input",
                 ):
                     if key in page:
                         base[key] = page[key]
@@ -2053,6 +2121,44 @@ def _drive_plan_confirmation(
             ("Input.dispatchMouseEvent", {"type": "mousePressed", "buttons": 1, **shared}),
             ("Input.dispatchMouseEvent", {"type": "mouseReleased", "buttons": 0, **shared}),
         ]
+
+    def plan_context(index: int = 0) -> None:
+        stages = ("shift", "shift-escape", "menu", "menu-escape")
+        if index == len(stages):
+            evaluate(wait_execute, after_execute, "wait_execute")
+            return
+        name = stages[index]
+        expression = """(async () => {
+          for (let attempt = 0; attempt < 1200; attempt += 1) {
+            if (window.__namiPlanContextStage === """ + json.dumps(name + "-ready") + """) {
+              return await window.__namiPlanContextCheck();
+            }
+            await new Promise(resolve => setTimeout(resolve, 25));
+          }
+          throw new Error('Plan context input did not become ready');
+        })()"""
+
+        def send(facts: object) -> None:
+            if type(facts) is not dict or not facts or any(value is not True for value in facts.values()):
+                raise RuntimeError("Plan context input target is unavailable")
+            if foreground_window_handle() != int(native.Handle.ToInt64()):
+                raise RuntimeError("Plan context input window is not foreground")
+            key, virtual_key = (("Escape", 27) if name.endswith("-escape")
+                                else ("F10", 121) if name == "shift" else ("ContextMenu", 93))
+            events = key_events(key, key, virtual_key)
+            if name == "shift":
+                for _method, parameters in events:
+                    parameters["modifiers"] = 8
+            if not name.endswith("-escape"):
+                events.insert(1, ("Runtime.evaluate", {
+                    "expression": "window.__namiPlanContextDown();true", "returnByValue": True,
+                }))
+            dispatch(events, lambda: evaluate(
+                "window.__namiPlanContextAck=" + json.dumps(name) + ";true",
+                lambda _ack: plan_context(index + 1), "plan_context_ack_" + name,
+            ), "plan_context_" + name)
+
+        evaluate(expression, send, "wait_plan_context_" + name)
 
     wait_execute = r"""
 (async () => {
@@ -2402,7 +2508,7 @@ def _drive_plan_confirmation(
 })()
 """, lambda _ready: capture(lambda: evaluate(
         "window.__namiMovePillCaptured=true;true",
-        lambda _captured: evaluate(wait_execute, after_execute, "wait_execute"),
+        lambda _captured: plan_context(),
         "move_pill_captured",
     ), "capture_move_pill", screenshot.with_name("move-pill.png")), "wait_move_pill")
     return fail
