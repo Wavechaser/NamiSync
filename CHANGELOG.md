@@ -179,6 +179,13 @@ explicit, reviewable and regression-backed.
 
 #### Align desktop review surfaces and recovery (2026-10-05 – 2026-10-06)
 
+- Align the Verify table with shared file rows: 24px geometry, zebra striping,
+  disabled unchecked selection visuals, Notes, concise Presence and consistent
+  typography. Preserve hierarchy and navigation; only Filename expands with
+  the viewport, while Notes supplies deliberate resizing space.
+  Correct active forced-color text across cells and verify 114 focused tests,
+  1,951 interfaces checks with a refreshed gallery checker, 12 import contracts
+  and eight installed obligations. Retain the review's red contrast witness.
 - Suppress native context-menu fallback for stale/empty owned row gestures and
   the Menu key's follow-up event on the custom menu. Preserve popup placement,
   focus and existing command scope without duplicate-event machinery. Cover

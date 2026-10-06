@@ -1838,19 +1838,19 @@ def _valid_inventory_panel(value: object) -> bool:
         "header_positions", "row_positions", "status_rectangles", "scroll_owners",
         "details", "refresh_on_status", "root_fits", "viewport_height",
         "viewport_scroll_height", "adopted_offset", "window_requests", "row_height",
-        "setup_heights", "status",
+        "setup_heights", "status", "appearance", "resizing",
     }:
         return False
     details = value["details"]
     return (
-        type(value["headers"]) is list and len(value["headers"]) == 5
+        type(value["headers"]) is list and len(value["headers"]) == 7
         and all(type(text) is str and len(text) <= 32 for text in value["headers"])
-        and type(value["checkbox_count"]) is int and 0 <= value["checkbox_count"] <= 10
+        and type(value["checkbox_count"]) is int and 0 <= value["checkbox_count"] <= 257
         and type(value["switcher"]) is list and len(value["switcher"]) == 2
         and all(type(item) is dict and set(item) == {"text", "selected", "disabled"}
                 and type(item["text"]) is str and item["selected"] in {"true", "false"}
                 and type(item["disabled"]) is bool for item in value["switcher"])
-        and type(value["labels"]) is list and len(value["labels"]) == 7
+        and type(value["labels"]) is list and len(value["labels"]) == 14
         and all(type(item) is dict and set(item) == {"case", "text", "foreground", "background", "height"}
                 and all(type(item[key]) is str and len(item[key]) <= 128
                         for key in ("case", "text", "foreground", "background"))
@@ -1861,9 +1861,9 @@ def _valid_inventory_panel(value: object) -> bool:
             "modified", "subject", "observed", "expected_modified", "expected_observed",
         }
         and all(type(text) is str and len(text) <= 64 for text in value["timestamps"].values())
-        and all(_finite_number_matrix([value[key]], 1, 5)
+        and all(_finite_number_matrix([value[key]], 1, 7)
                 for key in ("first_widths", "row_widths", "grown_widths", "manual_before", "manual_after"))
-        and all(_finite_number_matrix(value[key], 5, 4) for key in ("header_positions", "row_positions"))
+        and all(_finite_number_matrix(value[key], 7, 4) for key in ("header_positions", "row_positions"))
         and _finite_number_matrix(value["status_rectangles"], 4, 4)
         and _finite_number_matrix(value["setup_heights"], 2, 2)
         and type(value["status"]) is dict and set(value["status"]) == {
@@ -1892,6 +1892,68 @@ def _valid_inventory_panel(value: object) -> bool:
         and type(value["adopted_offset"]) is int and 0 <= value["adopted_offset"] <= 300
         and type(value["window_requests"]) is list and len(value["window_requests"]) <= 100
         and all(type(offset) is int and 0 <= offset <= 300 for offset in value["window_requests"])
+        and _valid_inventory_appearance(value["appearance"])
+        and _valid_inventory_resizing(value["resizing"])
+    )
+
+
+def _valid_inventory_appearance(value: object) -> bool:
+    if type(value) is not dict or set(value) != {
+        "typography", "zebra", "reference_zebra", "transparent_cells", "checkboxes",
+        "reference_checkbox", "notes", "name_indent", "active_colors", "active_node_id",
+        "active_text_colors", "active_filled_presence",
+    }:
+        return False
+    typography = value["typography"]
+    return (
+        type(typography) is dict and set(typography) == {
+            "header", "name", "folder", "presence", "checksum", "size", "modified", "notes",
+        }
+        and all(type(pair) is list and len(pair) == 2
+                and all(type(row) is list and len(row) == 5
+                        and all(type(text) is str and len(text) <= 256 for text in row)
+                        for row in pair) for pair in typography.values())
+        and all(type(value[key]) is list and len(value[key]) == 2
+                and all(type(text) is str and len(text) <= 128 for text in value[key])
+                for key in ("zebra", "reference_zebra", "reference_checkbox", "active_colors"))
+        and type(value["active_node_id"]) is str and len(value["active_node_id"]) <= 128
+        and type(value["active_text_colors"]) is list and len(value["active_text_colors"]) == 6
+        and all(type(text) is str and len(text) <= 128 for text in value["active_text_colors"])
+        and type(value["active_filled_presence"]) is dict and set(value["active_filled_presence"]) == {"node_id", "colors"}
+        and type(value["active_filled_presence"]["node_id"]) is str and len(value["active_filled_presence"]["node_id"]) <= 128
+        and type(value["active_filled_presence"]["colors"]) is list and len(value["active_filled_presence"]["colors"]) == 2
+        and all(type(text) is str and len(text) <= 128 for text in value["active_filled_presence"]["colors"])
+        and type(value["transparent_cells"]) is bool
+        and type(value["checkboxes"]) is list and len(value["checkboxes"]) <= 257
+        and all(type(item) is dict and set(item) == {
+            "disabled", "checked", "mixed", "width", "height", "background", "border",
+        } and all(type(item[key]) is bool for key in ("disabled", "checked", "mixed"))
+            and _finite_number_matrix([[item["width"], item["height"]]], 1, 2)
+            and all(type(item[key]) is str and len(item[key]) <= 128 for key in ("background", "border"))
+            for item in value["checkboxes"])
+        and type(value["notes"]) is list and len(value["notes"]) == 14
+        and all(type(text) is str and len(text) <= 512 for text in value["notes"])
+        and _finite_number_matrix([value["name_indent"]], 1, 2)
+    )
+
+
+def _valid_inventory_resizing(value: object) -> bool:
+    if type(value) is not dict or set(value) != {
+        "pointer_before", "pointer_after", "notes_minimum", "clamped_widths", "overflow",
+    }:
+        return False
+    overflow = value["overflow"]
+    return (
+        all(_finite_number_matrix([value[key]], 1, 7) for key in
+            ("pointer_before", "pointer_after", "notes_minimum", "clamped_widths"))
+        and type(overflow) is dict and set(overflow) == {
+            "client_width", "scroll_width", "widths", "edges_aligned",
+            "last_header_right", "last_row_right", "viewport_right",
+        }
+        and _finite_number_matrix([[overflow[key] for key in
+            ("client_width", "scroll_width", "last_header_right", "last_row_right", "viewport_right")]], 1, 5)
+        and _finite_number_matrix([overflow["widths"]], 1, 7)
+        and type(overflow["edges_aligned"]) is bool
     )
 
 

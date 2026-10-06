@@ -211,7 +211,12 @@ accepted offset and cannot publish result facts or retire exact detail, includin
 when the total population is larger.
 
 Inventory read views retain one immutable workflow projection, its complete sort
-permutation and its derived `VisibleSequence` at task scope. Repeated windows
+permutation and its derived `VisibleSequence` at task scope. Its browser tree
+uses an explicit 24 px geometry; the generic tree default remains
+28 px. Spacer, viewport and keyboard calculations share the invocation's height,
+while the same generation and active-node ownership rules remain authoritative.
+Disabled Inventory checkbox visuals do not introduce selection state or commands.
+Repeated windows
 reuse these values and serialize only the requested slice; current detail uses
 one exact ledger row read for domain subjects. Its separate revisioned snapshot
 supplies complete scan-time paths and warning diagnostics for rowless folders
@@ -290,7 +295,7 @@ Focused checks must catch the failures that small fixtures conceal: scope-qualif
 
 ## Implemented Plan and accepted future outcomes
 
-The implemented Plan review surface lets users inspect a complete stable view of immutable review facts, inert notices, current server-owned selection and destructive intent without letting stale UI actions acquire authority. It preserves prior-path ancestry and paired move annotations, while operation groups remain non-folder membership containers. Its renderer retains only the current `1..256` row window and uses exact 24 px rows and matching virtual spacers. The inventory renderer retains the same bounded window over the generic `tree.js` foundation's separate exact 28 px row contract. Its Refresh and visibility controls pass server-owned node identities, never visible-row or browser-derived path scope. Refresh selected resolves the tree's current active file or folder row from that window; arrow navigation changes highlighting without a detail read. Clearing the active row, including viewport gaps, disables the action. Item-card visibility actions retain the card's displayed row independently. Follow mode remains an accepted future outcome.
+The implemented Plan review surface lets users inspect a complete stable view of immutable review facts, inert notices, current server-owned selection and destructive intent without letting stale UI actions acquire authority. It preserves prior-path ancestry and paired move annotations, while operation groups remain non-folder membership containers. Its renderer retains only the current `1..256` row window and uses exact 24 px rows and matching virtual spacers. The inventory renderer retains the same bounded window with an explicit 24 px invocation of the generic `tree.js` foundation, whose default remains 28 px. Its Refresh and visibility controls pass server-owned node identities, never visible-row or browser-derived path scope. Refresh selected resolves the tree's current active file or folder row from that window; arrow navigation changes highlighting without a detail read. Clearing the active row, including viewport gaps, disables the action. Item-card visibility actions retain the card's displayed row independently. Follow mode remains an accepted future outcome.
 
 The Plan summary displays workflow-derived selected/eligible counts, selected
 required bytes, and planning issues (preflight refusals plus scan notices).

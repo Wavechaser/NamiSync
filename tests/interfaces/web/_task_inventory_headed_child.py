@@ -272,6 +272,19 @@ _PAGE = r"""
     return pane?.isConnected && !pane.querySelector('[data-action="inventory-refresh"]')?.disabled
       && pane.querySelector('.nami-inventory-review__rows [data-node-id]') ? pane : null;
   }, 'initial-inventory-view');
+  const tableRows = [...review.querySelectorAll('.nami-inventory-review__rows [data-node-id]')];
+  const tableHeaders = [...review.querySelector('.nami-inventory-review__columns').children];
+  const tableAppearance = {
+    headers:tableHeaders.map(value => value.textContent),
+    row_height:tableRows[0].getBoundingClientRect().height,
+    row_count:tableRows.length,
+    checkboxes:[...review.querySelectorAll('input[type="checkbox"]')].map(value => ({
+      disabled:value.disabled, checked:value.checked, mixed:value.indeterminate,
+      width:value.getBoundingClientRect().width, height:value.getBoundingClientRect().height})),
+    column_edges:tableHeaders.map((value,index) => [value.getBoundingClientRect().left,
+      value.getBoundingClientRect().right, tableRows[0].children[index].getBoundingClientRect().left,
+      tableRows[0].children[index].getBoundingClientRect().right]),
+  };
   const nativeClicks = Object.fromEntries(['refresh', 'filter-open', 'filter-present', 'filter-escape', 'filter-reopen', 'filter-all', 'details', 'acknowledge', 'restore-details', 'restore', 'context-open', 'context-escape', 'context-keyboard', 'context-keyboard-escape', 'context-menu', 'context-acknowledge', 'context-restore-details', 'context-restore', 'selected-activate', 'selected-arrow-first', 'selected-arrow-second', 'selected-refresh'].map(name => [name, false]));
   const keyboardInput = [];
   async function stage(name) {
@@ -498,7 +511,7 @@ _PAGE = r"""
   await until(() => !review.querySelector('[data-action="inventory-refresh"]').disabled
     && review.querySelector('.nami-inventory-review__status-line').textContent.includes(`Displayed scan: Item: ${fixture.missing_path}`),
     'selected-item-publication');
-  return {filter_geometry:menuGeometry, filter_colors:filterColors, filter_menu:filterMenu, row_menu:rowMenu, keyboard_input:keyboardInput, native_clicks:nativeClicks, pane_visible:review.isConnected && !review.hidden,
+  return {table_appearance:tableAppearance, filter_geometry:menuGeometry, filter_colors:filterColors, filter_menu:filterMenu, row_menu:rowMenu, keyboard_input:keyboardInput, native_clicks:nativeClicks, pane_visible:review.isConnected && !review.hidden,
     refreshed_missing:true, acknowledged_hidden:true, restored_missing:true, status, selected_refresh:selectedRefresh};
 })()
 """
@@ -617,7 +630,7 @@ def _drive(window: object, phase: _InventoryPhase, recorder: _Recorder,
         checkpoint = "page-result"
         if type(value) is dict:
             page_result = {key: value.get(key) for key in
-                           ("filter_geometry", "filter_colors", "filter_menu", "row_menu", "keyboard_input", "native_clicks", "pane_visible", "refreshed_missing", "acknowledged_hidden", "restored_missing", "status", "selected_refresh")}
+                           ("table_appearance", "filter_geometry", "filter_colors", "filter_menu", "row_menu", "keyboard_input", "native_clicks", "pane_visible", "refreshed_missing", "acknowledged_hidden", "restored_missing", "status", "selected_refresh")}
         if type(value) is not dict or value.get("native_clicks") != {name: True for name in stage_names} or any(value.get(key) is not True for key in
                  ("pane_visible", "refreshed_missing", "acknowledged_hidden", "restored_missing")):
             raise RuntimeError("native inventory page result is invalid")

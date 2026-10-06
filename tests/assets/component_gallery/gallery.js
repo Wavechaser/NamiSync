@@ -1899,13 +1899,14 @@ window.addEventListener("unhandledrejection", (event) => {
     const pageScroll = { x: window.scrollX, y: window.scrollY };
     const settled = () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     const checksum = "0123456789abcdef0123456789abcdef";
-    const cases = ["verified", "unverified", "modified", "reappeared", "unsupported", "missing", "mismatched"];
+    const cases = ["verified", "unverified", "modified", "reappeared", "unsupported", "missing", "mismatched",
+      "acknowledged", "reappeared-mismatch", "folder", "child", "notice", "partial", "overflow"];
     const rollup = { domain_count: 300, file_count: 300, size: 3000, size_overflow: false, size_partial: false,
       present: 298, unverified: 2, verified: 294, modified: 1, reappeared: 1, unsupported: 1,
       missing: 1, mismatched: 1, acknowledged: 0 };
     const rowAt = (index) => {
       const state = cases[index] ?? "verified";
-      return { node_id: String(index + 1), row_id: String(index + 1), display: `evidence-${index}.txt`,
+      const row = { node_id: String(index + 1), row_id: String(index + 1), display: `evidence-${index}.txt`,
         depth: 0, visible_index: index, parent_visible_index: null, first_child_visible_index: null,
         position_in_set: index + 1, set_size: 300, expanded: null, is_container: false, kind: "file",
         presence: ["unsupported", "missing"].includes(state) ? state : "present",
@@ -1913,6 +1914,16 @@ window.addEventListener("unhandledrejection", (event) => {
         reappeared: state === "reappeared", acknowledged: false, size: 10, mtime_ns: "1000000000",
         has_baseline: state !== "unverified", recorded_checksum: state === "unverified" ? null : checksum,
         warning: null, rollup };
+      if (state === "acknowledged") Object.assign(row, {presence:"missing", verification_state:"unverified", acknowledged:true});
+      if (state === "reappeared-mismatch") Object.assign(row, {verification_state:"mismatched", reappeared:true});
+      if (["folder", "partial", "overflow"].includes(state)) Object.assign(row, {
+        row_id:null, presence:null, verification_state:null, display:state, is_container:true,
+        expanded:state === "folder", first_child_visible_index:state === "folder" ? 10 : null,
+        rollup:{...rollup, size_partial:state === "partial", size_overflow:state === "overflow"}});
+      if (state === "child") Object.assign(row, {display:"child.txt", depth:1, parent_visible_index:9, verification_state:"verified"});
+      if (state === "notice") Object.assign(row, {row_id:null, presence:null, verification_state:null,
+        display:"access_denied unreadable", warning:{code:"access_denied", detail:"Cannot read this item."}});
+      return row;
     };
     const windowAt = (offset) => ({ offset, total: 300,
       rows: Array.from({ length: Math.min(64, 300 - offset) }, (_, index) => rowAt(offset + index)) });
@@ -2008,19 +2019,98 @@ window.addEventListener("unhandledrejection", (event) => {
       return { case: name, text: state.textContent, foreground: style.color, background: style.backgroundColor,
         height: Number(state.getBoundingClientRect().height.toFixed(3)) };
     });
+    const styleValues = value => {
+      const style = getComputedStyle(value);
+      return [style.fontFamily, style.fontSize, style.fontWeight, style.lineHeight, style.color];
+    };
+    const specimenRow = name => integritySpecimen.body.querySelector(`[data-gallery-case="${name}"]`);
+    const itemRow = index => viewport.querySelector(`[data-node-id="${index + 1}"]`);
+    const pairedStyle = (value, reference) => [styleValues(value), styleValues(reference)];
+    const activeRow = viewport.querySelector('[data-active="true"]');
+    const appearance = {
+      typography: {
+        header:pairedStyle(headers[1], planSpecimen.header.children[1]),
+        name:pairedStyle(itemRow(2).querySelector('.nami-file-row__name'), specimenRow('baselined').querySelector('.nami-file-row__name')),
+        folder:pairedStyle(itemRow(9).querySelector('.nami-file-row__name'), specimenRow('folder').querySelector('.nami-file-row__name')),
+        presence:pairedStyle(itemRow(2).querySelector('.nami-file-state-label'), specimenRow('modified').querySelector('.nami-file-state-label')),
+        checksum:pairedStyle(itemRow(2).querySelector('.nami-inventory-row__checksum'), specimenRow('baselined').querySelector('.nami-integrity-row__checksum')),
+        size:pairedStyle(itemRow(2).querySelector('.nami-file-row__size'), planSpecimen.body.firstElementChild.querySelector('.nami-file-row__size')),
+        modified:pairedStyle(itemRow(2).querySelector('.nami-inventory-row__modified'), planSpecimen.body.firstElementChild.querySelector('.nami-plan-row__modified')),
+        notes:pairedStyle(itemRow(2).querySelector('.nami-file-row__notes'), planSpecimen.body.firstElementChild.querySelector('.nami-file-row__notes')),
+      },
+      zebra:[getComputedStyle(itemRow(1)).backgroundColor, getComputedStyle(itemRow(2)).backgroundColor],
+      reference_zebra:[getComputedStyle(specimenRow('verified')).backgroundColor, getComputedStyle(specimenRow('folder')).backgroundColor],
+      transparent_cells:[...itemRow(2).children].every(cell => transparentColor(getComputedStyle(cell).backgroundColor)),
+      checkboxes:[...root.querySelectorAll('input[type="checkbox"]')].map(value => ({disabled:value.disabled,
+        checked:value.checked, mixed:value.indeterminate, width:value.getBoundingClientRect().width,
+        height:value.getBoundingClientRect().height, background:getComputedStyle(value).backgroundColor,
+        border:getComputedStyle(value).borderColor})),
+      reference_checkbox:[getComputedStyle(specimenRow('unsupported').querySelector('.nami-checkbox')).backgroundColor,
+        getComputedStyle(specimenRow('unsupported').querySelector('.nami-checkbox')).borderColor],
+      active_colors:[getComputedStyle(activeRow.querySelector('.nami-tree-row__label')).color,
+        getComputedStyle(activeRow).backgroundColor],
+      active_node_id:activeRow.dataset.nodeId,
+      active_text_colors:['.nami-tree-row__label', '.nami-file-state-label', '.nami-inventory-row__checksum',
+        '.nami-file-row__size', '.nami-inventory-row__modified', '.nami-file-row__notes']
+        .map(selector => getComputedStyle(activeRow.querySelector(selector)).color),
+      notes:cases.map((_name, index) => itemRow(index).querySelector('.nami-file-row__notes').textContent),
+      name_indent:[9,10].map(index => parseFloat(getComputedStyle(itemRow(index).querySelector('.nami-file-row__name')).paddingLeft)),
+    };
+    itemRow(3).click();
+    await settled();
+    const filledActiveRow = viewport.querySelector('[data-active="true"]');
+    const filledActiveLabel = filledActiveRow.querySelector('.nami-file-state-label');
+    appearance.active_filled_presence = {node_id:filledActiveRow.dataset.nodeId,
+      colors:[getComputedStyle(filledActiveLabel).color, getComputedStyle(filledActiveLabel).backgroundColor]};
+    activeRow.click();
+    await settled();
     const checksumCell = firstRow().querySelector(".nami-inventory-row__checksum");
     const checksumEvidence = { text: checksumCell.textContent, title: checksumCell.title,
       absent: viewport.querySelector('[data-node-id="2"] .nami-inventory-row__checksum').textContent };
     root.style.inlineSize = "1200px";
     await settled();
     const grownWidths = widths();
-    const handle = headers[0].querySelector("[role=separator]");
+    const handle = headers[1].querySelector("[role=separator]");
     handle.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
     await settled();
     const manualBefore = widths();
     handle.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
     await settled();
     const manualAfter = widths();
+    handle.dispatchEvent(new KeyboardEvent("keydown", { key:"ArrowLeft", bubbles:true }));
+    await settled();
+    const pointerBefore = widths();
+    const sizeHandle = headers[4].querySelector('[role=separator]');
+    sizeHandle.dispatchEvent(new PointerEvent('pointerdown', {clientX:200, bubbles:true}));
+    window.dispatchEvent(new PointerEvent('pointermove', {clientX:208}));
+    window.dispatchEvent(new PointerEvent('pointerup', {clientX:208}));
+    await settled();
+    const pointerAfter = widths();
+    handle.dispatchEvent(new KeyboardEvent('keydown', {key:'ArrowRight', bubbles:true}));
+    await settled();
+    const notesMinimum = widths();
+    sizeHandle.dispatchEvent(new KeyboardEvent('keydown', {key:'ArrowRight', bubbles:true}));
+    await settled();
+    const clampedWidths = widths();
+    root.style.inlineSize = '640px';
+    await settled();
+    const listElement = root.querySelector('.nami-inventory-review__list');
+    const overflow = {client_width:listElement.clientWidth, scroll_width:listElement.scrollWidth,
+      widths:widths(), edges_aligned:headers.every((value,index) => {
+        const cell = firstRow().children[index];
+        return Math.abs(value.getBoundingClientRect().left - cell.getBoundingClientRect().left) <= 1
+          && Math.abs(value.getBoundingClientRect().right - cell.getBoundingClientRect().right) <= 1;
+      })};
+    listElement.scrollLeft = listElement.scrollWidth;
+    await settled();
+    overflow.last_header_right = headers.at(-1).getBoundingClientRect().right;
+    overflow.last_row_right = firstRow().lastElementChild.getBoundingClientRect().right;
+    overflow.viewport_right = listElement.getBoundingClientRect().right;
+    listElement.scrollLeft = 0;
+    root.style.inlineSize = '1200px';
+    await settled();
+    const resizing = {pointer_before:pointerBefore, pointer_after:pointerAfter,
+      notes_minimum:notesMinimum, clamped_widths:clampedWidths, overflow};
     const diagnostics = root.querySelector(".nami-inventory-review__diagnostics");
     const initiallyHidden = diagnostics.hidden;
     const toggle = root.querySelector('[data-action="inventory-details"]');
@@ -2042,12 +2132,12 @@ window.addEventListener("unhandledrejection", (event) => {
     detailEvidence.focus_restored = document.activeElement === toggle && diagnostics.hidden;
     await settled();
     const viewportHeight = viewport.clientHeight;
-    viewport.scrollTop = 250 * 28;
+    viewport.scrollTop = 250 * 24;
     viewport.dispatchEvent(new Event("scroll"));
     await settled();
     await settled();
     const evidence = { headers: headers.map((value) => value.textContent), checkbox_count: root.querySelectorAll('input[type="checkbox"]').length,
-      timestamps, switcher: [...root.querySelectorAll(".nami-segmented__item")].map((value) => ({ text: value.textContent,
+      appearance, resizing, timestamps, switcher: [...root.querySelectorAll(".nami-segmented__item")].map((value) => ({ text: value.textContent,
         selected: value.ariaChecked, disabled: value.disabled })), labels, checksum: checksumEvidence,
       first_widths: firstWidths, row_widths: rowWidths, grown_widths: grownWidths,
       header_positions: headerPositions, row_positions: rowPositions,

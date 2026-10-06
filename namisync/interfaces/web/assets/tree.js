@@ -4,9 +4,12 @@ export const ROW_H = 28;
 
 let nextTreeId = 1;
 
-export function createTree(root, callbacks = {}) {
+export function createTree(root, callbacks = {}, rowHeight = ROW_H) {
   if (!(root instanceof Element)) {
     throw new TypeError("tree root must be an Element");
+  }
+  if (!Number.isSafeInteger(rowHeight) || rowHeight <= 0) {
+    throw new TypeError("tree row height must be a positive integer");
   }
   const document = root.ownerDocument;
   if (document === null || typeof document?.createElement !== "function") {
@@ -25,6 +28,7 @@ export function createTree(root, callbacks = {}) {
   nextTreeId += 1;
 
   root.classList.add("nami-tree");
+  root.style.setProperty("--row-h", `${rowHeight}px`);
   root.setAttribute("role", "tree");
   root.tabIndex = 0;
 
@@ -135,8 +139,8 @@ export function createTree(root, callbacks = {}) {
       total - leadingRows - entries.length,
       0,
     );
-    topSpacer.style.blockSize = `${leadingRows * ROW_H}px`;
-    bottomSpacer.style.blockSize = `${trailingRows * ROW_H}px`;
+    topSpacer.style.blockSize = `${leadingRows * rowHeight}px`;
+    bottomSpacer.style.blockSize = `${trailingRows * rowHeight}px`;
     root.replaceChildren(
       topSpacer,
       ...entries.map((entry) => entry.element),
@@ -219,8 +223,8 @@ export function createTree(root, callbacks = {}) {
     if (activeVisibleIndex === null || root.clientHeight <= 0) {
       return;
     }
-    const rowTop = activeVisibleIndex * ROW_H;
-    const rowBottom = rowTop + ROW_H;
+    const rowTop = activeVisibleIndex * rowHeight;
+    const rowBottom = rowTop + rowHeight;
     const viewportTop = root.scrollTop;
     const viewportBottom = viewportTop + root.clientHeight;
     if (rowTop < viewportTop) {
@@ -330,11 +334,11 @@ export function createTree(root, callbacks = {}) {
     const viewportTop = Math.max(root.scrollTop, 0);
     const viewportBottom = viewportTop + root.clientHeight;
     const firstIndex = Math.min(
-      Math.floor(viewportTop / ROW_H),
+      Math.floor(viewportTop / rowHeight),
       currentTotal - 1,
     );
     const lastIndex = Math.min(
-      Math.max(Math.ceil(viewportBottom / ROW_H) - 1, firstIndex),
+      Math.max(Math.ceil(viewportBottom / rowHeight) - 1, firstIndex),
       currentTotal - 1,
     );
     const covered = firstIndex >= currentOffset && lastIndex < currentEnd;
@@ -363,13 +367,13 @@ export function createTree(root, callbacks = {}) {
   }
 
   function visibleEntry(preferredIndex = null) {
-    if (root.clientHeight < ROW_H) {
+    if (root.clientHeight < rowHeight) {
       return null;
     }
     const viewportTop = Math.max(root.scrollTop, 0);
     const viewportBottom = viewportTop + root.clientHeight;
-    const firstFullIndex = Math.ceil(viewportTop / ROW_H);
-    const lastFullIndex = Math.floor(viewportBottom / ROW_H) - 1;
+    const firstFullIndex = Math.ceil(viewportTop / rowHeight);
+    const lastFullIndex = Math.floor(viewportBottom / rowHeight) - 1;
     const nearestIndex = preferredIndex ?? activeVisibleIndex ?? firstFullIndex;
     let active = null;
     let nearest = null;

@@ -297,7 +297,7 @@ body {
 
 .nami-inventory-review__grid {
   block-size: 100%;
-  grid-template-rows: auto minmax(28px, 1fr);
+  grid-template-rows: auto minmax(var(--file-row-h), 1fr);
   --nami-file-column-modified: var(--file-column-secondary-default);
 }
 
@@ -305,16 +305,13 @@ body {
 .nami-tree-row.nami-inventory-row {
   display: grid;
   grid-template-columns:
+    var(--nami-file-column-selection)
     var(--nami-file-column-name)
     var(--nami-file-column-primary)
     var(--nami-file-column-secondary)
     var(--nami-file-column-size)
-    var(--nami-file-column-modified);
-}
-
-.nami-inventory-review__columns > .nami-file-list__header-cell:first-child {
-  justify-content: start;
-  padding-inline: var(--space-3);
+    var(--nami-file-column-modified)
+    var(--nami-file-column-notes);
 }
 
 .nami-tree.nami-inventory-review__rows {
@@ -332,29 +329,15 @@ body {
   font-size: var(--font-size-caption);
 }
 
-.nami-inventory-row > span {
-  align-items: center;
-  display: flex;
-  min-inline-size: 0;
-  overflow: hidden;
-  padding-inline: var(--space-3);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.nami-inventory-row .nami-tree-row__disclosure {
+  border: 0;
+  block-size: var(--icon-size-sm);
+  inline-size: var(--icon-size-sm);
+  transform: none;
 }
 
-.nami-inventory-row > .nami-inventory-row__name {
-  gap: var(--space-1);
-  padding-inline-start: calc(var(--space-3) + var(--nami-tree-depth) * var(--space-5));
-}
-
-.nami-inventory-row__size,
-.nami-inventory-row__modified {
-  color: var(--color-neutral-foreground-tertiary);
-}
-
-.nami-inventory-row__size {
-  justify-content: end;
-  font-variant-numeric: tabular-nums;
+.nami-inventory-row[aria-expanded="true"] .nami-file-row__chevron {
+  transform: rotate(45deg);
 }
 
 .nami-inventory-review__actions {
@@ -1514,17 +1497,32 @@ body {
   line-height: var(--line-height-caption);
 }
 
-.nami-file-list__body > .nami-file-row {
+.nami-file-list__body > .nami-file-row,
+.nami-inventory-review__rows > .nami-inventory-row {
   --nami-state-foreground: var(--color-neutral-foreground-secondary);
   background: var(--color-neutral-surface);
   block-size: var(--file-row-h);
   color: var(--color-neutral-foreground);
   font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-regular);
   line-height: var(--line-height-caption);
 }
 
-.nami-file-list__body > .nami-file-row:nth-child(even) {
+.nami-file-list__body > .nami-file-row:nth-child(even),
+.nami-inventory-review__rows > .nami-inventory-row:nth-child(odd) {
   background: var(--color-neutral-surface-subtle);
+}
+
+.nami-inventory-review__rows > .nami-inventory-row:hover {
+  background: var(--color-neutral-surface-hover);
+}
+
+.nami-inventory-review__rows > .nami-inventory-row:active {
+  background: var(--color-neutral-surface-pressed);
+}
+
+.nami-inventory-review__rows > .nami-inventory-row[data-active="true"] {
+  background: var(--color-neutral-surface-selected);
 }
 
 .nami-file-list__body > .nami-file-row.nami-file-row--highlighted {
@@ -1772,6 +1770,15 @@ body {
 }
 
 @media (forced-colors: active) {
+  .nami-inventory-review__rows > .nami-inventory-row[data-active="true"] {
+    color: var(--color-accent-fill-foreground);
+  }
+
+  .nami-inventory-review__rows > .nami-inventory-row[data-active="true"] > .nami-file-row__cell,
+  .nami-inventory-review__rows > .nami-inventory-row[data-active="true"] .nami-file-state-label {
+    color: inherit;
+  }
+
   .nami-file-row__notes,
   .nami-plan-row__modified {
     color: var(--color-neutral-foreground);

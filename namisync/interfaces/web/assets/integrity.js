@@ -57,7 +57,7 @@ function createCell(ownerDocument, className, column, text) {
   return cell;
 }
 
-function createIntegrityCell(
+export function createIntegrityCell(
   ownerDocument,
   className,
   column,

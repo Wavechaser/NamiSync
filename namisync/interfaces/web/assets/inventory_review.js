@@ -4,6 +4,7 @@ import { createFilterMenu } from "./filter_menu.js";
 import { createRowMenu } from "./row_menu.js";
 import { createIcon } from "./icons.js";
 import { createTree } from "./tree.js";
+import { createIntegrityCell } from "./integrity.js";
 import { formatByteCount, formatFilesystemPath, formatLocalDateTime, renderFilesystemText, renderText } from "./render.js";
 
 const FACETS = Object.freeze([
@@ -118,13 +119,23 @@ export function createInventoryReviewPanel(callbacks) {
   const list = element("div", "nami-file-list nami-table-scroll nami-inventory-review__list");
   const grid = element("div", "nami-file-list__grid nami-table-layout nami-inventory-review__grid");
   const columnHeader = element("div", "nami-file-list__header nami-table__header nami-inventory-review__columns");
-  const columnNames = ["name", "primary", "secondary", "size", "modified"];
+  const columnNames = ["selection", "name", "primary", "secondary", "size", "modified", "notes"];
   const sortHeaders = new Map();
   for (const [index, [text, column]] of [
-    ["Filename", "filename"], ["State", null], ["Checksum", null], ["Size", "size"], ["Modified", "mtime"],
+    ["Selection", null], ["Filename", "filename"], ["Presence", null], ["Checksum", null],
+    ["Size", "size"], ["Modified", "mtime"], ["Notes", null],
   ].entries()) {
     const cell = element("div", "nami-file-list__header-cell");
-    if (column === null) renderText(cell, text);
+    if (index === 0) {
+      cell.ariaLabel = text;
+      const checkbox = element("input", "nami-checkbox");
+      checkbox.type = "checkbox";
+      checkbox.checked = false;
+      checkbox.indeterminate = false;
+      checkbox.disabled = true;
+      checkbox.ariaLabel = "Inventory selection unavailable";
+      cell.append(checkbox);
+    } else if (column === null) renderText(cell, text);
     else {
       const sortButton = button("", `inventory-sort-${column}`);
       sortButton.className = "nami-plan-review__sort";
@@ -153,7 +164,7 @@ export function createInventoryReviewPanel(callbacks) {
   rows.ariaLabel = "Inventory items";
   grid.append(columnHeader, rows);
   list.append(grid);
-  const columns = createTableColumns(grid, [...columnHeader.children], columnNames, [12, 8, 7, 5, 7], 0, 4);
+  const columns = createTableColumns(grid, [...columnHeader.children], columnNames, [2, 12, 8, 7, 5, 7, 14], 1, 6);
   const empty = element("p", "nami-shell__guidance", "No items match this view.");
   table.append(toolbar, list, empty);
 
@@ -270,32 +281,55 @@ export function createInventoryReviewPanel(callbacks) {
   });
 
   function decorateRow(rowElement, row) {
-    rowElement.classList.add("nami-inventory-row");
-    const name = element("span", "nami-inventory-row__name");
+    rowElement.classList.add("nami-file-row", "nami-inventory-row");
+    rowElement.dataset.folder = String(row.is_container);
+    rowElement.style.setProperty("--nami-file-depth", String(row.depth));
+    const name = element("div", "nami-file-row__cell nami-file-row__name nami-inventory-row__name");
+    const disclosure = rowElement.children[0];
+    disclosure.classList.add("nami-file-row__disclosure");
+    const chevron = element("span", "nami-file-row__chevron");
+    chevron.ariaHidden = "true";
+    disclosure.append(chevron);
+    rowElement.children[1].classList.add("nami-file-row__name-text");
     name.append(...Array.from(rowElement.children));
-    rowElement.replaceChildren(name);
-    const stateText = row.warning !== null ? "Notice" : row.row_id === null ? "Folder"
-      : [row.acknowledged ? "Acknowledged" : label(row.presence), label(row.verification_state),
-        row.reappeared ? "Reappeared" : null].filter(Boolean).join(" · ");
-    const state = element("span", "nami-inventory-row__state nami-integrity-row__presence");
-    state.append(element("span", "nami-file-state-label", stateText));
-    state.dataset.integrity = row.warning !== null || row.row_id === null ? ""
+    const selection = element("div", "nami-file-row__cell nami-file-row__selection");
+    const checkbox = element("input", "nami-checkbox");
+    checkbox.type = "checkbox";
+    checkbox.checked = false;
+    checkbox.indeterminate = false;
+    checkbox.disabled = true;
+    checkbox.ariaLabel = `Selection unavailable for ${row.display}`;
+    selection.append(checkbox);
+    rowElement.replaceChildren(selection, name);
+    const stateKey = row.warning !== null || row.row_id === null ? ""
       : row.presence !== "present" ? row.presence
-      : row.reappeared && ["unverified", "modified"].includes(row.verification_state)
-        ? "reappeared" : row.verification_state;
-    const checksum = element("span", "nami-inventory-row__checksum nami-integrity-row__checksum", row.recorded_checksum?.slice(0, 8) ?? "—");
+      : row.verification_state === "mismatched" ? "mismatched"
+      : row.reappeared ? "reappeared" : row.verification_state;
+    const stateText = row.warning !== null ? "Notice" : row.row_id === null ? "Folder"
+      : label(stateKey);
+    const state = createIntegrityCell(document,
+      "nami-inventory-row__state nami-integrity-row__presence", "primary", stateKey, undefined, stateText);
+    state.removeAttribute("role");
+    const checksum = element("div", "nami-file-row__cell nami-inventory-row__checksum nami-integrity-row__checksum", row.recorded_checksum?.slice(0, 8) ?? "—");
     checksum.title = row.recorded_checksum === null ? "No stored baseline evidence" : `Stored baseline checksum: ${row.recorded_checksum}`;
-    state.title = stateText;
+    state.title = row.row_id === null ? stateText
+      : `${label(row.presence)} · ${label(row.verification_state)}${row.reappeared ? " · Reappeared" : ""}`;
     const sizeText = row.warning !== null ? "" : row.is_container
-      ? bytes(row.rollup.size) + (row.rollup.size_overflow ? " (overflow)" : row.rollup.size_partial ? " (partial)" : "")
+      ? bytes(row.rollup.size)
       : bytes(row.size);
-    const size = element("span", "nami-inventory-row__size", sizeText);
+    const size = element("div", "nami-file-row__cell nami-file-row__size nami-inventory-row__size", sizeText);
     size.title = row.warning !== null ? "" : row.is_container
-      ? `Complete folder files: ${sizeText}. Own object size: ${bytes(row.size)}.`
+      ? `Complete folder files: ${sizeText}${row.rollup.size_overflow ? " (overflow)" : row.rollup.size_partial ? " (partial)" : ""}. Own object size: ${bytes(row.size)}.`
       : `Own file size: ${sizeText}.`;
-    const modified = element("span", "nami-inventory-row__modified", row.warning === null ? modifiedTime(row.mtime_ns) : "");
+    const modified = element("div", "nami-file-row__cell nami-plan-row__modified nami-inventory-row__modified", row.warning === null ? modifiedTime(row.mtime_ns) : "");
     modified.title = row.mtime_ns === null ? "" : `Own modified time: ${row.mtime_ns} ns`;
-    rowElement.append(state, checksum, size, modified);
+    const notesText = [row.warning?.detail, row.acknowledged ? "Acknowledged" : null,
+      row.warning === null && row.is_container && row.rollup.size_overflow ? "Size overflow" : null,
+      row.warning === null && row.is_container && row.rollup.size_partial ? "Partial size" : null]
+      .filter(Boolean).join(" · ");
+    const notes = element("div", "nami-file-row__cell nami-file-row__notes", notesText);
+    notes.title = notesText;
+    rowElement.append(state, checksum, size, modified, notes);
   }
 
   function ensureTree() {
@@ -364,7 +398,7 @@ export function createInventoryReviewPanel(callbacks) {
           updateRefreshSelected();
         }
       },
-    });
+    }, 24);
   }
 
   function appendDetail(key, value, filesystem = false) {

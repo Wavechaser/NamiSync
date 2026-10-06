@@ -82,30 +82,72 @@ checks across `c3-native-01` (six) and unchanged Inventory retry
 filter-target-readiness receipts; they are not product regression evidence.
 Independent review found no actionable issue and verified frozen dependencies.
 DESKTOP_UI and BUGS own behavior; raw evidence and commit accounting use `c3-*`
-and `integration.md`. C4 implementation waits for this commit.
+and `integration.md`. Integrated as `95ff419`.
 
-**C4 inspected boundary (`dfd9291`; refresh after C3).** Inventory retains its
-tree-owned row identities, disclosure and navigation while using seven columns:
-selection, Filename, Presence, Checksum, Size, Modified and Notes. Disabled,
-unchecked checkbox visuals carry no selection/action state. Pass 24px geometry
-to this tree only; preserve the generic 28px default and migrate viewport,
-spacer and keyboard calculations together. Reuse file-row cells and extract
-only the existing integrity state-cell rendering needed by both consumers.
-Only Filename grows passively; Notes is the deliberate resize donor, with the
-existing Filename/Notes/Modified minima and horizontal overflow preserved.
-Concise Presence retains missing/unsupported and mismatch precedence; full
-evidence remains in Details. Notes retain bounded warning/acknowledgement and
-partial/overflow facts. No wire, action, icon or backend change.
-Finite product owners: `inventory_review.js`, `tree.js`, `integrity.js` and
-`app.css`. Migrate Inventory/tree/static probes, existing component-gallery
-fixture and its child/parent geometry validators, plus installed Inventory
-child/parent together. Preserve C2 active-target and C3 trusted-menu witnesses.
-Acceptance: focused consumers, interfaces, installed Inventory/shared tree and
-Light/Dark/Forced/Reduced gallery; compare 24px rows, zebra, checkbox state,
-column edges, resize/overflow, Presence and typography with accepted specimens
-and Microsoft's Fluent Table/Checkbox references. Update DESKTOP_UI and
-PRESENTATION, inspect FEATURES, remove only renderer orphans, and independently
-review one atomic commit. No functional checkboxes or new state icons.
+**C4 delivered boundary (from `95ff419`).** Inventory now reuses shared file-row
+cells and integrity labels in a seven-column, 24px zebra table with disabled
+unchecked selection visuals, Notes, concise Presence and aligned typography.
+Tree identities/disclosure/navigation and the generic 28px default remain.
+Only Filename grows passively; Notes supplies deliberate resizing. Full evidence
+remains in Details; no wire, action, icon or backend change. Gallery producers,
+closed schemas, checkers and native consumers migrated together, retaining C2/C3
+witnesses. Adversarial review reproduced an active forced-color regression and
+confirmed the scoped all-text-cell HighlightText correction, including filled
+Presence. Retain `c4-active-colors-repro-01` and the later stale-reference failure.
+Final gates: 114 focused, 12 imports, 1,951 interfaces with the changed gallery
+checker reverified by `c4-focused-final-03`, and eight installed obligations via
+`c4-native-final-02` non-gallery passes plus `c4-gallery-final-03` (four passes).
+Independent review and exact input binding close the atomic commit; commit
+accounting is in `integration.md`. DESKTOP_UI, PRESENTATION and FEATURES own
+current behavior. Functional checkboxes remain deferred.
+
+**C5 inspected boundary (`95ff419` plus C4 draft; refresh after C4).** First
+deliver a diagnostic `table-loading` family using existing installed-host,
+child-containment and fixture helpers, then deliver Inventory coalescing with
+identical remeasurement. Keep instrumentation in disposable installed assets
+with exact-anchor checks, original/instrumented hashes and verified restoration;
+no shipped timing hooks or general tracing framework. Finite tool population:
+`tools/performance/table_loading.py`, its adjacent browser probe, family
+registration, `tests/test_table_loading_performance.py`, its tools-department
+manifest entry and TOOLS documentation. PERFORMANCE owns
+method/results; PRESENTATION owns subsequent request semantics. Inspect BRIDGE
+and DESKTOP_UI wording; root delivery documents track decisions and commits.
+
+Predeclare one recorded Windows host/runtime/viewport/DPI profile, Light theme,
+normal motion and Details closed. Use the existing 120k base Plan and Inventory
+fixtures, three fresh children each. Each child observes one initial table load
+after publication plus three repetitions each of sequential edge crossing,
+long jump, reversal/return to covered rows, an eight-target animation-frame burst
+and keyboard off-window navigation. Freeze exact indices/reset/gesture scripts
+before collection. Report per-child values and median/range (three initial and
+nine warm observations per class/component); no tail percentile or latency SLO.
+Host startup, fixture construction and first projection are separate. Heavy
+fixtures require a concrete unresolved information-density question, not a
+repeat of C1's byte-bound proof.
+
+Measure browser intent wait, round trip, actual native decode/bridge validation,
+accepted DOM adoption and identity-correct frame coverage/paint opportunity.
+Use Python clocks for pre-handler overhead, registry/inner window construction,
+bridge capture/projection and actual native response encoding. Distinguish
+canonical budget bytes from encoded transport bytes. Server phases nest within
+round trip; never sum them twice or subtract unrelated clocks. Host thread/lock
+queue time and actual compositor presentation are initially unobserved. Inspect
+a specific registry lock only if its outer time consistently dominates inner
+construction. Record request concurrency/count, offsets/generations, discarded
+work, landing identity and uncovered frame intervals; failed/incomplete children
+remain evidence, not valid samples. No artificial timing delay in measurements.
+
+Coalescing owners are `app.js`, `inventory_review.js` and an optional tree
+cancellation callback. Each intent retains its own generation/promise; retiring
+a queued intent resolves only that callback with null. Covered return, loaded
+row activation, keyboard replacement, navigation/view/session replacement and
+disposal retire obsolete work without setting action-pending state. Preserve
+existing conflict/error ownership and C2/C3 targeting. Direct real-page Inventory
+and tree probes plus installed Inventory/shared-tree witnesses own regression
+coverage; Plan stays the comparison consumer. Review method/baseline as one
+commit, then coalescing/repeated measurements as another. Placement/prefetch and
+noninteractive placeholders remain separate conditional outcomes only if those
+measurements demonstrate remaining gaps. C5 implementation waits for C4 closure.
 
 ## GUI follow-up batch — 2026-10-05
 

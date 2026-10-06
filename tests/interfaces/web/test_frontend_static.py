@@ -262,7 +262,7 @@ def test_modules_use_only_local_explicit_js_imports(
         "panels.js": ["./render.js", "./setup.js", "./plan_review.js", "./inventory_review.js"],
         "filter_menu.js": ["./icons.js", "./render.js"],
         "row_menu.js": ["./render.js"],
-        "inventory_review.js": ["./table_columns.js", "./task_status.js", "./filter_menu.js", "./row_menu.js", "./icons.js", "./tree.js", "./render.js"],
+        "inventory_review.js": ["./table_columns.js", "./task_status.js", "./filter_menu.js", "./row_menu.js", "./icons.js", "./tree.js", "./integrity.js", "./render.js"],
         "plan.js": ["./file_row.js", "./render.js"],
         "table_columns.js": [],
         "plan_review.js": ["./table_columns.js", "./plan.js", "./filter_menu.js", "./row_menu.js", "./icons.js", "./render.js", "./task_status.js"],
@@ -813,6 +813,7 @@ def test_plan_row_renderer_is_active_and_consumes_only_projected_views(
         "renderPlanRow"
     ]
     assert re.findall(r"export function ([A-Za-z0-9_]+)\(", integrity) == [
+        "createIntegrityCell",
         "renderIntegrityRow"
     ]
     assert re.findall(r"export function ([A-Za-z0-9_]+)\(", file_row) == [

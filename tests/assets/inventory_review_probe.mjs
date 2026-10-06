@@ -93,6 +93,9 @@ const moduleUrl = (source) => `data:text/javascript;base64,${Buffer.from(source)
 const assetRoot = process.argv[2];
 const renderUrl = moduleUrl(await readFile(join(assetRoot, "render.js"), "utf8"));
 const treeUrl = moduleUrl((await readFile(join(assetRoot, "tree.js"), "utf8")).replace("./render.js", renderUrl));
+const fileRowUrl = moduleUrl((await readFile(join(assetRoot, "file_row.js"), "utf8")).replace("./render.js", renderUrl));
+const integrityUrl = moduleUrl((await readFile(join(assetRoot, "integrity.js"), "utf8"))
+  .replace("./file_row.js", fileRowUrl).replace("./render.js", renderUrl));
 const iconsUrl = moduleUrl(await readFile(join(assetRoot, "icons.js"), "utf8"));
 const filterUrl = moduleUrl((await readFile(join(assetRoot, "filter_menu.js"), "utf8"))
   .replace("./render.js", renderUrl).replace("./icons.js", iconsUrl));
@@ -105,6 +108,7 @@ const source = (await readFile(join(assetRoot, "inventory_review.js"), "utf8"))
   .replace("./table_columns.js", tableColumnsUrl)
   .replace("./filter_menu.js", filterUrl)
   .replace("./row_menu.js", rowMenuUrl)
+  .replace("./integrity.js", integrityUrl)
   .replace("./render.js", renderUrl).replace("./tree.js", treeUrl).replace("./icons.js", iconsUrl);
 const { createInventoryReviewPanel } = await import(moduleUrl(source));
 const fixture = JSON.parse(await readFile(process.argv[3], "utf8"));
@@ -170,7 +174,13 @@ action("inventory-refresh").click();
 assert.deepEqual(refreshes.at(-1), [review, null]);
 assert.equal(rowElements().length, fixture.views.default.window.rows.length);
 assert.equal(find((value) => value.getAttribute("role") === "tree").tabIndex, 0);
-assert.equal(find((value) => value.tagName === "INPUT" && value.type === "checkbox"), undefined);
+const selectionVisuals = walk(pane.element).filter((value) => value.tagName === "INPUT" && value.type === "checkbox");
+assert.equal(selectionVisuals.length, rowElements().length + 1);
+assert.ok(selectionVisuals.every((value) => value.disabled && !value.checked && !value.indeterminate));
+const beforeSelectionClick = [viewChanges.length, details.length, refreshes.length, visibility.length];
+selectionVisuals.forEach((value) => value.click());
+assert.deepEqual([viewChanges.length, details.length, refreshes.length, visibility.length], beforeSelectionClick);
+assert.equal(find((value) => value.getAttribute("role") === "tree").style.values.get("--row-h"), "24px");
 const filterTrigger = action("filter-menu");
 const filterPopup = find((value) => value.classList.contains("nami-filter-menu__popup"));
 const filterItem = (key) => find((value) => value.dataset.filter === key);
@@ -206,11 +216,14 @@ for (const [scope, expected] of [
 review.summary = fixture.views.default.summary;
 pane.render(task);
 assert.ok(!rowElements().some((value) => text(value).includes("missing.txt")));
-assert.ok(rowElements().every((value) => value.children.length === 5));
+assert.ok(rowElements().every((value) => value.children.length === 7));
 const real = fixture.views.default.window.rows.find((row) => row.row_id === "1");
 const realElement = rowElements().find((value) => value.dataset.nodeId === real.node_id);
-assert.equal(realElement.children[4].textContent, "2262-04-11 23:47");
-assert.equal(realElement.children[4].title, "Own modified time: 9223372036854775807 ns");
+assert.equal(realElement.children[5].textContent, "2262-04-11 23:47");
+assert.equal(realElement.children[5].title, "Own modified time: 9223372036854775807 ns");
+assert.equal(realElement.querySelector(".nami-file-state-label").textContent, "Verified");
+assert.equal(rowElements().find((value) => value.dataset.nodeId === fixture.views.default.window.rows.find((row) => row.warning !== null).node_id)
+  .querySelector(".nami-file-row__notes").textContent, "read failed");
 realElement.click();
 assert.equal(details.at(-1)[1], real.node_id);
 const root = find((value) => value.getAttribute("role") === "tree");
@@ -306,7 +319,7 @@ action("inventory-details").click();
 assert.equal(action("inventory-refresh-selected").parentElement.parentElement.parentElement.classList.contains("nami-plan-review__summary"), true);
 const modes = walk(pane.element).filter((value) => value.getAttribute("role") === "radio");
 assert.deepEqual(modes.map((value) => [value.textContent, value.ariaChecked, value.disabled]), [["Sync", "false", true], ["Integrity", "true", false]]);
-const checksumCell = realElement.children[2];
+const checksumCell = realElement.querySelector(".nami-inventory-row__checksum");
 assert.equal(checksumCell.textContent, real.recorded_checksum.slice(0, 8));
 assert.ok(checksumCell.title.includes(real.recorded_checksum));
 assert.match(text(detail), new RegExp(fixture.detail.detail.attestation.content.digest));
@@ -361,7 +374,7 @@ Object.assign(review, fixture.views.maximum);
 pane.render(task);
 assert.equal(rowElements().length, 256, "render complete server window without growing beyond bound");
 assert.match(text(pane.element), /Unavailable \(size overflow\)/);
-root.scrollTop = 300 * 28; root.dispatch("scroll");
+root.scrollTop = 300 * 24; root.dispatch("scroll");
 while (frames.length) frames.shift()();
 assert.equal(pages.length, 1);
 assert.equal(pages[0][0], review);
@@ -476,7 +489,7 @@ const delayedViewport = () => {
   return { resolve, promise };
 };
 viewportReply = delayedViewport();
-treeRoot.scrollTop = 300 * 28; treeRoot.dispatch("scroll");
+treeRoot.scrollTop = 300 * 24; treeRoot.dispatch("scroll");
 while (frames.length) frames.shift()();
 assert.equal(viewportCalls.at(-1)[2], 268);
 assert.equal(walk(app.panel.element).find((value) => value.dataset.action === "inventory-refresh-selected").disabled,
@@ -488,7 +501,7 @@ assert.equal(liveReview.window === initialWindow, true, "retired viewport reply 
 app.panel.render(liveTask);
 assert.equal(firstLiveRow().dataset.nodeId, initialNode, "later render cannot adopt a rejected window");
 viewportReply = delayedViewport();
-treeRoot.scrollTop = 300 * 28; treeRoot.dispatch("scroll");
+treeRoot.scrollTop = 300 * 24; treeRoot.dispatch("scroll");
 while (frames.length) frames.shift()();
 viewportReply.resolve(fixture.tail); await settle();
 assert.equal(liveReview.window === fixture.tail, true, "accepted viewport reply becomes the retained window");
@@ -661,4 +674,27 @@ assert.equal(folderPopup.children.some(value => /restore/i.test(value.textConten
 folderPopup.children.find(value => value.dataset.action === "row-acknowledge").click();
 assert.deepEqual(folderCalls, [[folderReview, "acknowledge", folderDomain.node_id]]);
 folderPane.dispose();
+const presentationRows = [
+  {...real, node_id:"presence-return", reappeared:true, verification_state:"unverified"},
+  {...real, node_id:"presence-mismatch", reappeared:true, verification_state:"mismatched"},
+  {...real, node_id:"presence-missing", presence:"missing", acknowledged:true},
+  {...real, node_id:"partial-folder", row_id:null, presence:null, verification_state:null,
+    is_container:true, expanded:false, rollup:{...real.rollup, size_partial:true, size_overflow:false}},
+  {...real, node_id:"overflow-folder", row_id:null, presence:null, verification_state:null,
+    is_container:true, expanded:false, rollup:{...real.rollup, size_partial:false, size_overflow:true}},
+].map((row, index) => ({...row, visible_index:index}));
+const presentationReview = {...fixture.views.default, pending:null, detail:null,
+  window:{...fixture.views.default.window, offset:0, total:presentationRows.length, rows:presentationRows}};
+const presentationTask = {...menuTask, inventoryReview:presentationReview};
+const presentationPane = createInventoryReviewPanel({onViewChange:()=>{}, onDetail:()=>{},
+  onWindow:async()=>null, onReload:()=>{}, onCheckOutcome:()=>{}, onRefresh:()=>{}, onVisibility:()=>{}});
+presentationPane.render(presentationTask);
+const presented = walk(presentationPane.element).filter(value => value.getAttribute("role") === "treeitem");
+assert.deepEqual(presented.map(value => value.querySelector(".nami-file-state-label").textContent),
+  ["Reappeared", "Mismatch", "Missing", "Folder", "Folder"]);
+assert.deepEqual(presented.map(value => value.querySelector(".nami-file-row__notes").textContent),
+  ["", "", "Acknowledged", "Partial size", "Size overflow"]);
+assert.equal(presented[0].querySelector(".nami-inventory-row__checksum").textContent, real.recorded_checksum.slice(0, 8));
+assert.equal(presented[1].querySelector(".nami-integrity-row__presence").dataset.integrity, "mismatched");
+presentationPane.dispose();
 process.stdout.write("ok\n");

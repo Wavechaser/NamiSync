@@ -540,10 +540,12 @@ cards and fills are unchanged; their small WCG deviation is accepted. The
 gallery's historical normal/opaque flyout labels do not isolate popup alpha
 (both fills are opaque); its shadowless control remains useful.
 
-Three file-list surface modules are deliberately inactive.
+Three file-list surface modules share presentation components.
 `file_row.js` owns the shared row skeleton; `plan.js` exports only
-`renderPlanRow(element, rowView)` and `integrity.js` exports only
-`renderIntegrityRow(element, rowView)`. Inputs are page-local presentation
+`renderPlanRow(element, rowView)` and `integrity.js` exports
+`renderIntegrityRow(element, rowView)` plus its existing `createIntegrityCell`
+helper, reused by Inventory without replacing tree-owned row elements.
+Inputs are page-local presentation
 views, not bridge envelopes or compatibility contracts. Callers supply native
 checkbox state, mixed state and accessible labels; depth, folder and expanded
 state; display-ready basename and size text; list-specific status text; and
@@ -568,9 +570,10 @@ fixed component role; there is no form field and JavaScript does not derive a
 domain result, hue, urgency, transport-counter ratio, or row identity. The
 renderers also do not aggregate sizes,
 truncate hashes, split paths, reconstruct hierarchy, or dispatch anything. All
-text still passes through `render.js`. Neither `app.js` nor `panels.js` imports
-these modules, so production remains the honest empty Slice 4 shell until
-Slice 5 owns validated Python projections and bridge paths.
+text still passes through `render.js`. Production Plan consumes its row renderer;
+Inventory consumes the integrity state-cell helper while retaining its own
+tree identities, disclosure listeners and navigation. The complete integrity
+row renderer remains a gallery specimen.
 
 Both lists use the same compact six-column grid, 24 px rows, 12 px row text,
 and 16 px native checkboxes. The sync plan order is Selection, Filename, Size,
@@ -611,7 +614,8 @@ returns. The right edge aligns with the visible container when the tracks fit
 and with the scrollable table edge when they do not. Forced colors replace
 colored state text with the system neutral foreground.
 
-The component gallery owns the only current callers and fixtures. Its static
+The component gallery owns the complete static row fixtures; production consumers
+reuse the presentation components described above. Its static
 sync array covers one plain row, every operation once, all three exception
 states, and a
 partially selected expanded `photos` folder with two indented basename-only
@@ -1894,16 +1898,30 @@ headers: ascending, descending, then canonical path order. The Default facet vie
 their complete count and Acknowledged facet remain available, and necessary
 folder ancestors remain visible. Neither browsing nor hidden rows changes
 complete folder rollups. The browser retains at most 256 rows and reuses the
-28 px tree controller's keyboard, scroll and stale-generation behavior; it adds
-Filename, State, Checksum, Size and Modified columns without selection checkboxes.
+generic tree controller's keyboard, scroll and stale-generation behavior with
+an explicit 24 px row height; other tree consumers retain the 28 px default.
+Its columns are Selection, Filename, Presence, Checksum, Size, Modified and Notes.
+The Selection header has an accessible name and no visible text. Header and row
+checkboxes are disabled, unchecked and non-mixed; they dispatch no selection
+or action. Functional Inventory selection remains M1-10.
 Checksum shows eight characters of recorded baseline evidence, with the full
 stored digest in its tooltip; no evidence shows an em dash. Missing, modified or
 reappeared rows retain their stored checksum. A scan does not verify current bytes.
-State labels reuse the gallery's integrity semantics and retain presence,
-verification, acknowledgement and reappearance text. Filename alone absorbs
-passive width growth. Manual resizing transfers width from Modified down to its
-7rem minimum; Filename retains its 12rem minimum. Plan retains its separate Notes
-donor and 14rem floor. Folder Size shows
+Presence shows one gallery-style semantic label. Missing and unsupported presence
+retain their labels; for present items, Mismatch overrides Reappeared, then
+the stored verification state supplies Verified, Modified or Unverified.
+Reappeared stands alone without implying fresh verification. Rowless folders
+and scan notices remain neutral Folder and Notice labels. Acknowledgement,
+bounded warning details and partial/overflow size qualifiers appear in Notes;
+complete evidence remains in Details and tooltips. Filename alone absorbs
+passive width growth. Manual resizing transfers width from Notes down to its
+14rem minimum; Filename and Modified retain their 12rem and 7rem minima.
+Both lists reuse 24 px rows, 12 px/16 px caption text, shared zebra surfaces,
+16 px checkboxes, semibold folder names and state labels, monospace checksums,
+and the shared tertiary foreground for Size, Modified and Notes. In forced
+colors, active Inventory text cells inherit HighlightText while filled Presence
+backgrounds and disabled checkbox semantics remain. Tree spacers do not receive
+zebra fill. Folder Size shows
 complete file bytes while its tooltip and Details distinguish own object facts.
 
 The frozen Setup, status and table align with Plan review. The standalone task's
@@ -1974,7 +1992,7 @@ key targets the focused Plan row or Inventory tree's active row. Show details
 opens the existing Details pane for that exact row; Plan selection and container
 Expand/Collapse reuse the existing server-scoped actions. Committed, disabled
 and informational Plan rows have no selection action. Inventory has no
-selection action or checkbox. Its domain file/folder rows offer Refresh selected;
+selection action; its checkboxes are disabled visuals only. Its domain file/folder rows offer Refresh selected;
 Acknowledge missing is offered only for a currently eligible row whose own
 presence is missing, including a domain folder, using the existing node-scoped
 visibility command. Missing descendants do not qualify a present folder. The

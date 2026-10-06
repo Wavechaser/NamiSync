@@ -230,6 +230,9 @@ const linkedTreeSource = treeSource.replace(
 const {ROW_H, createTree} = await import(dataModuleUrl(linkedTreeSource));
 
 assert.equal(ROW_H, 28);
+for (const height of [0, -1, 24.5, null]) {
+  assert.throws(() => createTree(new TestDocument().createElement("div"), {}, height), /tree row height/);
+}
 assert.throws(() => createTree({}), /tree root must be an Element/);
 assert.throws(
   () => createTree(new TestDocument().createElement("div"), {toggle: true}),
@@ -263,6 +266,7 @@ assert.equal(root.getAttribute("role"), "tree");
 assert.equal(root.role, undefined);
 assert.equal(root.tabIndex, 0);
 assert.ok(root.classList.contains("nami-tree"));
+assert.equal(root.style.getPropertyValue("--row-h"), "28px");
 assert.equal(root.children.length, 2);
 const topSpacer = root.children[0];
 const bottomSpacer = root.children[1];
@@ -1159,6 +1163,37 @@ assert.equal(unmeasuredRoot.scrollTop, 17);
 unmeasuredRoot.clientHeight = ROW_H;
 unmeasuredRoot.focus();
 assert.equal(unmeasuredRoot.scrollTop, 5 * ROW_H);
+
+// A compact invocation shares every spacer, reveal and viewport calculation.
+const compactDocument = new TestDocument();
+const compactRoot = compactDocument.createElement("div");
+compactRoot.clientHeight = 2 * 24;
+const compactRequests = [];
+const compactTree = createTree(compactRoot, {
+  requestIndex: (index, generation) => compactRequests.push({index, generation}),
+}, 24);
+const compactGeneration = compactTree.beginWindowRequest();
+compactTree.commitWindow(compactGeneration, fixtureWindow(0, 4));
+compactDocument.defaultView.flushAnimationFrame();
+assert.equal(compactRoot.style.getPropertyValue("--row-h"), "24px");
+assert.equal(compactRoot.children.at(-1).style.blockSize, `${(fixtureWindow(0, 4).total - 4) * 24}px`);
+dispatchKey(compactRoot, "ArrowDown");
+dispatchKey(compactRoot, "ArrowDown");
+assert.equal(compactRoot.scrollTop, 24);
+compactRoot.scrollTop = 4 * 24;
+compactRoot.dispatch("scroll");
+compactDocument.defaultView.flushAnimationFrame();
+assert.deepEqual(compactRequests, [{index: 5, generation: 2}]);
+assert.equal(compactRoot.getAttribute("aria-activedescendant"), null);
+assert.equal(compactTree.commitWindow(2, fixtureWindow(4, 4)), true);
+assert.equal(compactRoot.children[0].style.blockSize, `${4 * 24}px`);
+assert.equal(compactRoot.scrollTop, 4 * 24);
+assert.equal(compactRoot.getAttribute("aria-activedescendant"), treeItems(compactRoot)[1].id);
+const compactStale = compactTree.beginWindowRequest();
+const compactCurrent = compactTree.beginWindowRequest();
+assert.equal(compactTree.commitWindow(compactStale, unreadableWindow), false);
+assert.equal(compactTree.commitWindow(compactCurrent, fixtureWindow(4, 4)), true);
+compactTree.dispose();
 
 // Arbitrary recycling cannot leave a stale active index or descendant.
 const recycledGeneration = tree.beginWindowRequest();

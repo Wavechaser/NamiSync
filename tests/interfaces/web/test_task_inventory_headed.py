@@ -101,6 +101,16 @@ def test_installed_inventory_refresh_acknowledge_restore_and_close(
         assert menu_edges[0] >= work_edges[0] and menu_edges[2] <= work_edges[2]
         assert menu_edges[1] >= work_edges[1] and menu_edges[3] <= work_edges[3]
         keyboard_input = initial["report"]["keyboard_input"]
+        table = initial["report"]["table_appearance"]
+        assert table["headers"] == ["", "Filename", "Presence", "Checksum", "Size", "Modified", "Notes"]
+        assert table["row_height"] == pytest.approx(24, abs=0.5)
+        assert 0 < table["row_count"] <= 256
+        assert len(table["checkboxes"]) == table["row_count"] + 1
+        for checkbox in table["checkboxes"]:
+            assert checkbox["disabled"] and not checkbox["checked"] and not checkbox["mixed"]
+            assert [checkbox["width"], checkbox["height"]] == pytest.approx([16, 16], abs=0.5)
+        for header_left, header_right, row_left, row_right in table["column_edges"]:
+            assert [row_left, row_right] == pytest.approx([header_left, header_right], abs=1)
         assert [item["name"] for item in keyboard_input] == ["context-keyboard", "context-menu"]
         for item, key in zip(keyboard_input, ("F10", "ContextMenu"), strict=True):
             assert item["popup_visible"] and item["stable_focus"] and item["stable_position"], item

@@ -2187,8 +2187,9 @@ def test_component_gallery_report_parser_is_exact_and_nested(
     integrity_list = report["control_contract"]["integrity_list"]
     integrity_rows = {row["case"]: row for row in integrity_list["rows"]}
     for row in inventory_panel["labels"]:
-        row["foreground"] = integrity_rows[row["case"]]["primary_foreground"]
-        row["background"] = integrity_rows[row["case"]]["primary_background"]
+        reference = integrity_rows[_inventory_reference_case(row["case"])]
+        row["foreground"] = reference["primary_foreground"]
+        row["background"] = reference["primary_background"]
     _assert_inventory_panel(inventory_panel, integrity_list, reduced=False)
     inventory_panel["details"]["column_width"] += 20
     with pytest.raises(AssertionError):
@@ -4086,23 +4087,44 @@ def _assert_diagnostic_layout(diagnostic_layout: list[dict[str, object]]) -> Non
                 assert [item_scroll[i] for i in (0, 2, 3)] == [global_scroll[i] for i in (0, 2, 3)]
 
 
+def _inventory_reference_case(name: str) -> str:
+    return {"acknowledged": "missing", "reappeared-mismatch": "mismatched", "child": "verified",
+            "notice": "unverified", "partial": "folder", "overflow": "folder"}.get(name, name)
+
+
 def _inventory_panel_sample() -> dict[str, object]:
+    cases = ("verified", "unverified", "modified", "reappeared", "unsupported", "missing", "mismatched",
+             "acknowledged", "reappeared-mismatch", "folder", "child", "notice", "partial", "overflow")
+    texts = ("Verified", "Unverified", "Modified", "Reappeared", "Unsupported", "Missing", "Mismatch",
+             "Missing", "Mismatch", "Folder", "Verified", "Notice", "Folder", "Folder")
+    first_widths = [32.0, 272.0, 128.0, 112.0, 80.0, 112.0, 264.0]
+    grown_widths = [32.0, 472.0, 128.0, 112.0, 80.0, 112.0, 264.0]
+    manual_before = [32.0, 464.0, 128.0, 112.0, 80.0, 112.0, 272.0]
+    pointer_before = [32.0, 464.0, 128.0, 112.0, 80.0, 112.0, 272.0]
+    pointer_after = [32.0, 464.0, 128.0, 112.0, 88.0, 112.0, 264.0]
+    clamped = [32.0, 504.0, 128.0, 112.0, 88.0, 112.0, 224.0]
+    narrow = [32.0, 192.0, 128.0, 112.0, 88.0, 112.0, 224.0]
+    positions = [sum(first_widths[:index]) for index in range(8)]
+    typography = {}
+    for name in ("header", "name", "folder", "presence", "checksum", "size", "modified", "notes"):
+        style = ["Cascadia Mono" if name == "checksum" else "Segoe UI Variable", "12px",
+                 "600" if name in {"header", "folder", "presence"} else "400", "16px", "rgb(0, 0, 0)"]
+        typography[name] = [style, style.copy()]
     return {
-        "headers": ["Filename", "State", "Checksum", "Size", "Modified"], "checkbox_count": 0,
+        "headers": ["", "Filename", "Presence", "Checksum", "Size", "Modified", "Notes"], "checkbox_count": 65,
         "switcher": [{"text": "Sync", "selected": "false", "disabled": True},
                      {"text": "Integrity", "selected": "true", "disabled": False}],
-        "labels": [{"case": name, "text": name, "foreground": "rgb(0, 0, 0)",
+        "labels": [{"case": name, "text": text, "foreground": "rgb(0, 0, 0)",
                     "background": "rgba(0, 0, 0, 0)", "height": 18.0}
-                   for name in ("verified", "unverified", "modified", "reappeared", "unsupported", "missing", "mismatched")],
+                   for name, text in zip(cases, texts, strict=True)],
         "checksum": {"text": "01234567", "title": "Stored baseline checksum: 0123456789abcdef0123456789abcdef", "absent": "—"},
         "timestamps": {"modified": "1970-01-01 00:00", "subject": "1970-01-01 00:00 (1000000000 ns)",
                        "observed": "2026-12-31 23:04", "expected_modified": "1970-01-01 00:00",
                        "expected_observed": "2026-12-31 23:04"},
-        "first_widths": [480.0, 128.0, 112.0, 80.0, 120.0], "row_widths": [480.0, 128.0, 112.0, 80.0, 120.0],
-        "grown_widths": [680.0, 128.0, 112.0, 80.0, 120.0], "manual_before": [672.0, 128.0, 112.0, 80.0, 128.0],
-        "manual_after": [680.0, 128.0, 112.0, 80.0, 120.0],
-        "header_positions": [[0.0, 100.0, 480.0, 128.0], [480.0, 100.0, 608.0, 128.0], [608.0, 100.0, 720.0, 128.0], [720.0, 100.0, 800.0, 128.0], [800.0, 100.0, 920.0, 128.0]],
-        "row_positions": [[0.0, 128.0, 480.0, 156.0], [480.0, 128.0, 608.0, 156.0], [608.0, 128.0, 720.0, 156.0], [720.0, 128.0, 800.0, 156.0], [800.0, 128.0, 920.0, 156.0]],
+        "first_widths": first_widths, "row_widths": first_widths.copy(),
+        "grown_widths": grown_widths, "manual_before": manual_before, "manual_after": grown_widths.copy(),
+        "header_positions": [[positions[index], 100.0, positions[index + 1], 124.0] for index in range(7)],
+        "row_positions": [[positions[index], 124.0, positions[index + 1], 148.0] for index in range(7)],
         "status_rectangles": [[0.0, 0.0, 400.0, 32.0], [500.0, 0.0, 920.0, 32.0], [0.0, 40.0, 500.0, 64.0], [850.0, 40.0, 920.0, 64.0]],
         "setup_heights": [[74.0, 74.0], [74.0, 74.0]],
         "status": {"single_line": True, "loading_same_line": True, "active_animation": "nami-progress-indeterminate",
@@ -4114,14 +4136,30 @@ def _inventory_panel_sample() -> dict[str, object]:
                     "card_rectangles": [[880.0, 0.0, 1200.0, 251.2], [880.0, 263.2, 1200.0, 640.0]], "rem_size": 16.0,
                     "placeholder": True, "focus_restored": True},
         "refresh_on_status": True, "root_fits": True, "viewport_height": 300.0,
-        "viewport_scroll_height": 8400.0, "adopted_offset": 218, "window_requests": [218], "row_height": 28.0,
+        "viewport_scroll_height": 7200.0, "adopted_offset": 218, "window_requests": [218], "row_height": 24.0,
+        "appearance": {"typography": typography, "zebra": ["rgb(250, 250, 250)", "rgb(255, 255, 255)"],
+            "reference_zebra": ["rgb(250, 250, 250)", "rgb(255, 255, 255)"], "transparent_cells": True,
+            "checkboxes": [{"disabled": True, "checked": False, "mixed": False, "width": 16.0, "height": 16.0,
+                            "background": "rgb(255, 255, 255)", "border": "rgb(128, 128, 128)"} for _ in range(65)],
+            "reference_checkbox": ["rgb(255, 255, 255)", "rgb(128, 128, 128)"],
+            "active_colors": ["rgb(255, 255, 255)", "rgb(0, 0, 0)"],
+            "active_node_id": "1",
+            "active_text_colors": ["rgb(255, 255, 255)"] * 6,
+            "active_filled_presence": {"node_id": "4", "colors": ["rgb(255, 255, 255)", "rgb(0, 0, 0)"]},
+            "notes": [""] * 7 + ["Acknowledged", "", "", "", "Cannot read this item.", "Partial size", "Size overflow"],
+            "name_indent": [8.0, 24.0]},
+        "resizing": {"pointer_before": pointer_before, "pointer_after": pointer_after,
+            "notes_minimum": clamped, "clamped_widths": clamped.copy(), "overflow": {
+                "client_width": 640.0, "scroll_width": 888.0, "widths": narrow,
+                "edges_aligned": True, "last_header_right": 640.0, "last_row_right": 640.0, "viewport_right": 640.0}},
     }
 
 
-def _assert_inventory_panel(evidence: dict[str, object], integrity: dict[str, object], *, reduced: bool) -> None:
+def _assert_inventory_panel(evidence: dict[str, object], integrity: dict[str, object], *, reduced: bool, forced: bool = False,
+                            system_colors: dict[str, str] | None = None) -> None:
     assert component_gallery_child._valid_inventory_panel(evidence)
-    assert evidence["headers"] == ["Filename", "State", "Checksum", "Size", "Modified"]
-    assert evidence["checkbox_count"] == 0
+    assert evidence["headers"] == ["", "Filename", "Presence", "Checksum", "Size", "Modified", "Notes"]
+    assert evidence["checkbox_count"] == 65
     assert evidence["switcher"] == [
         {"text": "Sync", "selected": "false", "disabled": True},
         {"text": "Integrity", "selected": "true", "disabled": False},
@@ -4143,12 +4181,14 @@ def _assert_inventory_panel(evidence: dict[str, object], integrity: dict[str, ob
     assert status["terminal_animation"] == "none"
     assert status["track_height"] == pytest.approx(8, abs=0.5)
     assert status["terminal_value"] == "0%"
-    assert evidence["grown_widths"][0] > evidence["first_widths"][0]
-    assert evidence["grown_widths"][1:] == pytest.approx(evidence["first_widths"][1:], abs=1)
+    assert evidence["grown_widths"][1] > evidence["first_widths"][1]
+    for index in (0, 2, 3, 4, 5, 6):
+        assert evidence["grown_widths"][index] == pytest.approx(evidence["first_widths"][index], abs=1)
     before, after = evidence["manual_before"], evidence["manual_after"]
-    assert after[0] - before[0] == pytest.approx(8, abs=1)
-    assert before[4] - after[4] == pytest.approx(8, abs=1)
-    assert after[1:4] == pytest.approx(before[1:4], abs=1)
+    assert after[1] - before[1] == pytest.approx(8, abs=1)
+    assert before[6] - after[6] == pytest.approx(8, abs=1)
+    for index in (0, 2, 3, 4, 5):
+        assert after[index] == pytest.approx(before[index], abs=1)
     assert evidence["checksum"] == _inventory_panel_sample()["checksum"]
     timestamps = evidence["timestamps"]
     assert timestamps["modified"] == timestamps["expected_modified"]
@@ -4157,13 +4197,57 @@ def _assert_inventory_panel(evidence: dict[str, object], integrity: dict[str, ob
     assert re.fullmatch(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}", timestamps["modified"])
     assert re.fullmatch(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}", timestamps["observed"])
     specimen = {row["case"]: row for row in integrity["rows"]}
-    for row in evidence["labels"]:
-        reference = specimen[row["case"]]
+    appearance = evidence["appearance"]
+    assert appearance["active_node_id"] == "1"
+    for node_id, row in enumerate(evidence["labels"], start=1):
+        reference = specimen[_inventory_reference_case(row["case"])]
         assert row["text"]
-        assert row["foreground"] == reference["primary_foreground"]
+        expected_foreground = (
+            system_colors["HighlightText"]
+            if forced and str(node_id) == appearance["active_node_id"] and reference["primary_form"] != "fill"
+            else reference["primary_foreground"]
+        )
+        assert row["foreground"] == expected_foreground
         assert row["background"] == reference["primary_background"]
         if reference["primary_form"] == "fill":
             assert row["height"] == pytest.approx(18, abs=0.5)
+    assert [row["text"] for row in evidence["labels"]] == [
+        "Verified", "Unverified", "Modified", "Reappeared", "Unsupported", "Missing", "Mismatch",
+        "Missing", "Mismatch", "Folder", "Verified", "Notice", "Folder", "Folder",
+    ]
+    assert appearance["active_filled_presence"]["node_id"] == "4"
+    if forced:
+        assert appearance["active_colors"] == [system_colors["HighlightText"], system_colors["Highlight"]]
+        assert _contrast(*appearance["active_colors"]) >= 4.5
+        assert appearance["active_text_colors"] == [system_colors["HighlightText"]] * 6
+        assert appearance["active_filled_presence"]["colors"] == [system_colors["HighlightText"], system_colors["Highlight"]]
+    for name, (actual, reference) in appearance["typography"].items():
+        assert actual == reference, (name, actual, reference)
+        assert actual[1] == "12px" and actual[3] == "16px"
+        assert actual[2] == ("600" if name in {"header", "folder", "presence"} else "400")
+    assert appearance["zebra"] == appearance["reference_zebra"]
+    assert appearance["transparent_cells"] is True
+    assert len(appearance["checkboxes"]) == evidence["checkbox_count"]
+    for checkbox in appearance["checkboxes"]:
+        assert checkbox["disabled"] and not checkbox["checked"] and not checkbox["mixed"]
+        assert [checkbox["width"], checkbox["height"]] == pytest.approx([16, 16], abs=0.5)
+        assert [checkbox["background"], checkbox["border"]] == appearance["reference_checkbox"]
+    assert appearance["notes"] == _inventory_panel_sample()["appearance"]["notes"]
+    assert appearance["name_indent"] == pytest.approx([8, 24], abs=0.5)
+    resizing = evidence["resizing"]
+    before, after = resizing["pointer_before"], resizing["pointer_after"]
+    assert after[4] - before[4] == pytest.approx(8, abs=1)
+    assert before[6] - after[6] == pytest.approx(8, abs=1)
+    for index in (0, 1, 2, 3, 5):
+        assert after[index] == pytest.approx(before[index], abs=1)
+    assert resizing["clamped_widths"] == pytest.approx(resizing["notes_minimum"], abs=1)
+    overflow = resizing["overflow"]
+    assert overflow["scroll_width"] > overflow["client_width"]
+    assert overflow["edges_aligned"] is True
+    assert overflow["last_header_right"] == pytest.approx(overflow["last_row_right"], abs=1)
+    assert overflow["last_header_right"] <= overflow["viewport_right"] + 1
+    for index in (0, 2, 3, 4, 5, 6):
+        assert overflow["widths"][index] == pytest.approx(resizing["clamped_widths"][index], abs=1)
     details = evidence["details"]
     for key in ("initially_hidden", "expanded", "placeholder", "focus_restored"):
         assert details[key] is True
@@ -4176,9 +4260,11 @@ def _assert_inventory_panel(evidence: dict[str, object], integrity: dict[str, ob
     )
     assert details["global_overflow"] == details["item_overflow"] == "auto"
     assert evidence["refresh_on_status"] is True and evidence["root_fits"] is True
-    assert 28 <= evidence["viewport_height"] < evidence["viewport_scroll_height"]
+    assert resizing["notes_minimum"][6] == pytest.approx(14 * details["rem_size"], abs=1)
+    assert overflow["widths"][1] == pytest.approx(12 * details["rem_size"], abs=1)
+    assert 24 <= evidence["viewport_height"] < evidence["viewport_scroll_height"]
     assert evidence["window_requests"] and evidence["adopted_offset"] > 0
-    assert evidence["row_height"] == pytest.approx(28, abs=0.5)
+    assert evidence["row_height"] == pytest.approx(24, abs=0.5)
 
 
 def _assert_complete_gallery_matrix(report: dict[str, object]) -> None:
@@ -4273,7 +4359,8 @@ def _assert_complete_gallery_matrix(report: dict[str, object]) -> None:
     }
     _assert_diagnostic_layout(report["control_contract"]["diagnostic_layout"])
     _assert_inventory_panel(report["control_contract"]["inventory_panel"], report["control_contract"]["integrity_list"],
-                            reduced=report["media"]["reduced"])
+                            reduced=report["media"]["reduced"], forced=report["media"]["forced"],
+                            system_colors=report["icons"]["system_colors"])
     minimum_window = report["control_contract"]["minimum_window"]
     filter_menu = minimum_window["filter_menu"]
     assert all(filter_menu[key] is True for key in (
