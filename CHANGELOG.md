@@ -177,8 +177,16 @@ behavioral evidence.
 Safety, settlement and authority work made high-consequence release claims
 explicit, reviewable and regression-backed.
 
-#### Align desktop review surfaces and recovery (2026-10-05)
+#### Align desktop review surfaces and recovery (2026-10-05 – 2026-10-06)
 
+- Bound Inventory window labels and warning tails while retaining full-path
+  search and complete scan-time paths in revision-guarded item details. Keep
+  fresh ledger evidence separate. Preserve Plan scan-notice side/code in compact
+  labels and verify complete 256-row envelopes, including execution overlays,
+  remain below the unchanged response cap. Migrate bridge validators and direct
+  consumers together. Pass 5,921 ordinary tests, 12 import contracts and all
+  seven installed checks; retain foreground-blocked receipts before the
+  successful Inventory retry and complete independent review.
 - Make a stale move-destination follow-up read visibly refreshable while
   retaining the last coherent review. A coherent conflict response now scrolls
   to its loaded window instead of leaving the viewport at an unrelated offset.

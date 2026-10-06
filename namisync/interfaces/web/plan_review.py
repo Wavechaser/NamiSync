@@ -910,7 +910,8 @@ def _row_view(
         "node_id": node.node_id,
         "display": (
             f"{node.move_item_count} {'item' if node.move_item_count == 1 else 'items'} moved to {destination_display or 'root'}"
-            if node.row_kind == "prior-group" else _tail_text(node.display, 300)
+            if node.row_kind == "prior-group" else _notice_display(node)
+            if node.scan_warning is not None else _tail_text(node.display, 300)
         ),
         "depth": node.depth - int(rootless),
         "is_container": node.is_container,
@@ -947,9 +948,19 @@ def _row_view(
         "move_group": None if node.move_destination_path is None else {
             "count": node.move_item_count, "destination_display": destination_display,
         },
-        "notice": None if node.notice is None else _tail_text(node.notice, 300),
+        "notice": None if node.notice is None else _notice_display(node),
         "selection_exclusion_reason": node.selection_exclusion_reason,
     }
+
+
+def _notice_display(node: PlanProjectionNode) -> str:
+    warning = node.scan_warning
+    if warning is None:
+        return _tail_text(node.notice or "", 300)
+    display = f"{node.path_origin}: {_tail_text(warning.rel_path or 'root', 120)} — {warning.code.value}"
+    if warning.detail:
+        display += f" — {_tail_text(warning.detail, 100)}"
+    return display
 
 
 def _tail_text(value: str, maximum_units: int) -> str:

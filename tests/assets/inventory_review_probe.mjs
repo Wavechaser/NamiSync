@@ -278,7 +278,7 @@ assert.deepEqual(refreshes.at(-1), [review, real.node_id]);
 const detail = find((value) => value.ariaLabel === "Inventory item details");
 const pathFact = () => {
   const body = detail.children.find((value) => value.tagName === "DL");
-  const index = body.children.findIndex((value) => value.tagName === "DT" && value.textContent === "Path");
+  const index = body.children.findIndex((value) => value.tagName === "DT" && ["Path", "Path at scan time"].includes(value.textContent));
   return index === -1 ? null : body.children[index + 1].textContent;
 };
 assert.equal(pathFact(), `${review.summary.root_path}\\${fixture.detail.detail.row.path}`);
@@ -287,10 +287,10 @@ review.summary = { ...review.summary, root_path: null };
 pane.render(task);
 assert.equal(pathFact(), fixture.detail.detail.row.path, "an absent established root retains relative evidence");
 review.summary = { ...review.summary, root_path: establishedRoot };
-review.detail = { row: { ...real, row_id: null, is_container: true, display: "Parent\\Child" },
-  state: "current", response: null };
+review.detail = { row: { ...real, row_id: null, is_container: true, display: "Child" },
+  state: "current", response: { snapshot: { path: "Parent\\Child", warning: null }, detail: null } };
 pane.render(task);
-assert.equal(pathFact(), `${establishedRoot}\\Parent\\Child`, "synthetic folder details use existing full display path");
+assert.equal(pathFact(), `${establishedRoot}\\Parent\\Child`, "synthetic folder details use the snapshot path rather than the basename");
 review.detail = { row: real, state: "current", response: fixture.detail };
 pane.render(task);
 const diagnostics = find((value) => value.classList.contains("nami-inventory-review__diagnostics"));
@@ -336,13 +336,14 @@ assert.match(text(detail), /Verification state Mismatch/);
 assert.match(text(detail), /Invalidation reason hash-mismatch/);
 assert.match(text(detail), new RegExp(fixture.invalidated_detail.detail.attestation.content.digest));
 const notice = fixture.views.default.window.rows.find((row) => row.warning !== null);
-review.detail = { row: notice, state: "current", response: null };
+review.detail = { row: notice, state: "current", response: fixture.snapshots[notice.node_id] };
 pane.render(task);
-assert.equal(pathFact(), `${establishedRoot}\\${notice.warning.path}`);
-review.detail = { row: { ...notice, warning: { ...notice.warning, path: null } }, state: "current", response: null };
+assert.equal(pathFact(), `${establishedRoot}\\${fixture.snapshots[notice.node_id].snapshot.path}`);
+review.detail = { row: notice, state: "current", response: { ...fixture.snapshots[notice.node_id],
+  snapshot: { ...fixture.snapshots[notice.node_id].snapshot, path: null } } };
 pane.render(task);
 assert.equal(pathFact(), "Unavailable", "a nullable warning path never becomes a path from its label");
-review.detail = { row: notice, state: "current", response: null };
+review.detail = { row: notice, state: "current", response: fixture.snapshots[notice.node_id] };
 pane.render(task);
 assert.match(text(detail), /read failed/);
 assert.doesNotMatch(text(detail), /Stored digest/);
@@ -507,7 +508,7 @@ const menuRow = (row) => menuWalk().find((value) => value.dataset.nodeId === row
 const missingRow = menuRows.find((row) => row.row_id === "1");
 const menuFolder = menuRows.find((row) => row.row_kind === "folder");
 const menuNotice = menuRows.find((row) => row.warning !== null);
-menuReview.detail = { row: menuFolder, state: "current", response: null };
+menuReview.detail = { row: menuFolder, state: "current", response: { snapshot: { path: "folder", warning: null }, detail: null } };
 menuPane.render(menuTask);
 const menuPointer = (row) => menuRow(row).dispatch("contextmenu", {clientX: 1279, clientY: 799});
 menuPointer(missingRow);

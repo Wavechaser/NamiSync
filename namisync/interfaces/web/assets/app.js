@@ -1538,10 +1538,9 @@ async function readInventoryDetail(review, nodeId) {
   const publication = review.summary.request_id;
   const revision = review.summary.view_revision;
   const navigation = navigationRevision;
-  const detail = { row, state: row.row_id === null ? "current" : "loading", response: null };
+  const detail = { row, state: "loading", response: null };
   review.detail = detail;
   renderTasks();
-  if (row.row_id === null) return;
   const stillCurrent = () => currentInventoryTask(review) === task && review.detailRevision === request
     && review.detail === detail && review.actionRevision === action && task.sessionId === sessionId
     && review.summary.request_id === publication && review.summary.view_revision === revision

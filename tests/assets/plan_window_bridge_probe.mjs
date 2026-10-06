@@ -282,6 +282,7 @@ for (const patch of [{ display: "x".repeat(301) },
   }
 }
 for (const patch of [{ display: "x".repeat(301) }, { notice: "x".repeat(301) },
+  { reason: "future" }, { blocked_reason: "future" }, { selection_exclusion_reason: "future" },
   { notice: "\ud800" }, { row_kind: "future" }]) {
   responseResult = { ...baseWindow(null), rows: [{ ...baseRow, size: null, ...patch }] };
   if (await bridge.getPlanWindow(taskId, 0, 0, 1).then(() => null, (error) => error) === null) {

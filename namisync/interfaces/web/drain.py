@@ -1186,10 +1186,16 @@ class TaskRegistry:
             if self._inventory_views.get(task_id) is not view:
                 raise TaskUnavailableError("inventory view is unavailable")
             if expected_revision != view.view_revision:
-                return {"disposition": "conflict", "view_revision": view.view_revision, "node_id": node_id, "detail": None}
+                return {"disposition": "conflict", "view_revision": view.view_revision, "node_id": node_id, "snapshot": None, "detail": None}
             node = view.projection.node_for_id(node_id)
+            if node.position == 0:
+                raise ValueError("synthetic inventory root has no public detail")
+            snapshot = {"path": node.warning.rel_path if node.warning is not None else node.rel_path,
+                        "warning": None if node.warning is None else {
+                            "code": node.warning.code.value, "detail": node.warning.detail}}
             if node.warning is not None or node.row is None:
-                raise ValueError("inventory detail requires a domain row")
+                return {"disposition": "current", "view_revision": view.view_revision,
+                        "node_id": node_id, "snapshot": snapshot, "detail": None}
             identity = (task.session_id, task.request_id, task.generation, view.view_revision)
             location_id, row_id, path_key = view.projection.location_id, node.row.row_id, node.row.rel_path_key
         detail = self._lifecycle.read_inventory_detail(location_id, row_id)
@@ -1197,11 +1203,11 @@ class TaskRegistry:
             self._require_inventory_task_locked(task)
             if (self._inventory_views.get(task_id) is not view
                     or identity != (task.session_id, task.request_id, task.generation, view.view_revision)):
-                return {"disposition": "conflict", "view_revision": view.view_revision, "node_id": node_id, "detail": None}
+                return {"disposition": "conflict", "view_revision": view.view_revision, "node_id": node_id, "snapshot": None, "detail": None}
             # A renamed/replaced row cannot attest the path in the earlier view.
             if detail is None or detail["row"]["path_key"] != path_key:
-                return {"disposition": "unavailable", "view_revision": view.view_revision, "node_id": node_id, "detail": None}
-            return {"disposition": "current", "view_revision": view.view_revision, "node_id": node_id, "detail": detail}
+                return {"disposition": "unavailable", "view_revision": view.view_revision, "node_id": node_id, "snapshot": None, "detail": None}
+            return {"disposition": "current", "view_revision": view.view_revision, "node_id": node_id, "snapshot": snapshot, "detail": detail}
 
     def open_plan_view(self, task_id: str) -> dict[str, object]:
         with self._condition:

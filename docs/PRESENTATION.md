@@ -133,7 +133,10 @@ Nodes retain the structural data needed by presentation—preorder position, dep
 
 Row serialization bounds display and notice labels to 300 UTF-16 units and rename
 names and destination hints to 255 without splitting Unicode characters. Search,
-sort and reveal retain the immutable complete server facts. Exact Plan details
+sort and reveal retain the immutable complete server facts. Plan scan notices
+retain the scanned side and warning code while bounding the path and explanation
+separately. Inventory window labels use basenames; flat scan notices use a warning
+code plus bounded path tail, and omit the repeated full warning path. Exact Plan details
 preserve original path spelling and a source/target discriminator for the path;
 they do not infer a warning's root from operation metadata. The read is one
 node-id lookup under the current task/view revision, without filesystem or ledger
@@ -210,7 +213,10 @@ when the total population is larger.
 Inventory read views retain one immutable workflow projection, its complete sort
 permutation and its derived `VisibleSequence` at task scope. Repeated windows
 reuse these values and serialize only the requested slice; current detail uses
-one exact ledger row read. Window checksum presentation uses only the immutable
+one exact ledger row read for domain subjects. Its separate revisioned snapshot
+supplies complete scan-time paths and warning diagnostics for rowless folders
+and notices without ledger or filesystem access. The browser never derives their
+full paths from compact labels. Window checksum presentation uses only the immutable
 row's recorded attestation: nullable lowercase full digest, rendered as an eight
 character prefix with the full value in a tooltip. Presence/freshness changes
 do not erase that evidence or trigger per-row reads or hashing. View updates
@@ -235,7 +241,7 @@ No ordinary-integrity overlay or selection mechanism is introduced.
 
 ## Search, filters, sorting, and follow
 
-Plan and inventory search use backend literal case-folded display matching. They have no regex, trimming, normalization, marker decoding, or path authority. The helper admits at most the 65,536-byte ingress limit; actual bridge query capacity is smaller when JSON overhead is included. The Plan renderer's fixed 150 ms trailing debounce keeps the field editable during an in-flight view refresh; only the latest newer query is retained for sequential dispatch after the current receipt. Client-side search is incorrect because the client owns only a window.
+Plan and inventory search use backend literal case-folded projection display matching. Inventory retains full relative-path matching even though its wire labels are basenames. They have no regex, trimming, normalization, marker decoding, or path authority. The helper admits at most the 65,536-byte ingress limit; actual bridge query capacity is smaller when JSON overhead is included. The Plan renderer's fixed 150 ms trailing debounce keeps the field editable during an in-flight view refresh; only the latest newer query is retained for sequential dispatch after the current receipt. Client-side search is incorrect because the client owns only a window.
 
 Filtering/collapse determine visible rows; the Plan Status rollups and effective execution selection retain their complete-plan meaning. The Plan header and filtered folder checkbox states report the active search/filter scope so their visible state agrees with their gesture; collapse does not narrow it. Empty ancestors disappear from the visible sequence rather than leaving a skeletal tree. Acknowledged inventory rows are excluded as direct matches by default but remain available through their facet; an acknowledged folder can remain as structural context for matching descendants. Counts make the hidden population visible. Acknowledgment changes the visible sequence and refetches its window, but does not rewrite inventory rollup truth.
 

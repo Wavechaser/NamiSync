@@ -9,7 +9,7 @@ from hashlib import blake2b
 from types import MappingProxyType
 from typing import Mapping
 
-from namisync.core.models import DirRecord, EntryKind, FileStat
+from namisync.core.models import DirRecord, EntryKind, FileStat, ScanWarning
 from namisync.core.pathing import fold_validated_path
 from namisync.core.planning import OpId, OperationKind, Plan, PlanOperation
 from namisync.core.scalars import MAX_SIGNED_64
@@ -127,6 +127,7 @@ class PlanProjectionNode:
     prior_path: str | None = None
     path: str | None = None
     path_origin: str | None = None
+    scan_warning: ScanWarning | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -261,6 +262,7 @@ class _PlanProjectionDraft:
     prior_path: str | None = None
     path: str | None = None
     path_origin: str | None = None
+    scan_warning: ScanWarning | None = None
 
 
 def build_plan_projection(
@@ -399,6 +401,7 @@ def build_plan_projection(
             draft = _notice_draft(request_id, len(drafts), display)
             draft.path = warning.rel_path or ""
             draft.path_origin = side
+            draft.scan_warning = warning
             drafts.append(draft)
     for refusal in artifact.verdict.refusals:
         drafts.append(
@@ -1067,6 +1070,7 @@ def _materialize_projection(
             risk=draft.risk,
             move_peer_id=draft.move_peer_id,
             notice=draft.notice,
+            scan_warning=draft.scan_warning,
             selection_exclusion_reason=draft.selection_exclusion_reason,
             filename_key=draft.filename_key,
             is_directory=draft.is_directory,

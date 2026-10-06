@@ -53,6 +53,8 @@ for (const patch of [
   ...["f".repeat(31), "f".repeat(33), "F".repeat(32), 1, "z".repeat(32)].map(recorded_checksum => ({rows: [{...fixture.window.rows[0], recorded_checksum}]})),
   {rows: [{...fixture.window.rows[0], has_baseline: false}]},
   {rows: [{...fixture.window.rows[0], recorded_checksum: null}]},
+  {rows: [{...fixture.window.rows[0], display: "x".repeat(301)}]},
+  {rows: [{...fixture.window.rows[0], display: "\ud800"}]},
 ]) {
   response = {...fixture.window, ...patch};
   await assert.rejects(bridge.getInventoryWindow(task, 0, 0, 256));
@@ -64,8 +66,27 @@ await assert.rejects(bridge.getInventoryDetail(task, 0, node));
 response = structuredClone(fixture.detail);
 response.detail.attestation.content.provenance = "manual-post-copy";
 await assert.rejects(bridge.getInventoryDetail(task, 0, node));
-response = {...fixture.detail, disposition: "unavailable", detail: null};
+response = {...fixture.detail, disposition: "unavailable", snapshot: null, detail: null};
 assert.equal((await bridge.getInventoryDetail(task, 0, node)).detail, null);
+const noticeRow = fixture.window.rows.find(row => row.warning !== null);
+for (const warning of [{...noticeRow.warning, path: "repeat"}, {...noticeRow.warning, code: "future"},
+  {...noticeRow.warning, detail: "x".repeat(301)}, {...noticeRow.warning, detail: "\ud800"}]) {
+  response = {...fixture.window, rows: fixture.window.rows.map(row => row === noticeRow ? {...row, warning} : row)};
+  await assert.rejects(bridge.getInventoryWindow(task, 0, 0, 256));
+}
+const snapshotDetail = {...fixture.detail, detail: null, snapshot: {path: "Folder\\Nested", warning: null}};
+response = snapshotDetail;
+assert.deepEqual(await bridge.getInventoryDetail(task, 0, node), snapshotDetail);
+response = {...snapshotDetail, snapshot: {path: null, warning: {code: "access_denied", detail: "full diagnostic"}}};
+assert.deepEqual((await bridge.getInventoryDetail(task, 0, node)).snapshot, response.snapshot);
+for (const patch of [{snapshot: null}, {snapshot: {path: null, warning: null}},
+  {snapshot: {path: "x".repeat(32768), warning: null}}, {snapshot: {path: "\ud800", warning: null}},
+  {snapshot: {path: "", warning: {code: "future", detail: ""}}},
+  {snapshot: {path: "", warning: {code: "access_denied", detail: "x".repeat(1025)}}},
+  {disposition: "conflict"}, {disposition: "unavailable"}]) {
+  response = {...snapshotDetail, ...patch};
+  await assert.rejects(bridge.getInventoryDetail(task, 0, node));
+}
 const before = requests.length;
 assert.throws(() => bridge.getInventoryWindow(task, 0, 0, 257));
 assert.throws(() => bridge.updateInventoryView(task, 0, {...gesture, filters: ["copy"]}));

@@ -135,6 +135,114 @@ def test_window_rename_name_and_group_destination_keep_utf16_bounds() -> None:
     assert plan_review_module._destination_display("") == ""
 
 
+def test_window_scan_notice_keeps_side_code_and_complete_detail():
+    from namisync.core.models import ScanWarning, ScanWarningCode
+    warning = ScanWarning(ScanWarningCode.SCALAR_UNREPRESENTABLE,
+                          "ancestor\\" + "😀" * 1000, "\x01" * 1024)
+    value = plan(())
+    request = PlanRequest("b" * 32, value.source_root.path, value.target_root.path)
+    artifact = PlanArtifact(request, SimpleNamespace(warnings=(warning,)),
+        SimpleNamespace(warnings=(), directories=()), value, Verdict(True, (), SimpleNamespace()))
+    state = PlanReviewState("task-" + "1" * 32, "a" * 32,
+        build_plan_projection(request.request_id, artifact), 0, "reviewing", "source", "target")
+    row = state.window(expected_revision=0, offset=0, limit=256)["rows"][0]
+    assert row["display"] == row["notice"]
+    assert row["notice"].startswith("source: …") and " — scalar_unrepresentable — " in row["notice"]
+    assert len(row["notice"].encode("utf-16-le")) // 2 <= 300
+    detail = state.detail(expected_revision=0, node_id=row["node_id"])["detail"]
+    assert detail["path"] == warning.rel_path
+    assert detail["notice"].endswith(warning.detail)
+
+
+def test_complete_plan_256_row_envelope_including_execution_has_response_margin():
+    import json
+    from namisync.interfaces.web.bridge import snapshot_bridge_response_result
+    from namisync.interfaces.web.drain import TaskRegistry, _decorate_execution_window
+    from namisync.core.planning import BlockedReason, OperationReason
+    from namisync.core.preflight import RefusalCode
+    from namisync.core.execution import ExecutionReason, ItemRecordingReason, TaskRecordingIssueReason
+    from namisync.core.evidence import Outcome, Provenance, RecordingStatus
+    from namisync.core.integrity import IntegrityReason, IntegrityResult, RecordDisposition
+    from namisync.core.session import MAX_OPERATION_RESULT_PHASES, Disposition, PhaseStatus
+    from namisync.workflows.selection import SELECTION_EXCLUSION_REASONS
+    from namisync.workflows.views import OperationResultView, PhaseResultView, RecordingIssueView
+
+    def longest(values):
+        return max((member.value for member in values), key=len)
+
+    prefix = "\\".join(["文" * 250] * 100)
+    state = _file_fact_state([operation(OperationKind.COPY, target_path=prefix + rf"\item-{index:03}.txt",
+        source=file_stat()) for index in range(256)])
+    actual = state.window(expected_revision=0, offset=100, limit=256)
+    assert len(actual["rows"]) == 256
+    snapshot_bridge_response_result(actual, "3" * 32)
+    row = dict(actual["rows"][0])
+    assert set(row) == {"node_id", "display", "depth", "is_container", "visible_index",
+        "parent_visible_index", "first_child_visible_index", "position_in_set", "set_size", "expanded",
+        "row_kind", "operation_id", "operation_kind", "presentation_kind", "prior_name", "reason",
+        "blocked_reason", "selection", "highlighted", "selectable_operation_count", "selected_operation_count",
+        "operation_count", "size", "mtime_ns", "dependency_count", "risk", "move_peer_id", "move_group",
+        "notice", "selection_exclusion_reason"}
+    # Conservatively combine mutually exclusive optional fields into one row.
+    # All varying text reaches its producer ceiling with six-byte JSON control
+    # escaping; identities remain fixed ASCII, enums use their longest member.
+    row.update(display="\x01" * 300, notice="\x01" * 300, prior_name="\x01" * 255,
+        move_peer_id="node-" + "f" * 32,
+        move_group={"count": 9007199254740991, "destination_display": "\x01" * 255},
+        reason=max(OperationReason, key=lambda value: len(value.value)).value,
+        blocked_reason=max(BlockedReason, key=lambda value: len(value.value)).value,
+        selection_exclusion_reason=max(SELECTION_EXCLUSION_REASONS, key=len),
+        operation_kind="move_update", presentation_kind="move_update", row_kind="prior-operation-group",
+        selection="unselected", risk="irreversible", size="9" * 19, mtime_ns="9" * 19)
+    for key, value in tuple(row.items()):
+        if type(value) is int or key in {"parent_visible_index", "first_child_visible_index"}:
+            row[key] = 9007199254740991
+        elif type(value) is bool or key == "expanded":
+            row[key] = False
+    stamp = "9999-12-31T23:59:59.999999+00:00"
+    operation_view = {"result": longest(Outcome), "reason": max(longest(ExecutionReason), longest(BlockedReason), max(SELECTION_EXCLUSION_REASONS, key=len), key=len), "recording": longest(RecordingStatus),
+        "recording_reason": longest(ItemRecordingReason), "detail_omitted_count": 9007199254740991}
+    integrity = {"result": longest(IntegrityResult), "reason": longest(IntegrityReason), "recording": longest(RecordingStatus),
+        "record_disposition": longest(RecordDisposition), "detail_omitted_count": 9007199254740991}
+    evidence = {"state": "already-verified", "content": {"algorithm": "xxh3_128", "digest": "f" * 32,
+        "size": "9" * 19, "provenance": longest(Provenance), "observed_at": stamp}}
+    # Result error, three phase errors/names, five recording issue details and
+    # review refusal are bounded independently of rows; no item diagnostics
+    # or per-item paths appear in compact execution overlays.
+    result = {"headline": "verification-incomplete", "filesystem": "completed", "integrity": "incomplete",
+        "recording": longest(RecordingStatus), "audit": longest(RecordingStatus), "disposition": longest(Disposition), "canceled": False,
+        "phases": [{"phase": "\x01" * 1024, "status": longest(PhaseStatus), "items_done": 9007199254740991,
+            "items_total": 9007199254740991, "bytes_done": "9" * 19, "bytes_total": "9" * 19,
+            "error": "\x01" * 1024}] * MAX_OPERATION_RESULT_PHASES,
+        "bytes_done": "9" * 19, "bytes_total": "9" * 19, "error": "\x01" * 1024,
+        "recording_degraded_items": 9007199254740991,
+        "recording_issues": [{"reason": longest(TaskRecordingIssueReason), "detail": "\x01" * 1024}] * len(TaskRecordingIssueReason),
+        "omitted_detail_count": 9007199254740991, "presentation_omitted_detail_count": 9007199254740991,
+        "review_refusal": {"reason": "review_fact_limit_exceeded", "tree_kind": "inventory",
+            "population": "informational", "axis": "retained-bytes", "row_limit": 9007199254740991, "byte_limit": "9" * 19}}
+    execution = {"execution_revision": 9007199254740991, "session_id": "f" * 32, "result": result,
+        "failed_operation_count": 9007199254740991, "disk_capacity_failure_count": 9007199254740991,
+        "gap": {"minimum_first_missed_seq": 9007199254740991, "maximum_first_missed_seq": 9007199254740991},
+        "trash_location": "\x01" * 32767, "started_at": stamp, "ended_at": stamp,
+        "refusal": {"origin": "commitment", "codes": [member.value for member in RefusalCode]}}
+    assert set(result) == set(OperationResultView.__dataclass_fields__)
+    assert set(result["phases"][0]) == set(PhaseResultView.__dataclass_fields__)
+    assert set(result["recording_issues"][0]) == set(RecordingIssueView.__dataclass_fields__)
+    empty_task = SimpleNamespace(execution_summary=None, delivered_terminal_record=None,
+        execution_gap_minimum=None, execution_revision=0, execution_session_id=None)
+    assert set(execution) == set(TaskRegistry._execution_summary_locked(empty_task))
+    window = {**actual, "view_revision": 9007199254740991, "highlight_revision": 9007199254740991,
+              "offset": 9007199254740991, "total": 9007199254740991, "rows": [row] * 256}
+    bounded = _decorate_execution_window(window, execution, {row["operation_id"]: operation_view},
+        {row["operation_id"]: integrity}, {row["operation_id"]: evidence})
+    assert set(bounded) == {"disposition", "view_revision", "highlight_revision", "offset", "total", "rows", "execution"}
+    assert set(bounded["rows"][0]["execution"]) == {"operation", "automatic_verification", "evidence"}
+    envelope = {"schema_version": 1, "request_id": "3" * 32, "ok": True, "result": bounded}
+    size = len(json.dumps(envelope, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8"))
+    assert size < 3 * 1024 * 1024  # Conservative proof margin, not a runtime wall.
+    snapshot_bridge_response_result(bounded, "3" * 32)
+
+
 @pytest.mark.parametrize("extra", [1, 2])
 def test_folder_size_boundary_survives_row_serialization(extra: int) -> None:
     maximum = (1 << 63) - 1

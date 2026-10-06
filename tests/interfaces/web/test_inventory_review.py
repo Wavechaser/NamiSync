@@ -41,7 +41,7 @@ def _update(view, **changes):
 def test_complete_view_of_incomplete_scan_keeps_warnings_ack_hiding_and_rollups():
     view = _view()
     rows = view.window(expected_revision=0, offset=0, limit=256)["rows"]
-    assert [row["display"] for row in rows] == ["a", r"a\b.txt", r"a\z.txt", "unreadable"]
+    assert [row["display"] for row in rows] == ["a", "b.txt", "z.txt", "access_denied: unreadable"]
     assert rows[-1]["row_kind"] == "notice" and rows[-1]["row_id"] is None
     assert view.summary()["scan_complete"] is False
     rollup = view.summary()["rollup"]
@@ -130,3 +130,63 @@ def test_window_keeps_recorded_checksum_independent_of_observation_state(state):
     rows = view.window(expected_revision=0, offset=0, limit=256)["rows"]
     assert next(item for item in rows if item["row_id"] == "1")["recorded_checksum"] == row.attestation.content.digest.hex()
     assert all(item["recorded_checksum"] is None for item in rows if item["row_id"] != "1")
+
+
+def test_compact_windows_keep_complete_path_search_and_bound_unicode_labels():
+    path = "ancestor\\" + "😀" * 1000 + ".txt"
+    warning = ScanWarning(ScanWarningCode.SCALAR_UNREPRESENTABLE, path, "\x01" * 1024)
+    view = InventoryReviewState("task-" + "1" * 32, "2" * 32,
+        build_inventory_projection(1, (_row("1", path),), (warning,)), r"C:\root", False, 1, 0)
+    _update(view, search_query="ancestor")
+    rows = view.window(expected_revision=1, offset=0, limit=256)["rows"]
+    assert any(row["row_id"] == "1" for row in rows)
+    assert all(len(row["display"].encode("utf-16-le")) // 2 <= 300 for row in rows)
+    notice = next(row for row in rows if row["warning"])
+    assert notice["display"].startswith("scalar_unrepresentable: …")
+    assert set(notice["warning"]) == {"code", "detail"}
+    assert len(notice["warning"]["detail"].encode("utf-16-le")) // 2 == 300
+
+
+def test_complete_inventory_256_row_envelope_has_margin_under_response_wall():
+    import json
+    from namisync.interfaces.web.bridge import snapshot_bridge_response_result
+
+    # This valid projection exercises the former repeated-full-path failure.
+    prefix = "\\".join(["文" * 250] * 100)
+    paths = [prefix + rf"\item-{index:03}.txt" for index in range(256)]
+    projection = build_inventory_projection(1, (), tuple(
+        ScanWarning(ScanWarningCode.SCALAR_UNREPRESENTABLE, path, "\x01" * 1024) for path in paths))
+    view = InventoryReviewState("task-" + "1" * 32, "2" * 32, projection, r"C:\root", False, 0, 0)
+    actual = view.window(expected_revision=0, offset=0, limit=256)
+    assert len(actual["rows"]) == 256
+    snapshot_bridge_response_result(actual, "3" * 32)
+
+    # A conservative all-fields row upper bound also covers ledger rows and
+    # synthetic folders. Control escaping is six bytes per UTF-16 unit; IDs
+    # stay 37 ASCII bytes (BLAKE2b), SQLite ids/scalars stay <=19 decimal bytes,
+    # and view/frame/count integers are <= the 16-digit JavaScript safe maximum.
+    row = _view().window(expected_revision=0, offset=1, limit=1)["rows"][0]
+    assert set(row) == {"node_id", "display", "depth", "is_container", "visible_index",
+        "parent_visible_index", "first_child_visible_index", "position_in_set", "set_size", "expanded",
+        "row_kind", "row_id", "presence", "verification_state", "has_baseline", "recorded_checksum",
+        "acknowledged", "reappeared", "size", "mtime_ns", "rollup", "warning"}
+    assert set(row["rollup"]) == {"domain_count", "file_count", "present", "unverified", "verified", "modified",
+        "reappeared", "unsupported", "missing", "mismatched", "acknowledged", "size", "size_overflow", "size_partial"}
+    assert set(actual) == {"disposition", "view_revision", "offset", "total", "rows"}
+    assert set(actual["rows"][0]["warning"]) == {"code", "detail"}
+    row.update(display="\x01" * 300, row_id="9" * 19, recorded_checksum="f" * 32,
+               size="9" * 19, mtime_ns="9" * 19, presence="unsupported",
+               verification_state="unverified", warning={"code": "scalar_unrepresentable", "detail": "\x01" * 300})
+    row["rollup"] = {key: "9" * 19 if key == "size" else False if type(value) is bool else 9007199254740991
+                     for key, value in row["rollup"].items()}
+    for key, value in tuple(row.items()):
+        if type(value) is int or key in {"parent_visible_index", "first_child_visible_index"}:
+            row[key] = 9007199254740991
+        elif type(value) is bool or key == "expanded":
+            row[key] = False
+    bounded = {**actual, "view_revision": 9007199254740991, "offset": 9007199254740991,
+               "total": 9007199254740991, "rows": [row] * 256}
+    envelope = {"schema_version": 1, "request_id": "3" * 32, "ok": True, "result": bounded}
+    size = len(json.dumps(envelope, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8"))
+    assert size < 2 * 1024 * 1024  # Derived margin, not a new runtime wall.
+    snapshot_bridge_response_result(bounded, "3" * 32)

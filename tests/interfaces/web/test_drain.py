@@ -2893,7 +2893,7 @@ def test_br_g_33_close_task_delegates_terminal_fact_and_retires_delivery() -> No
         registry.drain(start.task_id, SESSION, DRAIN, replay_from=None)
 
 
-def _inventory_read_registry(*, selected_paths=(), subtree_roots=()):
+def _inventory_read_registry(*, selected_paths=(), subtree_roots=(), path="one.txt"):
     from namisync.core.models import EntryKind, VolumeId, ScanWarning, ScanWarningCode
     from namisync.db.repositories import InventoryPresence, InventorySnapshot
     from namisync.workflows import (InventoryDetails, LocationBinding, VolumeResolution,
@@ -2902,7 +2902,8 @@ def _inventory_read_registry(*, selected_paths=(), subtree_roots=()):
     from _db_fixtures import NOW, file_stat, attestation
 
     stat = file_stat(identity_index=1)
-    row = InventorySnapshot("1", 1, "one.txt", "ONE.TXT", EntryKind.FILE, InventoryPresence.PRESENT,
+    from namisync.core.pathing import normalize_relative_path
+    row = InventorySnapshot("1", 1, path, normalize_relative_path(path), EntryKind.FILE, InventoryPresence.PRESENT,
         stat, attestation(stat), NOW, NOW, "scope", None, None, None, None, None)
     projection = build_inventory_projection(1, (row,), (
         ScanWarning(ScanWarningCode.ACCESS_DENIED, "warning", "unreadable"),))
@@ -2962,11 +2963,81 @@ def test_inventory_read_open_waits_for_release_then_windows_need_no_full_reread(
     assert detail["detail"]["attestation"]["content"]["provenance"] == "copy"
     assert service.detail_calls == [(1, "1")] and service.projection_calls == 1
     warning = next(node for node in projection.nodes if node.warning)
-    with pytest.raises(ValueError, match="domain row"):
-        registry.get_inventory_detail(start.task_id, expected_revision=0, node_id=warning.node_id)
+    warning_detail = registry.get_inventory_detail(start.task_id, expected_revision=0, node_id=warning.node_id)
+    assert warning_detail["detail"] is None
+    assert warning_detail["snapshot"] == {"path": warning.warning.rel_path,
+        "warning": {"code": warning.warning.code.value, "detail": warning.warning.detail}}
+    stale = registry.get_inventory_detail(start.task_id, expected_revision=1, node_id=warning.node_id)
+    assert stale["disposition"] == "conflict" and stale["snapshot"] is None
+    with pytest.raises(ValueError, match="synthetic inventory root"):
+        registry.get_inventory_detail(start.task_id, expected_revision=0, node_id=projection.nodes[0].node_id)
     assert service.detail_calls == [(1, "1")]
     registry.close_task(start.task_id, start.session_id)
     assert registry._inventory_views == {}
+
+
+def test_inventory_structural_folder_detail_uses_guarded_snapshot_without_ledger_read():
+    registry, service, start, projection = _inventory_read_registry(path=r"Parent\Nested\file.txt")
+    registry.release_terminal_session(start.task_id, start.session_id)
+    registry.open_inventory_view(start.task_id)
+    folder = next(node for node in projection.nodes if node.rel_path == r"Parent\Nested")
+    value = registry.get_inventory_detail(start.task_id, expected_revision=0, node_id=folder.node_id)
+    assert value["detail"] is None and value["snapshot"] == {"path": r"Parent\Nested", "warning": None}
+    stale = registry.get_inventory_detail(start.task_id, expected_revision=1, node_id=folder.node_id)
+    assert stale["disposition"] == "conflict" and stale["snapshot"] is None and stale["detail"] is None
+    assert service.detail_calls == []
+
+
+@pytest.mark.parametrize("notices", (False, True))
+def test_supported_long_inventory_paths_cross_production_window_and_detail_bridge(notices):
+    import json
+    from namisync.core.models import ScanWarning, ScanWarningCode
+    from namisync.core.pathing import normalize_relative_path
+    from namisync.workflows import build_inventory_projection
+    from namisync.workflows.views import inventory_current_detail
+    from namisync.interfaces.web.bridge import AdmissionGranted, BridgeDispatcher
+    from namisync.interfaces.web.commands import production_command_specs
+    from namisync.interfaces.web.readiness import CommandPhase, ReadinessContext
+
+    registry, service, start, original = _inventory_read_registry()
+    _, details = service.get_task_inventory_projection(start.task_id, start.request_id)
+    prefix = "\\".join(["文" * 250] * 100)
+    paths = [prefix + rf"\item-{index:03}.txt" for index in range(256)]
+    original_row = original.row_for_id("1")
+    rows = tuple(replace(original_row, row_id=str(index + 1), rel_path=path,
+        rel_path_key=normalize_relative_path(path)) for index, path in enumerate(paths))
+    warnings = tuple(ScanWarning(ScanWarningCode.SCALAR_UNREPRESENTABLE, path, "\x01" * 1024) for path in paths)
+    projection = build_inventory_projection(1, () if notices else rows, warnings if notices else ())
+    service.get_task_inventory_projection = lambda *_: (projection, details)
+    service.detail = inventory_current_detail(rows[0])
+    registry.release_terminal_session(start.task_id, start.session_id)
+    registry.open_inventory_view(start.task_id)
+    commands = production_command_specs(picker=lambda: None, slots=SimpleNamespace(), registry=registry,
+        cosmetics=SimpleNamespace(), shell_ready=lambda _: None, readiness_echo=lambda *_: True)
+    dispatcher = BridgeDispatcher(document=SimpleNamespace(require_trusted=lambda: None), commands=commands,
+        admit=lambda _: AdmissionGranted(ReadinessContext(CommandPhase.OPEN, 0)))
+
+    def dispatch(command, payload):
+        return dispatcher.dispatch(json.dumps({"schema_version": 1, "request_id": "a1" * 16,
+            "command": command, "payload": {"task_id": start.task_id, "expected_revision": 0, **payload}}))
+
+    response = dispatch("get_inventory_window", {"offset": 0 if notices else 100, "limit": 256})
+    assert response["ok"] is True and len(response["result"]["rows"]) == 256
+    window_row = response["result"]["rows"][0]
+    assert len(window_row["display"].encode("utf-16-le")) // 2 <= 300
+    if notices:
+        assert set(window_row["warning"]) == {"code", "detail"}
+    else:
+        assert window_row["display"] == "item-000.txt"
+    exact = dispatch("get_inventory_detail", {"node_id": window_row["node_id"]})
+    assert exact["ok"] is True and exact["result"]["snapshot"]["path"] == paths[0]
+    if notices:
+        assert exact["result"]["detail"] is None
+        assert exact["result"]["snapshot"]["warning"]["detail"] == warnings[0].detail
+        assert service.detail_calls == []
+    else:
+        assert exact["result"]["detail"]["row"]["path"] == paths[0]
+        assert service.detail_calls == [(1, "1")]
 
 
 @pytest.mark.parametrize("change", ["removed", "renamed", "generation", "view", "close"])
@@ -2994,6 +3065,7 @@ def test_inventory_current_detail_refuses_stale_location_path_and_view(change):
     else:
         result = registry.get_inventory_detail(start.task_id, expected_revision=0, node_id=node_id)
         assert result["detail"] is None
+        assert result["snapshot"] is None
         assert result["disposition"] == ("unavailable" if change in {"removed", "renamed"} else "conflict")
 
 

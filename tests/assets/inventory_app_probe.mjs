@@ -44,7 +44,7 @@ globalThis.inventoryHarness = {
     return Promise.resolve(summary());
   },
   getInventoryDetail(...args) {
-    calls.push(["detail", ...args]); return delayedDetail?.promise ?? Promise.resolve(fixture.detail);
+    calls.push(["detail", ...args]); return delayedDetail?.promise ?? Promise.resolve(fixture.snapshots[args[2]] ?? fixture.detail);
   },
   listTasks() { return Promise.resolve({ tasks: taskSnapshot === null ? [] : [taskSnapshot] }); },
   refreshInventory(...args) {
@@ -149,9 +149,11 @@ const warning = review.window.rows.find((row) => row.warning !== null);
 const folder = review.window.rows.find((row) => row.row_kind === "folder");
 await app.readInventoryDetail(review, warning.node_id);
 assert.equal(review.detail.row, warning);
-assert.equal(calls.filter(([name]) => name === "detail").length, 0);
+assert.equal(calls.filter(([name]) => name === "detail").length, 1);
+assert.deepEqual(review.detail.response, fixture.snapshots[warning.node_id]);
 await app.readInventoryDetail(review, folder.node_id);
-assert.equal(calls.filter(([name]) => name === "detail").length, 0);
+assert.equal(calls.filter(([name]) => name === "detail").length, 2);
+assert.deepEqual(review.detail.response, fixture.snapshots[folder.node_id]);
 const beforeContext = calls.filter(([name]) => name === "refresh").length;
 refuseRefresh = true;
 await app.runInventoryAction(review, "refresh", warning.node_id);

@@ -65,6 +65,7 @@ def test_projection_keeps_original_spelling_and_notice_path_origin() -> None:
     assert [(node.path, node.path_origin) for node in warnings] == [
         (r"Source\Case.txt", "source"), (r"Target\Case.txt", "target"),
     ]
+    assert [node.scan_warning for node in warnings] == [source_warning, target_warning]
     rebound = apply_plan_projection_selection(
         projection, selected_operation_ids=frozenset(), exclusion_reasons={},
     )

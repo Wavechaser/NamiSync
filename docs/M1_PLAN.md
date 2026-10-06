@@ -11,20 +11,83 @@ retains investigation, rejected proposals and superseded execution recipes;
 the decisions still governing delivery are below. Historical observations
 certify their recorded build and dependencies only.
 
+## GUI Inventory refinement — 2026-10-05
+
+The user approved the finalized follow-up proposals and their order from
+`614cd19`: contract correction, Refresh selected target, menu corrections,
+Verify table alignment, then loading measurements and evidence-led optimization.
+This renews GUI-B2 authority and supersedes its earlier deferral below. The
+original review is preserved byte-for-byte in
+`build/gui-inventory-refinement-20261005/user-handoff.md`; run evidence uses
+that directory. Each outcome is independently reviewed and committed before
+dependent implementation. No additional approval is needed for these outcomes.
+
+| ID | Accepted outcome | Dependencies and verification |
+| --- | --- | --- |
+| GUI-C1 | Bound every Plan/Inventory window field by construction; compact Inventory basenames and warning path tails, preserve full-path search, and provide revision-guarded complete snapshot details for rowless nodes through the existing detail command. Preserve structured Plan notice side/code while shortening path/explanation. Migrate serializers, browser validators, consumers and fixtures together. | First. Complete 256-row envelope tests include execution overlays and encoding overhead with a clear margin below the unchanged 8 MiB wall. Real bridge/detail composition, direct consumer tests, ordinary suite/import contracts and affected installed checks. |
+| GUI-C2 | Refresh selected targets the tree's current visible active eligible row, including arrow-key changes while Details is hidden. Detail-card actions retain their displayed item. | C1. Existing action route, tree owner and page consumers; regression activates A, arrows to B, then proves exactly one refresh of B. Interfaces and installed Inventory check. |
+| GUI-C3 | Suppress native fallback for owned row-context gestures even when the custom menu is stale/empty. Verify actual installed Menu/Shift+F10 event behavior before adding any duplicate-event correction. Document acknowledgement as own missing presence, not descendant rollup. | C2. Shared menu and Plan/tree consumers, direct probes, gallery and installed keyboard/pointer checks. No Restore context action. |
+| GUI-C4 | Deliver deferred B2 table appearance: shared 24px row geometry, zebra, disabled unchecked checkboxes, Notes, concise Presence, hierarchical basenames, typography and tones. Only Filename grows passively; Notes participates in deliberate resizing. | C1–C3. Preserve generic tree geometry default and Inventory navigation; direct renderer/tree/bridge probes, interfaces, gallery and installed Inventory checks against official Fluent references. |
+| GUI-C5 | Measure Plan and Inventory loading separately: queue wait, server build, serialization/bytes, browser validation, DOM and visible paint without double-counting round-trip intervals. Then coalesce Inventory to one in-flight/latest-intent read and remeasure. | C4. Record finite profiles and measurement authority before execution. Plan already coalesces. Placement/directional prefetch follows only measured need, retaining one 256-row window; fixed-height noninteractive placeholders only if gaps remain. Each justified optimization is its own reviewed commit with navigation/stale-owner tests and repeated measurements. |
+
+Preserve safe filesystem text, task/session/view ownership, authoritative action
+scope, fresh-ledger versus published-snapshot evidence, revision conflict behavior,
+selection counts and geometry. Never truncate identities or enum values; establish
+their finite producer domains. No response-wall or row-limit increase, new command,
+filesystem probe/effect, backend selection, hashing or persistence change. Functional
+checkboxes and execution-to-Verify navigation remain M1-10; irreversible-count
+presentation and fixed Filename under Details remain deferred. AGENTS mandatory
+and recurrence stops apply. Expand each pending row's finite source/test/doc
+population and acceptance/commit boundary before editing its product.
+
+**C1 delivered boundary.** Bounded Inventory window labels retain full-path
+search; exact revision-guarded snapshot paths and warning text are separate
+from fresh ledger details. Structured Plan scan notices retain side/code.
+Producer, validator, page and fixture migrations passed 370 focused and 5,921
+ordinary tests (four Windows privilege skips), all 12 import contracts and
+all seven installed obligations. Inventory passed on the 2026-10-06 retry
+`c1-native-inventory-03`; the two earlier foreground failures remain evidence.
+Conservative complete envelopes are 1,193,678 bytes Inventory and 2,395,485
+bytes Plan with execution metadata against the unchanged 8 MiB wall.
+Independent review found no actionable issues and verified dependency-bound
+reuse of prior passes. C1 is reconstructed from exact reviewed files on
+`milestone1`; recovery `a638040` was not merged or cherry-picked. Final commit
+identity and accounting belong to `integration.md` in the evidence directory.
+Retain its disposable recovery ref until final batch accounting. BRIDGE,
+PRESENTATION, INVENTORY and DESKTOP_UI own shipped behavior.
+
+**C2 read-only design (`614cd19`, revalidate after C1).** The generic tree owns
+active identity; an optional identity-change callback lets Inventory resolve
+the toolbar target from its current window. Recompute eligibility after window
+adoption as well as active changes: tree commit precedes panel window assignment.
+Cleared/gap/notice targets disable Refresh selected. No detail read accompanies
+arrow navigation; item-card Acknowledge/Restore keep their existing detail row.
+Production edits are limited to assets `tree.js` and `inventory_review.js`;
+`app.js`'s original-command action route remains unchanged. Consumers are
+`tree_probe.mjs`, `inventory_review_probe.mjs`, their frontend/page fixtures,
+and the installed Inventory child/parent plus existing shell tree witness.
+The native regression extends the existing journey with A activation, hidden
+Details, trusted arrows to B, and one scoped Refresh of B; retain the earlier
+whole-refresh and visibility-action assertions. DESKTOP_UI/PRESENTATION,
+BUGS and delivery docs record targeting. Gate: focused tree/renderer/page
+regressions, installed Inventory seam, interfaces and affected installed shell,
+then independent review. Preserve row geometry, 256-row windows, stale-owner
+rejection and original-command effects; C3/C4/C5 edits wait their own boundaries.
+
 ## GUI follow-up batch — 2026-10-05
 
 User-ratified six-unit follow-up from `583f14d` on `milestone1`. B1 and B3–B6
-are delivered as separate verified, independently reviewed atomic units; B2 is
-explicitly deferred. Overlapping renderer, gallery and bridge consumers were
+are delivered as separate verified, independently reviewed atomic units; B2 was
+deferred and is now resumed under GUI-C1/C4 above. Overlapping renderer, gallery and bridge consumers were
 migrated together. Evidence and the user's
 original uncommitted HANDOFF findings are preserved in
-`build/gui-followup-20261005/`. Component docs own shipped behavior; the deferred proposal below needs
-renewed user scope before implementation.
+`build/gui-followup-20261005/`. Component docs own shipped behavior; the prior
+proposal and recurrence review below explain the renewed GUI-C1/C4 boundary.
 
 | ID | Accepted outcome | Dependencies and verification |
 | --- | --- | --- |
 | GUI-B1 | Restore bounded plan-window labels, validate presentation enums/relationships, and migrate detail disclosure and all direct consumers. Full paths belong to individual details; Rename keeps its prior basename, Move uses a generic origin note, and previous-location destinations use compact labels. Preserve projection classification, node-id reveal, selection, revisions and the existing response wall. | Complete in `53e1abb`: 5,913 ordinary passes/four privilege skips, 12 import contracts and 12 installed gallery/shell/transport passes (`b1-*-02`). Independent review includes the corrected row-kind validator and final input binding. |
-| GUI-B2 | Align Verify table with Plan/gallery row geometry, zebra, disabled checkbox affordances, Notes, concise Presence labels, hierarchical basenames, typography and semantic tones. Preserve inventory evidence, scope, sorting, windowing and recovery. | **Deferred by the user for separate review** after recurrence analysis below. No B2 product/test changes. Functional checkboxes remain M1-10; proposed disabled visuals are also deferred with B2. |
+| GUI-B2 | Align Verify table with Plan/gallery row geometry, zebra, disabled checkbox affordances, Notes, concise Presence labels, hierarchical basenames, typography and semantic tones. Preserve inventory evidence, scope, sorting, windowing and recovery. | Earlier deferral is superseded by GUI-C1/C4. Functional checkboxes remain M1-10; disabled visuals are authorized in C4. |
 | GUI-B3 | Match Verify Setup height and reorganize status into summary plus one stable detailed line, with shared progress presentation and existing Refresh/recovery actions. Retain published/current scan distinctions without duplicate routine prose. | Complete in `2828b8b`: 41 focused, 1,943 interfaces and seven installed gallery/shell/Inventory checks (`b3-*-01`); independent review and source binding. |
 | GUI-B4 | Use local `yyyy-MM-DD HH:mm` display for UI timestamps, including Verify mtime, terminal completion and both detail panes; retain raw machine values where explicitly diagnostic. | Complete in `0f87f6a`: 13 focused, 1,944 interfaces and seven installed gallery/Inventory/execution checks (`b4-*-01`); independent review and input binding. |
 | GUI-B5 | Cap details at 20rem, allocate more height to item details, and show full paths joined to the correct known root without filesystem probes. | Complete in `61a5cf5`: six focused, 1,944 interfaces and all nine installed obligations across `b5-native-01` (eight passes) and unchanged-input larger-shell rerun `b5-native-larger-02`. Initial readiness timeout retained; independent review/input binding. |
@@ -38,7 +101,7 @@ together and retain failed evidence; test color alone does not classify defects.
 Use official Microsoft Fluent references and existing components. HANDOFF is
 updated at delivery, preserving the original user-authored finding in evidence.
 
-**Deferred B2 inspected boundary (`583f14d`).** Inventory's generic tree
+**Prior B2 inspected boundary (`583f14d`; renewed by C1/C4).** Inventory's generic tree
 uses 28px rows, while the file-row specimen uses 24px. B2 migrates the Inventory
 controller's geometry with its renderer; preserve the generic tree default and
 generation/keyboard rules. Reuse file-row/Integrity markup and tokens while
@@ -81,10 +144,10 @@ batch evidence root. Proposed coherent reorganization: compact adapter display,
 remove repeated warning paths, and extend the existing Inventory detail response
 with explicitly snapshot-owned path/warning context for selected rowless nodes,
 separate from existing fresh ledger evidence. No new command, scan, filesystem
-probe or action authority. Following AGENTS recurrence review, the user chose
-**Defer B2 and review separately**. Preserve the proposal rather than beginning
-another local fix. B3–B6 remain independent authorized work on the existing table
-and contract; B2's above population/gates are inspected proposals, not authority.
+probe or action authority. Following AGENTS recurrence review, the user initially
+chose **Defer B2 and review separately**. That review is now complete; GUI-C1/C4
+own renewed implementation authority and verification. B3–B6 shipped independently
+on the earlier table and contract.
 
 **B6 delivered boundary.** One shared frontend menu retains existing styling,
 server-scoped callbacks and exact row/window/task ownership. Opening it performs
@@ -102,7 +165,8 @@ that mixed open and later closed states. Production remained unchanged after the
 ordinary gate; changed producers/checkers/drivers were rerun. Failed receipts,
 exact rejected-report diagnosis and dependency-based evidence reuse are retained
 in `b6-native-disposition.md` and `b6-gallery-rejection.md` under the evidence root.
-`integration.md` records the resulting commit identity. B2 remains excluded.
+`integration.md` records the resulting commit identity. B2 was excluded from B6;
+the renewed scope is owned by GUI-C1/C4 above.
 
 ## GUI alignment batch — 2026-10-05
 

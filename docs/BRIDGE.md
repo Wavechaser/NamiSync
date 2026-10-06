@@ -473,7 +473,7 @@ BOOTSTRAP rows, commands require OPEN.
 | `acknowledge_inventory`, `restore_inventory` | `{task_id:TaskId,request_id:HexId,command_id:HexId,expected_revision:SafeInt,node_id:null\|NodeId}` | `InventoryVisibilityResult` | observed original result; 5 s feedback; no mutation replay |
 | `update_inventory_view` | `{task_id:TaskId,expected_revision:SafeInt,search_query:string,filters:[InventoryFilter],sort_column:"path"\|"filename"\|"size"\|"mtime",sort_direction:"ascending"\|"descending",collapse_node_id:null\|NodeId,collapsed:null\|boolean}` | `InventoryViewSummary` | current-state recovery; 5 s feedback; no mutation replay |
 | `get_inventory_window` | `{task_id:TaskId,expected_revision:SafeInt,offset:SafeInt,limit:1..256}` | `{disposition:"current"\|"conflict",view_revision:SafeInt,offset:SafeInt,total:SafeInt,rows:[InventoryWindowRow]}` | 5 s; one identical-payload retry |
-| `get_inventory_detail` | `{task_id:TaskId,expected_revision:SafeInt,node_id:NodeId}` | `{disposition:"current"\|"conflict"\|"unavailable",view_revision:SafeInt,node_id:NodeId,detail:null\|InventoryCurrentDetail}` | 5 s; one identical-payload retry |
+| `get_inventory_detail` | `{task_id:TaskId,expected_revision:SafeInt,node_id:NodeId}` | `{disposition:"current"\|"conflict"\|"unavailable",view_revision:SafeInt,node_id:NodeId,snapshot:null\|InventorySnapshotDetail,detail:null\|InventoryCurrentDetail}` | 5 s; one identical-payload retry |
 | `update_plan_view` | `{task_id:TaskId,expected_revision:SafeInt,search_query:string,filters:[PlanFilter],sort_column:"path"\|"filename"\|"size"\|"mtime",sort_direction:"ascending"\|"descending",collapse_node_id:null\|NodeId,collapsed:null\|boolean}` | `PlanViewSummary` | current-state recovery; 5 s feedback; no mutation replay |
 | `get_plan_window` | `{task_id:TaskId,expected_revision:SafeInt,offset:SafeInt,limit:1..256}` | `{disposition:"current"\|"conflict",view_revision:SafeInt,offset:SafeInt,total:SafeInt,execution:ExecutionSummary,rows:[PlanWindowRow]}` | 5 s; one identical-payload retry |
 | `get_plan_detail` | `{task_id:TaskId,expected_revision:SafeInt,node_id:NodeId}` | `{disposition:"current"\|"conflict",view_revision:SafeInt,node_id:NodeId,detail:null\|PlanNodeDetail}` | 5 s; one identical-payload retry |
@@ -519,12 +519,24 @@ shapes are serialized by `inventory_review.py` and validated by `bridge.js`.
 `InventoryFilter` admits present, unverified, verified, modified, reappeared,
 unsupported, missing, mismatched, acknowledged and notice. Path sort is ascending
 only; reset is an explicit path/ascending gesture. Windows contain at most 256
-rows and conflict replies contain no rows. Current detail returns a fresh
+rows and conflict replies contain no rows. Inventory window display is a basename
+bounded to 300 UTF-16 units; flat warning rows show the warning code and a path
+tail bounded to 255 units. Their warning object is exactly `{code,detail}`, with
+detail bounded to 300 units. No complete path is repeated in a window. These
+limits preserve Unicode characters; IDs and closed enums retain their full values.
+Current detail returns a fresh
 location-scoped ledger row, observed stat and optional attested subject/content
 evidence. Signed-64 scalars and full native file indexes cross as decimal text;
 digest and provenance remain raw. Removed/renamed rows return unavailable.
 Task/session/request/generation and view revision fence adoption after the read;
-warnings and synthetic ancestors cannot trigger ledger detail reads. These four
+warnings and synthetic ancestors cannot trigger ledger detail reads. The response
+also carries `snapshot:null|{path,warning}` from the retained projection under
+the same view revision. `path` is a nullable complete original-spelling path
+(empty denotes root), and `warning` is null or `{code,detail}` with the complete
+scan diagnostic. Current rowless folder/notice responses have `detail:null` and
+a snapshot; domain rows retain the existing fresh ledger detail and also supply
+their scan-time snapshot. Conflict and unavailable replies null both fields.
+The synthetic root is refused. These four
 commands grant no visibility mutation or integrity authority themselves.
 
 `refresh_inventory` requires the exact current released task request and retained
@@ -638,7 +650,9 @@ only prior groups carry it, and their `move_peer_id` is the canonical reveal
 target. Destination display is a hint of at most 255 UTF-16 units, empty for root;
 an omitted ancestor prefix is rendered as `…\\`. It is never path authority.
 All row displays and nullable notices are bounded to 300 UTF-16 units without
-splitting Unicode characters. Exact originals remain in the server projection.
+splitting Unicode characters. Scan notices retain structured side and warning
+code, with only their path tail (120 units) and explanation (100 units) shortened.
+Exact originals remain in the server projection.
 Rows also carry nullable `presentation_kind` and `prior_name` alongside the
 unchanged `operation_kind`. Projection supplies the display/filter kind:
 `rename` combines RECASE and same-Windows-parent pure MOVE, `move` is

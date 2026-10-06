@@ -1857,15 +1857,18 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Inventory windowing
 
-- MODERATE - OPEN (2026-10-05). Repeated unbounded labels. Inventory domain
+- MODERATE - FIXED (2026-10-05). Repeated unbounded labels. Inventory domain
   displays and warning paths repeat complete supported paths in 256-row windows.
-  With25112-unit relative paths (25120 including root,250-unit components),
+  With 25,112-unit relative paths (25,120 including root, 250-unit components),
   production response admission rejects domain and notice envelopes of
   19,426,765 and 38,691,017 bytes against its 8 MiB ceiling; those windows cannot
   load. Cause: row-count bounds leave repeated full strings in window fields.
-  B2 and this Inventory correction are explicitly deferred for separate review.
-  Exact source hashes, inputs and admitted/refused variants remain in
-  `build/gui-followup-20261005/b2-design-inventory-envelope.json` and its driver.
+  Compact window basenames/warning tails now preserve full-path search; complete
+  paths and warning text use revision-guarded snapshot details separately from
+  fresh ledger evidence. Complete 256-row envelope tests include all text and
+  Plan execution overlays with margin below the unchanged cap. Original proof:
+  `build/gui-followup-20261005/b2-design-inventory-envelope.json`; correction
+  evidence: `build/gui-inventory-refinement-20261005/c1-*`.
 
 ### Planning evidence freshness
 

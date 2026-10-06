@@ -308,8 +308,11 @@ M1 work. The active M1 delivery plan owns regression, race, and scale acceptance
 
 Warning rows are informational leaves, not inventory subjects. They have typed,
 stable identities and attachment order, but never enter the canonical path
-index, domain subtree membership, rollups, or action-scope resolution. Detail,
-acknowledge/restore, refresh, and integrity commands reject a warning target
+index, domain subtree membership, rollups, or action-scope resolution. The
+existing detail read supplies snapshot-owned warning paths/diagnostics and
+rowless folder paths under the view revision, without ledger or filesystem reads.
+Compact window basenames and warning path tails do not change full-path search.
+Acknowledge/restore, refresh, and integrity commands reject a warning target
 before ledger or native work. Folder rollups cover domain descendants only and
 are independent of filtering and acknowledged-row hiding; checked byte
 accumulation reports overflow rather than clamping.

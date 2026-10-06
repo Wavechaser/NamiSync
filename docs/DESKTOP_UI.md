@@ -1928,11 +1928,16 @@ Activate a row with click or Enter to load its detail selection. Domain subjects
 ledger evidence with observed and attested facts, full digest, provenance,
 evidence observation time, verification freshness and invalidation. Synthetic
 folders show complete rollups and their path; notices show their informational warning only.
+Window labels are bounded basenames, and flat notices show a code plus bounded
+path tail. The existing detail read supplies complete folder/notice paths and
+diagnostics from the published snapshot, labelled **Path at scan time**; domain
+subjects keep their separate fresh ledger evidence. Full-path server search is
+preserved independently of those compact labels.
 Ledger, synthetic-folder and non-null notice paths use the published summary's
 root for full filesystem display. Missing roots retain relative text, and a null
 notice path remains unavailable. Global detailed scan scope also uses that root;
 the central status scope, item titles and table text retain their existing form.
-These joins use existing facts without new reads, path probes or detail contracts.
+These joins use supplied detail facts without filesystem probes.
 Task navigation, view changes and Close retire details before late replies can
 restore them. A failed read normally offers Reload inventory view, which reads
 current publication without starting another scan. If a refused Refresh has no

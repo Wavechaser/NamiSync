@@ -379,8 +379,10 @@ export function createInventoryReviewPanel(callbacks) {
     const row = selected.row;
     if (row.warning !== null) {
       appendDetail("Notice", row.warning.code);
-      appendDetail("Path", formatFilesystemPath(current.summary.root_path, row.warning.path), true);
-      appendDetail("Details", row.warning.detail);
+      if (selected.state === "current") {
+        appendDetail("Path at scan time", formatFilesystemPath(current.summary.root_path, selected.response.snapshot.path), true);
+        appendDetail("Details", selected.response.snapshot.warning.detail);
+      }
       return;
     }
     if (row.is_container) {
@@ -390,7 +392,9 @@ export function createInventoryReviewPanel(callbacks) {
       }
     }
     if (row.row_id === null) {
-      if (row.is_container) appendDetail("Path", formatFilesystemPath(current.summary.root_path, row.display), true);
+      if (row.is_container && selected.state === "current") {
+        appendDetail("Path at scan time", formatFilesystemPath(current.summary.root_path, selected.response.snapshot.path), true);
+      }
       return;
     }
     if (selected.state !== "current") return;

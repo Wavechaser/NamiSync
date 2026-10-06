@@ -2893,7 +2893,7 @@ function validateInventoryRow(value) {
     "parent_visible_index", "first_child_visible_index", "position_in_set", "set_size", "expanded",
     "row_kind", "row_id", "presence", "verification_state", "has_baseline", "recorded_checksum", "acknowledged",
     "reappeared", "size", "mtime_ns", "rollup", "warning"])
-    && isNodeId(value.node_id) && isValidUnicode(value.display)
+    && isNodeId(value.node_id) && isValidUnicode(value.display) && value.display.length <= 300
     && [value.depth, value.visible_index, value.position_in_set, value.set_size].every(isNonnegativeInteger)
     && value.position_in_set > 0 && value.position_in_set <= value.set_size
     && [value.parent_visible_index, value.first_child_visible_index].every(isNullableNonnegativeInteger)
@@ -2911,9 +2911,9 @@ function validateInventoryRow(value) {
     && value.has_baseline === (value.recorded_checksum !== null)
     && [value.size, value.mtime_ns].every((item) => item === null || isScalar64(item))
     && validateInventoryRollup(value.rollup)
-    && (value.warning === null || (isExactObject(value.warning, ["code", "path", "detail"])
-      && isBoundedV5Text(value.warning.code, true)
-      && (value.warning.path === null || value.warning.path === "" || isBoundedPath(value.warning.path)) && isValidUnicode(value.warning.detail)))
+    && (value.warning === null || (isExactObject(value.warning, ["code", "detail"])
+      && isScanWarningCode(value.warning.code)
+      && isValidUnicode(value.warning.detail) && value.warning.detail.length <= 300))
     && ((value.row_kind === "notice") === (value.warning !== null))
     && (value.warning === null || (value.row_id === null && !value.is_container));
 }
@@ -2927,11 +2927,25 @@ function validateInventorySubject(value) {
       && BigInt(value.file_identity.file_index) <= 340282366920938463463374607431768211455n));
 }
 
+function isScanWarningCode(value) {
+  return ["root_unavailable", "volume_unavailable", "access_denied", "disappeared",
+    "enumeration_error", "path_unrepresentable", "case_collision", "duplicate_identity",
+    "multi_link", "placeholder", "reparse_point", "unknown_type", "scalar_unrepresentable"].includes(value);
+}
+
 function validateInventoryDetail(value) {
-  if (!isExactObject(value, ["disposition", "view_revision", "node_id", "detail"])
+  if (!isExactObject(value, ["disposition", "view_revision", "node_id", "snapshot", "detail"])
       || !["current", "conflict", "unavailable"].includes(value.disposition)
       || !isNonnegativeInteger(value.view_revision) || !isNodeId(value.node_id)) return false;
-  if (value.disposition !== "current") return value.detail === null;
+  if (value.disposition !== "current") return value.detail === null && value.snapshot === null;
+  const snapshot = value.snapshot;
+  if (!isExactObject(snapshot, ["path", "warning"])
+    || !(snapshot.path === null || snapshot.path === "" || isBoundedPath(snapshot.path))
+    || !(snapshot.warning === null || (isExactObject(snapshot.warning, ["code", "detail"])
+      && isScanWarningCode(snapshot.warning.code) && isValidUnicode(snapshot.warning.detail)
+      && new TextEncoder().encode(snapshot.warning.detail).length <= 1024))) return false;
+  if (value.detail === null) return snapshot.warning !== null || snapshot.path !== null;
+  if (snapshot.warning !== null || snapshot.path === null) return false;
   const detail = value.detail;
   if (!isExactObject(detail, ["row", "observed", "attestation"])) return false;
   const row = detail.row;
@@ -3191,8 +3205,11 @@ function validatePlanWindowRow(value) {
       "prior-operation-group", "prior-group", "notice"].includes(value.row_kind)
     && (value.operation_id === null || (typeof value.operation_id === "string" && ID_PATTERN.test(value.operation_id)))
     && validatePlanKinds(value)
-    && (value.reason === null || typeof value.reason === "string")
-    && (value.blocked_reason === null || typeof value.blocked_reason === "string")
+    && (value.reason === null || ["source_only", "metadata_changed", "metadata_match", "identity_rename",
+      "identity_rename_changed", "required_directory", "empty_directory", "target_only", "directory_cleanup",
+      "unsupported", "case_mismatch", "unicode_normalization_mismatch", "case_collision", "type_collision", "policy_collision"].includes(value.reason))
+    && (value.blocked_reason === null || ["unsupported", "case_mismatch", "case_collision", "type_collision",
+      "destination_collision", "blocked_dependency"].includes(value.blocked_reason))
     && ["selected", "unselected", "mixed", "disabled"].includes(value.selection)
     && typeof value.highlighted === "boolean"
     && [value.selectable_operation_count, value.selected_operation_count,
@@ -3211,8 +3228,9 @@ function validatePlanWindowRow(value) {
         && value.move_group.destination_display.length <= 255
         && isValidUnicode(value.move_group.destination_display))
     && (value.notice === null || (isValidUnicode(value.notice) && value.notice.length <= 300))
-    && (value.selection_exclusion_reason === null
-      || isValidUnicode(value.selection_exclusion_reason))
+    && (value.selection_exclusion_reason === null || ["blocked-correspondence", "blocked-dependency", "incomplete-scan",
+      "user-deselected", "unsupported", "case_mismatch", "case_collision", "type_collision",
+      "destination_collision", "blocked_dependency"].includes(value.selection_exclusion_reason))
     && (value.execution === null || validateExecutionRow(value.execution))
     && ((value.operation_id === null) === (value.execution === null));
 }

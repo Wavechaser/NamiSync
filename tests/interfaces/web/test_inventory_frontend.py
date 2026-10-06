@@ -48,10 +48,15 @@ def _fixture() -> dict[str, object]:
         r"C:\root", True, 300, 0)
     views["maximum"] = {"summary": maximum.summary(), "window": maximum.window(expected_revision=0, offset=0, limit=256)}
     invalidated = replace(row, invalidation=VerificationInvalidation(NOW, VerificationInvalidationReason.HASH_MISMATCH))
-    detail = {"disposition": "current", "view_revision": 0, "node_id": projection.node_id_by_row_id["1"]}
+    detail = {"disposition": "current", "view_revision": 0, "node_id": projection.node_id_by_row_id["1"],
+              "snapshot": {"path": row.rel_path, "warning": None}}
+    snapshots = {node.node_id: {"disposition": "current", "view_revision": 0, "node_id": node.node_id,
+        "detail": None, "snapshot": {"path": node.warning.rel_path if node.warning else node.rel_path,
+            "warning": None if node.warning is None else {"code": node.warning.code.value, "detail": node.warning.detail}}}
+        for node in projection.nodes if node.position != 0 and node.row is None}
     return {"views": views, "detail": {**detail, "detail": inventory_current_detail(row)},
         "invalidated_detail": {**detail, "detail": inventory_current_detail(invalidated)},
-        "tail": maximum.window(expected_revision=0, offset=268, limit=256)}
+        "snapshots": snapshots, "tail": maximum.window(expected_revision=0, offset=268, limit=256)}
 
 
 def _run(probe: str, fixture: Path) -> None:

@@ -14,6 +14,7 @@ from .visible_sequence import (
     VisibleSequence, VisibleSequenceParameters, _derive_visible_sequence_from_validated,
     window_visible_sequence,
 )
+from .plan_review import _tail_text
 
 
 INVENTORY_FILTERS = frozenset({
@@ -166,7 +167,11 @@ class InventoryReviewState:
         for frame in window.rows:
             node, row = frame.node, frame.node.row
             rows.append({
-                "node_id": node.node_id, "display": node.display,
+                "node_id": node.node_id, "display": (
+                    f"{node.warning.code.value}: {_tail_text(node.warning.rel_path or 'root', 255)}"
+                    if node.warning is not None
+                    else _tail_text(node.rel_path.replace('/', '\\').rsplit('\\', 1)[-1], 300)
+                ),
                 "depth": node.depth - 1, "is_container": node.is_container,
                 "visible_index": frame.visible_index - 1,
                 "parent_visible_index": None if frame.parent_visible_index in (None, 0) else frame.parent_visible_index - 1,
@@ -184,8 +189,8 @@ class InventoryReviewState:
                 "mtime_ns": None if node.mtime_ns is None else str(node.mtime_ns),
                 "rollup": inventory_rollup_wire(node.rollup),
                 "warning": None if node.warning is None else {
-                    "code": node.warning.code.value, "path": node.warning.rel_path,
-                    "detail": node.warning.detail,
+                    "code": node.warning.code.value,
+                    "detail": _tail_text(node.warning.detail, 300),
                 },
             })
         return {"disposition": "current", "view_revision": self.view_revision,

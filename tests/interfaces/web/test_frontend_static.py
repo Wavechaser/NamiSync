@@ -508,7 +508,8 @@ def test_inventory_reads_validate_production_windows_and_current_evidence(tmp_pa
         ScanWarning(ScanWarningCode.ACCESS_DENIED, "", "root warning"),))
     view = InventoryReviewState("task-" + "1" * 32, "2" * 32, projection, r"C:\root", False, 1, 0)
     detail = {"disposition": "current", "view_revision": 0,
-              "node_id": projection.node_id_by_row_id["1"], "detail": inventory_current_detail(row)}
+              "node_id": projection.node_id_by_row_id["1"], "snapshot": {"path": row.rel_path, "warning": None},
+              "detail": inventory_current_detail(row)}
     fixture = tmp_path / "inventory-window.json"
     fixture.write_text(json.dumps({"summary": view.summary(),
         "window": view.window(expected_revision=0, offset=0, limit=256), "detail": detail}), encoding="utf-8")
