@@ -1,50 +1,50 @@
-# Latest session — Inventory refinement continued
+# Latest session — approved C5 fixture correction resumed
 
-2026-10-06 on milestone1. C1/C2/C3 are integrated as 9868f5c, dfd9291 and
-95ff419. C4 now completes the Verify table migration: shared seven-column 24px
-rows, zebra, disabled unchecked checkboxes, concise Presence, Notes and aligned
-font/resize semantics. Generic tree 28px and existing action/navigation ownership
-remain. Component docs and gallery producers/schema/checkers are migrated.
+2026-10-07. The user approved the combined fixture correction and continuation
+of C5. Recovery `5031f22` and integration `6c6e10f` were clean and unchanged;
+work resumes on `milestone1`, rebuilding useful files rather than merging WIP.
+C1–C4 and the separately reviewed helper-label correction remain integrated.
 
-C4 adversarial review caught active forced-color text inheriting CanvasText
-instead of HighlightText. The retained c4-active-colors-repro-01 confirms it.
-A scoped correction covers all text cells and preserves filled badge backgrounds;
-raw final observations verify six cell colors and an active filled Presence.
-The later failure was an inactive-specimen comparison for the active neutral
-label; its checker-only correction preserves inactive/filled assertions.
+The approved shared Plan fixture correction in M1_PLAN is implemented: swap
+indices3/12 so numeric sorting witnesses stay while every RECASE can genuinely
+change case; supply same-parent case-variant prior path/stat. Preserve production
+validators, exact populations/geometry/selection/sorting facts and historical
+measurement authorities. The actual published-window-to-browser-validator
+witness at the existing receipt fixture seam preserves missing-prior rejection.
+Final checks: 68 focused, 5,924 ordinary/four privilege skips, 12 imports and
+installed Plan04 completing 16 observations. The first ordinary run's three
+failures were sandbox identity/policy preconditions before their intended seams;
+unchanged tests passed under the actual Windows user. No policies/assertions
+changed. Independent review and commit accounting use `c5-fixture-*` and
+`integration.md`. Plan04 is compatibility evidence, not a timing baseline.
 
-Final C4 evidence: 114 focused, 12 imports, 1,951 interfaces with the changed gallery
-checker reverified by c4-focused-final-03. Eight installed obligations are covered
-by c4-native-final-02 non-gallery passes and c4-gallery-final-03 four gallery
-passes. Exact dependencies support reuse; retain all failed receipts. Independent
-review and commit accounting belong to c4-review* and integration.md in
-build/gui-inventory-refinement-20261005/.
+The earlier native attempts are retained: Plan01 failed stale helper settlement
+(fixed in `6c6e10f`); Plan02 failed the new collector startup sequence (draft
+corrected); Plan03 exposed the synthetic RECASE admission failure. No timing
+baseline is accepted. Real headless reproduction and independently reviewed
+base/heavy simulation are in `build/gui-inventory-refinement-20261005/`.
 
-GUI-C5 is active under M1_PLAN after C4 commit `3c984b6`: a bounded diagnostic
-table-loading method/baseline commit, then Inventory single-flight/latest-intent
-coalescing with identical remeasurement. The builder revalidated the inspected
-seams against C4 and is implementing the tool/probe and focused controls. No C5
-product changes or loading measurements exist yet. A fresh disposable installed
-baseline is prepared at `build/gui-inventory-refinement-20261005/c5-install-baseline-01/`;
-its wheel/install identities and pinned runtime requirements are retained there.
-`c5-host-profile.json` records this machine without claiming verified idle or AC
-power. Earlier acceptance installations must not be instrumented.
+C5 method/probe/tests/registration and draft docs remain preserved as nine exact
+recovery files under `c5-recovery-20261006-1715/`, with SHA-256 manifest. M1/HANDOFF
+are reconstructed and updated; the two collector files are restored but unchanged
+and excluded from the fixture commit. Remaining files are restored only when
+needed. Next complete and review the diagnostic method/baseline, then
+Inventory coalescing and identical remeasurement. Conditional placement/prefetch
+and placeholders require evidence. No product/coalescing changes exist yet.
+Method corrections: report incomplete receipts before reading profile; record
+actual bridge admission errors; reset keyboard setup through 0 before 20,032;
+separate first visible target coverage from obsolete-request settlement; summarize
+existing phase/byte samples with counts and median/range without summing nested
+spans. Freeze before the six-child baseline and independently review its evidence.
 
-The first installed probe `c5-representative-plan-01` stopped before the page:
-the existing execution-receipt fixture helper expected the old full destination
-label. All prior-group identity/geometry facts match; the bounded display is
-`1 item moved to …\target30`. The helper and fake registry are migrated, with a
-real published projection/view witness. The separate correction passes 53 focused,
-1,952 interfaces and 12 import contracts. `c5-representative-plan-02` reaches the
-installed page after successful helper settlement, then the new collector stops
-at its startup handshake. That collector correction is next; no timing baseline
-is accepted. Its execution UI adapter remains a direct consumer. Failed raw logs,
-successful before/after installation checks and asset restoration are retained.
-Conditional placement/prefetch/placeholders require the resulting evidence.
+The fresh disposable installation `c5-install-baseline-01/` retains source/wheel/
+installed identity and pinned runtime requirements. All previous instrumentation
+was restored and installation checks passed. `run-c5.ps1` records before/after
+inputs; compare relevant dependencies before accepting observations. Host profile
+does not claim verified idle/AC. Announce native runs and retain foreground guards;
+the user will try to foreground windows. No active native run at resumption.
 
-No functional checkbox selection, execution-to-Verify lifecycle, new actions or
-filesystem effects. The user's original HANDOFF remains byte-exact in
-user-handoff.md. Retain recovery branch
-codex/wip-20261005-2356-inventory-windows until final batch accounting; never
-merge/cherry-pick its WIP. No worktrees, push or PR. Announce native input and
-retain foreground ownership guards; the user will try to foreground windows.
+Keep original byte-exact `user-handoff.md`, failed receipts, both C1 and C5
+recovery refs and integration accounting until final closeout. No unrelated dirty
+work, worktrees, push or PR. Functional checkbox selection and execution-to-Verify
+remain deferred. No new filesystem effects or backend changes are authorized.

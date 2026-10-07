@@ -164,6 +164,43 @@ it is helper evidence, not a completed timing sample. Independent review and
 commit accounting belong to `c5-helper-*` and `integration.md`. No product
 behavior changed. Failed receipts and verified installed-asset restoration remain.
 
+**C5 recurrence correction approved — 2026-10-07.** The real-window probe reaches publication
+but the unchanged browser rejects synthetic RECASE rows without a prior name.
+Production planner output supplies that evidence; this is fixture drift, not
+evidence of a supported product regression. The user approved the combined
+fixture correction below and continuation of the remaining C5 work.
+
+| Repeated mechanism | Consequence and owner | Common verification boundary |
+| --- | --- | --- |
+| Old prior-group label expectation after bounded-display migration | Published fixture refused by execution-receipt helper; corrected in `6c6e10f`. | Real service/registry publication through the browser's actual window validator. Earlier helper/fake controls covered geometry separately. |
+| Synthetic RECASE omits prior path after rename presentation migration | Browser rejects the initial window; owner `tools/performance/plan.py` and its fixture consumers. | The same realized fixture-to-browser seam, without weakening validators. |
+
+The approved separate correction swaps fixture indices 3 (numeric-name RECASE)
+and 12 (caseable NOOP), then gives every RECASE a genuinely different, same-parent
+case-equivalent prior leaf and prior stat. Read-only base/heavy simulation in
+`c5-inspect-fixture-swap.json` preserves all manifest facts except artifact digest
+and plan fingerprint: populations, IDs, targets, stats, dependency depth, sibling
+geometry, raw sort witnesses and selection totals remain. Both original numeric
+names remain. Historical authorities/measurements are not rewritten.
+
+Finite repair population: shared Plan fixture; owning Plan scale controls; real
+published-window/browser-validator witness in the receipt scale tests; fixture
+history note in PERFORMANCE. Execution receipt/UI and C5 are direct consumers.
+The fixture correction passes 68 focused Plan/receipt/UI controls, 5,924 ordinary
+tests (four privilege skips; 35 headed excluded), all 12 import contracts and
+installed Plan04's 16 observations. Plan04 is compatibility evidence, not an
+accepted timing baseline. The first ordinary run used a sandbox token differing
+from its environment username: two ACL preconditions and the PowerShell version
+guard setup failed before their intended seams. The unchanged suite passed under
+the actual user; no assertions or security settings changed. Failed receipts and
+the environment disposition remain under `c5-fixture-*`. Independent review and
+commit accounting close this separate fixture unit. Revalidate C5 controls when
+reconstructing its separate method/probe outcome; no baseline is accepted.
+The clean recovery `5031f22` is based on unchanged integration `6c6e10f`. Rebuild
+its useful files into reviewed units, never merge or cherry-pick it as a review
+unit. Both recovery refs remain until final batch accounting. No intervening
+product or fixture changes were found on resumption.
+
 ## GUI follow-up batch — 2026-10-05
 
 User-ratified six-unit follow-up from `583f14d` on `milestone1`. B1 and B3–B6

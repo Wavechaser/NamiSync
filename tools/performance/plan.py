@@ -350,6 +350,9 @@ def _fixture_operation(index: int) -> PlanOperation:
         else ()
     )
     prior = _deep_path("prior", "old.bin", directory_count=30) if index == 0 else None
+    if kind is OperationKind.RECASE:
+        parent, _, name = target.rpartition("\\")
+        prior = parent + "\\" + name.upper()
     return PlanOperation(
         op_id=OpId(f"{index:032x}"),
         kind=kind,
@@ -400,6 +403,11 @@ def _fixture_kind(index: int) -> OperationKind:
         return OperationKind.MOVE
     if index == 10:
         return OperationKind.MKDIR
+    # Keep numeric-name sort witnesses while giving every RECASE a caseable leaf.
+    if index == 3:
+        return OperationKind.NOOP
+    if index == 12:
+        return OperationKind.RECASE
     cycle = (
         OperationKind.COPY, OperationKind.UPDATE, OperationKind.RECASE,
         OperationKind.TRASH, OperationKind.DELETE, OperationKind.NOOP,

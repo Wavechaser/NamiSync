@@ -115,8 +115,36 @@ def test_rootless_helper_accepts_real_published_base_view(tmp_path: Path) -> Non
         assert row["session_state"] == "completed" and row["session_released"]
         assert observed["first_row"]["display"] == "1 item moved to …\\target30"
         assert observed["window_total"] == 119_968 and observed["window_row_count"] == 256
+        window = registry.get_plan_window(row["task_id"], expected_revision=0, offset=0, limit=256)
+        _check_published_browser_window(tmp_path, window)
     finally:
         assert service.close().complete
+
+
+def _check_published_browser_window(tmp_path: Path, window: dict) -> None:
+    from _frontend_test_support import _node_executable, run_node_probe
+
+    node = _node_executable()
+    assert node is not None, "Node.js is required for the published-window validator witness"
+    assets = Path(__file__).parents[3] / "namisync/interfaces/web/assets"
+    (tmp_path / "bridge.mjs").write_text(
+        (assets / "bridge.js").read_text(encoding="utf-8") + "\nexport {validatePlanWindow};\n", encoding="utf-8",
+    )
+    (tmp_path / "window.json").write_text(json.dumps(window), encoding="utf-8")
+    probe = tmp_path / "published-window.mjs"
+    probe.write_text("""import assert from 'node:assert/strict';
+import fs from 'node:fs';
+globalThis.window = {addEventListener() {}};
+const {validatePlanWindow} = await import('./bridge.mjs');
+const window = JSON.parse(fs.readFileSync(new URL('./window.json', import.meta.url), 'utf8'));
+assert.equal(validatePlanWindow(window), true, 'real published fixture window must pass production validation');
+const renamed = window.rows.find(row => row.operation_kind === 'recase');
+assert.ok(renamed?.prior_name);
+renamed.prior_name = null;
+assert.equal(validatePlanWindow(window), false, 'missing prior name must remain rejected');
+""", encoding="utf-8")
+    result = run_node_probe((node, probe), timeout=10)
+    assert result.returncode == 0, result.stderr
 
 
 def test_selected_receipt_rejects_false_action_even_with_fast_sample(

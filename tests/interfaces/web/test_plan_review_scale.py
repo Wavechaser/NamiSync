@@ -524,12 +524,30 @@ def _live_fixture_manifests() -> dict[str, object]:
     }
 
 
+@pytest.mark.parametrize("information_heavy", (False, True))
+def test_plan_fixture_recase_operations_have_genuine_prior_case(information_heavy: bool) -> None:
+    artifact = build_plan_fixture(information_heavy=information_heavy)
+    operations = artifact.plan.operations
+    assert operations[3].kind is OperationKind.NOOP
+    assert operations[3].target_rel_path == r"witness\0"
+    assert operations[6].target_rel_path == r"witness\100"
+    assert operations[12].kind is OperationKind.RECASE
+    recased = [operation for operation in operations if operation.kind is OperationKind.RECASE]
+    assert len(recased) == 16_667
+    for operation in recased:
+        target_parent, _, target_name = operation.target_rel_path.rpartition("\\")
+        prior_parent, _, prior_name = operation.prior_target_rel_path.rpartition("\\")
+        assert prior_parent == target_parent
+        assert prior_name != target_name and prior_name.casefold() == target_name.casefold()
+        assert operation.prior_target_expected == operation.source_expected
+
+
 
 def test_plan_review_fixture_realizes_exact_counts_depth_duplicates_and_orders() -> None:
     manifests = _live_fixture_manifests()
     expected = _synthetic_fixture_manifests()
     for case in ("base", "information-heavy"):
-        for field in ("counts", "raw_key_witnesses"):
+        for field in manifests[case].keys() - {"artifact_digest", "plan_fingerprint"}:
             assert manifests[case][field] == expected[case][field]
     base = manifests["base"]
     heavy = manifests["information-heavy"]

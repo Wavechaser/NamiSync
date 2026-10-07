@@ -36,6 +36,20 @@ exercises bounded retention without prescribing a cache mechanism. Key,
 projection, comparator, index, publication or retention changes reopen
 affected evidence. The source-owned runtime admission bounds are independent.
 
+The 2026-10-07 shared Plan fixture correction supplies each RECASE with a
+same-parent prior leaf that differs only in case and its existing expected stat.
+Indices 3 and 12 exchange RECASE/NOOP kinds so numeric filename witnesses remain
+unchanged and every recase has a caseable leaf. Both base and information-heavy
+manifests preserve all facts except artifact digest and plan fingerprint:
+population, kind counts, dependency/path depth, sibling geometry, selection
+facts and raw sort witnesses remain unchanged. The initial published base view
+still exposes 119,968 rootless rows and complete 256-row windows. Its realized
+window now passes the unchanged browser validator; a missing prior name remains
+rejected. Historical authorities and timing receipts retain their original
+bytes and producer identity. Changed fixture and payload representation require
+fresh affected observations; those historical timings do not describe the
+corrected fixture. No timing baseline is accepted by this correction.
+
 ## Cold inventory projection acceptance method
 
 PRESENTATION owns the retained base 3 s / information-heavy 6 s maxima. The

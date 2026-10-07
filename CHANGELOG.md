@@ -177,8 +177,12 @@ behavioral evidence.
 Safety, settlement and authority work made high-consequence release claims
 explicit, reviewable and regression-backed.
 
-#### Align desktop review surfaces and recovery (2026-10-05 – 2026-10-06)
+#### Align desktop review surfaces and recovery (2026-10-05 – 2026-10-07)
 
+- Repair synthetic recase evidence in the shared Plan scale fixture, preserving
+  populations, sorting witnesses and selection facts. Validate a real published
+  window through the unchanged browser validator; historical measurements retain
+  their original producer identity.
 - Migrate the installed measurement helper's prior-location label expectation
   to the bounded destination display, preserving full-path identity and rootless
   geometry checks.
