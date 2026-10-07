@@ -910,6 +910,19 @@ defect, and move implementation-level test choreography out of the log.
   Item-card Acknowledge/Restore retain their displayed item. Direct page and
   installed keyboard witnesses distinguish retained detail A from refreshed B.
 
+### Review viewport loading
+
+- MODERATE - OPEN (2026-10-08). Moving-intent starvation. Continuous viewport
+  movement can leave Plan and Inventory rows uncovered until scrolling stops,
+  while hundreds of successful reads are discarded. Cause: each new viewport
+  demand invalidates exact request revision/offset (and Inventory tree generation),
+  although a returned window may still cover the latest viewport under unchanged
+  task/view ownership. One-in-flight coalescing bounds concurrency but not adoption.
+  Separate browser-event-only 240-row/s controls reproduce about 11.1 seconds
+  uncovered in 12 seconds on both pages; stopping restores coverage. No mutation
+  or durable truth is affected. This predates BC1; investigation only, no fix.
+  PERFORMANCE's BC2–5 study retains the raw frames, source mechanism and limits.
+
 ### Plan review windowing
 
 - MODERATE - FIXED (2026-10-05). Repeated unbounded labels. Supported deep

@@ -11,7 +11,7 @@ retains investigation, rejected proposals and superseded execution recipes;
 the decisions still governing delivery are below. Historical observations
 certify their recorded build and dependencies only.
 
-## Bridge counter optimization and loading investigation — 2026-10-07
+## Bridge counter optimization and loading investigation — 2026-10-07–08
 
 The user authorizes #1 implementation and #2–5 investigation only, from
 `706be4b`. Preserve the response admission contract exactly: canonical UTF-8
@@ -46,6 +46,25 @@ bytes. PERFORMANCE records faster capture, overlapping Inventory coverage ranges
 and unchanged Plan burst median; no timing threshold is claimed. Final BC1b
 commit/review accounting is retained with the evidence. BC2–5 remains
 investigation only under the predeclared PERFORMANCE method.
+
+BC1b is committed as `9d09f70`; final independent review recomputed raw statistics
+and verified all 144 matrix asset hashes. BC2–5 investigation is complete on
+that unchanged product. Capture/field profiles, six DOM/steady children and two
+browser-event-only control children pass their declared checks. PERFORMANCE
+owns findings and recommendations; BUGS records moving-intent starvation OPEN.
+
+The shared recurrence review for the two observed viewport cases is:
+
+| Owner | Consequence | Common mechanism and follow-up boundary |
+| --- | --- | --- |
+| Plan `app.js` / grid viewport | Returned rows repeatedly discarded during continuous movement; recovery at rest. | Exact request revision/offset is conflated with current viewport compatibility. |
+| Inventory `app.js` / generic tree | Same exposed viewport; both intent and tree generation reject older demand. | Same viewport-demand mechanism, with an additional tree adoption fence. |
+
+No instance fix was attempted. A coherent follow-up must review both adoption
+paths and navigation/stale-owner consumers together, preserving the unchanged
+view/action/identity fences and bounded window/concurrency. Row-schema reductions,
+cheaper encoding calls, shared layout work and prefetch are proposals only.
+User review, not this investigation's closure, authorizes any implementation.
 
 ## GUI Inventory refinement — 2026-10-05
 

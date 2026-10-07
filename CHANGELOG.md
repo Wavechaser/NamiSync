@@ -177,8 +177,13 @@ behavioral evidence.
 Safety, settlement and authority work made high-consequence release claims
 explicit, reviewable and regression-backed.
 
-#### Align desktop review surfaces and recovery (2026-10-05 – 2026-10-07)
+#### Align desktop review surfaces and recovery (2026-10-05 – 2026-10-08)
 
+- Investigate remaining capture, row bytes, DOM stages and steady scrolling
+  without further product changes. Identify unused row payload candidates and
+  non-equivalent Plan/Inventory DOM timing endpoints. Record continuous-scroll
+  response starvation OPEN after browser-event-only controls; prefetch remains
+  a separate decision after fixing adoption, not an implemented optimization.
 - Count canonical bridge string bytes in bounded 4K chunks, preserving Unicode
   refusal, exact limits, first-failure ordering and detached response custody.
   Pass 5,982 ordinary checks, twelve import contracts and six installed transport

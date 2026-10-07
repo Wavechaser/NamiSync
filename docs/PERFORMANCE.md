@@ -276,6 +276,102 @@ Setup/steady gestures omit that forced read; setup summaries remain separate.
 These intrusive diagnostics are not headline comparison samples. Report raw
 dispersion and limits before proposing capture, row, DOM or prefetch changes.
 
+The first steady series exposed prolonged response discard while the viewport
+kept moving. Before generalizing, a separately hashed control runs one fresh
+child per component with both speeds, changing only the steady motion to direct
+`scrollTop` assignment without manually dispatching a scroll event. Standard
+gestures and all ownership/coverage/restoration checks remain. Browser-emitted
+scroll events still drive the product; this is not native wheel acceptance.
+Use `bc25_loading_natural.py`/`run-bc25-natural.ps1` and separate control receipts;
+do not pool these one-child observations with the original three-child series.
+
+### BC2–5 investigation results — 2026-10-08
+
+Product `9d09f70` is unchanged throughout. Evidence is `bc25-capture-candidate-01`,
+`bc25-dom-steady-{plan,inventory}-01`, `bc25-natural-{plan,inventory}-01`,
+`bc25-summary-01`, `bc25-field-proposals.json` and `row-consumers.md` under the
+BC1 directory. Wrappers preserve frozen source/helper/profile manifests and
+recheck installations after asset restoration. Component replay values use
+fixed identities/initial state, so their framing is not byte-identical to native
+gesture replies; do not substitute their bytes/timings for the BC1 matrix.
+
+**Remaining capture.** At offset 60,000, unwrapped component capture medians are
+12.526 ms Plan and 13.088 ms Inventory; capture-plus-projection medians are
+14.064/14.307 ms in separate blocks. Each window counts 11,230/11,354 string
+occurrences, including 8,592/9,221 keys, and makes 45,640/48,238 budget charges.
+Both contain only dictionaries, a list and primitives: no typed-view rebuild or
+registered view validation is repeated. Owned projection revisits the detached
+primitive tree in place; it does not make another dictionary copy. Profiles
+put string encoding/accounting and recursive dispatch ahead of container checks.
+They inflate capture to about 50.0/52.8 ms; use call counts and relative hotspots,
+not profiled milliseconds as predicted savings. No validation or custody walk
+was removed. A cheaper per-string encoder call is a potential narrow experiment;
+there is no measured justification for a broad trusted-response bypass.
+
+**Row payload.** Bounded Inventory basenames already shipped in C1. In these
+256-row windows, JSON keys alone contribute 123,218/113,201 bytes (Plan/Inventory).
+Inventory rollups contribute 57,387 bytes before row commas, including 47,925
+removable bytes with commas on the 213 noncontainers; container rollups have real
+detail/action consumers. A hypothetical producer/validator/consumer migration
+omitting noncontainer rollups plus redundant Inventory `has_baseline`, `row_kind`
+and window numeric `row_id` reduces this result from 176,302 to 113,488 bytes
+(35.6%). Presence nullness can distinguish ledger subjects; exact details retain
+their IDs. Full checksum still supplies the tooltip and should remain.
+
+Plan's four generic-tree geometry fields have no current grid consumer beyond
+validation; its three operation counts are read for containers only. Removing
+those geometry fields and noncontainer counts would reduce this sample from
+198,429 to 156,768 bytes (21.0%). Inventory uses those geometry fields for tree
+keyboard/ARIA behavior and must retain them. These are exact size estimates for
+the named samples, not accepted schemas, complete-domain ceilings or speed gains.
+Any implementation must migrate strict validators, producers, details/actions,
+fixtures and bounded-envelope proofs together. No packed-array/key-shortening
+schema or checksum truncation is proposed.
+
+**DOM work.** Nine diagnostic jumps per component give median detached build
+3.9/3.8 ms, attached replacement 2.1/1.9 ms, and post-insertion controller work
+0.0/15.9 ms (Plan/Inventory). The explicit residual rectangle read adds
+16.3/0.0 ms respectively. Zero is at the browser timer's observed precision.
+The old DOM spans charge similar layout-related work at different endpoints;
+Inventory's decorator is not demonstrated to be slower. These spans do not
+partition all render work or isolate pure layout CPU. Profile shared layout
+before rewriting the Inventory renderer; no DOM changes were made.
+
+**Continuous-scroll finding.** At 240 rows/second, all three children per
+component show about 11.1 seconds uncovered during each 12-second trajectory.
+Plan makes 454–459 reads, discarding all but one; Inventory makes 432–437,
+also discarding all but one. At 60 rows/second, uncovered totals range
+2.631–8.508 seconds Plan and 8.268–8.275 seconds Inventory. Both recover at
+settlement after scrolling stops, retain at most 256 rows and maximum one read
+in flight, and preserve the same task/publication/view ownership throughout.
+The browser-event-only controls reproduce this at 240: Plan 453 reads/452
+discarded and 11.117 seconds uncovered; Inventory 430/429 and 11.109 seconds.
+At 60, those controls observe 8.509/4.664 seconds uncovered. These controls
+exclude manual event dispatch as the sole cause, without certifying native
+wheel cadence or compositor presentation.
+
+Independent offline replay (`bc25-review-compatibility-01.json`) confirms all
+3,548 discarded 240-row/s responses cover both saved viewport frames bracketing
+their validation time, under unchanged recorded owner and valid 256-row replies.
+This is a frame-sampled compatibility witness, not interpolation of compositor
+state. All eight study/control asset restorations and 96 asset hashes were checked.
+
+The common failure mechanism is request freshness being invalidated by a newer
+viewport demand even when the in-flight response still covers that demand.
+`app.js` Plan checks exact window-request revision/offset; Inventory checks
+exact intent revision and `tree.js` separately checks request generation.
+Same-index events are deduplicated, but moving indices keep superseding reads.
+This behavior predates BC1's Python-only change. BUGS records it OPEN; no fix
+or prefetch was delivered. The abrupt-jump corpus did not test sustained movement.
+
+Recommended next decision: correct viewport-only response adoption in both
+consumers before adding prefetch, preserving task/session/publication, view,
+action, navigation and highlight fences and dropping superseded queued demand
+only when current viewport coverage is established. Then perform the bounded
+row migration and remeasure. Steady scrolling provides lead time inside a
+retained window; its absence cannot be inferred from abrupt jumps. Prefetch
+remains a separate experiment after starvation is resolved, not the current fix.
+
 ### GUI-C5 baseline — 2026-10-07
 
 Evidence under `build/gui-inventory-refinement-20261005/`:
