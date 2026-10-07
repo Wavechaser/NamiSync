@@ -50,6 +50,184 @@ bytes and producer identity. Changed fixture and payload representation require
 fresh affected observations; those historical timings do not describe the
 corrected fixture. No timing baseline is accepted by this correction.
 
+## Table-loading diagnostic method — GUI-C5
+
+This current-source observation has no latency SLO, tail percentile or release
+ceiling. It diagnoses Plan and Inventory separately after GUI-C4 (`3c984b6`),
+before Inventory request coalescing. The finite corpus is the existing base
+Plan fixture (120,000 projection nodes; 119,968 visible rootless rows) and base
+Inventory fixture (120,001 projection nodes including root; 120,000 displayed
+rows). No information-heavy collection is required. C1's complete-envelope
+proofs remain the authority for the unchanged 256-row / 8 MiB bounds.
+
+`tools/performance/table_loading.py` and its adjacent browser probe reuse the
+installed headed runner in `plan.py`, `_child.py`'s Windows Job/deadline, the
+rootless Plan fixture settlement in `execution_receipt.py`, and `inventory.py`'s
+base input/correctness functions. The driver imports no collected test module.
+Inventory starts/releases a real empty-root inventory task, then supplies the
+complete synthetic base projection at the existing lifecycle projection seam.
+Both projections and initial view states are constructed before table timing;
+the real registry, view, bridge, native encoding and browser renderers remain.
+These are table-loading diagnostics, not filesystem scan or cold projection
+measurements. Host startup, fixture construction and initial projection/view
+publication are excluded and have no duration reported by this collector.
+
+Collection uses a newly installed disposable C5 wheel environment, never a
+prior retained installed test environment. Its `site-packages` contains the
+explicit ownership marker `.namisync-table-loading-owned.json` with purpose
+`GUI-C5 disposable installed measurement`. Before collection, retain the wheel
+and installation identity, dependency versions and observed host profile as
+`c5-host-profile.json` beside the output. Actual viewport, device pixel ratio,
+theme, motion, forced colors, document visibility/focus and row geometry are
+recorded by each child. Scratch UI preferences select Light through the real
+cosmetic owner; normal motion, ordinary colors, hidden Details and 24px rows
+are checked, not assumed. Document focus is not native foreground ownership.
+Power and unrelated workload facts stay explicitly unobserved unless verified;
+this diagnostic does not borrow cold-projection profile acceptance.
+
+The baseline is three fresh sequential children for each component: six
+children total. Each child records one initial table load and three repetitions
+of each of five fixed classes. There are three initial and nine warm observations
+per class/component. Report each child and the median/minimum/maximum; no sparse
+p95 claim. Per-child and component summaries group existing phases and byte
+counts by gesture, each with count/median/minimum/maximum. Setup requests with
+no gesture tag remain raw but are excluded from aggregates; DOM summaries use
+only adopted responses. Request-phase sample counts can differ from the three
+or nine gesture counts. Nested phases remain separate and unsummed. A
+representative one-child `--probe` for each component validates the real installed
+seam before the six-child baseline and is not part of that baseline's samples.
+
+The browser script is frozen before collection. Every warm gesture resets to
+scroll index 0 and waits for current full viewport coverage and settled window
+reads over two frames. Sequential crossing sets index 256; a long jump sets
+60,000. Covered return sets 10,000, waits one animation frame, then sets 0.
+The burst sets 5,000 / 10,000 / 15,000 / 20,000 / 25,000 / 30,000 / 35,000 /
+40,000, one target per animation frame. Each keyboard repetition resets to 0
+and settles, then sets scroll index 20,032 and settles. It records the actual
+setup first/last viewport indices and retained window offset. Placement is checked
+against the unchanged component rule: Plan starts at first index minus 32
+(20,000); forward Inventory starts at last index minus 32, where last is
+`ceil((20032 * 24 + measured viewport height) / 24) - 1`. It scrolls the first
+retained row into view, activates/focuses it outside timing, and waits for its
+real highlight/active identity and viewport coverage, then dispatches ArrowUp
+to target the validated setup offset minus one. Setup geometry and target
+are retained in the raw sample. These are synthetic DOM scroll/click/key
+gestures through production handlers, not native keyboard acceptance evidence.
+Existing installed journeys retain native keyboard authority.
+
+Initial timing begins at the first eligible production review load after fixture
+publication. Its bounded frame observer starts before window completion. Warm
+timing begins immediately before its first input; observation includes all eight
+burst frames. Landing requires the actual scroll viewport's first index to match
+the final target, or the exact active row index within the viewport for keyboard, with current owner,
+matching DOM row identities, at most 256 rows and complete viewport coverage.
+The first two such actual recorded frames are coverage/paint-opportunity
+observations independently of outstanding requests. Coverage can therefore be
+visible while obsolete reads are still pending. A separate bounded settlement
+wait requires final target coverage and zero outstanding reads, then checks again
+after one frame for full request accounting. `settlement_ns` includes that final
+frame; `pending` describes the second visible frame and `settlement_pending` the
+final accounting boundary. Raw uncovered intervals end at the first paint
+opportunity. These observations do not measure actual compositor presentation. Raw uncovered
+frame intervals, request count/concurrency, offsets, action/view ownership and
+discarded responses identify remaining gaps. Plan's highlight RPC before a
+keyboard window read remains inside gesture-to-coverage time.
+
+Browser `performance.now()` measures the viewport-intent callback (or direct
+window call when no callback owns it) to native submission, direct call readiness
+wait, native round trip, actual pywebview JSON decode, bridge response-entry through
+envelope/token validation and clone/schema settlement,
+accepted DOM adoption and frame coverage. Python `perf_counter_ns()` measures
+native dispatcher entry to prepared-handler entry, registry total and inner
+view window construction, bridge capture/projection, and actual pywebview
+`json.dumps` response encoding. The latter forwards the original encoder; it
+does not time a substitute serialization. Canonical response-budget bytes come
+from actual budget consumption. Native JSON-wrapper bytes and complete escaped
+callback-script bytes are separate actual artifacts; script bytes include their
+callback framing. Encoding time covers JSON encoding, not callback escaping or
+native evaluation. Host thread/lock queue wait is initially unobserved.
+
+Python spans and browser decode nest within the browser round trip. Inner view
+construction nests within registry total. Never add those overlapping values
+into one latency or subtract clocks from different processes. Failed actions,
+missing phases/owners, wrong profiles, recorder overflow or unfinished children
+invalidate evidence independently of speed. The recorder uses the actual bridge
+settlement error, not a response's `current` disposition as proof of admission.
+Incomplete receipts surface their bounded actual error before profile validation;
+the first failed native response (already limited by C1's complete envelope)
+and all raw child/asset evidence remain retained. No artificial response delay is
+used in measurements. Record original/instrumented/restored asset bytes and
+SHA-256 identities; parent-owned restoration runs even after child termination.
+Exact-anchor drift refuses before installed writes. Product inputs, fixtures,
+driver/helpers, Python and loaded native/browser/runtime versions bind evidence;
+changed dependencies require affected observations. The collection wrapper
+retains and compares the finite product/fixture/tool/helper inputs and installed
+wheel identity before and after collection, including C4 geometry.
+
+Commands, run only after inputs freeze and headed coordination:
+
+```powershell
+.\.venv\Scripts\python.exe -m tools.performance.table_loading --check
+# Use the fresh installed interpreter for the probe and baseline; its output
+# directory already contains c5-host-profile.json.
+python -m tools.performance.table_loading --probe plan-base --installed-root SITE_PACKAGES --output build/gui-inventory-refinement-20261005/c5-representative-plan.json
+python -m tools performance table-loading plan-base --installed-root SITE_PACKAGES --json build/gui-inventory-refinement-20261005/c5-baseline-plan.json
+python -m tools performance table-loading inventory-base --installed-root SITE_PACKAGES --json build/gui-inventory-refinement-20261005/c5-baseline-inventory.json
+```
+
+Reports and raw child/asset evidence use fresh paths under ignored `build/`.
+`tests/test_table_loading_performance.py` supplies independent fixture/action,
+encoding/budget and failure/restoration controls without timing acceptance.
+Review this method/baseline as one atomic outcome, then Inventory coalescing and
+identical remeasurement separately. Placement/prefetch or placeholders require
+a remaining measured gap; this method adds none of those product changes.
+
+### GUI-C5 baseline — 2026-10-07
+
+Evidence under `build/gui-inventory-refinement-20261005/`:
+`c5-baseline-plan-01.json`, `c5-baseline-inventory-01.json` and
+`c5-baseline-summary.md`. Source base `455fd49` plus the frozen diagnostic files
+are bound by each run's before/after manifest. All six fresh children completed
+16 observations each; Plan05 and Inventory01 representatives are excluded.
+No ordinary suite ran alongside collection. Independent review recomputed all
+per-child and combined summaries and checked raw receipts, asset restoration
+and wheel/installation identity.
+
+Recorded host: Windows 11 build 26200, i7-13700K, 63.69 GiB RAM, F: SN850X NVMe;
+Python 3.13.14, pywebview 6.2.1, pythonnet 3.1.0, WebView2 154.0.4258.53.
+All children used 1267×764 CSS pixels, DPR 1.75, Light, normal motion, hidden
+Details and 24px rows. Plan viewport was 853×359; Inventory was 880×321.
+Power and unrelated workload were not independently verified. Instrumentation
+overhead is uncalibrated; these observations are not production latency promises.
+
+First identity-correct target coverage, milliseconds, median [minimum, maximum]:
+
+| Gesture (observations per component) | Plan | Inventory |
+| --- | --- | --- |
+| Initial (3) | 112.9 [110.8, 137.7] | 99.3 [97.2, 101.1] |
+| Sequential edge (9) | 103.0 [83.0, 140.5] | 83.5 [78.4, 87.4] |
+| Jump (9) | 80.8 [75.6, 105.2] | 76.2 [72.5, 83.3] |
+| Covered return (9) | 16.5 [14.2, 16.6] | 16.6 [8.8, 16.7] |
+| Burst (9) | 192.9 [180.1, 199.4] | 413.8 [396.1, 435.1] |
+| Keyboard (9) | 158.6 [151.2, 162.2] | 72.2 [67.3, 74.6] |
+
+Nine Inventory bursts dispatched 72 reads, maximum concurrency eight, discarding
+63 responses. Plan dispatched 27, concurrency one, discarding 18. Covered-return
+visibility precedes discarded-read settlement; Plan keyboard legitimately adopts
+two windows per gesture, Inventory one. Counts and all phase/byte distributions
+remain explicit in the raw reports rather than assuming one request per gesture.
+
+For the nine jump reads, Plan/Inventory median round trips were 53.9/49.0 ms;
+registry outer work 1.417/1.909 ms versus inner window build 1.303/1.899 ms.
+That does not trigger the conditional registry-lock investigation. Bridge capture
+was 43.291/37.287 ms, projection 3.169/3.550 ms, native JSON encoding
+0.601/0.615 ms, browser validation 0.7/0.9 ms and adopted DOM 5.9/21.7 ms.
+Nested spans are not added; the unobserved round-trip remainder is not assigned
+to a queue. Jump median canonical-budget/native-wrapper/callback-script bytes
+were 198624/215696/215780 for Plan and 176388/194671/194755 for Inventory.
+Proceed with the accepted viewport coalescing and identical remeasurement;
+placement/prefetch and placeholders remain conditional on the remaining gaps.
+
 ## Cold inventory projection acceptance method
 
 PRESENTATION owns the retained base 3 s / information-heavy 6 s maxima. The

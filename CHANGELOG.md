@@ -179,6 +179,12 @@ explicit, reviewable and regression-backed.
 
 #### Align desktop review surfaces and recovery (2026-10-05 – 2026-10-07)
 
+- Add the optional installed table-loading diagnostic and freeze a six-child
+  Plan/Inventory baseline. Separate first visible coverage from discarded-read
+  settlement, correlate real bridge phases and preserve installed assets after
+  every run. Inventory bursts dispatch eight concurrent reads; the accepted
+  coalescing follow-up remains separate. Pass 29 focused and 5,953 ordinary
+  checks, twelve import contracts and independent raw-evidence review.
 - Repair synthetic recase evidence in the shared Plan scale fixture, preserving
   populations, sorting witnesses and selection facts. Validate a real published
   window through the unchanged browser validator; historical measurements retain

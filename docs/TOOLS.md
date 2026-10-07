@@ -515,8 +515,8 @@ The pipeline report also aggregates copy counts by `write_modes` and non-null
 `fallback_reasons`. These opt-in observations distinguish direct writes from
 buffered copies and capability fallback; they do not select a device policy.
 
-`tools/performance/` owns selected Plan, execution receipt/UI, bridge-event and
-history measurements. Assets live beside their driver; small fixture/runner
+`tools/performance/` owns selected Plan, execution receipt/UI, bridge-event,
+table-loading and history measurements. Assets live beside their driver; small fixture/runner
 helpers are shared only where used. These drivers may compose the real
 interface and database endpoints they measure. They may reuse uncollected
 native test helpers; they must not import collected test modules. Tests stay
@@ -530,6 +530,18 @@ component endpoints. Bridge-event builds
 its own wheel from committed HEAD and uses the working-tree driver. Reports
 distinguish those sources. See [PERFORMANCE](PERFORMANCE.md) for exact cases,
 installation methods, profiles and interpretation.
+
+The `table-loading` family has `plan-base` and `inventory-base` cases, three
+fresh installed children each. Use a new C5 disposable installed environment
+with its explicit ownership marker and a `c5-host-profile.json` beside output.
+`python -m tools.performance.table_loading --check` validates the fixtures without
+heading or timing; `--probe CASE --installed-root PATH --output PATH` runs one
+representative child before baseline collection. Coordinate headed runs and
+freeze writers first. The driver instruments four installed assets with exact
+anchors and retains original/instrumented/restored bytes under ignored `build/`;
+parent-owned restoration also covers child failure/deadline. Source product
+assets stay unchanged. [PERFORMANCE](PERFORMANCE.md#table-loading-diagnostic-method--gui-c5)
+owns its finite gestures, actual clock boundaries and diagnostic interpretation.
 
 Reports are published without overwriting an existing result. If the destination
 already exists, the performance command advises choosing a new `--json` path;

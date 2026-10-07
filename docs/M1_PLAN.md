@@ -147,9 +147,27 @@ and tree probes plus installed Inventory/shared-tree witnesses own regression
 coverage; Plan stays the comparison consumer. Review method/baseline as one
 commit, then coalescing/repeated measurements as another. Placement/prefetch and
 noninteractive placeholders remain separate conditional outcomes only if those
-measurements demonstrate remaining gaps. C4 is closed; the diagnostic collector
-is under implementation. No loading measurements or coalescing changes are yet
-complete.
+measurements demonstrate remaining gaps. C5a now closes with 29 focused checks,
+5,953 ordinary passes/four privilege skips, 12 import contracts, both installed
+representatives and six complete baseline children (96 observations). Independent
+review confirmed source binding, raw correlation, summaries and asset restoration.
+PERFORMANCE owns the diagnostic figures; `c5-method-*`, `c5-baseline-*` and
+`integration.md` own evidence/commit accounting. C5b remains next; product loading
+behavior is unchanged by C5a.
+
+C5b's read-only design was checked at `455fd49`: retain viewport custody on the
+task so replacement reviews cannot start a second viewport read while an old
+one drains. Keep at most one running read and one queued intent; canceled or
+superseded callbacks resolve null independently. Initial review and view-change
+follow-up windows remain action-owned reads, which may overlap a retired
+viewport read under existing ownership guards. Do not delay those actions or
+introduce a general scheduler. The finite direct probes are
+`inventory_review_probe.mjs`, `inventory_app_probe.mjs` and `tree_probe.mjs`;
+`task_shell_probe.mjs` remains the Plan comparison. Cover bursts, covered return,
+loaded-row activation, keyboard precedence, replacement/disposal, rejection and
+conflict. Revalidate these seams after the C5a commit before implementation;
+interfaces/import checks, installed Inventory/shared-tree checks and identical
+measurements close the separate C5b commit.
 
 The first C5 installed probe exposed a stale direct measurement consumer:
 `execution_receipt._rootless_settlement` and its fake registry still expected the

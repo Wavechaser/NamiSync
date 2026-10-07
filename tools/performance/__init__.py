@@ -15,6 +15,7 @@ _MODULES = {
     "execution-ui": "execution_ui",
     "bridge-event": "bridge_event",
     "history": "history",
+    "table-loading": "table_loading",
 }
 _REPOSITORY = Path(__file__).resolve().parents[2]
 
