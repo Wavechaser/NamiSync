@@ -190,7 +190,13 @@ An excess returns `response_too_large` without undoing an admitted action. At mo
 seconds for quiescence. These active bounds are independent of retired BR-G-45.
 
 `web/bridge.py` captures each hostile response occurrence and charges its exact
-canonical bytes before using the detached value. Ordinary responses validate
+canonical bytes before using the detached value. String admission charges quotes
+first and encodes at most 4,096 characters per chunk with strict UTF-8. If a
+chunk cannot encode or fit, scalar accounting stops at the original first
+failure, preserving invalid-Unicode versus size-refusal ordering and the exact
+remaining budget. Temporary encoding and lookahead are bounded to one chunk;
+there is no whole-response serialization or extra source enumeration.
+Ordinary responses validate
 owned views while projecting JSON primitives. Continuation storage keeps its
 separately validated typed snapshot; task drains validate the complete admitted
 typed prefix before queue consumption and project only after that handoff.

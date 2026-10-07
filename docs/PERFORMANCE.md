@@ -65,6 +65,14 @@ suggested 40 ms jumps and 100 ms bursts are hypotheses, not acceptance criteria.
 Remaining-capture, row-field, DOM-stage and steady-scroll profiling is separate
 from these headline timings and authorizes no additional product optimization.
 
+BC1's counter uses 4,096-character chunks, with the original scalar rules only
+for a chunk that fails encoding or byte admission. Its bounded design probe
+compares mixed escapes, control characters, UTF-8 widths, emoji, noncharacters
+and surrogates with the old counter, including remaining budgets and exception
+precedence/context. Exact byte/custody tests remain behavior gates, independently
+of speed. Design microbenchmarks select a modest chunk size; the repeated
+installed baseline/comparison, not those loop samples, diagnoses user latency.
+
 This current-source observation has no latency SLO, tail percentile or release
 ceiling. It diagnoses Plan and Inventory separately after GUI-C4 (`3c984b6`),
 before Inventory request coalescing. The finite corpus is the existing base
@@ -194,6 +202,79 @@ encoding/budget and failure/restoration controls without timing acceptance.
 Review this method/baseline as one atomic outcome, then Inventory coalescing and
 identical remeasurement separately. Placement/prefetch or placeholders require
 a remaining measured gap; this method adds none of those product changes.
+
+### BC1 bounded counter comparison — 2026-10-07
+
+Evidence: `build/bridge-counter-study-20261007/`, `bc1-baseline-*` and
+`bc1-candidate-*` probes and matrices, with `comparison-summary.json`. Each
+matrix contains three fresh children per component and nine observations per
+warm class. Both use collector `806df04`, identical browser probe/wrappers,
+pinned dependencies and the same host profile; candidate product changes only
+the bridge string counter. Source manifests, wheel/install identities and
+original/instrumented/restored assets bind every run. No tests or profiling ran
+alongside these timings. Power and unrelated workload remain unverified.
+
+| Median, milliseconds | Plan old → bulk | Inventory old → bulk |
+| --- | --- | --- |
+| Jump capture | 18.505 → 12.477 | 17.070 → 13.568 |
+| Jump native round trip | 29.0 → 23.3 | 28.5 → 25.1 |
+| Jump first coverage | 57.6 → 50.2 | 57.3 → 56.3 |
+| Eight-step burst first coverage | 120.6 → 120.6 | 144.7 → 128.0 |
+| Keyboard first coverage | 60.3 → 52.7 | 49.3 → 47.0 |
+
+Jump coverage ranges are Plan 53.8–61.3 → 45.9–52.0 ms and Inventory
+52.4–60.3 → 49.8–59.1 ms; Inventory's coverage ranges overlap. Burst ranges
+are Plan 116.3–125.6 → 118.4–127.2 ms and Inventory 116.2–148.7 →
+123.5–132.2 ms. Faster completion changes intermediate scheduling: burst reads
+rise 27→36 Plan and 34→36 Inventory, always maximum one concurrent read;
+discarded reads rise 18→27 and 25→27. This does not establish a burst speed
+improvement for Plan. The suggested 40/100 ms figures were not reached.
+Jump canonical envelopes remain exactly 198,624/176,388 bytes. Projection is
+3.321/3.594 ms, window building 1.249/1.905 ms, native encoding 0.610/0.644 ms;
+DOM spans remain non-equivalent at 6.0/22.4 ms. Nested values are not additive.
+
+The scalar-versus-bulk comparison uses the corrected baseline, not original C5
+capture timings polluted by per-consume observer work. This is a diagnostic
+on this host/corpus, not a general speed guarantee. Functional gates: 587
+composition checks, 191 post-control-migration checks, 5,982 ordinary checks,
+12 import contracts and six installed transport checks. The first ordinary
+failure was a measurement control forbidding legitimate product string encoding;
+its migrated version still prohibits whole-response and extra observer encoding.
+
+### BC2–5 investigation method — 2026-10-07
+
+After BC1 delivery, investigate only; no additional product optimization.
+Ignored `bc25_capture.py`, `bc25_loading.py`, `bc25_summarize.py` and
+`run-bc25.ps1` in the same evidence directory retain source/helper/profile and
+installed identity checks. Inspect actual field consumers separately in
+`row-consumers.md`; schema proposals are not implementations.
+
+Capture profiling uses four real fixture/producer windows (Plan with ordinary
+initial execution decoration and Inventory, offsets 0 and 60,000, 256 rows).
+Check identity/index/total facts, exact field/punctuation byte sums and actual
+success-budget consumption. For capture and ordinary capture-plus-projection,
+perform five warmups and 30 unwrapped calls, then 30 separately profiled calls
+with cProfile. Retain raw durations, call counts, cumulative/self times, outputs
+and hashes. Profile percentages include profiler overhead; these component
+replays do not measure native round trips or hostile-source behavior.
+
+Installed diagnostics use three fresh children per component, existing standard
+gestures and one trajectory at each of 60 and 240 rows/second per child: start
+20,000, eight elapsed-time seconds forward, four reverse. Record each animation
+frame's desired/actual index, ownership, visibility/focus and bounded row coverage;
+require final coverage and request settlement. Retain gap intervals, requests,
+discards and concurrency, three samples per speed/component, no p95. These are
+synthetic scroll trajectories through production handlers, not native wheel or
+compositor evidence. No prefetch is introduced. Children have 180-second bounds;
+parent-owned restoration and installed identity checks remain mandatory.
+
+DOM markers distinguish detached construction, attached replacement and
+post-insertion controller work; they do not partition the complete DOM span.
+Only standard tagged gestures additionally read the root rectangle after the
+original DOM endpoint, measuring residual geometry flush, not total layout CPU.
+Setup/steady gestures omit that forced read; setup summaries remain separate.
+These intrusive diagnostics are not headline comparison samples. Report raw
+dispersion and limits before proposing capture, row, DOM or prefetch changes.
 
 ### GUI-C5 baseline — 2026-10-07
 

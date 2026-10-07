@@ -2005,28 +2005,38 @@ def _consume_canonical_json_string(
     value: str,
     budget: _JsonByteBudget | None,
 ) -> None:
-    """Count strict compact ensure_ascii=False JSON without a text copy."""
+    """Count strict compact ensure_ascii=False JSON in bounded chunks."""
 
     _consume_json_bytes(budget, 2)
-    for character in value:
-        codepoint = ord(character)
-        if 0xD800 <= codepoint <= 0xDFFF:
-            raise BridgeProtocolError(
-                "structured bridge data contains invalid Unicode"
-            )
-        if character in {'"', "\\", "\b", "\t", "\n", "\f", "\r"}:
-            count = 2
-        elif codepoint < 0x20:
-            count = 6
-        elif codepoint <= 0x7F:
-            count = 1
-        elif codepoint <= 0x7FF:
-            count = 2
-        elif codepoint <= 0xFFFF:
-            count = 3
-        else:
-            count = 4
-        _consume_json_bytes(budget, count)
+    for start in range(0, len(value), 4096):
+        chunk = value[start:start + 4096]
+        try:
+            count = len(json.dumps(chunk, ensure_ascii=False).encode("utf-8")) - 2
+        except UnicodeEncodeError:
+            count = None
+        if count is not None and (budget is None or count <= budget.remaining):
+            _consume_json_bytes(budget, count)
+            continue
+        # Replay a failing chunk to preserve first failure and partial charges.
+        for character in chunk:
+            codepoint = ord(character)
+            if 0xD800 <= codepoint <= 0xDFFF:
+                raise BridgeProtocolError(
+                    "structured bridge data contains invalid Unicode"
+                )
+            if character in {'"', "\\", "\b", "\t", "\n", "\f", "\r"}:
+                count = 2
+            elif codepoint < 0x20:
+                count = 6
+            elif codepoint <= 0x7F:
+                count = 1
+            elif codepoint <= 0x7FF:
+                count = 2
+            elif codepoint <= 0xFFFF:
+                count = 3
+            else:
+                count = 4
+            _consume_json_bytes(budget, count)
 
 
 def _recover_request_id(value: object) -> str | None:

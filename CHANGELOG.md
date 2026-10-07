@@ -179,6 +179,12 @@ explicit, reviewable and regression-backed.
 
 #### Align desktop review surfaces and recovery (2026-10-05 – 2026-10-07)
 
+- Count canonical bridge string bytes in bounded 4K chunks, preserving Unicode
+  refusal, exact limits, first-failure ordering and detached response custody.
+  Pass 5,982 ordinary checks, twelve import contracts and six installed transport
+  checks. Corrected-observer measurements reduce jump capture from 18.5→12.5 ms
+  Plan and 17.1→13.6 ms Inventory; Plan burst coverage is unchanged. Keep further
+  capture, row-payload, DOM and prefetch work investigative.
 - Remove per-character observer work from the loading diagnostic's response
   byte accounting. Retain actual successful budget consumption and original
   C5 receipts; collect a corrected baseline before optimizing the counter.

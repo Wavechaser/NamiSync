@@ -1397,6 +1397,107 @@ def test_response_ceiling_matches_strict_canonical_utf8(text: str) -> None:
         snapshot_bridge_response_result(result, REQUEST_ID, exact - 1)
 
 
+@pytest.mark.parametrize(
+    "text",
+    [
+        "",
+        'quote=" slash=\\ backspace=\b tab=\t newline=\n formfeed=\f return=\r',
+        "".join(map(chr, range(32))),
+        "\x7f\x80\u07ff\u0800\ud7ff\ue000\ufdd0\ufffe\uffff"
+        "\U00010000\U0001f30a\U0010fffe\U0010ffff",
+        "\ud800",
+        "\udfff",
+        "\ud800\udc00",
+        *("x" * length for length in (4095, 4096, 4097, 8191, 8192, 8193)),
+        'x"\\\n\x01波🌊' * 1025,
+        *("x" * position + "\ud800tail" for position in (4095, 4096, 4097)),
+        *("x" * position + "\udffftail" for position in (4095, 4096, 4097)),
+        '"\x01🌊' * 1365 + "x\ud800tail",
+        '"\x01🌊' * 1365 + "x\ud800\udc00tail",
+    ],
+    ids=lambda text: f"characters-{len(text)}-{ascii(text[:12])}",
+)
+def test_canonical_json_string_preserves_scalar_admission(text: str) -> None:
+    def scalar_counter(value, budget):
+        if budget is not None:
+            budget.consume(2)
+        for character in value:
+            codepoint = ord(character)
+            if 0xD800 <= codepoint <= 0xDFFF:
+                raise bridge_module.BridgeProtocolError(
+                    "structured bridge data contains invalid Unicode"
+                )
+            if character in {'"', "\\", "\b", "\t", "\n", "\f", "\r"}:
+                count = 2
+            elif codepoint < 0x20:
+                count = 6
+            elif codepoint <= 0x7F:
+                count = 1
+            elif codepoint <= 0x7FF:
+                count = 2
+            elif codepoint <= 0xFFFF:
+                count = 3
+            else:
+                count = 4
+            if budget is not None:
+                budget.consume(count)
+
+    def outcome(counter, initial):
+        budget = bridge_module._JsonByteBudget(initial) if initial is not None else None
+        try:
+            counter(text, budget)
+        except bridge_module.BridgeProtocolError as error:
+            result = (type(error), str(error), error.__cause__, error.__context__)
+        else:
+            result = (None, None, None, None)
+        return (*result, budget.remaining if budget is not None else None)
+
+    budgets = {None, *range(min(len(text), 64) + 3)}
+    positions = {0, 1, len(text) // 2, len(text), 4095, 4096, 4097, 8191, 8192, 8193}
+    positions.update(index for index, character in enumerate(text) if 0xD800 <= ord(character) <= 0xDFFF)
+    for position in positions:
+        try:
+            count = len(json.dumps(text[:position], ensure_ascii=False).encode("utf-8"))
+        except UnicodeEncodeError:
+            continue
+        budgets.update((count - 1, count, count + 1))
+    for initial in budgets:
+        assert outcome(bridge_module._consume_canonical_json_string, initial) == outcome(
+            scalar_counter, initial,
+        ), initial
+    try:
+        exact = len(json.dumps(text, ensure_ascii=False).encode("utf-8"))
+    except UnicodeEncodeError:
+        return
+    assert outcome(bridge_module._consume_canonical_json_string, exact) == (
+        None, None, None, None, 0,
+    )
+
+
+@pytest.mark.parametrize("character", ("x", "\x01", "🌊"))
+def test_canonical_json_string_bulk_encoding_stops_at_first_failing_chunk(
+    monkeypatch: pytest.MonkeyPatch,
+    character: str,
+) -> None:
+    encoded_lengths = []
+    original_dumps = bridge_module.json.dumps
+
+    def bounded_dumps(value, *args, **kwargs):
+        assert type(value) is str
+        assert len(value) <= 4096
+        encoded_lengths.append(len(value))
+        return original_dumps(value, *args, **kwargs)
+
+    monkeypatch.setattr(bridge_module.json, "dumps", bounded_dumps)
+    budget = bridge_module._JsonByteBudget(8)
+    with pytest.raises(BridgeResponseTooLargeError):
+        bridge_module._consume_canonical_json_string(
+            character * 2_000_000 + "\ud800", budget,
+        )
+    assert encoded_lengths == [4096]
+    assert budget.remaining == (2 if character == "🌊" else 0)
+
+
 def test_response_projection_rejects_unsafe_integer_before_decimal_encoding(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

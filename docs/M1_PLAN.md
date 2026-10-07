@@ -35,6 +35,18 @@ and timing; keep profiling separate from headline timings. AGENTS mandatory and
 recurrence stops apply. No changed safety boundary or further optimization is
 authorized; investigation may identify recommendations without delivering them.
 
+BC1a is delivered as `806df04`: 33 focused and 398 tools checks, independent
+review, unchanged product. BC1b passes 587 focused composition checks, the
+migrated observer control plus transport population (191), 5,982 ordinary
+checks, 12 import contracts and six installed transport checks. The observer
+control migration permits product string encoding while rejecting whole-response
+or extra observer serialization; its first failed ordinary receipt is retained.
+Corrected six-child matrices complete with restored assets and unchanged jump
+bytes. PERFORMANCE records faster capture, overlapping Inventory coverage ranges
+and unchanged Plan burst median; no timing threshold is claimed. Final BC1b
+commit/review accounting is retained with the evidence. BC2–5 remains
+investigation only under the predeclared PERFORMANCE method.
+
 ## GUI Inventory refinement — 2026-10-05
 
 The user approved the finalized follow-up proposals and their order from

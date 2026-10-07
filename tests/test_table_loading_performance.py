@@ -106,18 +106,28 @@ def test_table_loading_budget_observes_success_without_reencoding(monkeypatch):
     response = {"schema_version": 1, "request_id": "a" * 32, "ok": True, "result": value}
     expected = len(json.dumps(response, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
 
-    def refuse_reencoding(*args, **kwargs):
-        pytest.fail("budget observation must not re-encode the response")
+    original_dumps = bridge.json.dumps
+    encodings = []
+
+    def refuse_response_reencoding(value, *args, **kwargs):
+        assert type(value) is str, "budget observation must not re-encode the response"
+        encodings.append((value, args, kwargs))
+        return original_dumps(value, *args, **kwargs)
+
+    monkeypatch.setattr(bridge.json, "dumps", refuse_response_reencoding)
+    bridge._capture_bridge_response_result(value, "a" * 32, expected)
+    expected_encodings = tuple(encodings)
+    encodings.clear()
 
     timing = loading.HostTimings()
     with timing.installed():
         timing.current.record, timing.current.active = {}, set()
-        monkeypatch.setattr(bridge.json, "dumps", refuse_reencoding)
         captured = bridge._capture_bridge_response_result(value, "a" * 32, expected)
         assert captured == value
         assert captured is not value
         assert timing.current.record["canonical_budget_bytes"] == expected
         assert timing.current.capture_budget is None
+    assert tuple(encodings) == expected_encodings
 
 
 @pytest.mark.parametrize("value,ceiling,error", (
