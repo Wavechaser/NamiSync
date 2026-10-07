@@ -731,9 +731,15 @@ const scrollRoot = scrollDocument.createElement("div");
 scrollRoot.clientHeight = 4 * ROW_H;
 const scrollRequests = [];
 const scrollActiveChanges = [];
+const scrollCancellations = [];
 let scrollTree;
 scrollTree = createTree(scrollRoot, {
   activeChanged: (nodeId) => scrollActiveChanges.push(nodeId),
+  requestCancelled: (generation) => {
+    assert.equal(scrollTree.commitWindow(generation, unreadableWindow), false,
+      "cancellation runs only after the retired generation is inert");
+    scrollCancellations.push(generation);
+  },
   requestIndex: (index, generation) => {
     scrollRequests.push({index, generation});
   },
@@ -770,6 +776,7 @@ assert.deepEqual(scrollRequests, [
   {index: 11, generation: 2},
   {index: 15, generation: 3},
 ]);
+assert.deepEqual(scrollCancellations, [2]);
 assert.equal(scrollTree.commitWindow(2, unreadableWindow), false);
 assert.equal(staleReads, 0);
 assert.equal(scrollActiveChanges.at(-1), null, "stale windows cannot publish another active identity");
@@ -786,6 +793,7 @@ assert.deepEqual(scrollRequests, [
   {index: 15, generation: 3},
 ]);
 assert.equal(scrollTree.commitWindow(3, unreadableWindow), false);
+assert.deepEqual(scrollCancellations, [2, 3], "covered return emits a cancellation without another request");
 assert.equal(staleReads, 0);
 
 scrollRoot.scrollTop = 4 * ROW_H;
@@ -798,6 +806,7 @@ assert.equal(
   true,
 );
 assert.equal(scrollRoot.scrollTop, 4 * ROW_H);
+assert.deepEqual(scrollCancellations, [2, 3], "successful commits do not emit cancellation");
 assert.deepEqual(
   treeItems(scrollRoot).map((element) => element.dataset.nodeId),
   fixtureViews.maximum.rows.slice(4, 8).map((rowValue) => rowValue.node_id),

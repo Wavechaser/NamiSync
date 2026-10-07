@@ -215,6 +215,20 @@ permutation and its derived `VisibleSequence` at task scope. Its browser tree
 uses an explicit 24 px geometry; the generic tree default remains
 28 px. Spacer, viewport and keyboard calculations share the invocation's height,
 while the same generation and active-node ownership rules remain authoritative.
+Inventory viewport reads retain one running read and only the latest queued
+intent at task scope, including across review replacement. Every callback owns
+its own promise and tree generation; retiring a queued intent resolves it with
+null, never a newer result. Covered returns, loaded-row gestures, replacement
+requests and disposal retire obsolete intent through the tree's optional
+`requestCancelled(generation)` callback, after invalidation. A successful commit
+does not emit cancellation. Navigation, view/action, session and publication
+replacement also retire queued work. Dispatch rechecks ownership and current
+action/loading/close eligibility; obsolete results and errors are silent.
+Scrolling introduces no action-pending state. Initial and view-action follow-up
+windows keep their independent action ordering and may overlap a retired
+viewport read while it drains; that read cannot adopt or dispatch obsolete
+queued work. Keyboard targets retain precedence until a newer user scroll or
+loaded-row gesture replaces them. The browser retains one 256-row window.
 Disabled Inventory checkbox visuals do not introduce selection state or commands.
 Repeated windows
 reuse these values and serialize only the requested slice; current detail uses

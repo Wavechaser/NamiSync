@@ -1,4 +1,4 @@
-# Latest session — C5 baseline complete, coalescing next
+# Latest session — Inventory coalescing verified
 
 2026-10-07, `milestone1`. The approved fixture correction is integrated as
 `455fd49`, following helper correction `6c6e10f` and C1–C4. It preserves fixture
@@ -6,7 +6,7 @@ populations and historical authorities while supplying genuine RECASE evidence.
 Its checks passed: 68 focused, 5,924 ordinary/four privilege skips, 12 imports
 and the installed Plan04 compatibility probe. That probe is not timing evidence.
 
-C5a's frozen diagnostic method and baseline are complete. Evidence root:
+C5a's diagnostic method and baseline are integrated as `61ee878`. Evidence root:
 `build/gui-inventory-refinement-20261005/`. `c5-method-focused-06` passes 29;
 `c5-method-ordinary-01` passes 5,953/four privilege skips plus 12 imports.
 Installed representatives Plan05 and Inventory01 pass all 16 observations each.
@@ -16,23 +16,34 @@ hashes and verified restoration/installation identity. Independent review
 recomputed all summaries and found no remaining issue. PERFORMANCE and
 `c5-baseline-summary.md` own figures/limits; `integration.md` records commits.
 
-Inventory's nine bursts dispatched 72 reads, concurrency eight, discarding 63;
-Plan dispatched 27, concurrency one, discarding 18. Median target coverage was
-413.8/192.9 ms respectively. Covered-return visibility is separated from later
-obsolete-read settlement. These are instrumented diagnostics, not latency SLOs;
-observer overhead, compositor presentation and host queues remain unmeasured.
-No broad suite ran during timing. Product assets remain unchanged by C5a.
+C5b now implements task-owned one running viewport read plus one latest queued
+intent, resolving retired callbacks with null. Tree cancellation covers loaded
+and covered returns; navigation/view/session/reload/disposal retire obsolete
+work. Direct action-owned reads preserve their independent ordering. Seven
+frozen product/test/component-doc paths are bound in
+`c5b-focused-final-01-hashes.json`. The sole failed focused attempt was a new
+Close witness using an obsolete review object; its corrected assertion proves
+the read starts. No product correction was needed for that fixture failure.
 
-Next implement C5b under the accepted M1_PLAN boundary: task-owned one running
-viewport read plus one latest queued intent; independently retire callbacks to
-null. Preserve direct action-owned initial/view replacement reads and existing
-action ordering. Tree cancellation must cover loaded/covered returns without
-requiring another request. The read-only design inspected `455fd49`; revalidate
-the unchanged product seams after the C5a commit. Owners: app, Inventory panel,
-optional tree callback and their existing real-page/lifecycle/tree probes.
-Run focused/interface/import and installed Inventory/shared-tree checks, then
-the identical six-child matrix from a separate pinned-runtime installation.
-Placement/prefetch and placeholders remain conditional, separate outcomes.
+C5b checks: 88 focused; `c5b-neighborhood-01` has 2,348 interfaces/tools passes,
+three privilege skips; `c5b-imports-01` keeps 12 contracts; `c5b-native-01` passes
+both installed Inventory/shared-tree checks. Candidate
+`c5-install-coalesced-01` has separate source/wheel/installed identity and exact
+baseline dependency pins. `c5b-measured-plan-01.json` and
+`c5b-measured-inventory-01.json` repeat all six children/96 observations without
+concurrent broad tests. Source and raw-evidence review found no remaining issue.
+PERFORMANCE and `c5b-comparison-summary.md` own diagnostic figures/limitations.
+Inventory bursts fall from 72 reads/max concurrency eight to 27/max one, with
+median first coverage 413.8→175.4 ms. Plan remains 192.9→192.4 ms with identical
+burst counts. All installed instrumentation was restored and identity rechecked.
+
+Next assess the accepted conditional placement outcome, after C5b commit:
+the corpus shows two Plan keyboard windows because focus reveal exposes rows
+above the initial target-only window. An existing 32-row leading margin is the
+narrow candidate; finalize its finite M1 boundary before editing. The abrupt
+jumps do not demonstrate gradual-scroll lead time for directional prefetch.
+Placeholder disposition remains part of this read-only assessment. No conditional
+implementation is mixed into C5b.
 
 Native/broad runners must use the actual Windows user (`require_escalated`),
 not the sandbox identity whose environment misleadingly reports Spectrum.
@@ -42,7 +53,7 @@ No user policy or assertion was changed. Announce native runs; preserve all
 foreground guards. The user will try to foreground the window. No native run
 is active at this checkpoint.
 
-Keep `c5-install-baseline-01` unchanged. `run-c5.ps1` validates the wheel/install
+Keep both installed measurement environments unchanged. `run-c5.ps1` validates the wheel/install
 before and after, records input hashes and uses unique output names. The host
 profile was refreshed on Oct7; the Oct6 profile remains separately retained.
 Keep failed probes and original `user-handoff.md`. Both task recovery refs

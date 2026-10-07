@@ -336,6 +336,9 @@ export function createInventoryReviewPanel(callbacks) {
     if (tree !== null) return;
     tree = createTree(rows, {
       decorateRow,
+      requestCancelled: (generation) => {
+        if (current !== null) callbacks.onWindowCancelled?.(current, generation);
+      },
       activeChanged: (nodeId) => {
         activeNodeId = nodeId;
         updateRefreshSelected();

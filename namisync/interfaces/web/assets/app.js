@@ -259,6 +259,7 @@ const panel = createWorkPanel({
 }, settingsView, {
   onViewChange: (review, patch) => { void changeInventoryView(review, patch); },
   onWindow: loadInventoryWindow,
+  onWindowCancelled: cancelInventoryWindow,
   onDetail: (review, nodeId) => { void readInventoryDetail(review, nodeId); },
   onReload: (task) => { void loadInventoryReview(task, true); },
   onRefresh: (review, nodeId) => { void runInventoryAction(review, "refresh", nodeId); },
@@ -378,7 +379,10 @@ function showSettings() {
     retireExecutionDetail(task.review);
     retirePlanDetail(task.review);
   }
-  if (task?.inventoryReview != null) retireInventoryDetail(task.inventoryReview);
+  if (task?.inventoryReview != null) {
+    cancelInventoryWindow(task.inventoryReview);
+    retireInventoryDetail(task.inventoryReview);
+  }
   navigationRevision += 1;
   settingsVisible = true;
   renderTasks();
@@ -512,7 +516,10 @@ function selectTask(taskId) {
     retireExecutionDetail(previous.review);
     retirePlanDetail(previous.review);
   }
-  if (previous?.inventoryReview != null) retireInventoryDetail(previous.inventoryReview);
+  if (previous?.inventoryReview != null) {
+    cancelInventoryWindow(previous.inventoryReview);
+    retireInventoryDetail(previous.inventoryReview);
+  }
   selectedTaskId = taskId;
   settingsVisible = false;
   renderTasks();
@@ -567,6 +574,8 @@ function adoptTask(summary) {
       inventoryReview: null,
       inventoryLoading: false,
       inventoryRevision: 0,
+      inventoryWindowRunning: false,
+      inventoryWindowIntent: null,
       inventoryError: null,
       inventoryAction: null,
       inventoryViewUnconfirmed: false,
@@ -587,7 +596,10 @@ function adoptTask(summary) {
     if (task.sessionId !== summary.session_id) {
       task.stopDrain?.();
       task.stopDrain = null;
-      if (task.inventoryReview !== null) retireInventoryDetail(task.inventoryReview);
+      if (task.inventoryReview !== null) {
+        cancelInventoryWindow(task.inventoryReview);
+        retireInventoryDetail(task.inventoryReview);
+      }
       task.inventoryRevision += 1;
       task.inventoryLoading = false;
       task.recoveryRetry = null;
@@ -928,6 +940,7 @@ async function closeRetainedTask(taskId) {
   task.inventoryRevision += 1;
   task.inventoryLoading = false;
   if (task.inventoryReview !== null) {
+    cancelInventoryWindow(task.inventoryReview);
     task.inventoryReview.actionRevision += 1;
     task.inventoryReview.pending = "close";
     retireInventoryDetail(task.inventoryReview);
@@ -1327,7 +1340,7 @@ async function runInventoryAction(review, kind, nodeId) {
     message: kind === "refresh" ? "Starting inventory scan…" : "Updating missing-item visibility…",
   };
   task.inventoryAction = attempt;
-  review.windowRequestRevision += 1;
+  cancelInventoryWindow(review);
   retireInventoryDetail(review);
   renderTasks();
   const stillOwned = () => tasks.get(task.taskId) === task && task.inventoryAction === attempt;
@@ -1396,6 +1409,7 @@ async function loadInventoryReview(task, force = false) {
   const sessionId = task.sessionId;
   const navigation = navigationRevision;
   if (task.inventoryReview !== null) {
+    cancelInventoryWindow(task.inventoryReview);
     task.inventoryReview.actionRevision += 1;
     task.inventoryReview.pending = null;
     task.inventoryReview.queuedSearchQuery = null;
@@ -1456,7 +1470,7 @@ async function changeInventoryView(review, patch) {
     collapseNodeId: patch.collapseNodeId ?? null,
     collapsed: patch.collapseNodeId === undefined ? null : patch.collapsed,
   };
-  review.windowRequestRevision += 1;
+  cancelInventoryWindow(review);
   retireInventoryDetail(review);
   review.pending = "view";
   review.message = "Updating inventory view…";
@@ -1496,34 +1510,70 @@ async function changeInventoryView(review, patch) {
   }
 }
 
+function cancelInventoryWindow(review) {
+  review.windowRequestRevision += 1;
+  const task = tasks.get(review.summary.task_id);
+  if (task?.inventoryWindowIntent?.review === review) {
+    const intent = task.inventoryWindowIntent;
+    task.inventoryWindowIntent = null;
+    intent.resolve(null);
+  }
+}
+
+function inventoryWindowReady(task, review) {
+  return task !== null && currentInventoryTask(review) === task
+    && !task.inventoryLoading && !task.inventoryAction?.pending && review.pending === null
+    && !checkableOutcome(task.closeRecovery) && !fixedOutcome(task.closeRecovery);
+}
+
 async function loadInventoryWindow(review, offset) {
   const task = currentInventoryTask(review);
-  if (task === null || task.inventoryLoading || review.pending !== null) return null;
-  const request = ++review.windowRequestRevision;
+  if (!inventoryWindowReady(task, review)) return null;
+  cancelInventoryWindow(review);
+  const request = review.windowRequestRevision;
   const action = review.actionRevision;
   const sessionId = task.sessionId;
   const publication = review.summary.request_id;
   const revision = review.summary.view_revision;
   const navigation = navigationRevision;
-  const stillCurrent = () => currentInventoryTask(review) === task
+  const stillCurrent = () => inventoryWindowReady(task, review)
     && review.windowRequestRevision === request && review.actionRevision === action
     && task.sessionId === sessionId && review.summary.request_id === publication
     && review.summary.view_revision === revision && navigationRevision === navigation;
+  return new Promise((resolve) => {
+    task.inventoryWindowIntent = { review, offset, revision, stillCurrent, resolve };
+    if (!task.inventoryWindowRunning) void drainInventoryWindows(task);
+  });
+}
+
+async function drainInventoryWindows(task) {
+  task.inventoryWindowRunning = true;
   try {
-    const window = await getInventoryWindow(task.taskId, revision, offset, 256);
-    if (!stillCurrent()) return null;
-    if (window.disposition !== "current") {
-      review.message = "Inventory changed. Reload the inventory view to continue.";
-      renderTasks();
-      return null;
+    while (task.inventoryWindowIntent !== null) {
+      const intent = task.inventoryWindowIntent;
+      task.inventoryWindowIntent = null;
+      let window = null;
+      try {
+        if (intent.stillCurrent()) {
+          const response = await getInventoryWindow(task.taskId, intent.revision, intent.offset, 256);
+          if (intent.stillCurrent()) {
+            if (response.disposition === "current") window = response;
+            else {
+              intent.review.message = "Inventory changed. Reload the inventory view to continue.";
+              renderTasks();
+            }
+          }
+        }
+      } catch (_error) {
+        if (intent.stillCurrent()) {
+          intent.review.message = "Inventory rows unavailable. Reload the inventory view to retry.";
+          renderTasks();
+        }
+      }
+      intent.resolve(window);
     }
-    return window;
-  } catch (_error) {
-    if (stillCurrent()) {
-      review.message = "Inventory rows unavailable. Reload the inventory view to retry.";
-      renderTasks();
-    }
-    return null;
+  } finally {
+    task.inventoryWindowRunning = false;
   }
 }
 

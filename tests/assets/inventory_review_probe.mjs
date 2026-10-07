@@ -433,6 +433,8 @@ document.documentElement = document.createElement("html");
 globalThis.window = { ...document.defaultView, chrome: { webview: {} }, addEventListener() {} };
 let viewportReply = null;
 const viewportCalls = [];
+const viewportPromises = [];
+globalThis.inventoryViewportPromises = viewportPromises;
 const liveDetails = [], liveRefreshes = [];
 globalThis.inventoryViewportHarness = {
   openInventoryView: () => Promise.resolve(fixture.views.maximum.summary),
@@ -450,6 +452,11 @@ globalThis.inventoryViewportHarness = {
   },
 };
 let appSource = await readFile(join(assetRoot, "app.js"), "utf8");
+appSource = appSource.replace("onWindow: loadInventoryWindow,", `onWindow: (review, offset) => {
+  const promise = loadInventoryWindow(review, offset);
+  globalThis.inventoryViewportPromises.push(promise);
+  return promise;
+},`);
 const bridgeNames = appSource.match(/import \{([\s\S]*?)\} from "\.\/bridge\.js";/)[1]
   .split(",").map((value) => value.trim()).filter(Boolean);
 const bridgeFunctions = {
@@ -494,12 +501,94 @@ while (frames.length) frames.shift()();
 assert.equal(viewportCalls.at(-1)[2], 268);
 assert.equal(walk(app.panel.element).find((value) => value.dataset.action === "inventory-refresh-selected").disabled,
   true, "a viewport gap clears the current toolbar target");
+treeRoot.scrollTop = 280 * 24; treeRoot.dispatch("scroll");
+while (frames.length) frames.shift()();
+assert.equal(viewportCalls.length, 2, "the second viewport intent waits behind the initial read");
 treeRoot.scrollTop = 0; treeRoot.dispatch("scroll");
 while (frames.length) frames.shift()();
+assert.equal(await viewportPromises[1], null, "covered return retires its queued callback");
 viewportReply.resolve(fixture.tail); await settle();
+assert.equal(await viewportPromises[0], null);
+assert.equal(viewportCalls.length, 2, "covered return prevents queued follow-up work");
 assert.equal(liveReview.window === initialWindow, true, "retired viewport reply must not enter cached app state");
 app.panel.render(liveTask);
 assert.equal(firstLiveRow().dataset.nodeId, initialNode, "later render cannot adopt a rejected window");
+
+// Each queued generation owns its result, including when every newer intent
+// arrives in a separate animation frame while the first bridge call is held.
+viewportReply = delayedViewport();
+const burstRead = viewportReply;
+const burstCalls = viewportCalls.length;
+const burstPromises = viewportPromises.length;
+for (const index of [256, 260, 264, 268, 272, 276, 280, 300]) {
+  treeRoot.scrollTop = index * 24; treeRoot.dispatch("scroll");
+  while (frames.length) frames.shift()();
+}
+assert.equal(viewportCalls.length, burstCalls + 1);
+assert.equal(liveReview.pending, null, "viewport reads do not enter action-pending state");
+assert.equal(liveTask.inventoryAction, null);
+for (const promise of viewportPromises.slice(burstPromises + 1, -1)) assert.equal(await promise, null);
+viewportReply = delayedViewport();
+burstRead.resolve(fixture.tail); await settle();
+assert.equal(await viewportPromises[burstPromises], null);
+assert.equal(liveReview.window, initialWindow, "obsolete burst callbacks cannot publish the latest window");
+assert.equal(viewportCalls.length, burstCalls + 2);
+assert.equal(viewportCalls.at(-1)[2], 268);
+viewportReply.resolve(fixture.tail); await settle();
+assert.equal(await viewportPromises.at(-1), fixture.tail);
+assert.equal(liveReview.window, fixture.tail);
+assert.equal(treeRoot.children.filter((value) => value.getAttribute("role") === "treeitem").length,
+  fixture.tail.rows.length);
+assert.ok(fixture.tail.rows.length <= 256);
+Object.assign(liveReview, fixture.views.maximum, { scrollTop: 0 });
+app.panel.render(liveTask);
+while (frames.length) frames.shift()();
+
+// Keyboard replacement owns the queued callback and its reveal; old scroll
+// callbacks never receive the keyboard result.
+viewportReply = delayedViewport();
+const beforeKeyboard = viewportReply;
+const keyboardCalls = viewportCalls.length;
+treeRoot.scrollTop = 256 * 24; treeRoot.dispatch("scroll");
+while (frames.length) frames.shift()();
+treeRoot.scrollTop = 280 * 24; treeRoot.dispatch("scroll");
+while (frames.length) frames.shift()();
+const queuedScroll = viewportPromises.at(-1);
+treeRoot.dispatch("keydown", {key: "End"});
+assert.equal(await queuedScroll, null);
+while (frames.length) frames.shift()();
+assert.equal(viewportCalls.length, keyboardCalls + 1);
+viewportReply = delayedViewport();
+beforeKeyboard.resolve(fixture.tail); await settle();
+assert.equal(viewportCalls.length, keyboardCalls + 2);
+viewportReply.resolve(fixture.tail); await settle();
+assert.equal(treeRoot.getAttribute("aria-activedescendant"), treeRoot.children.at(-2).id);
+assert.equal(treeRoot.scrollTop, 301 * 24 - treeRoot.clientHeight);
+Object.assign(liveReview, fixture.views.maximum, { scrollTop: 0 });
+app.panel.render(liveTask);
+while (frames.length) frames.shift()();
+
+// Selecting an already-active loaded row cancels work even without an active
+// identity change. Disposal also retires a queued callback before settlement.
+for (const cancel of [() => firstLiveRow().click(), () => app.panel.renderSettings()]) {
+  viewportReply = delayedViewport();
+  const held = viewportReply;
+  const callsBefore = viewportCalls.length;
+  treeRoot.dispatch("keydown", {key: "End"});
+  treeRoot.dispatch("keydown", {key: "End"});
+  const queued = viewportPromises.at(-1);
+  cancel();
+  assert.equal(await queued, null);
+  held.resolve(Promise.reject(new Error("retired viewport failure"))); await settle();
+  assert.equal(viewportCalls.length, callsBefore + 1);
+  assert.equal(liveReview.window, initialWindow);
+  assert.equal(liveReview.message, null);
+  treeRoot.scrollTop = 0;
+}
+app.panel.render(liveTask);
+const restoredTree = walk(app.panel.element).find((value) => value.getAttribute("role") === "tree");
+// Continue the existing witnesses using the recreated controller/root.
+assert.equal(restoredTree, treeRoot);
 viewportReply = delayedViewport();
 treeRoot.scrollTop = 300 * 24; treeRoot.dispatch("scroll");
 while (frames.length) frames.shift()();

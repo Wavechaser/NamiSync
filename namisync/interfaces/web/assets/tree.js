@@ -16,6 +16,7 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H) {
     throw new TypeError("tree root must belong to a document");
   }
   const requestIndex = optionalCallback(callbacks, "requestIndex");
+  const requestCancelled = optionalCallback(callbacks, "requestCancelled");
   const toggle = optionalCallback(callbacks, "toggle");
   const activate = optionalCallback(callbacks, "activate");
   const activeChanged = optionalCallback(callbacks, "activeChanged");
@@ -81,6 +82,7 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H) {
 
   function beginRequest(pendingIndex, kind) {
     currentGeneration += 1;
+    cancelPendingRequest();
     settledScrollViewport = null;
     pendingRequest = Object.freeze({
       clientHeight: kind === "scroll" ? root.clientHeight : null,
@@ -401,7 +403,7 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H) {
 
   function invalidatePendingRequest() {
     currentGeneration += 1;
-    clearPendingRequest();
+    cancelPendingRequest();
   }
 
   function acceptRenderedIntent(entry, reveal = true) {
@@ -431,6 +433,12 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H) {
 
   function clearPendingRequest() {
     pendingRequest = null;
+  }
+
+  function cancelPendingRequest() {
+    const generation = pendingRequest?.generation;
+    clearPendingRequest();
+    if (generation !== undefined) requestCancelled(generation);
   }
 
   function onKeyDown(event) {
@@ -521,7 +529,7 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H) {
     }
     disposed = true;
     currentGeneration += 1;
-    clearPendingRequest();
+    cancelPendingRequest();
     resizeObserver.disconnect();
     root.removeEventListener("keydown", onKeyDown);
     root.removeEventListener("scroll", onScroll);

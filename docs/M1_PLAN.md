@@ -167,7 +167,15 @@ introduce a general scheduler. The finite direct probes are
 loaded-row activation, keyboard precedence, replacement/disposal, rejection and
 conflict. Revalidate these seams after the C5a commit before implementation;
 interfaces/import checks, installed Inventory/shared-tree checks and identical
-measurements close the separate C5b commit.
+measurements close the separate C5b commit. C5b is now verified: 88 focused,
+2,348 interfaces/tools passes with three privilege skips, 12 import contracts,
+two installed Inventory/shared-tree checks and the identical six-child matrix.
+Inventory burst concurrency is one and reads fall from 72 to 27; diagnostic
+median coverage falls from 413.8 to 175.4 ms. Plan remains the unchanged
+comparison. `c5b-*` retains raw evidence and independent review; PERFORMANCE
+owns the figures. Conditional Plan keyboard placement is under read-only review
+before its own finite implementation boundary; no prefetch is justified by
+the abrupt-jump corpus.
 
 The first C5 installed probe exposed a stale direct measurement consumer:
 `execution_receipt._rootless_settlement` and its fake registry still expected the

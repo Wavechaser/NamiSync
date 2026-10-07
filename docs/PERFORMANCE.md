@@ -228,6 +228,45 @@ were 198624/215696/215780 for Plan and 176388/194671/194755 for Inventory.
 Proceed with the accepted viewport coalescing and identical remeasurement;
 placement/prefetch and placeholders remain conditional on the remaining gaps.
 
+### GUI-C5 Inventory coalescing comparison — 2026-10-07
+
+`c5b-measured-plan-01.json`, `c5b-measured-inventory-01.json` and
+`c5b-comparison-summary.md` retain the repeated six-child matrix under the same
+evidence root. Base `61ee878` plus the seven frozen coalescing paths are bound by
+before/after manifests. A separate `c5-install-coalesced-01` installation uses
+the baseline's exact dependency pins; the original installation is unchanged.
+Collector/wrapper bytes, gestures, host profile and actual geometry are unchanged.
+No broad tests ran during timing. All 96 observations complete with truthful
+landing, at most 256 retained rows and verified asset restoration.
+
+First target coverage, milliseconds, median [minimum, maximum]:
+
+| Gesture | Plan candidate | Inventory candidate |
+| --- | --- | --- |
+| Initial (3) | 105.3 [103.8, 111.7] | 103.5 [99.2, 104.0] |
+| Sequential edge (9) | 84.7 [80.5, 120.3] | 79.2 [77.4, 106.5] |
+| Jump (9) | 82.3 [75.2, 83.9] | 74.0 [73.2, 78.0] |
+| Covered return (9) | 16.6 [14.1, 17.1] | 16.5 [10.8, 16.7] |
+| Burst (9) | 192.4 [179.1, 196.4] | 175.4 [169.2, 183.3] |
+| Keyboard (9) | 155.7 [152.9, 166.6] | 70.4 [69.0, 74.1] |
+
+Inventory burst reads fall from 72 to 27, discarded responses from 63 to 18 and
+maximum concurrency from eight to one. Median coverage falls from 413.8 to
+175.4 ms (57.6% in this instrumented run). Plan retains 27 burst reads,
+18 discarded responses and concurrency one; its median is 192.4 versus 192.9 ms.
+Single-read and initial differences receive no causal speed claim. Candidate
+Inventory burst request medians are 8.5 ms intent wait, 49.5 ms round trip and
+0.8 ms validation across 27 requests, with 19.4 ms DOM across nine adopted
+responses. Baseline burst round trip was 326.65 ms across 72 requests. Raw
+per-child counts, phases and bytes remain unsummed and retain the baseline's
+diagnostic limitations.
+
+Uncovered intervals remain for abrupt jumps and bursts, which provide no
+gradual-scroll lead time to support directional prefetch. The keyboard corpus
+also identifies a narrower Plan placement opportunity: two adopted reads expose
+rows above the first target-only window during focus reveal. That conditional
+follow-up stays a separate change; Inventory coalescing does not alter Plan.
+
 ## Cold inventory projection acceptance method
 
 PRESENTATION owns the retained base 3 s / information-heavy 6 s maxima. The

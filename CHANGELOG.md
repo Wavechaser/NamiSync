@@ -179,6 +179,12 @@ explicit, reviewable and regression-backed.
 
 #### Align desktop review surfaces and recovery (2026-10-05 – 2026-10-07)
 
+- Coalesce Inventory viewport reads to one running read and the latest queued
+  intent. Retire obsolete callbacks on covered returns, loaded-row gestures and
+  lifecycle changes while preserving action ordering. The repeated diagnostic
+  reduces burst reads from 72 to 27 and median coverage from 413.8 to 175.4 ms;
+  pass 88 focused, 2,348 interface/tools checks, twelve import contracts and
+  two installed journeys, with independent source and raw-evidence review.
 - Add the optional installed table-loading diagnostic and freeze a six-child
   Plan/Inventory baseline. Separate first visible coverage from discarded-read
   settlement, correlate real bridge phases and preserve installed assets after

@@ -178,14 +178,97 @@ const staleReview = review;
 delayedWindow = defer();
 const retainedWindow = delayedWindow;
 const oldWindow = app.loadInventoryWindow(review, 0);
+const obsoleteQueuedWindow = app.loadInventoryWindow(review, 64);
 delayedWindow = null;
 await app.changeInventoryView(review, { searchQuery: "evidence" });
+assert.equal(await obsoleteQueuedWindow, null, "view action retires queued viewport work before its direct window read");
 assert.equal(review.summary.search_query, "evidence");
 assert.equal(review.detail, null);
 retainedWindow.resolve(windowResponse(0, 0));
 assert.equal(await oldWindow, null, "old revision window must not be adopted");
 assert.equal(review.window.view_revision, review.summary.view_revision);
 assert.equal(staleReview, review);
+
+// A replacement publication may complete its action-owned window while an
+// obsolete viewport read drains. Task custody still serializes new viewports.
+delayedWindow = defer();
+const priorPublicationRead = delayedWindow;
+const priorPublicationWindow = app.loadInventoryWindow(review, 12);
+const priorQueuedWindow = app.loadInventoryWindow(review, 24);
+delayedWindow = null;
+await app.loadInventoryReview(task, true);
+assert.equal(await priorQueuedWindow, null);
+assert.notEqual(task.inventoryReview, review);
+review = task.inventoryReview;
+const replacementCalls = calls.filter(([name]) => name === "window").length;
+const replacementWindow = app.loadInventoryWindow(review, 48);
+assert.equal(calls.filter(([name]) => name === "window").length, replacementCalls);
+priorPublicationRead.resolve(windowResponse(0, 12));
+assert.equal(await priorPublicationWindow, null);
+assert.equal((await replacementWindow).offset, 48);
+assert.equal(calls.filter(([name]) => name === "window").length, replacementCalls + 1);
+
+// Dispatch rechecks UI eligibility rather than relying on revisions alone.
+for (const [block, unblock] of [
+  [() => { task.inventoryLoading = true; }, () => { task.inventoryLoading = false; }],
+  [() => { task.inventoryAction = { pending: true }; }, () => { task.inventoryAction = null; }],
+  [() => { review.pending = "view"; }, () => { review.pending = null; }],
+  [() => { task.closeRecovery = { canCheck: true }; }, () => { task.closeRecovery = null; }],
+]) {
+  delayedWindow = defer();
+  const heldRead = delayedWindow;
+  const held = app.loadInventoryWindow(review, 12);
+  const queued = app.loadInventoryWindow(review, 24);
+  const reads = calls.filter(([name]) => name === "window").length;
+  block();
+  delayedWindow = null;
+  heldRead.resolve(Promise.reject(new Error("obsolete window rejection")));
+  assert.equal(await held, null);
+  assert.equal(await queued, null);
+  assert.equal(calls.filter(([name]) => name === "window").length, reads);
+  assert.equal(review.message, null);
+  unblock();
+}
+delayedWindow = defer();
+const failedWindow = app.loadInventoryWindow(review, 12);
+delayedWindow.resolve(Promise.reject(new Error("current window rejection")));
+assert.equal(await failedWindow, null);
+assert.match(review.message, /Inventory rows unavailable.*Reload/);
+delayedWindow = null;
+review.message = null;
+assert.equal((await app.loadInventoryWindow(review, 24)).offset, 24, "a rejected read releases viewport custody");
+delayedWindow = defer();
+const conflictedWindow = app.loadInventoryWindow(review, 12);
+const retainedWindowAfterConflict = review.window;
+delayedWindow.resolve({ ...windowResponse(review.summary.view_revision, 12), disposition: "conflict" });
+assert.equal(await conflictedWindow, null);
+assert.equal(review.window, retainedWindowAfterConflict);
+assert.match(review.message, /Inventory changed.*Reload/);
+delayedWindow = null;
+review.message = null;
+delayedWindow = defer();
+const failedSupersededRead = delayedWindow;
+const supersededWindow = app.loadInventoryWindow(review, 12);
+const latestAfterFailure = app.loadInventoryWindow(review, 24);
+delayedWindow = null;
+failedSupersededRead.resolve(Promise.reject(new Error("superseded window rejection")));
+assert.equal(await supersededWindow, null);
+assert.equal((await latestAfterFailure).offset, 24, "obsolete rejection still dispatches the latest eligible intent");
+assert.equal(review.message, null);
+
+delayedWindow = defer();
+const navigationRead = delayedWindow;
+const navigationWindow = app.loadInventoryWindow(review, 12);
+const navigationQueued = app.loadInventoryWindow(review, 24);
+const navigationReads = calls.filter(([name]) => name === "window").length;
+app.showSettings();
+assert.equal(await navigationQueued, null);
+delayedWindow = null;
+navigationRead.resolve(windowResponse(review.summary.view_revision, 12));
+assert.equal(await navigationWindow, null);
+assert.equal(calls.filter(([name]) => name === "window").length, navigationReads);
+app.selectTask(taskId); await tick();
+review = task.inventoryReview;
 delayedView = defer();
 const retainedView = delayedView;
 const firstQuery = app.changeInventoryView(review, { searchQuery: "one" });
@@ -200,10 +283,21 @@ assert.equal(review.queuedSearchQuery, null);
 delayedDetail = defer();
 const sessionDetail = app.readInventoryDetail(review, real.node_id);
 const retainedDetail = delayedDetail;
+delayedWindow = defer();
+const sessionWindowRead = delayedWindow;
+const sessionWindow = app.loadInventoryWindow(review, 12);
+const sessionQueued = app.loadInventoryWindow(review, 24);
 app.adoptTask({ task_id: taskId, session_id: "4".repeat(32), session_state: "active",
   session_released: false, task_kind: "inventory", request_id: "5".repeat(32) });
 assert.equal(task.inventoryReview, review, "new scan preserves old publication");
 assert.equal(task.executionStarted, false);
+assert.equal(await sessionQueued, null, "session replacement retires its queued viewport callback");
+const sessionWindowCount = calls.filter(([name]) => name === "window").length;
+delayedWindow = null;
+sessionWindowRead.resolve(Promise.reject(new Error("retired session read")));
+assert.equal(await sessionWindow, null);
+assert.equal(calls.filter(([name]) => name === "window").length, sessionWindowCount);
+assert.equal(review.message, null);
 retainedDetail.resolve({ ...fixture.detail, view_revision: review.summary.view_revision });
 await sessionDetail;
 assert.equal(review.detail, null, "changed session invalidates old details");
@@ -358,11 +452,24 @@ await transportFailedOpen;
 assert.match(task.inventoryError, /Reload/, "transport failure alone retains view retry guidance");
 delayedOpen = null;
 
+review = task.inventoryReview;
 delayedDetail = defer();
 const closeDetail = app.readInventoryDetail(review, real.node_id);
 const retainedCloseDetail = delayedDetail;
+delayedWindow = defer();
+const closeWindowRead = delayedWindow;
+const beforeCloseReads = calls.filter(([name]) => name === "window").length;
+const closeWindow = app.loadInventoryWindow(review, 12);
+const closeQueued = app.loadInventoryWindow(review, 24);
+const closeReads = calls.filter(([name]) => name === "window").length;
+assert.equal(closeReads, beforeCloseReads + 1, "close witness holds a current viewport bridge read");
 await app.closeRetainedTask(taskId);
 assert.equal(app.tasks.has(taskId), false);
+assert.equal(await closeQueued, null);
+delayedWindow = null;
+closeWindowRead.resolve(Promise.reject(new Error("retired closed-task window")));
+assert.equal(await closeWindow, null);
+assert.equal(calls.filter(([name]) => name === "window").length, closeReads);
 retainedCloseDetail.resolve({ ...fixture.detail, view_revision: review.summary.view_revision });
 await closeDetail;
 assert.equal(review.detail, null, "Close invalidates outstanding details");
