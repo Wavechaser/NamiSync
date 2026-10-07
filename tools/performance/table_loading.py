@@ -149,7 +149,8 @@ class HostTimings:
 
         original_dispatch = bridge.BridgeDispatcher._dispatch_native
         original_execute = bridge.BridgeDispatcher._execute_prepared_command
-        original_budget = bridge._JsonByteBudget.consume
+        original_budget_init = bridge._JsonByteBudget.__init__
+        original_capture = bridge._capture_bridge_response_result
         original_evaluate = Window.evaluate_js
         original_json = webview.util.json
 
@@ -171,12 +172,26 @@ class HostTimings:
                 record["pre_handler_ns"] = perf_counter_ns() - record["entered_ns"]
             return original_execute(dispatcher, request_id, name, spec, prepared, **kwargs)
 
-        def budget(owner, count):
-            result = original_budget(owner, count)
+        def budget_init(owner, remaining):
+            original_budget_init(owner, remaining)
             record = getattr(self.current, "record", None)
-            if record is not None and "capture_ns" in self.current.active:
-                record["canonical_budget_bytes"] = record.get("canonical_budget_bytes", 0) + count
-            return result
+            if record is not None and "capture_ns" in self.current.active and self.current.capture_budget is None:
+                self.current.capture_budget = (owner, remaining)
+
+        timed_capture = self.span("capture_ns", original_capture)
+
+        def capture(*args, **kwargs):
+            record = getattr(self.current, "record", None)
+            if record is None or "capture_ns" in self.current.active:
+                return original_capture(*args, **kwargs)
+            self.current.capture_budget = None
+            try:
+                result = timed_capture(*args, **kwargs)
+                owner, ceiling = self.current.capture_budget
+                record["canonical_budget_bytes"] = record.get("canonical_budget_bytes", 0) + ceiling - owner.remaining
+                return result
+            finally:
+                self.current.capture_budget = None
 
         class JsonProxy:
             def __getattr__(self, name):
@@ -204,13 +219,13 @@ class HostTimings:
             for owner, name, replacement in (
                 (bridge.BridgeDispatcher, "_dispatch_native", dispatch),
                 (bridge.BridgeDispatcher, "_execute_prepared_command", execute),
-                (bridge._JsonByteBudget, "consume", budget),
+                (bridge._JsonByteBudget, "__init__", budget_init),
                 (webview.util, "json", JsonProxy()), (Window, "evaluate_js", evaluate),
                 (TaskRegistry, "get_plan_window", self.span("registry_ns", TaskRegistry.get_plan_window)),
                 (TaskRegistry, "get_inventory_window", self.span("registry_ns", TaskRegistry.get_inventory_window)),
                 (PlanReviewState, "window", self.span("window_build_ns", PlanReviewState.window)),
                 (InventoryReviewState, "window", self.span("window_build_ns", InventoryReviewState.window)),
-                (bridge, "_capture_bridge_response_result", self.span("capture_ns", bridge._capture_bridge_response_result)),
+                (bridge, "_capture_bridge_response_result", capture),
                 (bridge, "_project_response_value", self.span("projection_ns", bridge._project_response_value)),
             ):
                 stack.enter_context(patch.object(owner, name, replacement))

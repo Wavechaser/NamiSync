@@ -52,6 +52,19 @@ corrected fixture. No timing baseline is accepted by this correction.
 
 ## Table-loading diagnostic method — GUI-C5
 
+**BC1 observer correction (2026-10-07).** The original C5 collector wrapped
+every byte-budget consume call, adding Python observer work to the scalar
+character loop. Its capture and round-trip timings therefore overstate the
+uninstrumented loop's cost by an uncalibrated amount. Preserve those raw results
+as original-method diagnostics. BC1 observes the actual budget at capture scope,
+without wrapping consume, and recollects the unchanged-product baseline before
+the bounded bulk counter comparison. Both use the same six-child corpus below,
+same pinned runtime/profile and same corrected observer. Evidence uses
+`build/bridge-counter-study-20261007/`. No new latency gate is introduced; the
+suggested 40 ms jumps and 100 ms bursts are hypotheses, not acceptance criteria.
+Remaining-capture, row-field, DOM-stage and steady-scroll profiling is separate
+from these headline timings and authorizes no additional product optimization.
+
 This current-source observation has no latency SLO, tail percentile or release
 ceiling. It diagnoses Plan and Inventory separately after GUI-C4 (`3c984b6`),
 before Inventory request coalescing. The finite corpus is the existing base

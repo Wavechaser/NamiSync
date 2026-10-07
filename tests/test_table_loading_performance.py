@@ -74,9 +74,14 @@ def test_table_loading_measures_original_native_encoding_and_budget(monkeypatch)
     monkeypatch.setattr(Window, "evaluate_js", lambda _window, script: script)
     timing = loading.HostTimings()
     record = {}
+    original_consume = bridge._JsonByteBudget.consume
+    original_budget_init = bridge._JsonByteBudget.__init__
+    original_capture = bridge._capture_bridge_response_result
     with timing.installed():
+        assert bridge._JsonByteBudget.consume is original_consume
         timing.current.record, timing.current.active = record, set()
-        value = {"unicode": "\u00e9", "nested": [True, "quote'"]}
+        shared = [True, None, -12, "quote'\"\\\b\f\n\r\t\u0001"]
+        value = {"unicode": "\u00e9\u4e2d\U0001f600", "nested": [shared, shared]}
         captured = bridge._capture_bridge_response_result(value, "a" * 32, 8 * 1024 * 1024)
         projected = bridge._project_response_value(captured, set(), validate=False)
         native = {"transport_version": 1, "response_token": None, "response": {"schema_version": 1, "request_id": "a" * 32, "ok": True, "result": projected}}
@@ -88,6 +93,73 @@ def test_table_loading_measures_original_native_encoding_and_budget(monkeypatch)
     assert record["canonical_budget_bytes"] == len(json.dumps(native["response"], ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
     assert record["native_json_encode_ns"] >= 0
     assert timing.current.record is None
+    assert timing.current.capture_budget is None
+    assert bridge._JsonByteBudget.__init__ is original_budget_init
+    assert bridge._capture_bridge_response_result is original_capture
+    assert bridge._JsonByteBudget.consume is original_consume
+
+
+def test_table_loading_budget_observes_success_without_reencoding(monkeypatch):
+    from namisync.interfaces.web import bridge
+
+    value = {"text": "\u00e9\u4e2d\U0001f600\"\\\n" * 100}
+    response = {"schema_version": 1, "request_id": "a" * 32, "ok": True, "result": value}
+    expected = len(json.dumps(response, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
+
+    def refuse_reencoding(*args, **kwargs):
+        pytest.fail("budget observation must not re-encode the response")
+
+    timing = loading.HostTimings()
+    with timing.installed():
+        timing.current.record, timing.current.active = {}, set()
+        monkeypatch.setattr(bridge.json, "dumps", refuse_reencoding)
+        captured = bridge._capture_bridge_response_result(value, "a" * 32, expected)
+        assert captured == value
+        assert captured is not value
+        assert timing.current.record["canonical_budget_bytes"] == expected
+        assert timing.current.capture_budget is None
+
+
+@pytest.mark.parametrize("value,ceiling,error", (
+    ("x" * 2000, 1024, "ceiling"),
+    ("prefix\ud800", 8 * 1024 * 1024, "Unicode"),
+), ids=("oversized", "invalid-unicode"))
+def test_table_loading_refused_capture_clears_budget(value, ceiling, error):
+    from namisync.interfaces.web import bridge
+
+    timing = loading.HostTimings()
+    original_budget_init = bridge._JsonByteBudget.__init__
+    original_consume = bridge._JsonByteBudget.consume
+    original_capture = bridge._capture_bridge_response_result
+    with pytest.raises(bridge.BridgeProtocolError, match=error):
+        with timing.installed():
+            timing.current.record, timing.current.active = {}, set()
+            bridge._capture_bridge_response_result(value, "a" * 32, ceiling)
+    assert "canonical_budget_bytes" not in timing.current.record
+    assert timing.current.capture_budget is None
+    assert timing.current.active == set()
+    assert bridge._JsonByteBudget.__init__ is original_budget_init
+    assert bridge._JsonByteBudget.consume is original_consume
+    assert bridge._capture_bridge_response_result is original_capture
+
+
+def test_table_loading_nested_capture_keeps_outer_budget():
+    from namisync.interfaces.web import bridge
+
+    class NestedCapture(dict):
+        def items(self):
+            bridge._capture_bridge_response_result({"other": "x" * 1000}, "b" * 32, 8 * 1024 * 1024)
+            return super().items()
+
+    value = NestedCapture(text="outer")
+    response = {"schema_version": 1, "request_id": "a" * 32, "ok": True, "result": dict(value)}
+    expected = len(json.dumps(response, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
+    timing = loading.HostTimings()
+    with timing.installed():
+        timing.current.record, timing.current.active = {}, set()
+        bridge._capture_bridge_response_result(value, "a" * 32, 8 * 1024 * 1024)
+        assert timing.current.record["canonical_budget_bytes"] == expected
+        assert timing.current.capture_budget is None
 
 
 def _receipt(case="plan-base", viewport_height=480):

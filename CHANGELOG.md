@@ -179,6 +179,9 @@ explicit, reviewable and regression-backed.
 
 #### Align desktop review surfaces and recovery (2026-10-05 – 2026-10-07)
 
+- Remove per-character observer work from the loading diagnostic's response
+  byte accounting. Retain actual successful budget consumption and original
+  C5 receipts; collect a corrected baseline before optimizing the counter.
 - Give off-window Plan keyboard highlights the existing 32-row leading buffer,
   preserving pointer/in-window placement. In the repeated installed profile,
   all nine keyboard gestures use one read instead of two, with no exposed

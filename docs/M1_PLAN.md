@@ -11,6 +11,30 @@ retains investigation, rejected proposals and superseded execution recipes;
 the decisions still governing delivery are below. Historical observations
 certify their recorded build and dependencies only.
 
+## Bridge counter optimization and loading investigation — 2026-10-07
+
+The user authorizes #1 implementation and #2–5 investigation only, from
+`706be4b`. Preserve the response admission contract exactly: canonical UTF-8
+byte count, inclusive ceiling, Unicode refusal and first-failure ordering,
+bounded work on oversized strings, occurrence counting, detached ownership and
+one-time hostile-source enumeration. No wire, GUI, filesystem or domain change.
+
+| ID | Outcome and finite population | Verification and commit boundary |
+| --- | --- | --- |
+| BC1a | Remove per-character observer overhead from `tools/performance/table_loading.py`; retain actual budget accounting. Update its method controls and PERFORMANCE. | Focused controls, tools department, independent review; separate measurement-method commit. Recollect the unchanged-product Plan/Inventory baseline with this method before counter edits. |
+| BC1b | Replace scalar string counting in `interfaces/web/bridge.py` with bounded bulk JSON/UTF-8 encoding; scalar handling of a failing chunk preserves original precedence and budget. Direct consumers are ordinary response capture and drain-prefix capture; tests are transport, commands, shared public views and installed bridge consumers. Update BRIDGE, PERFORMANCE and delivery docs. | Differential old/new mixed-text and boundary tests, actual composition first, ordinary suite/import contracts, same corrected six-child loading matrix and independent adversarial review; one product performance commit. No latency threshold. |
+| BC2–5 | Profile remaining capture; attribute row bytes and consumers; distinguish DOM construction/insertion/layout; measure a predefined steady-scroll profile before discussing prefetch. Owners are bridge/window producers and existing installed measurement assets. | Read-only product investigation with bounded disposable instrumentation and retained raw receipts. Report measurements, limitations and proposals; no capture, DTO, DOM, scheduler or prefetch optimization delivery. |
+
+Evidence lives in `build/bridge-counter-study-20261007/`: unique run-prefixed
+receipts/logs/manifests, disposable installations and temporary analysis helpers;
+retain originals and failures, restore instrumented assets in parent-owned
+cleanup, and remove no earlier evidence. PERFORMANCE owns procedure/results;
+HANDOFF owns resumption. Existing C5 figures retain their original observer
+provenance and cannot serve as the corrected counter baseline. Serialize writers
+and timing; keep profiling separate from headline timings. AGENTS mandatory and
+recurrence stops apply. No changed safety boundary or further optimization is
+authorized; investigation may identify recommendations without delivering them.
+
 ## GUI Inventory refinement — 2026-10-05
 
 The user approved the finalized follow-up proposals and their order from
