@@ -2249,7 +2249,7 @@ function queuePlanHighlight(review, gesture, nodeId) {
       const window = await getPlanWindow(
         task.taskId,
         summary.view_revision,
-        targetOutsideWindow ? focusIndex : review.window.offset,
+        targetOutsideWindow ? Math.max(0, focusIndex - 32) : review.window.offset,
         256,
       );
       if (retainedReviewTask(review) !== task || review.actionRevision !== action

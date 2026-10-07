@@ -101,131 +101,55 @@ Independent review and exact input binding close the atomic commit; commit
 accounting is in `integration.md`. DESKTOP_UI, PRESENTATION and FEATURES own
 current behavior. Functional checkboxes remain deferred.
 
-**C5 active boundary (revalidated at `3c984b6`).** First
-deliver a diagnostic `table-loading` family using existing installed-host,
-child-containment and fixture helpers, then deliver Inventory coalescing with
-identical remeasurement. Keep instrumentation in disposable installed assets
-with exact-anchor checks, original/instrumented hashes and verified restoration;
-no shipped timing hooks or general tracing framework. Finite tool population:
-`tools/performance/table_loading.py`, its adjacent browser probe, family
-registration, `tests/test_table_loading_performance.py`, its tools-department
-manifest entry and TOOLS documentation. PERFORMANCE owns
-method/results; PRESENTATION owns subsequent request semantics. Inspect BRIDGE
-and DESKTOP_UI wording; root delivery documents track decisions and commits.
+**C5 delivered — 2026-10-07.** Loading diagnostics, Inventory viewport
+coalescing and the measured Plan keyboard placement correction are separate
+reviewed units. The optional collector (`61ee878`) reuses existing installed-host,
+fixture and containment helpers, retains exact source/runtime/asset provenance
+and restores disposable installed instrumentation. PERFORMANCE owns the frozen
+six-child method, phase/byte populations and all three matrices. It distinguishes
+visible coverage from obsolete-read settlement, keeps nested spans unsummed and
+makes no SLO, tail-latency or compositor-presentation claim.
 
-Predeclare one recorded Windows host/runtime/viewport/DPI profile, Light theme,
-normal motion and Details closed. Use the existing 120k base Plan and Inventory
-fixtures, three fresh children each. Each child observes one initial table load
-after publication plus three repetitions each of sequential edge crossing,
-long jump, reversal/return to covered rows, an eight-target animation-frame burst
-and keyboard off-window navigation. Freeze exact indices/reset/gesture scripts
-before collection. Report per-child values and median/range (three initial and
-nine warm observations per class/component); no tail percentile or latency SLO.
-Host startup, fixture construction and first projection are separate. Heavy
-fixtures require a concrete unresolved information-density question, not a
-repeat of C1's byte-bound proof.
+Inventory coalescing (`4122b10`) retains one running viewport read plus one latest
+queued intent at task scope. Each caller keeps its own promise/generation;
+superseded queued callbacks resolve null. Covered returns, loaded gestures,
+keyboard replacement, navigation/view/session/reload/disposal retire obsolete
+work. Direct action-owned initial/view reads retain their independent ordering.
+Current dispatch eligibility and stale result/error ownership remain guarded.
+The optional tree cancellation callback leaves generic geometry at 28px and
+Inventory at 24px; selection, C2 Refresh targeting, C3 menus and the 256-row
+window are preserved. Evidence: 88 focused, 2,348 interfaces/tools passes with
+three privilege skips, 12 imports, two installed checks and the repeated matrix.
 
-Measure browser intent wait, round trip, actual native decode/bridge validation,
-accepted DOM adoption and identity-correct frame coverage/paint opportunity.
-Use Python clocks for pre-handler overhead, registry/inner window construction,
-bridge capture/projection and actual native response encoding. Distinguish
-canonical budget bytes from encoded transport bytes. Server phases nest within
-round trip; never sum them twice or subtract unrelated clocks. Host thread/lock
-queue time and actual compositor presentation are initially unobserved. Inspect
-a specific registry lock only if its outer time consistently dominates inner
-construction. Record request concurrency/count, offsets/generations, discarded
-work, landing identity and uncovered frame intervals; failed/incomplete children
-remain evidence, not valid samples. No artificial timing delay in measurements.
+The separate C5c placement correction changes only off-window moving Plan
+highlights to use the existing 32-row leading margin, clamped at zero. Pointer
+and in-window placement, highlight/selection/revision/navigation/foreground/error
+semantics and the 256 limit remain unchanged. Direct task-shell controls cover
+both directions, extend gestures and zero clamp. Its gate passes 88 focused,
+2,348 interfaces/tools with three privilege skips, 12 imports, both installed
+task-shell sizes and the identical six-child matrix. All nine sampled keyboard
+gestures use one read with covered target rows rather than two reads with exposed
+preceding rows. This is the finite profile's observation, not a universal timing
+guarantee. Final source, consumer and raw-evidence review closes C5c; commit
+identities and gate receipts are recorded in `integration.md` under the evidence
+root. PRESENTATION owns current loading/placement behavior.
 
-Coalescing owners are `app.js`, `inventory_review.js` and an optional tree
-cancellation callback. Each intent retains its own generation/promise; retiring
-a queued intent resolves only that callback with null. Covered return, loaded
-row activation, keyboard replacement, navigation/view/session replacement and
-disposal retire obsolete work without setting action-pending state. Preserve
-existing conflict/error ownership and C2/C3 targeting. Direct real-page Inventory
-and tree probes plus installed Inventory/shared-tree witnesses own regression
-coverage; Plan stays the comparison consumer. Review method/baseline as one
-commit, then coalescing/repeated measurements as another. Placement/prefetch and
-noninteractive placeholders remain separate conditional outcomes only if those
-measurements demonstrate remaining gaps. C5a now closes with 29 focused checks,
-5,953 ordinary passes/four privilege skips, 12 import contracts, both installed
-representatives and six complete baseline children (96 observations). Independent
-review confirmed source binding, raw correlation, summaries and asset restoration.
-PERFORMANCE owns the diagnostic figures; `c5-method-*`, `c5-baseline-*` and
-`integration.md` own evidence/commit accounting. C5b remains next; product loading
-behavior is unchanged by C5a.
+The method gate passed 29 focused, 5,953 ordinary/four privilege skips, 12 imports,
+both representatives and six baseline children. Earlier fixture consumers were
+repaired separately: bounded destination-label expectation (`6c6e10f`) and genuine
+RECASE prior evidence (`455fd49`), preserving populations and historical timing
+authorities. The latter user-approved recurrence correction passed 68 focused,
+5,924 ordinary/four privilege skips, 12 imports and installed compatibility.
+Failed receipts, exact recovery bytes and independent reviews remain in the
+evidence root; no recovery WIP was merged or cherry-picked.
 
-C5b's read-only design was checked at `455fd49`: retain viewport custody on the
-task so replacement reviews cannot start a second viewport read while an old
-one drains. Keep at most one running read and one queued intent; canceled or
-superseded callbacks resolve null independently. Initial review and view-change
-follow-up windows remain action-owned reads, which may overlap a retired
-viewport read under existing ownership guards. Do not delay those actions or
-introduce a general scheduler. The finite direct probes are
-`inventory_review_probe.mjs`, `inventory_app_probe.mjs` and `tree_probe.mjs`;
-`task_shell_probe.mjs` remains the Plan comparison. Cover bursts, covered return,
-loaded-row activation, keyboard precedence, replacement/disposal, rejection and
-conflict. Revalidate these seams after the C5a commit before implementation;
-interfaces/import checks, installed Inventory/shared-tree checks and identical
-measurements close the separate C5b commit. C5b is now verified: 88 focused,
-2,348 interfaces/tools passes with three privilege skips, 12 import contracts,
-two installed Inventory/shared-tree checks and the identical six-child matrix.
-Inventory burst concurrency is one and reads fall from 72 to 27; diagnostic
-median coverage falls from 413.8 to 175.4 ms. Plan remains the unchanged
-comparison. `c5b-*` retains raw evidence and independent review; PERFORMANCE
-owns the figures. Conditional Plan keyboard placement is under read-only review
-before its own finite implementation boundary; no prefetch is justified by
-the abrupt-jump corpus.
-
-The first C5 installed probe exposed a stale direct measurement consumer:
-`execution_receipt._rootless_settlement` and its fake registry still expected the
-unbounded prior-destination label. The helper and receipt-scale fixture now use
-the bounded display, preserving full destination hashing and rootless geometry.
-A real published-base-view control prevents the fake registry from silently
-retaining an obsolete contract. Its execution UI adapter remains a direct consumer.
-The separate helper correction passes 53 focused, 1,952 interfaces and 12 import
-contracts. Installed `c5-representative-plan-02` passes fixture settlement and
-reaches page evaluation, then stops at the new collector's startup handshake;
-it is helper evidence, not a completed timing sample. Independent review and
-commit accounting belong to `c5-helper-*` and `integration.md`. No product
-behavior changed. Failed receipts and verified installed-asset restoration remain.
-
-**C5 recurrence correction approved — 2026-10-07.** The real-window probe reaches publication
-but the unchanged browser rejects synthetic RECASE rows without a prior name.
-Production planner output supplies that evidence; this is fixture drift, not
-evidence of a supported product regression. The user approved the combined
-fixture correction below and continuation of the remaining C5 work.
-
-| Repeated mechanism | Consequence and owner | Common verification boundary |
-| --- | --- | --- |
-| Old prior-group label expectation after bounded-display migration | Published fixture refused by execution-receipt helper; corrected in `6c6e10f`. | Real service/registry publication through the browser's actual window validator. Earlier helper/fake controls covered geometry separately. |
-| Synthetic RECASE omits prior path after rename presentation migration | Browser rejects the initial window; owner `tools/performance/plan.py` and its fixture consumers. | The same realized fixture-to-browser seam, without weakening validators. |
-
-The approved separate correction swaps fixture indices 3 (numeric-name RECASE)
-and 12 (caseable NOOP), then gives every RECASE a genuinely different, same-parent
-case-equivalent prior leaf and prior stat. Read-only base/heavy simulation in
-`c5-inspect-fixture-swap.json` preserves all manifest facts except artifact digest
-and plan fingerprint: populations, IDs, targets, stats, dependency depth, sibling
-geometry, raw sort witnesses and selection totals remain. Both original numeric
-names remain. Historical authorities/measurements are not rewritten.
-
-Finite repair population: shared Plan fixture; owning Plan scale controls; real
-published-window/browser-validator witness in the receipt scale tests; fixture
-history note in PERFORMANCE. Execution receipt/UI and C5 are direct consumers.
-The fixture correction passes 68 focused Plan/receipt/UI controls, 5,924 ordinary
-tests (four privilege skips; 35 headed excluded), all 12 import contracts and
-installed Plan04's 16 observations. Plan04 is compatibility evidence, not an
-accepted timing baseline. The first ordinary run used a sandbox token differing
-from its environment username: two ACL preconditions and the PowerShell version
-guard setup failed before their intended seams. The unchanged suite passed under
-the actual user; no assertions or security settings changed. Failed receipts and
-the environment disposition remain under `c5-fixture-*`. Independent review and
-commit accounting close this separate fixture unit. Revalidate C5 controls when
-reconstructing its separate method/probe outcome; no baseline is accepted.
-The clean recovery `5031f22` is based on unchanged integration `6c6e10f`. Rebuild
-its useful files into reviewed units, never merge or cherry-pick it as a review
-unit. Both recovery refs remain until final batch accounting. No intervening
-product or fixture changes were found on resumption.
+Conditional disposition: abrupt jumps provide no gradual-scroll lead time for
+directional prefetch. After the keyboard correction, remaining exposed-spacer
+intervals do not establish beneficial placeholder behavior. Neither is added;
+no backend, bridge, filesystem effect, general scheduler or new measurement
+matrix was introduced. Original accepted exclusions remain. Both task recovery
+contents are accounted for in reviewed integration; `integration.md` records
+reference cleanup. This closes the GUI-C1–C5 batch.
 
 ## GUI follow-up batch — 2026-10-05
 

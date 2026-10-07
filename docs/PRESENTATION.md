@@ -182,6 +182,10 @@ The browser sends only a compact gesture endpoint with expected view/highlight r
 resolves ranges against the full ordered view, including off-window rows and
 collapsed descendants; when a target is outside the retained window, the
 browser requests that window before painting the returned focus/highlight flags.
+An off-window moving highlight requests up to 32 leading rows before the
+authoritative focus index, clamped at zero, within the unchanged 256-row limit.
+This provides leading coverage when browser focus reveals preceding rows;
+in-window and pointer highlight reads retain the displayed window offset.
 Window rows carry highlight flags; scrolling, sorting and collapse preserve them,
 while search/filter changes clear them. Pointer highlighting does not request a
 keyboard focus ring; `:focus-visible` remains the keyboard-only ring. Checkboxes

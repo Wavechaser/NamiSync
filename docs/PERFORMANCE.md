@@ -267,6 +267,48 @@ also identifies a narrower Plan placement opportunity: two adopted reads expose
 rows above the first target-only window during focus reveal. That conditional
 follow-up stays a separate change; Inventory coalescing does not alter Plan.
 
+### GUI-C5 Plan keyboard placement comparison — 2026-10-07
+
+`c5c-measured-plan-01.json`, `c5c-measured-inventory-01.json` and
+`c5c-comparison-summary.md` retain the final identical six-child matrix. Base
+`4122b10` plus the frozen placement change uses separate
+`c5-install-placement-01`, the same dependency pins, collector, wrappers,
+gesture sequence and actual profile. All 96 observations complete; source,
+installed identity and asset restoration are checked before/after. Broad tests
+again run after timing, not alongside it.
+
+First target coverage, milliseconds, median [minimum, maximum]:
+
+| Gesture | Plan placement | Inventory comparison |
+| --- | --- | --- |
+| Initial (3) | 131.7 [129.9, 135.4] | 135.1 [127.0, 139.8] |
+| Sequential edge (9) | 94.0 [83.0, 121.2] | 105.1 [81.4, 115.9] |
+| Jump (9) | 82.1 [77.8, 94.9] | 101.0 [75.8, 108.0] |
+| Covered return (9) | 16.5 [12.2, 16.9] | 16.5 [10.0, 16.7] |
+| Burst (9) | 190.2 [182.2, 194.8] | 173.0 [135.7, 183.3] |
+| Keyboard (9) | 83.0 [80.4, 85.9] | 71.0 [67.4, 118.1] |
+
+All nine Plan keyboard actions now adopt one window at offset 19967 rather
+than two at 19999 then 19961. Target/active row 19999 remains visible within
+19993–20008, with 256 retained rows and no uncovered interval, compared with
+74.2–77.1 ms exposed intervals before placement. Median target coverage falls
+from 155.7 to 83.0 ms (46.7% in this instrumented profile). This establishes the
+specific duplicate-read correction, not a guarantee for every viewport size.
+
+Inventory remains at maximum concurrency one. Its nine bursts use 22 reads,
+13 discarded, with two or three per gesture as completion timing varies;
+the previous 27 count is not a contract. Initial and single-read latency varies
+in both components. No causal improvement or regression is inferred for those
+unchanged paths; workload/power and instrumentation overhead remain unverified.
+Raw reports retain all per-child phase/byte counts and distributions.
+
+No directional prefetch is added: the fixed corpus gives no gradual-scroll
+lead time. No placeholders are added: the corrected keyboard seam retains
+covered real rows, while the remaining exposed-spacer intervals under abrupt
+discontinuous input do not establish a useful loading visual. They remain
+observed limitations, not a claim of instantaneous loading. Compositor timing,
+tail latency and new release ceilings remain outside this diagnostic's authority.
+
 ## Cold inventory projection acceptance method
 
 PRESENTATION owns the retained base 3 s / information-heavy 6 s maxima. The

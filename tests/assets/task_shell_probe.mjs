@@ -937,12 +937,12 @@ assert.equal(
 );
 assert.equal(
   calls.at(-1)[3],
-  retainedHighlightOffset + 256,
-  "an off-window arrow anchors at the authoritative focus index",
+  retainedHighlightOffset + 256 - 32,
+  "an off-window arrow retains leading rows before the authoritative focus index",
 );
-planWindows[3].resolve(planWindow(offWindowHighlight, retainedHighlightOffset + 256));
+planWindows[3].resolve(planWindow(offWindowHighlight, retainedHighlightOffset + 256 - 32));
 await until(() => firstReview.pending === null);
-assert.equal(firstReview.window.offset, retainedHighlightOffset + 256);
+assert.equal(firstReview.window.offset, retainedHighlightOffset + 256 - 32);
 assert.equal(firstReview.foregroundWindowReaders, 0);
 assert.equal(executionDetails.length, 3, "planned-row highlight needs no execution-detail read");
 assert.equal(planDetails.length, plannedReadsBeforeHighlight + 1,
@@ -2571,6 +2571,65 @@ for (const [index, refusal, expected] of [
   planWindows.at(-1).resolve(planWindow(summary));
   await until(() => !task.reviewLoading);
   assert.equal(task.review.message, retainedMessage, "reload preserves refusal origin and guidance");
+}
+
+// Moving highlights retain leading coverage for browser focus reveal. Pointer
+// and in-window highlights still read the current window. Native measurement
+// owns the actual viewport coverage and follow-up-read observation.
+const placementTaskId = `task-${"f0".repeat(16)}`;
+const placementOpenBase = planOpens.length;
+const placementWindowBase = planWindows.length;
+const placementTask = globalThis.taskHarness.adoptTask({
+  task_id: placementTaskId, session_id: "e1".repeat(16),
+  session_state: "completed", session_released: true,
+  task_kind: "sync-plan", request_id: "e2".repeat(16),
+});
+const placementSummary = planSummary({ task_id: placementTaskId, request_id: "e2".repeat(16) });
+await until(() => planOpens.length === placementOpenBase + 1);
+planOpens.at(-1).resolve(placementSummary);
+await until(() => planWindows.length === placementWindowBase + 1);
+planWindows.at(-1).resolve(planWindow(placementSummary));
+await until(() => placementTask.review !== null);
+taskButton(placementTask.label).click();
+const placementReview = placementTask.review;
+const placementNode = (index) => `node-${index.toString(16).padStart(32, "0")}`;
+function placementWindow(summary, offset) {
+  const window = planWindow(summary, offset);
+  const row = window.rows[0];
+  window.total = 1000;
+  window.rows = Array.from({length: 256}, (_, index) => ({
+    ...row, node_id: placementNode(offset + index), visible_index: offset + index,
+    highlighted: placementNode(offset + index) === summary.highlight_focus_node_id,
+  }));
+  return window;
+}
+for (const [gesture, target, expectedOffset] of [
+  ["move_up", 95, 63],
+  ["move_down", 352, 320],
+  ["move_up_extend", 95, 63],
+  ["move_down_extend", 352, 320],
+  ["move_up", 1, 0],
+  ["move_down", 100, 96],
+  ["replace", 100, 96],
+]) {
+  placementReview.window = placementWindow(placementReview.summary, 96);
+  const expected = planSummary({ ...placementReview.summary,
+    highlight_revision: placementReview.summary.highlight_revision + 1,
+    highlight_focus_node_id: placementNode(target), highlight_focus_visible_index: target });
+  nextHighlightSummary = expected;
+  const windowsBefore = planWindows.length;
+  globalThis.planReviewHarness.callbacks.onHighlight(placementReview, gesture,
+    gesture === "replace" ? placementNode(target) : null);
+  await until(() => planWindows.length === windowsBefore + 1);
+  assert.deepEqual(calls.at(-1), ["plan-window", placementTaskId, expected.view_revision, expectedOffset, 256], gesture);
+  assert.equal(placementReview.foregroundWindowReaders, 1, gesture);
+  const response = placementWindow(expected, expectedOffset);
+  planWindows.at(-1).resolve(response);
+  await placementReview.highlightQueue;
+  assert.equal(placementReview.summary, expected, gesture);
+  assert.equal(placementReview.window, response, gesture);
+  assert.equal(placementReview.summary.highlight_focus_visible_index, target, gesture);
+  assert.equal(placementReview.foregroundWindowReaders, 0, gesture);
 }
 
 process.stdout.write("ok");

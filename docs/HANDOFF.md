@@ -1,66 +1,57 @@
-# Latest session — Inventory coalescing verified
+# Latest session — GUI-C1–C5 complete
 
-2026-10-07, `milestone1`. The approved fixture correction is integrated as
-`455fd49`, following helper correction `6c6e10f` and C1–C4. It preserves fixture
-populations and historical authorities while supplying genuine RECASE evidence.
-Its checks passed: 68 focused, 5,924 ordinary/four privilege skips, 12 imports
-and the installed Plan04 compatibility probe. That probe is not timing evidence.
+2026-10-07, `milestone1`. The resumed fixture correction is integrated as
+`455fd49`, followed by diagnostic baseline `61ee878`, Inventory coalescing
+`4122b10`, and the final Plan keyboard placement unit. `integration.md` under
+`build/gui-inventory-refinement-20261005/` records final commit identities and
+recovery-reference cleanup. No accepted C1–C5 work remains pending.
 
-C5a's diagnostic method and baseline are integrated as `61ee878`. Evidence root:
-`build/gui-inventory-refinement-20261005/`. `c5-method-focused-06` passes 29;
-`c5-method-ordinary-01` passes 5,953/four privilege skips plus 12 imports.
-Installed representatives Plan05 and Inventory01 pass all 16 observations each.
-`c5-baseline-plan-01.json` and `c5-baseline-inventory-01.json` contain three fresh
-children each, 96 observations total, with raw receipts, before/after source
-hashes and verified restoration/installation identity. Independent review
-recomputed all summaries and found no remaining issue. PERFORMANCE and
-`c5-baseline-summary.md` own figures/limits; `integration.md` records commits.
+Inventory now keeps one running viewport read and only the latest queued intent.
+Each caller retains its promise; cancellation covers loaded/covered returns and
+lifecycle replacement. Direct action-owned reads keep independent ordering.
+Off-window Plan keyboard moves use the existing 32-row leading buffer; pointer
+and in-window placement remain unchanged. No backend, bridge, filesystem effect
+or general scheduler change was made.
 
-C5b now implements task-owned one running viewport read plus one latest queued
-intent, resolving retired callbacks with null. Tree cancellation covers loaded
-and covered returns; navigation/view/session/reload/disposal retire obsolete
-work. Direct action-owned reads preserve their independent ordering. Seven
-frozen product/test/component-doc paths are bound in
-`c5b-focused-final-01-hashes.json`. The sole failed focused attempt was a new
-Close witness using an obsolete review object; its corrected assertion proves
-the read starts. No product correction was needed for that fixture failure.
+The three complete six-child matrices (96 observations each) are
+`c5-baseline-*`, `c5b-measured-*` and `c5c-measured-*`, with raw browser/host
+receipts, source manifests and restored-asset evidence. PERFORMANCE owns method,
+figures and limits; `c5-baseline-summary.md`, `c5b-comparison-summary.md` and
+`c5c-comparison-summary.md` retain compact evidence summaries. Inventory burst
+reads fell from 72/max concurrency eight to 27/max one; median coverage
+413.8→175.4 ms in that comparison. Plan keyboard reads fell from two to one per
+gesture, with zero uncovered interval and median 155.7→83.0 ms. Other latency
+variance receives no causal claim. Instrumented diagnostics are not SLOs;
+observer overhead, unrelated workload/power, host queues and compositor timing
+remain unmeasured. No broad suite ran alongside timing.
 
-C5b checks: 88 focused; `c5b-neighborhood-01` has 2,348 interfaces/tools passes,
-three privilege skips; `c5b-imports-01` keeps 12 contracts; `c5b-native-01` passes
-both installed Inventory/shared-tree checks. Candidate
-`c5-install-coalesced-01` has separate source/wheel/installed identity and exact
-baseline dependency pins. `c5b-measured-plan-01.json` and
-`c5b-measured-inventory-01.json` repeat all six children/96 observations without
-concurrent broad tests. Source and raw-evidence review found no remaining issue.
-PERFORMANCE and `c5b-comparison-summary.md` own diagnostic figures/limitations.
-Inventory bursts fall from 72 reads/max concurrency eight to 27/max one, with
-median first coverage 413.8→175.4 ms. Plan remains 192.9→192.4 ms with identical
-burst counts. All installed instrumentation was restored and identity rechecked.
+Verification: fixture 68 focused/5,924 ordinary/four privilege skips/12 imports;
+method 29 focused/5,953 ordinary/four privilege skips/12 imports; coalescing and
+placement each 88 focused/2,348 interfaces+tools/three privilege skips/12 imports.
+Installed Inventory/shared-tree pass two; final task-shell default/larger pass two.
+Final gate `c5c-neighborhood-01` passes in 196.34 s. Independent fresh reviews
+check source, controls, raw receipts, exact dependency binding and restoration.
+All failed attempts remain retained with their dispositions. The new Close
+test's obsolete-review setup was corrected without a product change.
 
-Next assess the accepted conditional placement outcome, after C5b commit:
-the corpus shows two Plan keyboard windows because focus reveal exposes rows
-above the initial target-only window. An existing 32-row leading margin is the
-narrow candidate; finalize its finite M1 boundary before editing. The abrupt
-jumps do not demonstrate gradual-scroll lead time for directional prefetch.
-Placeholder disposition remains part of this read-only assessment. No conditional
-implementation is mixed into C5b.
+All three disposable measurement installations are retained intact with exact
+runtime pins and wheel/installed identities. `run-c5.ps1` revalidates identities
+and source before/after; all instrumented assets were restored. Reuse evidence
+only after dependency checks. Native/broad runs need the actual Windows user
+(`require_escalated`), not the sandbox identity whose environment reports
+Spectrum. Its earlier identity/policy precondition failures and unchanged actual
+user pass are documented in `c5-fixture-environment-disposition.md`; no settings
+or assertions were weakened. Foreground guards remain required for native input.
+No test or benchmark process is active at closure.
 
-Native/broad runners must use the actual Windows user (`require_escalated`),
-not the sandbox identity whose environment misleadingly reports Spectrum.
-The first fixture ordinary run's identity/policy precondition failures and
-unchanged actual-user pass are retained in `c5-fixture-environment-disposition.md`.
-No user policy or assertion was changed. Announce native runs; preserve all
-foreground guards. The user will try to foreground the window. No native run
-is active at this checkpoint.
+Original `user-handoff.md` and all recovery bytes are preserved. C1 recovery
+`a638040` product/test/component docs were integrated exactly in `9868f5c`;
+only delivery prose was superseded. C5 recovery `5031f22` was reconstructed into
+the reviewed fixture/method commits, with every saved path accounted for.
+Never merge/cherry-pick those WIPs. No unrelated changes, worktrees, push or PR.
 
-Keep both installed measurement environments unchanged. `run-c5.ps1` validates the wheel/install
-before and after, records input hashes and uses unique output names. The host
-profile was refreshed on Oct7; the Oct6 profile remains separately retained.
-Keep failed probes and original `user-handoff.md`. Both task recovery refs
-remain until full batch accounting: C1 `a638040` and C5 `5031f22`. All nine C5
-recovery paths have been reconstructed or superseded individually; never merge
-or cherry-pick the WIP. No unrelated changes, worktrees, push or PR.
-
-Functional Verify checkbox selection and execution-to-Verify remain deferred.
-No new filesystem effects, backend changes or general request scheduler are
-authorized by C5.
+No prefetch or placeholders were added: this fixed abrupt-jump corpus establishes
+neither gradual lead time nor beneficial placeholder presentation after the
+keyboard placement fix. Remaining observed gaps are retained as limitations.
+Functional Verify checkbox selection and execution-to-Verify remain M1-10;
+the other explicit product exclusions remain in M1_PLAN.

@@ -179,6 +179,13 @@ explicit, reviewable and regression-backed.
 
 #### Align desktop review surfaces and recovery (2026-10-05 – 2026-10-07)
 
+- Give off-window Plan keyboard highlights the existing 32-row leading buffer,
+  preserving pointer/in-window placement. In the repeated installed profile,
+  all nine keyboard gestures use one read instead of two, with no exposed
+  viewport interval and median coverage 155.7→83.0 ms. Pass 88 focused,
+  2,348 interface/tools checks, twelve import contracts and both installed
+  task-shell sizes. Close C5 with independent review; prefetch/placeholders
+  remain unjustified by the fixed abrupt-jump corpus.
 - Coalesce Inventory viewport reads to one running read and the latest queued
   intent. Retire obsolete callbacks on covered returns, loaded-row gestures and
   lifecycle changes while preserving action ordering. The repeated diagnostic
