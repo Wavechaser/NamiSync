@@ -211,6 +211,7 @@ globalThis.__tableLoading = (() => {
       paint_opportunity_after_last_input_ns: trace.ns(paintAt - lastInput),
       settlement_after_last_input_ns: trace.ns(settledAt - lastInput),
       setup_offset: gesture.setupOffset ?? null,
+      setup_request_id: gesture.setupRequestId ?? null,
       setup_first: gesture.setupFirst ?? null, setup_last: gesture.setupLast ?? null,
       landed: true, ...result, covered_ns: trace.ns(coveredAt - gesture.started),
       paint_opportunity_ns: trace.ns(paintAt - gesture.started), uncovered_ns: trace.ns(uncovered),
@@ -257,31 +258,38 @@ globalThis.__tableLoading = (() => {
           await reset(20032);
           keyboardSetup = coverage();
           const last = Math.ceil((20032 * 24 + root.clientHeight) / 24) - 1;
-          const expectedOffset = (component === "plan" ? 20032 : last) - 32;
+          const setupRead = trace.requests.findLast(row => row.adopted
+            && row.returned_offset === keyboardSetup.offset && row.row_count === 256);
           if (keyboardSetup.first !== 20032 || keyboardSetup.last !== last
-              || keyboardSetup.offset !== expectedOffset) throw new Error("keyboard setup placement changed");
+              || !keyboardSetup.covered || !setupRead) throw new Error("keyboard setup window not observed");
+          keyboardSetup.requestId = setupRead.request_id;
         }
         let target = kind === "jump" ? 60000 : kind === "burst" ? 40000 : 256;
         if (kind === "keyboard") {
-          scroll(owner().window.offset);
-          await until(() => coverage()?.covered && trace.pending === 0, "keyboard first-row viewport");
-          if (owner().window.offset !== keyboardSetup.offset) throw new Error("keyboard setup offset changed");
           const first = root.querySelector("[data-node-id]");
           target = owner().window.offset - 1;
           first.click();
-          first.focus();
+          // Row activation can focus/reveal synchronously; restore setup before yielding.
+          root.scrollTop = keyboardSetup.first * 24;
+          first.focus({preventScroll: true});
           await until(() => trace.pending === 0 && coverage()?.covered
             && (component === "plan" ? owner().summary.highlight_focus_node_id === first.dataset.nodeId
               : root.getAttribute("aria-activedescendant") === first.id), "keyboard setup focus");
           await frame();
+          const selectedSetup = coverage();
+          if (selectedSetup.offset !== keyboardSetup.offset || selectedSetup.first !== keyboardSetup.first
+              || selectedSetup.last !== keyboardSetup.last || selectedSetup.active_index !== keyboardSetup.offset) {
+            throw new Error("keyboard setup geometry or active row changed");
+          }
           const live = root.querySelector("[data-node-id]");
-          live.focus();
+          live.focus({preventScroll: true});
           if (component === "plan" && document.activeElement !== live) throw new Error("Plan keyboard target lost focus");
           if (component === "inventory") root.focus();
         }
         const gesture = {kind, iteration, started: performance.now(), frames: [], inputs: []};
         if (kind === "keyboard") {
           gesture.setupOffset = keyboardSetup.offset;
+          gesture.setupRequestId = keyboardSetup.requestId;
           gesture.setupFirst = keyboardSetup.first;
           gesture.setupLast = keyboardSetup.last;
         }

@@ -125,14 +125,20 @@ reads over two frames. Sequential crossing sets index 256; a long jump sets
 The burst sets 5,000 / 10,000 / 15,000 / 20,000 / 25,000 / 30,000 / 35,000 /
 40,000, one target per animation frame. Each keyboard repetition resets to 0
 and settles, then sets scroll index 20,032 and settles. It records the actual
-setup first/last viewport indices and retained window offset. Placement is checked
-against the unchanged component rule: Plan starts at first index minus 32
-(20,000); forward Inventory starts at last index minus 32, where last is
-`ceil((20032 * 24 + measured viewport height) / 24) - 1`. It scrolls the first
-retained row into view, activates/focuses it outside timing, and waits for its
+setup first/last viewport indices and retained window offset. The SN2 method
+correlates that window with a completed, adopted setup read and checks that it
+covers index 20,032 through `ceil((20032 * 24 + measured viewport height) / 24) - 1`.
+It activates the first retained row outside timing, synchronously restores the
+setup scroll position after activation's normal reveal, focuses with preventScroll,
+and waits for its
 real highlight/active identity and viewport coverage, then dispatches ArrowUp
 to target the validated setup offset minus one. Setup geometry and target
-are retained in the raw sample. These are synthetic DOM scroll/click/key
+and setup request identity are retained in the raw sample. The offset must stay
+unchanged through activation, with the original viewport and selected row checked
+again before timing; the method does not manufacture a user scroll to
+the window edge, which would itself trigger directional prefetch. Earlier C5/SW
+receipts used fixed component placement and explicitly scrolled to that edge;
+SN2 compares both product variants with the revised method. These are synthetic DOM scroll/click/key
 gestures through production handlers, not native keyboard acceptance evidence.
 Existing installed journeys retain native keyboard authority.
 
@@ -234,6 +240,46 @@ Assess one-window edge-margin prefetch only after the adoption comparison.
 The separate key-cache experiment uses cold bounded per-capture caches, exact
 byte/error/partial-budget comparisons and unwrapped real-window captures;
 profile separately. Row-schema and renderer changes remain deferred.
+
+### SN2 directional prefetch — 2026-10-11
+
+`build/scroll-navigation-20261011/sn2-summary-01.json` aggregates
+`sn2-baseline-plan-02`, `sn2-candidate-plan-01`, `sn2-baseline-inventory-01`
+and `sn2-candidate-inventory-01`. Each contains three fresh installed children
+with both steady speeds and the same revised keyboard setup above. Baseline is
+committed SN1 `940c7ef`; candidate changes only the Plan, tree and Inventory
+panel assets. Source/wheel/install/restoration manifests are retained, including
+the failed initial keyboard-setup receipt and superseded candidate installation.
+
+The host and observed profiles match the SW profile below: Python 3.13.14,
+WebView2 154.0.4258.62, light theme, DPR 1.75, Details hidden, Plan 853×359 and
+Inventory 880×321 viewports. Collection was serialized after functional tests;
+power and unrelated host workload remain unknown. Each trajectory runs eight
+seconds forward and four reverse. Time not fully covered, seconds, median [range]:
+
+| Page and rows/s | SN1 baseline | Directional prefetch |
+| --- | --- | --- |
+| Plan 240 | 2.107 [2.106, 2.143] | 0 [0, 0] |
+| Plan 1,000 | 5.176 [5.070, 5.314] | 0 [0, 0.097] |
+| Inventory 240 | 1.237 [1.217, 1.282] | 0 [0, 0] |
+| Inventory 1,000 | 4.442 [4.400, 4.776] | 0 [0, 0] |
+
+The four-second reverse portions account for baseline median gaps of
+1.603/3.091 seconds in Plan and 0.920/3.085 seconds in Inventory at 240/1,000
+rows/s. Candidate reverse portions have zero median gaps; one Plan 1,000-row/s
+run has a 51.8 ms reverse gap and a separate 45.3 ms forward gap. All other
+candidate trajectories have zero frame-sampled gaps. This directly addresses
+the asymmetric upward loading observation within this measured corpus.
+
+Median read counts fall from Plan 36/98 and Inventory 33/116 to 20/81 in both
+pages. All steady samples retain one outstanding read, at most 256 rows and no
+discarded responses. Burst last-input coverage medians are Plan 82.4→57.0 ms
+and Inventory 71.1→69.2 ms; these sparse runs do not establish a universal burst
+latency improvement. Sampled frame intervals still reach 69.3 ms in Plan and
+33.4 ms in Inventory with prefetch. Zero sampled gaps is not compositor or native
+wheel proof, nor a guarantee of no visible flash. Per-frame DOM sampling adds
+overhead equally to both variants. No renderer rewrite or second retained window
+was introduced; navigation input coalescing remains the separate SN3 outcome.
 
 ### SW observations and dispositions — 2026-10-09
 

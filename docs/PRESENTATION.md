@@ -201,13 +201,22 @@ owns the fixture, measured interval, rerun triggers and historical observation.
 
 A plan or inventory window indexes the complete post-filter visible sequence, not lexical database order. Fixed-height virtual rows and leading/trailing spacers keep scrolling stable. Window requests carry the appropriate revision, offset, and limit; a renderer requests the index it needs, commits only under its request generation, and suppresses duplicate uncovered-range requests. Changing search, collapse, filters, sorting, task detail, publication state, or retirement advances the local generation. Stale responses and queued animation frames are inert. `dispose()` disconnects observers/listeners and invalidates pending work before a root is removed.
 
-Plan scrolling within the loaded viewport coverage performs no fetch. An uncovered
-viewport coalesces to its latest intent with at most one window read in flight.
-New scroll positions do not invalidate that read: a response with current task,
+Plan and Inventory scrolling prefetch within 64 rows of the loaded edge in the
+direction of travel. Placement retains 32 rows behind travel within one requested
+256-row window, clamped at the sequence endpoints. Only the travel-side edge
+triggers prefetch; the trailing margin cannot cause stationary ping-pong.
+Actual returned rows determine coverage, including short pages; the requested
+start is not clamped to `total - 256`, which could pin a short tail page away
+from the viewport.
+Keyboard and programmatic reveals rebase travel direction. Hidden viewports
+retire scroll intent; resize does not invent a travel direction.
+An uncovered viewport coalesces to its latest intent with at most one window read in flight.
+Same-direction scroll positions retain useful early reads: a response with current task,
 session, publication, action/view and highlight ownership may publish when it
 overlaps the current viewport. The renderer then reconciles coverage and requests
-another window only for remaining uncovered rows. Returning to covered rows
-invalidates an obsolete result. A later navigation demand has its own request
+another window for changed demand. Covered rows retain useful early requests;
+reversal retires obsolete intent before replacing it behind the running read.
+A later navigation demand has its own request
 revision; settlement of the old read cannot clear that newer queued demand. Window reads do not
 disable the whole review or remount unchanged rows. View/selection/execute actions
 retain their separate pending and revision guards, so a later window response
@@ -227,8 +236,9 @@ while the same generation and active-node ownership rules remain authoritative.
 Inventory viewport reads retain one running read and only the latest queued
 intent at task scope, including across review replacement. Every callback owns
 its own promise and tree generation; retiring a queued intent resolves it with
-null, never a newer result. New scroll positions share an in-flight scroll
-generation instead of creating replacement callbacks. A scroll commit must
+null, never a newer result. Same-direction scroll positions share an in-flight scroll
+generation instead of creating replacement callbacks. The tree passes the desired
+window offset separately from its navigation target index. A scroll commit must
 overlap the current viewport and chooses its active row from that viewport,
 not its original requested index. Changed demand is reconciled after settlement;
 a short response for unchanged demand does not initiate an automatic retry loop.

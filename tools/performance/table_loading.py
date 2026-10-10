@@ -385,7 +385,16 @@ def validate_child(receipt, case, token, installed_root=None):
         target = {"initial": 0, "sequential": 256, "jump": 60_000, "covered-return": 0, "burst": 40_000}.get(sample["kind"])
         if target is None:
             setup_last = math.ceil((20_032 * 24 + profile["viewport_height"]) / 24) - 1
-            setup_offset = (20_032 if case == "plan-base" else setup_last) - 32
+            setup_offset = sample["setup_offset"]
+            setup_read = next((row for row in browser["requests"]
+                               if row["request_id"] == sample["setup_request_id"]), None)
+            if (type(setup_offset) is not int or not 0 < setup_offset <= 20_032
+                or setup_offset + 256 <= setup_last or setup_read is None
+                or not setup_read["adopted"] or setup_read["row_count"] != 256
+                or setup_read["returned_offset"] != setup_offset
+                or setup_read["gesture"] is not None
+                or not requests or setup_read["validated_at"] > min(row["submitted"] for row in requests)):
+                raise ValueError("table-loading keyboard setup window differs")
             target = setup_offset - 1
         if (not sample["landed"] or not sample["covered"] or sample["row_count"] != 256 or sample["total"] != total
             or sample["target"] != target or sample["visibility_state"] != "visible" or not sample["document_has_focus"]

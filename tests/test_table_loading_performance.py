@@ -189,6 +189,13 @@ def _receipt(case="plan-base", viewport_height=480):
             "ownership": owner, "adoption_ownership": owner, "row_count": 256, "returned_offset": target,
             "returned_first_node_id": "node", "adopted": True, "dom_ns": 1,
             "settlement_error": None, **dict.fromkeys(loading.BROWSER_PHASES, 1)})
+        if kind == "keyboard":
+            setup_id = f"setup-{index}"
+            setup_payload = {**payload, "offset": setup_offset}
+            host.append({**host[-1], "request_id": setup_id, "payload": setup_payload})
+            requests[-1]["submitted"] = 2
+            requests.append({**requests[-1], "request_id": setup_id, "payload": setup_payload,
+                "gesture": None, "returned_offset": setup_offset, "submitted": 0, "validated_at": 1})
         gestures.append({"kind": kind, "iteration": index, "landed": True, "covered": True, "row_count": 256,
             "input_timestamps_ms": [0] * {"initial": 0, "burst": 8, "covered-return": 2}.get(kind, 1),
             "input_cadence_ms": [0] * {"initial": 0, "burst": 7, "covered-return": 1}.get(kind, 0),
@@ -197,6 +204,7 @@ def _receipt(case="plan-base", viewport_height=480):
             "total": total, "target": target, "first": target, "last": target + 20, "offset": target,
             "active_index": target, "active_node_id": "node", "first_node_id": "node",
             "setup_offset": setup_offset if kind == "keyboard" else None,
+            "setup_request_id": f"setup-{index}" if kind == "keyboard" else None,
             "setup_first": 20032 if kind == "keyboard" else None, "setup_last": setup_last if kind == "keyboard" else None,
             "visibility_state": "visible", "document_has_focus": True, "pending": 0, "ownership": owner,
             "frame_count": 2, "request_count": 1, "maximum_outstanding": 1, "uncovered_ns": 0,
@@ -214,15 +222,28 @@ def test_table_loading_accepts_complete_correlated_control():
 
 
 @pytest.mark.parametrize("case,height,offset", (("plan-base", 480, 20000), ("inventory-base", 480, 20019), ("inventory-base", 481, 20020)))
-def test_table_loading_keyboard_setup_uses_component_viewport_placement(case, height, offset):
+def test_table_loading_keyboard_setup_correlates_observed_window(case, height, offset):
     receipt = _receipt(case, height)
     sample = receipt["browser"]["gestures"][-1]
     assert sample["setup_offset"] == offset
     assert sample["target"] == offset - 1
     loading.validate_child(receipt, case, "token")
     sample.update(setup_offset=offset + 1, target=offset, active_index=offset)
-    with pytest.raises(ValueError, match="land truthfully"):
+    with pytest.raises(ValueError, match="setup window differs"):
         loading.validate_child(receipt, case, "token")
+
+
+@pytest.mark.parametrize("change", (
+    lambda value: value["browser"]["gestures"][-1].update(setup_request_id="absent"),
+    lambda value: value["browser"]["requests"][-1].update(gesture="keyboard-3"),
+    lambda value: value["browser"]["requests"][-1].update(validated_at=3),
+    lambda value: value["browser"]["requests"][-1].update(adopted=False),
+))
+def test_table_loading_rejects_uncorroborated_keyboard_setup(change):
+    receipt = _receipt()
+    change(receipt)
+    with pytest.raises(ValueError, match="setup window differs"):
+        loading.validate_child(receipt, "plan-base", "token")
 
 
 def test_table_loading_reports_actual_incomplete_reason_without_profile():

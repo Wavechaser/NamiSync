@@ -977,7 +977,8 @@ assert.equal(calls.filter(([name]) => name === "onWindow").length, windowCallCou
 viewport.scrollTop = ROW_HEIGHT * 10;
 viewport.dispatch("scroll");
 document.defaultView.flushAnimationFrame();
-assert.deepEqual(calls.at(-1), ["onWindow", review, null]);
+assert.deepEqual(calls.at(-2), ["onWindow", review, null]);
+assert.equal(calls.at(-1)[2], 0, "reverse travel prefetches toward the beginning");
 
 review.pending = "selection";
 panel.render(task);
@@ -1641,6 +1642,79 @@ findAction(livePanel.element, "pause").dispatch("click");
 assert.deepEqual(calls.at(-1), ["onControl", liveReview, "pause"],
   "real composed row leaves controls dispatchable");
 livePanel.dispose();
+
+{
+  const edgeCalls = [];
+  const edgePanel = createPlanReviewPanel({...callbacks,
+    onWindow: (...args) => edgeCalls.push(args)});
+  const edgeBody = findByClass(edgePanel.element, "nami-plan-review__rows");
+  edgeBody.clientHeight = 16 * ROW_HEIGHT;
+  const edgeWindow = (offset, count = 256) => ({...review.window, offset, total: 1000,
+    rows: Array.from({length: count}, (_, index) => ({...row,
+      node_id: `node-${(index + 1).toString(16).padStart(32, "0")}`,
+      visible_index: offset + index}))});
+  const edgeReview = {...review, window: edgeWindow(0), follow: null};
+  const edgeTask = {...task, review: edgeReview};
+  edgePanel.render(edgeTask);
+  document.defaultView.flushAnimationFrame();
+  const scroll = (index) => {
+    edgeBody.scrollTop = index * ROW_HEIGHT;
+    edgeBody.dispatch("scroll");
+    document.defaultView.flushAnimationFrame();
+  };
+  scroll(175);
+  assert.equal(edgeCalls.length, 0);
+  scroll(176);
+  assert.equal(edgeCalls.at(-1)[1], 144, "Plan prefetch starts with 64 rows ahead");
+  const settled = edgeCalls.at(-1)[3];
+  scroll(180);
+  assert.equal(edgeCalls.length, 1, "covered movement retains the early read");
+  edgeReview.window = edgeWindow(144);
+  edgePanel.render(edgeTask);
+  settled();
+  document.defaultView.flushAnimationFrame();
+  assert.equal(edgeCalls.length, 1, "32 trailing rows never trigger reverse prefetch");
+  scroll(179);
+  assert.equal(edgeCalls.at(-1)[1], 0, "upward placement puts 32 rows behind travel");
+  scroll(330);
+  assert.equal(edgeCalls.at(-2)[1], null, "reversal retires the old request first");
+  assert.equal(edgeCalls.at(-1)[1], 298);
+  edgeCalls.at(-1)[3]();
+  const failedCount = edgeCalls.length;
+  scroll(330);
+  assert.equal(edgeCalls.length, failedCount, "settled read cannot loop at rest");
+  scroll(331);
+  const shortSettled = edgeCalls.at(-1)[3];
+  edgeReview.window = edgeWindow(320, 12);
+  edgePanel.render(edgeTask);
+  shortSettled();
+  document.defaultView.flushAnimationFrame();
+  const shortCount = edgeCalls.length;
+  scroll(331);
+  assert.equal(edgeCalls.length, shortCount, "short reply does not refill at rest");
+  edgeReview.window = {...edgeWindow(100), view_revision: 1};
+  edgePanel.render(edgeTask);
+  document.defaultView.flushAnimationFrame();
+  assert.equal(edgeCalls.length, shortCount, "a changed view does not inherit downward edge intent");
+  scroll(332);
+  assert.equal(edgeCalls.at(-1)[1], 300, "new user travel resumes prefetch in the replacement view");
+  edgeCalls.at(-1)[3]();
+  edgeReview.window = {...edgeWindow(744, 12), view_revision: 2};
+  edgePanel.render(edgeTask);
+  scroll(984);
+  assert.equal(edgeCalls.at(-1)[1], 952, "short tail page cannot pin requests to total minus 256");
+  const tailSettled = edgeCalls.at(-1)[3];
+  edgeReview.window = {...edgeWindow(952, 48), view_revision: 2};
+  edgePanel.render(edgeTask);
+  tailSettled();
+  document.defaultView.flushAnimationFrame();
+  const tailCount = edgeCalls.length;
+  scroll(984);
+  assert.equal(edgeCalls.length, tailCount, "settled tail coverage does not loop");
+  scroll(985);
+  assert.equal(edgeCalls.length, tailCount, "complete tail does not prefetch beyond the sequence");
+  edgePanel.dispose();
+}
 
 const resizeCalls = [];
 const resizePanel = createPlanReviewPanel({

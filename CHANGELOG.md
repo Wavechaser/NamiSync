@@ -179,6 +179,13 @@ explicit, reviewable and regression-backed.
 
 #### Align desktop review surfaces and recovery (2026-10-05 – 2026-10-11)
 
+- Prefetch Plan and Inventory windows on the travel side, retaining 32 rows
+  behind travel and starting within 64 rows of the edge. Preserve early reads,
+  reverse direction safely and respect actual short-window endpoints. Installed
+  tree/Inventory/shell and interfaces/tools checks pass. Matched steady-scroll
+  runs remove most sampled uncovered time without adding concurrent reads or
+  a second retained window; PERFORMANCE records the qualified results.
+
 - Preserve Plan scroll position when a rebuilt row regains focus, retaining
   deliberate keyboard reveal. Settle discarded window requests back to their
   owning renderer so Settings and zero-height return can retry without loops.

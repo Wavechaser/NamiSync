@@ -39,8 +39,31 @@ fresh review confirms source identity and ownership. Ordinary focus restoration
 preserves scroll; explicit keyboard intent is attached before adoption's
 synchronous detail render. Exact request settlement handles Settings and
 zero-height restoration without failed-read loops. Earlier failed native and
-geometry receipts remain evidence. SN2 and SN3 remain pending implementation;
-revalidate their callback and input seams against the integrated SN1 commit.
+geometry receipts remain evidence. SN1 is integrated as `940c7ef`.
+
+SN2 proceeds from integrated SN1 `940c7ef`. Direction comes from viewport travel;
+place the window with 32 rows behind and trigger only within 64 rows of the travel
+edge. Clamp endpoints, retain useful early requests, and keep short/failing-window
+settlement suppression. Product owners are Plan, tree and Inventory panel assets;
+the app read lanes retain their ownership contracts. Direct consumers are their
+Plan/tree/Inventory/task-shell probes, the existing shell-tree, Inventory and
+task-shell native witnesses, and `table_loading.py`/its browser probe/method tests.
+PRESENTATION and DESKTOP_UI own behavior; PERFORMANCE owns the matched SN1 versus
+candidate study (three children per page, both 240 and 1,000 rows/s, retained
+12-second forward/reverse trajectory). Keyboard setup must correlate the actual
+adopted setup read and exact offset-minus-one target, without relying on old
+placement or triggering an extra scroll-to-edge prefetch. Root owns these
+measurement consumers and shared docs; the builder owns product/probes/subject
+docs. No new latency threshold or native wheel/compositor claim is introduced.
+
+SN2 is complete: focused Plan/tree/Inventory controls, 2,385 interfaces/tools
+checks (3 skipped), the revised method's 406 tools checks (3 skipped), installed
+tree `sn2-native-final-01` and Inventory/shell `sn2-native-retry-01` pass. Review
+corrected the full-page endpoint assumption and verified the actual short-tail
+case. Twelve matched installed children and independently reconstructed frame
+gaps support delivery; PERFORMANCE owns results and limitations. Failed native
+admission and initial keyboard-setup receipts remain retained. SN3 is next and
+must revalidate its read-admission and interruption seams against integrated SN2.
 
 ## Continuous-scroll adoption and follow-up measurements — 2026-10-09–10
 

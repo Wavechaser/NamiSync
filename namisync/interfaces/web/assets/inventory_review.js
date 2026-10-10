@@ -389,14 +389,14 @@ export function createInventoryReviewPanel(callbacks) {
         });
       },
       activate: (nodeId) => { if (current !== null && !blocked()) callbacks.onDetail(current, nodeId); },
-      requestIndex: async (index, generation) => {
+      requestIndex: async (index, generation, offset) => {
         const owner = current;
         const controller = tree;
         if (owner === null || blocked()) {
           controller.finishWindowRequest(generation);
           return;
         }
-        const window = await callbacks.onWindow(owner, Math.max(0, index - 32));
+        const window = await callbacks.onWindow(owner, offset);
         if (current !== owner || tree !== controller) return;
         if (window === null) {
           controller.finishWindowRequest(generation);

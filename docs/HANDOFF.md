@@ -1,46 +1,59 @@
-# Latest session — Plan scroll continuity fixed; directional loading next
+# Latest session — directional loading verified; navigation coalescing next
 
-2026-10-11. M1_PLAN SN1–SN3 owns the user-approved batch; starting milestone1
-was `0580b1b`. SN1 is verified and independently reviewed. SN2 directional
-prefetch and SN3 bounded interruptible navigation remain to implement in order.
-No row-schema change, bridge byte-counter change, renderer rewrite or domain change is authorized.
+2026-10-11. M1_PLAN SN1–SN3 owns the approved batch, starting milestone1 at
+0580b1b. SN1 is integrated as 940c7ef; SN2 is verified for its separate commit.
+SN3 remains authorized and pending. No row schema, bridge counter, renderer
+rewrite or domain change is included.
 
-SN1 corrects passive focus scrolling and split Plan request settlement. Renderer
-tokens protect newer demand; hidden/Settings return and restore-before-frame
-geometry can retry, unchanged failed reads cannot loop. Explicit keyboard reveal
-uses its accepted window, marked before adoption starts synchronous detail UI.
-The native check proves ordinary replacement preserves scroll and arrow movement
-reveals its target. No weakened input/visibility assertion or production menu fix.
+SN1 preserves passive row focus without scrolling, retains explicit keyboard
+reveal and settles discarded Plan reads without losing newer demand or looping
+failed reads. Its native and interfaces/tools gates passed. SN2 places one
+256-row window ahead of travel, keeps 32 rows behind and prefetches within 64 rows
+of only the travel-side edge. Early reads survive covered reconciliation;
+reversal retires obsolete intent through the existing serialized read lane.
+Programmatic/view replacement rebases direction. Actual short-window endpoints
+remain authoritative; do not restore a total-minus-256 start clamp.
 
-Evidence: `build/scroll-navigation-20261011/`. Baseline focus red, hidden-return
-red, zero-height red and first-render ordering red controls are retained; final
-focused green07 passes 3. Loading --check and 37 method tests pass. Final
-`sn1-neighborhood-final-01` passes 2,381 interfaces/tools tests (3 skipped);
-`sn1-native-03` passes the full installed shell (1 in 40.02s). Native01 exposed marker timing; geometry01
-proved actual missing reveal. Native02 passed new assertions but stopped before
-input; user foreground coordination allowed native03. Fresh review verified all
-596 source manifest entries before/after and current hashes. Failed receipts
-are not acceptance. Product/test/driver writers stayed frozen during final gates.
+Evidence: build/scroll-navigation-20261011/. SN2 focused receipt is
+build/sn2-focused-10.log (4 passed). sn2-neighborhood-final-01 passes 2,385
+interfaces/tools tests, 3 skipped. A later fixture-only keyboard setup correction
+passes sn2-tools-method-final-01 (406 passed, 3 skipped). Current installed
+tree passes in sn2-native-final-01; Inventory and shell pass in
+sn2-native-retry-01 (2 in 42.96s) after user foreground coordination. Retain
+the earlier input-admission failures; they did not prove product failures.
 
-SN2 design: one retained 256-row window and one running read, direction from user
-viewport movement, 32 rows behind travel and 64-row trigger on travel side only.
-Useful early reads must survive covered reconciliation; preserve narrow-page
-settlement/no loops, endpoint clamps and keyboard/external ownership. Revalidate
-measurement hooks/checker and collect matched SN1 baseline versus candidate at
-240/1,000 rows/s, three installed children per page, using the retained steady
-driver and source/install/restoration manifests. No general smoothness guarantee.
+Matched matrices: sn2-baseline-plan-02, sn2-candidate-plan-01,
+sn2-baseline-inventory-01, sn2-candidate-inventory-01; aggregate
+sn2-summary-01.json. Twelve fresh installed children use one frozen method and
+matching profile/runtime. SN1 installation is sw-install-baseline-sn1-01;
+final candidate is sw-install-candidate-sn2-02. Installation01 is superseded.
+Initial Plan measurement01 failed before steady collection because offscreen
+row activation focused/scrolled normally. The revised setup restores the
+viewport synchronously, checks original geometry and active identity, and keeps
+the exact offset-minus-one ArrowUp target. Both variants use that same method.
+Source/install/restored hashes and failed receipts remain retained.
 
-SN3 design: Plan's promise FIFO is the backlog; Inventory needs desired-index
-accumulation. Keep one in-flight navigation lane and one latest absolute target,
-resolving off-window node IDs through existing revisioned windows. Python owns
-ranges. Later inputs retire queued navigation and its visual authority. Preserve
-noncoalescible toggle/add-range/checkbox effects; highlighted selection must use
-the revision the user saw, with conflict/no effect rather than automatic replay.
-No server schema addition is currently necessary; finalize the finite consumers
-and interruption matrix before implementation. Do not start SN3 before SN2 closes.
+In each 12-second trajectory, median uncovered seconds fall from Plan
+2.107/5.176 and Inventory 1.237/4.442 to zero at 240/1,000 rows/s. One Plan
+1,000-row/s run has 97.1 ms total sampled gaps; other candidate runs have none.
+Reads fall to 20/81 in both pages, with one outstanding read and 256 retained
+rows. PERFORMANCE owns direction splits, ranges, burst intervals and limits.
+These are frame-sampled DOM observations, not compositor/native-wheel guarantees.
 
-No unrelated work, push, PR or worktree. Evidence and installed artifacts remain;
-no active native process. Use unique run names and preserve earlier studies.
-The sandbox launcher fails before execution; justified host pwsh works. This is
-not an approval rejection. Existing user authorization for headed attempts and
-recovery if foreground ownership cannot be established remains applicable.
+SN3 design: replace Plan's promise FIFO with one running navigation operation and
+one latest absolute desired target; Inventory needs desired-index accumulation.
+Plan scroll and highlight-related reads must share admission. Resolve off-window
+node IDs through existing revisioned reads; Python retains range/anchor truth.
+Later input retires pending navigation and its visual authority immediately.
+Already admitted highlight mutations retain custody until settlement; never
+replay them or let a late reply reclaim focus, details or current messages.
+Do not coalesce toggle/add-range/checkbox effects. Scope-dependent actions retain
+the displayed revisions and conflict/no effect if superseded server truth differs.
+Revalidate current SN2 callbacks before implementation; no new server schema is
+currently needed. Existing frontend probes, server selection guarantees and
+installed keyboard/pointer witnesses own verification.
+
+No unrelated work, push, PR or worktree. No active native/measurement process.
+Use unique run names and preserve prior studies. Sandbox launch fails before
+execution; justified host pwsh works (no approval rejection). User authorization
+for headed attempts and recovery if foreground ownership blocks them persists.

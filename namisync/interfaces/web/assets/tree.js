@@ -47,6 +47,8 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H) {
   let activeVisibleIndex = null;
   let pendingRequest = null;
   let settledScrollViewport = null;
+  let scrollTopObserved = root.scrollTop;
+  let scrollDirection = 0;
   let expectedProgrammaticScroll = null;
   let scrollFramePending = false;
   let initializedActive = false;
@@ -77,6 +79,8 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H) {
     if (disposed) {
       throw new Error("tree controller is disposed");
     }
+    scrollDirection = 0;
+    scrollTopObserved = root.scrollTop;
     return beginRequest(pendingIndex, "external");
   }
 
@@ -90,6 +94,7 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H) {
       index: pendingIndex,
       kind,
       scrollTop: kind === "scroll" ? root.scrollTop : null,
+      direction: kind === "scroll" ? scrollDirection : 0,
     });
     return currentGeneration;
   }
@@ -275,6 +280,8 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H) {
   }
 
   function navigateTo(visibleIndex) {
+    scrollDirection = 0;
+    scrollTopObserved = root.scrollTop;
     if (visibleIndex < 0 || visibleIndex >= currentTotal) {
       return;
     }
@@ -286,15 +293,16 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H) {
     requestWindow(visibleIndex, "keyboard");
   }
 
-  function requestWindow(visibleIndex, kind) {
+  function requestWindow(visibleIndex, kind, offset = Math.max(0, visibleIndex - 32)) {
     if (
       kind === "scroll" && pendingRequest?.kind === "scroll"
+      && pendingRequest.direction === scrollDirection
     ) {
       return;
     }
     const generation = beginRequest(visibleIndex, kind);
     try {
-      requestIndex(visibleIndex, generation);
+      requestIndex(visibleIndex, generation, offset);
     } catch (error) {
       if (pendingRequest?.generation === generation) {
         clearPendingRequest();
@@ -310,11 +318,15 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H) {
     ) {
       const reconcile = expectedProgrammaticScroll.reconcile;
       expectedProgrammaticScroll = null;
+      scrollTopObserved = root.scrollTop;
       if (!reconcile) {
         return;
       }
     } else {
       expectedProgrammaticScroll = null;
+      const direction = Math.sign(root.scrollTop - scrollTopObserved);
+      if (direction !== 0) scrollDirection = direction;
+      scrollTopObserved = root.scrollTop;
       if (pendingRequest?.kind === "keyboard") {
         invalidatePendingRequest();
       }
@@ -337,6 +349,10 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H) {
 
   function reconcileViewport() {
     if (root.clientHeight <= 0 || currentTotal <= 0) {
+      scrollDirection = 0;
+      scrollTopObserved = root.scrollTop;
+      settledScrollViewport = null;
+      if (pendingRequest?.kind === "scroll") invalidatePendingRequest();
       return;
     }
     if (
@@ -366,7 +382,14 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H) {
       currentTotal - 1,
     );
     const covered = firstIndex >= currentOffset && lastIndex < currentEnd;
-    if (covered) {
+    const direction = scrollDirection || (firstIndex < currentOffset ? -1 : 1);
+    const offset = Math.min(currentTotal - 1, Math.max(0,
+      direction < 0 ? lastIndex + 1 + 32 - 256 : firstIndex - 32));
+    const advancing = direction < 0 ? offset < currentOffset : offset > currentOffset;
+    const nearEdge = scrollDirection !== 0 && (direction < 0
+      ? currentOffset > 0 && firstIndex - currentOffset <= 64
+      : currentEnd < currentTotal && currentEnd - lastIndex - 1 <= 64);
+    if (covered && (!nearEdge || !advancing)) {
       reconcileVisibleActive();
       if (pendingRequest?.kind === "scroll") {
         invalidatePendingRequest();
@@ -376,7 +399,7 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H) {
 
     reconcileVisibleActive();
     const requestTarget = firstIndex < currentOffset ? firstIndex : lastIndex;
-    requestWindow(requestTarget, "scroll");
+    requestWindow(requestTarget, "scroll", offset);
   }
 
   function reconcileVisibleActive(preferredIndex = null) {
@@ -445,6 +468,10 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H) {
   function setProgrammaticScrollTop(value, reconcile = true) {
     const previous = root.scrollTop;
     root.scrollTop = value;
+    if (reconcile) {
+      scrollDirection = 0;
+      scrollTopObserved = root.scrollTop;
+    }
     if (root.scrollTop !== previous) {
       expectedProgrammaticScroll = Object.freeze({
         reconcile,

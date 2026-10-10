@@ -1301,6 +1301,68 @@ assert.equal(
   true,
 );
 
+// Travel-side prefetch keeps a single window and cannot ping-pong on its short trailing margin.
+{
+const edgeDocument = new TestDocument();
+const edgeRoot = edgeDocument.createElement("div");
+edgeRoot.clientHeight = 16 * ROW_H;
+const edgeRequests = [];
+const edgeCancelled = [];
+const edgeTree = createTree(edgeRoot, {
+  requestIndex: (index, generation, offset) => edgeRequests.push({index, generation, offset}),
+  requestCancelled: (generation) => edgeCancelled.push(generation),
+});
+const edgeWindow = (offset, count = 256) => ({offset, total: 1000,
+  rows: fixtureViews.maximum.rows.slice(0, count).map((value, index) => ({...value,
+    visible_index: offset + index, parent_visible_index: null, first_child_visible_index: null}))});
+edgeTree.commitWindow(edgeTree.beginWindowRequest(), edgeWindow(0));
+edgeDocument.defaultView.flushAnimationFrame();
+const edgeScroll = (index) => {
+  edgeRoot.scrollTop = index * ROW_H;
+  edgeRoot.dispatch("scroll");
+  edgeDocument.defaultView.flushAnimationFrame();
+};
+edgeScroll(175);
+assert.equal(edgeRequests.length, 0, "65 rows remaining does not prefetch");
+edgeScroll(176);
+assert.equal(edgeRequests.at(-1).offset, 144, "64 rows remaining prefetches with 32 behind");
+edgeScroll(180);
+assert.equal(edgeRequests.length, 1, "covered travel retains the useful early read");
+assert.equal(edgeCancelled.length, 0);
+edgeTree.commitWindow(edgeRequests.at(-1).generation, edgeWindow(144));
+edgeDocument.defaultView.flushAnimationFrame();
+assert.equal(edgeRequests.length, 1, "the trailing edge does not cause reverse prefetch");
+edgeScroll(179);
+assert.equal(edgeRequests.at(-1).offset, 0, "reverse travel places 32 rows after the viewport");
+const reverseGeneration = edgeRequests.at(-1).generation;
+edgeScroll(330);
+assert.equal(edgeRequests.at(-1).offset, 298);
+assert.ok(edgeCancelled.includes(reverseGeneration), "reversal retires stale intent");
+assert.equal(edgeTree.commitWindow(reverseGeneration, edgeWindow(0)), false);
+edgeTree.finishWindowRequest(edgeRequests.at(-1).generation);
+const failedCount = edgeRequests.length;
+edgeScroll(330);
+assert.equal(edgeRequests.length, failedCount, "failed early read cannot loop at rest");
+edgeScroll(331);
+const shortGeneration = edgeRequests.at(-1).generation;
+edgeTree.commitWindow(shortGeneration, edgeWindow(320, 12));
+edgeDocument.defaultView.flushAnimationFrame();
+const shortCount = edgeRequests.length;
+edgeScroll(331);
+assert.equal(edgeRequests.length, shortCount, "short page does not refill at rest");
+edgeTree.commitWindow(edgeTree.beginWindowRequest(), edgeWindow(744, 12));
+edgeScroll(984);
+assert.equal(edgeRequests.at(-1).offset, 952, "a short tail window cannot pin later reads to total minus 256");
+edgeTree.commitWindow(edgeRequests.at(-1).generation, edgeWindow(952, 48));
+edgeDocument.defaultView.flushAnimationFrame();
+const tailCount = edgeRequests.length;
+edgeScroll(984);
+assert.equal(edgeRequests.length, tailCount, "settled endpoint does not duplicate its read");
+edgeScroll(985);
+assert.equal(edgeRequests.length, tailCount, "complete tail has no further travel-side rows to prefetch");
+edgeTree.dispose();
+}
+
 const maximumGeneration = tree.beginWindowRequest();
 assert.equal(
   tree.commitWindow(maximumGeneration, fixtureViews.maximum),
