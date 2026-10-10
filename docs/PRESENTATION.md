@@ -318,6 +318,13 @@ standalone integrity/inventory following remains outside this batch.
 
 ## Bounded work and focused measurement
 
+Plan scroll-read settlement is separate from response adoption: rejected or
+retired responses release only their matching renderer request. An unchanged
+failed viewport does not retry automatically; a changed viewport or navigation
+re-entry can request its rows again without replacing the accepted window first.
+Restoring the same focused row preserves scroll, while explicit movement to a
+different keyboard target retains reveal behavior.
+
 Windowing must bound repeated query, decode, allocation, and serialization work, not merely response size. The Plan adapter retains one complete immutable projection and applies selection as a rollup overlay without rebuilding its tree, notices, raw sort facts, or unrelated view state. Inventory windows reuse a cached visible sequence; exact current-detail reads do not reread the location. Scale-sensitive changes need a focused profile, scaling axis, predeclared criterion, artifact, and rerun trigger under `DEFENSE.md` §7. No numeric presentation budget is invented here.
 
 The retained M1 support target for applicable plan, inventory, and standalone integrity populations is 120,000 rows. It defines the supported target, not a claim about behavior at 120,001 and not a complete-object-byte reservation. Independently enforced population/request limits remain owned by their runtime components and `DEFENSE.md`; a presentation view must surface a truthful refusal rather than publish partial authority when its own admitted population cannot be represented safely.

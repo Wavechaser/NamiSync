@@ -72,7 +72,13 @@ class ElementFake {
     value.parentElement = this;
   }
 
-  focus() { this.ownerDocument.activeElement = this; }
+  focus(options) {
+    this.ownerDocument.activeElement = this;
+    this.focusOptions = options;
+    if (this.ownerDocument.focusScrollRoot && !options?.preventScroll) {
+      this.ownerDocument.focusScrollRoot.scrollTop = (Number(this.ariaRowIndex) - 2) * ROW_HEIGHT;
+    }
+  }
   closest(selector) {
     for (let value = this; value !== null; value = value.parentElement) {
       if (value.classList.contains(selector.slice(1))) return value;
@@ -880,6 +886,23 @@ for (const action of ["pause", "cancel"]) {
 task.drainUnavailable = false;
 
 const viewport = findByClass(panel.element, "nami-plan-review__rows");
+const savedFocusNode = review.summary.highlight_focus_node_id;
+review.summary.highlight_focus_node_id = review.window.rows[0].node_id;
+panel.render(task);
+findByDataset(panel.element, "nodeId", review.window.rows[0].node_id).focus();
+document.focusScrollRoot = viewport;
+viewport.scrollTop = ROW_HEIGHT * 400;
+review.window = { ...review.window };
+panel.render(task);
+assert.equal(viewport.scrollTop, ROW_HEIGHT * 400, "replacing rows restores focus without revealing its offscreen row");
+review.window = { ...review.window };
+review.keyboardRevealWindow = review.window;
+panel.render(task);
+assert.equal(viewport.scrollTop, review.window.rows[0].visible_index * ROW_HEIGHT,
+  "an explicit keyboard response reveals even the same endpoint row");
+assert.equal(review.keyboardRevealWindow, null, "keyboard reveal is consumed by its accepted window");
+document.focusScrollRoot = null;
+review.summary.highlight_focus_node_id = savedFocusNode;
 viewport.clientHeight = ROW_HEIGHT - 1;
 viewport.scrollTop = ROW_HEIGHT * 10;
 const coveredWindowCallCount = calls.filter(([name]) => name === "onWindow").length;
@@ -917,6 +940,8 @@ const overlapsMovingViewport = calls.at(-1)[3];
 assert.equal(overlapsMovingViewport({offset: 368, rows: Array(256)}), true);
 assert.equal(overlapsMovingViewport({offset: 0, rows: Array(256)}), false);
 const windowCallCount = calls.filter(([name]) => name === "onWindow").length;
+const settleWindow = calls.at(-1)[4];
+settleWindow?.();
 viewport.dispatch("scroll");
 document.defaultView.flushAnimationFrame();
 assert.equal(
@@ -924,6 +949,31 @@ assert.equal(
   windowCallCount,
   "the same uncovered range is requested once",
 );
+viewport.clientHeight = 0;
+panel.render(task);
+document.defaultView.flushAnimationFrame();
+viewport.clientHeight = ROW_HEIGHT - 1;
+panel.render(task);
+document.defaultView.flushAnimationFrame();
+assert.equal(calls.filter(([name]) => name === "onWindow").length, windowCallCount + 1,
+  "a hidden-to-visible viewport retries its dropped offset");
+const newerSettlement = calls.at(-1)[4];
+settleWindow?.();
+viewport.dispatch("scroll");
+document.defaultView.flushAnimationFrame();
+assert.equal(calls.filter(([name]) => name === "onWindow").length, windowCallCount + 1,
+  "an old completion cannot clear the newer pending request");
+newerSettlement?.("retired");
+panel.render(task);
+document.defaultView.flushAnimationFrame();
+assert.equal(calls.filter(([name]) => name === "onWindow").length, windowCallCount + 2,
+  "navigation retirement allows the same offset on visible re-entry");
+viewport.clientHeight = 0;
+calls.at(-1)[4]();
+viewport.clientHeight = ROW_HEIGHT - 1;
+document.defaultView.flushAnimationFrame();
+assert.equal(calls.filter(([name]) => name === "onWindow").length, windowCallCount + 3,
+  "a zero-height settlement retries after restoration before the next frame");
 viewport.scrollTop = ROW_HEIGHT * 10;
 viewport.dispatch("scroll");
 document.defaultView.flushAnimationFrame();

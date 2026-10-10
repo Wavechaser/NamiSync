@@ -1,48 +1,46 @@
-# Latest session — scroll checkpoint closed
+# Latest session — Plan scroll continuity fixed; directional loading next
 
-2026-10-10. Integrated into `milestone1` from base
-`59e92ae418ac0ca91dad46c3be35f046a6fe722e` as two coherent commits:
-`93a13b8` fixes compatible scroll adoption; the following measurement commit
-adds last-input/cadence reporting and reviewed SW2–SW4 results. Resolve branch
-history or ignored `integration.md` for its exact identity. No WIP was merged.
+2026-10-11. M1_PLAN SN1–SN3 owns the user-approved batch; starting milestone1
+was `0580b1b`. SN1 is verified and independently reviewed. SN2 directional
+prefetch and SN3 bounded interruptible navigation remain to implement in order.
+No row-schema change, bridge byte-counter change, renderer rewrite or domain change is authorized.
 
-The remaining full task-shell gate passed in `sw-task-shell-20261010-02`
-(1 passed, 37.81s), after a fixture-only asynchronous wait correction. The
-Ctrl+Shift-click row was already highlighted, so its old predicate passed before
-the highlight response replaced that row and correctly dismissed its menu.
-The new wait witnesses old-invoker disconnection and the connected highlighted
-canonical row. All foreground, focus, menu-position and Escape checks remain.
-`sw-context-diag-20261010-01` proves native foreground ownership and row replacement;
-`sw-task-shell-20261010-01` retains the failing gate. Eight ordinary helper checks
-pass in `sw-shell-helper-20261010-01`. Fresh adversarial review approved closure.
+SN1 corrects passive focus scrolling and split Plan request settlement. Renderer
+tokens protect newer demand; hidden/Settings return and restore-before-frame
+geometry can retry, unchanged failed reads cannot loop. Explicit keyboard reveal
+uses its accepted window, marked before adoption starts synchronous detail UI.
+The native check proves ordinary replacement preserves scroll and arrow movement
+reveals its target. No weakened input/visibility assertion or production menu fix.
 
-Prior unaffected evidence: 59 frontend, 1,979 interfaces, installed Inventory
-`sw-native-01` and tree `sw-native-retry-01`. The tree helper uses actual fractional
-border edges and current-viewport row 4 with unchanged visibility tolerance.
-No product bytes changed after those checks. SW2: 37 focused and 402 tools checks
-passed, three skips; independent method and raw-evidence reviews passed.
+Evidence: `build/scroll-navigation-20261011/`. Baseline focus red, hidden-return
+red, zero-height red and first-render ordering red controls are retained; final
+focused green07 passes 3. Loading --check and 37 method tests pass. Final
+`sn1-neighborhood-final-01` passes 2,381 interfaces/tools tests (3 skipped);
+`sn1-native-03` passes the full installed shell (1 in 40.02s). Native01 exposed marker timing; geometry01
+proved actual missing reveal. Native02 passed new assertions but stopped before
+input; user foreground coordination allowed native03. Fresh review verified all
+596 source manifest entries before/after and current hashes. Failed receipts
+are not acceptance. Product/test/driver writers stayed frozen during final gates.
 
-Evidence remains under `build/scroll-window-study-20261009/`: four installed
-baseline/candidate matrices, twelve children, `sw-summary-01.json`, source/wheel/
-installed/restored manifests and all failed receipts. PERFORMANCE owns exact
-methods and limitations. In each 12-second trajectory, candidate uncovered
-medians are Plan 1.418/4.321s and Inventory 1.228/4.480s at 240/1,000 rows/s.
-Last-input burst coverage remains about 69–70ms; first-input totals include
-54–57ms scripted input. Larger sampled frame intervals preclude an overall
-smoothness claim. Browser-event/DOM sampling is not native wheel/compositor proof.
+SN2 design: one retained 256-row window and one running read, direction from user
+viewport movement, 32 rows behind travel and 64-row trigger on travel side only.
+Useful early reads must survive covered reconciliation; preserve narrow-page
+settlement/no loops, endpoint clamps and keyboard/external ownership. Revalidate
+measurement hooks/checker and collect matched SN1 baseline versus candidate at
+240/1,000 rows/s, three installed children per page, using the retained steady
+driver and source/install/restoration manifests. No general smoothness guarantee.
 
-SW3 assessment recommends directional one-window edge prefetch next; none shipped.
-SW4 ignored `sw4_key_cache.py` passes 2,808 prefix and 664 capture comparisons,
-independently repeated. Balanced 15 AB/15 BA pairs in `sw4-crossover-01` reduce
-stored-window capture medians 12.2–13.0ms to 5.4–5.5ms. These are component-only
-observations. A product cache needs ordinary response and actual drain-prefix/
-custody tests; no Python bridge change shipped. Row schemas and renderer rewrites
-remain deferred. No further implementation is opened by this closeout.
+SN3 design: Plan's promise FIFO is the backlog; Inventory needs desired-index
+accumulation. Keep one in-flight navigation lane and one latest absolute target,
+resolving off-window node IDs through existing revisioned windows. Python owns
+ranges. Later inputs retire queued navigation and its visual authority. Preserve
+noncoalescible toggle/add-range/checkbox effects; highlighted selection must use
+the revision the user saw, with conflict/no effect rather than automatic replay.
+No server schema addition is currently necessary; finalize the finite consumers
+and interruption matrix before implementation. Do not start SN3 before SN2 closes.
 
-Recovery `codex/wip-20261009-scroll-window-01` ended at `f6fbaeb`, including the
-final fixture correction. Product/test/tool bytes are fully accounted for in
-integration; recovery status prose is replaced by delivered records. The disposable
-ref was removed after this comparison; retain ignored patches, provenance,
-failed evidence, prototypes and baseline/candidate installations. No push, PR,
-worktree or unrelated dirty work. No active test process or instrumented installed
-asset remains. README's phase summary and AGENTS need no changes for this fix.
+No unrelated work, push, PR or worktree. Evidence and installed artifacts remain;
+no active native process. Use unique run names and preserve earlier studies.
+The sandbox launcher fails before execution; justified host pwsh works. This is
+not an approval rejection. Existing user authorization for headed attempts and
+recovery if foreground ownership cannot be established remains applicable.

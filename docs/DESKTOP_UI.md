@@ -1325,6 +1325,11 @@ While no reviewed plan is available, execution and replan actions are not
 actionable; a loading or unavailable panel cannot retain a previous task's
 enabled controls. Reusing the Plan panel also restores viewport resize
 observation so newly exposed rows reconcile without requiring a scroll gesture.
+Restoring the same focused Plan row after replacement preserves the viewport;
+moving keyboard focus to another row still reveals that target. Each scroll
+read settles its renderer-owned request even when its response is discarded.
+An unchanged failed viewport waits for viewport geometry or navigation to change;
+returning from Settings or restoring a hidden viewport can retry the same offset.
 Status and table cards use a 16 px top inset. The status
 progress bar is 8 px thick; the rail's progress remains 4 px. The Plan view switcher has
 a 6 px outer radius. At default (1280×800) and larger window sizes the natural-height

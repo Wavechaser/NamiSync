@@ -912,6 +912,20 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Review viewport loading
 
+- MODERATE - FIXED (2026-10-11). Split request settlement. Plan's renderer kept
+  its pending offset after the app discarded a window for navigation or hidden
+  geometry, suppressing a same-offset request on return. An exact request-token
+  callback now retires renderer demand without clearing newer work. Zero-height
+  completion cannot retain an old visible geometry; unchanged failed reads do
+  not automatically loop. Settings return, restore-before-frame, stale completion
+  and failed-read probes cover the bounded retry behavior.
+- MINOR - FIXED (2026-10-11). Implicit focus scrolling. Replacing Plan rows
+  restored focus with default browser scrolling, pulling a retained offscreen
+  highlight back into view during scrolling. Ordinary restoration now prevents
+  scrolling; an accepted keyboard window explicitly permits reveal, including
+  same-node endpoints. The marker precedes adoption's synchronous detail render.
+  Component negative controls and installed preservation/keyboard checks pass.
+
 - MODERATE - FIXED (2026-10-08–10). Moving-intent starvation. Continuous viewport
   movement can leave Plan and Inventory rows uncovered until scrolling stops,
   while hundreds of successful reads are discarded. Cause: each new viewport

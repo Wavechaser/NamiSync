@@ -864,11 +864,22 @@ window.addEventListener("error", (event) => {
   await until(() => selectionFacts().startsWith(`${selectedBefore} of `)
     && fresh.dataset.pending === "", "view reselection roundtrip");
   const highlightedRow = () => fresh.querySelector(`[data-node-id="${selectionNode}"]`);
+  const highlightInvoker = highlightedRow();
   highlightedRow().querySelector('.nami-file-row__name').click();
-  await until(() => highlightedRow()?.dataset.highlighted === "true", "row highlight roundtrip");
+  await until(() => !highlightInvoker.isConnected && highlightedRow()?.dataset.highlighted === "true"
+    && document.activeElement === highlightedRow() && fresh.dataset.pending === "", "row highlight roundtrip");
+  const focusViewport = fresh.querySelector('.nami-plan-review__rows');
+  const focusScrollOffset = (Number(highlightedRow().ariaRowIndex)) * 24;
+  focusViewport.scrollTop = focusScrollOffset;
+  await new Promise(requestAnimationFrame);
+  if (highlightedRow().getBoundingClientRect().bottom > focusViewport.getBoundingClientRect().top
+      || focusViewport.scrollTop !== focusScrollOffset) throw new Error("focus restoration fixture must scroll the retained focused row out of view");
+  const beforeFocusReplacement = highlightedRow();
   highlightedRow().querySelector('input[type="checkbox"]').click();
   await until(() => selectionFacts().startsWith(`${selectedBefore - 1} of `)
     && fresh.dataset.pending === "", "highlighted deselection roundtrip");
+  if (highlightedRow() === beforeFocusReplacement || document.activeElement !== highlightedRow()
+      || focusViewport.scrollTop !== focusScrollOffset) throw new Error("Plan row replacement must retain focus without changing scroll");
   fresh.querySelector(`[data-node-id="${selectionNode}"] input[type="checkbox"]`).click();
   await until(() => selectionFacts().startsWith(`${selectedBefore} of `)
     && fresh.dataset.pending === "", "highlighted reselection roundtrip");
@@ -890,6 +901,11 @@ window.addEventListener("error", (event) => {
     "Shift-ArrowDown from focused row",
   );
   const rowArrowFocusedNode = document.activeElement?.dataset?.nodeId ?? null;
+  const arrowBounds = document.activeElement.getBoundingClientRect();
+  const arrowViewport = focusViewport.getBoundingClientRect();
+  if (arrowBounds.top < arrowViewport.top || arrowBounds.bottom > arrowViewport.bottom) {
+    throw new Error("explicit Plan keyboard movement must reveal the focused target");
+  }
   const childArrowRow = fresh.querySelector(`[data-node-id="${selectionNode}"]`);
   childArrowRow.querySelector('input[type="checkbox"]')?.focus({focusVisible: true});
   childArrowRow.querySelector('input[type="checkbox"]')?.dispatchEvent(

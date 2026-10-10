@@ -11,6 +11,37 @@ retains investigation, rejected proposals and superseded execution recipes;
 the decisions still governing delivery are below. Historical observations
 certify their recorded build and dependencies only.
 
+## Scroll continuity and interruptible navigation — 2026-10-11
+
+The user formalized three atomic units below. Base is `0580b1b`; preserve the
+delivered compatible-response ownership and one-read/256-row bounds. Root owns
+shared register/handoff/evidence; serialize overlapping frontend writers. Read
+the current owners and direct consumers before each unit, including retained
+SW instrumentation anchors and installed helpers. No row-schema migration,
+bridge byte-counter change, renderer rewrite or filesystem/domain change.
+
+| ID | Outcome, owners and finite consumers | Gate and commit boundary |
+| --- | --- | --- |
+| SN1 | Confirm Plan focus-induced scrolling and dropped-read settlement; correct demonstrated failures in `app.js`/`plan_review.js`, their task-shell/Plan probes and installed shell fixture. Keep explicit keyboard reveal and owner fences. | Reproduce each claimed failure or record a negative result; affected frontend and interfaces checks, installed Plan/task-shell witness, fresh review, one fix commit with PRESENTATION/DESKTOP_UI/BUGS/CHANGELOG. Never automatically loop failed reads. |
+| SN2 | Directional placement and travel-side edge prefetch in Plan and Inventory: `app.js`, `plan_review.js`, `tree.js`, `inventory_review.js`, direct probes/native consumers and existing loading collector anchors. Covered viewport must not retire useful early reads; direction reversal, endpoints, hidden/resize and navigation retire stale intent correctly. | After SN1, focused no-ping-pong/one-read/256-row/ownership checks, interfaces and affected tools checks, installed tree/Inventory/shell, repeated matched 240/1,000-row/s measurements and fresh review. One performance commit; PERFORMANCE owns diagnostic results, no latency acceptance promise. |
+| SN3 | Replace navigation backlog with at most one in-flight navigation read and one latest pending target. Other later input supersedes pending intent immediately; late responses cannot reclaim focus or highlighting/selection. Trace Plan highlight mutation and Inventory tree owners plus bridge/projection consumers before implementation. | After SN2, finalize finite action/target contract and affected consumers. Held repeats, release tail, reversal, pointer/scroll/view/task interruption, Shift-range and selection truth require delayed-response tests, affected departments and installed keyboard/pointer witnesses; fresh independent review and separate fix commit. No silent browser-owned selection policy. |
+
+Evidence goes in ignored `build/scroll-navigation-20261011/`; unique receipts,
+source manifests and failed controls remain retained. Existing SW native fixture
+publication and fractional-geometry corrections stay active. The accepted
+navigation outcome does not authorize bypassing server selection or mutation
+custody; unresolved contract/effect changes need a coherent proposal before edits.
+AGENTS recurrence and mandatory stops remain binding. No new defect expands scope.
+
+SN1 is complete: focused negative/positive controls, 37 loading-method checks,
+the final interfaces/tools neighborhood and installed `sn1-native-03` pass;
+fresh review confirms source identity and ownership. Ordinary focus restoration
+preserves scroll; explicit keyboard intent is attached before adoption's
+synchronous detail render. Exact request settlement handles Settings and
+zero-height restoration without failed-read loops. Earlier failed native and
+geometry receipts remain evidence. SN2 and SN3 remain pending implementation;
+revalidate their callback and input seams against the integrated SN1 commit.
+
 ## Continuous-scroll adoption and follow-up measurements — 2026-10-09–10
 
 The user reviewed the BC2–5 shared-mechanism finding and authorizes its coherent

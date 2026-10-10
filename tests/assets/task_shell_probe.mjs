@@ -372,14 +372,17 @@ const setupUrl = moduleUrl(`
 const planReviewUrl = moduleUrl(`
   export function createPlanReviewPanel(callbacks) {
     globalThis.planReviewHarness.callbacks = {...callbacks,
-      onWindow(review, offset, overlaps = (window) => window.offset === review.windowRequestOffset) {
-        callbacks.onWindow(review, offset, overlaps);
+      onWindow(review, offset, overlaps = (window) => window.offset === review.windowRequestOffset, settled) {
+        callbacks.onWindow(review, offset, overlaps, settled);
       },
     };
     const element = new HTMLElement("div", "Plan review test surface");
     return {
       element,
-      render(task) { globalThis.planReviewHarness.reviewRenders.push(task); },
+      render(task) {
+        globalThis.planReviewHarness.reviewRenders.push(task);
+        globalThis.planReviewHarness.onRender?.(task);
+      },
       dispose() {},
     };
   }
@@ -880,6 +883,22 @@ await until(() => !firstReview.windowRequestRunning);
 assert.equal(firstReview.window, overlappingWindow);
 assert.equal(planWindows.length, overlapCallBase + 1, "newer covered scroll demand does not discard the response");
 firstReview.window = originalWindow;
+for (const reason of ["settings", "zero-height", "disjoint", "failure"]) {
+  const base = planWindows.length;
+  const settlements = [];
+  globalThis.planReviewHarness.callbacks.onWindow(firstReview, 768,
+    () => reason === "settings", (outcome) => settlements.push(outcome));
+  if (reason === "settings") settingsButton().click();
+  if (reason === "failure") planWindows[base].reject(new Error("read unavailable"));
+  else planWindows[base].resolve(planWindow(refusedReview, 768));
+  await until(() => !firstReview.windowRequestRunning);
+  assert.deepEqual(settlements, [reason === "settings" ? "retired" : undefined],
+    `${reason} releases the exact renderer request`);
+  assert.equal(planWindows.length, base + 1, "settlement does not automatically retry the read");
+  assert.equal(firstReview.window, originalWindow, "dropped reads preserve accepted rows");
+  if (reason === "settings") taskButton("Task 7").click();
+  await turns();
+}
 // Returning to this task creates a new navigation demand even at the same
 // offset. Settlement of its old read cannot clear or fail the new queued read.
 for (const failed of [false, true]) {
@@ -985,8 +1004,18 @@ assert.equal(
   retainedHighlightOffset + 256 - 32,
   "an off-window arrow retains leading rows before the authoritative focus index",
 );
-planWindows[3].resolve(planWindow(offWindowHighlight, retainedHighlightOffset + 256 - 32));
+const keyboardWindow = planWindow(offWindowHighlight, retainedHighlightOffset + 256 - 32);
+let firstKeyboardRender = null;
+globalThis.planReviewHarness.onRender = (task) => {
+  if (task.review?.window === keyboardWindow && firstKeyboardRender === null) {
+    firstKeyboardRender = task.review.keyboardRevealWindow === keyboardWindow;
+  }
+};
+planWindows[3].resolve(keyboardWindow);
 await until(() => firstReview.pending === null);
+assert.equal(firstKeyboardRender, true,
+  "the first adopted-window render, including planned-detail loading, owns keyboard reveal");
+delete globalThis.planReviewHarness.onRender;
 assert.equal(firstReview.window.offset, retainedHighlightOffset + 256 - 32);
 assert.equal(firstReview.foregroundWindowReaders, 0);
 assert.equal(executionDetails.length, 3, "planned-row highlight needs no execution-detail read");

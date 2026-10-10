@@ -177,7 +177,14 @@ behavioral evidence.
 Safety, settlement and authority work made high-consequence release claims
 explicit, reviewable and regression-backed.
 
-#### Align desktop review surfaces and recovery (2026-10-05 – 2026-10-10)
+#### Align desktop review surfaces and recovery (2026-10-05 – 2026-10-11)
+
+- Preserve Plan scroll position when a rebuilt row regains focus, retaining
+  deliberate keyboard reveal. Settle discarded window requests back to their
+  owning renderer so Settings and zero-height return can retry without loops.
+  Reproduce focus, hidden-return, zero-height ordering and synchronous keyboard
+  publication failures; pass focused/method controls, interfaces/tools and the
+  installed shell with unchanged focus/visibility/input assertions.
 
 - Report last-input burst delay and observed input cadence separately from the
   scripted input span. Three installed children per page reduce median uncovered

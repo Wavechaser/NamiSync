@@ -231,7 +231,7 @@ const panel = createWorkPanel({
   onPlanAgain: () => { void startPlanAgain(); },
 }, {
   onViewChange: (review, patch) => { void changePlanView(review, patch); },
-  onWindow: (review, offset, overlapsViewport) => { void loadPlanWindow(review, offset, overlapsViewport); },
+  onWindow: (review, offset, overlapsViewport, settled) => { void loadPlanWindow(review, offset, overlapsViewport, settled); },
   onSelect: (review, row, selected) => {
     void changePlanSelection(review, row, selected);
   },
@@ -2147,10 +2147,12 @@ async function retryReviewOutcome(review) {
   if (checkableOutcome(review.recovery)) await review.recovery.check();
 }
 
-async function loadPlanWindow(review, offset, overlapsViewport) {
+async function loadPlanWindow(review, offset, overlapsViewport, settled) {
   const task = currentReviewTask(review);
-  if (task === null) return;
-  if (offset !== null && review.pending !== null) return;
+  if (task === null || settingsVisible) { settled?.("retired"); return; }
+  if (offset !== null && review.pending !== null) { settled?.(); return; }
+  review.windowRequestSettled?.("retired");
+  review.windowRequestSettled = settled;
   if (offset === null || !review.windowRequestRunning
       || review.windowRequestNavigation !== navigationRevision) review.windowRequestRevision += 1;
   review.windowRequestNavigation = navigationRevision;
@@ -2166,6 +2168,7 @@ async function loadPlanWindow(review, offset, overlapsViewport) {
   }
 
   review.windowRequestRunning = true;
+  let settlement = undefined;
   beginForegroundWindowRead(review);
   try {
     while (review.windowRequestOffset !== null) {
@@ -2186,6 +2189,7 @@ async function loadPlanWindow(review, offset, overlapsViewport) {
         if (review.windowRequestRevision !== request) continue;
         if (currentReviewTask(review) !== task || task.sessionId !== sessionId
             || review.summary.request_id !== publication || navigationRevision !== navigation) {
+          settlement = "retired";
           review.windowRequestOffset = null;
           return;
         }
@@ -2193,6 +2197,7 @@ async function loadPlanWindow(review, offset, overlapsViewport) {
           review.actionRevision !== action
           || review.summary.view_revision !== viewRevision
         ) {
+          settlement = "retired";
           review.windowRequestOffset = null;
           return;
         }
@@ -2217,6 +2222,7 @@ async function loadPlanWindow(review, offset, overlapsViewport) {
         if (currentReviewTask(review) !== task || task.sessionId !== sessionId
             || review.summary.request_id !== publication || navigationRevision !== navigation
             || review.actionRevision !== action || review.summary.view_revision !== viewRevision) {
+          settlement = "retired";
           review.windowRequestOffset = null;
           return;
         }
@@ -2232,6 +2238,10 @@ async function loadPlanWindow(review, offset, overlapsViewport) {
     }
   } finally {
     review.windowRequestRunning = false;
+    const complete = review.windowRequestSettled;
+    review.windowRequestSettled = null;
+    complete?.(settlement === "retired" && !settingsVisible && currentReviewTask(review) === task
+      ? "changed" : settlement);
     endForegroundWindowRead(review);
   }
 }
@@ -2239,6 +2249,7 @@ async function loadPlanWindow(review, offset, overlapsViewport) {
 function queuePlanHighlight(review, gesture, nodeId) {
   const queuedViewRevision = review.summary.view_revision;
   const queuedActionRevision = review.actionRevision;
+  const queuedNavigation = navigationRevision;
   review.highlightQueue = review.highlightQueue.catch(() => {}).then(async () => {
     const task = currentReviewTask(review);
     if (task === null || review.pending !== null || task.executionAttempt !== null
@@ -2277,6 +2288,8 @@ function queuePlanHighlight(review, gesture, nodeId) {
           || window.view_revision !== summary.view_revision
           || window.highlight_revision !== summary.highlight_revision) return;
       review.summary = summary;
+      review.keyboardRevealWindow = moving && !settingsVisible
+        && navigationRevision === queuedNavigation && currentReviewTask(review) === task ? window : null;
       adoptExecutionWindow(review, window);
       review.refreshAvailable = false;
       const focusedRow = window.rows.find((row) => row.node_id === summary.highlight_focus_node_id);

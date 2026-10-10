@@ -495,6 +495,8 @@ export function createPlanReviewPanel(callbacks) {
   let scrollFramePending = false;
   let scrollGeneration = 0;
   let pendingWindowOffset = null;
+  let pendingWindowRequest = null;
+  let settledViewport = null;
   let renderedRows = null;
   let controlTaskId = null;
   let controlSessionId = null;
@@ -627,7 +629,11 @@ export function createPlanReviewPanel(callbacks) {
   }
 
   function reconcileViewport() {
-    if (body.clientHeight <= 0 || current.window.total <= 0) return;
+    if (body.clientHeight <= 0) { settledViewport = null; return; }
+    if (current.window.total <= 0) return;
+    if (settledViewport?.scrollTop === body.scrollTop
+        && settledViewport.clientHeight === body.clientHeight) return;
+    settledViewport = null;
     const viewportTop = Math.max(body.scrollTop, 0);
     const firstIndex = Math.min(
       Math.floor(viewportTop / ROW_HEIGHT),
@@ -644,6 +650,7 @@ export function createPlanReviewPanel(callbacks) {
     if (firstIndex >= current.window.offset && lastIndex < windowEnd) {
       if (pendingWindowOffset !== null) {
         pendingWindowOffset = null;
+        pendingWindowRequest = null;
         callbacks.onWindow(current, null);
       }
       return;
@@ -652,9 +659,19 @@ export function createPlanReviewPanel(callbacks) {
     if (offset === current.window.offset) return;
     if (offset !== pendingWindowOffset) {
       pendingWindowOffset = offset;
+      const request = { review: current, scrollTop: body.scrollTop, clientHeight: body.clientHeight };
+      pendingWindowRequest = request;
       callbacks.onWindow(current, offset, (window) =>
         body.clientHeight > 0 && window.offset * ROW_HEIGHT < body.scrollTop + body.clientHeight
-        && (window.offset + window.rows.length) * ROW_HEIGHT > body.scrollTop);
+        && (window.offset + window.rows.length) * ROW_HEIGHT > body.scrollTop, (outcome) => {
+          if (current !== request.review || pendingWindowRequest !== request) return;
+          pendingWindowOffset = null;
+          pendingWindowRequest = null;
+          settledViewport = outcome === "retired" || outcome === "changed" || body.clientHeight <= 0
+            ? null : request;
+          if (outcome === "changed" || (outcome !== "retired" && (body.scrollTop !== request.scrollTop
+              || body.clientHeight !== request.clientHeight))) scheduleViewportCheck();
+        });
     }
   }
   execute.addEventListener("click", () => {
@@ -937,12 +954,13 @@ export function createPlanReviewPanel(callbacks) {
         if (focusedRow) {
           const focused = renderedRows.rows.find((row) => row.dataset.nodeId === focusNodeId);
           if (focused !== undefined) {
-            focused.focus?.();
+            focused.focus?.({ preventScroll: review.keyboardRevealWindow !== review.window });
             if (focusOrigin === "pointer") focused.dataset.namiFocusOrigin = "pointer";
           }
         }
         renderedRows.highlightRevision = highlightRevision;
       }
+      review.keyboardRevealWindow = null;
       return;
     }
     const checkboxes = [];
@@ -1067,10 +1085,11 @@ export function createPlanReviewPanel(callbacks) {
     if (focusedRow) {
       const focused = rowElements.find((row) => row.dataset.nodeId === focusNodeId);
       if (focused !== undefined) {
-        focused.focus?.();
+        focused.focus?.({ preventScroll: review.keyboardRevealWindow !== review.window });
         if (focusOrigin === "pointer") focused.dataset.namiFocusOrigin = "pointer";
       }
     }
+    review.keyboardRevealWindow = null;
     renderedRows = {
       review, window: review.window, disabled, committed, checkboxes,
       rows: rowElements,
@@ -1100,6 +1119,8 @@ export function createPlanReviewPanel(callbacks) {
       scrollGeneration += 1;
       scrollFramePending = false;
       pendingWindowOffset = null;
+      pendingWindowRequest = null;
+      settledViewport = null;
       body.scrollTop = (task.review?.window.offset ?? 0) * ROW_HEIGHT;
       detailsExpanded = false;
       focusedPlanRow = null;
@@ -1156,7 +1177,10 @@ export function createPlanReviewPanel(callbacks) {
     enableFollow.hidden = follow?.hasTarget !== true
       || follow?.eligible !== true || follow?.enabled === true;
     floatingControls.hidden = goCurrent.hidden && enableFollow.hidden;
-    if (review.window !== previousWindow) pendingWindowOffset = null;
+    if (review.window !== previousWindow) {
+      pendingWindowOffset = null;
+      settledViewport = null;
+    }
     element.dataset.pending = review.pending ?? "";
     list.ariaRowCount = String(review.window.total + 1);
     tableCard.hidden = false;
@@ -1341,6 +1365,8 @@ export function createPlanReviewPanel(callbacks) {
     scrollGeneration += 1;
     scrollFramePending = false;
     pendingWindowOffset = null;
+    pendingWindowRequest = null;
+    settledViewport = null;
     current = null;
     renderedRows = null;
   }
