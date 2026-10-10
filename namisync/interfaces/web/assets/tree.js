@@ -94,6 +94,15 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H) {
     return currentGeneration;
   }
 
+  function finishWindowRequest(generation) {
+    if (disposed || generation !== currentGeneration || pendingRequest?.generation !== generation) return false;
+    clearPendingRequest();
+    settledScrollViewport = Object.freeze({
+      clientHeight: root.clientHeight, scrollTop: root.scrollTop,
+    });
+    return true;
+  }
+
   function commitWindow(generation, window, preferredNodeId = null) {
     if (disposed || generation !== currentGeneration) {
       return false;
@@ -106,6 +115,20 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H) {
       : null;
     const requestKind = admittedRequest?.kind ?? null;
     const requestedIndex = admittedRequest?.index ?? null;
+    if (requestKind === "scroll" && root.clientHeight > 0 &&
+        (offset * rowHeight >= root.scrollTop + root.clientHeight ||
+         (offset + sourceRows.length) * rowHeight <= root.scrollTop)) {
+      clearPendingRequest();
+      if (root.scrollTop === admittedRequest.scrollTop &&
+          root.clientHeight === admittedRequest.clientHeight) {
+        settledScrollViewport = Object.freeze({
+          clientHeight: root.clientHeight, scrollTop: root.scrollTop,
+        });
+      } else {
+        scheduleViewportCheck();
+      }
+      return false;
+    }
     const preservedScrollTop = root.scrollTop;
     const entries = sourceRows.map((sourceRow) => {
       const row = snapshotRow(sourceRow);
@@ -161,7 +184,7 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H) {
 
     let target = null;
     if (requestKind === "scroll") {
-      target = visibleEntry(requestedIndex);
+      target = visibleEntry();
     } else if (preferredNodeId !== null) {
       target = entries.find(
         (entry) => entry.row.node_id === preferredNodeId,
@@ -265,8 +288,7 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H) {
 
   function requestWindow(visibleIndex, kind) {
     if (
-      kind === "scroll" && pendingRequest?.kind === "scroll" &&
-      pendingRequest.index === visibleIndex
+      kind === "scroll" && pendingRequest?.kind === "scroll"
     ) {
       return;
     }
@@ -536,7 +558,7 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H) {
     root.removeEventListener("focus", onFocus);
   }
 
-  return Object.freeze({beginWindowRequest, commitWindow, dispose});
+  return Object.freeze({beginWindowRequest, commitWindow, finishWindowRequest, dispose});
 }
 
 function optionalCallback(callbacks, name) {

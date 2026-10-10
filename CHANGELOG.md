@@ -177,7 +177,15 @@ behavioral evidence.
 Safety, settlement and authority work made high-consequence release claims
 explicit, reviewable and regression-backed.
 
-#### Align desktop review surfaces and recovery (2026-10-05 – 2026-10-08)
+#### Align desktop review surfaces and recovery (2026-10-05 – 2026-10-10)
+
+- Adopt compatible Plan and Inventory windows during continuous scrolling,
+  coalescing newer demand while preserving owner fences and exact keyboard/
+  external intent. Reconcile the current viewport, settle matching failures
+  without retry loops, and preserve newer demand across old navigation replies.
+  Pass 59 frontend and 1,979 interfaces checks plus installed tree, Inventory
+  and full task-shell gates. Correct native fixture visibility geometry and
+  wait for highlight publication before menu input; keep existing assertions.
 
 - Investigate remaining capture, row bytes, DOM stages and steady scrolling
   without further product changes. Identify unused row payload candidates and

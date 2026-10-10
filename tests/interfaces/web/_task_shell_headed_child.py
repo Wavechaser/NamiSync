@@ -904,12 +904,14 @@ window.addEventListener("error", (event) => {
   const pointerNode = childArrowFocusedNode ?? rowArrowFocusedNode ?? selectionNode;
   let pointerRow = fresh.querySelector(`[data-node-id="${pointerNode}"]`)
     ?? fresh.querySelector(`[data-node-id="${selectionNode}"]`);
+  const pointerInvoker = pointerRow;
   pointerRow.querySelector('.nami-file-row__name').dispatchEvent(
     new MouseEvent("click", {bubbles: true, ctrlKey: true, shiftKey: true}));
   await until(() => {
     pointerRow = fresh.querySelector(`[data-node-id="${pointerNode}"]`)
       ?? fresh.querySelector(`[data-node-id="${selectionNode}"]`);
-    return pointerRow?.dataset.highlighted === "true" && fresh.dataset.pending === "";
+    return !pointerInvoker.isConnected && pointerRow?.isConnected
+      && pointerRow.dataset.highlighted === "true" && fresh.dataset.pending === "";
   }, "pointer focus row");
   const pointerFocusSuppressed = !hasKeyboardOutline(pointerRow);
   pointerRow.blur();

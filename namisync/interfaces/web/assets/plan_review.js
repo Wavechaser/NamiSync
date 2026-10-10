@@ -652,7 +652,9 @@ export function createPlanReviewPanel(callbacks) {
     if (offset === current.window.offset) return;
     if (offset !== pendingWindowOffset) {
       pendingWindowOffset = offset;
-      callbacks.onWindow(current, offset);
+      callbacks.onWindow(current, offset, (window) =>
+        body.clientHeight > 0 && window.offset * ROW_HEIGHT < body.scrollTop + body.clientHeight
+        && (window.offset + window.rows.length) * ROW_HEIGHT > body.scrollTop);
     }
   }
   execute.addEventListener("click", () => {

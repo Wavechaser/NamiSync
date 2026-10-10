@@ -11,6 +11,54 @@ retains investigation, rejected proposals and superseded execution recipes;
 the decisions still governing delivery are below. Historical observations
 certify their recorded build and dependencies only.
 
+## Continuous-scroll adoption and follow-up measurements — 2026-10-09–10
+
+The user reviewed the BC2–5 shared-mechanism finding and authorizes its coherent
+Plan/Inventory correction, followed by measurement and narrower experiments.
+This supersedes the investigation-only restriction for the outcomes below.
+Row-schema migration is deferred; no renderer rewrite is authorized.
+
+| ID | Outcome and population | Verification and commit boundary |
+| --- | --- | --- |
+| SW1 | Correct compatible scroll-window adoption together in `app.js`, `tree.js` and `plan_review.js`, with their direct browser/installed consumers and DESKTOP_UI/PRESENTATION documentation. Coalesce newer scroll demand without retiring compatible in-flight reads; reconcile coverage and active row against the current viewport. | Existing composition first, focused delayed-response/navigation/owner regressions, interfaces department and affected installed headed checks, independent review; one fix commit. Preserve task/session/publication/view/action/highlight fences, exact keyboard/external intent, one read and one 256-row window. |
+| SW2 | Extend the existing loading collector and controls to report burst time from last input as well as first, observed frame cadence, and browser-event steady trajectories at 240 and 1,000 rows/s. Reuse bounded installed fixture/identity/restoration infrastructure. PERFORMANCE owns results. | Method controls and tools department, independent review; separate measurement commit. Three fresh children per page, 12-second forward/reverse trajectories, uncovered intervals and final settlement; freeze sources and serialize timing. No timing acceptance threshold or native wheel/compositor claim. |
+| SW3 | Assess one-window edge-margin/directional prefetch after SW1/SW2 measurements. Approximately 64 rows is an experiment parameter, not an accepted latency guarantee. | Read-only design/measurement decision first; any justified implementation gets its own finite population, navigation/ownership/bound checks, repeated steady measurements and independent review before commit. No second retained window or concurrent read. |
+| SW4 | Experiment with successfully encoded key byte counts and combined punctuation/key charges without changing the row schema. Bridge response and drain-prefix capture remain the owners. | Disposable bounded prototype, old/new differential tests for invalid text, overflow precedence and exact partial charges, real-window timing and bounded-cache analysis. Report findings before product delivery; do not weaken admission/custody or add unbounded/global key retention. |
+
+Evidence belongs in `build/scroll-window-study-20261009/`, with directory
+conventions and unique run receipts; preserve earlier evidence and failures.
+Expand each implementation row before editing its product seam. AGENTS stops
+remain binding. The user's review resolves the prior two-owner recurrence
+decision; it does not authorize unrelated instance fixes. HANDOFF owns current
+resumption context, and each delivered outcome gets tests/docs/review and a
+separate coherent commit. SW3 and SW4 do not justify the deferred DTO migration.
+
+SW1 is verified and ready for its atomic fix commit. The approved recurrence
+correction separates pending demand from read settlement: Inventory finishes
+only the matching failed request without an automatic loop; old Plan navigation
+cannot clear newer demand. Exact keyboard/external and task/session/publication/
+view/action/highlight ownership remain intact. `inventory_review.js` and existing
+failure/navigation probes are included in the finite consumer population.
+
+Evidence: 59 frontend and 1,979 interfaces checks; installed Inventory
+`sw-native-01`, tree `sw-native-retry-01`, and full task-shell
+`sw-task-shell-20261010-02` pass. Eight ordinary shell-helper checks pass after
+its fixture correction. The tree consumer observes current-viewport row 4 and
+fractional border edges with unchanged tolerance. The native shell fixture now
+waits for pointer-highlight publication before opening its menu: the old
+already-highlighted/pending-empty predicate passed before the async response,
+whose valid window replacement dismissed the menu. A foreground-owned trace
+proves the race; no product menu change or weakened input guard was needed.
+Independent review confirms the correction and atomic split. Failed receipts
+and recovery ancestry remain evidence, not acceptance or mergeable commits.
+
+SW2 method/results are reviewed and await their separate measurement commit:
+37 focused and 402 tools checks pass (three skips), twelve installed children
+retain coverage/cadence and source/restoration identity. SW3's assessment and
+SW4's bounded disposable cache experiment remain reporting outcomes, not product
+prefetch or bridge delivery. Row schemas and renderer rewrites remain deferred.
+Recovery changes are rebuilt into coherent commits; never merge WIP snapshots.
+
 ## Bridge counter optimization and loading investigation — 2026-10-07–08
 
 The user authorizes #1 implementation and #2–5 investigation only, from

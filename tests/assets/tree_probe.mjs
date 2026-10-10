@@ -772,11 +772,16 @@ assert.deepEqual(scrollRequests, [{index: 11, generation: 2}]);
 scrollRoot.scrollTop = 12 * ROW_H;
 scrollRoot.dispatch("scroll");
 scrollDocument.defaultView.flushAnimationFrame();
+assert.deepEqual(scrollRequests, [{index: 11, generation: 2}],
+  "new scroll demand shares the in-flight generation");
+assert.equal(scrollTree.commitWindow(2, fixtureWindow(8, 4)), false,
+  "a disjoint reply cannot replace the current viewport");
+scrollDocument.defaultView.flushAnimationFrame();
 assert.deepEqual(scrollRequests, [
   {index: 11, generation: 2},
   {index: 15, generation: 3},
 ]);
-assert.deepEqual(scrollCancellations, [2]);
+assert.deepEqual(scrollCancellations, []);
 assert.equal(scrollTree.commitWindow(2, unreadableWindow), false);
 assert.equal(staleReads, 0);
 assert.equal(scrollActiveChanges.at(-1), null, "stale windows cannot publish another active identity");
@@ -793,7 +798,7 @@ assert.deepEqual(scrollRequests, [
   {index: 15, generation: 3},
 ]);
 assert.equal(scrollTree.commitWindow(3, unreadableWindow), false);
-assert.deepEqual(scrollCancellations, [2, 3], "covered return emits a cancellation without another request");
+assert.deepEqual(scrollCancellations, [3], "covered return emits a cancellation without another request");
 assert.equal(staleReads, 0);
 
 scrollRoot.scrollTop = 4 * ROW_H;
@@ -806,14 +811,14 @@ assert.equal(
   true,
 );
 assert.equal(scrollRoot.scrollTop, 4 * ROW_H);
-assert.deepEqual(scrollCancellations, [2, 3], "successful commits do not emit cancellation");
+assert.deepEqual(scrollCancellations, [3], "successful commits do not emit cancellation");
 assert.deepEqual(
   treeItems(scrollRoot).map((element) => element.dataset.nodeId),
   fixtureViews.maximum.rows.slice(4, 8).map((rowValue) => rowValue.node_id),
 );
 assert.equal(
   scrollRoot.getAttribute("aria-activedescendant"),
-  treeItems(scrollRoot).at(-1).id,
+  treeItems(scrollRoot)[0].id,
 );
 scrollDocument.defaultView.flushAnimationFrame();
 assert.deepEqual(scrollRequests.at(-1), trailingRequest);
@@ -886,7 +891,7 @@ assert.equal(
 assert.equal(scrollRoot.scrollTop, 21 * ROW_H);
 assert.equal(
   scrollRoot.getAttribute("aria-activedescendant"),
-  treeItems(scrollRoot).at(-1).id,
+  treeItems(scrollRoot)[2].id,
 );
 
 // A wheel movement wholly inside the current window updates only the
@@ -1133,6 +1138,49 @@ narrowRoot.dispatch("scroll");
 assert.equal(narrowDocument.defaultView.animationFrames.length, 0);
 assert.deepEqual(narrowRequests, [{index: 7, generation: 2}]);
 
+// Moving while an overlapping read is in flight accepts its rows immediately,
+// preserves the current viewport, and focuses a currently visible row.
+const movingDocument = new TestDocument();
+const movingRoot = movingDocument.createElement("div");
+movingRoot.clientHeight = 4 * ROW_H;
+const movingRequests = [];
+const movingTree = createTree(movingRoot, {
+  requestIndex: (index, generation) => movingRequests.push({index, generation}),
+});
+movingTree.commitWindow(movingTree.beginWindowRequest(), fixtureWindow(0, 4));
+movingDocument.defaultView.flushAnimationFrame();
+movingRoot.scrollTop = 4 * ROW_H;
+movingRoot.dispatch("scroll");
+movingDocument.defaultView.flushAnimationFrame();
+for (const index of [5, 6, 7, 8]) {
+  movingRoot.scrollTop = index * ROW_H;
+  movingRoot.dispatch("scroll");
+  movingDocument.defaultView.flushAnimationFrame();
+}
+assert.equal(movingRequests.length, 1);
+assert.equal(movingTree.commitWindow(movingRequests[0].generation, fixtureWindow(4, 12)), true);
+assert.equal(movingRoot.scrollTop, 8 * ROW_H);
+assert.equal(movingRoot.getAttribute("aria-activedescendant"), treeItems(movingRoot)[4].id);
+movingDocument.defaultView.flushAnimationFrame();
+assert.equal(movingRequests.length, 1, "a covering response needs no follow-up read");
+movingRoot.scrollTop = 16 * ROW_H;
+movingRoot.dispatch("scroll");
+movingDocument.defaultView.flushAnimationFrame();
+movingRoot.scrollTop = 18 * ROW_H;
+movingRoot.dispatch("scroll");
+movingDocument.defaultView.flushAnimationFrame();
+assert.equal(movingRequests.length, 2);
+assert.equal(movingTree.commitWindow(movingRequests[1].generation, fixtureWindow(16, 4)), true);
+movingDocument.defaultView.flushAnimationFrame();
+assert.equal(movingRequests.length, 3, "partial overlap is adopted then requests remaining coverage");
+assert.equal(movingRequests[2].index, 21);
+const movingExternal = movingTree.beginWindowRequest();
+assert.equal(movingTree.finishWindowRequest(movingRequests[2].generation), false,
+  "a stale failed read cannot settle a newer external request");
+assert.equal(movingTree.commitWindow(movingExternal, fixtureWindow(18, 4)), true);
+
+
+
 // A changed viewport observed while that narrow response is in flight still
 // receives one new last-state-wins request and can converge normally.
 const changedDocument = new TestDocument();
@@ -1153,7 +1201,7 @@ changedDocument.defaultView.flushAnimationFrame();
 assert.deepEqual(changedRequests, [{index: 7, generation: 2}]);
 changedRoot.scrollTop = 8 * ROW_H;
 changedRoot.dispatch("scroll");
-assert.equal(changedTree.commitWindow(2, fixtureWindow(7, 1)), true);
+assert.equal(changedTree.commitWindow(2, fixtureWindow(7, 1)), false);
 changedDocument.defaultView.flushAnimationFrame();
 assert.deepEqual(changedRequests, [
   {index: 7, generation: 2},
@@ -1197,7 +1245,7 @@ assert.equal(compactRoot.getAttribute("aria-activedescendant"), null);
 assert.equal(compactTree.commitWindow(2, fixtureWindow(4, 4)), true);
 assert.equal(compactRoot.children[0].style.blockSize, `${4 * 24}px`);
 assert.equal(compactRoot.scrollTop, 4 * 24);
-assert.equal(compactRoot.getAttribute("aria-activedescendant"), treeItems(compactRoot)[1].id);
+assert.equal(compactRoot.getAttribute("aria-activedescendant"), treeItems(compactRoot)[0].id);
 const compactStale = compactTree.beginWindowRequest();
 const compactCurrent = compactTree.beginWindowRequest();
 assert.equal(compactTree.commitWindow(compactStale, unreadableWindow), false);

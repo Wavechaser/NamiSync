@@ -231,7 +231,7 @@ const panel = createWorkPanel({
   onPlanAgain: () => { void startPlanAgain(); },
 }, {
   onViewChange: (review, patch) => { void changePlanView(review, patch); },
-  onWindow: (review, offset) => { void loadPlanWindow(review, offset); },
+  onWindow: (review, offset, overlapsViewport) => { void loadPlanWindow(review, offset, overlapsViewport); },
   onSelect: (review, row, selected) => {
     void changePlanSelection(review, row, selected);
   },
@@ -2147,12 +2147,15 @@ async function retryReviewOutcome(review) {
   if (checkableOutcome(review.recovery)) await review.recovery.check();
 }
 
-async function loadPlanWindow(review, offset) {
+async function loadPlanWindow(review, offset, overlapsViewport) {
   const task = currentReviewTask(review);
   if (task === null) return;
   if (offset !== null && review.pending !== null) return;
-  review.windowRequestRevision += 1;
+  if (offset === null || !review.windowRequestRunning
+      || review.windowRequestNavigation !== navigationRevision) review.windowRequestRevision += 1;
+  review.windowRequestNavigation = navigationRevision;
   review.windowRequestOffset = offset;
+  review.windowRequestOverlaps = overlapsViewport;
   if (offset === null) {
     review.foregroundWindowEpoch += 1;
     return;
@@ -2166,6 +2169,9 @@ async function loadPlanWindow(review, offset) {
   beginForegroundWindowRead(review);
   try {
     while (review.windowRequestOffset !== null) {
+      const sessionId = task.sessionId;
+      const publication = review.summary.request_id;
+      const navigation = review.windowRequestNavigation;
       const requestedOffset = review.windowRequestOffset;
       const request = review.windowRequestRevision;
       const action = review.actionRevision;
@@ -2177,7 +2183,12 @@ async function loadPlanWindow(review, offset) {
           requestedOffset,
           256,
         );
-        if (retainedReviewTask(review) !== task) return;
+        if (review.windowRequestRevision !== request) continue;
+        if (currentReviewTask(review) !== task || task.sessionId !== sessionId
+            || review.summary.request_id !== publication || navigationRevision !== navigation) {
+          review.windowRequestOffset = null;
+          return;
+        }
         if (
           review.actionRevision !== action
           || review.summary.view_revision !== viewRevision
@@ -2186,22 +2197,31 @@ async function loadPlanWindow(review, offset) {
           return;
         }
         if (
-          review.windowRequestRevision !== request
-          || review.windowRequestOffset !== requestedOffset
-        ) continue;
-        review.windowRequestOffset = null;
-        if (
           window.disposition !== "current"
           || window.view_revision !== viewRevision
           || window.highlight_revision !== review.summary.highlight_revision
-        ) return;
+        ) {
+          review.windowRequestOffset = null;
+          return;
+        }
+        if (!review.windowRequestOverlaps(window)) {
+          if (review.windowRequestOffset === requestedOffset) review.windowRequestOffset = null;
+          continue;
+        }
+        review.windowRequestOffset = null;
         adoptExecutionWindow(review, window);
         review.message = "";
         renderTasks();
       } catch (_error) {
+        if (review.windowRequestRevision !== request) continue;
+        if (currentReviewTask(review) !== task || task.sessionId !== sessionId
+            || review.summary.request_id !== publication || navigationRevision !== navigation
+            || review.actionRevision !== action || review.summary.view_revision !== viewRevision) {
+          review.windowRequestOffset = null;
+          return;
+        }
         if (
-          retainedReviewTask(review) === task
-          && review.windowRequestRevision === request
+          review.windowRequestRevision === request
           && review.windowRequestOffset === requestedOffset
         ) {
           review.windowRequestOffset = null;

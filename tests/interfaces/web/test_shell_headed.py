@@ -347,7 +347,7 @@ def test_sh_g_7_installed_shell_tree_keyboard_reflow_and_forced_colors(
         "active_node": projection_id,
     }
     assert page["scroll_tree"] == {
-        "active_node": views["maximum"]["rows"][7]["node_id"],
+        "active_node": views["maximum"]["rows"][4]["node_id"],
         "activations": [],
         "commits": [
             {"accepted": True, "generation": 2, "offset": 0},

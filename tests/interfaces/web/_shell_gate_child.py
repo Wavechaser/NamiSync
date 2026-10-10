@@ -354,8 +354,9 @@ _SCROLL_TREE_SETUP = r"""
   await new Promise((resolve) =>
     requestAnimationFrame(() => requestAnimationFrame(resolve)));
   const resizeRootRect = root.getBoundingClientRect();
-  const resizeViewportTop = resizeRootRect.top + root.clientTop;
-  const resizeViewportBottom = resizeViewportTop + root.clientHeight;
+  const resizeStyle = getComputedStyle(root);
+  const resizeViewportTop = resizeRootRect.top + parseFloat(resizeStyle.borderTopWidth);
+  const resizeViewportBottom = resizeRootRect.bottom - parseFloat(resizeStyle.borderBottomWidth);
   const resizeRendered = [...root.querySelectorAll(".nami-tree-row")];
   const resizeRects = resizeRendered.map((row) => row.getBoundingClientRect());
   state.resize = {
@@ -395,8 +396,10 @@ _SCROLL_TREE_EVIDENCE = r"""
   }
   const root = state.root;
   const rootRect = root.getBoundingClientRect();
-  const viewportTop = rootRect.top + root.clientTop;
-  const viewportBottom = viewportTop + root.clientHeight;
+  // clientTop rounds fractional CSS borders at noninteger display scaling.
+  const rootStyle = getComputedStyle(root);
+  const viewportTop = rootRect.top + parseFloat(rootStyle.borderTopWidth);
+  const viewportBottom = rootRect.bottom - parseFloat(rootStyle.borderBottomWidth);
   const rendered = [...root.querySelectorAll(".nami-tree-row")];
   const rects = rendered.map((row) => row.getBoundingClientRect());
   const descendant = root.getAttribute("aria-activedescendant");

@@ -392,9 +392,16 @@ export function createInventoryReviewPanel(callbacks) {
       requestIndex: async (index, generation) => {
         const owner = current;
         const controller = tree;
-        if (owner === null || blocked()) return;
+        if (owner === null || blocked()) {
+          controller.finishWindowRequest(generation);
+          return;
+        }
         const window = await callbacks.onWindow(owner, Math.max(0, index - 32));
-        if (current !== owner || tree !== controller || window === null) return;
+        if (current !== owner || tree !== controller) return;
+        if (window === null) {
+          controller.finishWindowRequest(generation);
+          return;
+        }
         if (controller.commitWindow(generation, window)) {
           owner.window = window;
           committedWindow = window;

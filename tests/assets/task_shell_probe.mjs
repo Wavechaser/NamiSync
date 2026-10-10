@@ -371,7 +371,11 @@ const setupUrl = moduleUrl(`
 `);
 const planReviewUrl = moduleUrl(`
   export function createPlanReviewPanel(callbacks) {
-    globalThis.planReviewHarness.callbacks = callbacks;
+    globalThis.planReviewHarness.callbacks = {...callbacks,
+      onWindow(review, offset, overlaps = (window) => window.offset === review.windowRequestOffset) {
+        callbacks.onWindow(review, offset, overlaps);
+      },
+    };
     const element = new HTMLElement("div", "Plan review test surface");
     return {
       element,
@@ -854,6 +858,47 @@ globalThis.planReviewHarness.callbacks.onWindow(firstReview, 0);
 planWindows[5].resolve(originalWindow);
 await until(() => !firstReview.windowRequestRunning);
 assert.equal(firstReview.window, originalWindow);
+// Current viewport overlap, not the latest requested offset, decides whether
+// a scroll reply may publish. Keyboard/highlight calls use their separate path.
+const overlapCallBase = planWindows.length;
+let viewportIndex = 280;
+const overlaps = (window) => window.offset <= viewportIndex
+  && window.offset + window.rows.length > viewportIndex;
+globalThis.planReviewHarness.callbacks.onWindow(firstReview, 256, overlaps);
+for (const offset of [260, 264, 268, 272]) {
+  viewportIndex = offset + 32;
+  globalThis.planReviewHarness.callbacks.onWindow(firstReview, offset, overlaps);
+}
+assert.equal(planWindows.length, overlapCallBase + 1);
+const overlappingWindow = planWindow(refusedReview, 256);
+overlappingWindow.total = 1000;
+overlappingWindow.rows = Array.from({length: 256}, (_, index) => ({
+  ...originalWindow.rows[0], visible_index: 256 + index,
+}));
+planWindows.at(-1).resolve(overlappingWindow);
+await until(() => !firstReview.windowRequestRunning);
+assert.equal(firstReview.window, overlappingWindow);
+assert.equal(planWindows.length, overlapCallBase + 1, "newer covered scroll demand does not discard the response");
+firstReview.window = originalWindow;
+// Returning to this task creates a new navigation demand even at the same
+// offset. Settlement of its old read cannot clear or fail the new queued read.
+for (const failed of [false, true]) {
+  const callsBefore = planWindows.length;
+  globalThis.planReviewHarness.callbacks.onWindow(firstReview, 768);
+  taskButton("Task 6").click();
+  taskButton("Task 7").click();
+  await turns();
+  globalThis.planReviewHarness.callbacks.onWindow(firstReview, 768);
+  assert.equal(planWindows.length, callsBefore + 1);
+  if (failed) planWindows[callsBefore].reject(new Error("old navigation read failed"));
+  else planWindows[callsBefore].resolve(planWindow(refusedReview, 768));
+  await until(() => planWindows.length === callsBefore + 2);
+  const returnedWindow = planWindow(refusedReview, 768);
+  planWindows.at(-1).resolve(returnedWindow);
+  await until(() => !firstReview.windowRequestRunning);
+  assert.equal(firstReview.window, returnedWindow);
+}
+firstReview.window = originalWindow;
 planWindows.splice(2); // Keep the following independent gesture receipt ordinals.
 
 globalThis.planReviewHarness.callbacks.onWindow(firstReview, 768);

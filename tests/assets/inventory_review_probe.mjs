@@ -506,7 +506,7 @@ while (frames.length) frames.shift()();
 assert.equal(viewportCalls.length, 2, "the second viewport intent waits behind the initial read");
 treeRoot.scrollTop = 0; treeRoot.dispatch("scroll");
 while (frames.length) frames.shift()();
-assert.equal(await viewportPromises[1], null, "covered return retires its queued callback");
+assert.equal(viewportPromises.length, 1, "changed scroll demand does not queue another callback");
 viewportReply.resolve(fixture.tail); await settle();
 assert.equal(await viewportPromises[0], null);
 assert.equal(viewportCalls.length, 2, "covered return prevents queued follow-up work");
@@ -514,35 +514,56 @@ assert.equal(liveReview.window === initialWindow, true, "retired viewport reply 
 app.panel.render(liveTask);
 assert.equal(firstLiveRow().dataset.nodeId, initialNode, "later render cannot adopt a rejected window");
 
-// Each queued generation owns its result, including when every newer intent
-// arrives in a separate animation frame while the first bridge call is held.
+// Multiple changing positions share one read. Its overlapping response enters
+// both the tree and the app cache immediately, before scrolling has stopped.
 viewportReply = delayedViewport();
 const burstRead = viewportReply;
 const burstCalls = viewportCalls.length;
 const burstPromises = viewportPromises.length;
-for (const index of [256, 260, 264, 268, 272, 276, 280, 300]) {
+for (const index of [256, 260, 264, 268, 272, 276, 280, 288]) {
   treeRoot.scrollTop = index * 24; treeRoot.dispatch("scroll");
   while (frames.length) frames.shift()();
 }
 assert.equal(viewportCalls.length, burstCalls + 1);
+assert.equal(viewportPromises.length, burstPromises + 1);
 assert.equal(liveReview.pending, null, "viewport reads do not enter action-pending state");
 assert.equal(liveTask.inventoryAction, null);
-for (const promise of viewportPromises.slice(burstPromises + 1, -1)) assert.equal(await promise, null);
-viewportReply = delayedViewport();
 burstRead.resolve(fixture.tail); await settle();
-assert.equal(await viewportPromises[burstPromises], null);
-assert.equal(liveReview.window, initialWindow, "obsolete burst callbacks cannot publish the latest window");
-assert.equal(viewportCalls.length, burstCalls + 2);
-assert.equal(viewportCalls.at(-1)[2], 268);
-viewportReply.resolve(fixture.tail); await settle();
-assert.equal(await viewportPromises.at(-1), fixture.tail);
+assert.equal(await viewportPromises[burstPromises], fixture.tail);
 assert.equal(liveReview.window, fixture.tail);
+assert.equal(treeRoot.scrollTop, 288 * 24);
+assert.equal(viewportCalls.length, burstCalls + 1, "the first covering reply needs no replacement RPC");
 assert.equal(treeRoot.children.filter((value) => value.getAttribute("role") === "treeitem").length,
   fixture.tail.rows.length);
 assert.ok(fixture.tail.rows.length <= 256);
 Object.assign(liveReview, fixture.views.maximum, { scrollTop: 0 });
 app.panel.render(liveTask);
 while (frames.length) frames.shift()();
+
+// Failed or refused reads settle only their generation. No automatic retry
+// occurs at rest, but a changed user viewport can fetch again.
+for (const failure of ["error", "conflict"]) {
+  const callsBefore = viewportCalls.length;
+  viewportReply = delayedViewport();
+  treeRoot.scrollTop = 270 * 24; treeRoot.dispatch("scroll");
+  while (frames.length) frames.shift()();
+  assert.equal(viewportCalls.length, callsBefore + 1);
+  viewportReply.resolve(failure === "error"
+    ? Promise.reject(new Error("temporary read failure"))
+    : { disposition: "conflict" });
+  await settle();
+  while (frames.length) frames.shift()();
+  assert.equal(viewportCalls.length, callsBefore + 1, "failure does not busy-retry");
+  viewportReply = delayedViewport();
+  treeRoot.scrollTop = 280 * 24; treeRoot.dispatch("scroll");
+  while (frames.length) frames.shift()();
+  assert.equal(viewportCalls.length, callsBefore + 2, "changed scrolling retries the failed read");
+  viewportReply.resolve(fixture.tail); await settle();
+  assert.equal(liveReview.window, fixture.tail);
+  Object.assign(liveReview, fixture.views.maximum, { scrollTop: 0, message: null });
+  app.panel.render(liveTask);
+  while (frames.length) frames.shift()();
+}
 
 // Keyboard replacement owns the queued callback and its reveal; old scroll
 // callbacks never receive the keyboard result.
@@ -555,12 +576,14 @@ treeRoot.scrollTop = 280 * 24; treeRoot.dispatch("scroll");
 while (frames.length) frames.shift()();
 const queuedScroll = viewportPromises.at(-1);
 treeRoot.dispatch("keydown", {key: "End"});
-assert.equal(await queuedScroll, null);
 while (frames.length) frames.shift()();
 assert.equal(viewportCalls.length, keyboardCalls + 1);
 viewportReply = delayedViewport();
 beforeKeyboard.resolve(fixture.tail); await settle();
-assert.equal(viewportCalls.length, keyboardCalls + 2);
+assert.equal(await queuedScroll, null, "keyboard intent retires the held scroll response");
+while (frames.length) frames.shift()();
+assert.equal(viewportCalls.length, keyboardCalls + 2,
+  "settling the stale null cannot retire or duplicate the newer keyboard read");
 viewportReply.resolve(fixture.tail); await settle();
 assert.equal(treeRoot.getAttribute("aria-activedescendant"), treeRoot.children.at(-2).id);
 assert.equal(treeRoot.scrollTop, 301 * 24 - treeRoot.clientHeight);

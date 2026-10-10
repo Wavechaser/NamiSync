@@ -1257,7 +1257,13 @@ the entire row without scrolling an outer surface. User scroll bursts and
 layout-only tree-root resizes enter the same coalesced animation-frame
 reconciliation. Crossing a virtual spacer requests the missing leading or
 trailing global index with the tree-owned generation;
-the returned page preserves `scrollTop` and cannot snap the viewport. Scrolling
+new positions share the in-flight scroll generation. A still-owned response
+that overlaps the current viewport is accepted even after further scrolling,
+preserves `scrollTop`, and chooses a visible active row using the current
+viewport. Reconciliation then requests any remaining uncovered range. Keyboard
+and external requests retain exact generations. Failed or blocked Inventory reads
+settle their exact pending generation without retrying at rest; later changed
+scrolling can retry without reloading the page. Scrolling
 within a covered window sends no request and moves only presentation focus to a
 fully visible rendered row when one is available; otherwise it clears the
 active descendant until a covering commit. Neither outcome invokes domain
@@ -1534,9 +1540,11 @@ installed light/dark/forced-color/reduced-motion gallery witness exercises both
 dismissals, background inertness, native wheel blocking and focus restoration alongside the existing
 material matrix.
 
-A valid scroll page is terminal for the viewport snapshot that requested it.
-If it is narrower than the viewport, the renderer waits for a later viewport
-change rather than automatically alternating requests between missing edges;
+A scroll page settles the viewport snapshot that requested it. If that snapshot
+is unchanged and the page is narrower than the viewport, the renderer waits for
+a later viewport change rather than automatically alternating missing edges.
+A changed viewport is reconciled after the response, including a response now
+outside the viewport;
 the owning view is not subject to an implicit minimum page width.
 
 The Slice 4 frame has two labelled structural regions beneath the header: task
