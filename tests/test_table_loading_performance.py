@@ -190,6 +190,10 @@ def _receipt(case="plan-base", viewport_height=480):
             "returned_first_node_id": "node", "adopted": True, "dom_ns": 1,
             "settlement_error": None, **dict.fromkeys(loading.BROWSER_PHASES, 1)})
         gestures.append({"kind": kind, "iteration": index, "landed": True, "covered": True, "row_count": 256,
+            "input_timestamps_ms": [0] * {"initial": 0, "burst": 8, "covered-return": 2}.get(kind, 1),
+            "input_cadence_ms": [0] * {"initial": 0, "burst": 7, "covered-return": 1}.get(kind, 0),
+            "input_span_ns": 0, "covered_after_last_input_ns": 10,
+            "paint_opportunity_after_last_input_ns": 20, "settlement_after_last_input_ns": 30,
             "total": total, "target": target, "first": target, "last": target + 20, "offset": target,
             "active_index": target, "active_node_id": "node", "first_node_id": "node",
             "setup_offset": setup_offset if kind == "keyboard" else None,
@@ -291,17 +295,29 @@ const fixture = {visible_rows: 120000};
 const trace = {pending:2,requests:[{gesture:'covered-return-1',submitted:0,validated_at:64,adopted:false}],ns:value=>value*1000000,end(){}};
 const targetFrame = {covered:true,total:120000,visibility_state:'visible',document_has_focus:true,first:0,pending:2};
 const coverage = () => ({...targetFrame,pending:trace.pending});
-const frame = async () => {timestamp = 64;trace.pending = 0;};
+const frame = async () => {timestamp = Math.max(timestamp,64);trace.pending = 0;};
 const until = async (predicate, label) => {if (!predicate()) await frame();assert.ok(predicate(),label);};
 """ + observe + """
-const gesture = {kind:'covered-return',iteration:1,started:0,frames:[{timestamp:8,value:targetFrame},{timestamp:16,value:targetFrame}]};
+const gesture = {kind:'covered-return',iteration:1,started:0,inputs:[0,5],frames:[{timestamp:8,value:targetFrame},{timestamp:16,value:targetFrame}]};
 await observe(gesture, 0);
 assert.equal(gestures[0].covered_ns, 8000000);
 assert.equal(gestures[0].paint_opportunity_ns, 16000000);
 assert.equal(gestures[0].settlement_ns, 64000000);
+assert.equal(gestures[0].covered_after_last_input_ns, 3000000);
+assert.equal(gestures[0].paint_opportunity_after_last_input_ns, 11000000);
+assert.equal(gestures[0].settlement_after_last_input_ns, 59000000);
+assert.deepEqual(gestures[0].input_cadence_ms, [5]);
 assert.equal(gestures[0].pending, 2);
 assert.equal(gestures[0].settlement_pending, 0);
 assert.equal(gestures[0].discarded_responses, 1);
+timestamp = 128;
+targetFrame.first = 40000;
+await observe({kind:'burst',iteration:1,started:0,inputs:[0,7,15,26,40,51,60,70],
+  frames:[{timestamp:80,value:targetFrame},{timestamp:96,value:targetFrame}]}, 40000);
+assert.equal(gestures[1].covered_ns, 80000000);
+assert.equal(gestures[1].covered_after_last_input_ns, 10000000);
+assert.equal(gestures[1].input_span_ns, 70000000);
+assert.deepEqual(gestures[1].input_cadence_ms, [7,8,11,14,11,9,10]);
 const offscreen = {...targetFrame,active_index:-1,last:20};
 await assert.rejects(observe({kind:'keyboard',iteration:1,started:0,
   frames:[{timestamp:8,value:offscreen},{timestamp:16,value:offscreen}]}, -1), /frame interval was not observed/);
@@ -315,6 +331,10 @@ await assert.rejects(observe({kind:'keyboard',iteration:1,started:0,
     lambda value: value["browser"]["gestures"].pop(),
     lambda value: value["browser"]["gestures"][0].update(landed=False),
     lambda value: value["browser"]["gestures"][0].update(row_count=257),
+    lambda value: value["browser"]["gestures"][10].update(input_timestamps_ms=[0]),
+    lambda value: value["browser"]["gestures"][1].update(input_span_ns=100),
+    lambda value: value["browser"]["gestures"][1].update(covered_after_last_input_ns=-1),
+    lambda value: value["browser"]["gestures"][10].update(input_cadence_ms=[3] * 7),
     lambda value: value["browser"]["requests"].append({"request_id": "missing"}),
     lambda value: (value.update(host=[]), value["browser"].update(requests=[])),
     lambda value: value["browser"]["gestures"][1].update(first=0),

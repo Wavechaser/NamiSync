@@ -33,7 +33,7 @@ decision; it does not authorize unrelated instance fixes. HANDOFF owns current
 resumption context, and each delivered outcome gets tests/docs/review and a
 separate coherent commit. SW3 and SW4 do not justify the deferred DTO migration.
 
-SW1 is verified and ready for its atomic fix commit. The approved recurrence
+SW1 is delivered in `93a13b8`. The approved recurrence
 correction separates pending demand from read settlement: Inventory finishes
 only the matching failed request without an automatic loop; old Plan navigation
 cannot clear newer demand. Exact keyboard/external and task/session/publication/
@@ -52,12 +52,16 @@ proves the race; no product menu change or weakened input guard was needed.
 Independent review confirms the correction and atomic split. Failed receipts
 and recovery ancestry remain evidence, not acceptance or mergeable commits.
 
-SW2 method/results are reviewed and await their separate measurement commit:
+SW2 method/results are complete and independently reviewed:
 37 focused and 402 tools checks pass (three skips), twelve installed children
-retain coverage/cadence and source/restoration identity. SW3's assessment and
-SW4's bounded disposable cache experiment remain reporting outcomes, not product
-prefetch or bridge delivery. Row schemas and renderer rewrites remain deferred.
-Recovery changes are rebuilt into coherent commits; never merge WIP snapshots.
+retain coverage/cadence and source/restoration identity. SW3 assessment is complete:
+directional placement and a roughly 64-row margin are justified for a separate
+implementation outcome. SW4's bounded disposable cache experiment and balanced
+capture comparison are complete; production delivery still needs ordinary
+response and actual drain-prefix/custody checks. PERFORMANCE owns the values and
+limitations. No prefetch or bridge cache shipped. Row schemas and renderer
+rewrites remain deferred. Recovery changes were rebuilt into coherent commits;
+the disposable ref can be removed after exact source and documentation accounting.
 
 ## Bridge counter optimization and loading investigation — 2026-10-07–08
 

@@ -201,7 +201,15 @@ globalThis.__tableLoading = (() => {
       .sort((left, right) => left[0] - right[0]);
     let outstanding = 0, maximum = 0;
     for (const [, delta] of changes) { outstanding += delta; maximum = Math.max(maximum, outstanding); }
+    const inputs = gesture.inputs ?? [];
+    const lastInput = inputs.at(-1) ?? gesture.started;
     gestures.push({kind: gesture.kind, iteration: gesture.iteration, target,
+      input_timestamps_ms: inputs.map(value => value - gesture.started),
+      input_cadence_ms: inputs.slice(1).map((value, index) => value - inputs[index]),
+      input_span_ns: trace.ns(lastInput - gesture.started),
+      covered_after_last_input_ns: trace.ns(coveredAt - lastInput),
+      paint_opportunity_after_last_input_ns: trace.ns(paintAt - lastInput),
+      settlement_after_last_input_ns: trace.ns(settledAt - lastInput),
       setup_offset: gesture.setupOffset ?? null,
       setup_first: gesture.setupFirst ?? null, setup_last: gesture.setupLast ?? null,
       landed: true, ...result, covered_ns: trace.ns(coveredAt - gesture.started),
@@ -271,7 +279,7 @@ globalThis.__tableLoading = (() => {
           if (component === "plan" && document.activeElement !== live) throw new Error("Plan keyboard target lost focus");
           if (component === "inventory") root.focus();
         }
-        const gesture = {kind, iteration, started: performance.now(), frames: []};
+        const gesture = {kind, iteration, started: performance.now(), frames: [], inputs: []};
         if (kind === "keyboard") {
           gesture.setupOffset = keyboardSetup.offset;
           gesture.setupFirst = keyboardSetup.first;
@@ -281,13 +289,17 @@ globalThis.__tableLoading = (() => {
         observed = gesture;
         trace.begin(gesture);
         if (kind === "burst") {
-          for (const index of [5000, 10000, 15000, 20000, 25000, 30000, 35000, 40000]) { scroll(index); await frame(); }
+          for (const index of [5000, 10000, 15000, 20000, 25000, 30000, 35000, 40000]) {
+            gesture.inputs.push(performance.now()); scroll(index); await frame();
+          }
         } else if (kind === "covered-return") {
-          scroll(10000); await frame(); scroll(0); target = 0;
+          gesture.inputs.push(performance.now()); scroll(10000); await frame();
+          gesture.inputs.push(performance.now()); scroll(0); target = 0;
         } else if (kind === "keyboard") {
           const focused = component === "plan" ? document.activeElement : root;
+          gesture.inputs.push(performance.now());
           focused.dispatchEvent(new KeyboardEvent("keydown", {key: "ArrowUp", bubbles: true, cancelable: true}));
-        } else scroll(target);
+        } else { gesture.inputs.push(performance.now()); scroll(target); }
         await observe(gesture, target);
       }
     }

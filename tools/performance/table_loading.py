@@ -369,6 +369,18 @@ def validate_child(receipt, case, token, installed_root=None):
             check_owner(request["adoption_ownership"])
     for sample in samples:
         check_owner(sample["ownership"])
+        inputs = sample["input_timestamps_ms"]
+        expected_inputs = {"initial": 0, "burst": 8, "covered-return": 2}.get(sample["kind"], 1)
+        cadence = [right - left for left, right in zip(inputs, inputs[1:])]
+        if (len(inputs) != expected_inputs
+            or any(not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0 for value in inputs)
+            or any(value < 0 for value in cadence)
+            or sample["input_cadence_ms"] != cadence
+            or abs(sample["input_span_ns"] - round((inputs[-1] if inputs else 0) * 1_000_000)) > 1
+            or any(sample[field + "_after_last_input_ns"] < 0
+                or abs(sample[field + "_ns"] - sample["input_span_ns"] - sample[field + "_after_last_input_ns"]) > 1
+                for field in ("covered", "paint_opportunity", "settlement"))):
+            raise ValueError("table-loading input timing differs")
         requests = [row for row in browser["requests"] if row["gesture"] == f'{sample["kind"]}-{sample["iteration"]}']
         target = {"initial": 0, "sequential": 256, "jump": 60_000, "covered-return": 0, "burst": 40_000}.get(sample["kind"])
         if target is None:
@@ -407,7 +419,8 @@ def summarize_children(receipts):
         adopted = [row for row in requests if row["adopted"]]
         result[name] = {
             "counts": {"gestures": len(samples), "requests": len(requests), "adopted": len(adopted), "discarded": len(requests) - len(adopted)},
-            "gesture": {field: summary([row[field] for row in samples]) for field in ("covered_ns", "paint_opportunity_ns", "settlement_ns", "uncovered_ns", "maximum_outstanding")},
+            "gesture": {field: summary([row[field] for row in samples]) for field in ("covered_ns", "paint_opportunity_ns", "settlement_ns", "input_span_ns", "covered_after_last_input_ns", "paint_opportunity_after_last_input_ns", "settlement_after_last_input_ns", "uncovered_ns", "maximum_outstanding")},
+            "input_cadence_ms": summary([value for row in samples for value in row["input_cadence_ms"]]),
             "browser": {field: summary([row[field] for row in requests]) for field in BROWSER_PHASES},
             "host": {field: summary([row[field] for row in host]) for field in HOST_PHASES},
             "adopted_dom_ns": summary([row["dom_ns"] for row in adopted]),

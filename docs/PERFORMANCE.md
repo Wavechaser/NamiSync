@@ -203,6 +203,106 @@ Review this method/baseline as one atomic outcome, then Inventory coalescing and
 identical remeasurement separately. Placement/prefetch or placeholders require
 a remaining measured gap; this method adds none of those product changes.
 
+### SW continuous-scroll follow-up method — 2026-10-09
+
+Evidence belongs in `build/scroll-window-study-20261009/`. Compare the BC1
+bulk-counter product baseline with compatible-scroll adoption using the same
+updated collector, installed fixture, profile and dependency pins. Freeze inputs
+and serialize timings after functional checks; preserve raw frames, requests,
+source/install manifests and original/instrumented/restored assets.
+
+The standard eight-input burst retains its first-input-to-coverage interval,
+which includes scripted input time and is not post-input latency. Also report
+last-input-to-coverage, frame opportunity and settlement, retaining all input
+timestamps and their observed spacing rather than assuming a display refresh
+rate. A frame opportunity is not measured compositor presentation.
+
+The steady diagnostic uses three fresh installed children per page, each with
+240 and 1,000 rows/second trajectories from index 20,000: eight elapsed-time
+seconds forward and four reverse. Set scrollTop and let browser scroll events
+drive production handlers; omit the earlier intrusive DOM/layout stage probes.
+Retain desired/readback indices, frame-sampled ownership and coverage, uncovered
+intervals/total/longest gap, read/discard counts, maximum concurrency and final
+settlement. Require the existing one-read/256-row bounds and correct final
+coverage, with a 180-second child containment bound. Report per-child values
+and medians/ranges, not p95 or a latency acceptance threshold. This corpus does
+not certify native wheel cadence or compositor output. Baseline and candidate
+use identical measurement dependencies; source-anchor changes require explicit
+consumer migration with exact-match controls, never silently skipped hooks.
+
+Assess one-window edge-margin prefetch only after the adoption comparison.
+The separate key-cache experiment uses cold bounded per-capture caches, exact
+byte/error/partial-budget comparisons and unwrapped real-window captures;
+profile separately. Row-schema and renderer changes remain deferred.
+
+### SW observations and dispositions — 2026-10-09
+
+`sw-{baseline,candidate}-{plan,inventory}-01.json` and `sw-summary-01.json`
+retain twelve fresh children and their raw samples. Baseline is the retained
+BC1 bulk-counter installation; candidate changes only the four scroll-adoption
+JavaScript assets. Both ran Python 3.13.14, pywebview 6.2.1, pythonnet 3.1.0 and
+WebView2 154.0.4258.62 on Windows 11 build 26200, i7-13700K, 63.69 GiB RAM and
+SN850X NVMe. DPR was 1.75, light theme, normal motion, Details hidden and inner
+window 1267×764; Plan viewport 853×359, Inventory 880×321. Power and unrelated
+host workload are unknown. Source, wheel, installed and restored asset manifests
+match the declared populations; independent review reconstructed coverage gaps.
+
+Time not fully covered during each 12-second trajectory, seconds, median [range]:
+
+| Page and rows/s | Baseline | Candidate |
+| --- | --- | --- |
+| Plan 240 | 11.125 [11.117, 11.125] | 1.418 [1.392, 1.438] |
+| Plan 1,000 | 11.783 [11.775, 11.784] | 4.321 [4.248, 4.426] |
+| Inventory 240 | 11.067 [11.067, 11.067] | 1.228 [1.208, 1.247] |
+| Inventory 1,000 | 11.775 [11.775, 11.783] | 4.480 [4.410, 4.533] |
+
+Median candidate reads/discards were respectively 36/0, 114/1, 33/0 and 115/0;
+baseline was 459/458, 486/485, 440/439 and 468/467. All retained one outstanding
+read and at most 256 rows. Candidate median longest gaps were 54.4, 93.9, 45.2 and
+94.1 ms. Compatible replies now supply rows during movement, but edge-on-demand
+loading still leaves substantial uncovered time. Directional placement and a
+roughly 64-row margin are justified as a separately scoped follow-up. SW1's
+native gates subsequently passed on October 10; no prefetch was included.
+
+Burst last-input coverage medians were Plan 69.0→69.2 ms and Inventory 72.9→69.9 ms;
+candidate ranges were 65.1–73.0 and 52.3–78.9 ms. First-input medians remained
+122.9→124.8 and 126.3→123.3 ms, including roughly 54–57 ms scripted input spans.
+This is not evidence of a general burst speedup. Observed frame intervals had
+8.3–8.4 ms medians; candidate maxima 35.8–44.1 ms exceeded baseline 11.1–14.1 ms.
+More window adoption does not establish a blanket smoothness improvement, and
+frame sampling does not prove compositor output or a display refresh rate.
+Per-frame coverage sampling scans up to 256 DOM rows and adds instrumentation
+overhead; both variants use the same sampler.
+
+SW4 remains an ignored disposable bridge-capture prototype. `sw4-controls-01`
+and independent `sw-review-key-controls-01` pass 2,808 prefix and 664 capture
+comparisons, including invalid text, error chains, partial charges, hostile
+enumeration, duplicate/subclass keys and detached aliases. Each budget retains
+at most 256 successful exact-string keys of at most 128 codepoints. A cached
+comma/key/colon charge is combined only when it fully fits; otherwise original
+ordering is replayed. No product bridge or row schema changed.
+
+Prefer `sw4-crossover-01/result.json` over initial sequential-block timings:
+five warmups per variant, then 30 cold-cache captures per variant in 15 AB/15 BA
+alternating pairs for each stored producer window. Capture medians in ms:
+
+| Stored window | Original | Prototype | Median paired saving |
+| --- | --- | --- | --- |
+| Plan offset 0 | 12.324 | 5.525 | 6.767 |
+| Plan offset 60,000 | 12.204 | 5.386 | 6.758 |
+| Inventory offset 0 | 12.953 | 5.483 | 7.447 |
+| Inventory offset 60,000 | 12.810 | 5.512 | 7.322 |
+
+Separate `sw4-measurements-01` profiles at offset 60,000 reduce string-encoder
+calls from 11,230→2,688 for Plan and 11,354→2,171 for Inventory; budget charges
+fall from 45,640→20,485 and 48,238→21,202. Actual retained keys never exceed 52
+or 626 codepoints in these four samples. Canonical byte counts remain identical.
+These are one-process stored-payload capture observations, not installed
+round-trip or scrolling improvements. Production delivery needs ordinary
+response and actual drain-prefix/custody tests and review. The narrow cache
+experiment is promising enough to precede any row-schema migration; that
+migration and a renderer rewrite remain deferred.
+
 ### BC1 bounded counter comparison — 2026-10-07
 
 Evidence: `build/bridge-counter-study-20261007/`, `bc1-baseline-*` and

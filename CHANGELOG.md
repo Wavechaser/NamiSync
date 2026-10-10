@@ -179,6 +179,15 @@ explicit, reviewable and regression-backed.
 
 #### Align desktop review surfaces and recovery (2026-10-05 – 2026-10-10)
 
+- Report last-input burst delay and observed input cadence separately from the
+  scripted input span. Three installed children per page reduce median uncovered
+  time at 240 rows/s from about 11.1 seconds per 12-second run to 1.42 seconds
+  Plan and 1.23 seconds Inventory; larger gaps remain at 1,000 rows/s. Record
+  sampling overhead and frame-interval limits, recommending directional edge
+  prefetch without implementing it. A bounded key-cache prototype reduces stored
+  window capture medians from 12.2–13.0 ms to 5.4–5.5 ms under balanced order;
+  no production bridge or row-schema change is included. Method controls,
+  tools department and independent evidence reviews pass.
 - Adopt compatible Plan and Inventory windows during continuous scrolling,
   coalescing newer demand while preserving owner fences and exact keyboard/
   external intent. Reconcile the current viewport, settle matching failures
