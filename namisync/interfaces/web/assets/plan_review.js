@@ -221,6 +221,22 @@ export function createPlanReviewPanel(callbacks) {
 
   const element = document.createElement("section");
   element.className = "nami-plan-review";
+  const interruptNavigation = () => {
+    if (current !== null) callbacks.onNavigationInterrupt?.(current);
+  };
+  for (const name of ["pointerdown", "wheel", "touchstart", "input", "contextmenu"]) {
+    element.addEventListener(name, interruptNavigation, { capture: true, passive: true });
+  }
+  for (const name of ["pointerdown", "wheel", "touchstart", "input", "contextmenu", "keydown"]) {
+    document.addEventListener(name, (event) => {
+      if (!element.contains(event.target)) interruptNavigation();
+    }, { capture: true, passive: true });
+  }
+  element.addEventListener("keydown", (event) => {
+    if (event.altKey || event.ctrlKey || event.metaKey
+        || !["ArrowUp", "ArrowDown"].includes(event.key)
+        || !event.target?.closest?.("[data-node-id]")) interruptNavigation();
+  }, true);
   const header = document.createElement("div");
   header.className = "nami-card nami-plan-review__plan";
   const paths = document.createElement("div");
@@ -937,6 +953,8 @@ export function createPlanReviewPanel(callbacks) {
     const focusedRow = activeRow?.dataset?.nodeId !== undefined;
     const focusOrigin = focusedRow ? activeRow.dataset.namiFocusOrigin ?? null : null;
     const focusNodeId = review.summary.highlight_focus_node_id;
+    const restoreFocusNodeId = review.keyboardRevealWindow === review.window
+      ? focusNodeId : activeRow?.dataset?.nodeId;
     if (renderedRows?.review === review && renderedRows.window === review.window
     ) {
       if (renderedRows.progressPresentation !== task.progressPresentation) {
@@ -976,7 +994,7 @@ export function createPlanReviewPanel(callbacks) {
           rendered.tabIndex = row.node_id === (focusNodeId ?? review.window.rows[0]?.node_id) ? 0 : -1;
         }
         if (focusedRow) {
-          const focused = renderedRows.rows.find((row) => row.dataset.nodeId === focusNodeId);
+          const focused = renderedRows.rows.find((row) => row.dataset.nodeId === restoreFocusNodeId);
           if (focused !== undefined) {
             focused.focus?.({ preventScroll: review.keyboardRevealWindow !== review.window });
             if (review.keyboardRevealWindow === review.window) {
@@ -1051,7 +1069,8 @@ export function createPlanReviewPanel(callbacks) {
         } else if (event.key === "Escape") {
           event.preventDefault();
           callbacks.onHighlight(review, "clear", null);
-        } else if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+        } else if ((event.key === "ArrowUp" || event.key === "ArrowDown")
+            && !event.altKey && !event.ctrlKey && !event.metaKey) {
           event.preventDefault();
           element.focus?.();
           delete element.dataset.namiFocusOrigin;
@@ -1111,7 +1130,7 @@ export function createPlanReviewPanel(callbacks) {
     fragment.append(bottom);
     body.replaceChildren(fragment);
     if (focusedRow) {
-      const focused = rowElements.find((row) => row.dataset.nodeId === focusNodeId);
+      const focused = rowElements.find((row) => row.dataset.nodeId === restoreFocusNodeId);
       if (focused !== undefined) {
         focused.focus?.({ preventScroll: review.keyboardRevealWindow !== review.window });
         if (review.keyboardRevealWindow === review.window) {

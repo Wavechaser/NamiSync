@@ -225,7 +225,7 @@ const { createPlanReviewPanel } = await import(moduleUrl(source));
 const calls = [];
 const callbacks = Object.fromEntries([
   "onViewChange", "onWindow", "onSelect", "onScopeSelect", "onExecute", "onControl", "onPlanAgain",
-  "onHighlight", "onHighlightedSelect", "onExecutionDetail", "onFollowOverride", "onNavigateCurrent", "onRevealMove",
+  "onHighlight", "onHighlightedSelect", "onExecutionDetail", "onFollowOverride", "onNavigateCurrent", "onRevealMove", "onNavigationInterrupt",
 ].map((name) => [name, (...args) => calls.push([name, ...args])]));
 const panel = createPlanReviewPanel(callbacks);
 const planAgainButton = findAction(panel.element, "plan-again");
@@ -478,6 +478,7 @@ assert.equal(planAgainButton.title, "Plan again");
 const executionRecovery = { state: "fixed-unknown", canCheck: false, checking: false,
   message: "execution-owner-sentinel", check: () => Promise.resolve(null) };
 const recoveryPanel = createPlanReviewPanel(callbacks);
+const permanentPointerListeners = document.listeners.get("pointerdown").length;
 const recoveryFooter = findByClass(recoveryPanel.element, "nami-plan-review__status");
 task.executionAttempt = { state: "uncertain", recovery: executionRecovery };
 review.pending = "outcome";
@@ -687,7 +688,7 @@ document.hidden = false;
 filterTrigger.dispatch("click");
 panel.dispose();
 assert.equal(filterPopup.hidden, true);
-assert.equal(document.listeners.get("pointerdown").length, 0);
+assert.equal(document.listeners.get("pointerdown").length, permanentPointerListeners);
 assert.equal(document.defaultView.listeners.get("blur").length, 0);
 panel.render(task);
 filterTrigger.dispatch("click");
@@ -886,6 +887,15 @@ for (const action of ["pause", "cancel"]) {
 task.drainUnavailable = false;
 
 const viewport = findByClass(panel.element, "nami-plan-review__rows");
+const interruptsBeforeOutsideInput = calls.filter(([name]) => name === "onNavigationInterrupt").length;
+for (const name of ["pointerdown", "keydown"]) {
+  document.dispatch(name, {target: document.createElement("button"), key: "ArrowDown"});
+}
+assert.equal(calls.filter(([name]) => name === "onNavigationInterrupt").length,
+  interruptsBeforeOutsideInput + 2, "outside pointer and control keys retire navigation");
+document.dispatch("pointerdown", {target: viewport});
+assert.equal(calls.filter(([name]) => name === "onNavigationInterrupt").length,
+  interruptsBeforeOutsideInput + 2, "document capture leaves within-panel gesture ownership to the panel");
 const savedFocusNode = review.summary.highlight_focus_node_id;
 review.summary.highlight_focus_node_id = review.window.rows[0].node_id;
 panel.render(task);
@@ -895,6 +905,13 @@ viewport.scrollTop = ROW_HEIGHT * 400;
 review.window = { ...review.window };
 panel.render(task);
 assert.equal(viewport.scrollTop, ROW_HEIGHT * 400, "replacing rows restores focus without revealing its offscreen row");
+const actualFocusNode = document.activeElement.dataset.nodeId;
+review.summary.highlight_focus_node_id = review.window.rows[1].node_id;
+review.window = { ...review.window };
+panel.render(task);
+assert.equal(document.activeElement.dataset.nodeId, actualFocusNode,
+  "fresh reconciliation of a retired highlight cannot reclaim focus from a later pointer or checkbox");
+review.summary.highlight_focus_node_id = review.window.rows[0].node_id;
 review.window = { ...review.window };
 review.keyboardRevealWindow = review.window;
 panel.render(task);

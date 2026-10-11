@@ -179,6 +179,13 @@ explicit, reviewable and regression-backed.
 
 #### Align desktop review surfaces and recovery (2026-10-05 – 2026-10-11)
 
+- Bound held navigation to one read and the latest pending target in Plan and
+  Inventory. Later input retires its visual authority immediately; admitted
+  highlight mutations retain settlement custody without replay. Preserve server
+  Shift-range semantics, discrete gesture ordering and the revisions displayed
+  when highlighted selection was requested. Delayed regression probes,
+  interfaces/tools and installed tree, Inventory and shell checks pass.
+
 - Prefetch Plan and Inventory windows on the travel side, retaining 32 rows
   behind travel and starting within 64 rows of the edge. Preserve early reads,
   reverse direction safely and respect actual short-window endpoints. Installed

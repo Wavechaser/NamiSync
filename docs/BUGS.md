@@ -912,6 +912,17 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Review viewport loading
 
+- MODERATE - FIXED (2026-10-11). Unbounded navigation intent. Plan queued each
+  repeated arrow or pointer replacement behind earlier highlight work, leaving
+  a delayed input tail; Inventory repeats reused the committed index instead of
+  accumulating the desired endpoint. Both now retain one navigation read and
+  one latest target. Other input retires pending intent and late visual feedback;
+  admitted mutations still settle without replay. Discrete gestures preserve
+  order and displayed revisions, and Python retains range/anchor authority.
+  Delayed probes cover repeats, reversal, interruption, stale replies and
+  highlighted-selection conflicts. Interfaces/tools and installed tree,
+  Inventory and shell input gates pass.
+
 - MODERATE - FIXED (2026-10-11). Split request settlement. Plan's renderer kept
   its pending offset after the app discarded a window for navigation or hidden
   geometry, suppressing a same-offset request on return. An exact request-token

@@ -43,6 +43,19 @@ function rollupText(rollup) {
 export function createInventoryReviewPanel(callbacks) {
   const pane = element("section", "nami-inventory-review");
   pane.ariaLabel = "Inventory review";
+  for (const name of ["pointerdown", "wheel", "touchstart", "input", "contextmenu"]) {
+    pane.addEventListener(name, () => tree?.cancelNavigation(), { capture: true, passive: true });
+  }
+  for (const name of ["pointerdown", "wheel", "touchstart", "input", "contextmenu", "keydown"]) {
+    document.addEventListener(name, (event) => {
+      if (!pane.contains(event.target)) tree?.cancelNavigation();
+    }, { capture: true, passive: true });
+  }
+  pane.addEventListener("keydown", (event) => {
+    if (event.altKey || event.ctrlKey || event.metaKey
+        || !["ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)
+        || event.target !== rows) tree?.cancelNavigation();
+  }, true);
   const header = element("div", "nami-card nami-plan-review__plan nami-inventory-review__header");
   const switcher = element("div", "nami-segmented nami-plan-review__view-switcher");
   switcher.setAttribute("role", "radiogroup");

@@ -241,6 +241,7 @@ const panel = createWorkPanel({
   onHighlight: (review, gesture, nodeId) => {
     queuePlanHighlight(review, gesture, nodeId);
   },
+  onNavigationInterrupt: interruptPlanNavigation,
   onHighlightedSelect: (review, selected) => {
     void changePlanSelection(review, null, selected, true);
   },
@@ -376,6 +377,7 @@ function showSettings() {
   if (settingsVisible) return;
   const task = currentTask();
   if (task?.review != null) {
+    interruptPlanNavigation(task.review);
     retireExecutionDetail(task.review);
     retirePlanDetail(task.review);
   }
@@ -513,6 +515,7 @@ function selectTask(taskId) {
   navigationRevision += 1;
   const previous = selectedTaskId === null ? null : tasks.get(selectedTaskId) ?? null;
   if (previous?.review != null) {
+    interruptPlanNavigation(previous.review);
     retireExecutionDetail(previous.review);
     retirePlanDetail(previous.review);
   }
@@ -2024,6 +2027,7 @@ async function revealPlanMoveDestination(review, nodeId) {
 }
 
 async function changePlanView(review, patch, queued = false) {
+  interruptPlanNavigation(review);
   const task = queued ? retainedReviewTask(review) : currentReviewTask(review);
   if (task === null) return;
   if (review.follow !== null && ["searchQuery", "filters", "sortColumn", "sortDirection"]
@@ -2180,12 +2184,20 @@ async function loadPlanWindow(review, offset, overlapsViewport, settled) {
       const action = review.actionRevision;
       const viewRevision = review.summary.view_revision;
       try {
-        const window = await getPlanWindow(
+        const window = await readPlanNavigationWindow(review, () =>
+          review.windowRequestRevision === request && review.actionRevision === action
+          && currentReviewTask(review) === task && navigationRevision === navigation,
           task.taskId,
           viewRevision,
           requestedOffset,
           256,
         );
+        if (window === null) {
+          if (review.windowRequestRevision !== request) continue;
+          settlement = "retired";
+          review.windowRequestOffset = null;
+          return;
+        }
         if (review.windowRequestRevision !== request) continue;
         if (currentReviewTask(review) !== task || task.sessionId !== sessionId
             || review.summary.request_id !== publication || navigationRevision !== navigation) {
@@ -2201,10 +2213,14 @@ async function loadPlanWindow(review, offset, overlapsViewport, settled) {
           review.windowRequestOffset = null;
           return;
         }
+        const receipt = review.highlightReceipt;
+        const summary = window.highlight_revision === review.summary.highlight_revision ? review.summary
+          : receipt?.request_id === publication && receipt.view_revision === viewRevision
+            && receipt.highlight_revision === window.highlight_revision ? receipt : null;
         if (
           window.disposition !== "current"
           || window.view_revision !== viewRevision
-          || window.highlight_revision !== review.summary.highlight_revision
+          || summary === null
         ) {
           review.windowRequestOffset = null;
           return;
@@ -2214,6 +2230,7 @@ async function loadPlanWindow(review, offset, overlapsViewport, settled) {
           continue;
         }
         review.windowRequestOffset = null;
+        review.summary = summary;
         adoptExecutionWindow(review, window);
         review.message = "";
         renderTasks();
@@ -2246,77 +2263,168 @@ async function loadPlanWindow(review, offset, overlapsViewport, settled) {
   }
 }
 
+async function readPlanNavigationWindow(review, current, ...args) {
+  while (review.navigationRead != null) {
+    await review.navigationRead.catch(() => {});
+    if (!current()) return null;
+  }
+  if (!current()) return null;
+  const read = getPlanWindow(...args);
+  review.navigationRead = read;
+  try { return await read; }
+  finally { if (review.navigationRead === read) review.navigationRead = null; }
+}
+
+function interruptPlanNavigation(review) {
+  review.highlightGeneration = (review.highlightGeneration ?? 0) + 1;
+  review.highlightNavigation = null;
+  review.keyboardRevealWindow = null;
+  review.windowRequestRevision += 1;
+  review.windowRequestOffset = null;
+  const settled = review.windowRequestSettled;
+  review.windowRequestSettled = null;
+  settled?.("retired");
+  if (review.highlightPump != null) review.highlightPump.next = null;
+}
+
 function queuePlanHighlight(review, gesture, nodeId) {
-  const queuedViewRevision = review.summary.view_revision;
-  const queuedActionRevision = review.actionRevision;
-  const queuedNavigation = navigationRevision;
-  review.highlightQueue = review.highlightQueue.catch(() => {}).then(async () => {
-    const task = currentReviewTask(review);
-    if (task === null || review.pending !== null || task.executionAttempt !== null
-        || review.summary.view_revision !== queuedViewRevision
-        || review.actionRevision !== queuedActionRevision) return;
+  const moving = gesture.startsWith("move_");
+  const extending = gesture.endsWith("_extend");
+  const previous = review.highlightNavigation;
+  if (moving && previous?.extending === extending && previous.current()) {
+    previous.target = Math.max(0, Math.min(review.window.total - 1,
+      previous.target + (gesture.startsWith("move_down") ? 1 : -1)));
+    previous.version += 1;
+    return review.highlightQueue;
+  }
+  interruptPlanNavigation(review);
+  const generation = review.highlightGeneration;
+  const task = currentReviewTask(review);
+  const viewRevision = review.summary.view_revision;
+  const action = review.actionRevision;
+  const navigation = navigationRevision;
+  const publication = review.summary.request_id;
+  const session = task?.sessionId;
+  const owned = () => currentReviewTask(review) === task && task !== null
+    && task.sessionId === session && !settingsVisible && navigationRevision === navigation
+    && review.summary.request_id === publication && review.summary.view_revision === viewRevision
+    && review.actionRevision === action;
+  const current = () => owned() && review.highlightGeneration === generation;
+  const captured = review.summary;
+  const focus = captured.highlight_focus_visible_index;
+  const down = gesture.startsWith("move_down");
+  const intent = { current, extending, version: 0,
+    target: Math.max(0, Math.min(review.window.total - 1,
+      Number.isSafeInteger(focus) ? focus + (down ? 1 : -1) : down ? 0 : review.window.total - 1)) };
+  if (moving) review.highlightNavigation = intent;
+  const run = async () => {
+    if (!(moving ? current() : owned()) || review.pending !== null || task.executionAttempt !== null) return;
     beginForegroundWindowRead(review);
-    const action = review.actionRevision;
-    const viewRevision = review.summary.view_revision;
+    let summary = captured;
+    let first = true;
     try {
-      const summary = await mutatePlanHighlight(
-        task.taskId, viewRevision, review.summary.highlight_revision, gesture, nodeId,
-        () => {
-          if (retainedReviewTask(review) === task && review.actionRevision === action) {
+      do {
+        const version = moving && first ? 0 : intent.version;
+        const target = intent.target;
+        const latest = () => current() && (!moving || intent.version === version);
+        let command = gesture;
+        let endpoint = nodeId;
+        if (moving && !first) {
+          let row = review.window.rows.find((value) => value.visible_index === target);
+          if (row === undefined) {
+            const lookup = await readPlanNavigationWindow(review, latest,
+              task.taskId, viewRevision, Math.max(0, target - 32), 256);
+            if (!current()) return;
+            if (!latest()) continue;
+            if (lookup === null || lookup.disposition !== "current" || lookup.view_revision !== viewRevision) return;
+            row = lookup.rows.find((value) => value.visible_index === target);
+          }
+          if (row === undefined) return;
+          command = extending ? "extend" : "replace";
+          endpoint = row.node_id;
+        }
+        // Only unconditional replacement/clear may follow a retired mutation's receipt.
+        const receipt = review.highlightReceipt;
+        const revision = !moving && ["replace", "clear"].includes(command)
+          && receipt?.request_id === publication && receipt.view_revision === viewRevision
+          ? receipt.highlight_revision : summary.highlight_revision;
+        summary = await mutatePlanHighlight(task.taskId, viewRevision, revision, command, endpoint, () => {
+          if (latest()) {
             review.refreshAvailable = true;
             review.message = "Highlight is still pending. Select Refresh review to read the current highlight.";
             renderTasks();
           }
-        },
-      );
-      if (retainedReviewTask(review) !== task || review.actionRevision !== action) return;
-      const moving = gesture === "move_up" || gesture === "move_down"
-        || gesture === "move_up_extend" || gesture === "move_down_extend";
-      const focusIndex = summary.highlight_focus_visible_index;
-      const currentEnd = review.window.offset + review.window.rows.length;
-      const targetOutsideWindow = moving
-        && Number.isSafeInteger(focusIndex)
-        && (focusIndex < review.window.offset || focusIndex >= currentEnd);
-      const window = await getPlanWindow(
-        task.taskId,
-        summary.view_revision,
-        targetOutsideWindow ? Math.max(0, focusIndex - 32) : review.window.offset,
-        256,
-      );
-      if (retainedReviewTask(review) !== task || review.actionRevision !== action
-          || window.disposition !== "current"
-          || window.view_revision !== summary.view_revision
-          || window.highlight_revision !== summary.highlight_revision) return;
-      review.summary = summary;
-      review.keyboardRevealWindow = moving && !settingsVisible
-        && navigationRevision === queuedNavigation && currentReviewTask(review) === task ? window : null;
-      adoptExecutionWindow(review, window);
-      review.refreshAvailable = false;
-      const focusedRow = window.rows.find((row) => row.node_id === summary.highlight_focus_node_id);
-      if (focusedRow !== undefined && review.planDetail?.state === "error") {
-        void readPlanDetail(review, focusedRow);
-      }
-      if (focusedRow?.operation_id === review.executionDetail?.operationId
-          && review.executionDetail?.state === "error") {
-        void readExecutionDetail(review, focusedRow);
-      }
-      renderTasks();
+        });
+        // A retired reply retains mutation custody but has no presentation authority.
+        if (retainedReviewTask(review) === task && task.sessionId === session
+            && review.summary.request_id === publication && review.summary.view_revision === viewRevision) {
+          review.highlightReceipt = summary;
+        }
+        first = false;
+        if (!current()) return;
+        if (!latest() && summary.disposition !== "conflict") continue;
+        const focusIndex = summary.highlight_focus_visible_index;
+        const outside = moving && Number.isSafeInteger(focusIndex)
+          && (focusIndex < review.window.offset || focusIndex >= review.window.offset + review.window.rows.length);
+        const window = await readPlanNavigationWindow(review, latest, task.taskId, summary.view_revision,
+          outside ? Math.max(0, focusIndex - 32) : review.window.offset, 256);
+        if (!current()) return;
+        if (!latest()) continue;
+        if (window === null || window.disposition !== "current" || window.view_revision !== summary.view_revision
+            || window.highlight_revision !== summary.highlight_revision) return;
+        review.summary = summary;
+        review.keyboardRevealWindow = moving && summary.disposition !== "conflict" ? window : null;
+        adoptExecutionWindow(review, window);
+        review.refreshAvailable = false;
+        review.message = summary.disposition === "conflict"
+          ? "Highlight changed while navigation finished. Review the current highlight, then try again." : null;
+        const focusedRow = window.rows.find((row) => row.node_id === summary.highlight_focus_node_id);
+        if (focusedRow !== undefined && review.planDetail?.state === "error") void readPlanDetail(review, focusedRow);
+        if (focusedRow?.operation_id === review.executionDetail?.operationId
+            && review.executionDetail?.state === "error") void readExecutionDetail(review, focusedRow);
+        renderTasks();
+        return;
+      } while (current());
     } catch (_error) {
-      if (retainedReviewTask(review) === task && review.actionRevision === action) {
+      if (current()) {
         review.refreshAvailable = true;
         review.message = "Highlight response unavailable. Select Refresh review to read the current highlight.";
         renderTasks();
       }
     } finally {
+      if (review.highlightNavigation === intent) review.highlightNavigation = null;
       endForegroundWindowRead(review);
     }
-  });
+  };
+  if (moving || gesture === "replace") {
+    if (review.highlightPump != null) review.highlightPump.next = run;
+    else {
+      const pump = { next: run };
+      review.highlightPump = pump;
+      review.highlightQueue = review.highlightQueue.catch(() => {}).then(async () => {
+        try {
+          while (pump.next !== null) {
+            const next = pump.next;
+            pump.next = null;
+            await next();
+          }
+        } finally { if (review.highlightPump === pump) review.highlightPump = null; }
+      });
+    }
+  } else {
+    // A later navigation pump must stay behind this individual gesture.
+    review.highlightPump = null;
+    review.highlightQueue = review.highlightQueue.catch(() => {}).then(run);
+  }
   return review.highlightQueue;
 }
 
 async function changePlanSelection(review, row, selected, highlightedScope = false) {
   if (currentReviewTask(review) === null || review.pending !== null) return;
   const clickedViewRevision = review.summary.view_revision;
+  const clickedHighlightRevision = review.summary.highlight_revision;
+  const clickedSelectionRevision = review.summary.selection_revision;
+  interruptPlanNavigation(review);
   await review.highlightQueue.catch(() => {});
   const task = currentReviewTask(review);
   if (
@@ -2346,7 +2454,7 @@ async function changePlanSelection(review, row, selected, highlightedScope = fal
     const summary = highlightedScope
       ? await mutatePlanHighlightedSelection(
         task.taskId, review.summary.view_revision,
-        review.summary.highlight_revision, review.summary.selection_revision, selected,
+        clickedHighlightRevision, clickedSelectionRevision, selected,
         onDelayed,
       )
       : row === null
@@ -2376,7 +2484,8 @@ async function changePlanSelection(review, row, selected, highlightedScope = fal
     review.message = summary.disposition === "applied"
       ? null
       : summary.disposition === "conflict"
-        ? "Selection changed elsewhere. Current selection shown."
+        ? highlightedScope ? "Highlight changed while navigation finished. Review the current highlight, then select again."
+          : "Selection changed elsewhere. Current selection shown."
         : summary.disposition === "frozen" || summary.disposition === "in-flight"
           ? "Selection is already committed to execution."
           : null;

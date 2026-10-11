@@ -176,8 +176,12 @@ eligibility cannot authorize an unavailable parent operation.
 Row highlighting is separate from execution selection. Plain clicks replace the
 highlighted set; Ctrl-click toggles; Shift-click extends from the retained
 anchor; Ctrl+Shift-click adds a range. Arrow keys move focus, Shift+arrows
-extend, and Escape clears. Arrow navigation sends `node_id: null`, which the
-server resolves relative to its retained focus; it is not a deselection gesture.
+extend, and Escape clears. An initial arrow sends `node_id: null`, which the
+server resolves relative to its retained focus. Repeated arrows retain one
+latest desired visible index, clamped on every input; their final endpoint uses
+the existing `replace` or `extend` gesture with a server-supplied node identity.
+An off-window endpoint is resolved through a revisioned window read. This is
+not a deselection gesture, and Python continues to own range membership.
 The browser sends only a compact gesture endpoint with expected view/highlight revisions. Python
 resolves ranges against the full ordered view, including off-window rows and
 collapsed descendants; when a target is outside the retained window, the
@@ -193,6 +197,21 @@ change execution selection without changing highlighting, and a checkbox inside
 a highlighted range applies to that range. Highlight-driven selection also
 carries the execution-selection revision and is rejected as stale before one
 atomic workflow mutation.
+
+Plan and Inventory navigation retain at most one read in flight and one latest
+pending target. Plan scrolling, endpoint lookup and highlight refresh share
+read admission. Pointer replacement likewise supersedes unsubmitted navigation;
+toggle, add-range and other scope-dependent gestures retain individual mutation
+admission with captured revisions. Later pointer, wheel, touch, non-navigation
+keyboard, search, view, task or lifecycle input retires pending navigation and
+its authority to paint, focus or report feedback. Already submitted highlight
+mutations still settle and are never replayed. A subsequent fresh window may
+reconcile their matching authoritative receipt without moving keyboard focus.
+Highlighted selection preserves the revisions displayed at the gesture; a
+conflict asks the user to review the current highlight and select again instead
+of silently applying selection to a changed range. Passive row replacement
+restores the actually focused row; only an accepted keyboard navigation result
+uses the server highlight as a new focus target.
 
 Scoped highlighted selection retains a finite under-10-second cost gate on the
 supported Windows host, with exact matched count and post-mutation scope and

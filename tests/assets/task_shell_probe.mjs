@@ -212,6 +212,10 @@ globalThis.taskHarness = {
     calls.push(["select-plan", ...args.slice(0, -1)]);
     return deferred(planSelections, args.at(-1));
   },
+  mutatePlanHighlightedSelection(...args) {
+    calls.push(["select-highlighted", ...args.slice(0, -1)]);
+    return deferred(planSelections, args.at(-1));
+  },
   startExecution(...args) {
     assert.equal(typeof args.at(-1), "function", "execution admission exposes delay feedback");
     calls.push(["execute-plan", ...args.slice(0, -1)]);
@@ -442,6 +446,7 @@ const bridgeUrl = moduleUrl(`
   export const acknowledgeInventory = () => Promise.reject(new Error("unused inventory action"));
   export const restoreInventory = () => Promise.reject(new Error("unused inventory action"));
   export const mutatePlanSelection = (...args) => globalThis.taskHarness.mutatePlanSelection(...args);
+  export const mutatePlanHighlightedSelection = (...args) => globalThis.taskHarness.mutatePlanHighlightedSelection(...args);
   export const openPlanView = (...args) => globalThis.taskHarness.openPlanView(...args);
   export const readSetup = (...args) => globalThis.taskHarness.readSetup(...args);
   export const admitLocation = () => Promise.reject(new BridgeTransportError());
@@ -473,7 +478,7 @@ const themeUrl = moduleUrl(`
 let appSource = await readFile(process.argv[2], "utf8");
 appSource = appSource.replace(
   /import \{[\s\S]*?\} from "\.\/bridge\.js";/,
-  `import { acknowledgeShellReady, acknowledgeInventory, admitLocation, BridgeTransportError, closeTask, controlExecution, createTask, echoReadiness, getExecutionDetail, getPlanDetail, getInventoryDetail, getInventoryWindow, openInventoryView, refreshInventory, restoreInventory, updateInventoryView, getPlanAnchor, getPlanOperationAnchor, getPlanWindow, revealPlanMove, listTasks, markBridgeOperational, mutatePlanHighlight, mutatePlanSelection, openPlanView, OutcomeUnavailableError, pickFolder, planAgain, prepareSetup, readSetup, StartPlanUncertainError, startExecution, startInventory, startPlan, startTaskDrain, TaskCloseUncertainError, TaskCreateUncertainError, TerminalPresentationError, TerminalSessionReleaseError, updatePlanView, whenBridgeApiReady } from "${bridgeUrl}";`,
+  `import { acknowledgeShellReady, acknowledgeInventory, admitLocation, BridgeTransportError, closeTask, controlExecution, createTask, echoReadiness, getExecutionDetail, getPlanDetail, getInventoryDetail, getInventoryWindow, openInventoryView, refreshInventory, restoreInventory, updateInventoryView, getPlanAnchor, getPlanOperationAnchor, getPlanWindow, revealPlanMove, listTasks, markBridgeOperational, mutatePlanHighlight, mutatePlanSelection, mutatePlanHighlightedSelection, openPlanView, OutcomeUnavailableError, pickFolder, planAgain, prepareSetup, readSetup, StartPlanUncertainError, startExecution, startInventory, startPlan, startTaskDrain, TaskCloseUncertainError, TaskCreateUncertainError, TerminalPresentationError, TerminalSessionReleaseError, updatePlanView, whenBridgeApiReady } from "${bridgeUrl}";`,
 );
 appSource = appSource
   .replace("./readiness.js", readinessUrl)
@@ -1012,7 +1017,7 @@ globalThis.planReviewHarness.onRender = (task) => {
   }
 };
 planWindows[3].resolve(keyboardWindow);
-await until(() => firstReview.pending === null);
+await until(() => firstReview.window === keyboardWindow);
 assert.equal(firstKeyboardRender, true,
   "the first adopted-window render, including planned-detail loading, owns keyboard reveal");
 delete globalThis.planReviewHarness.onRender;
@@ -1045,7 +1050,7 @@ assert.equal(
 const pointerHighlightWindow = planWindow(retainedPointerHighlight, pointerWindowOffset);
 pointerHighlightWindow.rows[0].node_id = retainedPointerHighlight.highlight_focus_node_id;
 planWindows[4].resolve(pointerHighlightWindow);
-await until(() => firstReview.pending === null);
+await until(() => firstReview.window === pointerHighlightWindow);
 assert.equal(firstReview.window.offset, pointerWindowOffset);
 assert.equal(planDetails.length, plannedReadsBeforeHighlight + 2,
   "a new highlight owns a distinct planned-detail read");
@@ -2706,4 +2711,183 @@ for (const [gesture, target, expectedOffset] of [
   assert.equal(placementReview.foregroundWindowReaders, 0, gesture);
 }
 
+// Delayed navigation keeps one admitted operation and only the latest endpoint.
+const navigationCallbacks = globalThis.planReviewHarness.callbacks;
+function navigationSummary(index, extra = {}) {
+  return planSummary({ ...placementReview.summary, disposition: "applied",
+    highlight_revision: placementReview.summary.highlight_revision + 1,
+    highlight_anchor_node_id: placementNode(index), highlight_focus_node_id: placementNode(index),
+    highlight_focus_visible_index: index, ...extra });
+}
+function resetNavigation(index = 100) {
+  placementReview.summary = navigationSummary(index);
+  placementReview.window = placementWindow(placementReview.summary, 96);
+  placementReview.highlightReceipt = null;
+}
+for (const extending of [false, true]) {
+  resetNavigation();
+  const base = planHighlights.length;
+  const reads = planWindows.length;
+  deferHighlight = true;
+  const down = extending ? "move_down_extend" : "move_down";
+  const up = extending ? "move_up_extend" : "move_up";
+  navigationCallbacks.onHighlight(placementReview, down, null);
+  await until(() => planHighlights.length === base + 1);
+  for (let i = 0; i < 20; i += 1) navigationCallbacks.onHighlight(placementReview, down, null);
+  for (let i = 0; i < 5; i += 1) navigationCallbacks.onHighlight(placementReview, up, null);
+  await turns();
+  assert.equal(planHighlights.length, base + 1, "held repeats do not queue mutations");
+  assert.equal(planWindows.length, reads, "a held mutation does not request stale rows");
+  planHighlights[base].resolve(navigationSummary(101));
+  await until(() => planHighlights.length === base + 2);
+  assert.deepEqual(calls.at(-1).slice(4), [extending ? "extend" : "replace", placementNode(116)],
+    "relative repeats and reversal resolve to one latest absolute endpoint");
+  const latest = navigationSummary(116);
+  planHighlights[base + 1].resolve(latest);
+  await until(() => planWindows.length === reads + 1);
+  planWindows.at(-1).resolve(placementWindow(latest, 96));
+  await placementReview.highlightQueue;
+  assert.equal(placementReview.summary.highlight_focus_visible_index, 116);
+  assert.equal(planHighlights.length, base + 2, "release leaves at most one latest target");
+}
+
+// Pointer replacements share the same bounded pending slot.
+resetNavigation();
+let heldBase = planHighlights.length;
+navigationCallbacks.onHighlight(placementReview, "replace", placementNode(101));
+await until(() => planHighlights.length === heldBase + 1);
+for (let index = 102; index <= 130; index += 1) {
+  navigationCallbacks.onNavigationInterrupt(placementReview);
+  navigationCallbacks.onHighlight(placementReview, "replace", placementNode(index));
+}
+planHighlights[heldBase].resolve(navigationSummary(101));
+await until(() => planHighlights.length === heldBase + 2);
+assert.equal(calls.at(-1).at(-1), placementNode(130));
+let latestNavigation = navigationSummary(130);
+let readBase = planWindows.length;
+planHighlights[heldBase + 1].resolve(latestNavigation);
+await until(() => planWindows.length === readBase + 1);
+planWindows.at(-1).resolve(placementWindow(latestNavigation, 96));
+await placementReview.highlightQueue;
+assert.equal(planHighlights.length, heldBase + 2);
+
+// Interruption cannot undo an admitted mutation, but its reply never paints.
+resetNavigation();
+heldBase = planHighlights.length;
+readBase = planWindows.length;
+const displayedNavigation = placementReview.summary;
+navigationCallbacks.onHighlight(placementReview, "move_down", null);
+await until(() => planHighlights.length === heldBase + 1);
+navigationCallbacks.onNavigationInterrupt(placementReview);
+latestNavigation = navigationSummary(101);
+planHighlights[heldBase].resolve(latestNavigation);
+await placementReview.highlightQueue;
+assert.equal(placementReview.summary, displayedNavigation);
+assert.equal(planWindows.length, readBase);
+navigationCallbacks.onWindow(placementReview, 128, () => true);
+await until(() => planWindows.length === readBase + 1);
+const freshNavigationWindow = placementWindow(latestNavigation, 128);
+planWindows.at(-1).resolve(freshNavigationWindow);
+await until(() => placementReview.window === freshNavigationWindow);
+assert.equal(placementReview.summary, latestNavigation, "a fresh scroll reconciles an admitted highlight receipt");
+assert.equal(placementReview.keyboardRevealWindow, null);
+
+// Highlight-dependent selection keeps exactly the revision displayed at click.
+// Endpoint lookup and refresh share scroll's read lane, and newer input retires both.
+resetNavigation();
+heldBase = planHighlights.length;
+readBase = planWindows.length;
+navigationCallbacks.onWindow(placementReview, 400, () => true);
+await until(() => planWindows.length === readBase + 1);
+navigationCallbacks.onHighlight(placementReview, "move_down", null);
+await until(() => planHighlights.length === heldBase + 1);
+for (let index = 0; index < 400; index += 1) navigationCallbacks.onHighlight(placementReview, "move_down", null);
+planHighlights[heldBase].resolve(navigationSummary(101));
+await turns();
+assert.equal(planWindows.length, readBase + 1, "endpoint lookup waits behind the admitted scroll read");
+planWindows[readBase].resolve(placementWindow(placementReview.summary, 400));
+await until(() => planWindows.length === readBase + 2);
+navigationCallbacks.onNavigationInterrupt(placementReview);
+const lookupDisplay = placementReview.window;
+planWindows.at(-1).resolve(placementWindow(placementReview.highlightReceipt, 469));
+await placementReview.highlightQueue;
+assert.equal(planHighlights.length, heldBase + 1, "retired endpoint lookup never submits its mutation");
+assert.equal(placementReview.window, lookupDisplay);
+
+resetNavigation();
+heldBase = planHighlights.length;
+readBase = planWindows.length;
+navigationCallbacks.onHighlight(placementReview, "move_down", null);
+await until(() => planHighlights.length === heldBase + 1);
+latestNavigation = navigationSummary(101);
+planHighlights[heldBase].resolve(latestNavigation);
+await until(() => planWindows.length === readBase + 1);
+navigationCallbacks.onNavigationInterrupt(placementReview);
+placementReview.message = "New input owns this message";
+const beforeRetiredRefresh = placementReview.window;
+planWindows.at(-1).reject(new Error("retired refresh failed"));
+await placementReview.highlightQueue;
+assert.equal(placementReview.window, beforeRetiredRefresh);
+assert.equal(placementReview.message, "New input owns this message");
+
+resetNavigation();
+heldBase = planHighlights.length;
+const clickedHighlight = placementReview.summary.highlight_revision;
+const selectionBase = planSelections.length;
+navigationCallbacks.onHighlight(placementReview, "move_down_extend", null);
+await until(() => planHighlights.length === heldBase + 1);
+navigationCallbacks.onHighlightedSelect(placementReview, false);
+latestNavigation = navigationSummary(101);
+planHighlights[heldBase].resolve(latestNavigation);
+await until(() => planSelections.length === selectionBase + 1);
+assert.equal(calls.at(-1)[3], clickedHighlight, "selection cannot silently acquire the retired mutation's scope");
+const conflict = { ...latestNavigation, disposition: "conflict" };
+readBase = planWindows.length;
+planSelections.at(-1).resolve(conflict);
+await until(() => planWindows.length === readBase + 1);
+planWindows.at(-1).resolve(placementWindow(conflict, 96));
+await until(() => placementReview.pending === null);
+assert.match(placementReview.message, /Review the current highlight, then select again/);
+assert.equal(planSelections.length, selectionBase + 1, "conflict never replays selection");
+
+// Individually admitted gestures retain order between navigation pumps.
+resetNavigation();
+heldBase = planHighlights.length;
+const beforeToggle = placementReview.summary;
+navigationCallbacks.onHighlight(placementReview, "replace", placementNode(100));
+await until(() => planHighlights.length === heldBase + 1);
+navigationCallbacks.onHighlight(placementReview, "toggle", placementNode(102));
+navigationCallbacks.onHighlight(placementReview, "replace", placementNode(130));
+planHighlights[heldBase].resolve({ ...beforeToggle, disposition: "noop" });
+await until(() => planHighlights.length === heldBase + 2);
+assert.deepEqual(calls.at(-1).slice(3), [beforeToggle.highlight_revision, "toggle", placementNode(102)],
+  "a later pointer target cannot overtake the individually queued toggle");
+const afterToggle = navigationSummary(102, { highlight_anchor_node_id: placementNode(100), highlighted_count: 2 });
+planHighlights[heldBase + 1].resolve(afterToggle);
+await until(() => planHighlights.length === heldBase + 3);
+assert.deepEqual(calls.at(-1).slice(3), [afterToggle.highlight_revision, "replace", placementNode(130)]);
+latestNavigation = navigationSummary(130, { highlight_revision: afterToggle.highlight_revision + 1 });
+readBase = planWindows.length;
+planHighlights[heldBase + 2].resolve(latestNavigation);
+await until(() => planWindows.length === readBase + 1);
+planWindows.at(-1).resolve(placementWindow(latestNavigation, 96));
+await placementReview.highlightQueue;
+assert.equal(placementReview.summary, latestNavigation);
+
+// A waiting old viewport request may not rebase itself onto a newer action.
+resetNavigation();
+heldBase = planHighlights.length;
+readBase = planWindows.length;
+navigationCallbacks.onHighlight(placementReview, "move_down", null);
+await until(() => planHighlights.length === heldBase + 1);
+latestNavigation = navigationSummary(101);
+planHighlights[heldBase].resolve(latestNavigation);
+await until(() => planWindows.length === readBase + 1);
+navigationCallbacks.onWindow(placementReview, 400, () => true);
+placementReview.actionRevision += 1;
+planWindows[readBase].resolve(placementWindow(latestNavigation, 96));
+await placementReview.highlightQueue;
+await until(() => !placementReview.windowRequestRunning);
+assert.equal(planWindows.length, readBase + 1, "an old queued read never adopts a newer action's authority");
+deferHighlight = false;
 process.stdout.write("ok");

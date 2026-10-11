@@ -124,6 +124,7 @@ const pane = createInventoryReviewPanel({
   onCheckOutcome: (task) => checks.push(task),
 });
 const review = { ...fixture.views.default, pending: null, message: null, detail: null, queuedSearchQuery: null, scrollTop: 0 };
+const permanentPointerListeners = documentListeners.get("pointerdown").length;
 const task = { taskId: "inventory", taskKind: "inventory", sessionState: "completed", inventoryReview: review,
   requestId: fixture.views.default.summary.request_id,
   inventoryLoading: false, closePending: false, inventoryError: null, sessionReleased: true,
@@ -268,7 +269,7 @@ assert.equal(filterTrigger.children[2].textContent, "0");
 assert.ok(!rowElements().some((value) => text(value).includes("missing.txt")), "All preserves default acknowledged hiding");
 pane.dispose();
 assert.equal(filterPopup.hidden, true);
-assert.equal(documentListeners.get("pointerdown").length, 0);
+assert.equal(documentListeners.get("pointerdown").length, permanentPointerListeners);
 assert.equal(viewListeners.get("blur").length, 0);
 pane.render(task);
 for (const column of ["filename", "size", "mtime"]) {
@@ -593,7 +594,48 @@ while (frames.length) frames.shift()();
 
 // Selecting an already-active loaded row cancels work even without an active
 // identity change. Disposal also retires a queued callback before settlement.
-for (const cancel of [() => firstLiveRow().click(), () => app.panel.renderSettings()]) {
+for (const fail of [false, true]) {
+  viewportReply = delayedViewport();
+  const interrupted = viewportReply;
+  const beforeOutsideFocus = treeRoot.getAttribute("aria-activedescendant");
+  const nextOutsideIndex = Number(beforeOutsideFocus.match(/row-(\d+)$/)[1]) + 1;
+  treeRoot.dispatch("keydown", {key: "End"});
+  for (const callback of documentListeners.get(fail ? "keydown" : "pointerdown") ?? []) {
+    callback({ target: document.createElement("button"), key: "ArrowDown" });
+  }
+  treeRoot.dispatch("keydown", {key: "ArrowDown"});
+  assert.equal(treeRoot.getAttribute("aria-activedescendant"), beforeOutsideFocus.replace(/row-\d+$/, `row-${nextOutsideIndex}`),
+    "outside input clears the pending endpoint before keyboard reentry");
+  if (fail) interrupted.resolve(Promise.reject(new Error("retired outside-input failure")));
+  else interrupted.resolve(fixture.tail);
+  await settle();
+  assert.equal(liveReview.window, initialWindow);
+  Object.assign(liveReview, fixture.views.maximum, { scrollTop: 0 });
+  app.panel.render(liveTask);
+}
+
+viewportReply = delayedViewport();
+const heldNavigation = viewportReply;
+const heldNavigationCalls = viewportCalls.length;
+treeRoot.dispatch("keydown", {key: "End"});
+for (let index = 0; index < 25; index += 1) treeRoot.dispatch("keydown", {key: "ArrowDown"});
+for (let index = 0; index < 5; index += 1) treeRoot.dispatch("keydown", {key: "ArrowUp"});
+assert.equal(viewportCalls.length, heldNavigationCalls + 1, "held keys share one admitted read");
+viewportReply = delayedViewport();
+heldNavigation.resolve(fixture.tail); await settle();
+assert.equal(viewportCalls.length, heldNavigationCalls + 2, "only the latest pending target survives");
+viewportReply.resolve(fixture.tail); await settle();
+assert.equal(treeRoot.getAttribute("aria-activedescendant"),
+  firstLiveRow().id.replace(/row-\d+$/, `row-${fixture.tail.total - 6}`),
+  "edge repeats clamp each event before reversing five rows");
+Object.assign(liveReview, fixture.views.maximum, { scrollTop: 0 });
+app.panel.render(liveTask);
+while (frames.length) frames.shift()();
+
+for (const cancel of [() => firstLiveRow().click(),
+  ...["ctrlKey", "altKey", "metaKey"].map((modifier) =>
+    () => treeRoot.dispatch("keydown", {key: "ArrowDown", [modifier]: true})),
+  () => app.panel.renderSettings()]) {
   viewportReply = delayedViewport();
   const held = viewportReply;
   const callsBefore = viewportCalls.length;

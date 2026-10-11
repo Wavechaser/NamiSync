@@ -62,8 +62,43 @@ tree `sn2-native-final-01` and Inventory/shell `sn2-native-retry-01` pass. Revie
 corrected the full-page endpoint assumption and verified the actual short-tail
 case. Twelve matched installed children and independently reconstructed frame
 gaps support delivery; PERFORMANCE owns results and limitations. Failed native
-admission and initial keyboard-setup receipts remain retained. SN3 is next and
-must revalidate its read-admission and interruption seams against integrated SN2.
+admission and initial keyboard-setup receipts remain retained. SN3 follows and
+revalidates its read-admission and interruption seams against integrated SN2.
+
+SN2 is integrated as `fac8ed0`. SN3 starts there: `app.js` owns Plan navigation
+admission/custody/publication, while `tree.js` and `inventory_review.js` own the
+Inventory desired index and request generation. `plan_review.js` supplies input
+interruption at the panel boundary. Coalesce repeat navigation to an absolute
+desired visible index and ordinary pointer replacement to its latest target,
+sharing Plan read admission with scrolling.
+Existing revisioned windows resolve off-window node IDs; existing highlight
+commands retain server range/anchor policy. Retiring local intent cannot undo an
+admitted mutation or authorize its replay. Scope-dependent pointer and checkbox
+effects keep the revisions the user saw; a conflict must have no selection effect.
+Noncoalescible toggle/add-range/selection commands retain individual custody.
+
+The finite consumer population is the existing task-shell, Plan, tree and
+Inventory browser probes/runners, existing installed shell/Inventory/tree
+witnesses, and existing Python Plan highlight/bridge selection tests. Inspect
+`plan_review.py`, `drain.py`, `commands.py` for preserved contract meaning; no
+Python behavior or command/schema addition is currently needed. Migrate existing
+loading instrumentation anchors/method fixtures only if changed signatures or
+read ordering requires it. PRESENTATION/DESKTOP_UI own behavior and BRIDGE needs
+an update only if its description of existing gesture use changes. Verify held
+repeat endpoint/release tail/reversal/Shift anchor, pointer/scroll/search/view/task
+interruption, stale success/error, admitted mutation custody and no replay in
+delayed-response probes, then interfaces plus any changed tools consumers and
+installed keyboard/pointer witnesses. Fresh review and one fix commit close SN3.
+
+SN3 is complete: `sn3-neighborhood-final-01` passes 2,385 interfaces/tools
+tests (3 existing privilege skips); `sn3-native-final-01` passes installed tree,
+and `sn3-native-retry-02` passes Inventory/shell (2 in 46.33s) with user
+foreground coordination and unchanged product/test inputs. Independent source
+and evidence review closes the gate. Earlier incomplete native attempts and
+the baseline negative control remain retained; no product correction was needed
+for the successful retry. Rebuild the reviewed outcome from recovery `eba28a6`
+on integrated SN2 `fac8ed0`, without merging the WIP. No production timing claim
+is added for SN3; SN2's measured revision remains explicit in PERFORMANCE.
 
 ## Continuous-scroll adoption and follow-up measurements — 2026-10-09–10
 

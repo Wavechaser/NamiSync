@@ -57,6 +57,9 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H) {
   root.addEventListener("keydown", onKeyDown);
   root.addEventListener("scroll", onScroll, {passive: true});
   root.addEventListener("focus", onFocus);
+  root.addEventListener("pointerdown", invalidateInternalRequest);
+  root.addEventListener("wheel", invalidateInternalRequest, { passive: true });
+  root.addEventListener("touchstart", invalidateInternalRequest, { passive: true });
   const resizeObserver = new document.defaultView.ResizeObserver(() => {
     scheduleViewportCheck();
   });
@@ -491,6 +494,8 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H) {
   }
 
   function onKeyDown(event) {
+    if (event.altKey || event.ctrlKey || event.metaKey
+        || !["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) invalidateInternalRequest();
     if (
       event.defaultPrevented || event.altKey || event.ctrlKey ||
       event.metaKey
@@ -518,11 +523,11 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H) {
     switch (event.key) {
       case "ArrowDown":
         event.preventDefault();
-        navigateTo(Math.min(activeVisibleIndex + 1, currentTotal - 1));
+        navigateTo(Math.min((pendingRequest?.kind === "keyboard" ? pendingRequest.index : activeVisibleIndex) + 1, currentTotal - 1));
         break;
       case "ArrowUp":
         event.preventDefault();
-        navigateTo(Math.max(activeVisibleIndex - 1, 0));
+        navigateTo(Math.max((pendingRequest?.kind === "keyboard" ? pendingRequest.index : activeVisibleIndex) - 1, 0));
         break;
       case "Home":
         event.preventDefault();
@@ -583,9 +588,12 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H) {
     root.removeEventListener("keydown", onKeyDown);
     root.removeEventListener("scroll", onScroll);
     root.removeEventListener("focus", onFocus);
+    root.removeEventListener("pointerdown", invalidateInternalRequest);
+    root.removeEventListener("wheel", invalidateInternalRequest);
+    root.removeEventListener("touchstart", invalidateInternalRequest);
   }
 
-  return Object.freeze({beginWindowRequest, commitWindow, finishWindowRequest, dispose});
+  return Object.freeze({beginWindowRequest, commitWindow, finishWindowRequest, cancelNavigation: invalidateInternalRequest, dispose});
 }
 
 function optionalCallback(callbacks, name) {
