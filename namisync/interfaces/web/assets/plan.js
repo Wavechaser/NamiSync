@@ -29,6 +29,7 @@ const INTENT_KEYS = Object.freeze(new Set([
 const ROW_LIFECYCLE_KEYS = Object.freeze(new Set([
   "executing",
   "completed",
+  "skipped",
   "partial",
   "degraded",
   "incomplete",

@@ -67,7 +67,9 @@ const executionLabel = (value) => Object.prototype.hasOwnProperty.call(EXECUTION
 
 function operationLifecycle(operation) {
   if (operation === null) return null;
-  if (operation.result === "succeeded" || operation.result === "skipped") return "completed";
+  if (operation.result === "succeeded"
+    || (operation.result === "skipped" && operation.reason === "noop")) return "completed";
+  if (operation.result === "skipped") return "skipped";
   if (operation.result === "canceled") return "canceled";
   if (operation.result === "deferred") return "incomplete";
   if (operation.result === "failed" && operation.reason === "disk-capacity") return "capacity";
@@ -80,6 +82,7 @@ export function projectExecutionRow(execution) {
   const operation = execution.operation;
   const automatic = execution.automatic_verification;
   const evidence = execution.evidence;
+  const lifecycle = operationLifecycle(operation);
   const notes = [];
   if (operation !== null) {
     notes.push(`Operation: ${executionLabel(operation.result)}${operation.reason === null ? "" : ` (${executionLabel(operation.reason)})`}`);
@@ -95,8 +98,8 @@ export function projectExecutionRow(execution) {
   }
   if (evidence !== null) notes.push(`Stored evidence: ${executionLabel(evidence.state)}`);
   return {
-    lifecycle: operationLifecycle(operation),
-    intent: operation === null ? null : executionLabel(operation.result),
+    lifecycle,
+    intent: operation === null ? null : lifecycle === "completed" ? "Completed" : executionLabel(operation.result),
     checksum: evidence?.content?.digest?.slice(0, 8) ?? "",
     notes,
   };

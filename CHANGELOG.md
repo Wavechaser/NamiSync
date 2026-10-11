@@ -179,6 +179,11 @@ explicit, reviewable and regression-backed.
 
 #### Align desktop review surfaces and recovery (2026-10-05 – 2026-10-11)
 
+- Distinguish completed no-ops from deselected skips in execution rows: actual
+  no-ops display green Completed, deselected operations neutral Skipped. Keep
+  raw operation notes and backend results unchanged. Red/green renderer probes,
+  interfaces/tools and installed execution/shell/gallery checks pass.
+
 - Align move-badge text with filenames, use fill-only hover/press feedback,
   separate inline rename notes and match Inventory's disclosure chevrons to
   Plan. Installed gallery checks cover light, dark, forced colors and reduced

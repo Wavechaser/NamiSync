@@ -885,6 +885,17 @@ defect, and move implementation-level test choreography out of the log.
 
 ## INTERFACES
 
+### Execution row presentation
+
+- MINOR - FIXED (2026-10-11). Conflated outcome presentation. Execution rows
+  labeled actual no-ops Skipped while giving both no-ops and deselected skips
+  green completion styling. Cause: color used the broad skipped result and
+  text ignored its already distinct reason. Only skipped with reason noop now
+  displays green Completed; other skipped results display neutral Skipped.
+  Original result/reason notes and verification facts remain unchanged. Direct
+  renderer regressions cover deselected no-ops and other terminal states;
+  installed gallery confirms labels and colors, with execution/shell checks.
+
 ### Row context menus
 
 - MINOR - FIXED (2026-10-06). Incomplete gesture cancellation. Owned row

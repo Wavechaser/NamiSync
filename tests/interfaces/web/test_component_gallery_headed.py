@@ -290,6 +290,8 @@ _PLAN_ROW_CASE_KEYS = {
     "copy",
     "copying",
     "completed",
+    "completed_noop",
+    "skipped",
     "capacity",
     "update",
     "move",
@@ -1394,6 +1396,8 @@ def test_component_gallery_report_parser_is_exact_and_nested(
         "update",
         "copying",
         "completed",
+        "completed_noop",
+        "skipped",
         "capacity",
         "move",
         "move_update",
@@ -1409,6 +1413,8 @@ def test_component_gallery_report_parser_is_exact_and_nested(
         "plain": ("", "", ""),
         "copying": ("lifecycle", "executing", "progress"),
         "completed": ("lifecycle", "completed", "text"),
+        "completed_noop": ("lifecycle", "completed", "text"),
+        "skipped": ("lifecycle", "skipped", "text"),
         "capacity": ("lifecycle", "capacity", "fill"),
         **{
             key: ("intent", key, form)
@@ -1442,7 +1448,7 @@ def test_component_gallery_report_parser_is_exact_and_nested(
                 "expanded": "true" if case == "mkdir" else None,
                 "name": f"{case}.example",
                 "size": "1 KB",
-                "primary": case,
+                "primary": {"completed_noop": "Completed", "skipped": "Skipped"}.get(case, case),
                 "primary_tone": tone,
                 "primary_key": intent_key,
                 "primary_form": form,
@@ -3583,6 +3589,8 @@ def _assert_plan_list_evidence(
         "update",
         "copying",
         "completed",
+        "completed_noop",
+        "skipped",
         "capacity",
         "move",
         "move_update",
@@ -3623,6 +3631,8 @@ def _assert_plan_list_evidence(
         "plain": ("", "", ""),
         "copying": ("lifecycle", "executing", "progress"),
         "completed": ("lifecycle", "completed", "text"),
+        "completed_noop": ("lifecycle", "completed", "text"),
+        "skipped": ("lifecycle", "skipped", "text"),
         "capacity": ("lifecycle", "capacity", "fill"),
         **{
             key: ("intent", key, form)
@@ -3645,6 +3655,9 @@ def _assert_plan_list_evidence(
     assert by_case["error"]["checkbox_disabled"] is True
     assert by_case["unsupported"]["checkbox_disabled"] is True
     assert by_case["blocked"]["checkbox_disabled"] is True
+    assert by_case["completed_noop"]["primary"] == "Completed"
+    assert by_case["skipped"]["primary"] == "Skipped"
+    assert by_case["skipped"]["primary_foreground"] == by_case["noop"]["primary_foreground"]
 
     for row in rows:
         assert row["secondary"] == "—" or len(row["secondary"]) == 8
@@ -3669,7 +3682,7 @@ def _assert_plan_list_evidence(
             )
             continue
         hue, form = (
-            _LIFECYCLE_CASES[row["primary_key"]]
+            ("neutral", "text") if row["primary_key"] == "skipped" else _LIFECYCLE_CASES[row["primary_key"]]
             if row["primary_tone"] == "lifecycle"
             else _INTENT_CASES[row["primary_key"]]
         )

@@ -869,6 +869,7 @@ def test_plan_row_renderer_is_active_and_consumes_only_projected_views(
     assert _javascript_frozen_set(plan, "ROW_LIFECYCLE_KEYS") == (
         "executing",
         "completed",
+        "skipped",
         "partial",
         "degraded",
         "incomplete",

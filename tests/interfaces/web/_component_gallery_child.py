@@ -134,6 +134,8 @@ _PLAN_ROW_CASE_KEYS = frozenset(
         "copy",
         "copying",
         "completed",
+        "completed_noop",
+        "skipped",
         "capacity",
         "update",
         "move",
@@ -155,6 +157,8 @@ _PLAN_ROW_PRIMARY = {
     "plain": ("", "", ""),
     "copying": ("lifecycle", "executing", "progress"),
     "completed": ("lifecycle", "completed", "text"),
+    "completed_noop": ("lifecycle", "completed", "text"),
+    "skipped": ("lifecycle", "skipped", "text"),
     "capacity": ("lifecycle", "capacity", "fill"),
     **{
         key: ("intent", key, form)
@@ -2426,10 +2430,12 @@ def _valid_file_list_evidence(
             or (
                 primary_tone == "lifecycle"
                 and primary_key not in _LIFECYCLE_CASES
+                and primary_key != "skipped"
             )
             or (
                 secondary_tone == "lifecycle"
                 and secondary_key not in _LIFECYCLE_CASES
+                and secondary_key != "skipped"
             )
             or (
                 primary_tone == "integrity"

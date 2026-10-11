@@ -53,6 +53,18 @@ gallery gates across light, dark, forced colors and reduced motion (78.33s).
 The changed gallery producer/checker population was rerun; unaffected neighborhood
 evidence remains applicable. Fresh independent review covers the final receipts.
 
+RF3 is complete. The execution row maps only `skipped` plus reason `noop` to
+green Completed; other skipped results use neutral Skipped. Raw notes, planned
+No change, other terminal outcomes and independent verification facts remain.
+`rf3-red-matrix-01` reproduces the label error; `rf3-focused-matrix-01` passes
+28 renderer/gallery checks. `rf3-neighborhood-01` passes 2,385 interfaces/tools
+checks (three existing privilege skips); `rf3-native-01` passes six installed
+execution, shell and gallery cases in 111.82s. The gallery confirms both labels
+and green/neutral styling across themes. Fresh independent review verifies the
+final source, receipts and installed package identity. RF1 is `23e5810`, RF2 is
+`7136764`; RF3 is the atomic commit containing this record. No larger loading
+or axis-switching implementation was included.
+
 RI1 source investigation at `350af26` confirms routing waits for review/loading
 state rather than the submitted attempt, and the empty renderers hide the table.
 Proposal for discussion: show the existing review shell immediately with frozen

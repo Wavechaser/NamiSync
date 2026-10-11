@@ -1,41 +1,50 @@
-# Latest session — review follow-ups in progress
+# Latest session — review follow-ups complete
 
-2026-10-11. User approved RF1, RF2 and RF3 in M1_PLAN based on 350af26.
-RI1 initial loading and RI2 axis-lock remain investigation-only. Further scroll
-optimization is closed. Work is on milestone1; no unrelated work or worktrees.
+2026-10-11. Completed the three user-approved implementation units on milestone1.
+No unrelated work, worktrees or recovery branches were created. Larger initial
+loading and axis-switching fixes remain investigation-only; further scroll
+optimization is closed.
 
-RF1 committed as 23e5810. Input interruption preserves compatible scroll reads
-while retiring keyboard/highlight intent; explicit view/lifecycle retirement
-and exact external ownership remain. Red/green composition probes, 2,385
+RF1: 23e5810 preserves compatible scroll reads when wheel/pointer/touch input
+interrupts keyboard/highlight intent. Explicit view/lifecycle retirement and
+exact external ownership remain. Real consumer red/green probes, 2,385
 interfaces/tools checks and installed tree/Inventory/shell pass. Failed native
-readiness receipts are retained; unchanged user-assisted retry passed.
+readiness receipts remain; the unchanged foreground-assisted retry passed.
 
-RF2 is ready for its atomic styling commit. Badge text compensates its actual
-5 px inset; hover/press change only fill alpha, with forced-color focus outline.
-Inline annotations have a measured 4 px gap. Inventory disclosure matches Plan
-without double rotation. Final focused03 passes 84; neighborhood01 passes 2,385
-with three existing privilege skips. Native02 passes two gallery gates in 78.33s across light,
-dark, forced colors and reduced motion. Native01 exposed mistaken expected
-spacing/token arithmetic and fractional outline assumptions; product stayed
-unchanged while exact gallery color vocabulary and verdicts were corrected.
-Changed producer/checker checks were rerun; unaffected neighborhood is retained.
-Fresh rf2_review checks the actual diff and raw receipts before commit.
+RF2: 7136764 aligns badge text, uses fill-only hover/press feedback, separates
+inline annotations by 4 px and matches Inventory chevrons to Plan. Focused
+checks pass 84; neighborhood passes 2,385 with three existing privilege skips;
+installed gallery passes two gates across light, dark, forced colors and reduced
+motion. Native01 exposed mistaken token arithmetic and fractional-outline
+expectations; consolidated gallery-only corrections pass focused03/native02.
+Product CSS stayed unchanged through those checker corrections. Independent
+source, evidence and documentary review approved the commit.
 
-RF3 next: skipped+reason noop displays green Completed; other skipped results
-remain gray Skipped. Preserve raw operation notes, failed/canceled states,
-planned No change and executor/bridge truth. Read-only design is ready; refresh
-against RF2 before serial edits to shared gallery consumers. Required direct
-renderer matrix, interfaces/tools, installed execution/shell and gallery gates.
+RF3: the atomic commit containing this handoff maps skipped+noop to green
+Completed and other skips to neutral Skipped. Raw notes and backend/bridge facts
+remain unchanged, including independent verification and planned No change.
+Red matrix reproduces the label error; focused matrix/gallery passes 28;
+interfaces/tools passes 2,385 with three existing privilege skips (205.43s).
+Installed execution, shell and gallery pass six cases (111.82s). Raw gallery
+receipts confirm the distinct labels/colors and forced-color text semantics.
+Fresh independent review covers actual source and installed package provenance.
 
-RI1: routing waits for review/loading state, empty renderers hide tables. Propose
-immediate review shell with Checking folders then Planning/Scanning and blank
-table; preserve refusal/uncertain outcome recovery. Existing C5 timings exclude
-cold admission, scan, projection and initial indexes; profile these before a
-speed change. RI2: mouse wheel/tilt over rows, nested axis scrollers and Chromium
-wheel target retention are plausible, not proven in the installed runtime.
-Propose trusted delta/position observation and same-host nested versus single
-scroller comparison. No larger implementation authorized.
+RI1: routing waits for review/loading state and empty renderers hide tables.
+Propose immediate review shell at the submitted attempt, with frozen inputs,
+Checking folders then Planning/Scanning, indeterminate progress and blank table.
+Preserve refusal/uncertain outcome recovery and complete publication. Existing
+C5 timings exclude cold admission, scans, projection and initial indexes; profile
+those stages before selecting a speed change. No startup implementation made.
 
-Evidence: build/review-followups-20261011/, exact integration hashes in
-integration.md. No test/native process remains active. Default sandbox launch
-fails; justified host pwsh works. Freeze tracked writers during manifest gates.
+RI2: mouse wheel/tilt over rows; nested horizontal/vertical scrollers plus
+Chromium's wheel-target retention plausibly explain the axis lock. No app
+axis-lock timer found; installed runtime/device behavior is not yet reproduced.
+Propose trusted delta/scroll-position observations while switching both ways,
+then compare nested and single two-axis scrollers in the same host. Only if
+confirmed should a single-scroller/sticky-header correction be selected.
+
+Evidence and exact commit identities: build/review-followups-20261011/ and its
+integration.md. Failed receipts are retained. All tracked-source verification
+manifests stayed stable. No native/test process remains active. Default sandbox
+launch fails; justified host pwsh works. README/AGENTS need no change: this batch
+changes neither milestone synopsis nor repository execution rules.

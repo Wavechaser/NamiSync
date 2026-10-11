@@ -214,6 +214,30 @@ assert.ok(row.notes.includes("2 operation details omitted"));
 assert.ok(row.notes.includes("3 verification details omitted"));
 assert.ok(row.notes.includes("Stored evidence: Recorded copy"));
 
+const operationPresentations = [
+  ["skipped", "noop", "noop", "completed", "Completed"],
+  ["skipped", "user-deselected", "noop", "skipped", "Skipped"],
+  ["skipped", "user-deselected", "copy", "skipped", "Skipped"],
+  ["succeeded", null, "copy", "completed", "Completed"],
+  ["failed", "noop", "noop", "failed", "Failed"],
+  ["failed", "disk-capacity", "copy", "capacity", "Failed"],
+  ["canceled", null, "copy", "canceled", "Canceled"],
+  ["deferred", null, "mkdir", "incomplete", "Deferred"],
+  ["blocked", null, "copy", "failed", "Blocked"],
+].map(([result, reason, kind, lifecycle, intent]) => {
+  const projected = projectExecutionRow({
+    operation: operation({ result, reason, kind }),
+    automatic_verification: verification({ result: "mismatched" }),
+    evidence: evidence("unrecorded"),
+  });
+  assert.equal(projected.lifecycle, lifecycle, `${result}/${reason}/${kind} lifecycle`);
+  assert.equal(projected.intent, intent, `${result}/${reason}/${kind} label`);
+  assert.ok(projected.notes.includes(`Operation: ${result === "succeeded" ? "Completed" : result[0].toUpperCase() + result.slice(1)}${reason === null ? "" : ` (${reason === "user-deselected" ? "User deselected" : reason === "disk-capacity" ? "Disk capacity" : "Noop"})`}`));
+  assert.ok(projected.notes.includes("Automatic verification: Mismatch"));
+  assert.ok(projected.notes.includes("Stored evidence: Unrecorded"));
+  return projected;
+});
+
 for (const state of ["unrecorded", "superseded", "not-applicable"]) {
   const projected = projectExecutionRow({
     operation: operation(), automatic_verification: null, evidence: evidence(state),
@@ -384,6 +408,16 @@ const baseRenderedRow = {
   modifiedText: "", notesText: "", lifecycleKey: "completed",
 };
 const descendants = (element) => [element, ...element.children.flatMap(descendants)];
+for (const projected of operationPresentations) {
+  const rendered = rowDocument.createElement("div");
+  renderPlanRow(rendered, {
+    ...baseRenderedRow, lifecycleKey: projected.lifecycle, intentText: projected.intent,
+    notesText: projected.notes.join(" · "),
+  });
+  const intent = rendered.children.find((child) => child.dataset.fileColumn === "primary");
+  assert.equal(intent.dataset.lifecycle, projected.lifecycle);
+  assert.equal(intent.children[0].textContent, projected.intent);
+}
 for (const [itemType, phase] of [["operation", "execute"], ["operation", "verify"], ["integrity", "verify"]]) {
   for (const itemPercent of [40, null]) {
     const rendered = rowDocument.createElement("div");

@@ -290,13 +290,14 @@ rendered status; it does not rewrite the reviewed operation or domain result.
 
 #### Channel 2 — lifecycle
 
-Lifecycle describes task cards and run status.
+Lifecycle describes task cards, run status and projected execution rows.
 
 | State or projected result condition | Hue | Form |
 | --- | --- | --- |
 | new / planned / queued | neutral | text |
 | executing / verifying | system accent | text |
 | completed | green | text |
+| skipped operation (row only) | neutral | text |
 | completed, partial / degraded / incomplete | yellow | text |
 | `PAUSING` / `CANCELING` | system accent | text |
 | `PAUSED` / recoverable `INTERRUPTED` | yellow | text |
@@ -552,8 +553,11 @@ state; display-ready basename and size text; list-specific status text; and
 notes. `renderPlanRow` accepts an empty `intentKey` for a plain row, exact operation
 and presentation keys `copy`, `mkdir`, `move`, `rename`, `recase`, `update`, `move_update`, `trash`,
 `delete`, and `noop`, or exact exception keys `error`, `unsupported`, and
-`blocked`. A projected execution row may instead supply exact lifecycle key
-`executing` or `completed`. An `executing` row additionally requires a finite,
+`blocked`. A projected execution row may instead supply an admitted lifecycle
+key. Actual no-op completion (`skipped` result with `noop` reason) displays green
+**Completed**; other skipped results, including a deselected no-op, display
+neutral **Skipped** through the row-only `skipped` key. Operation notes retain
+the supplied result and reason. An `executing` row additionally requires a finite,
 already-projected `progressPercent` from 0 through 100 and renders a 4 logical
 px mini progress bar across the cell's content width, preserving the standard
 8 px inset on both sides; supplied text such as “Copying” becomes its
