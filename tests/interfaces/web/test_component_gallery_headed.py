@@ -97,6 +97,16 @@ def _recent_ui_sample() -> dict[str, object]:
             "renamed_annotation": "renamed from logo.png", "rename_action": "Rename",
             "annotations_purple": True,
             "long_origin_keeps_filename": True, "long_origin_clipped": True,
+            "text_alignment": 0.0, "rename_gap": 4.0,
+            "states": [{"state": state, "background": background,
+                        "foreground": "rgb(51, 17, 85)", "border": "rgba(0, 0, 0, 0)",
+                        "focus": "rgb(0, 0, 0) 0px 0px 0px 3px" if state == "focused" else "none",
+                        "outline": "none", "outline_width": "0px", "opacity": "1", "control_opacity": "1"}
+                       for state, background in (("rest", "rgb(187, 136, 238)"),
+                           ("hover", "rgba(187, 136, 238, 0.902)"),
+                           ("pressed", "rgba(187, 136, 238, 0.8)"),
+                           ("focused", "rgb(187, 136, 238)"),
+                           ("disabled", "rgb(187, 136, 238)"))],
             "hierarchy": [[0, 0, None, 1, 1, 3], [1, 1, 0, None, 1, 1],
                           [2, 0, None, 3, 2, 3], [3, 1, 2, None, 1, 1], [4, 0, None, None, 3, 3]],
             "row_indexes": ["2", "3", "4", "5", "6"],
@@ -116,10 +126,37 @@ def _recent_ui_sample() -> dict[str, object]:
     }
 
 
-def _assert_recent_ui(value: dict[str, object]) -> None:
+def _assert_recent_ui(value: dict[str, object], *, forced: bool = False,
+                      system_colors: dict[str, str] | None = None) -> None:
     expected = _recent_ui_sample()
-    for key in ("refusals", "move", "commands_after_arm", "commands", "retained_panels"):
+    for key in ("refusals", "commands_after_arm", "commands", "retained_panels"):
         assert value[key] == expected[key], key
+    move = value["move"]
+    variable = {"text_alignment", "rename_gap", "states"}
+    assert {key: item for key, item in move.items() if key not in variable} == {
+        key: item for key, item in expected["move"].items() if key not in variable
+    }, "move"
+    assert move["text_alignment"] == pytest.approx(0, abs=0.5)
+    assert move["rename_gap"] == pytest.approx(4, abs=0.5)
+    states = move["states"]
+    assert [row["state"] for row in states] == ["rest", "hover", "pressed", "focused", "disabled"]
+    rest, hover, pressed, focused, disabled = states
+    assert all(row["opacity"] == row["control_opacity"] == "1" for row in states)
+    assert focused["background"] == disabled["background"] == rest["background"]
+    assert focused["foreground"] == disabled["foreground"] == rest["foreground"]
+    if forced:
+        assert [rest["background"], rest["foreground"]] == [system_colors["ButtonFace"], system_colors["ButtonText"]]
+        assert [hover["background"], hover["foreground"]] == [system_colors["Highlight"], system_colors["HighlightText"]]
+        assert [pressed["background"], pressed["foreground"]] == [system_colors["Highlight"], system_colors["HighlightText"]]
+        assert focused["outline"] == "solid" and float(focused["outline_width"].removesuffix("px")) > 0
+    else:
+        assert _color_rgb(rest["background"]) in {(187.0, 136.0, 238.0), (51.0, 17.0, 85.0)}
+        assert all(_color_rgb(row["background"]) == _color_rgb(rest["background"]) for row in states)
+        assert [_color_alpha(row["background"]) for row in states] == pytest.approx([1, 0.9, 0.8, 1, 1], abs=0.003)
+        assert all(row["foreground"] == rest["foreground"] for row in states)
+        assert all(_color_alpha(row["border"]) == 0 for row in states)
+        assert focused["focus"] != "none"
+        assert _contrast(rest["foreground"], rest["background"]) >= 4.5
     for key in ("pause", "cancel"):
         for observed, sample in zip(value[key], expected[key], strict=True):
             assert {name: observed[name] for name in ("label", "primary", "disabled")} == {
@@ -151,6 +188,11 @@ def test_component_gallery_recent_ui_report_separates_shape_from_verdict() -> No
     sample["layout"][0]["status"][3] = 482
     assert component_gallery_child._valid_recent_ui(sample)
     with pytest.raises(AssertionError, match="recent specimen clipped"):
+        _assert_recent_ui(sample)
+    sample = _recent_ui_sample()
+    sample["move"]["text_alignment"] = 9.0
+    assert component_gallery_child._valid_recent_ui(sample)
+    with pytest.raises(AssertionError):
         _assert_recent_ui(sample)
 
 
@@ -2373,7 +2415,8 @@ def test_sh_g_11_component_gallery_uses_installed_tokens_and_non_color_cues(
         for name in ("hdr", "advanced_color")
     )
     for report in (light, dark, forced):
-        _assert_recent_ui(report["control_contract"]["recent_ui"])
+        _assert_recent_ui(report["control_contract"]["recent_ui"], forced=report["media"]["forced"],
+                          system_colors=report["icons"]["system_colors"])
         theme = "dark" if report["media"]["dark"] else "light"
         _assert_complete_gallery_matrix(report)
         _assert_icon_registry_evidence(
@@ -4147,7 +4190,9 @@ def _inventory_panel_sample() -> dict[str, object]:
             "active_text_colors": ["rgb(255, 255, 255)"] * 6,
             "active_filled_presence": {"node_id": "4", "colors": ["rgb(255, 255, 255)", "rgb(0, 0, 0)"]},
             "notes": [""] * 7 + ["Acknowledged", "", "", "", "Cannot read this item.", "Partial size", "Size overflow"],
-            "name_indent": [8.0, 24.0]},
+            "name_indent": [8.0, 24.0],
+            "chevrons": [[0.707107, -0.707107, 0.707107, 0.707107, 5.59375, 1.5] * 2,
+                         [0.707107, 0.707107, -0.707107, 0.707107, 5.59375, 1.5] * 2]},
         "resizing": {"pointer_before": pointer_before, "pointer_after": pointer_after,
             "notes_minimum": clamped, "clamped_widths": clamped.copy(), "overflow": {
                 "client_width": 640.0, "scroll_width": 888.0, "widths": narrow,
@@ -4234,6 +4279,11 @@ def _assert_inventory_panel(evidence: dict[str, object], integrity: dict[str, ob
         assert [checkbox["background"], checkbox["border"]] == appearance["reference_checkbox"]
     assert appearance["notes"] == _inventory_panel_sample()["appearance"]["notes"]
     assert appearance["name_indent"] == pytest.approx([8, 24], abs=0.5)
+    for index, geometry in enumerate(appearance["chevrons"]):
+        assert geometry[:6] == pytest.approx(geometry[6:], abs=0.0001)
+        assert geometry[:4] == pytest.approx(
+            [0.707107, -0.707107, 0.707107, 0.707107] if index == 0
+            else [0.707107, 0.707107, -0.707107, 0.707107], abs=0.0001)
     resizing = evidence["resizing"]
     before, after = resizing["pointer_before"], resizing["pointer_after"]
     assert after[4] - before[4] == pytest.approx(8, abs=1)

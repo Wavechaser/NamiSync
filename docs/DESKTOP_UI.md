@@ -1433,7 +1433,13 @@ selection and execution authority remain unchanged.
 Prior groups start collapsed and show one clickable badge containing both the
 count (`N items moved to`) and compact destination in the filename area, with
 separate expand/collapse disclosure. Its 4 px corners and inner padding match
-the compact action badges. The target parent is the destination even for a directory move.
+the compact action badges; the badge starts slightly before the filename slot
+so its text aligns with ordinary filenames. Hover and press reduce only the
+purple fill opacity to 90% and 80%, retaining the text color and a visible
+keyboard focus ring. Forced colors use Highlight/HighlightText for interaction.
+Inventory uses the same collapsed/expanded chevrons as Plan, without rotating
+both the disclosure container and its chevron.
+The target parent is the destination even for a directory move.
 The destination label is a basename with an ellipsis prefix when ancestors are
 omitted, bounded to 255 UTF-16 units; its tooltip and accessible name use the
 same compact label. Full filesystem destinations are available in the highlighted
@@ -1449,6 +1455,7 @@ same-folder updates. Rename rows show **renamed from [previous name]** and have 
 prior-location groups. The browser renders projection-supplied classification
 and bounded prior basenames; it never hides rows or derives filter membership.
 Long Rename annotations ellipsize and retain their prior basename in a tooltip.
+Inline prior-location and Rename annotations have a 4 px gap after the filename.
 They use at most half the Filename cell so long origins leave the filename readable.
 If the destination's follow-up window no longer matches, retain the last coherent
 review and offer **Refresh review** with an explanation. A coherent conflict

@@ -179,6 +179,11 @@ explicit, reviewable and regression-backed.
 
 #### Align desktop review surfaces and recovery (2026-10-05 – 2026-10-11)
 
+- Align move-badge text with filenames, use fill-only hover/press feedback,
+  separate inline rename notes and match Inventory's disclosure chevrons to
+  Plan. Installed gallery checks cover light, dark, forced colors and reduced
+  motion; focused and interfaces/tools checks pass.
+
 - Preserve compatible Plan/Inventory scroll reads during repeated wheel,
   pointer and touch input while still retiring queued keyboard/highlight intent.
   Event-based regressions reproduce the SN3 cancellation error; focused,

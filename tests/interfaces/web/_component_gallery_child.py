@@ -313,6 +313,7 @@ _SYSTEM_COLOR_NAMES = frozenset(
         "GrayText",
         "LinkText",
         "ButtonText",
+        "ButtonFace",
         "ButtonBorder",
     }
 )
@@ -336,6 +337,9 @@ def _expected_pseudo_targets(mode: str) -> list[dict[str, object]]:
         raise ValueError("component gallery mode is invalid")
     return [
         *_EXPECTED_PSEUDO_TARGETS,
+        {"selector": "#gallery-move-pill-hover", "classes": ["hover"]},
+        {"selector": "#gallery-move-pill-pressed", "classes": ["hover", "active"]},
+        {"selector": "#gallery-move-pill-focused", "classes": ["focus", "focus-visible"]},
         {"selector": "#gallery-theme-option-hover", "classes": ["hover"]},
         {
             "selector": "#gallery-theme-option-pressed",
@@ -1304,6 +1308,7 @@ def _valid_recent_ui(value: object) -> bool:
             "badge_matches_action_radius", "path_clipped", "moved_annotation",
             "renamed_annotation", "rename_action", "annotations_purple",
             "long_origin_keeps_filename", "long_origin_clipped",
+            "text_alignment", "rename_gap", "states",
         }
         and all(text(move[key]) for key in ("destination", "title", "revealed_node", "expanded", "message", "destination_highlighted", "revealed_destination", "prior_action", "prior_metadata"))
         and type(move["checkable"]) is bool
@@ -1311,6 +1316,10 @@ def _valid_recent_ui(value: object) -> bool:
         and type(move["prior_selection_disabled"]) is bool
         and all(type(move[key]) is bool for key in ("initial_collapsed", "path_in_badge", "badge_matches_action_radius", "path_clipped", "annotations_purple", "long_origin_keeps_filename", "long_origin_clipped"))
         and all(text(move[key]) for key in ("moved_annotation", "renamed_annotation", "rename_action"))
+        and all(type(move[key]) in {int, float} and math.isfinite(move[key]) for key in ("text_alignment", "rename_gap"))
+        and type(move["states"]) is list and len(move["states"]) == 5
+        and all(type(row) is dict and set(row) == {"state", "background", "foreground", "border", "focus", "outline", "outline_width", "opacity", "control_opacity"}
+                and all(text(item) for item in row.values()) for row in move["states"])
         and type(move["hierarchy"]) is list and len(move["hierarchy"]) == 5
         and all(type(row) is list and len(row) == 6 and all(item is None or type(item) is int for item in row) for row in move["hierarchy"])
         and type(move["row_indexes"]) is list and len(move["row_indexes"]) == 5
@@ -1902,6 +1911,7 @@ def _valid_inventory_appearance(value: object) -> bool:
         "typography", "zebra", "reference_zebra", "transparent_cells", "checkboxes",
         "reference_checkbox", "notes", "name_indent", "active_colors", "active_node_id",
         "active_text_colors", "active_filled_presence",
+        "chevrons",
     }:
         return False
     typography = value["typography"]
@@ -1934,6 +1944,7 @@ def _valid_inventory_appearance(value: object) -> bool:
         and type(value["notes"]) is list and len(value["notes"]) == 14
         and all(type(text) is str and len(text) <= 512 for text in value["notes"])
         and _finite_number_matrix([value["name_indent"]], 1, 2)
+        and _finite_number_matrix(value["chevrons"], 2, 12)
     )
 
 

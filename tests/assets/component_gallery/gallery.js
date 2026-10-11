@@ -1240,6 +1240,17 @@ window.addEventListener("unhandledrejection", (event) => {
   }];
   planReviewPanel.render(planReviewTask);
   const galleryMovePill = planReviewPanel.element.querySelector(".nami-plan-move-pill");
+  const moveStatePreview = document.createElement('div');
+  moveStatePreview.style.position = 'fixed';
+  moveStatePreview.style.insetInlineStart = '-10000px';
+  moveStatePreview.style.insetBlockStart = '0';
+  document.body.append(moveStatePreview);
+  const moveStatePills = Object.fromEntries(["hover", "pressed", "focused"].map((state) => {
+    const pill = galleryMovePill.cloneNode(true);
+    pill.id = `gallery-move-pill-${state}`;
+    moveStatePreview.append(pill);
+    return [state, pill];
+  }));
   const galleryMoveBadgeStyle = getComputedStyle(galleryMovePill.querySelector(".nami-badge"));
   const galleryDark = document.documentElement.dataset.theme === "dark";
   const galleryForced = matchMedia("(forced-colors: active)").matches;
@@ -2056,6 +2067,30 @@ window.addEventListener("unhandledrejection", (event) => {
       notes:cases.map((_name, index) => itemRow(index).querySelector('.nami-file-row__notes').textContent),
       name_indent:[9,10].map(index => parseFloat(getComputedStyle(itemRow(index).querySelector('.nami-file-row__name')).paddingLeft)),
     };
+    const inventoryFolder = itemRow(9);
+    const planDisclosure = planSpecimen.body.querySelector('.nami-file-row__disclosure');
+    const savedPlanExpanded = planDisclosure.ariaExpanded;
+    appearance.chevrons = [];
+    function chevronGeometry(disclosure) {
+      const chevron = disclosure.querySelector('.nami-file-row__chevron');
+      const matrix = value => getComputedStyle(value).transform === 'none'
+        ? new DOMMatrixReadOnly() : new DOMMatrixReadOnly(getComputedStyle(value).transform);
+      const transform = matrix(disclosure).multiply(matrix(chevron));
+      const style = getComputedStyle(chevron);
+      return [transform.a, transform.b, transform.c, transform.d,
+        parseFloat(style.width), parseFloat(style.borderInlineEndWidth)];
+    }
+    for (const expanded of [false, true]) {
+      inventoryFolder.ariaExpanded = String(expanded);
+      planDisclosure.ariaExpanded = String(expanded);
+      await settled();
+      appearance.chevrons.push([
+        ...chevronGeometry(inventoryFolder.querySelector('.nami-tree-row__disclosure')),
+        ...chevronGeometry(planDisclosure),
+      ]);
+    }
+    inventoryFolder.ariaExpanded = 'true';
+    planDisclosure.ariaExpanded = savedPlanExpanded;
     itemRow(3).click();
     await settled();
     const filledActiveRow = viewport.querySelector('[data-active="true"]');
@@ -2293,6 +2328,9 @@ window.addEventListener("unhandledrejection", (event) => {
     { selector: `#gallery-control-${definition.key}-focused`, classes: ["focus", "focus-visible"] },
   ]);
   pseudoTargets.push(
+    { selector: "#gallery-move-pill-hover", classes: ["hover"] },
+    { selector: "#gallery-move-pill-pressed", classes: ["hover", "active"] },
+    { selector: "#gallery-move-pill-focused", classes: ["focus", "focus-visible"] },
     { selector: "#gallery-theme-option-hover", classes: ["hover"] },
     {
       selector: "#gallery-theme-option-pressed",
@@ -3006,6 +3044,7 @@ window.addEventListener("unhandledrejection", (event) => {
     "GrayText",
     "LinkText",
     "ButtonText",
+    "ButtonFace",
   ]) {
     const probe = document.createElement("span");
     probe.style.color = name;
@@ -3591,7 +3630,25 @@ window.addEventListener("unhandledrejection", (event) => {
   const movedAnnotation = movePanel.element.querySelector(`[data-node-id="${canonicalRow.node_id}"] .nami-plan-row__previous`);
   const renamedAnnotation = movePanel.element.querySelector(`[data-node-id="${renamedRow.node_id}"] .nami-plan-row__previous`);
   const actionStyle = getComputedStyle(movePanel.element.querySelector(".nami-file-state-label"));
+  const renameFilename = renamedAnnotation.previousElementSibling;
+  const moveStateStyle = (state, pill) => {
+    const style = getComputedStyle(pill.querySelector('.nami-badge'));
+    const controlStyle = getComputedStyle(pill);
+    return { state, background: style.backgroundColor, foreground: style.color,
+      border: controlStyle.borderTopColor, focus: controlStyle.boxShadow,
+      outline: controlStyle.outlineStyle, outline_width: controlStyle.outlineWidth,
+      opacity: style.opacity, control_opacity: controlStyle.opacity };
+  };
+  const moveStates = [moveStateStyle('rest', livePill),
+    ...Object.entries(moveStatePills).map(([state, pill]) => moveStateStyle(state, pill))];
+  moveStatePills.pressed.disabled = true;
+  moveStates.push(moveStateStyle('disabled', moveStatePills.pressed));
+  moveStatePills.pressed.disabled = false;
   const moveEvidence = {
+    text_alignment: livePill.querySelector('.nami-plan-move-pill__count').getBoundingClientRect().left
+      - renameFilename.getBoundingClientRect().left,
+    rename_gap: renamedAnnotation.getBoundingClientRect().left - renameFilename.getBoundingClientRect().right,
+    states: moveStates,
     destination: movePill.querySelector(".nami-plan-move-pill__destination").textContent,
     title: movePill.title, revealed_node: revealedNode,
     expanded: movePanel.element.querySelector(".nami-file-row__disclosure").ariaExpanded,

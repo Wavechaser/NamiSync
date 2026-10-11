@@ -58,6 +58,10 @@ AUTHORED_FILTER_INTERACTION_VALUES = {
         "neutralPressed": "#D6D6D6CC",
     },
 }
+AUTHORED_MOVE_INTERACTION_VALUES = {
+    "light": ("#BB88EEE6", "#BB88EECC"),
+    "dark": ("#331155E6", "#331155CC"),
+}
 FLUENT_SOURCE = {
     "package": "@fluentui/tokens@1.0.0-alpha.24",
     "commit": "32b42a5bf79c1836047dfc7fae07b1320731bce4",
@@ -650,6 +654,8 @@ def test_sh_g_11_tokens_route_authored_lights_only_to_new_semantic_roles() -> No
             *AUTHORED_FLYOUT_VALUES["dark"].values(),
             *AUTHORED_FILTER_INTERACTION_VALUES["light"].values(),
             *AUTHORED_FILTER_INTERACTION_VALUES["dark"].values(),
+            *AUTHORED_MOVE_INTERACTION_VALUES["light"],
+            *AUTHORED_MOVE_INTERACTION_VALUES["dark"],
         )
         if value != "transparent" and not value.startswith("var(")
     }

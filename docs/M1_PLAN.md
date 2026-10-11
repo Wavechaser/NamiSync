@@ -42,6 +42,17 @@ the earlier filter target/readiness receipts remain retained without attributing
 them solely to foreground loss. Independent review confirms separated input
 retirement, existing exact external policy and unchanged placement/read bounds.
 
+RF2 is complete. Move-pill text aligns with filenames by compensating its
+5 px border/padding inset; hover/press change only fill opacity, with system
+focus outlines in forced colors. Inline annotations have a measured 4 px gap,
+and Inventory's disclosure no longer double-rotates. `rf2-focused-03` passes
+84 checks; `rf2-neighborhood-01` passes 2,385 interfaces/tools checks with three
+existing privilege skips. After correcting gallery expectations for the token
+ramp and fractional focus rasterization, `rf2-native-02` passes both installed
+gallery gates across light, dark, forced colors and reduced motion (78.33s).
+The changed gallery producer/checker population was rerun; unaffected neighborhood
+evidence remains applicable. Fresh independent review covers the final receipts.
+
 RI1 source investigation at `350af26` confirms routing waits for review/loading
 state rather than the submitted attempt, and the empty renderers hide the table.
 Proposal for discussion: show the existing review shell immediately with frozen
