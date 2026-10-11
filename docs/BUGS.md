@@ -912,6 +912,15 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Review viewport loading
 
+- MODERATE - FIXED (2026-10-11). Conflated input cancellation. SN3's general
+  input handlers retired scroll-window requests along with keyboard navigation,
+  discarding useful reads during repeated wheel events in Plan and Inventory.
+  Input interruption now retires highlight/keyboard intent separately; explicit
+  row navigation, view and lifecycle changes keep their existing invalidation
+  authority. Real consumer event probes reproduce both failures and retain
+  keyboard cancellation, mutation custody and external-generation guarantees.
+  Interfaces/tools and installed tree, Inventory and shell checks pass.
+
 - MODERATE - FIXED (2026-10-11). Unbounded navigation intent. Plan queued each
   repeated arrow or pointer replacement behind earlier highlight work, leaving
   a delayed input tail; Inventory repeats reused the committed index instead of

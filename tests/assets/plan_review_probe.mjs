@@ -1913,4 +1913,121 @@ for (const [actions, isCurrent] of [[[], () => true],
   }
 }
 emptyMenu.dispose();
+
+// Exercise real input capture, viewport admission and app adoption together.
+const shellNodes = new Map();
+document.querySelector = (key) => {
+  if (!shellNodes.has(key)) shellNodes.set(key, document.createElement("div"));
+  return shellNodes.get(key);
+};
+document.body = document.createElement("body");
+globalThis.window = { ...document.defaultView, chrome: { webview: {} } };
+const scrollSummary = {...summary, highlight_revision: 0,
+  highlight_focus_node_id: null, highlight_focus_visible_index: null};
+const scrollWindow = (offset) => ({...review.window, disposition: "current",
+  view_revision: 0, highlight_revision: 0, offset, total: 1000,
+  rows: Array.from({length: 256}, (_, index) => ({...row,
+    node_id: `node-${(offset + index).toString(16).padStart(32, "0")}`,
+    visible_index: offset + index, is_container: false, row_kind: "operation", expanded: null,
+  })),
+});
+let scrollReply = null;
+let highlightReply = null;
+const scrollReads = [];
+const inputHighlights = [];
+globalThis.planScrollHarness = {
+  openPlanView: () => Promise.resolve(scrollSummary),
+  getPlanWindow: (...args) => {
+    scrollReads.push(args);
+    return scrollReply?.promise ?? Promise.resolve(scrollWindow(0));
+  },
+  mutatePlanHighlight: (...args) => {
+    inputHighlights.push(args);
+    return highlightReply.promise;
+  },
+};
+let scrollAppSource = await readFile(join(dirname(process.argv[2]), "app.js"), "utf8");
+const bridgeNames = scrollAppSource.match(/import \{([\s\S]*?)\} from "\.\/bridge\.js";/)[1]
+  .split(",").map((name) => name.trim()).filter(Boolean);
+const bridgeFunctions = {whenBridgeApiReady: "() => new Promise(() => {})",
+  readSetup: "() => new Promise(() => {})", startTaskDrain: "() => () => {}"};
+const scrollBridgeUrl = moduleUrl(bridgeNames.map((name) => /^[A-Z]/.test(name)
+  ? `export class ${name} extends Error {}`
+  : `export const ${name} = ${bridgeFunctions[name] ?? (name in globalThis.planScrollHarness
+    ? `(...args) => globalThis.planScrollHarness.${name}(...args)`
+    : "() => Promise.reject(new Error('unused bridge command'))")};`).join("\n"));
+const unusedPanelUrl = moduleUrl("export const createSetupPanel = () => ({ element: document.createElement('div'), render() {} }); export const createInventoryReviewPanel = () => ({ element: document.createElement('div'), dispose() {} });");
+const scrollPanelsUrl = moduleUrl((await readFile(join(dirname(process.argv[2]), "panels.js"), "utf8"))
+  .replace("./render.js", renderUrl).replace("./plan_review.js", moduleUrl(source))
+  .replace("./setup.js", unusedPanelUrl).replace("./inventory_review.js", unusedPanelUrl));
+for (const [key, value] of Object.entries({
+  "./bridge.js": scrollBridgeUrl, "./render.js": renderUrl, "./panels.js": scrollPanelsUrl,
+  "./readiness.js": moduleUrl("export const installReadinessReceiver = () => ({ revision: () => 0 });"),
+  "./appearance.js": moduleUrl("export const installAppearanceReceiver = () => {};"),
+  "./theme.js": moduleUrl("export const installThemeCombobox = () => ({}); export const installThemeSelector = () => ({ refresh() {} });"),
+  "./execution_confirmation.js": moduleUrl("export const createExecutionConfirmation = () => ({ element: document.createElement('dialog') });"),
+  "./rail.js": moduleUrl("export const createTaskRail = () => ({ element: document.createElement('nav'), render() {} });"),
+})) scrollAppSource = scrollAppSource.replace(key, value);
+scrollAppSource += "\nexport { adoptTask, selectTask, panel };";
+const scrollApp = await import(moduleUrl(scrollAppSource));
+const scrollTask = scrollApp.adoptTask({task_id: summary.task_id, session_id: "4".repeat(32),
+  session_state: "completed", session_released: true, task_kind: "sync-plan", request_id: summary.request_id});
+const settleScroll = async () => { for (let index = 0; index < 20; index += 1) await Promise.resolve(); };
+scrollApp.selectTask(scrollTask.taskId);
+await settleScroll();
+assert.ok(scrollTask.review, "the real app must open the Plan review before input");
+const scrollReview = scrollTask.review;
+const scrollPane = findByClass(scrollApp.panel.element, "nami-plan-review");
+const scrollViewport = findByClass(scrollPane, "nami-plan-review__rows");
+scrollViewport.clientHeight = 16 * ROW_HEIGHT;
+const inputScroll = (name, index) => {
+  const event = {target: scrollViewport};
+  document.dispatch(name, event);
+  scrollPane.dispatch(name, event);
+  scrollViewport.dispatch(name, event);
+  scrollViewport.scrollTop = index * ROW_HEIGHT;
+  scrollViewport.dispatch("scroll");
+  document.defaultView.flushAnimationFrame();
+};
+for (const name of ["wheel", "pointerdown", "touchstart"]) {
+  scrollViewport.scrollTop = 0;
+  scrollViewport.dispatch("scroll");
+  scrollReview.window = scrollWindow(0);
+  scrollApp.panel.render(scrollTask);
+  document.defaultView.flushAnimationFrame();
+  let resolve;
+  scrollReply = {promise: new Promise((accept) => { resolve = accept; })};
+  const readsBefore = scrollReads.length;
+  for (const index of [176, 180, 184, 188, 192]) inputScroll(name, index);
+  assert.equal(scrollReads.length, readsBefore + 1, `${name} retains one physical read`);
+  const response = scrollWindow(144);
+  resolve(response);
+  await settleScroll();
+  assert.equal(scrollReview.window, response, `${name} accepts the useful delayed window during input`);
+  assert.equal(scrollViewport.scrollTop, 192 * ROW_HEIGHT);
+  assert.equal(scrollReview.keyboardRevealWindow, null);
+  document.defaultView.flushAnimationFrame();
+  assert.equal(scrollReads.length, readsBefore + 1, `${name} does not replace an accepted covering read`);
+  scrollReply = null;
+  const highlightBefore = inputHighlights.length;
+  let resolveHighlight;
+  highlightReply = {promise: new Promise((accept) => { resolveHighlight = accept; })};
+  const keyRow = findByDataset(scrollPane, "nodeId", response.rows[0].node_id);
+  keyRow.dispatch("keydown", {key: "ArrowDown"});
+  await settleScroll();
+  assert.equal(inputHighlights.length, highlightBefore + 1);
+  for (let index = 0; index < 10; index += 1) keyRow.dispatch("keydown", {key: "ArrowDown"});
+  const focusBefore = document.activeElement;
+  inputScroll(name, 192);
+  assert.equal(scrollReview.highlightNavigation, null, `${name} retires pending keyboard targets immediately`);
+  const receipt = {...scrollSummary, disposition: "applied", highlight_revision: 1,
+    highlight_focus_node_id: response.rows[0].node_id, highlight_focus_visible_index: 144};
+  resolveHighlight(receipt);
+  await settleScroll();
+  assert.equal(scrollReview.highlightReceipt, receipt, "an admitted mutation keeps custody after interruption");
+  assert.equal(scrollReview.summary, scrollSummary, "the retired highlight does not paint");
+  assert.equal(inputHighlights.length, highlightBefore + 1, "interruption retires the held repeat tail");
+  assert.equal(scrollReads.length, readsBefore + 1, "the retired highlight never reads to reclaim focus");
+  assertSameNode(document.activeElement, focusBefore, "input interruption prevents stale focus adoption");
+}
 process.stdout.write("ok");

@@ -1360,6 +1360,17 @@ edgeScroll(984);
 assert.equal(edgeRequests.length, tailCount, "settled endpoint does not duplicate its read");
 edgeScroll(985);
 assert.equal(edgeRequests.length, tailCount, "complete tail has no further travel-side rows to prefetch");
+for (const input of ["wheel", "pointerdown", "touchstart"]) {
+  dispatchKey(edgeRoot, "Home");
+  const keyboard = edgeRequests.at(-1);
+  edgeRoot.dispatch(input);
+  assert.ok(edgeCancelled.includes(keyboard.generation), `${input} immediately retires keyboard intent`);
+  assert.equal(edgeTree.commitWindow(keyboard.generation, edgeWindow(0)), false);
+  const external = edgeTree.beginWindowRequest();
+  edgeRoot.dispatch(input);
+  assert.equal(edgeTree.commitWindow(external, edgeWindow(952, 48)), true,
+    `${input} preserves the existing external request policy`);
+}
 edgeTree.dispose();
 }
 

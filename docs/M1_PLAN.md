@@ -11,6 +11,57 @@ retains investigation, rejected proposals and superseded execution recipes;
 the decisions still governing delivery are below. Historical observations
 certify their recorded build and dependencies only.
 
+## Review follow-ups — 2026-10-11
+
+The user formalized three implementation units and two investigation-only
+outcomes, based on `350af26`. Further scroll-loading optimization is closed;
+RF1 repairs the reported regression without changing placement/prefetch policy.
+Serialize overlapping frontend writers. Root owns shared delivery documents;
+each implementation receives fresh independent review and a separate commit.
+
+| ID | Outcome, owners and finite consumers | Verification and boundary |
+| --- | --- | --- |
+| RF1 | Preserve compatible scroll reads while later wheel/pointer/touch input retires keyboard/navigation intent. Trace app, Plan/Inventory panels and tree request ownership together; migrate their existing delayed probes and subject documentation. | Reproduce repeated real input-event cancellation in both pages before fixing. Preserve task/session/publication/view fences, keyboard/external focus intent, admitted mutation custody, one read/latest demand and failure settlement. Existing frontend/interfaces plus affected loading-tool checks and installed tree/Inventory/shell witnesses; no placement, schema or domain change. |
+| RF2 | Move ghost badge left slightly to align its text, use fill-opacity hover/press, separate inline rename text, and match Inventory disclosure chevrons to Plan. Owners are existing CSS/tokens/renderers and gallery specimens/direct probes. | Reuse current Fluent button and disclosure vocabulary; inspect current gallery and light/dark/forced-color behavior with existing gallery/native checks. Interfaces and affected tools checks. No action/navigation behavior change. |
+| RF3 | Show execution no-op as green Completed and deselected skip as gray Skipped using the already distinct bridge facts. Owners are execution row presentation, gallery/fixtures and direct renderer probes. | Trace producer/bridge facts without changing contracts; pin no-op versus deselected skip and preserve failed/canceled/other terminal states. Interfaces and existing installed execution/shell witness; no executor semantics change. |
+| RI1 | Investigate slow initial plan load and setup-to-review sequencing in Plan and Inventory. | Read click/admission/workflow/projection/first-window owners, existing measurement tools and consumers. Report observed versus unknown cost, bounded measurement needs, and immediate planning-status/indeterminate/empty-table proposal. No implementation. |
+| RI2 | Investigate horizontal/vertical scroll switching lock. | Trace containers, axis handlers, pointer/wheel behavior and WebView constraints; distinguish a reproduced app cause from browser/input hypotheses. Report a bounded reproducer and options. No implementation. |
+
+Evidence lives in ignored `build/review-followups-20261011/`, with scoped
+subdirectories, unique retained receipts and manifests. Existing SN evidence
+remains historical. No new performance promise, backend mutation, bridge schema,
+renderer rewrite or larger loading/axis fix is authorized. AGENTS recurrence,
+scope and mandatory stops apply; discoveries do not expand these outcomes.
+
+RF1 is complete. `rf1-red-event-03` reproduces the cancellation in both real
+consumer compositions; `rf1-green-event-03` passes the four focused probes.
+`rf1-neighborhood-01` passes 2,385 interfaces/tools tests (3 existing privilege
+skips); installed tree passes in `rf1-native-01`, Inventory/shell in
+`rf1-native-retry-01` (2 in 44.49s). The unchanged retry needed no product fix;
+the earlier filter target/readiness receipts remain retained without attributing
+them solely to foreground loss. Independent review confirms separated input
+retirement, existing exact external policy and unchanged placement/read bounds.
+
+RI1 source investigation at `350af26` confirms routing waits for review/loading
+state rather than the submitted attempt, and the empty renderers hide the table.
+Proposal for discussion: show the existing review shell immediately with frozen
+inputs, Checking folders then Planning/Scanning and indeterminate progress;
+preserve admission refusal, uncertain-receipt recovery and complete publication.
+The cold path includes admission, scans/workflow, release, full projection and
+initial view/index construction before the first window. Existing C5 timings
+prebuild projections/views and cannot identify the cold bottleneck. Profile
+those named stages before selecting a speed change; no partial-plan streaming
+or startup implementation is authorized by this investigation.
+
+RI2 source investigation confirms separate nested horizontal and vertical
+scrollers and passive wheel listeners, without an app axis-lock timer. The user
+uses a mouse wheel/tilt wheel over rows. Chromium's phase-less wheel transaction
+and retained scroll target are a plausible explanation, not an installed-runtime
+reproduction. Next evidence would record trusted deltas/targets and both scroll
+positions during immediate axis switches, comparing this layout with a single
+two-axis scroller in the same WebView host. RF1's request cancellation is separate
+from browser axis movement; no axis fix is authorized or measured here.
+
 ## Scroll continuity and interruptible navigation — 2026-10-11
 
 The user formalized three atomic units below. Base is `0580b1b`; preserve the
@@ -96,7 +147,7 @@ and `sn3-native-retry-02` passes Inventory/shell (2 in 46.33s) with user
 foreground coordination and unchanged product/test inputs. Independent source
 and evidence review closes the gate. Earlier incomplete native attempts and
 the baseline negative control remain retained; no product correction was needed
-for the successful retry. Rebuild the reviewed outcome from recovery `eba28a6`
+for the successful retry. SN3 was rebuilt from recovery `eba28a6` as `350af26`
 on integrated SN2 `fac8ed0`, without merging the WIP. No production timing claim
 is added for SN3; SN2's measured revision remains explicit in PERFORMANCE.
 

@@ -241,7 +241,7 @@ const panel = createWorkPanel({
   onHighlight: (review, gesture, nodeId) => {
     queuePlanHighlight(review, gesture, nodeId);
   },
-  onNavigationInterrupt: interruptPlanNavigation,
+  onNavigationInterrupt: interruptPlanHighlight,
   onHighlightedSelect: (review, selected) => {
     void changePlanSelection(review, null, selected, true);
   },
@@ -2275,16 +2275,20 @@ async function readPlanNavigationWindow(review, current, ...args) {
   finally { if (review.navigationRead === read) review.navigationRead = null; }
 }
 
-function interruptPlanNavigation(review) {
+function interruptPlanHighlight(review) {
   review.highlightGeneration = (review.highlightGeneration ?? 0) + 1;
   review.highlightNavigation = null;
   review.keyboardRevealWindow = null;
+  if (review.highlightPump != null) review.highlightPump.next = null;
+}
+
+function interruptPlanNavigation(review) {
+  interruptPlanHighlight(review);
   review.windowRequestRevision += 1;
   review.windowRequestOffset = null;
   const settled = review.windowRequestSettled;
   review.windowRequestSettled = null;
   settled?.("retired");
-  if (review.highlightPump != null) review.highlightPump.next = null;
 }
 
 function queuePlanHighlight(review, gesture, nodeId) {

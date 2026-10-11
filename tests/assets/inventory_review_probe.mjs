@@ -517,11 +517,13 @@ assert.equal(firstLiveRow().dataset.nodeId, initialNode, "later render cannot ad
 
 // Multiple changing positions share one read. Its overlapping response enters
 // both the tree and the app cache immediately, before scrolling has stopped.
+for (const input of ["wheel", "pointerdown", "touchstart"]) {
 viewportReply = delayedViewport();
 const burstRead = viewportReply;
 const burstCalls = viewportCalls.length;
 const burstPromises = viewportPromises.length;
 for (const index of [256, 260, 264, 268, 272, 276, 280, 288]) {
+  treeRoot.dispatch(input);
   treeRoot.scrollTop = index * 24; treeRoot.dispatch("scroll");
   while (frames.length) frames.shift()();
 }
@@ -540,6 +542,7 @@ assert.ok(fixture.tail.rows.length <= 256);
 Object.assign(liveReview, fixture.views.maximum, { scrollTop: 0 });
 app.panel.render(liveTask);
 while (frames.length) frames.shift()();
+}
 
 // Failed or refused reads settle only their generation. No automatic retry
 // occurs at rest, but a changed user viewport can fetch again.
@@ -594,13 +597,14 @@ while (frames.length) frames.shift()();
 
 // Selecting an already-active loaded row cancels work even without an active
 // identity change. Disposal also retires a queued callback before settlement.
-for (const fail of [false, true]) {
+for (const [input, fail] of [["pointerdown", false], ["wheel", false],
+    ["touchstart", false], ["keydown", true]]) {
   viewportReply = delayedViewport();
   const interrupted = viewportReply;
   const beforeOutsideFocus = treeRoot.getAttribute("aria-activedescendant");
   const nextOutsideIndex = Number(beforeOutsideFocus.match(/row-(\d+)$/)[1]) + 1;
   treeRoot.dispatch("keydown", {key: "End"});
-  for (const callback of documentListeners.get(fail ? "keydown" : "pointerdown") ?? []) {
+  for (const callback of documentListeners.get(input) ?? []) {
     callback({ target: document.createElement("button"), key: "ArrowDown" });
   }
   treeRoot.dispatch("keydown", {key: "ArrowDown"});
@@ -633,6 +637,7 @@ app.panel.render(liveTask);
 while (frames.length) frames.shift()();
 
 for (const cancel of [() => firstLiveRow().click(),
+  ...["wheel", "pointerdown", "touchstart"].map((input) => () => treeRoot.dispatch(input)),
   ...["ctrlKey", "altKey", "metaKey"].map((modifier) =>
     () => treeRoot.dispatch("keydown", {key: "ArrowDown", [modifier]: true})),
   () => app.panel.renderSettings()]) {

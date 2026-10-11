@@ -212,6 +212,11 @@ conflict asks the user to review the current highlight and select again instead
 of silently applying selection to a changed range. Passive row replacement
 restores the actually focused row; only an accepted keyboard navigation result
 uses the server highlight as a new focus target.
+Input interruption retires keyboard/highlight intent separately from compatible
+scroll reads. Repeated wheel, pointer or touch events preserve a useful in-flight
+scroll read; viewport coverage and travel direction still decide its adoption.
+Loaded-row gestures and explicit navigation retain their replacement authority,
+and view, task and lifecycle changes retain their existing ownership fences.
 
 Scoped highlighted selection retains a finite under-10-second cost gate on the
 supported Windows host, with exact matched count and post-mutation scope and

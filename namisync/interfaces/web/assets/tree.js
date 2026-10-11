@@ -57,9 +57,9 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H) {
   root.addEventListener("keydown", onKeyDown);
   root.addEventListener("scroll", onScroll, {passive: true});
   root.addEventListener("focus", onFocus);
-  root.addEventListener("pointerdown", invalidateInternalRequest);
-  root.addEventListener("wheel", invalidateInternalRequest, { passive: true });
-  root.addEventListener("touchstart", invalidateInternalRequest, { passive: true });
+  root.addEventListener("pointerdown", cancelNavigation);
+  root.addEventListener("wheel", cancelNavigation, { passive: true });
+  root.addEventListener("touchstart", cancelNavigation, { passive: true });
   const resizeObserver = new document.defaultView.ResizeObserver(() => {
     scheduleViewportCheck();
   });
@@ -468,6 +468,10 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H) {
     }
   }
 
+  function cancelNavigation() {
+    if (pendingRequest?.kind === "keyboard") invalidatePendingRequest();
+  }
+
   function setProgrammaticScrollTop(value, reconcile = true) {
     const previous = root.scrollTop;
     root.scrollTop = value;
@@ -588,12 +592,12 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H) {
     root.removeEventListener("keydown", onKeyDown);
     root.removeEventListener("scroll", onScroll);
     root.removeEventListener("focus", onFocus);
-    root.removeEventListener("pointerdown", invalidateInternalRequest);
-    root.removeEventListener("wheel", invalidateInternalRequest);
-    root.removeEventListener("touchstart", invalidateInternalRequest);
+    root.removeEventListener("pointerdown", cancelNavigation);
+    root.removeEventListener("wheel", cancelNavigation);
+    root.removeEventListener("touchstart", cancelNavigation);
   }
 
-  return Object.freeze({beginWindowRequest, commitWindow, finishWindowRequest, cancelNavigation: invalidateInternalRequest, dispose});
+  return Object.freeze({beginWindowRequest, commitWindow, finishWindowRequest, cancelNavigation, dispose});
 }
 
 function optionalCallback(callbacks, name) {
