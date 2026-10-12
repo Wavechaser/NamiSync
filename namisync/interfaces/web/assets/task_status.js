@@ -132,6 +132,11 @@ export function taskStatusDigest(task) {
   const summary = task?.review?.summary ?? null;
   const form = task?.form ?? null;
   const { snapshot, sessionState: executionState, execution } = selectTaskExecution(task);
+  const attempt = ["sync-plan", "inventory"].includes(form?.attempt?.kind) ? form.attempt : null;
+  const checkingFolders = attempt?.running === true && !attempt.dispatched;
+  const scanning = task?.inventoryError == null && (task?.taskKind === "inventory" || attempt?.kind === "inventory")
+    && (executionState === "active" || task?.inventoryLoading === true
+      || (attempt?.running === true && attempt.dispatched));
   // Planning has no item-level progress, but the shell can still tell us that
   // it is underway. Keep the task rail animated while the start request is
   // being admitted, while a new plan view is loading, or while an active task
@@ -143,7 +148,7 @@ export function taskStatusDigest(task) {
     || (["sync-plan", "plan-again"].includes(form?.attempt?.kind)
       && form.attempt.dispatched === true && form.attempt.running === true)
   );
-  const progress = planning
+  const progress = checkingFolders || (scanning && snapshot === null) || planning
     ? { value: 0, determinate: false, indeterminate: true, phase: "plan" }
     : (summary !== null || task?.error != null) && !task?.executionStarted
       ? { value: 0, determinate: false, indeterminate: false, phase: null }
@@ -173,6 +178,9 @@ export function taskStatusDigest(task) {
   if (releaseMessage !== null || (task?.error !== null && task?.error !== undefined)) {
     [title, state] = ["Error", "error"];
   }
+  else if (checkingFolders) [title, state] = ["Checking folders", "planning"];
+  else if (attempt !== null && !attempt.running) [title, state] = ["Outcome unknown", "error"];
+  else if (scanning) [title, state] = ["Scanning", "planning"];
   else if (planning) [title, state] = ["Planning", "planning"];
   else if (summary !== null && !task?.executionStarted) [title, state] = ["Plan ready", "plan"];
   else if (terminal !== null) ({ title, state } = terminal);
@@ -189,6 +197,9 @@ export function taskStatusDigest(task) {
   let detail;
   if (releaseMessage !== null) detail = releaseMessage;
   else if (typeof task?.error === "string") detail = task.error;
+  else if (attempt?.recovery?.message) detail = attempt.recovery.message;
+  else if (checkingFolders) detail = "Checking the selected folders before starting.";
+  else if (scanning) detail = "Inventory scan in progress.";
   else if (planning) detail = "Planning in progress.";
   else if (summary !== null && !task?.executionStarted) detail = planItemCount === 0 && !planHasItems ? "Plan is empty."
     : `${planItemCount} items, ${formatByteCount(summary.required_bytes)} required.`;

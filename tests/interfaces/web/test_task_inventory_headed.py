@@ -133,6 +133,7 @@ def test_installed_inventory_refresh_acknowledge_restore_and_close(
             "kind": "item", "path": initial["report"]["fixture"]["missing_path"],
         }
         assert initial["report"]["pane_visible"] is True
+        assert initial["report"]["blank_scanning_shell"] is True
         assert initial["report"]["refreshed_missing"] is True
         assert initial["report"]["acknowledged_hidden"] is True
         assert initial["report"]["restored_missing"] is True

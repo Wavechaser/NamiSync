@@ -277,7 +277,9 @@ export function createInventoryReviewPanel(callbacks) {
     if (task !== null && current !== null && !blocked()) callbacks.onRefresh(current, null);
   });
   check.addEventListener("click", () => {
-    if (task !== null) callbacks.onCheckOutcome(task);
+    if (task === null || check.disabled) return;
+    if (task.form?.attempt?.kind === "inventory") callbacks.onCheckStart?.();
+    else callbacks.onCheckOutcome(task);
   });
   refreshSelected.addEventListener("click", () => {
     updateRefreshSelected();
@@ -528,20 +530,22 @@ export function createInventoryReviewPanel(callbacks) {
     detailsToggle.hidden = review === null;
     diagnostics.hidden = review === null || !detailsExpanded;
     const available = review !== null;
-    content.hidden = !available;
+    content.hidden = false;
     reload.hidden = !value.inventoryError && !review?.message;
     reload.disabled = value.inventoryLoading || value.closePending;
     const actionBlocked = !available || blocked() || !value.sessionReleased || value.sessionState === "active";
     refresh.disabled = actionBlocked;
     refresh.hidden = !available;
-    check.hidden = value.inventoryAction?.recovery?.canCheck !== true;
-    check.disabled = value.inventoryAction?.recovery?.checking === true;
+    const startAttempt = value.form?.attempt?.kind === "inventory" ? value.form.attempt : null;
+    const recovery = startAttempt?.recovery ?? value.inventoryAction?.recovery;
+    check.hidden = recovery?.canCheck !== true;
+    check.disabled = recovery?.checking === true || (startAttempt !== null && !startAttempt.running);
     recoveryActions.hidden = check.hidden && reload.hidden;
     renderFilesystemText(rootPath, review?.summary.root_path ?? value.form?.source?.text ?? "");
     rootLine.title = review?.summary.root_path ?? value.form?.source?.text ?? "";
     const digest = taskStatusDigest(value);
     summary.dataset.status = value.inventoryError ? "attention" : digest.state;
-    renderText(title, value.sessionState === "active" ? "Inventory scan in progress"
+    renderText(title, startAttempt !== null || value.sessionState === "active" || value.inventoryLoading ? digest.title
       : value.sessionState === "refused" ? "Inventory scan did not start"
         : value.sessionState === "failed" ? "Inventory scan failed"
           : value.sessionState === "canceled" ? "Inventory scan canceled" : "Inventory scan completed");
@@ -566,7 +570,7 @@ export function createInventoryReviewPanel(callbacks) {
       ? `${review.summary.request_id === value.requestId ? "Displayed scan" : "Previous published scan"}: ${detailScopeLabel}` : "";
     const scanCounts = available
       ? `${review.summary.observed_count} observed · ${review.summary.missing_count} missing · ${review.summary.warning_count} notices from this scan.${scanScope.kind === "location" ? "" : " Other inventory items were not rescanned."}` : "";
-    const guidance = value.inventoryError ?? review?.message
+    const guidance = value.inventoryError ?? startAttempt?.recovery?.message ?? review?.message
       ?? (value.inventoryLoading ? "Loading inventory view…" : "");
     renderFilesystemText(statusLine, [...new Set([
       available ? `${publication} · ${review.summary.scan_complete ? "" : "incomplete · "}${scanCounts}` : "",
@@ -576,12 +580,21 @@ export function createInventoryReviewPanel(callbacks) {
     renderFilesystemText(globalScanFacts, available
       ? `${detailPublication} · ${review.summary.scan_complete ? "complete" : "incomplete"} · ${scanCounts}` : "");
     if (!available) {
+      toolbar.hidden = true;
+      empty.hidden = true;
+      rows.replaceChildren();
+      list.ariaRowCount = "1";
+      search.disabled = true;
+      submit.disabled = true;
+      clear.disabled = true;
+      for (const { sortButton } of sortHeaders.values()) sortButton.disabled = true;
       rowMenu.close();
       filterMenu.render([], {}, true);
       refreshSelected.disabled = true;
       detailActions.hidden = true;
       return;
     }
+    toolbar.hidden = false;
     renderText(globalFacts, `${rollupText(review.summary.rollup)}. ${review.summary.rollup.acknowledged} acknowledged items. Stored checksums are baseline evidence; a scan does not verify current bytes.`);
     const selected = review.detail?.row ?? null;
     const domain = selected !== null && selected.warning === null;

@@ -425,10 +425,14 @@ _BUSY_SCRIPT = _COMMON_JS + r"""
   await untilAsync(async () => (await control("track_busy")).ready === true, "published busy session");
   await untilAsync(async () => (await control("status")).busy_entered === true, "busy scanner");
   await until(() => {
-    const guidance = document.querySelector(".nami-setup__card > p:first-of-type");
-    return guidance?.hidden === false && guidance.textContent ===
-      "Planning is in progress. Reviewed folders and options are frozen.";
-  }, "observed frozen busy Setup");
+    const pane = document.querySelector(".nami-plan-review");
+    return pane?.querySelector(".nami-plan-review__status-title")?.textContent === "Planning"
+      && pane.querySelector(".nami-plan-review__progress.nami-progress--indeterminate")
+      && !pane.querySelector(".nami-plan-review__table-card").hidden
+      && pane.querySelectorAll(".nami-plan-review__rows [data-node-id]").length === 0
+      && pane.querySelector('[data-action="execute"]').disabled;
+  }, "observed blank planning shell");
+  const blankPlanningShell = true;
   await control("arm_busy_drain_failure");
   clickClose("Task 50");
   await until(() => detailFor("Task 50") === "Canceling and closing…", "pending cancellation");
@@ -448,7 +452,7 @@ _BUSY_SCRIPT = _COMMON_JS + r"""
   await control("settle_busy");
   await until(() => rows().length === 46, "settled busy close");
   const settled = await control("status");
-  await control("record", { busy: { pending, retainedPending, recovered, settled } });
+  await control("record", { busy: { blankPlanningShell, pending, retainedPending, recovered, settled } });
   await control("arm_release_delay");
   clickNew();
   await until(() => rows().length === 47 && statusFor("Task 51") === "New task", "terminal Setup task");

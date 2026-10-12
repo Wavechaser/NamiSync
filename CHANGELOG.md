@@ -177,7 +177,15 @@ behavioral evidence.
 Safety, settlement and authority work made high-consequence release claims
 explicit, reviewable and regression-backed.
 
-#### Align desktop review surfaces and recovery (2026-10-05 – 2026-10-11)
+#### Align desktop review surfaces and recovery (2026-10-05 – 2026-10-12)
+
+- Show Plan/Inventory review shells immediately after starting, with Checking
+  folders then Planning/Scanning, indeterminate progress and a blank table until
+  publication. Preserve refusal and original-command Check recovery, and retain
+  the shell on admitted terminal failures. Composition, interfaces/tools and
+  installed Plan/Inventory checks pass. Real 8k/32k startup medians are
+  12.669/50.482 seconds; PERFORMANCE separates filesystem observation from
+  preflight evaluation. No backend optimization was made.
 
 - Distinguish completed no-ops from deselected skips in execution rows: actual
   no-ops display green Completed, deselected operations neutral Skipped. Keep

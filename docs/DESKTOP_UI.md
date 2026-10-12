@@ -1372,10 +1372,16 @@ at narrow card widths both use a stacked, wrapping layout.
 The progress track deliberately uses the ordinary button-rest translucent fill
 instead of Microsoft's stronger ProgressBar stroke resource. It composites over
 the card, without opacity on the whole control. Forced colors retain Canvas.
-Dispatched planning and loading its completed review use indeterminate progress
-in the shared task digest and loading status card; no scan percentage is invented.
-Pre-admission folder checks and ready, unexecuted plans remain idle. Errors stop
-planning animation, and execution retains its existing progress authority.
+Creating a Plan or Inventory switches immediately from Setup to its review shell.
+The shell shows Checking folders during admission, then Planning or Scanning
+after submission, with indeterminate progress and an empty table until the
+complete review is available. Filters and row actions stay unavailable during
+loading. Submitted folder text provides context until canonical reviewed paths
+arrive; it is not admitted evidence. Admission refusal returns to Setup. A delayed
+start retains Check outcome for the original delivery, and an unknown outcome
+stops animation while preserving its admission fence. Plan again keeps the old
+review until the newly created task is adopted; pair batches keep their coordinator.
+Ready, unexecuted plans remain idle; execution retains its progress authority.
 The production Plan grid orders Select, Name, Action, Checksum (empty), Size,
 Modified and Notes; Checksum and Modified share their default width. The
 gallery shares that column order. Dependency counts and `Risk: none` are omitted

@@ -264,6 +264,7 @@ def test_m1_4_installed_task_shell_navigation_closure_and_recovery(
         },
     }
     busy = report["busy"]
+    assert busy["blankPlanningShell"] is True
     assert busy["retainedPending"] is True
     assert busy["pending"]["busy_state"] == "canceling"
     assert busy["pending"]["busy_present"] is True

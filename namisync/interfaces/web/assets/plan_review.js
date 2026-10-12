@@ -740,6 +740,7 @@ export function createPlanReviewPanel(callbacks) {
   });
   retryOutcome.addEventListener("click", () => {
     if (current !== null) callbacks.onRetryOutcome?.(current);
+    else if (!retryOutcome.disabled) callbacks.onCheckStart?.();
   });
   detailsToggle.addEventListener("click", () => {
     detailsExpanded = !detailsExpanded;
@@ -1192,19 +1193,36 @@ export function createPlanReviewPanel(callbacks) {
       filterMenu.render([], {}, true);
       disableActions();
       delete element.dataset.pending;
-      updateText(sourceValue, "Loading reviewed plan…");
-      updateText(targetValue, "");
+      updateText(sourceValue, task.form?.source?.text ?? "Loading reviewed plan…", true);
+      updateText(targetValue, task.form?.target?.text ?? "", true);
+      sourcePath.title = task.form?.source?.text ?? "";
+      targetPath.title = task.form?.target?.text ?? "";
       updateSetting(verifySetting, verifyIcon, verifyLabel, "arrow-sync", "", "muted");
       updateSetting(deletionSetting, deletionIcon, deletionLabel, "delete", "", "muted");
-      updateText(facts, task.error ?? "Waiting for the completed plan to become available.");
       const digest = taskStatusDigest(task);
+      updateText(facts, task.error ?? (task.form?.attempt?.recovery?.message
+        ? "Waiting for the original start outcome." : digest.detail));
+      const recovery = task.form?.attempt?.recovery;
+      updateText(status, recovery?.message ?? "");
+      status.hidden = !recovery?.message;
+      retryOutcome.hidden = recovery?.canCheck !== true;
+      retryOutcome.disabled = recovery?.checking === true || task.form?.attempt?.running !== true;
+      updateText(retryOutcome, "Check outcome");
       updateText(statusTitle, task.error ? "Plan unavailable" : digest.title);
       summary.dataset.status = task.error ? "attention" : digest.state;
       progress.classList.toggle?.("nami-progress--indeterminate", !task.error && digest.progress.indeterminate);
       progress.style.setProperty("--nami-progress-value", `${digest.progress.value}%`);
       body.replaceChildren();
       renderedRows = null;
-      tableCard.hidden = true;
+      list.ariaRowCount = "1";
+      tableCard.hidden = false;
+      toolbar.hidden = true;
+      if (scopeCheckbox instanceof HTMLInputElement) {
+        scopeCheckbox.disabled = true;
+        scopeCheckbox.checked = false;
+        scopeCheckbox.indeterminate = false;
+      }
+      for (const { sortButton } of sortHeaders.values()) sortButton.disabled = true;
       executionReview.hidden = true;
       executionReview.dataset.status = "none";
       diagnostics.dataset.status = "none";
@@ -1222,6 +1240,7 @@ export function createPlanReviewPanel(callbacks) {
       return;
     }
     const review = current;
+    toolbar.hidden = false;
     if (previousWindow !== null && previousWindow.view_revision !== review.window.view_revision) {
       scrollDirection = 0;
       scrollTopObserved = body.scrollTop;

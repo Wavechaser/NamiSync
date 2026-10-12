@@ -11,6 +11,64 @@ retains investigation, rejected proposals and superseded execution recipes;
 the decisions still governing delivery are below. Historical observations
 certify their recorded build and dependencies only.
 
+## Loading sequence and axis scrolling — 2026-10-12
+
+The user explicitly formalized these outcomes from `42aa079`, superseding RI1/
+RI2's investigation-only restriction for the work below. Deliver at least two
+separate reviewed commits, in order; no backend optimization is authorized.
+Root owns shared delivery documents and integration. Serialize frontend and
+test writers; read-only investigation may overlap implementation.
+
+| ID | Outcome and owners | Verification and commit boundary |
+| --- | --- | --- |
+| LS1 | Immediately show the existing Plan/Inventory review shell for a submitted start attempt, with truthful checking/planning/scanning status, indeterminate progress and blank table until complete publication. Owners: app attempt/adoption/routing, Plan/Inventory renderers, existing composition/native consumers and DESKTOP_UI/INTERFACES as affected. Measure initial planning stages using bounded existing fixture/host infrastructure; PERFORMANCE owns method and observations. | Delayed admission and work, refusal, uncertain receipt recovery, task switching, terminal failure and publication must preserve command custody, frozen inputs and disabled unavailable actions. Existing direct page/route probes, installed Setup/task-shell/Inventory witnesses, interfaces and direct tool consumers, fresh independent review. Record source/runtime/fixture provenance and raw samples; diagnostic timings are not latency guarantees. One coherent display-sequence commit including measurements; no partial plans, backend speed changes or bridge schema changes. |
+| AX1 | Confirm or disprove the reported wheel/tilt axis lock in the installed WebView. If nested native scrollers reproduce Chromium target retention and a single scroller removes it, use one two-axis scroller with sticky header in Plan/Inventory. Owners: common table CSS/geometry, Plan/Inventory/tree viewport consumers and existing native/gallery/loading helpers. | Compare actual browser/native wheel input in both axis orders with the same runtime/layout, excluding endpoints and foreground loss. Preserve row windows, direction/prefetch policy, column widths, header alignment, focus/keyboard reveal and task/view ownership. Before implementation, record the confirmed cause and finite consumer migration. Installed axis-switch witness plus affected tree/Inventory/shell/gallery and interfaces/tools gates; fresh review, separate commit. If unconfirmed, deliver investigation evidence and next decision without speculative product changes. |
+
+Evidence lives in ignored `build/loading-sequence-20261012/`; temporary fixtures,
+measurement scripts and unique immutable receipts stay there. Each collector
+records its dependencies and limitations. Reuse existing containment and native
+input ownership checks. No new benchmarking framework, latency SLO, renderer
+rewrite, row schema, execution policy or further window-loading optimization.
+AGENTS recurrence, scope and mandatory stops apply. A cause outside the accepted
+frontend scrolling mechanism requires discussion before implementation.
+
+LS1 finite implementation population: `panels.js`, `task_status.js`,
+`plan_review.js`, `inventory_review.js`; existing setup/task-shell/Plan/Inventory
+JavaScript probes and their wrappers; existing installed task-shell/Inventory
+helpers; DESKTOP_UI and INTERFACES. Start-recovery Check reuses the original
+delivery callback, never a new submission. Plan-again and pair coordination
+retain their old task identity. Measurement uses real 8,000/32,000-file source
+trees with 10% missing targets, three sequential fresh-process observations
+per size and coarse stage timers. Filesystem caches are warm after fixture
+creation; no p95 or cold-device claim. An installed first-frame/first-row witness
+reuses the existing host when practical; measurements stay separate from gates.
+
+AX1 confirmation method uses browser-injected trusted wheel events through the
+existing WebView CDP driver, not DOM WheelEvent dispatch and not a hardware-tilt
+equivalence claim. Compare both axis orders at 50/250/600/1,000 ms, with quiet
+resets and scroll room inside the loaded window, on nested, temporary single,
+then restored nested layout. Capture raw deltas/targets/default prevention,
+scroll positions, geometry, focus and runtime/source identity. Product changes
+remain conditional on the supported nested-scroll mechanism being reproduced.
+
+LS1 is complete in the atomic commit containing this record. Focused checks
+pass 67 (three deselected); interfaces/tools pass 2,385 with three existing
+privilege skips. Installed task-shell cases pass twice in `ls1-native-01`;
+Inventory passes in `ls1-native-retry-01` after correcting the helper's async
+dependency-capture barrier. The earlier failed receipt remains; product bytes
+were unchanged across the retry. Held-work witnesses confirm blank Planning/
+Scanning shells and disabled unavailable actions. Fresh independent review
+covers source, consumers, installed provenance and six startup samples.
+PERFORMANCE owns the 8k/32k method and observations; no backend change occurred.
+
+AX1's first CDP attempt did not reproduce the lock. Its single-scroller control
+was invalid because CSP blocked a stylesheet; retain that receipt, correct the
+ignored control with CSSOM and prove actual overflow geometry. Follow with a
+bounded Windows WHEEL/HWHEEL injection using existing foreground/job ownership
+checks and the same finite matrix. Injected Windows input is not a claim of
+physical device equivalence. No scroller implementation is authorized unless
+the nested/single/restored comparison confirms the mechanism.
+
 ## Review follow-ups — 2026-10-11
 
 The user formalized three implementation units and two investigation-only

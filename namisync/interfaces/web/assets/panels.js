@@ -14,8 +14,8 @@ export function createWorkPanel(setupCallbacks, planReviewCallbacks, settings, i
   body.classList.add("nami-work-panel__body");
   panel.append(body);
   const setup = createSetupPanel(setupCallbacks);
-  const review = createPlanReviewPanel(planReviewCallbacks);
-  const inventory = createInventoryReviewPanel(inventoryCallbacks);
+  const review = createPlanReviewPanel({ ...planReviewCallbacks, onCheckStart: setupCallbacks.onStartPlan });
+  const inventory = createInventoryReviewPanel({ ...inventoryCallbacks, onCheckStart: setupCallbacks.onStartInventory });
   settings.remove();
   settings.hidden = false;
   let content = null;
@@ -37,15 +37,17 @@ export function createWorkPanel(setupCallbacks, planReviewCallbacks, settings, i
       show(empty);
       return;
     }
-    if (task.taskKind === "inventory" && (task.inventoryReview != null
-        || task.inventoryLoading || task.sessionReleased)) {
+    const starting = task.form?.attempt?.kind;
+    if (starting === "inventory" || (task.taskKind === "inventory" && (task.inventoryReview != null
+        || task.inventoryLoading || task.sessionReleased || task.sessionId != null || task.sessionState === "active"))) {
       review.dispose();
       show(inventory.element);
       inventory.render(task);
       return;
     }
     inventory.dispose();
-    if (task.review !== null || task.reviewLoading || task.executionStarted) {
+    if (starting === "sync-plan" || task.review !== null || task.reviewLoading || task.executionStarted
+        || (task.taskKind === "sync-plan" && task.sessionId != null)) {
       show(review.element);
       review.render(task);
       return;

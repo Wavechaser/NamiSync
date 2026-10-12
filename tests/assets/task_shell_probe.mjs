@@ -281,7 +281,7 @@ const taskStatusUrl = moduleUrl((await readFile(join(dirname(process.argv[3]), "
 const { taskStatusDigest } = await import(taskStatusUrl);
 assert.equal(taskStatusDigest({}).title, "New task");
 assert.equal(taskStatusDigest({}).progress.indeterminate, false);
-assert.equal(taskStatusDigest({ taskKind: "inventory", sessionState: "active" }).title, "Inventory");
+assert.equal(taskStatusDigest({ taskKind: "inventory", sessionState: "active" }).title, "Scanning");
 assert.equal(taskStatusDigest({ taskKind: "sync-plan", sessionState: "active", error: "Planning failed." }).progress.indeterminate, false);
 assert.equal(taskStatusDigest({ form: { attempt: { kind: "sync-plan", dispatched: true, running: true } } }).detail, "Planning in progress.");
 assert.equal(taskStatusDigest({ taskKind: "sync-plan", sessionState: "active" }).progress.indeterminate, true);
@@ -299,7 +299,16 @@ assert.equal(taskStatusDigest({ taskKind: "sync-plan", form: {
 } }).progress.indeterminate, true);
 assert.equal(taskStatusDigest({ taskKind: "sync-plan", form: {
   attempt: { kind: "sync-plan", dispatched: false, running: true },
-} }).progress.indeterminate, false);
+} }).progress.indeterminate, true);
+for (const kind of ["sync-plan", "inventory"]) {
+  const attempt = { kind, dispatched: false, running: true };
+  assert.equal(taskStatusDigest({ form: { attempt } }).title, "Checking folders");
+  attempt.dispatched = true;
+  assert.equal(taskStatusDigest({ form: { attempt } }).title, kind === "inventory" ? "Scanning" : "Planning");
+  attempt.running = false;
+  assert.equal(taskStatusDigest({ form: { attempt } }).title, "Outcome unknown");
+  assert.equal(taskStatusDigest({ form: { attempt } }).progress.indeterminate, false);
+}
 assert.equal(taskStatusDigest({ taskKind: "sync-plan", reviewLoading: true,
   error: "Plan unavailable.",
 }).progress.indeterminate, false);
@@ -781,16 +790,19 @@ assert.deepEqual(
 
 globalThis.taskHarness.deferTaskGSetup = true;
 taskButton("Task 7").click();
+const beforeReleaseSurface = byText("Plan review test surface");
+assert.ok(beforeReleaseSurface, "an admitted terminal Plan keeps its shell before release");
 drains.get(TASK_G).acceptRelease(TASK_G, SESSION_G);
 await until(() => planOpens.length === 1);
 assert.deepEqual(calls.at(-1), ["open-plan", TASK_G]);
 const firstLoadingSurface = byText("Plan review test surface");
+assertSameNode(firstLoadingSurface, beforeReleaseSurface, "release retains the same Plan shell");
 assert.ok(firstLoadingSurface, "selected task shows the retained review while loading");
 planOpens[0].reject(new Error("simulated initial plan open failure"));
 await until(() => byText("Plan unavailable. Select the task to retry.") !== undefined);
-assert.ok(byText("Loading task setup…"), "a failed Plan load leaves the Plan surface");
-assert.ok(byText("Plan review test surface") === undefined, "failed Plan surface is absent");
-assertSameNode(firstLoadingSurface.parentNode, null, "refused load detaches the loading review");
+assert.ok(byText("Loading task setup…") === undefined);
+assertSameNode(byText("Plan review test surface"), firstLoadingSurface,
+  "failed initial open retains the admitted Plan shell");
 
 taskButton("Task 7").click();
 await until(() => planOpens.length === 2);
@@ -799,8 +811,10 @@ planOpens[1].resolve(planSummary());
 await until(() => planWindows.length === 1);
 planWindows[0].reject(new Error("simulated initial plan window failure"));
 await until(() => byText("Plan unavailable. Select the task to retry.") !== undefined);
-assert.ok(byText("Loading task setup…"));
-assert.ok(byText("Plan review test surface") === undefined, "failed Plan surface is absent");
+assert.ok(byText("Loading task setup…") === undefined);
+assertSameNode(byText("Plan review test surface"), firstLoadingSurface,
+  "an admitted Plan retains its shell after an initial review read fails");
+assert.equal(reviewRenders.at(-1).error, "Plan unavailable. Select the task to retry.");
 
 taskButton("Task 7").click();
 taskButton("Task 7").click();

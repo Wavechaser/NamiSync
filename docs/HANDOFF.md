@@ -1,50 +1,39 @@
-# Latest session — review follow-ups complete
+# Latest session — loading sequence and axis investigation
 
-2026-10-11. Completed the three user-approved implementation units on milestone1.
-No unrelated work, worktrees or recovery branches were created. Larger initial
-loading and axis-switching fixes remain investigation-only; further scroll
-optimization is closed.
+2026-10-12, milestone1. User authorized LS1 then AX1 as separate commits;
+M1_PLAN owns scope. No backend optimization or further window-loading policy
+change is authorized. No unrelated work, recovery branch or worktree created.
 
-RF1: 23e5810 preserves compatible scroll reads when wheel/pointer/touch input
-interrupts keyboard/highlight intent. Explicit view/lifecycle retirement and
-exact external ownership remain. Real consumer red/green probes, 2,385
-interfaces/tools checks and installed tree/Inventory/shell pass. Failed native
-readiness receipts remain; the unchanged foreground-assisted retry passed.
+LS1 is the atomic commit containing this record. Submitted starts immediately
+show blank Plan/Inventory shells with Checking folders then Planning/Scanning
+and indeterminate progress. Refusal returns to editable Setup; uncertain receipt
+Check retains the original command. Admitted terminal failure stays on its
+review shell. Plan again and pair coordination retain existing task identities.
 
-RF2: 7136764 aligns badge text, uses fill-only hover/press feedback, separates
-inline annotations by 4 px and matches Inventory chevrons to Plan. Focused
-checks pass 84; neighborhood passes 2,385 with three existing privilege skips;
-installed gallery passes two gates across light, dark, forced colors and reduced
-motion. Native01 exposed mistaken token arithmetic and fractional-outline
-expectations; consolidated gallery-only corrections pass focused03/native02.
-Product CSS stayed unchanged through those checker corrections. Independent
-source, evidence and documentary review approved the commit.
+Verification: focused 67 passes/three deselected; interfaces/tools 2,385 passes/
+three existing privilege skips. Both installed task-shell cases pass in
+ls1-native-01. Inventory passes in ls1-native-retry-01 after a test-only barrier
+correction: keep injected dependencies until the asynchronous scanner captures
+them. The earlier failure was not foreground loss. Product bytes are identical
+between native receipts; the final Inventory full journey and blank Scanning
+witness pass. Independent review covers product, fixtures and provenance.
 
-RF3: the atomic commit containing this handoff maps skipped+noop to green
-Completed and other skips to neutral Skipped. Raw notes and backend/bridge facts
-remain unchanged, including independent verification and planned No change.
-Red matrix reproduces the label error; focused matrix/gallery passes 28;
-interfaces/tools passes 2,385 with three existing privilege skips (205.43s).
-Installed execution, shell and gallery pass six cases (111.82s). Raw gallery
-receipts confirm the distinct labels/colors and forced-color text semantics.
-Fresh independent review covers actual source and installed package provenance.
+PERFORMANCE records six fresh-process planning samples: warm-filesystem medians
+12.669s for 8k files and 50.482s for 32k. Current-world observation accounts for
+about 74%; later preflight evaluation is distinct. One installed 8k DOM click
+shows the blank shell synchronously and first rows at 13.389s. No backend
+optimization was made. Evidence and method live under
+build/loading-sequence-20261012/measurement/; all measurement children closed.
 
-RI1: routing waits for review/loading state and empty renderers hide tables.
-Propose immediate review shell at the submitted attempt, with frozen inputs,
-Checking folders then Planning/Scanning, indeterminate progress and blank table.
-Preserve refusal/uncertain outcome recovery and complete publication. Existing
-C5 timings exclude cold admission, scans, projection and initial indexes; profile
-those stages before selecting a speed change. No startup implementation made.
+AX1 remains active. Browser-injected wheels did not reproduce axis lock on
+actual/nested/restored controls. The attempted single control was invalid due
+to CSP; ignored CSSOM correction now proves overflow geometry before trials.
+Next: bounded native Windows WHEEL/HWHEEL comparison, with foreground/hit/PID
+checks and both axis orders. Product migration remains conditional on a valid
+nested/single/restored reproduction. User input is mouse wheel/tilt over rows.
 
-RI2: mouse wheel/tilt over rows; nested horizontal/vertical scrollers plus
-Chromium's wheel-target retention plausibly explain the axis lock. No app
-axis-lock timer found; installed runtime/device behavior is not yet reproduced.
-Propose trusted delta/scroll-position observations while switching both ways,
-then compare nested and single two-axis scrollers in the same host. Only if
-confirmed should a single-scroller/sticky-header correction be selected.
-
-Evidence and exact commit identities: build/review-followups-20261011/ and its
-integration.md. Failed receipts are retained. All tracked-source verification
-manifests stayed stable. No native/test process remains active. Default sandbox
-launch fails; justified host pwsh works. README/AGENTS need no change: this batch
-changes neither milestone synopsis nor repository execution rules.
+Evidence: build/loading-sequence-20261012/, including retained failed receipts.
+Use justified host pwsh for Python/native tests; sandbox temp/runtime resolution
+does not describe the installed host. Serialize native windows and measurement
+intervals. README/AGENTS need no change because milestone synopsis and repository
+rules are unchanged.

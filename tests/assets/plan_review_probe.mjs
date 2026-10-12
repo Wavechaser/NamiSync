@@ -10,6 +10,14 @@ process.env.TZ = "UTC";
 class ClassList {
   constructor(owner) { this.owner = owner; this.values = new Set(); }
   add(...values) { for (const value of values) this.values.add(value); }
+  toggle(value, force = !this.contains(value)) {
+    if (force) this.add(value);
+    else {
+      this.values.delete(value);
+      this.owner.className = this.owner.className.split(/\s+/).filter((item) => item !== value).join(" ");
+    }
+    return force;
+  }
   contains(value) {
     return this.values.has(value) || this.owner.className.split(/\s+/).includes(value);
   }
@@ -1045,7 +1053,9 @@ search.value = "stale";
 search.dispatch("input");
 task.review = null;
 panel.render(task);
-assert.equal(findByClass(panel.element, "nami-plan-review__table-card").hidden, true);
+assert.equal(findByClass(panel.element, "nami-plan-review__table-card").hidden, false);
+assert.equal(viewport.children.length, 0, "loading cannot retain the previous plan rows");
+assert.equal(findByClass(panel.element, "nami-plan-review__toolbar").hidden, true);
 task.review = review;
 panel.render(task);
 assert.equal(findByClass(panel.element, "nami-plan-review__settings").children.length, 2,
@@ -1935,7 +1945,10 @@ let scrollReply = null;
 let highlightReply = null;
 const scrollReads = [];
 const inputHighlights = [];
+let acceptSetup, acceptStart, loadingStarts = 0;
 globalThis.planScrollHarness = {
+  prepareSetup: () => new Promise((resolve) => { acceptSetup = resolve; }),
+  startPlan: () => { loadingStarts += 1; return new Promise((resolve) => { acceptStart = resolve; }); },
   openPlanView: () => Promise.resolve(scrollSummary),
   getPlanWindow: (...args) => {
     scrollReads.push(args);
@@ -1968,8 +1981,46 @@ for (const [key, value] of Object.entries({
   "./execution_confirmation.js": moduleUrl("export const createExecutionConfirmation = () => ({ element: document.createElement('dialog') });"),
   "./rail.js": moduleUrl("export const createTaskRail = () => ({ element: document.createElement('nav'), render() {} });"),
 })) scrollAppSource = scrollAppSource.replace(key, value);
-scrollAppSource += "\nexport { adoptTask, selectTask, panel };";
+scrollAppSource += "\nexport { adoptTask, selectTask, panel, startCurrentPlan };";
 const scrollApp = await import(moduleUrl(scrollAppSource));
+// Hold the real start path at setup admission, then at the original start
+// receipt. The packaged router and renderer must show the same blank shell.
+const loadingTask = scrollApp.adoptTask({task_id: "task-" + "9".repeat(32), session_id: null,
+  session_state: null, session_released: false, task_kind: null, request_id: null});
+const loadingOptions = { deletion_policy: "trash", preservation: {}, filters: [] };
+loadingTask.form = { editable: true, mode: "sync-plan", revision: 0, attempt: null, options: loadingOptions,
+  source: { text: "C:\\source", pending: false, location: {purpose: "source", choice_id: "source"} },
+  target: { text: "D:\\target", pending: false, location: {purpose: "target", choice_id: "target"} } };
+scrollApp.selectTask(loadingTask.taskId);
+const loadingStart = scrollApp.startCurrentPlan();
+const loadingPane = () => findByClass(scrollApp.panel.element, "nami-plan-review");
+assert.equal(findByClass(loadingPane(), "nami-plan-review__status-title").textContent, "Checking folders");
+assert.equal(findByClass(loadingPane(), "nami-plan-review__rows").children.length, 0);
+assert.equal(findByClass(loadingPane(), "nami-plan-review__table-card").hidden, false);
+assert.equal(findByClass(loadingPane(), "nami-plan-review__progress").classList.contains("nami-progress--indeterminate"), true);
+assert.equal(findAction(loadingPane(), "execute").disabled, true);
+acceptSetup(loadingOptions);
+for (let index = 0; index < 12; index += 1) await Promise.resolve();
+assert.equal(findByClass(loadingPane(), "nami-plan-review__status-title").textContent, "Planning");
+assert.equal(findByClass(loadingPane(), "nami-plan-review__rows").children.length, 0);
+let loadingChecks = 0;
+loadingTask.form.attempt.recovery = {canCheck: true, checking: false, message: "Original start delayed", check: async () => {
+  loadingChecks += 1;
+  acceptStart({task_id: loadingTask.taskId, request_id: summary.request_id, session_id: "9".repeat(32)});
+}};
+loadingTask.form.attempt.running = false;
+scrollApp.panel.render(loadingTask);
+assert.equal(findByClass(loadingPane(), "nami-plan-review__status-title").textContent, "Outcome unknown");
+assert.equal(findByClass(loadingPane(), "nami-plan-review__progress").classList.contains("nami-progress--indeterminate"), false);
+assert.equal(findAction(loadingPane(), "retry-outcome").disabled, true);
+loadingTask.form.attempt.running = true;
+scrollApp.panel.render(loadingTask);
+findAction(loadingPane(), "retry-outcome").dispatch("click");
+await loadingStart;
+assert.equal(loadingChecks, 1);
+assert.equal(loadingStarts, 1, "Check outcome never resubmits the start");
+assert.ok(loadingTask.review, "only the complete review publishes rows");
+assert.equal(findByClass(loadingPane(), "nami-plan-review__rows").children.length > 0, true);
 const scrollTask = scrollApp.adoptTask({task_id: summary.task_id, session_id: "4".repeat(32),
   session_state: "completed", session_released: true, task_kind: "sync-plan", request_id: summary.request_id});
 const settleScroll = async () => { for (let index = 0; index < 20; index += 1) await Promise.resolve(); };

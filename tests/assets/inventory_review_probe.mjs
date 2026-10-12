@@ -414,7 +414,8 @@ const panelSource = (await readFile(join(assetRoot, "panels.js"), "utf8"))
   .replace("./render.js", renderUrl).replace("./inventory_review.js", moduleUrl(source))
   .replace("./setup.js", setupUrl).replace("./plan_review.js", planUrl);
 const { createWorkPanel } = await import(moduleUrl(panelSource));
-const work = createWorkPanel({}, {}, document.createElement("div"), {
+let startChecks = 0;
+const work = createWorkPanel({onStartInventory: () => { startChecks += 1; }}, {}, document.createElement("div"), {
   onViewChange() {}, onDetail() {}, onWindow() {}, onReload() {},
 });
 task.sessionReleased = true; task.review = null;
@@ -422,6 +423,39 @@ work.render(task);
 assert.ok(walk(work.element).some((value) => value.ariaLabel === "Inventory review"));
 work.renderSettings();
 assert.ok(!walk(work.element).some((value) => value.ariaLabel === "Inventory review"));
+const pendingInventory = { taskId: "pending-inventory", label: "Pending", taskKind: null,
+  sessionState: null, sessionReleased: false, inventoryReview: null, review: null,
+  form: { source: {text: "C:\\pending"}, attempt: { kind: "inventory", running: true, dispatched: false } } };
+work.render(pendingInventory);
+const pendingPane = () => walk(work.element).find((value) => value.ariaLabel === "Inventory review");
+const pendingTitle = () => walk(pendingPane()).find((value) => value.classList.contains("nami-plan-review__status-title"));
+assert.equal(pendingTitle().textContent, "Checking folders");
+assert.equal(walk(pendingPane()).find((value) => value.classList.contains("nami-inventory-review__content")).hidden, false);
+assert.equal(walk(pendingPane()).some((value) => value.getAttribute("role") === "treeitem"), false);
+pendingInventory.form.attempt.dispatched = true;
+work.render(pendingInventory);
+assert.equal(pendingTitle().textContent, "Scanning");
+pendingInventory.form.attempt.recovery = {canCheck: true, checking: false, message: "Check original start"};
+work.render(pendingInventory);
+walk(pendingPane()).find((value) => value.dataset.action === "inventory-check-outcome").click();
+assert.equal(startChecks, 1, "start recovery reuses the original setup action");
+pendingInventory.form.attempt.running = false;
+work.render(pendingInventory);
+assert.equal(pendingTitle().textContent, "Outcome unknown");
+assert.equal(walk(pendingPane()).find((value) => value.classList.contains("nami-plan-review__progress")).classList.contains("nami-progress--indeterminate"), false);
+pendingInventory.form.attempt = null;
+work.render(pendingInventory);
+assert.equal(walk(work.element).some((value) => value.ariaLabel === "Inventory review"), false,
+  "refused admission returns to Setup");
+pendingInventory.taskKind = "inventory"; pendingInventory.sessionState = "active";
+work.render(pendingInventory);
+assert.equal(pendingTitle().textContent, "Scanning", "native active start renders before session release");
+pendingInventory.sessionId = "a".repeat(32);
+pendingInventory.sessionState = "failed";
+pendingInventory.inventoryError = "Scan failed; reload the inventory view.";
+work.render(pendingInventory);
+assert.equal(pendingTitle().textContent, "Inventory scan failed", "terminal failure keeps its admitted shell before release");
+assert.equal(walk(pendingPane()).find((value) => value.classList.contains("nami-plan-review__progress")).classList.contains("nami-progress--indeterminate"), false);
 
 // Exercise the app's fetch and the real pane/tree publication seam together.
 const shellNodes = new Map();
@@ -437,7 +471,10 @@ const viewportCalls = [];
 const viewportPromises = [];
 globalThis.inventoryViewportPromises = viewportPromises;
 const liveDetails = [], liveRefreshes = [];
+let admitInitial, startInitial, initialStarts = 0;
 globalThis.inventoryViewportHarness = {
+  admitLocation: () => new Promise((resolve) => { admitInitial = resolve; }),
+  startInventory: () => { initialStarts += 1; return new Promise((resolve) => { startInitial = resolve; }); },
   openInventoryView: () => Promise.resolve(fixture.views.maximum.summary),
   getInventoryWindow: (...args) => {
     viewportCalls.push(args);
@@ -479,8 +516,34 @@ for (const [key, value] of Object.entries({
   "./execution_confirmation.js": moduleUrl("export const createExecutionConfirmation = () => ({ element: document.createElement('dialog') });"),
   "./rail.js": moduleUrl("export const createTaskRail = () => ({ element: document.createElement('nav'), render() {} });"),
 })) appSource = appSource.replace(key, value);
-appSource += "\nexport { adoptTask, selectTask, panel };";
+appSource += "\nexport { adoptTask, selectTask, panel, startCurrentInventory };";
 const app = await import(moduleUrl(appSource));
+const initialTask = app.adoptTask({task_id: "task-" + "9".repeat(32), session_id: null,
+  session_state: null, session_released: false, task_kind: null, request_id: null});
+initialTask.form = { editable: true, mode: "inventory", revision: 0, attempt: null,
+  source: {text: "C:\\initial", pending: false, candidate: {}, revision: 0, admissionRevision: 0} };
+app.selectTask(initialTask.taskId);
+const initialStart = app.startCurrentInventory();
+const initialPane = () => walk(app.panel.element).find((value) => value.ariaLabel === "Inventory review");
+const initialTitle = () => walk(initialPane()).find((value) => value.classList.contains("nami-plan-review__status-title"));
+assert.equal(initialTitle().textContent, "Checking folders");
+assert.equal(walk(initialPane()).some((value) => value.getAttribute("role") === "treeitem"), false);
+admitInitial({purpose: "inventory", choice_id: "initial", display: "C:\\initial", continuation_id: null});
+for (let count = 0; count < 12; count += 1) await Promise.resolve();
+assert.equal(initialTitle().textContent, "Scanning");
+let initialChecks = 0;
+initialTask.form.attempt.recovery = {canCheck: true, checking: false, message: "Original scan delayed", check: async () => {
+  initialChecks += 1;
+  startInitial({task_id: initialTask.taskId, request_id: fixture.views.default.summary.request_id,
+    session_id: "9".repeat(32)});
+}};
+app.panel.render(initialTask);
+walk(initialPane()).find((value) => value.dataset.action === "inventory-check-outcome").click();
+await initialStart;
+assert.equal(initialStarts, 1); assert.equal(initialChecks, 1);
+assert.equal(initialTitle().textContent, "Scanning", "adopted active scan retains its loading shell");
+assert.equal(walk(initialPane()).some((value) => value.getAttribute("role") === "treeitem"), false,
+  "Inventory cannot publish rows before session release");
 const liveTask = app.adoptTask({ task_id: fixture.views.maximum.summary.task_id,
   session_id: "3".repeat(32), session_state: "completed", session_released: true,
   task_kind: "inventory", request_id: fixture.views.maximum.summary.request_id });

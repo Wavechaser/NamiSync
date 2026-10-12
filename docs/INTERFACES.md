@@ -451,6 +451,15 @@ are not themselves durable history loss.
 for literal input or remembered identity; `remembered_locations()` returns its
 bounded source, target and pair suggestions. Their immutable types remain with
 the workflow owner rather than becoming a second service/bridge view registry.
+Fresh Plan and Inventory starts display their review shells as soon as the
+local attempt begins: Checking folders precedes dispatch, then Planning or
+Scanning. This presentation does not admit a task or publish partial results.
+The original start delivery retains custody, including its explicit Check
+outcome action and unknown-outcome fence; a definitive admission refusal
+returns to editable Setup. An admitted session retains its shell through
+terminal delivery, release and review loading or failure. Plan again and batch
+starts retain their existing task/coordinator ownership.
+
 Typed/picker/recent Setup commands adapt these application APIs. Reading
 suggestions or admitting a candidate creates
 no task, session, location, mapping, run or recent activity.

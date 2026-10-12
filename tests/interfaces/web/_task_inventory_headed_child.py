@@ -31,6 +31,9 @@ _OWN_FAILURES = frozenset({
     "native inventory point is invalid",
     "native inventory click target is unavailable",
     "inventory fixture identity is unavailable",
+    "initial inventory loading witness timed out",
+    "initial inventory loading witness is invalid",
+    "initial inventory scanner did not enter",
 }) | frozenset(f"inventory {name} did not have one original command" for name in _COMMANDS)
 
 
@@ -48,6 +51,8 @@ class _InventoryPhase:
         self.fixture: dict[str, object] | None = None
         self.commands: list[dict[str, object]] = []
         self.failure: dict[str, object] | None = None
+        self.initial_scan_entered = threading.Event()
+        self.initial_scan_release = threading.Event()
 
     def bind(self, registry: object) -> None:
         from namisync.workflows import LocationCandidate
@@ -60,10 +65,26 @@ class _InventoryPhase:
         (folder / "one.txt").write_bytes(_FILE_BYTES)
         (folder / "two.txt").write_bytes(_FILE_BYTES)
         shell = registry.create_task_shell("a" * 32)
-        started = registry.start_setup_inventory(
-            shell.task_id, LocationCandidate.literal(str(self.source)),
-            command_id="b" * 32, wire_intent=("headed-inventory", str(self.source)),
-        )
+        runtime = registry._lifecycle._runtime
+        original = runtime._inventory_deps
+
+        def delayed_scan(*args: object, **kwargs: object) -> object:
+            self.initial_scan_entered.set()
+            if not self.initial_scan_release.wait(60):
+                raise RuntimeError("initial inventory loading witness timed out")
+            return original.scanner(*args, **kwargs)
+
+        runtime._inventory_deps = replace(original, scanner=delayed_scan)
+        try:
+            started = registry.start_setup_inventory(
+                shell.task_id, LocationCandidate.literal(str(self.source)),
+                command_id="b" * 32, wire_intent=("headed-inventory", str(self.source)),
+            )
+            if not self.initial_scan_entered.wait(10):
+                self.initial_scan_release.set()
+                raise RuntimeError("initial inventory scanner did not enter")
+        finally:
+            runtime._inventory_deps = original
         with self.lock:
             self.registry = registry
             self.initial = {"task_id": started.task_id, "request_id": started.request_id,
@@ -151,6 +172,8 @@ class _InventoryPhase:
                 for item in commands[:64]
             ],
             "wrapper_failure": failure,
+            "initial_scan_entered": self.initial_scan_entered.is_set(),
+            "initial_scan_released": self.initial_scan_release.is_set(),
         }
 
     def report(self) -> dict[str, object]:
@@ -534,6 +557,7 @@ def _drive(window: object, phase: _InventoryPhase, recorder: _Recorder,
         if failed:
             return
         failed = True
+        phase.initial_scan_release.set()
         recorder.fail(step, type(error).__name__)
         diagnostic = failure_site(task)
         diagnostic.update({"checkpoint": checkpoint, "page_result": page_result,
@@ -636,6 +660,7 @@ def _drive(window: object, phase: _InventoryPhase, recorder: _Recorder,
             raise RuntimeError("native inventory page result is invalid")
         checkpoint = "phase-report"
         report = phase.report()
+        report["blank_scanning_shell"] = phase.initial_scan_entered.is_set() and phase.initial_scan_release.is_set()
         report.update(value)
         report["foreground_owned"] = dict(foreground_owned)
         cdp.capture(screenshot, lambda: captured(report), "capture")
@@ -656,8 +681,22 @@ def _drive(window: object, phase: _InventoryPhase, recorder: _Recorder,
         report["task_closed"] = True
         recorder.ready(report)
 
-    cdp.evaluate(_PAGE, finished, "page")
-    next_stage(0)
+    def initial_loading(value: object) -> None:
+        if value is not True or not phase.initial_scan_entered.is_set():
+            raise RuntimeError("initial inventory loading witness is invalid")
+        phase.initial_scan_release.set()
+        cdp.evaluate(_PAGE, finished, "page")
+        next_stage(0)
+
+    loading = r"""(async()=>{for(let i=0;i<1200;i++){
+      const pane=document.querySelector('.nami-inventory-review');
+      if(pane?.querySelector('.nami-plan-review__status-title')?.textContent==='Scanning'
+          && pane.querySelector('.nami-progress--indeterminate')
+          && !pane.querySelector('.nami-inventory-review__content').hidden
+          && pane.querySelectorAll('.nami-inventory-review__rows [data-node-id]').length===0
+          && pane.querySelector('[data-action="inventory-refresh"]').disabled) return true;
+      await new Promise(r=>setTimeout(r,25));}throw new Error('initial-inventory-loading');})()"""
+    cdp.evaluate(loading, initial_loading, "initial-loading")
 
 
 def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
@@ -696,11 +735,14 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
         stack.enter_context(patch.object(host, "_production_commands", commands))
         stack.enter_context(headed_command_extension(host, extension))
         stack.enter_context(patch.object(host, "_configure_window_appearance", configure))
-        code = host.run_desktop(
-            AppPaths.from_root(arguments.data_dir),
-            DesktopInstanceIdentity(arguments.mutex, arguments.title),
-            startup_error=lambda _message: recorder.fail("startup", "DesktopStartupError"),
-        )
+        try:
+            code = host.run_desktop(
+                AppPaths.from_root(arguments.data_dir),
+                DesktopInstanceIdentity(arguments.mutex, arguments.title),
+                startup_error=lambda _message: recorder.fail("startup", "DesktopStartupError"),
+            )
+        finally:
+            phase.initial_scan_release.set()
     if not recorder.settled:
         recorder.fail("child", "HostReturned")
     recorder.finish(code, True)

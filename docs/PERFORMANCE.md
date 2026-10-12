@@ -10,6 +10,62 @@ retain behavior and gate decisions. AB-2 moved Plan/UI latency and empirical
 representation-memory collection to optional developer observations while
 preserving fixture/action, counted-work and independent release/custody gates.
 
+## Initial planning observation — LS1 (2026-10-12)
+
+The LS1 display-sequence candidate based on `42aa079` was measured without
+backend changes. Real fixtures contain 8,000 or 32,000 source files, 100 per
+folder, with 90% matching target files and 10% missing. Each file has 32 fixed
+bytes and a fixed mtime; exact path sets, bytes and timestamps were checked
+outside timing. Three sequential fresh-process/database children per size use
+the installed wheel and existing containment. Filesystem caches are warm after
+fixture creation; this is not a cold-device or p95 collection. The recorded host
+is Windows build 26200, i7-13700K, 63.69 GiB RAM, NTFS, Python 3.13.14 and SQLite
+3.50.4; power/background activity was not controlled as a reference-profile gate.
+
+The interval starts before `start_setup_plan` and ends after terminal drain,
+release, full projection, initial view and the first 256-row window. Coarse
+`perf_counter_ns` wrappers time existing calls without per-file instrumentation.
+All six children produced the expected 800/3,200 COPY and 7,200/28,800 NOOP
+operations, complete scans and 256-row windows, then closed cleanly.
+
+| Interval (seconds; median unless range shown) | 8,000 files | 32,000 files |
+| --- | ---: | ---: |
+| Request through first window | 12.669 | 50.482 |
+| Minimum–maximum | 12.602–12.673 | 50.454–50.754 |
+| Source scan | 0.684 | 2.733 |
+| Target scan | 0.620 | 2.469 |
+| Planner | 0.923 | 3.774 |
+| Current-world observation | 9.341 | 37.166 |
+| Preflight evaluation | 0.107 | 0.436 |
+| Full projection | 0.092 | 0.483 |
+| Initial view | 0.028 | 0.115 |
+
+Spans nest inside workflow/open-view/total intervals and must not be summed
+across those levels. `modules.preflight.observe` gathers guarded filesystem
+facts for scoped source/target/parent subjects, root evidence and space/trash
+facts. It is distinct from the subsequent preflight decision. Observation is
+about 74% of the total in this fixture; these coarse timings do not attribute
+its internal cost or justify removing checks. No backend optimization was made.
+
+One separate installed 8,000-file browser observation used a synthetic DOM
+Create plan click. The synchronous snapshot at 4.9 ms showed Checking folders;
+the next animation frame at 9.3 ms showed Planning. Both had a visible blank
+table. The first 256 rows were observed at 13,389.3 ms (25 ms polling resolution),
+with Plan ready on the following frame at 13,389.5 ms. This is DOM geometry/frame
+evidence, not compositor presentation or physical-input latency. The visible,
+focused viewport was 1267×764 at DPR 1.75. Native held-work tests independently
+verify blank Planning and Scanning shells.
+
+Raw evidence is under `build/loading-sequence-20261012/measurement/`: accepted
+`runs/planning_81a64a2b9e0940bf99e8673d15996f7a` and
+`runs/browser_5e6c8b6722c3490cb9b5acfc3e1fdc24`. Receipts retain every sample,
+fixture census, source/helper hashes, runtime, and matching before/after inputs.
+The installed wheel SHA-256 is
+`c3597454d262c9991ae4256a99da962b51b28f86568754f3e030d6de906df33e`.
+The preceding smoke is retained separately and excluded from aggregation.
+Recollection is needed for changed workflow/fixture/observer/host dependencies;
+these observations establish no latency acceptance threshold.
+
 ## Reference profile and collection
 
 The retained BR-G-42 profile is Windows 11 Pro build 26200, i7-13700K
