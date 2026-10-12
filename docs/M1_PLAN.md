@@ -69,6 +69,16 @@ checks and the same finite matrix. Injected Windows input is not a claim of
 physical device equivalence. No scroller implementation is authorized unless
 the nested/single/restored comparison confirms the mechanism.
 
+AX1 investigation is complete in its separate evidence commit; the conditional
+product migration was not activated. `attempt-02` passes all 80 CDP trials across
+both pages/layouts with full requested movement and valid controls. Windows
+wheel injection in `attempt-03` stopped before input at a focused-process job
+ownership check; missing numeric PID evidence prevents attributing that mismatch.
+No native or sustained-input conclusion follows. PERFORMANCE owns exact method,
+limits and next passive diagnostic if reopened. Fresh review confirms the raw
+negative observations and incomplete native receipt; the user's physical-device
+report remains unresolved. LS1 is `81731de`; no backend/scroller changes follow.
+
 ## Review follow-ups — 2026-10-11
 
 The user formalized three implementation units and two investigation-only

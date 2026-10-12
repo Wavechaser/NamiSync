@@ -66,6 +66,49 @@ The preceding smoke is retained separately and excluded from aggregation.
 Recollection is needed for changed workflow/fixture/observer/host dependencies;
 these observations establish no latency acceptance threshold.
 
+## Axis-switch investigation — AX1 (2026-10-12)
+
+At `81731de`, the installed WebView2 154.0.4258.62 diagnostic compared actual
+Plan/Inventory tables, inert copies with their nested scrollers, a temporary
+single two-axis scroller with sticky header, and restored nested copies. No
+installed asset or production behavior was changed. Existing contained host and
+CDP helpers supplied trusted browser-default wheel input over loaded rows,
+with foreground/focus checks and interior scroll positions. Each page/layout
+received isolated X/Y inputs and both axis orders at requested gaps of
+50/250/600/1,000 ms: 40 trials per page, 80 total. Deltas were 32 px horizontally
+and 80 px vertically; quiet resets separated trials.
+Observed switch gaps were 66.6–75.7, 266.3–275.8, 614.9–626.8 and
+1,016.5–1,025.3 ms respectively; requested delays are not exact delivered gaps.
+
+All 80 corrected trials moved the requested axes fully. Raw checks retain
+trusted unprevented deltas, actual event gaps, signed scroll room, intermediate
+positions, stable row populations/geometry and focus. The single control used
+CSSOM, proving outer overflow auto/auto, body visible/visible with zero internal
+vertical range and sticky header. Its outer box was retained; removing the body
+gutter narrowed header/body tracks by about 9.7 CSS px. Restoration returned the
+original nested ownership. These injected browser trials did not reproduce the
+reported physical wheel/tilt-wheel lock; they cannot disprove that report.
+
+An earlier attempt's stylesheet was blocked by CSP, leaving its single control
+nested; that layout comparison is invalid and retained separately. A subsequent
+Windows SendInput WHEEL/HWHEEL attempt, including planned sustained sequences,
+stopped before cursor movement or any input. The focused HWND passed owned-form
+ancestry but failed job-process membership. Exact PID/job values were not retained
+at the thrown exception, so the cause cannot be attributed to foreground loss,
+WebView process topology or a helper query error. Cursor restoration confirmed
+no movement; containment closed the child. No native or sustained-input result
+was collected. The planned horizontal stream alternated signs to avoid limited
+travel and would not have established unidirectional hardware equivalence.
+
+Evidence: `build/loading-sequence-20261012/axis/runs/attempt-01` (invalid single
+control), `attempt-02` (80 valid CDP trials), and `attempt-03` (pre-input ownership
+failure). Source/driver/installed identities are retained before and after.
+The nested-scroller hypothesis remains unconfirmed; no single-scroller product
+migration was made. If reopened, first retain a passive ownership snapshot with
+numeric HWND/PID/job facts, then resolve that mismatch before sending native
+input. A valid physical/native reproduction and nested/single/restored comparison
+remain necessary to attribute the report to this mechanism.
+
 ## Reference profile and collection
 
 The retained BR-G-42 profile is Windows 11 Pro build 26200, i7-13700K

@@ -179,6 +179,12 @@ explicit, reviewable and regression-backed.
 
 #### Align desktop review surfaces and recovery (2026-10-05 – 2026-10-12)
 
+- Investigate axis switching in both installed tables. Eighty valid browser
+  wheel trials did not reproduce the lock in nested or single-scroller controls.
+  Windows wheel injection stopped before input at an ownership check, so the
+  physical-device report remains unresolved. Retain evidence and limitations;
+  no speculative scroller migration was made.
+
 - Show Plan/Inventory review shells immediately after starting, with Checking
   folders then Planning/Scanning, indeterminate progress and a blank table until
   publication. Preserve refusal and original-command Check recovery, and retain
