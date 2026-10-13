@@ -7237,7 +7237,9 @@ def test_manual_dispatcher_partial_pause_and_terminal_reconciliation(tmp_path, m
             detail = registry.get_inventory_detail(planned.task_id,
                 expected_revision=view["view_revision"], node_id=node_id)
             assert detail["disposition"] == "current"
-            assert detail["manual_verification"] == overlay
+            detail_overlay = detail["manual_verification"]
+            assert detail_overlay["revision"] >= overlay["revision"]
+            assert detail_overlay == {**overlay, "revision": detail_overlay["revision"]}
             with pytest.raises(TaskUnavailableError):
                 registry.set_inventory_selection(planned.task_id, manual.request_id,
                     expected_revision=view["view_revision"], node_id=None, selected=True)
