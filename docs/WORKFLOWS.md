@@ -650,6 +650,13 @@ returns inventory plus nominal phase-tagged outcomes. Missing inventory is
 created automatically; the user is not told to run a hidden prerequisite
 manually.
 
+Selection distinguishes a current stat from retained historical observation.
+Only present rows supply an expected current stat to the verifier. Missing rows
+can retain their last observed metadata in the ledger and Inventory display;
+unsupported rows likewise supply no current stat. Neither retained history nor
+an unsupported classification makes a row present or prevents its typed negative
+outcome. Mode eligibility and conditional recording are unchanged.
+
 Task-bound ordinary sessions retain one latest `RetainedInventoryIntegrity`
 view independently of current ledger rows. The runtime captures nominal outcomes
 and result axes before session details are dropped; the interface binds that

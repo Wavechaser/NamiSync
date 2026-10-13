@@ -2736,6 +2736,7 @@ def _integrity_selection(
     shared_root = Path(root)
 
     def owned_item(row: InventorySnapshot) -> IntegritySelectionItem:
+        expected_state = InventoryState(row.presence.value)
         return IntegritySelectionItem(
             item_id=f"{row.location_id}:{row.row_id}",
             row_id=row.row_id,
@@ -2743,9 +2744,12 @@ def _integrity_selection(
             root=shared_root,
             rel_path_key=row.rel_path_key,
             display_path=row.rel_path,
-            expected_state=InventoryState(row.presence.value),
+            expected_state=expected_state,
             expected_stat=(
-                None if row.observed is None else snapshot_file_stat(row.observed)
+                snapshot_file_stat(row.observed)
+                if expected_state is InventoryState.PRESENT
+                and row.observed is not None
+                else None
             ),
             baseline=(
                 None if row.attestation is None else snapshot_attestation(row.attestation)

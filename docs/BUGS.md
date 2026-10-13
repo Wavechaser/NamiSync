@@ -2431,6 +2431,17 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- MODERATE - FIXED (2026-10-13). Historical observation promotion. Ordinary
+  integrity over a previously observed file that later becomes missing fails
+  before hashing, suppressing outcomes for otherwise eligible present siblings.
+  Cause: the workflow promotes the ledger's retained last-observed metadata to
+  a current expected stat even for a non-present row, which the core selection
+  contract rejects. The installed mixed-selection journey reproduces this
+  explicit failed result; no successful evidence or file mutation is claimed.
+  Workflow selection now supplies a current stat only for present rows, preserving
+  historical metadata and the verifier's missing-result policy. Real Baseline,
+  Verify and Rebaseline regressions cover a missing file and present sibling.
+
 - SEVERE - FIXED (2026-08-30). Population-scaled authority revalidation.
   Execution, post-copy, and standalone-integrity workflows rebuilt or rescanned
   complete immutable authority around item callbacks, making their result

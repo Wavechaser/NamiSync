@@ -23,6 +23,7 @@ from namisync.core.execution import TaskRecordingIssueReason
 from namisync.core.integrity import (
     IntegrityMode,
     IntegrityOutcome,
+    IntegrityReason,
     IntegrityRecordCommand,
     IntegrityResult,
     IntegrityRunResult,
@@ -536,6 +537,129 @@ def test_native_runtime_baseline_then_verify_uses_production_composition(
             runtime._hasher_factory,
         ]
         assert all(factory is backend._hasher_factory for factory in verifier_factories)
+    finally:
+        runtime.close()
+
+
+@pytest.mark.skipif(os.name != "nt", reason="native verifier is Windows-only")
+@pytest.mark.parametrize(
+    ("mode", "present_result", "seed_evidence"),
+    (
+        (IntegrityMode.BASELINE, IntegrityResult.BASELINED, False),
+        (IntegrityMode.VERIFY, IntegrityResult.VERIFIED, True),
+        (IntegrityMode.REBASELINE, IntegrityResult.BASELINED, True),
+    ),
+)
+def test_native_runtime_integrity_preserves_missing_observation_without_current_stat(
+    tmp_path: Path,
+    mode: IntegrityMode,
+    present_result: IntegrityResult,
+    seed_evidence: bool,
+) -> None:
+    root = tmp_path / "managed"
+    root.mkdir()
+    missing_path = root / "missing.bin"
+    missing_path.write_bytes(b"retained historical observation")
+    (root / "present.bin").write_bytes(b"present sibling")
+    runtime = LocalWorkflowRuntime(
+        tmp_path / "ledger.db",
+        tmp_path / "history.db",
+        clock=FakeClock(),
+        host_key="host",
+        host_name="Host",
+    )
+    context = RunContext(lambda _event: None, lambda: None)
+    try:
+        inventory = runtime.prepare_inventory(
+            InventoryRequest("present-inventory", root_path=str(root))
+        )
+        assert runtime.open_inventory(inventory.checkpoint).run(context).status is (
+            SessionState.COMPLETED
+        )
+        location_id = runtime.get_inventory_details(
+            "present-inventory"
+        ).location_id
+        assert location_id is not None
+
+        if seed_evidence:
+            baseline = runtime.prepare_baseline(
+                IntegrityRequest(
+                    "seed-evidence",
+                    IntegrityMode.BASELINE,
+                    location_id=location_id,
+                )
+            )
+            baseline_result = runtime.open_baseline(baseline.checkpoint).run(context)
+            assert baseline_result.status is SessionState.COMPLETED
+            assert {item.result for item in baseline_result.items} == {
+                IntegrityResult.BASELINED
+            }
+
+        before = {
+            row.rel_path: row for row in runtime.list_inventory(location_id)
+        }
+        assert before["missing.bin"].observed is not None
+        assert (before["missing.bin"].attestation is not None) is seed_evidence
+        historical_observation = before["missing.bin"].observed
+        missing_path.unlink()
+
+        selected: list[tuple[InventoryState, object, bool]] = []
+        runners = runtime._integrity_deps.runners
+        assert isinstance(runners, dict)
+        production_runner = runners[mode]
+
+        def capture_selection(selection, verifier_context, recorder):
+            selected.extend(
+                (
+                    item.expected_state,
+                    item.expected_stat,
+                    item.baseline is not None,
+                )
+                for item in selection.items
+            )
+            return production_runner(selection, verifier_context, recorder)
+
+        runners[mode] = capture_selection
+        request = IntegrityRequest(
+            f"present-to-missing-{mode.value}",
+            mode,
+            location_id=location_id,
+            selected_paths=("missing.bin", "present.bin"),
+            accept_current_evidence=mode is IntegrityMode.REBASELINE,
+        )
+        if mode is IntegrityMode.BASELINE:
+            prepared = runtime.prepare_baseline(request)
+            invocation = runtime.open_baseline(prepared.checkpoint)
+        elif mode is IntegrityMode.VERIFY:
+            prepared = runtime.prepare_verify(request)
+            invocation = runtime.open_verify(prepared.checkpoint)
+        else:
+            prepared = runtime.prepare_rebaseline(request)
+            invocation = runtime.open_rebaseline(prepared.checkpoint)
+
+        result = invocation.run(context)
+
+        assert result.status is SessionState.COMPLETED
+        assert {
+            item.path: (item.result, item.reason) for item in result.items
+        } == {
+            "missing.bin": (
+                IntegrityResult.MISSING,
+                IntegrityReason.INVENTORY_MISSING,
+            ),
+            "present.bin": (present_result, None),
+        }
+        assert selected == [
+            (InventoryState.MISSING, None, seed_evidence),
+            (InventoryState.PRESENT, before["present.bin"].observed, seed_evidence),
+        ]
+        after = {
+            row.rel_path: row for row in runtime.list_inventory(location_id)
+        }
+        assert after["missing.bin"].observed == historical_observation
+        assert after["missing.bin"].presence.value == "missing"
+        assert (after["missing.bin"].attestation is not None) is seed_evidence
+        assert after["present.bin"].presence.value == "present"
     finally:
         runtime.close()
 
