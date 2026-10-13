@@ -772,6 +772,7 @@ assert.ok(calls.at(-1)[0] === "onExecute" && calls.at(-1)[1] === review
 assert.ok(findByDataset(panel.element, "action", "destructive-confirmation") === null, "the destructive acknowledgment control remains absent");
 
 task.executionStarted = true;
+task.sessionKind = "sync-execution";
 task.sessionState = "active";
 panel.render(task);
 const pauseToggle = findAction(panel.element, "pause");
@@ -1614,6 +1615,7 @@ const liveReview = {
 const liveTask = {
   ...executionTask, review: liveReview, sessionState: "active",
   sessionId: "8".repeat(32),
+  executionSessionId: "8".repeat(32),
   reviewSessionId: "8".repeat(32),
   executionControlState: "running",
   progressPresentation: {
@@ -1621,6 +1623,7 @@ const liveTask = {
     itemPercent: 10,
   },
 };
+liveTask.executionPresentation = liveTask.progressPresentation;
 livePanel.render(liveTask);
 const liveElement = findByDataset(livePanel.element, "nodeId", liveRow.node_id);
 let liveIntent = findByClass(liveElement, "nami-plan-row__intent");
@@ -1629,6 +1632,7 @@ assert.equal(liveIntent.dataset.lifecycle, "executing",
 assert.equal(findByClass(liveIntent, "nami-progress").ariaValueNow, "10");
 liveElement.focus();
 liveTask.progressPresentation = { ...liveTask.progressPresentation, itemPercent: 80 };
+liveTask.executionPresentation = liveTask.progressPresentation;
 livePanel.render(liveTask);
 liveIntent = findByClass(liveElement, "nami-plan-row__intent");
 assert.equal(findByClass(liveIntent, "nami-progress").ariaValueNow, "80",
@@ -1644,6 +1648,7 @@ liveTask.progressPresentation = {
   phase: "verify", activeItem: { item_id: operationId, item_type: "operation" },
   itemPercent: 40,
 };
+liveTask.executionPresentation = liveTask.progressPresentation;
 livePanel.render(liveTask);
 liveIntent = findByClass(liveElement, "nami-plan-row__intent");
 assert.equal(liveIntent.dataset.lifecycle, "completed", "copy outcome survives verification");
@@ -1651,6 +1656,7 @@ assert.ok(findText(liveIntent, "Completed"));
 assert.equal(findByClass(liveIntent, "nami-plan-row__verification")
   .querySelector(".nami-progress").ariaValueNow, "40");
 liveTask.progressPresentation = { phase: "verify", activeItem: null, itemPercent: null };
+liveTask.executionPresentation = liveTask.progressPresentation;
 livePanel.render(liveTask);
 liveIntent = findByClass(liveElement, "nami-plan-row__intent");
 assert.equal(liveIntent.dataset.lifecycle, "completed", "retirement keeps copy outcome");
@@ -1935,7 +1941,8 @@ document.querySelector = (key) => {
 document.body = document.createElement("body");
 globalThis.window = { ...document.defaultView, chrome: { webview: {} } };
 const scrollSummary = {...summary, highlight_revision: 0,
-  highlight_focus_node_id: null, highlight_focus_visible_index: null};
+  highlight_focus_node_id: null, highlight_focus_visible_index: null,
+  execution: review.window.execution};
 const scrollWindow = (offset) => ({...review.window, disposition: "current",
   view_revision: 0, highlight_revision: 0, offset, total: 1000,
   rows: Array.from({length: 256}, (_, index) => ({...row,
@@ -1988,7 +1995,8 @@ const scrollApp = await import(moduleUrl(scrollAppSource));
 // Hold the real start path at setup admission, then at the original start
 // receipt. The packaged router and renderer must show the same blank shell.
 const loadingTask = scrollApp.adoptTask({task_id: "task-" + "9".repeat(32), session_id: null,
-  session_state: null, session_released: false, task_kind: null, request_id: null});
+  session_state: null, session_released: false, task_kind: null, request_id: null,
+  plan_request_id: null, session_kind: null});
 const loadingOptions = { deletion_policy: "trash", preservation: {}, filters: [] };
 loadingTask.form = { editable: true, mode: "sync-plan", revision: 0, attempt: null, options: loadingOptions,
   source: { text: "C:\\source", pending: false, location: {purpose: "source", choice_id: "source"} },
@@ -2021,10 +2029,12 @@ findAction(loadingPane(), "retry-outcome").dispatch("click");
 await loadingStart;
 assert.equal(loadingChecks, 1);
 assert.equal(loadingStarts, 1, "Check outcome never resubmits the start");
+assert.equal(loadingTask.planRequestId, summary.request_id);
 assert.ok(loadingTask.review, "only the complete review publishes rows");
 assert.equal(findByClass(loadingPane(), "nami-plan-review__rows").children.length > 0, true);
 const scrollTask = scrollApp.adoptTask({task_id: summary.task_id, session_id: "4".repeat(32),
-  session_state: "completed", session_released: true, task_kind: "sync-plan", request_id: summary.request_id});
+  session_state: "completed", session_released: true, task_kind: "sync-plan", request_id: summary.request_id,
+  plan_request_id: summary.request_id, session_kind: "sync-plan"});
 const settleScroll = async () => { for (let index = 0; index < 20; index += 1) await Promise.resolve(); };
 scrollApp.selectTask(scrollTask.taskId);
 await settleScroll();

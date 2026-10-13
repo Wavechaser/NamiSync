@@ -278,7 +278,7 @@ const iconsUrl = moduleUrl(`
 const digestRenderUrl = moduleUrl(await readFile(join(dirname(process.argv[3]), "render.js"), "utf8"));
 const taskStatusUrl = moduleUrl((await readFile(join(dirname(process.argv[3]), "task_status.js"), "utf8"))
   .replace("./render.js", digestRenderUrl));
-const { taskStatusDigest } = await import(taskStatusUrl);
+const { selectTaskExecution, taskStatusDigest } = await import(taskStatusUrl);
 assert.equal(taskStatusDigest({}).title, "New task");
 assert.equal(taskStatusDigest({}).progress.indeterminate, false);
 assert.equal(taskStatusDigest({ taskKind: "inventory", sessionState: "active" }).title, "Scanning");
@@ -321,9 +321,9 @@ assert.equal(taskStatusDigest({ taskKind: "sync-plan", reviewLoading: false,
 assert.equal(taskStatusDigest({ sessionState: "completed", review: { summary: {
   filter_counts: { all: 2 }, required_bytes: "1024", operation_count: 2,
 } } }).title, "Plan ready");
-assert.equal(taskStatusDigest({ executionStarted: true, sessionState: "active",
+assert.equal(taskStatusDigest({ sessionKind: "sync-execution", executionStarted: true, sessionState: "active",
   executionControlState: "paused" }).title, "Paused");
-assert.equal(taskStatusDigest({ executionStarted: true, sessionState: "active",
+assert.equal(taskStatusDigest({ sessionKind: "sync-execution", executionStarted: true, sessionState: "active",
   sessionId: "8".repeat(32),
   snapshot: { wire_version: 2, session_id: "8".repeat(32),
     session_state: "active", progress_inconsistent: false, phase: "verify", presentation: {
@@ -341,28 +341,30 @@ assert.equal(taskStatusDigest({ sessionState: "completed", review: { summary: {
 assert.equal(taskStatusDigest({ sessionState: "completed", review: { summary: {
   filter_counts: { all: 0 }, required_bytes: "0",
 } } }).detail, "Plan is empty.");
-assert.equal(taskStatusDigest({ executionStarted: true, sessionState: "active",
+assert.equal(taskStatusDigest({ sessionKind: "sync-execution", executionStarted: true, sessionState: "active",
   sessionId: "8".repeat(32),
   snapshot: { session_id: "8".repeat(32), session_state: "active", phase: "verify", presentation: {
     value: 0, determinate: false, indeterminate: true,
     items_done: null, items_total: null,
     throughput_bytes_per_second: null, eta_seconds: null,
   } } }).title, "Verifying");
-assert.equal(taskStatusDigest({ executionStarted: true, sessionState: "refused" }).title, "Error");
+assert.equal(taskStatusDigest({ sessionKind: "sync-execution", executionStarted: true, sessionState: "refused" }).title, "Error");
 assert.equal(taskStatusDigest({ form: { source: { text: "source" }, target: { text: "" } } }).targetPath, "-");
 const capacityRailResult = {
   headline: "failed", filesystem: "failed", integrity: "baselined",
   recording: "ok", audit: "ok", disposition: "ran", error: null,
 };
 const capacityRailWindow = {
-  result: capacityRailResult, failed_operation_count: 1, disk_capacity_failure_count: 1,
+  session_id: "8".repeat(32), result: capacityRailResult,
+  failed_operation_count: 1, disk_capacity_failure_count: 1,
 };
 assert.equal(taskStatusDigest({
+  sessionKind: "sync-execution", sessionId: "8".repeat(32),
   executionStarted: true, sessionState: "failed",
   review: { window: { execution: capacityRailWindow } },
 }).title, "Needs target space");
 assert.equal(taskStatusDigest({
-  executionStarted: true, sessionId: "8".repeat(32), sessionState: "failed",
+  sessionKind: "sync-execution", executionStarted: true, sessionId: "8".repeat(32), sessionState: "failed",
   snapshot: { wire_version: 2, session_id: "8".repeat(32), session_state: "failed",
     terminal_result: { ...capacityRailResult, integrity: "mismatch" },
     presentation: { value: 0, determinate: false, indeterminate: false,
@@ -647,9 +649,9 @@ function planWindow(summary, offset = 0) {
 const imported = import(moduleUrl(appSource));
 await until(() => lists.length === 1);
 lists[0].resolve({ tasks: [
-  { task_id: TASK_A, session_id: null, session_state: null, session_released: false },
-  { task_id: TASK_B, session_id: null, session_state: null, session_released: false },
-  { task_id: TASK_E, session_id: SESSION_E, session_state: "active", session_released: false },
+  { task_id: TASK_A, session_id: null, session_state: null, session_released: false, task_kind: null, request_id: null, plan_request_id: null, session_kind: null },
+  { task_id: TASK_B, session_id: null, session_state: null, session_released: false, task_kind: null, request_id: null, plan_request_id: null, session_kind: null },
+  { task_id: TASK_E, session_id: SESSION_E, session_state: "active", session_released: false, task_kind: "inventory", request_id: "e".repeat(32), plan_request_id: null, session_kind: "inventory" },
 ] });
 await imported;
 await turns();
@@ -682,20 +684,20 @@ creates[1].resolve({ task_id: TASK_D });
 await turns();
 assert.ok(byText("Task 5"), "an admitted create remains visible in its document");
 lists[1].resolve({ tasks: [
-  { task_id: TASK_A, session_id: null, session_state: null, session_released: false },
-  { task_id: TASK_B, session_id: null, session_state: null, session_released: false },
-  { task_id: TASK_C, session_id: null, session_state: null, session_released: false },
-  { task_id: TASK_E, session_id: SESSION_E, session_state: "active", session_released: false },
+  { task_id: TASK_A, session_id: null, session_state: null, session_released: false, task_kind: null, request_id: null, plan_request_id: null, session_kind: null },
+  { task_id: TASK_B, session_id: null, session_state: null, session_released: false, task_kind: null, request_id: null, plan_request_id: null, session_kind: null },
+  { task_id: TASK_C, session_id: null, session_state: null, session_released: false, task_kind: null, request_id: null, plan_request_id: null, session_kind: null },
+  { task_id: TASK_E, session_id: SESSION_E, session_state: "active", session_released: false, task_kind: "inventory", request_id: "e".repeat(32), plan_request_id: null, session_kind: "inventory" },
 ] });
 await until(() => lists.length === 3);
 await turns();
 assert.ok(byText("Task 5"), "a list overtaken by create is stale");
 const retainedThroughD = { tasks: [
-  { task_id: TASK_A, session_id: null, session_state: null, session_released: false },
-  { task_id: TASK_B, session_id: null, session_state: null, session_released: false },
-  { task_id: TASK_C, session_id: null, session_state: null, session_released: false },
-  { task_id: TASK_D, session_id: null, session_state: null, session_released: false },
-  { task_id: TASK_E, session_id: SESSION_E, session_state: "active", session_released: false },
+  { task_id: TASK_A, session_id: null, session_state: null, session_released: false, task_kind: null, request_id: null, plan_request_id: null, session_kind: null },
+  { task_id: TASK_B, session_id: null, session_state: null, session_released: false, task_kind: null, request_id: null, plan_request_id: null, session_kind: null },
+  { task_id: TASK_C, session_id: null, session_state: null, session_released: false, task_kind: null, request_id: null, plan_request_id: null, session_kind: null },
+  { task_id: TASK_D, session_id: null, session_state: null, session_released: false, task_kind: null, request_id: null, plan_request_id: null, session_kind: null },
+  { task_id: TASK_E, session_id: SESSION_E, session_state: "active", session_released: false, task_kind: "inventory", request_id: "e".repeat(32), plan_request_id: null, session_kind: "inventory" },
 ] };
 lists[2].resolve(retainedThroughD);
 await turns();
@@ -710,16 +712,16 @@ creates[2].resolve({ task_id: TASK_F });
 await turns();
 assert.ok(byText("Task 6"));
 lists[3].resolve({ tasks: [
-  { task_id: TASK_A, session_id: null, session_state: null, session_released: false },
-  { task_id: TASK_B, session_id: null, session_state: null, session_released: false },
-  { task_id: TASK_C, session_id: null, session_state: null, session_released: false },
-  { task_id: TASK_D, session_id: null, session_state: null, session_released: false },
-  { task_id: TASK_E, session_id: SESSION_E, session_state: "active", session_released: false },
+  { task_id: TASK_A, session_id: null, session_state: null, session_released: false, task_kind: null, request_id: null, plan_request_id: null, session_kind: null },
+  { task_id: TASK_B, session_id: null, session_state: null, session_released: false, task_kind: null, request_id: null, plan_request_id: null, session_kind: null },
+  { task_id: TASK_C, session_id: null, session_state: null, session_released: false, task_kind: null, request_id: null, plan_request_id: null, session_kind: null },
+  { task_id: TASK_D, session_id: null, session_state: null, session_released: false, task_kind: null, request_id: null, plan_request_id: null, session_kind: null },
+  { task_id: TASK_E, session_id: SESSION_E, session_state: "active", session_released: false, task_kind: "inventory", request_id: "e".repeat(32), plan_request_id: null, session_kind: "inventory" },
 ] });
 await until(() => lists.length === 5);
 lists[4].resolve({ tasks: [
   ...retainedThroughD.tasks,
-  { task_id: TASK_F, session_id: null, session_state: null, session_released: false },
+  { task_id: TASK_F, session_id: null, session_state: null, session_released: false, task_kind: null, request_id: null, plan_request_id: null, session_kind: null },
 ] });
 await turns();
 assert.ok(byText("Task 6"), "a delayed list cannot erase a completed create");
@@ -736,20 +738,20 @@ await turns();
 assert.ok(byText("Task 1") === undefined, "closed task is absent");
 assert.equal(taskButton("Task 6")?.ariaCurrent, "page", "close selects the newest task");
 lists[5].resolve({ tasks: [
-  { task_id: TASK_A, session_id: null, session_state: null, session_released: false },
-  { task_id: TASK_B, session_id: null, session_state: null, session_released: false },
-  { task_id: TASK_C, session_id: null, session_state: null, session_released: false },
-  { task_id: TASK_D, session_id: null, session_state: null, session_released: false },
-  { task_id: TASK_E, session_id: SESSION_E, session_state: "active", session_released: false },
-  { task_id: TASK_F, session_id: null, session_state: null, session_released: false },
+  { task_id: TASK_A, session_id: null, session_state: null, session_released: false, task_kind: null, request_id: null, plan_request_id: null, session_kind: null },
+  { task_id: TASK_B, session_id: null, session_state: null, session_released: false, task_kind: null, request_id: null, plan_request_id: null, session_kind: null },
+  { task_id: TASK_C, session_id: null, session_state: null, session_released: false, task_kind: null, request_id: null, plan_request_id: null, session_kind: null },
+  { task_id: TASK_D, session_id: null, session_state: null, session_released: false, task_kind: null, request_id: null, plan_request_id: null, session_kind: null },
+  { task_id: TASK_E, session_id: SESSION_E, session_state: "active", session_released: false, task_kind: "inventory", request_id: "e".repeat(32), plan_request_id: null, session_kind: "inventory" },
+  { task_id: TASK_F, session_id: null, session_state: null, session_released: false, task_kind: null, request_id: null, plan_request_id: null, session_kind: null },
 ] });
 await until(() => lists.length === 7);
 lists[6].resolve({ tasks: [
-  { task_id: TASK_B, session_id: null, session_state: null, session_released: false },
-  { task_id: TASK_C, session_id: null, session_state: null, session_released: false },
-  { task_id: TASK_D, session_id: null, session_state: null, session_released: false },
-  { task_id: TASK_E, session_id: SESSION_E, session_state: "active", session_released: false },
-  { task_id: TASK_F, session_id: null, session_state: null, session_released: false },
+  { task_id: TASK_B, session_id: null, session_state: null, session_released: false, task_kind: null, request_id: null, plan_request_id: null, session_kind: null },
+  { task_id: TASK_C, session_id: null, session_state: null, session_released: false, task_kind: null, request_id: null, plan_request_id: null, session_kind: null },
+  { task_id: TASK_D, session_id: null, session_state: null, session_released: false, task_kind: null, request_id: null, plan_request_id: null, session_kind: null },
+  { task_id: TASK_E, session_id: SESSION_E, session_state: "active", session_released: false, task_kind: "inventory", request_id: "e".repeat(32), plan_request_id: null, session_kind: "inventory" },
+  { task_id: TASK_F, session_id: null, session_state: null, session_released: false, task_kind: null, request_id: null, plan_request_id: null, session_kind: null },
 ] });
 await turns();
 assert.ok(byText("Task 1") === undefined, "a delayed list cannot restore a closed task");
@@ -771,13 +773,14 @@ assert.ok(byText("Task 3") === undefined, "closed active task is absent");
 void globalThis.taskHarness.refreshTasks();
 await until(() => lists.length === 8);
 lists[7].resolve({ tasks: [
-  { task_id: TASK_B, session_id: null, session_state: null, session_released: false },
-  { task_id: TASK_C, session_id: null, session_state: null, session_released: false },
-  { task_id: TASK_D, session_id: null, session_state: null, session_released: false },
-  { task_id: TASK_F, session_id: null, session_state: null, session_released: false },
+  { task_id: TASK_B, session_id: null, session_state: null, session_released: false, task_kind: null, request_id: null, plan_request_id: null, session_kind: null },
+  { task_id: TASK_C, session_id: null, session_state: null, session_released: false, task_kind: null, request_id: null, plan_request_id: null, session_kind: null },
+  { task_id: TASK_D, session_id: null, session_state: null, session_released: false, task_kind: null, request_id: null, plan_request_id: null, session_kind: null },
+  { task_id: TASK_F, session_id: null, session_state: null, session_released: false, task_kind: null, request_id: null, plan_request_id: null, session_kind: null },
   {
     task_id: TASK_G, session_id: SESSION_G, session_state: "completed",
     session_released: false, task_kind: "sync-plan", request_id: "a".repeat(32),
+    plan_request_id: "a".repeat(32), session_kind: "sync-plan",
   },
 ] });
 await turns();
@@ -1655,6 +1658,7 @@ const activeOperationId = "f".repeat(32);
 liveTask.progressPresentation = Object.freeze({
   activeItem: Object.freeze({ item_id: activeOperationId, item_type: "operation" }),
 });
+liveTask.executionPresentation = liveTask.progressPresentation;
 liveReview.follow.enabled = true;
 liveReview.follow.eligible = true;
 liveReview.follow.hasTarget = true;
@@ -1709,6 +1713,7 @@ planWindows.splice(sameTargetWindowBase);
 
 globalThis.planReviewHarness.callbacks.onFollowOverride(liveReview);
 liveTask.progressPresentation = Object.freeze({ activeItem: null });
+liveTask.executionPresentation = liveTask.progressPresentation;
 liveReview.follow.hasTarget = false;
 const noActiveAnchorCount = planAnchors.length;
 globalThis.planReviewHarness.callbacks.onNavigateCurrent(liveReview, true);
@@ -1950,6 +1955,7 @@ const stoppedTask = globalThis.taskHarness.adoptTask({
   task_id: stoppedTaskId, session_id: stoppedSessionId,
   session_state: "active", session_released: false,
   task_kind: "sync-plan", request_id: "a".repeat(32),
+  plan_request_id: "a".repeat(32), session_kind: "sync-execution",
 });
 await until(() => planOpens.length === stoppedOpenBase + 1);
 const stoppedSummary = planSummary({
@@ -2074,6 +2080,7 @@ const earlyStoppedTask = globalThis.taskHarness.adoptTask({
   task_id: earlyStoppedTaskId, session_id: earlyStoppedSessionId,
   session_state: "active", session_released: false,
   task_kind: "sync-plan", request_id: "a".repeat(32),
+  plan_request_id: "a".repeat(32), session_kind: "sync-execution",
 });
 await until(() => planOpens.length === earlyStoppedOpenBase + 1);
 assert.equal(earlyStoppedTask.executionStarted, false,
@@ -2150,6 +2157,7 @@ const replacedSessionTask = globalThis.taskHarness.adoptTask({
   task_id: replacedSessionTaskId, session_id: replacedSessionId,
   session_state: "active", session_released: false,
   task_kind: "sync-plan", request_id: "a".repeat(32),
+  plan_request_id: "a".repeat(32), session_kind: "sync-execution",
 });
 await until(() => planOpens.length === replacedSessionOpenBase + 1);
 const replacedSessionSummary = planSummary({
@@ -2171,6 +2179,7 @@ globalThis.taskHarness.adoptTask({
   task_id: replacedSessionTaskId, session_id: replacementSessionId,
   session_state: "active", session_released: false,
   task_kind: "sync-plan", request_id: "a".repeat(32),
+  plan_request_id: "a".repeat(32), session_kind: "sync-execution",
 });
 await until(() => planOpens.length === replacementOpenBase + 1);
 const replacementSummary = planSummary({
@@ -2201,6 +2210,7 @@ const unknownReviewTask = globalThis.taskHarness.adoptTask({
   task_id: unknownReviewTaskId, session_id: unknownReviewSessionId,
   session_state: "active", session_released: false,
   task_kind: "sync-plan", request_id: "a".repeat(32),
+  plan_request_id: "a".repeat(32), session_kind: "sync-execution",
 });
 await until(() => planOpens.length === unknownOpenBase + 1);
 const unknownSummary = planSummary({ task_id: unknownReviewTaskId });
@@ -2267,6 +2277,7 @@ async function openActiveUnknownOutcomeTask(hex) {
   const task = globalThis.taskHarness.adoptTask({
     task_id: taskId, session_id: sessionId, session_state: "active",
     session_released: false, task_kind: "sync-plan", request_id: "a".repeat(32),
+    plan_request_id: "a".repeat(32), session_kind: "sync-execution",
   });
   task.executionStarted = true;
   await until(() => planOpens.length === openBase + 1);
@@ -2485,6 +2496,7 @@ const closeRaceTask = globalThis.taskHarness.adoptTask({
   task_id: closeRaceTaskId, session_id: closeRaceSessionId,
   session_state: "active", session_released: false,
   task_kind: "inventory", request_id: "a".repeat(32),
+  plan_request_id: null, session_kind: "inventory",
 });
 await until(() => drains.has(closeRaceTaskId));
 const closeRaceBase = closes.length;
@@ -2535,6 +2547,7 @@ const uncertainExecutionTask = globalThis.taskHarness.adoptTask({
   task_id: uncertainExecutionTaskId, session_id: uncertainExecutionSessionId,
   session_state: "completed", session_released: true,
   task_kind: "sync-plan", request_id: "9".repeat(32),
+  plan_request_id: "9".repeat(32), session_kind: "sync-plan",
 });
 await until(() => planOpens.length === uncertainOpenBase + 1);
 const uncertainSummary = planSummary({
@@ -2597,6 +2610,7 @@ const failedTask = globalThis.taskHarness.adoptTask({
   task_id: failedTaskId, session_id: failedPlanSession,
   session_state: "completed", session_released: true,
   task_kind: "sync-plan", request_id: "3".repeat(32),
+  plan_request_id: "3".repeat(32), session_kind: "sync-plan",
 });
 await until(() => planOpens.length === failedOpenBase + 1);
 const failedPlanSummary = planSummary({ task_id: failedTaskId,
@@ -2642,6 +2656,7 @@ for (const [index, refusal, expected] of [
   const task = globalThis.taskHarness.adoptTask({
     task_id: refusalTaskId, session_id: refusalSession, session_state: "refused",
     session_released: true, task_kind: "sync-plan", request_id: "d".repeat(32),
+    plan_request_id: "d".repeat(32), session_kind: "sync-execution",
   });
   const summary = planSummary({ task_id: refusalTaskId, request_id: "d".repeat(32),
     selection_state: "committed", execution: {
@@ -2676,6 +2691,7 @@ const placementTask = globalThis.taskHarness.adoptTask({
   task_id: placementTaskId, session_id: "e1".repeat(16),
   session_state: "completed", session_released: true,
   task_kind: "sync-plan", request_id: "e2".repeat(16),
+  plan_request_id: "e2".repeat(16), session_kind: "sync-plan",
 });
 const placementSummary = planSummary({ task_id: placementTaskId, request_id: "e2".repeat(16) });
 await until(() => planOpens.length === placementOpenBase + 1);
@@ -2904,4 +2920,51 @@ await placementReview.highlightQueue;
 await until(() => !placementReview.windowRequestRunning);
 assert.equal(planWindows.length, readBase + 1, "an old queued read never adopts a newer action's authority");
 deferHighlight = false;
+
+const auxiliaryTaskId = "task-" + "6".repeat(32);
+const originalExecutionId = "7".repeat(32);
+const auxiliarySessionId = "8".repeat(32);
+const auxiliaryPlanId = "9".repeat(32);
+const auxiliaryRequestId = "c".repeat(32);
+const auxiliaryOpenBase = planOpens.length;
+const auxiliaryWindowBase = planWindows.length;
+const auxiliaryTask = globalThis.taskHarness.adoptTask({
+  task_id: auxiliaryTaskId, session_id: auxiliarySessionId, session_state: "active",
+  session_released: false, task_kind: "sync-plan", request_id: auxiliaryRequestId,
+  plan_request_id: auxiliaryPlanId, session_kind: "manual-verify",
+});
+await until(() => planOpens.length === auxiliaryOpenBase + 1);
+const auxiliaryPlan = planSummary({
+  task_id: auxiliaryTaskId, request_id: auxiliaryPlanId, selection_state: "committed",
+  execution: { ...committedReview.execution, session_id: originalExecutionId },
+});
+planOpens[auxiliaryOpenBase].resolve(auxiliaryPlan);
+await until(() => planWindows.length === auxiliaryWindowBase + 1);
+planWindows[auxiliaryWindowBase].resolve(planWindow(auxiliaryPlan));
+await until(() => auxiliaryTask.review !== null);
+assert.equal(auxiliaryTask.requestId, auxiliaryRequestId);
+assert.equal(auxiliaryTask.planRequestId, auxiliaryPlanId);
+assert.equal(auxiliaryTask.executionSessionId, originalExecutionId);
+assert.equal(auxiliaryTask.reviewSessionId, originalExecutionId);
+assert.equal(auxiliaryTask.review.summary.request_id, auxiliaryPlanId);
+assert.equal(selectTaskExecution(auxiliaryTask).execution.session_id, originalExecutionId);
+assert.equal(taskStatusDigest(auxiliaryTask).title, "Verifying");
+auxiliaryTask.error = "Manual verification updates unavailable";
+const auxiliaryReloadBase = planOpens.length;
+const auxiliaryReloadWindowBase = planWindows.length;
+void globalThis.taskHarness.forceReview(auxiliaryTask, true);
+await until(() => planOpens.length === auxiliaryReloadBase + 1);
+planOpens[auxiliaryReloadBase].resolve(auxiliaryPlan);
+await until(() => planWindows.length === auxiliaryReloadWindowBase + 1);
+planWindows[auxiliaryReloadWindowBase].resolve(planWindow(auxiliaryPlan));
+await until(() => !auxiliaryTask.reviewLoading);
+assert.equal(auxiliaryTask.error, "Manual verification updates unavailable",
+  "an original Plan reload cannot clear current auxiliary recovery feedback");
+auxiliaryTask.progressPresentation = { activeItem: { item_id: "f".repeat(32), item_type: "operation" } };
+taskButton(auxiliaryTask.label).click();
+const auxiliaryAnchorBase = planAnchors.length;
+globalThis.planReviewHarness.callbacks.onNavigateCurrent(auxiliaryTask.review, false);
+await turns();
+assert.equal(planAnchors.length, auxiliaryAnchorBase,
+  "current auxiliary operation cannot become an original Plan follow target");
 process.stdout.write("ok");

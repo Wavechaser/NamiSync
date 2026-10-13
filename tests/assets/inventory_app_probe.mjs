@@ -51,8 +51,9 @@ globalThis.inventoryHarness = {
     calls.push(["refresh", ...args.slice(0, 5)]);
     if (refuseRefresh) return Promise.reject(Object.assign(new Error("capacity"), { code: "inventory_capacity" }));
     const [taskId] = args;
-    taskSnapshot = { task_id: taskId, session_id: "7".repeat(32), session_state: "active",
-      session_released: false, task_kind: "inventory", request_id: "8".repeat(32) };
+    taskSnapshot = { ...taskSnapshot, task_id: taskId, session_id: "7".repeat(32),
+      session_state: "active", session_released: false, request_id: "8".repeat(32),
+      session_kind: "inventory" };
     return delayedRefresh?.promise ?? Promise.resolve({ task_id: taskId, session_id: taskSnapshot.session_id,
       request_id: taskSnapshot.request_id });
   },
@@ -110,9 +111,11 @@ const app = await import(url(source));
 const taskId = fixture.views.default.summary.task_id;
 const sessionId = "3".repeat(32);
 const task = app.adoptTask({ task_id: taskId, session_id: sessionId, session_state: "active",
-  session_released: false, task_kind: "inventory", request_id: fixture.views.default.summary.request_id });
+  session_released: false, task_kind: "inventory", request_id: fixture.views.default.summary.request_id,
+  plan_request_id: null, session_kind: "inventory" });
 taskSnapshot = { task_id: taskId, session_id: sessionId, session_state: "active",
-  session_released: false, task_kind: "inventory", request_id: task.requestId };
+  session_released: false, task_kind: "inventory", request_id: task.requestId,
+  plan_request_id: null, session_kind: "inventory" };
 const tick = async () => { for (let i = 0; i < 8; i += 1) await Promise.resolve(); };
 app.selectTask(taskId); await tick();
 assert.equal(calls.length, 0, "active inventory must not open terminal review");
@@ -288,7 +291,8 @@ const sessionWindowRead = delayedWindow;
 const sessionWindow = app.loadInventoryWindow(review, 12);
 const sessionQueued = app.loadInventoryWindow(review, 24);
 app.adoptTask({ task_id: taskId, session_id: "4".repeat(32), session_state: "active",
-  session_released: false, task_kind: "inventory", request_id: "5".repeat(32) });
+  session_released: false, task_kind: "inventory", request_id: "5".repeat(32),
+  plan_request_id: null, session_kind: "inventory" });
 assert.equal(task.inventoryReview, review, "new scan preserves old publication");
 assert.equal(task.executionStarted, false);
 assert.equal(await sessionQueued, null, "session replacement retires its queued viewport callback");
@@ -364,7 +368,8 @@ const originalListTasks = globalThis.inventoryHarness.listTasks;
 for (const observation of ["failed", "stale"]) {
   const oldSnapshot = { task_id: taskId, session_id: (observation === "failed" ? "9" : "a").repeat(32),
     session_state: "completed", session_released: true, task_kind: "inventory",
-    request_id: fixture.views.default.summary.request_id };
+    request_id: fixture.views.default.summary.request_id, plan_request_id: null,
+    session_kind: "inventory" };
   app.adoptTask(oldSnapshot);
   taskSnapshot = oldSnapshot;
   await tick();
@@ -402,7 +407,8 @@ for (const observation of ["failed", "stale"]) {
 
 // A task-list observation and terminal drain can beat the original start reply.
 app.adoptTask({ task_id: taskId, session_id: "b".repeat(32), session_state: "completed",
-  session_released: true, task_kind: "inventory", request_id: fixture.views.default.summary.request_id });
+  session_released: true, task_kind: "inventory", request_id: fixture.views.default.summary.request_id,
+  plan_request_id: null, session_kind: "inventory" });
 delayedRefresh = defer();
 const lateStart = app.runInventoryAction(task.inventoryReview, "refresh", null);
 await app.refreshTasks();
@@ -435,7 +441,8 @@ globalThis.inventoryHarness.listTasks = originalListTasks;
 
 // A refused scan with no fresh location details cannot be repaired by a view reload.
 app.adoptTask({ task_id: taskId, session_id: "c".repeat(32), session_state: "refused",
-  session_released: true, task_kind: "inventory", request_id: "d".repeat(32) });
+  session_released: true, task_kind: "inventory", request_id: "d".repeat(32),
+  plan_request_id: null, session_kind: "inventory" });
 const retainedBeforeRefusal = task.inventoryReview;
 delayedOpen = defer();
 const refusedOpen = app.loadInventoryReview(task, true);
@@ -475,4 +482,24 @@ await closeDetail;
 assert.equal(review.detail, null, "Close invalidates outstanding details");
 assert.ok(renders.some((value) => value === task));
 assert.equal(typeof globalThis.inventoryCallbacks.onReload, "function");
+
+const syncTaskId = "task-" + "f".repeat(32);
+const syncPlanRequestId = "9".repeat(32);
+const syncCurrentRequestId = fixture.views.default.summary.request_id;
+taskSnapshot = { task_id: syncTaskId, session_id: "6".repeat(32), session_state: "completed",
+  session_released: true, task_kind: "sync-plan", request_id: syncCurrentRequestId,
+  plan_request_id: syncPlanRequestId, session_kind: "sync-execution" };
+const syncTask = app.adoptTask(taskSnapshot);
+syncTask.executionStarted = true;
+app.selectTask(syncTaskId);
+await tick();
+const syncReview = { ...review, summary: { ...review.summary, task_id: syncTaskId,
+  request_id: syncCurrentRequestId }, pending: null, message: null };
+syncTask.inventoryReview = syncReview;
+await app.runInventoryAction(syncReview, "refresh", null);
+assert.equal(syncTask.taskKind, "sync-plan", "ordinary auxiliary Refresh keeps the sync task kind");
+assert.equal(syncTask.planRequestId, syncPlanRequestId,
+  "ordinary auxiliary Refresh keeps the original Plan request");
+assert.equal(syncTask.requestId, "8".repeat(32), "Refresh adopts the new current request");
+assert.equal(syncTask.sessionKind, "inventory", "Refresh identifies the current activity");
 process.stdout.write("ok\n");

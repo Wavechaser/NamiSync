@@ -579,6 +579,8 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
         "open_inventory_view",
         "refresh_inventory",
         "start_inventory_integrity",
+        "get_manual_verification_readiness",
+        "start_manual_verification",
         "control_integrity",
         "acknowledge_inventory",
         "restore_inventory",
@@ -608,6 +610,7 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
     async_commands = {
         "refresh_inventory",
         "start_inventory_integrity",
+        "start_manual_verification",
         "acknowledge_inventory",
         "restore_inventory",
         "create_task",
@@ -627,7 +630,7 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
         name for name, spec in commands.items()
         if spec.response_policy is CommandResponsePolicy.MUTATION_OBSERVED
     } == {
-        "create_task", "start_plan", "start_inventory", "refresh_inventory", "start_inventory_integrity", "control_integrity",
+        "create_task", "start_plan", "start_inventory", "refresh_inventory", "start_inventory_integrity", "start_manual_verification", "control_integrity",
         "acknowledge_inventory", "restore_inventory",
         "plan_again", "mutate_plan_selection", "mutate_plan_scope",
         "mutate_plan_highlighted_selection", "start_execution",
@@ -654,13 +657,13 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
         (("list_tasks", "read_cosmetic_section", "open_inventory_view"), CommandAccess.READ_ONLY,
          FieldRequirement.FORBIDDEN, FieldRequirement.FORBIDDEN,
          CommandResponsePolicy.LOCAL_5_SECONDS, CommandRetry.SAME_PAYLOAD_ONCE),
-        (("get_inventory_window", "get_inventory_detail"), CommandAccess.READ_ONLY,
+        (("get_inventory_window", "get_inventory_detail", "get_manual_verification_readiness"), CommandAccess.READ_ONLY,
          FieldRequirement.FORBIDDEN, FieldRequirement.REQUIRED,
          CommandResponsePolicy.LOCAL_5_SECONDS, CommandRetry.SAME_PAYLOAD_ONCE),
         (("update_inventory_view", "set_inventory_selection"), CommandAccess.READ_ONLY,
          FieldRequirement.FORBIDDEN, FieldRequirement.REQUIRED,
          CommandResponsePolicy.FEEDBACK_ONLY, CommandRetry.NONE),
-        (("refresh_inventory", "start_inventory_integrity", "acknowledge_inventory", "restore_inventory"), CommandAccess.MUTATING,
+        (("refresh_inventory", "start_inventory_integrity", "start_manual_verification", "acknowledge_inventory", "restore_inventory"), CommandAccess.MUTATING,
          FieldRequirement.REQUIRED, FieldRequirement.REQUIRED,
          CommandResponsePolicy.MUTATION_OBSERVED, CommandRetry.NONE),
         (("next_events",), CommandAccess.READ_ONLY, FieldRequirement.FORBIDDEN,

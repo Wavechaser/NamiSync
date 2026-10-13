@@ -229,7 +229,8 @@ def test_complete_plan_256_row_envelope_including_execution_has_response_margin(
     assert set(result["phases"][0]) == set(PhaseResultView.__dataclass_fields__)
     assert set(result["recording_issues"][0]) == set(RecordingIssueView.__dataclass_fields__)
     empty_task = SimpleNamespace(execution_summary=None, delivered_terminal_record=None,
-        execution_gap_minimum=None, execution_revision=0, execution_session_id=None)
+        execution_terminal_record=None, execution_gap_minimum=None,
+        execution_revision=0, execution_session_id=None)
     assert set(execution) == set(TaskRegistry._execution_summary_locked(empty_task))
     window = {**actual, "view_revision": 9007199254740991, "highlight_revision": 9007199254740991,
               "offset": 9007199254740991, "total": 9007199254740991, "rows": [row] * 256}

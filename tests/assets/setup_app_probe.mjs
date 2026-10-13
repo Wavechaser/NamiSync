@@ -85,6 +85,8 @@ function summary(taskId = TASK_A) {
     session_released: false,
     task_kind: null,
     request_id: null,
+    plan_request_id: null,
+    session_kind: null,
   };
 }
 
@@ -1168,7 +1170,8 @@ for (const kind of ["inventory", "sync-plan"]) {
     form.attempt = attempt;
     const start = { task_id: TASK_A, request_id: (kind === "inventory" ? "6" : "4").repeat(32),
       session_id: (kind === "inventory" ? "7" : "5").repeat(32) };
-    const active = { ...start, task_kind: kind, session_state: "active", session_released: false };
+    const active = { ...start, task_kind: kind, session_state: "active", session_released: false,
+      plan_request_id: kind === "sync-plan" ? start.request_id : null, session_kind: kind };
     const oldList = deferred();
     let olderRead;
     if (observation === "failed") {
@@ -1209,13 +1212,15 @@ if (lifecycleScenario === "all" || lifecycleScenario === "plan-again") {
     plan_again: { source_state: "resolved", source_candidates: [], target_state: "resolved", target_candidates: [] },
   };
   const originalSummary = { ...summary(), session_id: "1".repeat(32), request_id: "2".repeat(32),
+    plan_request_id: "2".repeat(32), session_kind: "sync-plan",
     task_kind: "sync-plan", session_state: "completed", session_released: true };
   const harness = await loadScenario({ snapshot, initialSummary: originalSummary });
   const original = harness.task;
   original.review = { pending: null };
   const originalReview = original.review;
   const shell = harness.adoptTask({ ...summary(TASK_B), session_id: "6".repeat(32),
-    request_id: "7".repeat(32), task_kind: "sync-plan", session_state: "completed", session_released: true });
+    request_id: "7".repeat(32), plan_request_id: "7".repeat(32), session_kind: "sync-plan",
+    task_kind: "sync-plan", session_state: "completed", session_released: true });
   shell.review = { pending: null };
   const previousDrain = harness.drains.at(-1);
   harness.listTasks = () => Promise.reject(new Error("list transport unavailable"));
@@ -1235,7 +1240,8 @@ if (lifecycleScenario === "all" || lifecycleScenario === "plan-again") {
   assert.equal(shell.sessionReleased, false, "the superseded drain cannot release the new session");
   assert.equal(shell.sessionState, "active");
   harness.adoptTask({ ...summary(TASK_B), session_id: "a".repeat(32),
-    request_id: shell.requestId, task_kind: "sync-plan", session_state: "active", session_released: false });
+    request_id: shell.requestId, plan_request_id: shell.planRequestId,
+    session_kind: "sync-execution", task_kind: "sync-plan", session_state: "active", session_released: false });
   assert.equal(shell.executionStarted, true, "execution's same-request transition remains intact");
   assert.equal(shell.executionWindowDirty, true);
 }
@@ -1250,7 +1256,8 @@ for (const observation of ["failed", "stale"]) {
   await until(() => harness.model.target.location?.state === "resolved", "batch resolved target");
   harness.callbacks.onAddPair();
   const start = { task_id: TASK_B, request_id: "4".repeat(32), session_id: "5".repeat(32) };
-  const active = { ...start, task_kind: "sync-plan", session_state: "active", session_released: false };
+  const active = { ...start, task_kind: "sync-plan", session_state: "active", session_released: false,
+    plan_request_id: start.request_id, session_kind: "sync-plan" };
   const startReply = deferred();
   harness.startPlan = (...values) => {
     harness.calls.push(["start-plan", ...values]);

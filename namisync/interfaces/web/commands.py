@@ -297,6 +297,10 @@ class TaskAuthority(Protocol):
     def control_integrity(self, *args, **kwargs) -> object: ...
     def start_inventory_integrity(self, *args, **kwargs) -> object: ...
 
+    def get_manual_verification_readiness(self, *args, **kwargs) -> dict[str, object]: ...
+
+    def start_manual_verification(self, *args, **kwargs) -> object: ...
+
     def replay_start(
         self,
         command_id: str,
@@ -624,6 +628,21 @@ class _StartInventoryIntegrityPayload:
     expected_revision: int
     mode: str
     accept_current_evidence: bool
+
+
+@dataclass(frozen=True, slots=True)
+class _ManualVerificationReadinessPayload:
+    task_id: str
+    session_id: str
+    expected_execution_revision: int
+
+
+@dataclass(frozen=True, slots=True)
+class _StartManualVerificationPayload:
+    task_id: str
+    session_id: str
+    command_id: str
+    expected_execution_revision: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -1031,6 +1050,26 @@ def production_command_specs(
             raise CommandConflictError("ordinary integrity command id conflicts") from error
         except (KeyError, ValueError) as error:
             raise PlanningRefusedError("ordinary integrity selection was refused") from error
+
+    def get_manual_verification_readiness(payload: object) -> object:
+        if type(payload) is not _ManualVerificationReadinessPayload:
+            raise TypeError("get_manual_verification_readiness received an unvalidated payload")
+        return registry.get_manual_verification_readiness(payload.task_id, payload.session_id,
+            expected_execution_revision=payload.expected_execution_revision)
+
+    def start_manual_verification(payload: object) -> object:
+        if type(payload) is not _StartManualVerificationPayload:
+            raise TypeError("start_manual_verification received an unvalidated payload")
+        intent = ("manual-verification", payload.task_id, payload.session_id,
+                  payload.expected_execution_revision)
+        try:
+            return registry.start_manual_verification(payload.task_id, payload.session_id,
+                expected_execution_revision=payload.expected_execution_revision,
+                command_id=payload.command_id, wire_intent=intent)
+        except (CommandIdConflictError, TaskIntentConflictError) as error:
+            raise CommandConflictError("manual verification command id conflicts") from error
+        except (KeyError, ValueError) as error:
+            raise PlanningRefusedError("manual verification was refused") from error
 
     def control_integrity(payload: object) -> object:
         if type(payload) is not _ControlExecutionPayload:
@@ -1501,6 +1540,22 @@ def production_command_specs(
                 validate_payload=_validate_start_inventory_integrity, handler=start_inventory_integrity,
                 access=CommandAccess.MUTATING, command_id=FieldRequirement.REQUIRED,
                 revision=FieldRequirement.REQUIRED, response_policy=CommandResponsePolicy.MUTATION_OBSERVED,
+                retry=CommandRetry.NONE, work=CommandWork.ASYNC_SMALL,
+            ),
+            "get_manual_verification_readiness": CommandSpec(
+                validate_payload=_validate_manual_verification_readiness,
+                handler=get_manual_verification_readiness,
+                access=CommandAccess.READ_ONLY, command_id=FieldRequirement.FORBIDDEN,
+                revision=FieldRequirement.REQUIRED,
+                response_policy=CommandResponsePolicy.LOCAL_5_SECONDS,
+                retry=CommandRetry.SAME_PAYLOAD_ONCE,
+            ),
+            "start_manual_verification": CommandSpec(
+                validate_payload=_validate_start_manual_verification,
+                handler=start_manual_verification,
+                access=CommandAccess.MUTATING, command_id=FieldRequirement.REQUIRED,
+                revision=FieldRequirement.REQUIRED,
+                response_policy=CommandResponsePolicy.MUTATION_OBSERVED,
                 retry=CommandRetry.NONE, work=CommandWork.ASYNC_SMALL,
             ),
             "control_integrity": CommandSpec(
@@ -2271,6 +2326,36 @@ def _validate_start_inventory_integrity(value: object) -> _StartInventoryIntegri
             or type(accepted) is not bool or (mode == "rebaseline" and not accepted)):
         raise CommandPayloadError("start_inventory_integrity payload is invalid")
     return _StartInventoryIntegrityPayload(task_id, request_id, command_id, revision, mode, accepted)
+
+
+def _validate_manual_verification_readiness(value: object) -> _ManualVerificationReadinessPayload:
+    if type(value) is not dict or set(value) != {
+        "task_id", "session_id", "expected_execution_revision"
+    }:
+        raise CommandPayloadError("manual verification readiness payload is invalid")
+    task_id, session_id = value["task_id"], value["session_id"]
+    revision = value["expected_execution_revision"]
+    if (type(task_id) is not str or _TASK_ID.fullmatch(task_id) is None
+            or type(session_id) is not str or _OPAQUE_ID.fullmatch(session_id) is None
+            or not _is_javascript_safe_integer(revision) or revision < 0):
+        raise CommandPayloadError("manual verification readiness payload is invalid")
+    return _ManualVerificationReadinessPayload(task_id, session_id, revision)
+
+
+def _validate_start_manual_verification(value: object) -> _StartManualVerificationPayload:
+    if type(value) is not dict or set(value) != {
+        "task_id", "session_id", "command_id", "expected_execution_revision"
+    }:
+        raise CommandPayloadError("manual verification start payload is invalid")
+    readiness = _validate_manual_verification_readiness({
+        "task_id": value["task_id"], "session_id": value["session_id"],
+        "expected_execution_revision": value["expected_execution_revision"],
+    })
+    command_id = value["command_id"]
+    if type(command_id) is not str or _OPAQUE_ID.fullmatch(command_id) is None:
+        raise CommandPayloadError("manual verification start payload is invalid")
+    return _StartManualVerificationPayload(readiness.task_id, readiness.session_id,
+        command_id, readiness.expected_execution_revision)
 
 
 def _validate_control_execution(value: object) -> _ControlExecutionPayload:

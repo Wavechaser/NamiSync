@@ -317,6 +317,23 @@ Refresh preserves these activity facts. Failed admission restores prior state;
 Close retires it. The backend and bridge are available; checkbox activation,
 mode controls and rich result rendering remain pending.
 
+Execution tasks can also attach ordinary current-location work and one first
+exact manual verification. Their current activity request/session/kind is
+independent of original Plan request, execution session, terminal timestamps,
+operation results and automatic verification. Plan detail, anchors/follow and
+Plan again retain original identity; task status follows current activity.
+Reconstruction obtains the original execution identity from the Plan summary,
+never from a current auxiliary session. Auxiliary progress cannot drive Plan
+follow or replace its terminal result.
+
+Manual verification has a separate frozen operation-to-row membership and
+result generation. Inventory window/detail exposes only matching returned-row
+manual facts, alongside ordinary facts and current ledger evidence. Terminal
+normalization repairs a live Gap and retains outcomes completed before pause.
+Manual hashing preserves actual prior scan provenance; subsequent ordinary
+scanning supplies its own scan identity. Desktop pane navigation and action
+controls remain the next delivery unit.
+
 One existing view revision fences selection, windows and details. A stale request
 or revision changes nothing; selection changes advance the revision. Selection
 requires a current released, clean publication and cannot race admission or a

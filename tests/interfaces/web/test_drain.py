@@ -3926,7 +3926,9 @@ def test_m1_7_execution_reuses_plan_task_and_preserves_original_start_replay() -
 
     assert execution == TaskStartView(plan_start.task_id, "c" * 32, "b" * 32)
     assert summary.task_id == plan_start.task_id
-    assert summary.request_id == plan_start.request_id
+    assert summary.request_id == execution.request_id
+    assert summary.plan_request_id == plan_start.request_id
+    assert summary.session_kind == "sync-execution"
     assert summary.session_id == execution.session_id
     assert summary.session_released is False
     assert registry.replay_start(plan_command, wire_intent) == plan_start
@@ -4176,12 +4178,6 @@ def test_m1_8_execution_times_follow_the_matching_terminal_record() -> None:
     )
     assert window["execution"] == retained
 
-    task = registry._tasks[planned.task_id]
-    with task.condition:
-        task.delivered_terminal_record = replace(delivered, session_id="f" * 32)
-    stale = registry.open_plan_view(planned.task_id)["execution"]
-    assert stale["started_at"] is None
-    assert stale["ended_at"] is None
 
 
 def test_m1_8_unrun_execution_retains_completion_without_a_start() -> None:
@@ -6900,7 +6896,7 @@ def test_execution_inventory_real_ledger_read_selection_and_close(tmp_path, monk
             assert all(summary[key] is None for key in (
                 "scan_request_id", "scan_complete", "scan_scope", "observed_count", "missing_count"))
             assert summary["warning_count"] == 0
-            selected = registry.set_inventory_selection(planned.task_id, planned.request_id,
+            selected = registry.set_inventory_selection(planned.task_id, execution.request_id,
                 expected_revision=0, node_id=None, selected=True)
             assert selected["selected_file_count"] == 1
             hidden = registry.update_inventory_view(planned.task_id, expected_revision=1,
@@ -6913,16 +6909,6 @@ def test_execution_inventory_real_ledger_read_selection_and_close(tmp_path, monk
             window = registry.get_inventory_window(planned.task_id, expected_revision=3, offset=0, limit=256)
             node_id = next(row["node_id"] for row in window["rows"] if row["row_id"] is not None)
             assert registry.get_inventory_detail(planned.task_id, expected_revision=3, node_id=node_id)["disposition"] == "current"
-            with pytest.raises(TaskUnavailableError):
-                _refresh(registry, planned, revision=3)
-            with pytest.raises(TaskUnavailableError):
-                registry.start_inventory_integrity(planned.task_id, planned.request_id,
-                    expected_revision=3, mode="verify", accept_current_evidence=False,
-                    command_id="6" * 32, wire_intent=("verify",))
-            with pytest.raises(TaskUnavailableError):
-                registry.change_inventory_visibility(planned.task_id, planned.request_id,
-                    expected_revision=3, node_id=None, action="acknowledge",
-                    command_id="7" * 32, wire_intent=("acknowledge",))
             assert registry.open_inventory_view(planned.task_id) == {**shown, "disposition": "current"}
             assert service.remembered_locations() == before_locations
         plan = registry.open_plan_view(planned.task_id)
@@ -6933,6 +6919,327 @@ def test_execution_inventory_real_ledger_read_selection_and_close(tmp_path, monk
         registry.close_task(planned.task_id, execution.session_id)
         with pytest.raises(TaskUnavailableError):
             registry.open_inventory_view(planned.task_id)
+
+@pytest.mark.parametrize("refresh_before", [False, True])
+def test_execution_inventory_visibility_preserves_original_review(tmp_path, refresh_before):
+    from namisync.interfaces.service import NamiSyncService
+    source, target = tmp_path / "source", tmp_path / "target"
+    source.mkdir()
+    target.mkdir()
+    (source / "one.txt").write_text("execution bytes", encoding="utf-8")
+    stale = target / "stale.txt"
+    stale.write_text("missing later", encoding="utf-8")
+    with NamiSyncService(tmp_path / "ledger.db", tmp_path / "history.db") as service:
+        service.initialize_database_contracts()
+        seeded = service.start_inventory(root_path=str(target))
+        _wait_terminal(service._dispatcher, seeded.session_id)
+        service.close_session(seeded.session_id)
+        stale.unlink()
+        missing_scan = service.start_inventory(root_path=str(target))
+        _wait_terminal(service._dispatcher, missing_scan.session_id)
+        service.close_session(missing_scan.session_id)
+        registry = _make_registry(service, drain_wait=0.1)
+        ids = iter(f"{index:032x}" for index in range(100, 300))
+        def finish(start):
+            _wait_terminal(service._dispatcher, start.session_id)
+            _drain_until_record(registry, start.task_id, start.session_id, ids)
+            registry.release_terminal_session(start.task_id, start.session_id)
+        planned = registry.start_plan(str(source), str(target), deletion_policy=None,
+            command_id="1" * 32)
+        finish(planned)
+        execution = registry.start_execution(planned.task_id, request_id=planned.request_id,
+            expected_revision=0, destructive_acknowledged=False, command_id="2" * 32,
+            wire_intent=("execute",))
+        finish(execution)
+        original = registry._execution_summary_locked(registry._tasks[planned.task_id])
+        current = execution
+        view = registry.open_inventory_view(planned.task_id)
+        assert view["scan_request_id"] is None
+        if refresh_before:
+            current = registry.refresh_inventory(planned.task_id, execution.request_id,
+                expected_revision=view["view_revision"], node_id=None,
+                command_id="8" * 32, wire_intent=("refresh",))
+            finish(current)
+            view = registry.open_inventory_view(planned.task_id)
+            assert view["scan_request_id"] == current.request_id
+        projection = registry._inventory_views[planned.task_id].projection
+        location_id = projection.location_id
+        missing = next(row for row in service._runtime.list_inventory(location_id)
+            if row.rel_path == "stale.txt")
+        node_id = projection.node_id_by_row_id[missing.row_id]
+        result = _visibility(registry, current, revision=view["view_revision"], node_id=node_id)
+        assert result["applied"] == 1 and result["unresolved_count"] == 0
+        assert _visibility(registry, current, revision=view["view_revision"], node_id=node_id) == result
+        assert next(row for row in service._runtime.list_inventory(location_id)
+            if row.row_id == missing.row_id).acknowledged_at is not None
+        restored = _visibility(registry, current, action="restore",
+            revision=view["view_revision"] + 1, node_id=node_id, command_id="7" * 32)
+        assert restored["applied"] == 1 and restored["unresolved_count"] == 0
+        assert next(row for row in service._runtime.list_inventory(location_id)
+            if row.row_id == missing.row_id).acknowledged_at is None
+        assert registry._execution_summary_locked(registry._tasks[planned.task_id]) == original
+        assert registry.open_plan_view(planned.task_id)["request_id"] == planned.request_id
+        registry.close_task(planned.task_id, current.session_id)
+        assert service._visibility_receipts == {}
+        assert service._runtime._retained_execution_reviews == {}
+
+
+@pytest.mark.parametrize("refresh_before", [False, True])
+def test_execution_manual_verification_attaches_and_preserves_original_review(tmp_path, refresh_before):
+    from namisync.interfaces.service import NamiSyncService
+    source, target = tmp_path / "source", tmp_path / "target"
+    source.mkdir()
+    target.mkdir()
+    (source / "one.txt").write_text("manual bytes", encoding="utf-8")
+    with NamiSyncService(tmp_path / "ledger.db", tmp_path / "history.db") as service:
+        service.initialize_database_contracts()
+        registry = _make_registry(service, drain_wait=0.1)
+        ids = iter(f"{index:032x}" for index in range(100, 300))
+        def finish(start):
+            _wait_terminal(service._dispatcher, start.session_id)
+            _drain_until_record(registry, start.task_id, start.session_id, ids)
+            registry.release_terminal_session(start.task_id, start.session_id)
+        planned = registry.start_plan(str(source), str(target), deletion_policy=None,
+            command_id="1" * 32)
+        finish(planned)
+        execution = registry.start_execution(planned.task_id, request_id=planned.request_id,
+            expected_revision=0, destructive_acknowledged=False, command_id="2" * 32,
+            wire_intent=("execute",))
+        finish(execution)
+        original = registry._execution_summary_locked(registry._tasks[planned.task_id])
+        refreshed = None
+        if refresh_before:
+            initial_view = registry.open_inventory_view(planned.task_id)
+            refreshed = registry.refresh_inventory(planned.task_id, execution.request_id,
+                expected_revision=initial_view["view_revision"], node_id=None,
+                command_id="8" * 32, wire_intent=("refresh-before",))
+            assert registry.get_manual_verification_readiness(planned.task_id,
+                execution.session_id, expected_execution_revision=original["execution_revision"])["reason"] == "busy"
+            finish(refreshed)
+        readiness = registry.get_manual_verification_readiness(planned.task_id,
+            execution.session_id, expected_execution_revision=original["execution_revision"])
+        if refresh_before:
+            assert readiness["reason"] == "superseded"
+            assert registry.open_inventory_view(planned.task_id)["scan_request_id"] == refreshed.request_id
+            registry.close_task(planned.task_id, refreshed.session_id)
+            assert service._runtime._retained_execution_reviews == {}
+            return
+        assert readiness["reason"] == "ready" and readiness["ready_count"] == 1
+        manual = registry.start_manual_verification(planned.task_id, execution.session_id,
+            expected_execution_revision=original["execution_revision"],
+            command_id="3" * 32, wire_intent=("manual",))
+        finish(manual)
+        assert registry.start_manual_verification(planned.task_id, execution.session_id,
+            expected_execution_revision=original["execution_revision"],
+            command_id="3" * 32, wire_intent=("manual",)) == manual
+        with pytest.raises(TaskUnavailableError):
+            registry.close_task(planned.task_id, execution.session_id)
+        assert registry._execution_summary_locked(registry._tasks[planned.task_id]) == original
+        summary = registry.open_inventory_view(planned.task_id)
+        assert summary["scan_request_id"] == (None if refreshed is None else refreshed.request_id)
+        window = registry.get_inventory_window(planned.task_id,
+            expected_revision=summary["view_revision"], offset=0, limit=256)
+        overlay = window["manual_verification"]
+        assert overlay["session_id"] == manual.session_id
+        assert overlay["complete"] and len(overlay["items"]) == 1
+        assert overlay["items"][0]["result"] == "verified"
+        assert registry.open_plan_view(planned.task_id)["request_id"] == planned.request_id
+        refresh_after = registry.refresh_inventory(planned.task_id, manual.request_id,
+            expected_revision=summary["view_revision"], node_id=None,
+            command_id="9" * 32, wire_intent=("refresh-after",))
+        finish(refresh_after)
+        refreshed_view = registry.open_inventory_view(planned.task_id)
+        assert refreshed_view["scan_request_id"] == refresh_after.request_id
+        registry.set_inventory_selection(planned.task_id, refresh_after.request_id,
+            expected_revision=refreshed_view["view_revision"], node_id=None, selected=True)
+        selected_view = registry.open_inventory_view(planned.task_id)
+        ordinary = registry.start_inventory_integrity(planned.task_id, refresh_after.request_id,
+            expected_revision=selected_view["view_revision"], mode="verify",
+            accept_current_evidence=False, command_id="4" * 32, wire_intent=("ordinary",))
+        finish(ordinary)
+        after = registry.open_inventory_view(planned.task_id)
+        after_window = registry.get_inventory_window(planned.task_id,
+            expected_revision=after["view_revision"], offset=0, limit=256)
+        assert after["scan_request_id"] == ordinary.request_id
+        assert after_window["manual_verification"] == overlay
+        assert after_window["integrity"]["session_id"] == ordinary.session_id
+        assert registry._execution_summary_locked(registry._tasks[planned.task_id]) == original
+        registry.close_task(planned.task_id, ordinary.session_id)
+        assert service._runtime._retained_execution_reviews == {}
+        assert service._runtime._retained_inventory_integrity == {}
+        assert service._runtime._retained_manual_verification == {}
+
+
+def test_execution_manual_first_failed_claim_is_consumed_and_replayed(tmp_path):
+    from namisync.interfaces.service import NamiSyncService
+    source, target = tmp_path / "source", tmp_path / "target"
+    source.mkdir()
+    target.mkdir()
+    (source / "one.txt").write_text("manual bytes", encoding="utf-8")
+    with NamiSyncService(tmp_path / "ledger.db", tmp_path / "history.db") as service:
+        service.initialize_database_contracts()
+        registry = _make_registry(service, drain_wait=0.1)
+        ids = iter(f"{index:032x}" for index in range(100, 200))
+        def finish(start):
+            _wait_terminal(service._dispatcher, start.session_id)
+            _drain_until_record(registry, start.task_id, start.session_id, ids)
+            registry.release_terminal_session(start.task_id, start.session_id)
+        planned = registry.start_plan(str(source), str(target), deletion_policy=None,
+            command_id="1" * 32)
+        finish(planned)
+        execution = registry.start_execution(planned.task_id, request_id=planned.request_id,
+            expected_revision=0, destructive_acknowledged=False,
+            command_id="2" * 32, wire_intent=("execute",))
+        finish(execution)
+        revision = registry._tasks[planned.task_id].execution_revision
+        assert registry.get_manual_verification_readiness(planned.task_id,
+            execution.session_id, expected_execution_revision=revision)["reason"] == "ready"
+        target.rename(tmp_path / "moved-target")
+        def attempt(command_id="3" * 32, intent=("manual",)):
+            return registry.start_manual_verification(planned.task_id, execution.session_id,
+                expected_execution_revision=revision, command_id=command_id, wire_intent=intent)
+        with pytest.raises(RuntimeError):
+            attempt()
+        assert service.task_manual_verification_attempted(planned.task_id)
+        with pytest.raises(RuntimeError):
+            attempt()
+        with pytest.raises(TaskIntentConflictError):
+            attempt(intent=("changed",))
+        with pytest.raises(TaskUnavailableError):
+            attempt(command_id="4" * 32)
+        assert registry._tasks[planned.task_id].session_id == execution.session_id
+        registry.close_task(planned.task_id, execution.session_id)
+
+
+def test_linked_execution_refuses_manual_without_consuming_attempt(tmp_path):
+    from namisync.interfaces.service import NamiSyncService
+    from namisync.workflows import LocationCandidate
+    source, target = tmp_path / "source", tmp_path / "target"
+    source.mkdir()
+    target.mkdir()
+    (source / "one.txt").write_text("linked bytes", encoding="utf-8")
+    with NamiSyncService(tmp_path / "ledger.db", tmp_path / "history.db") as service:
+        service.initialize_database_contracts()
+        registry = _make_registry(service, drain_wait=0.1)
+        ids = iter(f"{index:032x}" for index in range(100, 200))
+        def finish(start):
+            _wait_terminal(service._dispatcher, start.session_id)
+            _drain_until_record(registry, start.task_id, start.session_id, ids)
+            registry.release_terminal_session(start.task_id, start.session_id)
+        shell = registry.create_task_shell("1" * 32)
+        options = replace(service.read_setup_options(), verify_after_execute=True)
+        planned = registry.start_setup_plan(shell.task_id,
+            LocationCandidate.literal(str(source)), LocationCandidate.literal(str(target)),
+            options, command_id="2" * 32, wire_intent=("linked",))
+        finish(planned)
+        execution = registry.start_execution(planned.task_id, request_id=planned.request_id,
+            expected_revision=0, destructive_acknowledged=False,
+            command_id="3" * 32, wire_intent=("execute",))
+        finish(execution)
+        revision = registry._tasks[planned.task_id].execution_revision
+        readiness = registry.get_manual_verification_readiness(planned.task_id,
+            execution.session_id, expected_execution_revision=revision)
+        assert readiness["reason"] == "linked-execution" and not readiness["attempted"]
+        with pytest.raises(TaskUnavailableError):
+            registry.start_manual_verification(planned.task_id, execution.session_id,
+                expected_execution_revision=revision, command_id="4" * 32,
+                wire_intent=("manual",))
+        assert not service.task_manual_verification_attempted(planned.task_id)
+        registry.close_task(planned.task_id, execution.session_id)
+
+
+@pytest.mark.parametrize("action", ["resume", "cancel"])
+@pytest.mark.parametrize("completed_before_pause", [0, 1])
+def test_manual_dispatcher_partial_pause_and_terminal_reconciliation(tmp_path, monkeypatch, action, completed_before_pause):
+    from namisync.core.session import RunContext, SessionState
+    from namisync.interfaces.service import NamiSyncService
+    from namisync.modules.verifier import verify_post_copy
+    from namisync.workflows.runtime import LocalWorkflowRuntime
+    from _inventory_fixtures import _wait_for
+    started, release = Event(), Event()
+    calls = []
+    original_open = LocalWorkflowRuntime.open_manual_verification
+
+    def opened(runtime, checkpoint):
+        invocation = original_open(runtime, checkpoint)
+        def gated(selection, context, recorder):
+            calls.append(tuple(item.item_id for item in selection.pending))
+            def pause_after_first():
+                context.run.checkpoint()
+                if selection.completed_count == completed_before_pause and len(calls) == 1:
+                    started.set()
+                    assert release.wait(5)
+                    context.run.checkpoint()
+            return verify_post_copy(selection,
+                replace(context, run=RunContext(context.run.emit, pause_after_first)), recorder)
+        invocation.runner = gated
+        return invocation
+    monkeypatch.setattr(LocalWorkflowRuntime, "open_manual_verification", opened)
+    source, target = tmp_path / "source", tmp_path / "target"
+    source.mkdir()
+    target.mkdir()
+    for index in range(2):
+        (source / f"{index}.txt").write_text(f"bytes {index}", encoding="utf-8")
+    with NamiSyncService(tmp_path / "ledger.db", tmp_path / "history.db") as service:
+        service.initialize_database_contracts()
+        registry = _make_registry(service, drain_wait=0.1)
+        ids = iter(f"{index:032x}" for index in range(100, 300))
+        def finish(start):
+            _wait_terminal(service._dispatcher, start.session_id)
+            _drain_until_record(registry, start.task_id, start.session_id, ids)
+            manual_state = registry._tasks[start.task_id].manual_verification
+            if manual_state is not None:
+                assert manual_state.gap and not manual_state.complete
+                assert manual_state.items == {}
+            registry.release_terminal_session(start.task_id, start.session_id)
+        planned = registry.start_plan(str(source), str(target), deletion_policy=None,
+            command_id="1" * 32)
+        finish(planned)
+        execution = registry.start_execution(planned.task_id, request_id=planned.request_id,
+            expected_revision=0, destructive_acknowledged=False,
+            command_id="2" * 32, wire_intent=("execute",))
+        finish(execution)
+        revision = registry._tasks[planned.task_id].execution_revision
+        original_start = service.start_task_manual_verification
+        def lossy_start(task_id, execution_session_id, **kwargs):
+            factory = kwargs["delivery_factory"]
+            def delivery(task_id):
+                sink = factory(task_id)
+                def accept(update):
+                    if type(update) is SessionEventView and update.body_type in {"PhaseChanged", "IntegrityOutcome"}:
+                        update = replace(update, body_type="Gap", body={"first_missed_seq": update.sequence})
+                    sink(update)
+                return accept
+            return original_start(task_id, execution_session_id, **{**kwargs, "delivery_factory": delivery})
+        monkeypatch.setattr(service, "start_task_manual_verification", lossy_start)
+        manual = registry.start_manual_verification(planned.task_id, execution.session_id,
+            expected_execution_revision=revision, command_id="3" * 32,
+            wire_intent=("manual",))
+        owner = registry._tasks[planned.task_id].manual_verification
+        assert owner is not None and len(owner.subjects) == 2
+        subject_index = owner.subjects
+        try:
+            assert started.wait(5)
+            assert registry.control_execution(planned.task_id, manual.session_id, "pause").accepted
+            release.set()
+            _wait_for(service._dispatcher, manual.session_id, SessionState.PAUSED)
+            assert registry.control_execution(planned.task_id, manual.session_id, action).accepted
+            finish(manual)
+            view = registry.open_inventory_view(planned.task_id)
+            overlay = registry.get_inventory_window(planned.task_id,
+                expected_revision=view["view_revision"], offset=0, limit=256)["manual_verification"]
+            assert overlay["complete"] and not overlay["gap"]
+            assert len(overlay["items"]) == (2 if action == "resume" else completed_before_pause)
+            assert all(item["result"] == "verified" for item in overlay["items"])
+            assert owner.subjects is subject_index
+            assert len(calls) == (2 if action == "resume" else 1)
+            assert registry._tasks[planned.task_id].execution_session_id == execution.session_id
+            registry.close_task(planned.task_id, manual.session_id)
+            assert service._runtime._retained_execution_reviews == {}
+            assert service._runtime._retained_manual_verification == {}
+        finally:
+            release.set()
+
 
 @pytest.mark.parametrize("action", ["resume", "cancel"])
 def test_inventory_ordinary_live_control_terminal_repair_and_zero_replacement(tmp_path, action):

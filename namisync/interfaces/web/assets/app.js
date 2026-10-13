@@ -406,9 +406,9 @@ function disablePlanFollow(review) {
 
 function queuePlanFollow(review, enableFollow = false, explicit = false) {
   const task = currentReviewTask(review);
-  if (task === null || task.sessionId === null || review.follow == null) return;
+  if (task === null || task.executionSessionId === null || review.follow == null) return;
   review.follow.eligible = planFollowEligible(review);
-  const operationId = task.progressPresentation?.activeItem?.item_id ?? null;
+  const operationId = task.executionPresentation?.activeItem?.item_id ?? null;
   review.follow.hasTarget = operationId !== null;
   if (operationId === null) {
     review.follow.message = "No operation is active.";
@@ -417,7 +417,7 @@ function queuePlanFollow(review, enableFollow = false, explicit = false) {
     return;
   }
   if (enableFollow) review.follow.enabled = review.follow.eligible;
-  const anchorKey = `${task.sessionId}:${review.summary.view_revision}:${operationId}`;
+  const anchorKey = `${task.executionSessionId}:${review.summary.view_revision}:${operationId}`;
   if (review.follow.anchorKey === anchorKey && Number.isSafeInteger(review.follow.anchorIndex)
       && review.follow.anchorIndex >= review.window.offset
       && review.follow.anchorIndex < review.window.offset + review.window.rows.length) {
@@ -430,7 +430,7 @@ function queuePlanFollow(review, enableFollow = false, explicit = false) {
   if (planFollowLookupRunning && activePlanFollowKey === anchorKey
       && activePlanFollowGeneration === review.follow.generation) return;
   const request = Object.freeze({
-    task, review, sessionId: task.sessionId, operationId,
+    task, review, sessionId: task.executionSessionId, operationId,
     viewRevision: review.summary.view_revision,
     actionRevision: review.actionRevision,
     anchorKey,
@@ -458,10 +458,10 @@ async function drainPlanFollow() {
       activePlanFollowGeneration = followGeneration;
       const stillCurrent = () => currentReviewTask(review) === task
         && !settingsVisible && navigationRevision === navigation
-        && task.sessionId === sessionId && review.summary.view_revision === viewRevision
+        && task.executionSessionId === sessionId && review.summary.view_revision === viewRevision
         && review.actionRevision === actionRevision
         && review.follow.generation === followGeneration
-        && task.progressPresentation?.activeItem?.item_id === operationId;
+        && task.executionPresentation?.activeItem?.item_id === operationId;
       try {
         const anchor = Number.isSafeInteger(cachedIndex)
           ? { disposition: "current", index: cachedIndex }
@@ -526,7 +526,7 @@ function selectTask(taskId) {
   selectedTaskId = taskId;
   settingsVisible = false;
   renderTasks();
-  if (task.review !== null && task.reviewSessionId === task.sessionId
+  if (task.review !== null && task.reviewSessionId === task.executionSessionId
       && task.review.summary.highlight_focus_node_id !== null) {
     void readPlanDetail(task.review, { node_id: task.review.summary.highlight_focus_node_id });
   }
@@ -538,7 +538,7 @@ function selectTask(taskId) {
     void loadPlanReview(task);
   }
   if (task.executionWindowDirty) void refreshExecutionWindow(task);
-  if (task.taskKind === "inventory" && task.sessionReleased) void loadInventoryReview(task, true);
+  if (task.sessionReleased && (task.taskKind === "inventory" || task.executionStarted)) void loadInventoryReview(task, true);
 }
 
 function adoptTask(summary) {
@@ -551,6 +551,12 @@ function adoptTask(summary) {
       sessionReleased: summary.session_released,
       taskKind: summary.task_kind,
       requestId: summary.request_id,
+      planRequestId: summary.plan_request_id,
+      sessionKind: summary.session_kind,
+      executionSessionId: summary.session_kind === "sync-execution" ? summary.session_id : null,
+      executionSessionState: null,
+      executionSnapshot: null,
+      executionPresentation: null,
       closePending: false,
       closeRecovery: null,
       closeAwaitingTerminal: false,
@@ -624,18 +630,29 @@ function adoptTask(summary) {
       && summary.session_id !== null
       && task.sessionId !== summary.session_id
       && summary.task_kind === "sync-plan"
-      && task.requestId === summary.request_id
+      && task.planRequestId === summary.plan_request_id
       && task.review !== null
     ) {
-      task.executionStarted = true;
-      task.executionWindowDirty = true;
-      task.executionWindowDirtyRevision += 1;
+      if (summary.session_kind === "sync-execution") {
+        task.executionStarted = true;
+        task.executionSessionId = summary.session_id;
+        task.executionWindowDirty = true;
+        task.executionWindowDirtyRevision += 1;
+      }
+    }
+    if (task.sessionKind === "sync-execution" && summary.session_kind !== "sync-execution") {
+      task.executionSessionState = task.sessionState;
+      task.executionPresentation = null;
+      if (task.review?.follow != null) task.review.follow.hasTarget = false;
     }
     task.sessionId = summary.session_id;
     task.sessionState = summary.session_state;
     task.sessionReleased = summary.session_released;
     task.taskKind = summary.task_kind;
     task.requestId = summary.request_id;
+    task.planRequestId = summary.plan_request_id;
+    task.sessionKind = summary.session_kind;
+    if (summary.session_kind === "sync-execution") task.executionSessionId = summary.session_id;
   }
   if (task.form !== null) task.form.sessionState = task.sessionState;
   if (
@@ -650,7 +667,7 @@ function adoptTask(summary) {
   ) {
     void loadPlanReview(task);
   }
-  if (task.taskKind === "inventory" && task.sessionReleased) void loadInventoryReview(task);
+  if (task.sessionReleased && (task.taskKind === "inventory" || task.executionStarted)) void loadInventoryReview(task);
   return task;
 }
 
@@ -658,13 +675,16 @@ function adoptTaskStart(result, taskKind) {
   taskMutationRevision += 1;
   const observed = tasks.get(result.task_id);
   if (observed?.sessionId === result.session_id) return observed;
+  const retainedPlanRequestId = observed?.taskKind === "sync-plan" ? observed.planRequestId : null;
   return adoptTask({
     task_id: result.task_id,
     request_id: result.request_id,
+    plan_request_id: retainedPlanRequestId ?? (taskKind === "sync-plan" ? result.request_id : null),
     session_id: result.session_id,
+    session_kind: taskKind,
     session_state: "active",
     session_released: false,
-    task_kind: taskKind,
+    task_kind: retainedPlanRequestId === null ? taskKind : "sync-plan",
   });
 }
 
@@ -697,6 +717,11 @@ function acceptTaskUpdate(task, sessionId, update, snapshot = null) {
       activeItem: snapshot.active_item,
       itemPercent: snapshot.presentation.item_percent,
     };
+    if (task.sessionKind === "sync-execution") {
+      task.executionSnapshot = snapshot;
+      task.executionPresentation = task.progressPresentation;
+      task.executionSessionState = snapshot.session_state;
+    }
     if (task.executionControlState !== snapshot.control_state) {
       task.executionControlRevision += 1;
       task.executionControlState = snapshot.control_state;
@@ -710,15 +735,15 @@ function acceptTaskUpdate(task, sessionId, update, snapshot = null) {
           task.executionControlAttempt = null;
         }
       }
-      if (task.executionStarted && task.review !== null && !fixedOutcome(task.review.recovery)) {
+      if (task.sessionKind === "sync-execution" && task.review !== null && !fixedOutcome(task.review.recovery)) {
         task.review.message = executionControlMessage(snapshot.control_state);
       }
     }
-    if (task.review?.follow != null) {
-      task.review.follow.hasTarget = task.progressPresentation?.activeItem?.item_id != null;
+    if (task.review?.follow != null && task.sessionKind === "sync-execution") {
+      task.review.follow.hasTarget = task.executionPresentation?.activeItem?.item_id != null;
     }
   }
-  if (task.executionStarted) markExecutionWindowDirty(task);
+  if (task.sessionKind === "sync-execution") markExecutionWindowDirty(task);
   if (update?.update_type === "record") {
     task.recoveryRetry = null;
     task.recoverySessionId = null;
@@ -732,7 +757,7 @@ function acceptTaskUpdate(task, sessionId, update, snapshot = null) {
         && task.review.pending === controlAttempt.actionName) task.review.pending = null;
     task.sessionState = snapshot.session_state;
     if (task.form !== null) task.form.sessionState = task.sessionState;
-    if (task.executionStarted && task.review !== null) {
+    if (task.sessionKind === "sync-execution" && task.review !== null) {
       task.review.message = task.sessionState === "completed" ? null : `Execution ${task.sessionState}.`;
     }
     if (task.closePending && ["completed", "failed", "canceled", "refused"].includes(task.sessionState)) {
@@ -746,8 +771,8 @@ function acceptTaskUpdate(task, sessionId, update, snapshot = null) {
   } else {
     renderTasks();
   }
-  if (task.review !== null && task.executionStarted && task.sessionState === "active") {
-    task.review.follow.hasTarget = task.progressPresentation?.activeItem?.item_id != null;
+  if (task.review !== null && task.sessionKind === "sync-execution" && task.sessionState === "active") {
+    task.review.follow.hasTarget = task.executionPresentation?.activeItem?.item_id != null;
     if (task.review.follow.enabled && task.review.follow.eligible) queuePlanFollow(task.review);
   }
 }
@@ -770,7 +795,7 @@ function acceptTaskRefusal(task, sessionId, error, retry = null) {
     renderTasks();
     return;
   }
-  if (drainStopped && task.executionStarted) {
+  if (drainStopped && task.sessionKind === "sync-execution") {
     setTaskRecoveryError(task, STOPPED_TASK_UPDATES_MESSAGE);
     if (task.review !== null) task.review.message = STOPPED_TASK_UPDATES_MESSAGE;
   } else {
@@ -1265,11 +1290,18 @@ function acceptTaskRelease(task, sessionId) {
   task.recoveryRunning = false;
   clearTaskRecoveryError(task);
   task.sessionReleased = true;
-  task.executionWindowDirty = true;
-  task.executionWindowDirtyRevision += 1;
+  if (task.sessionKind === "sync-execution") {
+    task.executionSessionState = task.sessionState;
+    task.executionPresentation = null;
+    if (task.review?.follow != null) task.review.follow.hasTarget = false;
+    task.executionWindowDirty = true;
+    task.executionWindowDirtyRevision += 1;
+  }
   renderTasks();
-  if (task.taskKind === "sync-plan") void loadPlanReview(task, true);
-  if (task.taskKind === "inventory") void loadInventoryReview(task, true);
+  if (task.taskKind === "sync-plan" && ["sync-plan", "sync-execution"].includes(task.sessionKind)) {
+    void loadPlanReview(task, true);
+  }
+  if (task.taskKind === "inventory" || task.executionStarted) void loadInventoryReview(task, true);
 }
 
 function acceptTaskReleaseDelay(task, sessionId, recovery) {
@@ -1405,7 +1437,8 @@ function currentInventoryTask(review) {
 
 async function loadInventoryReview(task, force = false) {
   if (task === undefined || tasks.get(task.taskId) !== task || selectedTaskId !== task.taskId
-      || settingsVisible || task.closePending || task.taskKind !== "inventory"
+      || settingsVisible || task.closePending
+      || (task.taskKind !== "inventory" && !task.executionStarted)
       || !task.sessionReleased || task.sessionId === null
       || (!force && (task.inventoryLoading || task.inventoryReview !== null))) return;
   const request = ++task.inventoryRevision;
@@ -1677,7 +1710,7 @@ async function refreshExecutionWindow(task) {
       const review = task.review;
       const foregroundWindowEpoch = review.foregroundWindowEpoch;
       const reviewRevision = task.reviewRevision;
-      const sessionId = task.sessionId;
+      const sessionId = task.executionSessionId;
       const requestId = review.summary.request_id;
       const action = review.actionRevision;
       const viewRevision = review.summary.view_revision;
@@ -1685,7 +1718,7 @@ async function refreshExecutionWindow(task) {
       const refreshStillCurrent = () => (
         tasks.get(task.taskId) === task && selectedTaskId === task.taskId && !settingsVisible
         && task.review === review && !task.reviewLoading && task.reviewRevision === reviewRevision
-        && task.sessionId === sessionId && review.foregroundWindowReaders === 0
+        && task.executionSessionId === sessionId && review.foregroundWindowReaders === 0
         && review.foregroundWindowEpoch === foregroundWindowEpoch
         && review.summary.request_id === requestId && review.actionRevision === action
         && review.summary.view_revision === viewRevision && review.window.offset === offset
@@ -1840,14 +1873,15 @@ function retainedReviewTask(review) {
 async function loadPlanReview(task, force = false) {
   if (
     task === undefined || tasks.get(task.taskId) !== task
-    || task.taskKind !== "sync-plan" || task.sessionId === null
+    || task.taskKind !== "sync-plan" || task.planRequestId === null
     || task.reviewLoading
     || task.review?.pending === "selection"
-    || (!force && task.review !== null && task.reviewSessionId === task.sessionId)
+    || (!force && task.review !== null && task.reviewSessionId === task.executionSessionId)
   ) return;
   const request = ++task.reviewRevision;
   const dirtyRevision = task.executionWindowDirtyRevision;
-  const sessionId = task.sessionId;
+  const sessionId = task.executionSessionId;
+  const planRequestId = task.planRequestId;
   task.reviewLoading = true;
   renderTasks();
   try {
@@ -1855,7 +1889,7 @@ async function loadPlanReview(task, force = false) {
     const window = await getPlanWindow(task.taskId, summary.view_revision, 0, 256);
     if (
       tasks.get(task.taskId) !== task || task.reviewRevision !== request
-      || task.sessionId !== sessionId
+      || task.executionSessionId !== sessionId || task.planRequestId !== planRequestId
     ) return;
     if (
       window.disposition !== "current" || window.view_revision !== summary.view_revision
@@ -1863,17 +1897,28 @@ async function loadPlanReview(task, force = false) {
     ) {
       task.executionWindowDirty = task.executionWindowDirtyRevision !== dirtyRevision;
       if (task.review !== null) task.review.message = "Execution status refresh delayed. Select the task to retry.";
-      else if (task.sessionState !== "active") task.error = "Plan unavailable. Select the task to retry.";
+      else if (task.sessionState !== "active"
+          && ["sync-plan", "sync-execution"].includes(task.sessionKind)) {
+        task.error = "Plan unavailable. Select the task to retry.";
+      }
       return;
     }
     task.executionStarted ||= summary.selection_state === "committed";
+    if (summary.execution.session_id !== null) task.executionSessionId = summary.execution.session_id;
+    if (task.executionSessionState === null && summary.execution.result !== null) {
+      const originalResult = summary.execution.result;
+      task.executionSessionState = originalResult.disposition === "unrun" ? "refused"
+        : originalResult.canceled ? "canceled"
+          : ["failed", "partial", "mismatch", "refused"].includes(originalResult.headline)
+            ? "failed" : "completed";
+    }
     const message = task.executionStarted
-      ? task.sessionState === "active"
+      ? task.sessionKind === "sync-execution" && task.sessionState === "active"
         ? executionControlMessage(task.executionControlState)
-        : task.sessionState === "completed" ? null
+        : task.executionSessionState === "completed" ? null
           : summary.execution.refusal !== null
             ? executionRefusalMessage(summary.execution.refusal)
-            : `Execution ${task.sessionState}.`
+            : `Execution ${task.executionSessionState}.`
       : summary.preflight_ready
         ? null
         : "Plan failed review. Inspect notices and create a fresh plan.";
@@ -1898,7 +1943,7 @@ async function loadPlanReview(task, force = false) {
       refreshAvailable: false,
       queuedSearchQuery: null,
       highlightQueue: Promise.resolve(),
-      message: task.drainUnavailable && task.sessionState === "active" && task.executionStarted
+      message: task.drainUnavailable && task.sessionKind === "sync-execution" && task.sessionState === "active"
         ? STOPPED_TASK_UPDATES_MESSAGE
         : controlAttempt?.message ?? message,
       actionRevision: 0,
@@ -1914,7 +1959,7 @@ async function loadPlanReview(task, force = false) {
       follow: {
         enabled: retainedFollow === null ? task.executionStarted && eligibleFollow : retainedFollow.enabled,
         eligible: eligibleFollow,
-        hasTarget: task.progressPresentation?.activeItem?.item_id != null,
+        hasTarget: task.executionPresentation?.activeItem?.item_id != null,
         message: null,
         anchorKey: retainedFollow?.anchorKey ?? null,
         anchorIndex: retainedFollow?.anchorIndex ?? null,
@@ -1922,20 +1967,27 @@ async function loadPlanReview(task, force = false) {
         generation: retainedFollow?.generation ?? 0,
       },
     };
-    task.reviewSessionId = sessionId;
+    task.reviewSessionId = task.executionSessionId;
     adoptExecutionWindow(task.review, window);
     task.executionWindowDirty = task.executionWindowDirtyRevision !== dirtyRevision;
-    task.error = task.drainUnavailable
-      ? task.sessionState === "active" && task.executionStarted
-        ? STOPPED_TASK_UPDATES_MESSAGE : "Task updates stopped. Close can be retried."
-      : null;
+    if (["sync-plan", "sync-execution"].includes(task.sessionKind)) {
+      task.error = task.drainUnavailable
+        ? task.sessionKind === "sync-execution" && task.sessionState === "active"
+          ? STOPPED_TASK_UPDATES_MESSAGE : "Task updates stopped. Close can be retried."
+        : null;
+    }
   } catch (_error) {
     if (
       tasks.get(task.taskId) === task && task.reviewRevision === request
-      && task.sessionId === sessionId
-      && task.sessionState !== "active"
+      && task.executionSessionId === sessionId && task.planRequestId === planRequestId
+      && (task.sessionState !== "active"
+        || !["sync-plan", "sync-execution"].includes(task.sessionKind))
     ) {
-      task.error = "Plan unavailable. Select the task to retry.";
+      if (["sync-plan", "sync-execution"].includes(task.sessionKind)) {
+        task.error = "Plan unavailable. Select the task to retry.";
+      } else if (task.review !== null) {
+        task.review.message = "Plan unavailable. Select the task to retry.";
+      }
     }
   } finally {
     if (tasks.get(task.taskId) === task && task.reviewRevision === request) {
@@ -2608,10 +2660,15 @@ async function submitReviewedExecution(task, attempt) {
     task.executionAttempt = null;
     if (typeof result.task_id === "string") {
       task.sessionId = result.session_id;
+      task.sessionKind = "sync-execution";
+      task.executionSessionId = result.session_id;
       task.sessionState = "active";
+      task.executionSessionState = "active";
       task.sessionReleased = false;
       task.snapshot = null;
       task.progressPresentation = null;
+      task.executionSnapshot = null;
+      task.executionPresentation = null;
       task.executionStarted = true;
       task.executionWindowDirty = true;
       task.executionWindowDirtyRevision += 1;

@@ -480,7 +480,9 @@ window.addEventListener("unhandledrejection", (event) => {
   galleryRail.render([
     {
       taskId: "task-gallery-executing", label: "Current sync", review: null,
-      sessionId: "1".repeat(32),
+      taskKind: "sync-plan", requestId: "3".repeat(32),
+      planRequestId: "1".repeat(32), sessionKind: "sync-execution",
+      sessionId: "1".repeat(32), executionSessionId: "1".repeat(32),
       form: { source: { text: "C:\\source" }, target: { text: "D:\\target" } },
       sessionState: "active", executionStarted: true, executionControlState: "running",
       snapshot: { session_id: "1".repeat(32), session_state: "active", phase: "sync", presentation: {
@@ -492,7 +494,9 @@ window.addEventListener("unhandledrejection", (event) => {
     },
     {
       taskId: "task-gallery-paused", label: "Paused verification", review: null,
-      sessionId: "2".repeat(32),
+      taskKind: "sync-plan", requestId: "4".repeat(32),
+      planRequestId: "2".repeat(32), sessionKind: "sync-execution",
+      sessionId: "2".repeat(32), executionSessionId: "2".repeat(32),
       form: { source: { text: "C:\\source" }, target: { text: "D:\\target" } },
       sessionState: "active", executionStarted: true, executionControlState: "paused",
       snapshot: { session_id: "2".repeat(32), session_state: "active", phase: "verify", presentation: {
@@ -504,6 +508,9 @@ window.addEventListener("unhandledrejection", (event) => {
     },
     {
       taskId: "task-gallery-canceled", label: "Canceled sync", review: null,
+      taskKind: "sync-plan", requestId: "3".repeat(32),
+      planRequestId: "3".repeat(32), sessionKind: "sync-execution",
+      sessionId: "3".repeat(32), executionSessionId: "3".repeat(32),
       form: { source: { text: "C:\\source" }, target: { text: "D:\\target" } },
       sessionState: "canceled", executionStarted: true, executionControlState: "running",
       snapshot: null, error: null, closePending: false, executionAttempt: null,
@@ -1180,6 +1187,10 @@ window.addEventListener("unhandledrejection", (event) => {
   planReviewPanel.element.style.gridColumn = "1 / -1";
   app.append(planReviewPanel.element);
   const planReviewTask = {
+    taskId: "task-gallery-plan", taskKind: "sync-plan",
+    requestId: "5".repeat(32), planRequestId: "5".repeat(32),
+    sessionId: "4".repeat(32), sessionKind: "sync-plan",
+    reviewSessionId: "4".repeat(32),
     review: {
       summary: {
         source_path: "C:\\source",
@@ -1542,6 +1553,9 @@ window.addEventListener("unhandledrejection", (event) => {
     galleryWindowRequests = [];
     renderedGalleryTask = {
       ...planReviewTask,
+      requestId: "7".repeat(32), sessionKind: "sync-execution",
+      sessionId: "6".repeat(32), executionSessionId: "6".repeat(32),
+      reviewSessionId: "6".repeat(32),
       executionStarted: true,
       sessionState: populated ? "failed" : "completed",
       review: {
@@ -3537,7 +3551,9 @@ window.addEventListener("unhandledrejection", (event) => {
   }
   function recentTask(rows = []) {
     return {
-      ...planReviewTask, taskId: "gallery-recent", sessionId: "6".repeat(32),
+      ...planReviewTask, taskId: "gallery-recent", requestId: "7".repeat(32),
+      planRequestId: "5".repeat(32), sessionKind: "sync-execution",
+      sessionId: "6".repeat(32), executionSessionId: "6".repeat(32),
       reviewSessionId: "6".repeat(32),
       review: {
         ...planReviewTask.review, message: "",

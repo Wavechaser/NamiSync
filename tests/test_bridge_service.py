@@ -1659,6 +1659,12 @@ def test_m1_6_task_inventory_has_no_plan_and_retires_exact_details(has_details) 
         def retire_inventory_integrity(self, task_id):
             pass
 
+        def retire_manual_verification(self, task_id):
+            pass
+
+        def retire_captured_execution_review(self, task_id):
+            pass
+
         def drop_inventory_details(self, request_id):
             self.dropped.append(request_id)
 

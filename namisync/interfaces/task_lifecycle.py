@@ -135,6 +135,8 @@ class _TaskEffect:
     retirement_claim_id: int | None = None
     retiring: bool = False
     inventory_start_command_ids: set[str] = field(default_factory=set)
+    manual_attempt_command_id: str | None = None
+    execution_session_id: str | None = None
 
 
 @dataclass(slots=True)
@@ -238,7 +240,7 @@ class TaskLifecycle:
                 association = self._sessions.get(receipt.session_id)
                 if association is None:
                     task = self._tasks.get(receipt.task_id)
-                    if (receipt.kind in {"task-inventory", "task-integrity"} and task is not None
+                    if (receipt.kind in {"task-execution", "task-inventory", "task-integrity", "task-manual-verification"} and task is not None
                             and command_id in task.inventory_start_command_ids
                             and not task.retiring and task.retirement_claim_id is None):
                         return receipt
@@ -430,7 +432,7 @@ class TaskLifecycle:
                     task.plan_token is not None
                     and task.start_kind == "task-execution"
                 )
-                or task.start_kind in {"task-inventory", "task-integrity"}
+                or task.start_kind in {"task-inventory", "task-integrity", "task-manual-verification"}
             ):
                 self._finish_failed_task_start_locked(task)
             self._condition.notify_all()
@@ -447,6 +449,49 @@ class TaskLifecycle:
         signature: tuple[object, ...],
     ) -> TaskStartClaim:
         return self._begin_inventory_activity(task_id, request_id, command_id, signature, "task-integrity")
+
+    def begin_task_manual_verification(
+        self, task_id: str, execution_session_id: str, command_id: str,
+        signature: tuple[object, ...],
+    ) -> TaskStartClaim:
+        self._require_command_id(command_id)
+        self._require_opaque_id(execution_session_id, "execution session id")
+        self._require_signature(signature)
+        replay = self.replay_start(command_id, "task-manual-verification", signature)
+        if replay is not None:
+            if replay.task_id != task_id:
+                raise LifecycleReceiptConflictError("manual replay belongs to another task")
+            return TaskStartClaim(task_id, replay, False)
+        with self._condition:
+            task = self._tasks.get(task_id)
+            prior = None if task is None else self._sessions.get(task.session_id)
+            if (self._closed or task is None or prior is None or task.plan_token is None
+                    or task.manual_attempt_command_id is not None
+                    or prior.kind not in {"task-execution", "task-inventory", "task-integrity", "task-manual-verification"}
+                    or task.execution_session_id != execution_session_id
+                    or prior.plan_token != task.plan_token
+                    or not prior.session_released or prior.terminal_digest is None
+                    or prior.settlement_claim is not None or prior.observation_claim is not None
+                    or task.retiring or task.retirement_claim_id is not None
+                    or task.admission_identity is not None):
+                raise LifecycleAssociationError("manual verification is unavailable")
+            if any(other.start_command_id == command_id for other in self._tasks.values()):
+                raise LifecycleReceiptConflictError("command id belongs to another task start")
+            if task.start_command_id is not None and task.start_command_id not in self._start_receipts:
+                raise LifecycleAssociationError("task start remains pending")
+            task.manual_attempt_command_id = command_id
+            task.start_command_id = command_id
+            task.start_signature = signature
+            task.start_kind = "task-manual-verification"
+            task.start_failed = False
+            return TaskStartClaim(task_id, None, False)
+
+    def manual_verification_attempted(self, task_id: str) -> bool:
+        with self._condition:
+            task = self._tasks.get(task_id)
+            if task is None or task.plan_token is None:
+                raise LifecycleAssociationError("manual verification task is unavailable")
+            return task.manual_attempt_command_id is not None
 
     def _begin_inventory_activity(
         self, task_id: str, request_id: str, command_id: str,
@@ -465,11 +510,11 @@ class TaskLifecycle:
                 raise RuntimeError("service is closed")
             task = self._tasks.get(task_id)
             prior = None if task is None else self._sessions.get(task.session_id)
-            if (task is None or prior is None or prior.kind not in {"task-inventory", "task-integrity"}
+            if (task is None or prior is None or prior.kind not in {"task-inventory", "task-integrity", "task-execution", "task-manual-verification"}
                     or prior.request_id != request_id or not prior.session_released
                     or prior.terminal_digest is None or prior.settlement_claim is not None
                     or prior.observation_claim is not None
-                    or task.plan_token is not None or task.retiring
+                    or (task.plan_token is not None and prior.plan_token != task.plan_token) or task.retiring
                     or task.retirement_claim_id is not None or task.admission_identity is not None
                     or (task.start_command_id is not None
                         and task.start_command_id not in self._start_receipts)):
@@ -488,7 +533,7 @@ class TaskLifecycle:
             task = self._tasks.get(task_id)
             association = None if task is None else self._sessions.get(task.session_id)
             if (self._closed or task is None or association is None
-                    or association.kind not in {"task-inventory", "task-integrity"} or association.request_id != request_id
+                    or association.kind not in {"task-inventory", "task-integrity", "task-execution", "task-manual-verification"} or association.request_id != request_id
                     or not association.session_released or association.terminal_digest is None
                     or association.settlement_claim is not None or association.observation_claim is not None
                     or task.admission_identity is not None or task.retiring
@@ -761,13 +806,16 @@ class TaskLifecycle:
                 if task.session_id is not None:
                     prior = self._sessions.get(task.session_id)
                     if (
-                        kind not in {"task-execution", "task-inventory", "task-integrity"}
+                        kind not in {"task-execution", "task-inventory", "task-integrity", "task-manual-verification"}
                         or prior is None
                         or not prior.session_released
                         or prior.terminal_digest is None
                         or (kind == "task-execution" and task.plan_token is None)
-                        or (kind in {"task-inventory", "task-integrity"} and (prior.kind not in {"task-inventory", "task-integrity"}
-                            or task.plan_token is not None or prior.settlement_claim is not None))
+                        or (kind in {"task-inventory", "task-integrity", "task-manual-verification"}
+                            and (prior.kind not in {"task-inventory", "task-integrity", "task-execution", "task-manual-verification"}
+                                 or (task.plan_token is None and prior.kind not in {"task-inventory", "task-integrity"})
+                                 or (task.plan_token is not None and prior.plan_token != task.plan_token)
+                                 or prior.settlement_claim is not None or prior.observation_claim is not None))
                     ):
                         raise LifecycleAssociationError(
                             "task is unavailable for admission"
@@ -900,19 +948,24 @@ class TaskLifecycle:
                 admission.plan_token = self._plan_token(plan)
                 if task is not None:
                     task.plan_token = admission.plan_token
-            elif admission.kind == "task-execution":
+            elif admission.kind in {"task-execution", "task-inventory", "task-integrity", "task-manual-verification"} and task is not None and task.plan_token is not None:
                 if task is None or task.plan_token is None:
                     raise RuntimeError("task execution lost its reviewed plan")
                 admission.plan_token = task.plan_token
+                if admission.kind == "task-execution":
+                    task.execution_session_id = session_id
             admission.request_id = request_id
             if admission.command_id is not None:
                 self._start_receipts[admission.command_id] = receipt
             if task is not None:
                 task.admission_identity = None
-                if admission.kind in {"task-inventory", "task-integrity"}:
+                if admission.kind in {"task-inventory", "task-integrity", "task-manual-verification"}:
                     assert admission.command_id is not None
                     task.inventory_start_command_ids.add(admission.command_id)
                     if admission.prior_session_id is not None:
+                        prior = self._sessions[admission.prior_session_id]
+                        if prior.command_id is not None:
+                            task.inventory_start_command_ids.add(prior.command_id)
                         self._sessions.pop(admission.prior_session_id, None)
             self._admissions.pop(admission.identity, None)
             self._condition.notify_all()
@@ -1455,7 +1508,7 @@ class TaskLifecycle:
             if task.admission_identity != admission.identity:
                 raise LifecycleAssociationError("task admission is stale")
             task.admission_identity = None
-            if task.start_failed and (task.session_id is None or task.start_kind in {"task-inventory", "task-integrity"}):
+            if task.start_failed and (task.session_id is None or task.start_kind in {"task-inventory", "task-integrity", "task-manual-verification"}):
                 self._finish_failed_task_start_locked(task)
 
     def _retire_association_locked(

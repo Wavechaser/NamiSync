@@ -20,7 +20,10 @@ do not establish acceptance for changed dependencies.
 ## Remaining checkpoints
 
 The user activated M1-10 on 2026-10-13, with a stop for recap and GUI tweaks
-after its completion. Deliver the smallest reasonable reviewed atomic commits;
+after its completion. During C3b, the user requested an earlier hold after all C
+units finish because of repeated model-capacity interruptions. Finish and commit
+C3b, then pause; D/E require resumption before implementation. Deliver the
+smallest reasonable reviewed atomic commits;
 M1-12, release and DOC-2 remain inactive. Backend optimization is closed.
 Other pending rows still need user authorization, active scope and verification.
 A finding does not enlarge a row; [AGENTS](../AGENTS.md) governs scope changes,
@@ -29,7 +32,7 @@ stops and recovery.
 | ID | Accepted outcome | Named verification | Status |
 | --- | --- | --- | --- |
 | M1-9 | Bounded inventory projections, current evidence and the full inventory consumer for sibling sorting, including missing-row acknowledge/restore. | Complete or prior-complete publication; warnings outside action scope; raw evidence provenance; search/filter/collapse/window/detail, replacement/race and production sort/reset paths; headed witnesses. | Complete; reviewed commits and evidence in the completed M1-9 section below. |
-| M1-10 | Baseline, verify and rebaseline controls plus first same-task manual post-copy verification, without persistent operation-time hashes. Eligible null-evidence files enter rebaseline; every admitted rebaseline hashes and replaces/creates evidence, and a match is not verified. | Confirm acknowledgement admission before claim/native work; all-null/mixed workflow, service/CLI and desktop paths; conditional recording and supersession races; atomic handoff classification; live pause/resume/cancel and unchanged automatic failed-read retries; overlay/result identity. Independently review operation matrix and conditional recording. Terminal Verify-remaining/subset retry remains deferred. | Active; finite implementation register being expanded. Rebaseline confirmation is distinct from missing-row acknowledgement. |
+| M1-10 | Baseline, verify and rebaseline controls plus first same-task manual post-copy verification, without persistent operation-time hashes. Eligible null-evidence files enter rebaseline; every admitted rebaseline hashes and replaces/creates evidence, and a match is not verified. | Confirm acknowledgement admission before claim/native work; all-null/mixed workflow, service/CLI and desktop paths; conditional recording and supersession races; atomic handoff classification; live pause/resume/cancel and unchanged automatic failed-read retries; overlay/result identity. Independently review operation matrix and conditional recording. Terminal Verify-remaining/subset retry remains deferred. | Hold after reviewed C3b delivery; D/E await user resumption. Rebaseline confirmation is distinct from missing-row acknowledgement. |
 | M1-12 | Close integrated lifecycle/retention across activated task surfaces, then complete adversarial, documentation, ordinary and headed verification. This absorbs former M1-11. | Plan-only, execution-only, linked/manual verification, inventory, refused/canceled/degraded/failed tasks across same-document navigation, contained unsupported reload, explicit close and shutdown; admission bounds, stale-response suppression, exact resource release and retained truth. Applicable settlement oracle, ordinary/headed, installed-wheel/product, imports, diff/active-link checks and independent cross-component review. No aggregate-artifact or whole-owner-graph criterion. | Pending. |
 | M1-Release | Beta packaging and release closure after delivery rows above. | Installed artifact from clean checkout; frozen specification/dependency/CI, notices and corresponding source; standard-integrity host proof and every applicable BR-G/SH-G gate. [INTERFACES](INTERFACES.md) owns host/package/SH-G; [BRIDGE](BRIDGE.md) owns BR-G. | Pending. |
 
@@ -43,7 +46,7 @@ consolidation do not execute, close or authorize DOC-2 history rewriting.
 ### M1-10 implementation register — 2026-10-13
 
 Inspected clean `milestone1` at `fc8a79b`. The checkpoint is authorized as a
-whole; the dependency order below defines atomic review/commit boundaries,
+whole, with the later user-requested hold after C; the dependency order below defines atomic review/commit boundaries,
 not additional product outcomes. Serialize shared writers and refresh each
 dependent unit against its integrated predecessor before implementation.
 Root owns this register, HANDOFF and CHANGELOG. Evidence is retained under
@@ -57,187 +60,32 @@ Root owns this register, HANDOFF and CHANGELOG. Evidence is retained under
 | D — desktop integrity and GUI-A6 | Assets app/bridge/inventory review/plan review/integrity plus directly required markup/styles and task status; existing production JS probes and installed inventory/task-shell/execution/gallery helpers. DESKTOP_UI, BRIDGE, PRESENTATION, FEATURES. | Functional selection, Baseline/Verify/Rebaseline confirmation, truthful live/terminal overlays and pause/resume/cancel, execution-to-Verify navigation, first eligible exact manual action and explicitly ordinary fallback. Delayed/stale/recovery tests and real installed command journeys; preserve scroll/keyboard/selection custody and existing failed-read retries. Independently reviewed UI commits may divide ordinary controls from exact manual navigation after their backend gates pass. |
 | E — checkpoint closure | Integrated A–D and their direct test/doc/helper consumers. | Ordinary suite, affected installed headed gates, import contracts, active-link/diff checks and fresh adversarial cross-component review; account for tests/receipts and all commits. Stop for recap and GUI tweaks. No M1-12 or release claim. |
 
-Unit A baseline: five deterministic workflow/recorder checks pass; the two
-existing native runtime/CLI cases pass under host PowerShell. Restricted-run
-native EIO failures before bytes remain in the evidence directory alongside
-the passing `integrity-prechange-host-05.log`; they are not product changes.
+Delivered A–C3a are condensed below. Their finite implementation populations,
+earlier decisions and failed receipts remain in Git through `07947213` and the
+named evidence root; subject documents own current behavior. Scope preparation
+and the earlier delivered-register condensation are committed as `a730165`.
 
-Unit A delivered: service and typed fresh requests require explicit Boolean
-current-evidence acceptance and selected scope before admission; CLI forwards
-its existing confirmation. Fresh rebaseline admits both evidence states;
-existing engine and recorder remain unchanged. The final database/verifier/
-workflows/interfaces gate passes 3,504 checks (2,537 outside these departments)
-in `integrity-neighborhood-09.log`; all 12 import contracts and diff checks pass.
-Focused native/CLI, mode matrix, conditional absence/conflict and match/freshness
-coverage pass. Earlier failed fixture-migration receipts remain retained.
-Independent review is recorded in `policy-review-01.md`; the documentation-only
-scope/condensation commit is `a730165`; A is `6ba3575`.
+| Delivered unit | Shipped result and preserved boundaries | Reviewed commit and evidence |
+| --- | --- | --- |
+| A — operation policy | Explicit Boolean confirmation and selected scope precede rebaseline admission. Null/prior evidence both enter fresh hashing and conditional replacement; matches clear freshness rather than become verified. Existing engine/recorder behavior is unchanged. | `6ba3575`; 3,504 database/verifier/workflows/interfaces checks, 12 imports, focused native/CLI matrix and races. `integrity-neighborhood-09.log`, `policy-review-01.md`. |
+| B — exact manual workflow | Whole selected applicable population, including absent outcomes, is classified atomically with bounded repository chunks. Fresh target admission and a second classification freeze ledger-derived candidates for existing post-copy verification and pause continuation. Own session/history; no scan, original-run finish or persistent operation-time hashes. | `959f1bc`; 239 focused, 3,520 neighborhood checks, 12 imports, independent 257-subject/native pause/degradation probes. `manual-neighborhood-focused-09.log`, `manual-departments-10.log`, `manual-review-01.md`. |
+| C1 — server-owned selection | Initially empty exact file/folder/location selection; complete membership and counts include hidden/collapsed/off-window files. Warnings are inert. Existing view revision fences gestures, reads and later confirmation; selection grants no hashing authority. | `26e72ad`; 2,399 interfaces/tools checks, three skips, unaffected workflow evidence, 12 imports and seven installed checks. `selection-neighborhood-08.log`, `selection-installed-11.log`, `selection-review-01.md`. |
+| C2 — ordinary integrity association | Current request/session binds exact selected scope, confirmation and controls. One latest ordinary result remains separate from ledger state and is wholly replaced even for zero outcomes. Real scan provenance, normalized partial-pause results, original-command recovery, rollback, stale-response fences and exact Close remain intact. | `eecf31c`; 3,348 neighborhood checks, three skips, 12 imports and eight affected installed obligations including traced Setup; independent partial-pause resume/cancel probes. `ordinary-installed-12.log`, `ordinary-installed-13.log`, `ordinary-review-01.md`. |
+| C3a — execution target ledger reads | Released executions expose the existing target location through original Plan/execution binding. Opening creates no location, scan, native admission or hash. Missing scan provenance is explicitly null; complete ledger projection does not imply complete scan. Plan reads/selection/Close remain available. C3b owns auxiliary mutations. | `07947213`; 2,946 workflows/interfaces checks, 12 imports, installed Inventory and both execution-window cases. `execution-inventory-departments-01.log`, `execution-inventory-headed-01.log`, `execution-inventory-review-01.md`. |
 
-Unit B starts from integrated A `6ba3575`, refreshing the inspected runtime,
-service, facade and repository seams. Complete selected applicable immutable
-Plan operation references stay with retained execution review so absent outcomes
-cannot disappear from readiness. A dedicated bounded repository read holds one
-transaction across receipt/target-key chunks; the public 256-subject reader
-remains unchanged. The specific manual workflow owns classification, a fresh
-request/history identity, target binding, frozen ledger-derived PostCopySelection
-and its pause continuation. It calls existing verify_post_copy and conditional
-LedgerRecorder directly: no inventory scan, original-run finish, fabricated
-execute phase or linked VerifyContinuation. Queue/resume re-admits the frozen
-target and never silently substitutes newly selected evidence.
+The separate `bf9d649` Setup driver repair replaces retired hidden-Setup DOM
+predicates with visible review and authoritative frozen context. The timeout
+reproduced on accepted `26e72ad`; actual Plan again/new task/revisit and native
+ownership guards remain. Its two-file change passed 37 ordinary checks and a
+traced installed journey (`setup-driver-ordinary-03.log`,
+`setup-driver-installed-03.log`, `setup-driver-review-01.md`). Retained captures
+carry an undiagnosed label-legibility observation for the later GUI review;
+behavioral DOM evidence does not prove pixel legibility.
 
-The finite B tests are repository/execution-review/post-execution/runtime/domain
-checkpoint/service tests and, if useful, one focused manual workflow module
-registered in the department manifest. Verifier-recorder integration and native
-verifier are direct consumers. The B row's real-ledger/dispatcher/history gate
-covers transactions across chunks, admission/classification and later recording
-races, exact pause/cancel truth and immutable execution results. A department
-manifest change additionally requires the ordinary suite. First run existing
-affected composition, then implement, verify and independently review this one
-workflow commit before task attachment work. Read-only design observations are
-in `manual-workflow-design-01.md`; this register remains scope authority.
-
-Unit B delivered in `959f1bc`: the dedicated manual workflow and dormant runtime registration
-pass 239 focused and 3,520 database/verifier/workflows/interfaces checks
-(`manual-neighborhood-focused-09.log`, `manual-departments-10.log`), plus all
-12 import contracts. Independent review additionally exercises 257 subjects at
-the default chunk size and recorder-close degradation across native pause/resume.
-`manual-review-01.md` records source/evidence review. Initial fixture-anchor,
-canonical-key, registration-catalog and keyword failures remain distinct failed
-receipts; no admission check was relaxed. C–E remain pending.
-
-Unit C will split at independently reviewable boundaries: C1 server-owned
-inventory selection, C2 ordinary integrity association/results, C3 execution
-inventory attachment and the B-backed first manual action. C1 uses the existing
-view revision for selection, window and later confirmation fences; no second
-selection revision is needed. One node gesture applies to the complete folder,
-or the complete location for a null node, matching FEATURES' existing inventory
-scope policy. Initial selection is empty; warnings are informational and
-directories are containers. Server counts/tri-state include hidden/off-window
-files; labels disclose whole-folder/location scope and hidden selections.
-
-C1 finite implementation: inventory projection only where complete membership
-needs an owner; web inventory_review/drain/commands and bridge.js validators;
-inventory projection/review/drain/command/frontend tests and existing inventory
-window/refresh/visibility/review/app probe fixtures. Exact command catalogs in
-test_commands, test_component_gallery_headed, test_host, test_native_host_gates,
-test_transport_headed and tools/performance/bridge_event migrate together.
-BRIDGE/PRESENTATION/INTERFACES own its behavior. Gate is real scan/release/view/
-selection composition, stale and replacement controls, hidden/collapsed/full
-folder membership, large-population and envelope bounds, workflow/interface/tool
-departments, imports and affected installed Inventory/transport/host consumers,
-then fresh review. C1 grants no hashing/session-start authority. C2/C3 are
-refreshed and expanded against B/C1 before implementation; their read-only seam
-census is `c-design-association-20261013-01.md`, not a second register.
-C1 implementation starts at integrated B `959f1bc`. The corrected interfaces/tools
-gate passes 2,399 checks with three expected skips (`selection-neighborhood-08.log`),
-and all 12 import contracts pass. Unaffected workflow passes from
-`selection-departments-04.log` remain valid; its two sorted-catalog failures are
-covered by the 103-pass `selection-catalogs-05.log`. Failed envelope/catalog/import
-receipts remain retained. Six installed host/transport/gallery cases pass; the
-Inventory journey passes unchanged after the user confirms desktop availability
-(`selection-installed-11.log`, one pass); the two earlier foreground refusals
-remain retained and no safety guard changed. All seven installed cases now pass.
-C1 was preserved as recovery-only `c3bb191` and rebuilt into reviewed commit
-`26e72ad` on `milestone1`; recovery ancestry is not integrated. C2 is active;
-C3 remains read-only until its prerequisite closes.
-
-C2 is one inventory-task-only association/result commit, designed against
-`959f1bc` and refreshed against integrated C1 `26e72ad`. Task kind stays inventory with no Plan token.
-An explicit `task-integrity` lifecycle effect permits released inventory-to-
-ordinary, ordinary-to-ordinary and ordinary-to-refresh replacement under the
-existing exact prior association, settlement and retirement guards. The bounded
-`start_inventory_integrity` command freezes nonempty server-owned selected row
-paths at the current view revision, requires exact Boolean rebaseline acceptance
-before a fresh claim, and recovers an original command result before testing
-current publication. Changed intent conflicts; an empty selection never means
-whole location. `control_integrity` binds task/session/action to the current
-ordinary session. Existing command capacity and pause/resume/cancel apply.
-
-C2 retains one latest ordinary result generation, bound to task/request/session/
-mode and exact location/row identity. Capture terminal facts before detail release;
-each newly admitted operation replaces the whole overlay, including zero-outcome
-work. Keep live Gap repair, retained results and ledger verification state distinct.
-Use the scan details from the actual ordinary workflow scan when rebuilding the
-current ledger projection after settlement; hashing is not another scan. Failed
-admission preserves the prior released publication; Close retires results and
-receipts. Execution task association and automatic/manual maps stay in C3.
-
-Finite C2 owners are interfaces service/task_port/task_lifecycle; web drain,
-commands, inventory_review and task_snapshot as required; workflow runtime/models/
-facade for retained ordinary facts; bridge.js and narrow app/inventory renderer
-activity compatibility. Migrate the same exact command catalogs as C1. Tests
-cover those service/lifecycle/runtime/bridge owners and existing production
-inventory/refresh/visibility probes; BRIDGE, PRESENTATION, INTERFACES and WORKFLOWS
-own documentation, with DESKTOP_UI's current-activity wording migrated where
-ordinary sessions invalidate scan-only labels. The gate follows a real scan through selection, ordinary
-start, live control/release, current-ledger publication with separately bound
-results, refresh/next operation and exact Close. Include all-null/mixed confirmed
-rebaseline, empty/stale rejection before effects, original uncertain-result
-recovery, replacement rollback, stale sink/window/detail suppression, Gap repair,
-zero-result replacement and retirement. Run affected workflows/interfaces/tools,
-installed Inventory compatibility, imports and fresh review. Full controls and
-rich row rendering remain D; no engine rewrite or execution identity migration.
-C2's shared start-response validator also changes the exact Plan-again tracing
-anchor; its helper/ordinary transformation checks and one installed Setup flow
-with tracing are direct consumers. Existing runtime close fixture slots and the
-task-port catalog migrate with their owning interfaces tests.
-C2's traced Setup witness exposed a bounded pre-existing driver defect: unchanged
-accepted `26e72ad` reproduces the same frozen-stage timeout as the C2 candidate
-(`ordinary-base-setup-16.log`). The helper captures Setup DOM nodes that are
-retired when the supported flow immediately enters Plan review. Repair the
-existing `_setup_headed_child.py` journey and `test_setup_headed.py` consumers in
-a separate test commit: verify the backend-frozen roots/options in visible Plan
-review, retain actual Plan-again/new-task/revisit and native interaction witnesses,
-and replace only the obsolete hidden-Setup predicates. The complete helper census
-has two such stages: sync's frozen Setup and independent Inventory's frozen Setup;
-both must inspect their visible review pane and authoritative frozen context.
-Absent edit controls supersede disabled-style checks on detached Setup nodes.
-Product behavior and
-verification mechanism stay unchanged. Gate: relevant ordinary driver/transform
-checks plus traced installed Setup, independently reviewed; retain all failed
-candidate/base receipts and rerun the changed driver before accepting C2.
-The repaired driver passes 37 ordinary checks and the traced installed Setup
-journey (`setup-driver-ordinary-03.log`, `setup-driver-installed-03.log`). C2's
-final affected gate passes 3,348 tests with three expected skips, all 12 imports,
-and seven other installed Inventory/host/transport/gallery cases across
-`ordinary-installed-12.log` and `ordinary-installed-13.log`. Independent C2
-partial-progress probes also confirm completed outcomes survive resume/cancel.
-Review owners are `setup-driver-review-01.md` and `ordinary-review-01.md`.
-The independently approved driver repair is committed as `bf9d649`. Its retained
-screenshots also show a possible label-legibility issue in unchanged assets;
-this observation remains for the requested post-M1-10 GUI review. Behavioral
-readback and DOM visibility do not establish pixel legibility.
-C2 is delivered as `eecf31c`; its independent final review confirms the frozen
-source identity, complete named gates and no actionable supported source finding.
-
-C3 splits into two independently exercised API commits; D retains actual pane
-navigation and action controls. The read-only census inspected `26e72ad` plus
-the unfinished C2 candidate (`manual-attachment-design-01.md`). C3a starts from
-integrated C2 `eecf31c`, refreshing its changed seams before implementation.
-
-C3a exposes current-ledger Inventory on a released execution task using the
-original target location and retained execution/Plan binding. Missing location
-is unavailable; opening creates no location, scan, root admission or hash.
-Workflow runtime/models/facade and service/task_port provide the narrow read;
-web drain/inventory_review and bridge/renderer consumers admit nullable actual
-scan provenance. Summary adds `scan_request_id`; scan scope/completeness/counts
-are all null when there was no inventory scan. A complete ledger projection is
-not a completed scan. Preserve Plan reads, existing full-file selection and exact
-Close; explicitly refuse sync-task Refresh, visibility and integrity mutations
-until C3b. Finite tests are existing runtime readers/execution review/inventory
-projection/service/lifecycle and web drain/review/command/frontend/Plan tests,
-plus their existing Inventory probes and exact summary producers. WORKFLOWS,
-INTERFACES, BRIDGE, PRESENTATION and narrow DESKTOP_UI provenance own docs.
-Gate: real execution/release → ledger open/read/hidden selection → preserved
-Plan/detail → Close, with no scan/native/hash entry, truthful missing/no-scan
-state, stale/replacement retirement and mutation refusal. Run affected workflows/
-interfaces, imports, installed Inventory/execution compatibility and fresh review.
-C3a's frozen workflows/interfaces gate passes 2,946 checks
-(`execution-inventory-departments-01.log`); all 12 imports pass. Initial
-test-fixture/encoding corrections and a source-drift receipt remain retained.
-The installed Inventory and two execution-window cases pass in
-`execution-inventory-headed-01.log`. Final independent review is recorded in
-`execution-inventory-review-01.md`; source remains frozen for its identity check.
+Earlier foreground refusals remain failed receipts; unchanged checks passed
+after user availability confirmations. C1 recovery `c3bb191` was rebuilt into
+the reviewed commit without merging recovery ancestry. HANDOFF retains the
+task-owned recovery/worktree cleanup pointers until final accounting.
 
 C3b atomically migrates current versus original identity before enabling any
 auxiliary start. Retain original Plan request and execution terminal record;
@@ -252,6 +100,8 @@ Linked execution cannot offer manual verification even after an automatic failed
 read. The first valid fresh manual claim consumes the opportunity through later
 failure/cancellation; wire/identity/revision/capacity refusal before claim does
 not. Only original-command observation/replay survives; no terminal subset retry.
+C3b was implemented from integrated C3a `07947213`, with the read-only
+consumer census refreshed against that predecessor before editing.
 
 C3b finite owners: workflow runtime/models/execution_review/facade (manual module
 only for required frozen identity/result exposure); service/task_port/lifecycle;
@@ -275,6 +125,75 @@ interactive bridge probes, public-view/scale witnesses and existing native task
 helpers. These direct consumers migrate with the identity shape; historical
 receipts remain unchanged. Reuse the dispatcher's normalized accumulated
 terminal outcomes across pause/resume/cancel, not a second workflow accumulator.
+The full integrated gate additionally reaches exact service/runtime doubles in
+`test_service.py`/`test_bridge_service.py`, the lifecycle port catalog, Plan
+summary/scale fixtures, sorted native/benchmark command catalogs and the
+`tools/performance/table_loading.py` render instrumentation anchor. These are
+direct consumers of the declared identity/port migration; migrate their shapes
+and anchors without retiring their behavioral checks. Review reproduced an
+introduced original-execution review retention gap after auxiliary Close; the
+same C3b outcome corrects task-owned retirement and verifies it through actual
+manual/ordinary and Refresh sessions. Manual Gap/zero terminal witnesses close
+the named evidence gap. Final review also closed the finite visibility-admission
+migration: execution ledger views use retained execution binding under the current
+request claim, without requiring scan metadata. Real missing-row cases cover
+direct and refreshed views, acknowledge/replay/restore and exact Close. The initial all-tests receipt (misnamed ordinary01)
+includes headed checks and remains retained; it is not acceptance.
+
+C3b final gates pass 6,049 ordinary checks with four expected skips and 35
+headed deselections (`c3b-ordinary-12.log`), all twelve import contracts
+(`c3b-imports-13.log`) and nineteen affected installed obligations: fourteen
+unaffected passes in `c3b-headed-02.log`, four gallery checks in
+`c3b-gallery-04.log`, and the changed service visibility path's installed Inventory
+journey in `c3b-inventory-17.log`. The gallery rerun covers changed identity
+specimens and the sorted command checker; host/transport/execution/task-shell/Setup
+evidence remains valid by dependency. Visibility's focused gate passes fifteen
+checks (`c3b-visibility-11.log`). Inventory retries 14/15 stopped at foreground
+ownership and 16 at pre-click focus; 17 passed with all guards intact.
+The initial broad and gallery failures remain failed receipts. Close regression
+red/green and manual Gap/zero/partial repair are in `c3b-close-repro-01.log` and
+`c3b-review-corrections-01.log`; `auxiliary-review-luna-01.md` owns independent
+source, correction and final acceptance review. Exactly 106 native evidence
+files were copied and hash-verified under `c3b-native-evidence/`, with 35 final
+Inventory retry files under `c3b-native-evidence-final/`. After this
+reviewed C3b commit, all C units are complete and the user-requested hold applies.
+
+D remains on hold until user resumption. It splits into two functional UI
+commits after C3b acceptance. Read-only
+`desktop-integrity-design-20261013-01.md` inspected `07947213` plus its unfinished
+C3b candidate; recheck current/original identity, control routing, sync ordinary
+admission and exact result shapes against integrated C3b before editing.
+
+D1 activates standalone Inventory checkboxes, complete location/folder scope
+labels and selected/hidden counts; Baseline, Verify and explicit revision-bound
+Rebaseline confirmation; ordinary results separate from ledger state; current
+pause/resume/cancel and original-start observation recovery. Empty selections
+start nothing; canceling confirmation changes nothing. Stale selection results
+reload authoritative state rather than optimistically changing or replaying it.
+Owners: assets inventory_review/app/task_status and only required existing
+confirmation/styles/integrity-cell support. Consumers: existing Inventory
+review/app/window/refresh/visibility probes and wrappers, shared tree behavior,
+and installed Inventory child/helper. Gate: delayed/stale selection and reads,
+hidden/collapsed/off-window scope, confirmation cancel/revision changes, real
+baseline/verify/rebaseline/control/release, Gap/zero results, original-command
+recovery and exact Close; interfaces checks, installed journey and fresh review.
+
+D2 adds task-local Plan/Verify navigation, on-demand exact-manual readiness and
+the first Verify copied files action, plus clearly separate Verify current state
+ordinary fallback using server selection. Readiness grants no authority; no
+automatic fallback, new attempt or terminal subset retry. Current-session
+controls use C3b's settled route, independently of original execution identity.
+Owners: D1 assets plus panels/plan_review and narrow existing styles; no new wire
+commands or generic pane framework. Consumers: existing task-shell, execution,
+Plan and Inventory probes/wrappers and one installed execution helper extended
+through ledger/readiness/manual/control/release and explicit ordinary fallback.
+Gate: distinct original/current results, blocked/linked/empty/attempted guidance,
+late pane/task responses, Gap/zero replacement, exact Close, preserved Plan
+detail/follow/selection and scroll/keyboard custody; ordinary suite, affected
+installed execution/Inventory/task-shell/gallery and fresh review. Matching
+DESKTOP_UI/FEATURES/PRESENTATION/BRIDGE docs accompany each UI commit. E remains
+checkpoint closure; later GUI polish and the retained legibility observation
+wait for the user-requested recap.
 
 Preserve atomic publication, conditional recording including prior absence,
 root admission, fixed continuation identity and original execution truth.

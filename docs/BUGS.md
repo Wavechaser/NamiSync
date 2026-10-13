@@ -1144,6 +1144,26 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Application task lifecycle
 
+- MODERATE - FIXED (2026-10-13). Scan identity substituted for publication identity.
+  The M1-10 execution-task candidate safely refused missing-row acknowledge/restore
+  until Refresh, despite publishing a complete target-ledger view. Cause: the
+  service still required standalone scan metadata after execution-ledger views
+  became valid publications without a scan. Visibility now holds the exact current
+  request's lifecycle claim and validates the target through the retained original
+  execution binding. Standalone tasks retain their scan/request check. Real missing
+  rows exercise direct and refreshed execution views, exact replay, restore and
+  Close without changing original Plan/execution truth or inventing scan provenance.
+
+- MODERATE - FIXED (2026-10-13). Current-session cleanup omits task-owned state.
+  The M1-10 auxiliary-session candidate retained the original execution review
+  after exact Close following manual/ordinary verification or Refresh. Repeated
+  task creation could accumulate closed-task result graphs. Cause: retirement
+  depended on the current session being the original execution, although that
+  review belongs to the whole task. Final task retirement now releases all
+  task-owned result slots independently of the current activity. Real-session
+  Close regressions failed before the correction and pass afterward; manual
+  pause/resume/cancel and empty terminal results retain their separate truth.
+
 - MODERATE - FIXED (2026-10-02). Late admission overwrites observation. An
   unrelated task-list read can discover a new session before its start response
   arrives; if its drain then observes completion, the late receipt reset it to

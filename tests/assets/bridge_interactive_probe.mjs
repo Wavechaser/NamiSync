@@ -498,6 +498,8 @@ const inconsistentTaskList = {
     session_released: false,
     task_kind: "sync-plan",
     request_id: null,
+    plan_request_id: null,
+    session_kind: null,
   }],
 };
 testWindow.queueResults("list_tasks", inconsistentTaskList, inconsistentTaskList);

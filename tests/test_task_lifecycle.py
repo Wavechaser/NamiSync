@@ -1238,6 +1238,11 @@ def test_task_lifecycle_port_surface_is_exact() -> None:
         "read_task_execution_items",
         "read_task_integrity_items",
         "read_task_execution_evidence",
+        "read_task_manual_verification_readiness",
+        "task_manual_verification_attempted",
+        "read_task_manual_verification_membership",
+        "start_task_manual_verification",
+        "read_task_manual_verification",
     }
 
 

@@ -85,9 +85,15 @@ describes the paused-index lifetime.
 Released execution tasks also expose current target-ledger Inventory reads and
 selection, bound to their committed original Plan and retained execution review.
 Opening needs an existing location and performs no native admission or scan.
-Plan reads/detail and exact Close remain available. Sync-task Refresh, visibility
-changes and ordinary integrity starts remain refused until auxiliary association
-support ships; a read publication grants no mutation permission.
+Plan reads/detail and exact Close remain available. After the released original
+execution, the same task may run its first eligible exact manual post-copy
+verification, or explicitly Refresh, change Inventory visibility, and verify
+current state. Each new session has a fresh current request/session; the original
+Plan request, execution session, terminal record, and review results remain
+independent. A ledger read has no scan provenance until an actual scan occurs;
+later manual publication retains the last actual scan's provenance. Linked
+execution cannot start a manual session. A first valid manual claim is consumed
+even if native preparation fails, and equal command replay returns that outcome.
 
 Inventory tasks additionally retain their exact `InventoryDetails` metadata at
 task scope before terminal release drops runtime request details, including
@@ -120,7 +126,10 @@ Current durable evidence retains observed and attested subjects, raw scalar
 values, full native identity and digest provenance separately from scan metadata.
 
 Task-bound acknowledge/restore additionally require a current complete
-publication. The registry resolves complete missing-row membership independently
+publication. Execution tasks validate its location through the retained original
+execution binding; no Refresh or synthetic scan metadata is required. The current
+released request still owns the visibility claim and does not change identity.
+The registry resolves complete missing-row membership independently
 of visible filtering, windows and collapse, then reserves an original-result
 entry in the same 48-entry population as starts. The service freezes one UTC
 timestamp, retains task-owned aggregate receipts and invokes existing conditional
@@ -283,12 +292,12 @@ validation. Browser whole-batch refusal remains for transport, ordering,
 lifecycle, and snapshot admission failures, with clean replay of previously unaccepted
 updates.
 
-The service's workflow registry also includes the dormant `manual-verify`
-runtime route. It accepts an exact retained execution binding and produces an
-independent verification session/history result. Task association, original
-command recovery, bounded result publication and desktop controls remain the
-following M1-10 work; this registration does not expose a browser command or a
-terminal retry action.
+The service's `manual-verify` runtime route accepts an exact retained execution
+binding and produces an independent verification session/history result. Task
+association retains a first-attempt command receipt, a bounded separate manual
+result, and exact current-session control. Its result never changes original
+execution or automatic verification truth. Browser action controls and
+navigation remain the following M1-10 surface work.
 
 The current public service surface includes:
 

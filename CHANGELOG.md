@@ -550,8 +550,9 @@ Integrity controls, manual post-copy handoff and beta packaging remain open.
 
 - Activate M1-10 alone, condense delivered register history while retaining
   evidence and binding dispositions, and expand the remaining implementation
-  into independently reviewed atomic outcomes. Stop after this checkpoint for
-  the requested recap and GUI tweaks; M1-12 and release remain inactive.
+  into independently reviewed atomic outcomes. The user subsequently requested
+  a hold after C, before desktop controls; the later checkpoint completion still
+  stops for recap and GUI tweaks. M1-12 and release remain inactive.
 - Require explicit selected-scope/current-evidence acceptance before service or
   workflow rebaseline admission and forward the existing CLI confirmation.
   Rebaseline now includes eligible files without prior evidence; every admitted
@@ -591,6 +592,21 @@ Integrity controls, manual post-copy handoff and beta packaging remain open.
   scan provenance is explicit. Auxiliary mutations and pane navigation follow
   in their separate delivery units. Verification passes 2,946 workflows/interfaces
   checks, all 12 imports and three installed Inventory/execution checks.
+- Add same-task first manual post-copy verification and explicit ordinary
+  integrity/Refresh and missing-row acknowledge/restore on execution tasks. Keep original Plan/execution identity,
+  terminal facts and automatic results separate from current activity and
+  bounded manual/ordinary results. Preserve original-command recovery, first
+  attempt consumption, linked-execution exclusion, live controls and exact Close.
+  Browser reconstruction preserves original review while current task status
+  follows auxiliary activity. Actual scan provenance advances only for scans.
+  Visible controls and pane navigation remain the following UI delivery units.
+  Fix original-execution review retirement after auxiliary Close, and migrate
+  direct contract fixtures, gallery identities and measurement anchors without
+  weakening their behavioral checks. Admit visibility directly from the existing
+  execution ledger view without requiring Refresh or invented scan metadata.
+  Final verification passes 6,049 ordinary
+  tests (four expected skips), nineteen affected installed obligations and all
+  twelve import contracts; independent review covers the source and corrections.
 
 #### Refine Plan refusal messages, move context and controls (2026-10-04)
 

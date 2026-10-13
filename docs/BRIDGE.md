@@ -471,13 +471,15 @@ BOOTSTRAP rows, commands require OPEN.
 | `prepare_setup` | `{options:SetupOptions}` | canonical `SetupOptions` | 5 s; one identical-payload retry |
 | `admit_location` | `{purpose:"source"\|"target"\|"inventory",candidate:LocationCandidate}` or `{purpose:"source"\|"target"\|"inventory",continuation_id:SlotId,mount_index:SafeInt}` | `LocationChoice` | current-state recovery; 5 s feedback; no mutation replay |
 | `create_task` | `{command_id:HexId}` | `{task_id:TaskId}` | observed original result; 5 s feedback; no mutation replay |
-| `list_tasks` | `{}` | `{tasks:[{task_id:TaskId,task_kind:null\|"sync-plan"\|"inventory",request_id:null\|HexId,session_id:null\|HexId,session_state:null\|"active"\|"completed"\|"failed"\|"canceled"\|"refused",session_released:boolean}]}` | 5 s; one identical-payload retry |
+| `list_tasks` | `{}` | `{tasks:[{task_id:TaskId,task_kind:null\|"sync-plan"\|"inventory",request_id:null\|HexId,plan_request_id:null\|HexId,session_id:null\|HexId,session_kind:null\|TaskSessionKind,session_state:null\|"active"\|"completed"\|"failed"\|"canceled"\|"refused",session_released:boolean}]}` | 5 s; one identical-payload retry |
 | `start_plan` | `{task_id:TaskId,command_id:HexId,source_id:SlotId,target_id:SlotId,options:SetupOptions}` | `{task_id:TaskId,request_id:HexId,session_id:HexId}` | observed original result; 5 s feedback; no mutation replay |
 | `start_inventory` | `{task_id:TaskId,command_id:HexId,root_id:SlotId}` | `{task_id:TaskId,request_id:HexId,session_id:HexId}` | observed original result; 5 s feedback; no mutation replay |
 | `plan_again` | `{task_id:TaskId,command_id:HexId,source_mount:null\|string,target_mount:null\|string}` | `{task_id:TaskId,request_id:HexId,session_id:HexId}` | observed original result; 5 s feedback; no mutation replay |
 | `open_plan_view` | `{task_id:TaskId}` | `PlanViewSummary` | 5 s; one identical-payload retry |
 | `open_inventory_view` | `{task_id:TaskId}` | `InventoryViewSummary` | 5 s; one identical-payload retry |
 | `refresh_inventory` | `{task_id:TaskId,request_id:HexId,command_id:HexId,expected_revision:SafeInt,node_id:null\|NodeId}` | `{task_id:TaskId,request_id:HexId,session_id:HexId}` | observed original result; 5 s feedback; no mutation replay |
+| `get_manual_verification_readiness` | `{task_id:TaskId,session_id:HexId,expected_execution_revision:SafeInt}` | `ManualVerificationReadiness` | 5 s; one identical-payload retry |
+| `start_manual_verification` | `{task_id:TaskId,session_id:HexId,command_id:HexId,expected_execution_revision:SafeInt}` | `{task_id:TaskId,request_id:HexId,session_id:HexId}` | observed original result; 5 s feedback; no mutation replay |
 | `acknowledge_inventory`, `restore_inventory` | `{task_id:TaskId,request_id:HexId,command_id:HexId,expected_revision:SafeInt,node_id:null\|NodeId}` | `InventoryVisibilityResult` | observed original result; 5 s feedback; no mutation replay |
 | `update_inventory_view` | `{task_id:TaskId,expected_revision:SafeInt,search_query:string,filters:[InventoryFilter],sort_column:"path"\|"filename"\|"size"\|"mtime",sort_direction:"ascending"\|"descending",collapse_node_id:null\|NodeId,collapsed:null\|boolean}` | `InventoryViewSummary` | current-state recovery; 5 s feedback; no mutation replay |
 | `set_inventory_selection` | `{task_id:TaskId,request_id:HexId,expected_revision:SafeInt,node_id:null\|NodeId,selected:boolean}` | `InventoryViewSummary` | current-state recovery; 5 s feedback; no automatic retry or mutation replay |
@@ -593,8 +595,32 @@ server selection and shares the existing 48-entry start capacity. Changed
 original intent conflicts. `control_integrity` is an observed direct mutation
 with exact task/session/action (pause, resume or cancel).
 
+Sync tasks retain their original `plan_request_id` while `request_id`,
+`session_id` and `session_kind` describe current activity. `TaskSessionKind` is
+`sync-plan`, `sync-execution`, `inventory`, `baseline`, `verify`, `rebaseline`
+or `manual-verify`; it is null exactly when the session ID is null. Inventory
+tasks have no Plan request. Plan reads resolve original identity, including
+after auxiliary starts; retained Plan summaries identify the original execution.
+Fresh auxiliary starts require a released association with the same retained
+Plan token. Their current-session Close also retires the original retained Plan
+and execution; an old execution session cannot control or close its successor.
+
+Manual command `session_id` names the original execution.
+`ManualVerificationReadiness` contains exactly `task_id`, `session_id`,
+`execution_revision`, `reason`, `applicable_count`, `ready_count`,
+`already_verified_count` and `attempted`. Counts/revision are SafeInt, `attempted`
+is Boolean, and reason is a finite workflow or admission disposition. This read
+grants no authority.
+Start rechecks the whole handoff and admits the target afresh. It accepts no
+browser paths, evidence or subsets. The first valid fresh claim consumes the
+opportunity through later failure or cancellation; preclaim identity, revision
+and capacity refusals do not. Original-command observation precedes fresh
+attempt checks. Linked execution cannot start this separate manual action.
+Manual live control uses `control_execution` against its current manual session;
+ordinary integrity on either task kind uses `control_integrity`.
+
 After an ordinary start, inventory windows and domain details additionally carry
-an `integrity` context: original request/session/mode/location identity, result
+an `integrity` context: activity request/session/mode/location identity, result
 revision, complete and gap flags, and compact outcome items for only the returned
 row IDs. Items carry result/reason, recording/disposition and omitted-detail
 count. At most 256 facts cross a window and at most one crosses detail; full
@@ -602,6 +628,14 @@ selected populations remain server-owned. Terminal reconciliation replaces the
 live subset and clears the gap flag, even with zero outcomes. These activity
 facts do not reinterpret the separate current ledger fields. Existing pure
 inventory responses omit this context. Full desktop controls remain pending.
+
+Manual windows/details instead add an independent `manual_verification` context:
+original execution session, manual request/session/location, result revision,
+complete/gap and compact returned-row outcomes including operation and row IDs.
+The same 256-window/one-detail limits apply. Exact frozen membership binds these
+facts; a different row at the same path cannot inherit an outcome. Terminal
+reconciliation replaces the live subset, including zero outcomes. Manual and
+ordinary contexts coexist without changing original automatic execution facts.
 
 Visibility requires the current released request, a matching complete publication
 and its exact revision. Full/root, folder and leaf membership comes from the

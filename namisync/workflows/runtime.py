@@ -164,6 +164,8 @@ from .models import (
     RetainedExecutionSummary,
     RetainedIntegrityItemWindow,
     RetainedInventoryIntegrity,
+    ManualVerificationMembership,
+    RetainedManualVerification,
     HistoryEventView,
     HistoryEventPageView,
     HistoryItemPageView,
@@ -333,6 +335,8 @@ class LocalWorkflowRuntime:
         self._execution_details: dict[str, ExecutionDetails] = {}
         self._retained_execution_reviews: dict[str, RetainedExecutionReview] = {}
         self._retained_inventory_integrity: dict[str, RetainedInventoryIntegrity] = {}
+        self._manual_memberships: dict[str, ManualVerificationMembership] = {}
+        self._retained_manual_verification: dict[str, RetainedManualVerification] = {}
         self._inventory_details: dict[str, InventoryDetails] = {}
         self._execution_started: dict[str, datetime] = {}
         self._history_store: HistoryStore | None = None
@@ -847,8 +851,49 @@ class LocalWorkflowRuntime:
                 raise ValueError("manual verification execution binding changed")
         checkpoint = freeze_manual_verification(
             request, prepared.binding, second, _binding_root(prepared.binding))
+        membership = ManualVerificationMembership(request.execution, request.request_id,
+            prepared.binding.location_id, tuple((item.item_id, item.recorded_identity.row_id,
+                item.display_path) for item in checkpoint.selection.candidates))
+        with self._lock:
+            self._manual_memberships[request.request_id] = membership
         return WorkflowPreparation(checkpoint,
             (("volume", _volume_resource_key(prepared.binding.volume_id)),))
+
+    def read_manual_verification_membership(self, request_id: str) -> ManualVerificationMembership:
+        with self._lock:
+            return self._manual_memberships[request_id]
+
+    def capture_manual_verification(self, task_id: str, request_id: str,
+                                    session_id: str, result: OperationResult | None) -> RetainedManualVerification:
+        with self._lock:
+            current = self._retained_manual_verification.get(task_id)
+            if current is not None:
+                if (current.membership.request_id, current.session_id) != (request_id, session_id):
+                    raise ValueError("manual verification result binding changed")
+                return current
+            membership = self._manual_memberships[request_id]
+            if membership.execution.task_id != task_id or type(result) is not OperationResult:
+                raise ValueError("manual verification terminal result is unavailable")
+            subjects = {operation_id: (row_id, path) for operation_id, row_id, path in membership.subjects}
+            items = tuple(result_item_view(item) for item in result.items if type(item) is IntegrityOutcome)
+            if any((item.row_id, item.path) != subjects.get(item.item_id)
+                    or item.location_id != str(membership.location_id) or item.phase != "verify" for item in items):
+                raise ValueError("manual verification result changed its subject")
+            retained = RetainedManualVerification(membership, session_id, operation_result_view(result), items)
+            self._retained_manual_verification[task_id] = retained
+            return retained
+
+    def read_manual_verification(self, task_id: str) -> RetainedManualVerification:
+        with self._lock:
+            return self._retained_manual_verification[task_id]
+
+    def drop_manual_verification_details(self, request_id: str) -> None:
+        with self._lock:
+            self._manual_memberships.pop(request_id, None)
+
+    def retire_manual_verification(self, task_id: str) -> None:
+        with self._lock:
+            self._retained_manual_verification.pop(task_id, None)
 
     def open_manual_verification(self, checkpoint: object) -> ManualVerificationInvocation:
         self._require_open()
@@ -1439,6 +1484,8 @@ class LocalWorkflowRuntime:
                 self._execution_details.clear()
                 self._retained_execution_reviews.clear()
                 self._retained_inventory_integrity.clear()
+                self._manual_memberships.clear()
+                self._retained_manual_verification.clear()
                 self._inventory_details.clear()
                 self._execution_started.clear()
                 self._closed = True

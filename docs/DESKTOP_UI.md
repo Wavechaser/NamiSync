@@ -1881,6 +1881,13 @@ copies authorization. There is no background replan, execute-anyway,
 auto-commit, or unattended path. Automatic linked verification stays in the
 execution session; manual
 exact post-copy verification is a later session that never rewrites execution.
+The task adapter and browser identity consumers now preserve that separation:
+Plan headers, details and follow use original execution identity, while task
+status uses the current session kind. Reconstructing a task or refreshing its
+Inventory preserves the original Plan request. Loading original Plan review
+does not replace current auxiliary recovery feedback. The first-manual API and
+separate bounded result contexts are implemented; visible Verify navigation and
+integrity action controls remain the next M1-10 UI delivery unit.
 When exact handoff is blocked, the UI explains why and offers only the clearly
 labelled ordinary **Verify current state** fallback for an otherwise eligible,
 normally completed execution; this is not a terminal retry action.

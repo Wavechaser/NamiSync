@@ -68,7 +68,7 @@ def transform_asset(name: str, source: str) -> str:
         ),
         "plan_review.js": (
             ("    const checkboxes = [];", "    const loadingStarted = performance.now();\n    const checkboxes = [];"),
-            ("      activeOperationId: task.progressPresentation?.activeItem?.item_id ?? null,\n    };\n  }", "      activeOperationId: task.progressPresentation?.activeItem?.item_id ?? null,\n    };\n    globalThis.__tableLoading.dom(review.window, loadingStarted);\n  }"),
+            ("      activeOperationId: task.executionPresentation?.activeItem?.item_id ?? null,\n    };\n  }", "      activeOperationId: task.executionPresentation?.activeItem?.item_id ?? null,\n    };\n    globalThis.__tableLoading.dom(review.window, loadingStarted);\n  }"),
         ),
     }
     for old, new in hooks[name]:

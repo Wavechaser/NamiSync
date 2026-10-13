@@ -14,6 +14,7 @@ from namisync.workflows import (
     EXECUTION_KIND,
     INVENTORY_KIND,
     PLAN_KIND,
+    MANUAL_VERIFY_KIND,
     ExecutionEvidenceWindow,
     RetainedExecutionItemWindow,
     RetainedExecutionSummary,
@@ -23,6 +24,9 @@ from namisync.workflows import (
     InventoryPublication,
     InventoryDetails,
     RetainedInventoryIntegrity,
+    ManualVerificationMembership,
+    ManualVerificationReadiness,
+    RetainedManualVerification,
 )
 from namisync.workflows.inventory import LocationCandidate
 from namisync.workflows.views import (
@@ -41,6 +45,7 @@ _TASK_RECORD_PAUSE_SUPPORT = {
     INVENTORY_KIND: False,
     EXECUTION_KIND: True,
     BASELINE_KIND: True, REBASELINE_KIND: True, VERIFY_KIND: True,
+    MANUAL_VERIFY_KIND: True,
 }
 
 TaskDeliveryUpdate = SessionEventView | SessionRecordView
@@ -194,6 +199,8 @@ class TaskSummaryView:
     session_released: bool
     task_kind: str | None = None
     request_id: str | None = None
+    plan_request_id: str | None = None
+    session_kind: str | None = None
 
     def __post_init__(self) -> None:
         _require_task_id(self.task_id)
@@ -220,6 +227,15 @@ class TaskSummaryView:
             _require_opaque_id(self.request_id, "task request id")
         if (self.task_kind is None) != (self.request_id is None):
             raise ValueError("task summary request identity is inconsistent")
+        if self.plan_request_id is not None:
+            _require_opaque_id(self.plan_request_id, "original plan request id")
+        if (self.task_kind == "sync-plan") != (self.plan_request_id is not None):
+            raise ValueError("task summary original plan identity is inconsistent")
+        if self.session_kind not in {None, PLAN_KIND, EXECUTION_KIND, INVENTORY_KIND,
+                                     BASELINE_KIND, VERIFY_KIND, REBASELINE_KIND, MANUAL_VERIFY_KIND}:
+            raise ValueError("task summary session kind is invalid")
+        if (self.session_id is None) != (self.session_kind is None):
+            raise ValueError("task summary session kind is inconsistent")
 
 
 @dataclass(frozen=True, slots=True)
@@ -411,6 +427,23 @@ class TaskLifecyclePort(Protocol):
     ) -> TaskStartView: ...
 
     def read_task_inventory_integrity(self, task_id: str) -> RetainedInventoryIntegrity: ...
+
+    def read_task_manual_verification_readiness(
+        self, task_id: str, execution_session_id: str,
+    ) -> ManualVerificationReadiness: ...
+
+    def task_manual_verification_attempted(self, task_id: str) -> bool: ...
+
+    def start_task_manual_verification(
+        self, task_id: str, execution_session_id: str, *, command_id: str,
+        signature: tuple[object, ...], delivery_factory: TaskDeliveryFactory,
+    ) -> TaskStartView: ...
+
+    def read_task_manual_verification_membership(
+        self, request_id: str,
+    ) -> ManualVerificationMembership: ...
+
+    def read_task_manual_verification(self, task_id: str) -> RetainedManualVerification: ...
 
     def change_task_inventory_visibility(
         self, task_id: str, request_id: str, *, action: str, location_id: int,

@@ -41,18 +41,23 @@ const EMPTY_EXECUTION = Object.freeze({
 });
 
 export function selectTaskExecution(task) {
-  const snapshot = task?.snapshot != null && task.snapshot.session_id === task.sessionId
-    ? task.snapshot : null;
+  const executionSessionId = task?.executionSessionId ?? task?.sessionId ?? null;
+  const snapshot = task?.executionSnapshot != null
+    && task.executionSnapshot.session_id === executionSessionId
+    ? task.executionSnapshot
+    : task?.sessionKind === "sync-execution" && task?.snapshot?.session_id === executionSessionId
+      ? task.snapshot : null;
   const retained = task?.review?.window?.execution ?? null;
   if (!task?.executionStarted) {
-    return { snapshot, sessionState: snapshot?.session_state ?? task?.sessionState ?? null,
+    return { snapshot, sessionState: snapshot?.session_state ?? task?.executionSessionState ?? task?.sessionState ?? null,
       execution: EMPTY_EXECUTION };
   }
   if (snapshot === null) {
     const execution = retained !== null
-      && (task?.sessionId == null || retained.session_id === task.sessionId)
+      && (executionSessionId == null || retained.session_id === executionSessionId)
       ? retained : EMPTY_EXECUTION;
-    return { snapshot: null, sessionState: task?.sessionState ?? null, execution };
+    return { snapshot: null, sessionState: task?.executionSessionState
+      ?? (task?.sessionKind === "sync-execution" ? task?.sessionState : null) ?? null, execution };
   }
   const sameSession = retained?.session_id === snapshot.session_id;
   const terminalWindow = sameSession && retained.result != null
@@ -131,7 +136,11 @@ export function terminalStatusLine(execution, sessionState = null) {
 export function taskStatusDigest(task) {
   const summary = task?.review?.summary ?? null;
   const form = task?.form ?? null;
-  const { snapshot, sessionState: executionState, execution } = selectTaskExecution(task);
+  const snapshot = task?.snapshot != null && task.snapshot.session_id === task?.sessionId
+    ? task.snapshot : null;
+  const executionState = snapshot?.session_state ?? task?.sessionState ?? null;
+  const currentExecution = task?.sessionKind === "sync-execution";
+  const execution = currentExecution ? selectTaskExecution(task).execution : EMPTY_EXECUTION;
   const attempt = ["sync-plan", "inventory"].includes(form?.attempt?.kind) ? form.attempt : null;
   const checkingFolders = attempt?.running === true && !attempt.dispatched;
   const scanning = task?.inventoryError == null && (task?.taskKind === "inventory" || attempt?.kind === "inventory")
@@ -164,11 +173,11 @@ export function taskStatusDigest(task) {
           throughputBytesPerSecond: snapshot.presentation.throughput_bytes_per_second,
           etaSeconds: snapshot.presentation.eta_seconds,
         };
-  const activeTerminalResult = task?.executionStarted ? execution?.result ?? null : null;
+  const activeTerminalResult = currentExecution ? execution?.result ?? null : null;
   const terminal = terminalDigest(
     activeTerminalResult,
     executionState,
-    isCapacityOnlyExecution(execution),
+    currentExecution && isCapacityOnlyExecution(execution),
   );
   const planItemCount = summary?.selected_operation_count ?? 0;
   const planHasItems = (summary?.filter_counts?.all ?? 0) > 0;
@@ -182,13 +191,19 @@ export function taskStatusDigest(task) {
   else if (attempt !== null && !attempt.running) [title, state] = ["Outcome unknown", "error"];
   else if (scanning) [title, state] = ["Scanning", "planning"];
   else if (planning) [title, state] = ["Planning", "planning"];
-  else if (summary !== null && !task?.executionStarted) [title, state] = ["Plan ready", "plan"];
+  else if (summary !== null && !task?.executionStarted && task?.sessionKind !== "inventory") [title, state] = ["Plan ready", "plan"];
   else if (terminal !== null) ({ title, state } = terminal);
   else if (executionState === "completed") [title, state] = ["Completed", "completed"];
   else if (executionState === "failed" || executionState === "refused") [title, state] = ["Error", "error"];
   else if (executionState === "canceled") [title, state] = ["Canceled", "canceled"];
-  else if (task?.executionStarted) {
+  else if (task?.executionStarted && currentExecution) {
     title = task.executionControlState === "paused" ? "Paused" : progress.phase === "verify" ? "Verifying" : "Executing";
+    state = title.toLowerCase();
+  } else if (executionState === "active" && task?.sessionKind === "manual-verify") {
+    title = task.executionControlState === "paused" ? "Paused" : "Verifying";
+    state = title.toLowerCase();
+  } else if (executionState === "active" && ["inventory", "baseline", "verify", "rebaseline"].includes(task?.sessionKind)) {
+    title = task.executionControlState === "paused" ? "Paused" : "Inventory";
     state = title.toLowerCase();
   } else if (executionState === "active") {
     title = task?.taskKind === "inventory" ? "Inventory" : "Planning";
@@ -205,12 +220,16 @@ export function taskStatusDigest(task) {
     : `${planItemCount} items, ${formatByteCount(summary.required_bytes)} required.`;
   else if (terminal !== null) detail = terminal.detail;
   else if (["completed", "failed", "refused", "canceled"].includes(executionState)) detail = `${title}.`;
-  else if (summary === null && task?.executionStarted) detail = progress.total == null
+  else if (summary === null && task?.executionStarted && currentExecution) detail = progress.total == null
     ? "Execution in progress." : `${progress.done} of ${progress.total} items.`;
+  else if (executionState === "active" && task?.sessionKind === "manual-verify") detail = progress.total == null
+    ? "Manual verification in progress." : `${progress.done} of ${progress.total} items.`;
+  else if (executionState === "active" && ["inventory", "baseline", "verify", "rebaseline"].includes(task?.sessionKind)) detail = progress.total == null
+    ? "Inventory activity in progress." : `${progress.done} of ${progress.total} items.`;
   else if (summary === null && executionState === "active") detail = task?.taskKind === "inventory"
     ? "Inventory in progress." : "Planning in progress.";
   else if (summary === null) detail = "Choose a source and target.";
-  else if (task?.executionStarted) detail = progress.total == null
+  else if (task?.executionStarted && currentExecution) detail = progress.total == null
     ? "Execution in progress." : `${progress.done} of ${progress.total} items.`;
   else detail = "Choose a source and target.";
   if (snapshot?.progress_inconsistent === true) {

@@ -1430,6 +1430,8 @@ class _HeadedFixtureController:
             if (
                 summary.task_kind != "sync-plan"
                 or summary.request_id != row["request_id"]
+                or summary.plan_request_id != row["request_id"]
+                or summary.session_kind != "sync-plan"
                 or summary.session_id != row["plan_session_id"]
                 or summary.session_state != "completed"
                 or summary.session_released is not True
@@ -1532,6 +1534,10 @@ class _HeadedFixtureController:
                         summaries[row["task_id"]].task_kind == "sync-plan"
                         and summaries[row["task_id"]].request_id
                         == row["request_id"]
+                        and summaries[row["task_id"]].plan_request_id
+                        == row["request_id"]
+                        and summaries[row["task_id"]].session_kind
+                        == "sync-plan"
                         and summaries[row["task_id"]].session_state
                         == "completed"
                         and summaries[row["task_id"]].session_id

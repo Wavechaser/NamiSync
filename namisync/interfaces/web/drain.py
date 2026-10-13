@@ -54,6 +54,7 @@ from namisync.workflows import (
     RetainedExecutionItemWindow,
     RetainedExecutionSummary,
     RetainedIntegrityItemWindow,
+    ManualVerificationMembership,
     SortDirection,
 )
 
@@ -222,6 +223,58 @@ class _InventoryIntegrityState:
 
 
 @dataclass(slots=True)
+class _ManualVerificationState:
+    membership: ManualVerificationMembership
+    session_id: str
+    subjects: dict[str, tuple[str, str]] = field(init=False, repr=False)
+    revision: int = 0
+    complete: bool = False
+    gap: bool = False
+    items: dict[str, dict[str, object]] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        self.subjects = {operation_id: (row_id, path)
+                         for operation_id, row_id, path in self.membership.subjects}
+
+    def add(self, body: Mapping[str, object]) -> None:
+        operation_id = str(body["item_id"])
+        expected = self.subjects.get(operation_id)
+        if (expected is None or body["row_id"] != expected[0]
+                or body["path"] != expected[1]
+                or str(body["location_id"]) != str(self.membership.location_id)
+                or body["phase"] != "verify"):
+            raise ObservationConflictError("manual verification changed its frozen subject")
+        fact = {"operation_id": operation_id, **{key: body[key] for key in
+                ("result", "reason", "recording", "record_disposition", "detail_omitted_count")}}
+        previous = self.items.get(expected[0])
+        if previous is not None and previous != fact:
+            raise ObservationConflictError("manual verification changed its outcome")
+        if previous is None:
+            self.items[expected[0]] = fact
+            self.revision += 1
+
+    def offer(self, update: TaskDeliveryUpdate) -> None:
+        if self.complete or type(update) is not SessionEventView:
+            return
+        if update.body_type == "Gap":
+            self.gap = True
+            self.revision += 1
+        elif update.body_type == "IntegrityOutcome":
+            self.add(update.body)
+
+    def wire(self, row_ids: Iterable[str]) -> dict[str, object]:
+        binding = self.membership.execution
+        return {"execution_session_id": binding.session_id,
+                "request_id": self.membership.request_id,
+                "session_id": self.session_id,
+                "location_id": str(self.membership.location_id),
+                "revision": self.revision, "complete": self.complete,
+                "gap": self.gap,
+                "items": [{"row_id": row_id, **self.items[row_id]}
+                          for row_id in row_ids if row_id in self.items]}
+
+
+@dataclass(slots=True)
 class _TaskState:
     task_id: str
     command_id: str
@@ -246,12 +299,15 @@ class _TaskState:
     start_command_id: str | None = None
     task_kind: str | None = None
     request_id: str | None = None
+    plan_request_id: str | None = None
+    session_kind: str | None = None
     setup: TaskSetupSnapshotView | None = None
     start_response_ids: set[str] = field(default_factory=set)
     prior_session_id: str | None = None
     prior_delivery: tuple[object, ...] | None = None
     execution_revision: int = 0
     execution_session_id: str | None = None
+    execution_terminal_record: SessionRecordView | None = None
     execution_summary: RetainedExecutionSummary | None = None
     execution_operation_results: dict[str, dict[str, object]] = field(
         default_factory=dict
@@ -264,6 +320,7 @@ class _TaskState:
     execution_membership: Mapping[str, str] | None = None
     presentation_state: TaskPresentationState | None = None
     ordinary_integrity: _InventoryIntegrityState | None = None
+    manual_verification: _ManualVerificationState | None = None
     inventory_view_loading: bool = False
     inventory_visibility_pending: bool = False
     inventory_view_dirty: bool = False
@@ -300,9 +357,13 @@ class _TaskState:
                 update,
                 expected_session_id=expected_session_id,
             )
-            self._offer_execution_fact(update)
+            if self.session_kind == "sync-execution" and self.execution_session_id in (None, update_session):
+                self._offer_execution_fact(update)
             if self.ordinary_integrity is not None and (self.ordinary_integrity.session_id in (None, update_session)):
                 self.ordinary_integrity.offer(update)
+            if (self.session_kind == "manual-verify" and self.manual_verification is not None
+                    and self.manual_verification.session_id == update_session):
+                self.manual_verification.offer(update)
             if type(update) is SessionRecordView:
                 self.terminal_record = update
                 self.terminal_pending = False
@@ -632,17 +693,20 @@ class TaskRegistry:
                 ),
                 task.task_kind,
                 task.request_id,
+                task.plan_request_id,
+                (task.prior_delivery[18] if task.transition and task.prior_delivery is not None
+                 else task.session_kind),
             )
 
     @staticmethod
     def _execution_summary_locked(task: _TaskState) -> dict[str, object]:
         retained = task.execution_summary
-        record = task.delivered_terminal_record
+        record = task.execution_terminal_record
         matching_record = (
             retained is not None
             and record is not None
             and record.kind == "sync-execution"
-            and record.session_id == task.execution_session_id == task.session_id
+            and record.session_id == task.execution_session_id
         )
         gap = None
         if task.execution_gap_minimum is not None:
@@ -841,7 +905,7 @@ class TaskRegistry:
             raise TaskUnavailableError("task is unavailable")
         with task.condition:
             snapshot = task.setup
-            request_id = task.request_id
+            request_id = task.plan_request_id if task.task_kind == "sync-plan" else task.request_id
             kind = task.task_kind
         if snapshot is None:
             return TaskSetupSnapshotView(
@@ -926,12 +990,12 @@ class TaskRegistry:
         with old.condition:
             if (
                 old.task_kind != "sync-plan"
-                or old.request_id is None
+                or old.plan_request_id is None
                 or old.retiring
                 or old.transition
             ):
                 raise TaskUnavailableError("task is unavailable")
-            request_id = old.request_id
+            request_id = old.plan_request_id
             old.transition = True
             old.condition.notify_all()
         try:
@@ -954,17 +1018,17 @@ class TaskRegistry:
                 old.condition.notify_all()
 
     def _require_inventory_task_locked(self, task: _TaskState) -> None:
-        if (self._closing or task.task_kind != "inventory" or task.request_id is None
+        if (self._closing or task.task_kind not in {"inventory", "sync-plan"} or task.request_id is None
                 or task.session_id is None or (task.transition and not task.inventory_visibility_pending)
-                or task.retiring):
+                or task.retiring or (task.task_kind == "sync-plan" and task.execution_session_id is None)):
             raise TaskUnavailableError("inventory task is unavailable")
 
     def _require_inventory_read_task_locked(self, task: _TaskState) -> None:
         if task.task_kind == "inventory":
             self._require_inventory_task_locked(task)
             return
-        if (self._closing or task.task_kind != "sync-plan" or task.request_id is None
-                or task.session_id is None or task.execution_session_id != task.session_id
+        if (self._closing or task.task_kind != "sync-plan" or task.plan_request_id is None
+                or task.session_id is None or task.execution_session_id is None
                 or not task.session_released or task.delivered_terminal_record is None
                 or task.transition or task.retiring):
             raise TaskUnavailableError("execution inventory is unavailable")
@@ -993,7 +1057,7 @@ class TaskRegistry:
             task.inventory_view_loading = True
         try:
             if task.task_kind == "sync-plan":
-                publication = self._lifecycle.get_task_execution_inventory(task_id, identity[1], identity[0])
+                publication = self._lifecycle.get_task_execution_inventory(task_id, task.plan_request_id, task.execution_session_id)
                 projection, root_path, details = publication.projection, publication.root_path, publication.scan_details
             else:
                 projection, details = self._lifecycle.get_task_inventory_projection(task_id, identity[1])
@@ -1081,6 +1145,151 @@ class TaskRegistry:
             node_id=None, command_id=command_id, wire_intent=wire_intent,
             mode=mode, accept_current_evidence=accept_current_evidence)
 
+    def get_manual_verification_readiness(
+        self, task_id: str, session_id: str, *, expected_execution_revision: int,
+    ) -> dict[str, object]:
+        with self._condition:
+            task = self._tasks.get(task_id)
+        if task is None:
+            raise TaskUnavailableError("manual verification task is unavailable")
+        with task.condition:
+            if (task.task_kind != "sync-plan" or task.execution_session_id != session_id
+                    or task.execution_terminal_record is None or task.retiring):
+                raise TaskUnavailableError("manual verification is unavailable")
+            revision = task.execution_revision
+            if revision != expected_execution_revision:
+                reason = "conflict"
+            elif self._lifecycle.task_manual_verification_attempted(task_id):
+                reason = "attempted"
+            elif task.transition or not task.session_released:
+                reason = "busy"
+            else:
+                reason = None
+        if reason is None:
+            readiness = self._lifecycle.read_task_manual_verification_readiness(task_id, session_id)
+            reason = readiness.reason
+            counts = (readiness.applicable_count, readiness.ready_count,
+                      readiness.already_verified_count)
+        else:
+            counts = (0, 0, 0)
+        return {"task_id": task_id, "session_id": session_id,
+                "execution_revision": revision, "reason": reason,
+                "applicable_count": counts[0], "ready_count": counts[1],
+                "already_verified_count": counts[2],
+                "attempted": self._lifecycle.task_manual_verification_attempted(task_id)}
+
+    def start_manual_verification(
+        self, task_id: str, session_id: str, *, command_id: str,
+        expected_execution_revision: int, wire_intent: tuple[object, ...],
+    ) -> TaskStartView:
+        _require_opaque_id(command_id, "manual verification command id")
+        with self._condition:
+            if self._closing:
+                raise TaskUnavailableError("task registry is closing")
+            retained = self._start_responses.get(command_id)
+            if retained is not None:
+                if retained.wire_intent != wire_intent:
+                    raise TaskIntentConflictError("task command intent conflicts")
+                retained.participants += 1
+            else:
+                task = self._tasks.get(task_id)
+                if task is None:
+                    raise TaskUnavailableError("manual verification task is unavailable")
+                with task.condition:
+                    if (task.task_kind != "sync-plan" or task.execution_session_id != session_id
+                            or task.execution_terminal_record is None
+                            or task.execution_revision != expected_execution_revision
+                            or not task.session_released or task.delivered_terminal_record is None
+                            or task.transition or task.retiring or task.inventory_view_loading):
+                        raise TaskUnavailableError("manual verification requires the released execution task")
+                    if len(self._start_responses) >= _START_RESPONSE_CAPACITY:
+                        raise InventoryCommandCapacityError("Task command capacity is full; close a task")
+                    response = _StartResponse(command_id, wire_intent, participants=1, retain_failure=True)
+                    self._start_responses[command_id] = response
+                    task.start_response_ids.add(command_id)
+                    prior_request, prior_start = task.request_id, task.start_command_id
+                    prior_manual = task.manual_verification
+                    task.transition = True
+                    task.condition.notify_all()
+        if retained is not None:
+            try:
+                return self._await_start_response(retained)
+            finally:
+                self._leave_start_response(retained)
+
+        def delivery_factory(delivered_task_id: str):
+            if delivered_task_id != task_id:
+                raise ObservationConflictError("manual lifecycle changed its task")
+            with task.condition:
+                if self._closing or task.retiring or not task.transition:
+                    raise TaskUnavailableError("manual verification task is unavailable")
+                task.prior_session_id = task.session_id
+                task.prior_delivery = (
+                    tuple(task.queue), task.progress_available_at, task.terminal_record,
+                    task.terminal_pending, task.delivered_terminal_event,
+                    task.delivered_terminal_record, task.session_released, task.closing,
+                    task.execution_revision, task.execution_session_id, task.execution_summary,
+                    dict(task.execution_operation_results), dict(task.execution_integrity_results),
+                    task.execution_gap_minimum, task.execution_gap_maximum,
+                    task.execution_membership, task.presentation_state, task.progress_sample_at,
+                    task.session_kind,
+                )
+                task.generation += 1
+                task.session_id = None
+                task.queue.clear()
+                task.progress_available_at = task.progress_sample_at = None
+                task.terminal_record = task.delivered_terminal_record = None
+                task.delivered_terminal_event = None
+                task.terminal_pending = task.session_released = task.closing = False
+                task.active_drain = None
+                task.presentation_state = None
+                task.session_kind = "manual-verify"
+                return task.sink(task.generation)
+
+        result = None
+        failure_code = None
+        try:
+            candidate = self._lifecycle.start_task_manual_verification(
+                task_id, session_id, command_id=command_id,
+                signature=wire_intent, delivery_factory=delivery_factory)
+            if type(candidate) is not TaskStartView or candidate.task_id != task_id:
+                raise RuntimeError("manual lifecycle returned invalid start data")
+            candidate.__post_init__()
+            membership = self._lifecycle.read_task_manual_verification_membership(candidate.request_id)
+            if (membership.execution.task_id != task_id
+                    or membership.execution.session_id != session_id
+                    or membership.request_id != candidate.request_id):
+                raise ObservationConflictError("manual membership changed its execution")
+            with task.condition:
+                if any(update.session_id != candidate.session_id for update in task.queue):
+                    raise ObservationConflictError("manual observation names another session")
+                manual = _ManualVerificationState(membership, candidate.session_id)
+                for update in task.queue:
+                    manual.offer(update)
+                task.manual_verification = manual
+                task.session_id, task.request_id = candidate.session_id, candidate.request_id
+                task.start_command_id = command_id
+                task.prior_session_id = task.prior_delivery = None
+                task.transition = False
+                task.condition.notify_all()
+            result = candidate
+        except BaseException as error:
+            failure_code = _classify_start_failure(error)
+            _retire_exception_graph(error)
+            self._restore_plan_delivery(task)
+            with task.condition:
+                task.request_id, task.start_command_id = prior_request, prior_start
+                task.manual_verification = prior_manual
+                task.transition = False
+                task.condition.notify_all()
+        with self._condition:
+            response.result, response.failure_code, response.complete = result, failure_code, True
+            self._condition.notify_all()
+        try:
+            return self._await_start_response(response)
+        finally:
+            self._leave_start_response(response)
+
     def _start_inventory_activity(
         self, task_id: str, request_id: str, *, expected_revision: int,
         node_id: str | None, command_id: str, wire_intent: tuple[object, ...],
@@ -1153,6 +1362,7 @@ class TaskRegistry:
                     dict(task.execution_operation_results), dict(task.execution_integrity_results),
                     task.execution_gap_minimum, task.execution_gap_maximum,
                     task.execution_membership, task.presentation_state, task.progress_sample_at,
+                    task.session_kind,
                 )
                 task.generation += 1
                 task.session_id = None
@@ -1163,6 +1373,7 @@ class TaskRegistry:
                 task.terminal_pending = task.session_released = task.closing = False
                 task.active_drain = None
                 task.presentation_state = None
+                task.session_kind = "inventory" if mode is None else mode
                 if mode is not None:
                     task.ordinary_integrity = _InventoryIntegrityState(mode, view.projection.location_id, frozenset(membership))
                 return task.sink(task.generation)
@@ -1184,6 +1395,7 @@ class TaskRegistry:
                 if any(update.session_id != candidate.session_id for update in task.queue):
                     raise ObservationConflictError("inventory observation names another session")
                 task.session_id, task.request_id = candidate.session_id, candidate.request_id
+                task.session_kind = "inventory" if mode is None else mode
                 if mode is not None:
                     task.ordinary_integrity.request_id = candidate.request_id
                     task.ordinary_integrity.session_id = candidate.session_id
@@ -1294,6 +1506,9 @@ class TaskRegistry:
             if task.ordinary_integrity is not None:
                 result["integrity"] = task.ordinary_integrity.wire(
                     row["row_id"] for row in result["rows"] if row["row_id"] is not None)
+            if task.manual_verification is not None:
+                result["manual_verification"] = task.manual_verification.wire(
+                    row["row_id"] for row in result["rows"] if row["row_id"] is not None)
             return result
 
     def get_inventory_detail(self, task_id: str, *, expected_revision: int, node_id: str) -> dict[str, object]:
@@ -1327,6 +1542,8 @@ class TaskRegistry:
             result = {"disposition": "current", "view_revision": view.view_revision, "node_id": node_id, "snapshot": snapshot, "detail": detail}
             if task.ordinary_integrity is not None:
                 result["integrity"] = task.ordinary_integrity.wire((row_id,))
+            if task.manual_verification is not None:
+                result["manual_verification"] = task.manual_verification.wire((row_id,))
             return result
 
     def open_plan_view(self, task_id: str) -> dict[str, object]:
@@ -1336,7 +1553,7 @@ class TaskRegistry:
             if existing is not None and retained_task is not None:
                 with retained_task.condition:
                     if (
-                        retained_task.request_id == existing.request_id
+                        retained_task.plan_request_id == existing.request_id
                         and retained_task.session_id is not None
                         and not retained_task.transition
                         and not retained_task.retiring
@@ -1381,7 +1598,7 @@ class TaskRegistry:
                 if (
                     task.generation != generation
                     or task.session_id != session_id
-                    or task.request_id != request_id
+                    or task.plan_request_id != request_id
                     or task.transition
                     or task.retiring
                     or not self._plan_review_ready(task)
@@ -1648,7 +1865,7 @@ class TaskRegistry:
         task, view = self._require_plan_view(task_id)
         with task.condition:
             self._require_plan_view_locked(task, view)
-            if task.session_id != session_id:
+            if task.execution_session_id != session_id:
                 return {
                     "disposition": "conflict", "view_revision": view.view_revision,
                     "node_id": None, "index": None,
@@ -1714,7 +1931,7 @@ class TaskRegistry:
             raise TaskUnavailableError("task is unavailable")
         with task.condition:
             if (
-                task.request_id != request_id
+                task.plan_request_id != request_id
                 or task.session_id is None
                 or not task.session_released
                 or task.transition
@@ -1805,7 +2022,7 @@ class TaskRegistry:
             raise TaskUnavailableError("task is unavailable")
         with task.condition:
             if (
-                task.request_id != request_id
+                task.plan_request_id != request_id
                 or task.session_id is None
                 or not task.session_released
                 or task.transition
@@ -1879,14 +2096,14 @@ class TaskRegistry:
         with task.condition:
             if (
                 task.task_kind != "sync-plan"
-                or task.request_id is None
+                or task.plan_request_id is None
                 or task.session_id is None
                 or task.delivered_terminal_record is None
                 or not task.session_released
                 or task.transition
             ):
                 raise TaskUnavailableError("task is unavailable")
-            return task, task.request_id
+            return task, task.plan_request_id
 
     def _require_plan_review_task(
         self,
@@ -1903,21 +2120,22 @@ class TaskRegistry:
         with task.condition:
             if (
                 task.task_kind != "sync-plan"
-                or task.request_id is None
+                or task.plan_request_id is None
                 or task.session_id is None
                 or task.transition
                 or task.retiring
                 or not self._plan_review_ready(task)
             ):
                 raise TaskUnavailableError("task is unavailable")
-            return task, task.request_id
+            return task, task.plan_request_id
 
     @staticmethod
     def _plan_review_ready(task: _TaskState) -> bool:
         return (
-            task.delivered_terminal_record is not None
-            and task.session_released
-        ) or len(task.start_response_ids) == 2
+            (task.session_kind == "sync-plan" and task.delivered_terminal_record is not None
+             and task.session_released)
+            or task.execution_session_id is not None
+        )
 
     def _require_plan_view(
         self,
@@ -1928,7 +2146,7 @@ class TaskRegistry:
                 raise TaskUnavailableError("task registry is closing")
             view = self._plan_views.get(task_id)
             task = self._tasks.get(task_id)
-        if view is None or task is None or task.request_id != view.request_id:
+        if view is None or task is None or task.plan_request_id != view.request_id:
             raise TaskUnavailableError("plan view is unavailable")
         with task.condition:
             self._require_plan_view_locked(task, view)
@@ -1942,7 +2160,7 @@ class TaskRegistry:
         if (
             task.retiring
             or task.transition
-            or task.request_id != view.request_id
+            or task.plan_request_id != view.request_id
         ):
             raise TaskUnavailableError("plan view is unavailable")
 
@@ -1984,13 +2202,14 @@ class TaskRegistry:
             plan_view = self._plan_views.get(task_id)
             if (
                 task.task_kind != "sync-plan"
-                or task.request_id != request_id
+                or task.plan_request_id != request_id
+                or task.session_kind != "sync-plan"
+                or task.execution_session_id is not None
                 or task.session_id is None
                 or task.delivered_terminal_record is None
                 or not task.session_released
                 or task.transition
                 or task.retiring
-                or len(task.start_response_ids) >= 2
                 or plan_view is None
                 or plan_view.request_id != request_id
             ):
@@ -2016,13 +2235,14 @@ class TaskRegistry:
             with task.condition:
                 if (
                     task.task_kind != "sync-plan"
-                    or task.request_id != request_id
+                    or task.plan_request_id != request_id
+                    or task.session_kind != "sync-plan"
+                    or task.execution_session_id is not None
                     or task.session_id is None
                     or task.delivered_terminal_record is None
                     or not task.session_released
                     or not task.transition
                     or task.retiring
-                    or len(task.start_response_ids) >= 2
                 ):
                     raise TaskUnavailableError("task is unavailable")
                 next_execution_revision = _next_execution_revision(
@@ -2054,6 +2274,7 @@ class TaskRegistry:
                     task.execution_membership,
                     task.presentation_state,
                     task.progress_sample_at,
+                    task.session_kind,
                 )
                 task.generation += 1
                 task.session_id = None
@@ -2076,6 +2297,7 @@ class TaskRegistry:
                 task.execution_gap_maximum = None
                 task.execution_membership = execution_membership
                 task.presentation_state = None
+                task.session_kind = "sync-execution"
                 return task.sink(task.generation)
 
         result: object | None = None
@@ -2152,7 +2374,7 @@ class TaskRegistry:
     def control_integrity(self, task_id: str, session_id: str, action: str) -> object:
         task = self._require_task(task_id, session_id)
         with task.condition:
-            if (task.task_kind != "inventory" or task.ordinary_integrity is None
+            if (task.task_kind not in {"inventory", "sync-plan"} or task.ordinary_integrity is None
                     or task.ordinary_integrity.session_id != session_id):
                 raise TaskUnavailableError("ordinary integrity session is unavailable")
         if action not in {"pause", "resume", "cancel"}:
@@ -2169,7 +2391,10 @@ class TaskRegistry:
     ) -> object:
         task = self._require_task(task_id, session_id)
         with task.condition:
-            if task.task_kind != "sync-plan" or len(task.start_response_ids) != 2:
+            if (task.task_kind != "sync-plan" or not (
+                    (task.session_kind == "sync-execution" and task.execution_session_id == session_id)
+                    or (task.session_kind == "manual-verify" and task.manual_verification is not None
+                        and task.manual_verification.session_id == session_id))):
                 raise TaskUnavailableError("task is unavailable")
         if action == "pause":
             result = self._lifecycle.pause_task_session(task_id, session_id)
@@ -2218,6 +2443,7 @@ class TaskRegistry:
             task.execution_membership = prior[15]
             task.presentation_state = prior[16]
             task.progress_sample_at = prior[17]
+            task.session_kind = prior[18]
             task.prior_session_id = None
             task.prior_delivery = None
             task.transition = False
@@ -2243,7 +2469,9 @@ class TaskRegistry:
                     "task observation does not match execution"
                 )
             task.session_id = candidate.session_id
+            task.request_id = candidate.request_id
             task.execution_session_id = candidate.session_id
+            task.session_kind = "sync-execution"
             task.start_command_id = command_id
             task.start_response_ids.add(command_id)
             task.prior_session_id = None
@@ -2422,6 +2650,8 @@ class TaskRegistry:
             task.session_id = result.session_id
             task.task_kind = candidate.snapshot.task_kind
             task.request_id = result.request_id
+            task.plan_request_id = result.request_id if task.task_kind == "sync-plan" else None
+            task.session_kind = "sync-plan" if task.task_kind == "sync-plan" else "inventory"
             task.setup = candidate.snapshot
             task.start_response_ids.add(command_id)
             task.transition = False
@@ -2507,6 +2737,8 @@ class TaskRegistry:
             if provisional.task_kind is None:
                 provisional.task_kind = "sync-plan"
             provisional.request_id = candidate.request_id
+            provisional.plan_request_id = candidate.request_id
+            provisional.session_kind = "sync-plan"
             provisional.start_response_ids.add(command_id)
             provisional.condition.notify_all()
         with self._condition:
@@ -2846,6 +3078,8 @@ class TaskRegistry:
             execution_release = task.execution_session_id == session_id
             ordinary = task.ordinary_integrity
             ordinary_release = ordinary is not None and ordinary.session_id == session_id
+            manual = task.manual_verification
+            manual_release = manual is not None and manual.session_id == session_id
             delivery = self._terminal_delivery_locked(task)
             task.closing = True
             task.generation += 1
@@ -2910,12 +3144,12 @@ class TaskRegistry:
                     "task lifecycle returned invalid retained execution summary"
                 )
         retained_ordinary = self._lifecycle.read_task_inventory_integrity(task_id) if ordinary_release else None
+        retained_manual = self._lifecycle.read_task_manual_verification(task_id) if manual_release else None
         with task.condition:
             stale = (
                 task.session_id != session_id
                 or task.generation != release_generation
-                or task.execution_session_id
-                != (session_id if execution_release else None)
+                or (execution_release and task.execution_session_id != session_id)
             )
             if stale and task.retiring and task.session_id == session_id:
                 return result
@@ -2925,6 +3159,8 @@ class TaskRegistry:
                 next_revision = _next_execution_revision(task.execution_revision)
                 task.execution_summary = retained_summary
                 task.execution_revision = next_revision
+            if execution_release:
+                task.execution_terminal_record = task.delivered_terminal_record
             if retained_ordinary is not None:
                 if (retained_ordinary.task_id != task_id or retained_ordinary.session_id != session_id
                         or retained_ordinary.request_id != ordinary.request_id
@@ -2937,7 +3173,19 @@ class TaskRegistry:
                     replacement.add(asdict(item))
                 replacement.complete = True
                 task.ordinary_integrity = replacement
+            if retained_manual is not None:
+                if (retained_manual.session_id != session_id or manual is None
+                        or retained_manual.membership != manual.membership):
+                    raise ObservationConflictError("manual terminal result changed identity")
+                replacement_manual = _ManualVerificationState(manual.membership, session_id,
+                    manual.revision + 1)
+                for item in retained_manual.items:
+                    replacement_manual.add(asdict(item))
+                replacement_manual.complete = True
+                task.manual_verification = replacement_manual
             task.session_released = True
+            if task.task_kind == "sync-plan":
+                task.inventory_view_dirty = True
             task.condition.notify_all()
         return result
 

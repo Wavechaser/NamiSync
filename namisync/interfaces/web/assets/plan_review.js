@@ -975,8 +975,8 @@ export function createPlanReviewPanel(callbacks) {
       ? focusNodeId : activeRow?.dataset?.nodeId;
     if (renderedRows?.review === review && renderedRows.window === review.window
     ) {
-      if (renderedRows.progressPresentation !== task.progressPresentation) {
-        const activeOperationId = task.progressPresentation?.activeItem?.item_id ?? null;
+      if (renderedRows.progressPresentation !== task.executionPresentation) {
+        const activeOperationId = task.executionPresentation?.activeItem?.item_id ?? null;
         for (const operationId of new Set([renderedRows.activeOperationId, activeOperationId])) {
           if (operationId === null) continue;
           const index = review.window.rows.findIndex((row) => row.operation_id === operationId);
@@ -986,11 +986,11 @@ export function createPlanReviewPanel(callbacks) {
           if (intent === null) continue;
           const replacement = document.createElement("div");
           renderPlanRow(replacement, rowView(
-            review.window.rows[index], disabled, committed, task.progressPresentation,
+            review.window.rows[index], disabled, committed, task.executionPresentation,
           ));
           intent.replaceWith(replacement.querySelector(".nami-plan-row__intent"));
         }
-        renderedRows.progressPresentation = task.progressPresentation;
+        renderedRows.progressPresentation = task.executionPresentation;
         renderedRows.activeOperationId = activeOperationId;
       }
       if (renderedRows.disabled !== disabled || renderedRows.committed !== committed) {
@@ -1048,7 +1048,7 @@ export function createPlanReviewPanel(callbacks) {
         row,
         disabled,
         committed,
-        task.progressPresentation,
+        task.executionPresentation,
       ));
       element.insertBefore(element.querySelector(".nami-file-row__size"),
         element.querySelector(".nami-plan-row__modified"));
@@ -1165,8 +1165,8 @@ export function createPlanReviewPanel(callbacks) {
       review, window: review.window, disabled, committed, checkboxes,
       rows: rowElements,
       highlightRevision,
-      progressPresentation: task.progressPresentation,
-      activeOperationId: task.progressPresentation?.activeItem?.item_id ?? null,
+      progressPresentation: task.executionPresentation,
+      activeOperationId: task.executionPresentation?.activeItem?.item_id ?? null,
     };
   }
 
@@ -1320,16 +1320,17 @@ export function createPlanReviewPanel(callbacks) {
     const executionPresentation = renderExecution(displayExecution, terminalState,
       task.executionStarted ? snapshot : null);
     updateText(statusTitle, terminalState && displayExecution.result === null
-      ? digest.title : executionPresentation.title ?? digest.title);
-    const progressFacts = task.executionStarted && digest.progress.phase !== null
+      ? `Execution ${executionState}` : executionPresentation.title ?? (task.executionStarted ? "Execution" : digest.title));
+    const executionProgress = snapshot?.presentation ?? null;
+    const progressFacts = task.executionStarted && snapshot?.phase != null
       ? [
-        digest.progress.phase === "verify" ? "Verifying" : "Executing",
-        digest.progress.total == null ? null : `${digest.progress.done} of ${digest.progress.total} items`,
-        digest.progress.determinate ? `${Math.round(digest.progress.value)}%` : null,
-        digest.progress.throughputBytesPerSecond == null ? null
-          : `${formatByteCount(BigInt(Math.round(digest.progress.throughputBytesPerSecond)))}/s estimate`,
-        digest.progress.etaSeconds == null ? null
-          : `${Math.ceil(digest.progress.etaSeconds)}s ETA estimate`,
+        snapshot.phase === "verify" ? "Verifying" : "Executing",
+        executionProgress.items_total == null ? null : `${executionProgress.items_done} of ${executionProgress.items_total} items`,
+        executionProgress.determinate ? `${Math.round(executionProgress.value)}%` : null,
+        executionProgress.throughput_bytes_per_second == null ? null
+          : `${formatByteCount(BigInt(Math.round(executionProgress.throughput_bytes_per_second)))}/s estimate`,
+        executionProgress.eta_seconds == null ? null
+          : `${Math.ceil(executionProgress.eta_seconds)}s ETA estimate`,
       ].filter(Boolean).join(" · ")
       : null;
     const statusFacts = terminalState ? terminalStatusLine(displayExecution, executionState)
@@ -1339,10 +1340,10 @@ export function createPlanReviewPanel(callbacks) {
       ? [statusFacts, "Some progress updates were inconsistent."].filter(Boolean).join(" · ")
       : statusFacts);
     summary.dataset.status = terminalState && displayExecution.result === null
-      ? digest.state : executionPresentation.status ?? digest.state;
-    const progressValue = digest.progress.value;
+      ? "error" : executionPresentation.status ?? (task.executionStarted ? "executing" : digest.state);
+    const progressValue = executionProgress?.value ?? 0;
     progress.dataset.lifecycle = executionState ?? "completed";
-    if (digest.progress.indeterminate) {
+    if (executionProgress?.indeterminate) {
       progress.classList.add("nami-progress--indeterminate");
     } else {
       progress.classList.remove?.("nami-progress--indeterminate");
@@ -1375,9 +1376,9 @@ export function createPlanReviewPanel(callbacks) {
       scopeCheckbox.indeterminate = scopeAvailable
         && scopeSelected > 0 && scopeSelected < scopeSelectable;
     }
-    const activeExecution = task.executionStarted && task.sessionState === "active";
+    const activeExecution = task.executionStarted && task.sessionKind === "sync-execution" && task.sessionState === "active";
     const controlUnavailable = task.drainUnavailable
-      || task.reviewSessionId !== task.sessionId;
+      || task.reviewSessionId !== task.executionSessionId;
     const checkExecution = task.executionAttempt?.state === "submitting"
       && task.executionAttempt.recovery?.canCheck
       && !task.executionAttempt.recovery.checking;

@@ -1147,6 +1147,8 @@ PUBLIC_VIEW_WITNESSES: dict[
                 "session_released": False,
                 "task_kind": None,
                 "request_id": None,
+                "plan_request_id": None,
+                "session_kind": None,
             },
         ),
     ),
@@ -1163,6 +1165,8 @@ PUBLIC_VIEW_WITNESSES: dict[
                         "session_released": False,
                         "task_kind": None,
                         "request_id": None,
+                        "plan_request_id": None,
+                        "session_kind": None,
                     }
                 ]
             },

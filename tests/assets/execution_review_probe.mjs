@@ -48,7 +48,7 @@ const activeSnapshot = {
   terminal_result: null,
 };
 const activeDigest = taskStatusDigest({
-  sessionId: digestSession, sessionState: "active", executionStarted: true,
+  sessionId: digestSession, sessionKind: "sync-execution", sessionState: "active", executionStarted: true,
   executionControlState: "running", snapshot: activeSnapshot,
 });
 assert.equal(activeDigest.progress.value, 50);
@@ -83,7 +83,7 @@ const unknownSnapshot = {
   },
 };
 const unknownDigest = taskStatusDigest({
-  sessionId: digestSession, sessionState: "active", executionStarted: true,
+  sessionId: digestSession, sessionKind: "sync-execution", sessionState: "active", executionStarted: true,
   executionControlState: "running", snapshot: unknownSnapshot,
 });
 assert.equal(unknownDigest.progress.determinate, false);
@@ -91,7 +91,7 @@ assert.equal(unknownDigest.progress.throughputBytesPerSecond, 100);
 assert.equal(unknownDigest.progress.etaSeconds, null);
 
 const pausedDigest = taskStatusDigest({
-  sessionId: digestSession, sessionState: "active", executionStarted: true,
+  sessionId: digestSession, sessionKind: "sync-execution", sessionState: "active", executionStarted: true,
   executionControlState: "paused",
   snapshot: { ...unknownSnapshot, presentation: {
     ...unknownSnapshot.presentation, indeterminate: false,
@@ -265,6 +265,7 @@ const railCapacityExecution = summary(railCapacityResult, {
   failed_operation_count: 1, disk_capacity_failure_count: 1,
 });
 const capacityTask = taskStatusDigest({
+  sessionKind: "sync-execution", sessionId: railCapacityExecution.session_id,
   sessionState: "failed", executionStarted: true, executionControlState: "running",
   review: { window: { execution: railCapacityExecution } },
 });
@@ -288,6 +289,7 @@ for (const staleResult of [
   result({ headline: "failed", filesystem: "failed", integrity: "verified", recording: "degraded" }),
 ]) {
   const staleTask = taskStatusDigest({
+    sessionKind: "sync-execution",
     sessionId: railCapacityExecution.session_id, sessionState: "failed",
     executionStarted: true, executionControlState: "running",
     snapshot: terminalSnapshot(staleResult),
@@ -297,6 +299,7 @@ for (const staleResult of [
   assert.equal(staleTask.state, "error");
 }
 const mismatchedCapacityTask = taskStatusDigest({
+  sessionKind: "sync-execution",
   sessionId: "9".repeat(32), sessionState: "failed",
   executionStarted: true, executionControlState: "running",
   snapshot: terminalSnapshot({ ...railCapacityResult }, "9".repeat(32)),
@@ -304,6 +307,7 @@ const mismatchedCapacityTask = taskStatusDigest({
 });
 assert.equal(mismatchedCapacityTask.title, "Failed", "a prior session's capacity counts have no rail authority");
 const matchingCapacityTask = taskStatusDigest({
+  sessionKind: "sync-execution",
   sessionId: railCapacityExecution.session_id, sessionState: "active",
   executionStarted: true, snapshot: terminalSnapshot({ ...railCapacityResult }),
   review: { window: { execution: railCapacityExecution } },
@@ -311,6 +315,7 @@ const matchingCapacityTask = taskStatusDigest({
 assert.equal(matchingCapacityTask.title, "Needs target space",
   "same-session terminal window counts preserve capacity guidance");
 const activeAgainstTerminalWindow = taskStatusDigest({
+  sessionKind: "sync-execution",
   sessionId: railCapacityExecution.session_id, sessionState: "active",
   executionStarted: true,
   snapshot: { ...activeSnapshot, session_id: railCapacityExecution.session_id },
@@ -319,6 +324,7 @@ const activeAgainstTerminalWindow = taskStatusDigest({
 assert.equal(activeAgainstTerminalWindow.title, "Executing",
   "an active snapshot does not inherit a retained terminal result");
 const inconsistentTask = taskStatusDigest({
+  sessionKind: "sync-execution",
   sessionId: railCapacityExecution.session_id, sessionState: "active",
   executionStarted: true,
   snapshot: { ...terminalSnapshot(railCapacityResult), progress_inconsistent: true },
@@ -355,6 +361,7 @@ assert.deepEqual(projectExecutionSummary(mixedWindow.execution), {
   title: "Verification mismatch", status: "error",
 }, "a mixed window keeps its known aggregate integrity failure red");
 const mixedRail = taskStatusDigest({
+  sessionKind: "sync-execution", sessionId: railCapacityExecution.session_id,
   sessionState: "failed", executionStarted: true, executionControlState: "running",
   review: { window: mixedWindow },
 });
@@ -372,6 +379,7 @@ assert.ok(mixedCapacityRow.notes.includes("Recording: Degraded (Record write fai
 assert.ok(mixedCapacityRow.notes.includes("Stored evidence: Unrecorded"));
 
 const terminalTask = taskStatusDigest({
+  sessionKind: "sync-execution", sessionId: railCapacityExecution.session_id,
   sessionState: "completed", executionStarted: true, executionControlState: "running",
   sessionId: digestSession,
   snapshot: { ...terminalSnapshot(result({ headline: "degraded", recording: "degraded",

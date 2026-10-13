@@ -526,7 +526,8 @@ for (const [key, value] of Object.entries({
 appSource += "\nexport { adoptTask, selectTask, panel, startCurrentInventory };";
 const app = await import(moduleUrl(appSource));
 const initialTask = app.adoptTask({task_id: "task-" + "9".repeat(32), session_id: null,
-  session_state: null, session_released: false, task_kind: null, request_id: null});
+  session_state: null, session_released: false, task_kind: null, request_id: null,
+  plan_request_id: null, session_kind: null});
 initialTask.form = { editable: true, mode: "inventory", revision: 0, attempt: null,
   source: {text: "C:\\initial", pending: false, candidate: {}, revision: 0, admissionRevision: 0} };
 app.selectTask(initialTask.taskId);
@@ -553,7 +554,8 @@ assert.equal(walk(initialPane()).some((value) => value.getAttribute("role") === 
   "Inventory cannot publish rows before session release");
 const liveTask = app.adoptTask({ task_id: fixture.views.maximum.summary.task_id,
   session_id: "3".repeat(32), session_state: "completed", session_released: true,
-  task_kind: "inventory", request_id: fixture.views.maximum.summary.request_id });
+  task_kind: "inventory", request_id: fixture.views.maximum.summary.request_id,
+  plan_request_id: null, session_kind: "inventory" });
 const settle = async () => { for (let count = 0; count < 8; count += 1) await Promise.resolve(); };
 app.selectTask(liveTask.taskId); await settle();
 const liveReview = liveTask.inventoryReview;

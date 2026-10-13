@@ -51,7 +51,13 @@ conditional recorder without rewriting or finishing the original execution.
 Frozen ledger-derived candidates exist only for this manual session and its
 pause continuation; original operation-time hashes are not retained. Resume
 resolves the frozen target identity, and paused cancel opens no native work.
-Task attachment and desktop controls remain pending M1-10 consumers.
+Task attachment now retains this session's frozen operation/row/location
+membership and normalized terminal outcomes separately from original execution
+and ordinary integrity results. Dispatcher normalization supplies accumulated
+outcomes across pause/resume/cancel; the workflow adds no second accumulator.
+The first exact action excludes linked execution and remains subject to current
+ledger classification. Interfaces own first-attempt custody and same-task
+association; visible desktop controls remain pending M1-10 consumers.
 
 Installed NamiSync modules are trusted-but-fallible internal (rung 3)
 participants, not adversarial security principals. Their public returns are the
@@ -630,7 +636,10 @@ Released execution tasks can read their original target's current ledger through
 binding and original Plan, resolves the existing volume-relative location, and
 builds one complete projection. Missing locations are unavailable. This read
 does not create a location, admit a root, scan or hash. Its publication carries
-no scan provenance; execution discovery is not an inventory scan.
+no scan provenance; execution discovery is not an inventory scan. After a task
+has performed a real Inventory or ordinary integrity scan, its interface
+publication retains those actual scan facts through later manual verification.
+Ordinary integrity's fresh scan advances that provenance to its own request.
 
 Inventory, baseline, verify, and rebaseline are location-centric,
 not plan- or mapping-dependent. The workflow resolves or registers one selected

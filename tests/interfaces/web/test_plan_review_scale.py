@@ -147,6 +147,8 @@ def test_headed_fixture_publishes_stable_exact_task_summaries_once(
             session_released=True,
             task_kind="sync-plan",
             request_id=row["request_id"],
+                plan_request_id=row["request_id"],
+                session_kind="sync-plan",
         )
         registry._tasks[row["task_id"]] = task
 

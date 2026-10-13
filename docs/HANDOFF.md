@@ -1,70 +1,95 @@
-# Latest session — M1-10 implementation
+# Latest session — M1-10 held after C
 
-2026-10-13, `milestone1`. M1-10 is authorized with the smallest reasonable atomic
-commits, followed by a stop for recap and GUI tweaks. M1-12, release, DOC-2 and
-unrelated optimization remain inactive. M1_PLAN owns the finite register;
-execute-task requires independent review before each normal commit.
+2026-10-13, `milestone1`. The user requested a hold after all C work because of
+repeated model-capacity interruptions. C3b is the current reviewed commit
+boundary; after committing it, stop before D/E. Resume only on user instruction.
+The later M1-10 completion still stops for recap and GUI tweaks. M1-12, release,
+DOC-2 and unrelated optimization remain inactive.
 
-Integrated from clean `fc8a79b`:
+## Delivered and current boundary
+
+From clean `fc8a79b`, the task has delivered these atomic outcomes:
 
 - `a730165`: condense delivered registers and scope M1-10.
-- `6ba3575` (A): confirmed selected rebaseline admits null/prior evidence,
-  preserving engine/recorder behavior. 3,504 neighborhood checks, 12 imports;
-  `policy-review-01.md`.
-- `959f1bc` (B): exact manual verification workflow, whole-selection atomic
-  classification, fresh target admission and frozen continuation; own session/
-  history, no scan or persistent operation-time hashes. 239 focused, 3,520
-  neighborhood checks, 12 imports; `manual-review-01.md`.
-- `26e72ad` (C1): server-owned complete file/folder/location selection and
-  revision fences. 2,399 interfaces/tools checks, three skips, unaffected
-  workflow evidence, 12 imports and seven installed checks;
-  `selection-review-01.md`.
-- `bf9d649`: separately reviewed Setup driver follows actual Plan/Inventory
-  review panes while preserving frozen context, Plan again and native guards.
-  37 ordinary checks and one traced installed journey;
-  `setup-driver-review-01.md`.
-- `eecf31c` (C2): ordinary integrity task association, exact selection/confirmation
-  admission, current-session controls, retained distinct results, actual scan
-  provenance and replacement/Close. 3,348 neighborhood checks, three skips,
-  12 imports and eight affected installed obligations; independent partial-pause
-  resume/cancel probes preserve complete results. `ordinary-review-01.md`.
+- `6ba3575` (A): selected confirmed rebaseline admits null/prior evidence.
+- `959f1bc` (B): exact whole-selection manual workflow with fresh target
+  admission, frozen continuation and independent session/history.
+- `26e72ad` (C1): server-owned complete Inventory selection and revision fences.
+- `bf9d649`: separate Setup driver repair follows the visible review panes;
+  reproduced on the accepted baseline and independently reviewed.
+- `eecf31c` (C2): ordinary integrity sessions, separate results, actual scan
+  provenance, control, rollback/replay and Close.
+- `07947213` (C3a): execution-target ledger reads with honest absent-scan facts.
+- C3b (this commit): original Plan/execution identity remains separate from
+  current activity; first exact manual verification and explicit ordinary
+  integrity/Refresh and missing-row visibility attach to the same execution task. Bounded manual/ordinary
+  overlays, original-command recovery, linked exclusion, live controls and exact
+  Close preserve original execution truth. Visible D controls are not included.
 
-C3a is active from `eecf31c`. Its builder revalidated all six frozen design
-fingerprints before editing. It adds execution-target ledger browsing/selection
-with honest absent-scan provenance, no new native work and no mutation authority.
-C3b then migrates original/current identities atomically with first manual and
-ordinary auxiliary starts; D supplies actual desktop controls/navigation; E
-closes the checkpoint. No dependent implementation starts before its predecessor
-passes. Root owns M1_PLAN/HANDOFF/CHANGELOG; builders own scoped source/tests and
-subject docs. `manual-attachment-design-01.md` is read-only design evidence.
-C3a's frozen departments01 passes 2,946 checks and imports01 keeps all twelve
-contracts. Independent source review has no actionable finding; installed
-Inventory and both execution-window cases pass in headed01 (three passes).
-Final review checks source identity and delivery docs before commit.
-The original builder hit model-capacity errors; a GPT-6 Sol lane coordinates
-remaining gates. Host process isolation briefly hid the still-running broad
-test, causing an unnecessary duplicate receipt; departments01 is valid and
-departments02 was stopped through its own exact session control.
+M1_PLAN is the sole active register and now condenses delivered A–C3a details.
+BRIDGE, INTERFACES, WORKFLOWS, PRESENTATION, DESKTOP_UI and FEATURES describe
+shipped C3b behavior. BUGS records the corrected auxiliary-Close retention gap
+and execution-view visibility admission without scan metadata.
 
-Evidence remains under `build/m1-10-20261013/`, governed by its local AGENTS.
-Failed receipts are retained. C1's earlier Inventory and C2's first Inventory
-run refused foreground ownership before input; user availability confirmations
-were followed by passing unchanged checks. Traced Setup failed an obsolete
-detached-DOM predicate, reproduced on accepted `26e72ad`; the bounded repair
-above passed. No native guard was weakened. Use host PowerShell for native tests
-and serialize/announce headed input.
+## Verification and dispositions
 
-Final cleanup still owns:
+Evidence root: `build/m1-10-20261013/`; preserve failed receipts.
+
+- `c3b-ordinary-12.log`: 6,049 passed, four expected skips, 35 headed deselected.
+- `c3b-imports-13.log`: all twelve import contracts kept.
+- Nineteen affected installed obligations pass: fourteen unaffected passes in
+  `c3b-headed-02.log`, four gallery checks in `c3b-gallery-04.log`, and Inventory
+  in `c3b-inventory-17.log` after the service visibility correction. The larger task-shell retry passed
+  unchanged; the earlier failure does not establish a foreground cause.
+- `c3b-close-repro-01.log` fails both real auxiliary-Close retirement assertions
+  before correction. `c3b-review-corrections-01.log` passes six cases including
+  manual live Gap and zero/partial/full terminal repair across pause/resume/cancel.
+- `auxiliary-review-luna-01.md` owns independent source/correction/final review;
+  final document-link and diff receipts use the `c3b-*-18.log` names.
+- `c3b-native-evidence/manifest.json` accounts for 106 copied, SHA-256-verified
+  native receipts, screenshots, logs and wheel identity records from finalized
+  pytest-108/109/110 runs. Initial broad-run pytest-104 temporary files were
+  already removed by pytest retention; its complete failed output remains.
+- `c3b-visibility-repro-09.log` reproduces the no-scan admission refusal;
+  `c3b-visibility-11.log` passes all fifteen visibility cases after correction.
+  Retry 10 exposed an incomplete missing-row fixture, corrected by an independent
+  scan before Plan. No synthetic task scan provenance was added.
+- Installed retries 14/15 stopped before input at the foreground guard; 16
+  reached foreground but stopped at pre-click button focus. Retry 17 passed with
+  unchanged guards after title-bar activation. `c3b-native-evidence-final/`
+  preserves 35 hash-verified files from pytest-117/118/119. Pytest-116 was already
+  retired by pytest; its complete failure output remains in retry 14's log.
+
+The misnamed `c3b-ordinary-01.txt` cleared addopts and included headed tests;
+it is not acceptance. Its failures exposed direct-consumer migration omissions
+(catalog ordering, runtime doubles, Plan/gallery identity fixtures and one render
+instrumentation anchor). Those consumers were updated without removing their
+behavioral checks. Failures in `c3b-headed-02.log` and `c3b-gallery-03.log`
+remain failed receipts. Source and
+helpers were frozen before the final acceptance runs. Use host PowerShell for
+native/file gates; restricted native runs produce environmental EIO failures.
+Announce and serialize native input; retain foreground/hit-target guards.
+
+## Resumption and preserved work
+
+D1 supplies standalone Inventory selection/actions, revision-bound Rebaseline
+confirmation, ordinary overlays and controls. D2 supplies Plan/Verify navigation,
+exact-manual readiness/action and explicit ordinary fallback. The read-only
+`desktop-integrity-design-20261013-01.md` inspected `07947213` plus unfinished
+C3b: refresh it against this integrated commit before implementation. C3b settled
+manual control through `control_execution`, ordinary control through
+`control_integrity`, and original/current identity separation. E is still the
+whole-checkpoint closure. No D product work has started.
+
+Retain until M1-10 closeout:
 
 - Recovery `c3bb191` on `codex/wip-20261013-1228-m1-10-selection`: all 19 paths
-  rebuilt/accounted in C1; no WIP ancestry merged or cherry-picked. Only delivery
-  documentation differs from its reconstructed commit. Retain until closeout.
-- Detached source-clean baseline worktree
-  `build/m1-10-20261013/ordinary-base-26e72ad`: retain its receipts, verify clean,
-  then remove at closeout.
+  rebuilt/accounted in C1 without integrating WIP ancestry. Only delivery docs
+  differ from its reconstructed commit; `selection-recovery-accounting-12.log`.
+- Source-clean detached baseline worktree
+  `build/m1-10-20261013/ordinary-base-26e72ad`. Retain its Setup control receipts;
+  verify clean and use Git worktree removal during final accounting.
 
-Retained Setup screenshots show possible label-legibility issues in unchanged
-assets. This is undiagnosed and belongs to the requested post-M1-10 GUI review;
-DOM visibility/behavior does not prove pixel legibility. Previous AX2 physical
-wheel/tilt uncertainty remains unrelated and unverified. No unrelated changes,
-pushes or PRs were made.
+The earlier Setup captures carry an undiagnosed label-legibility observation for
+the later GUI review; DOM behavior does not establish pixel legibility. Previous
+AX2 wheel/tilt uncertainty remains unrelated and unverified. No pushes or PRs.
