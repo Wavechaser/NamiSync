@@ -1029,7 +1029,7 @@ class TaskRegistry:
             return
         if (self._closing or task.task_kind != "sync-plan" or task.plan_request_id is None
                 or task.session_id is None or task.execution_session_id is None
-                or not task.session_released or task.delivered_terminal_record is None
+                or task.execution_terminal_record is None
                 or task.transition or task.retiring):
             raise TaskUnavailableError("execution inventory is unavailable")
 

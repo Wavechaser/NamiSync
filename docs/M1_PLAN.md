@@ -21,8 +21,10 @@ do not establish acceptance for changed dependencies.
 
 The user activated M1-10 on 2026-10-13, with a stop for recap and GUI tweaks
 after its completion. During C3b, the user requested an earlier hold after all C
-units finish because of repeated model-capacity interruptions. Finish and commit
-C3b, then pause; D/E require resumption before implementation. Deliver the
+units finish because of repeated model-capacity interruptions. C3b shipped as
+`41afd262`. The user subsequently resumed the remaining M1-10 work, requiring a
+thorough integrated A–C review before D. For this resumed session only, GPT-5.6
+Sol replaces GPT-6 Sol as the fallback if GPT-6.1 Sol is unavailable. Deliver the
 smallest reasonable reviewed atomic commits;
 M1-12, release and DOC-2 remain inactive. Backend optimization is closed.
 Other pending rows still need user authorization, active scope and verification.
@@ -32,7 +34,7 @@ stops and recovery.
 | ID | Accepted outcome | Named verification | Status |
 | --- | --- | --- | --- |
 | M1-9 | Bounded inventory projections, current evidence and the full inventory consumer for sibling sorting, including missing-row acknowledge/restore. | Complete or prior-complete publication; warnings outside action scope; raw evidence provenance; search/filter/collapse/window/detail, replacement/race and production sort/reset paths; headed witnesses. | Complete; reviewed commits and evidence in the completed M1-9 section below. |
-| M1-10 | Baseline, verify and rebaseline controls plus first same-task manual post-copy verification, without persistent operation-time hashes. Eligible null-evidence files enter rebaseline; every admitted rebaseline hashes and replaces/creates evidence, and a match is not verified. | Confirm acknowledgement admission before claim/native work; all-null/mixed workflow, service/CLI and desktop paths; conditional recording and supersession races; atomic handoff classification; live pause/resume/cancel and unchanged automatic failed-read retries; overlay/result identity. Independently review operation matrix and conditional recording. Terminal Verify-remaining/subset retry remains deferred. | Hold after reviewed C3b delivery; D/E await user resumption. Rebaseline confirmation is distinct from missing-row acknowledgement. |
+| M1-10 | Baseline, verify and rebaseline controls plus first same-task manual post-copy verification, without persistent operation-time hashes. Eligible null-evidence files enter rebaseline; every admitted rebaseline hashes and replaces/creates evidence, and a match is not verified. | Confirm acknowledgement admission before claim/native work; all-null/mixed workflow, service/CLI and desktop paths; conditional recording and supersession races; atomic handoff classification; live pause/resume/cancel and unchanged automatic failed-read retries; overlay/result identity. Independently review operation matrix and conditional recording. Terminal Verify-remaining/subset retry remains deferred. | Resumed; integrated A–C review precedes D/E. Rebaseline confirmation is distinct from missing-row acknowledgement. |
 | M1-12 | Close integrated lifecycle/retention across activated task surfaces, then complete adversarial, documentation, ordinary and headed verification. This absorbs former M1-11. | Plan-only, execution-only, linked/manual verification, inventory, refused/canceled/degraded/failed tasks across same-document navigation, contained unsupported reload, explicit close and shutdown; admission bounds, stale-response suppression, exact resource release and retained truth. Applicable settlement oracle, ordinary/headed, installed-wheel/product, imports, diff/active-link checks and independent cross-component review. No aggregate-artifact or whole-owner-graph criterion. | Pending. |
 | M1-Release | Beta packaging and release closure after delivery rows above. | Installed artifact from clean checkout; frozen specification/dependency/CI, notices and corresponding source; standard-integrity host proof and every applicable BR-G/SH-G gate. [INTERFACES](INTERFACES.md) owns host/package/SH-G; [BRIDGE](BRIDGE.md) owns BR-G. | Pending. |
 
@@ -155,11 +157,38 @@ red/green and manual Gap/zero/partial repair are in `c3b-close-repro-01.log` and
 `c3b-review-corrections-01.log`; `auxiliary-review-luna-01.md` owns independent
 source, correction and final acceptance review. Exactly 106 native evidence
 files were copied and hash-verified under `c3b-native-evidence/`, with 35 final
-Inventory retry files under `c3b-native-evidence-final/`. After this
-reviewed C3b commit, all C units are complete and the user-requested hold applies.
+Inventory retry files under `c3b-native-evidence-final/`. The reviewed C3b commit
+completed the original C delivery; the subsequent hold and resumption are recorded above.
 
-D remains on hold until user resumption. It splits into two functional UI
-commits after C3b acceptance. Read-only
+D is authorized after the resumed A–C review closes. Review the integrated
+`41afd262` in three read-only populations: A/B policy, classification, admission
+and conditional recording; C selection, association, result/replay/Close ownership;
+and bridge/browser/direct-consumer migrations, test retirement and evidence.
+Trace cross-unit consumers and reproduce supported concerns before disposition.
+Existing unchanged gates remain evidence by dependency; findings do not authorize
+new scope, and AGENTS recurrence/mandatory stops remain binding. Review receipts
+use `resume-review-{ab,c,consumers}-01.md` under the existing evidence root.
+No D product/test edits precede this review's closure.
+
+The resumed review reproduced a C3 read-admission omission: current auxiliary
+activity revoked reads of an already published execution Inventory. Correct the
+original/current release check in `web/drain.py`, with public active/paused reads
+in the existing real manual composition and preserved mutation/retirement guards.
+Separately census the browser's closed session-kind validators: SessionRecord
+omits `manual-verify` despite the accepted kind migration. These are bounded
+corrections within C's predeclared identity/consumer migration, not new outcomes
+or effect authority. Each receives its own fix commit, matching tests/docs and
+fresh reviewer confirmation. Gate the read correction with real composition,
+interfaces tests and imports; gate the browser correction with production
+drain/validation probes, interfaces tests and affected installed host/transport.
+Retain original failures; close the whole finite census before D.
+The read correction passes 234 drain tests, 2,015 interfaces tests and twelve
+imports (`resume-read-drain-04.log`, `resume-read-interfaces-05.log`,
+`resume-read-imports-05.log`), with independent native/source confirmation in the
+C report. A/B's fresh native review passed 43 focused cases without a product
+finding; stale VERIFIER/WORKFLOWS delivery prose is reconciled.
+
+D splits into two functional UI commits after C3b acceptance. Read-only
 `desktop-integrity-design-20261013-01.md` inspected `07947213` plus its unfinished
 C3b candidate; recheck current/original identity, control routing, sync ordinary
 admission and exact result shapes against integrated C3b before editing.

@@ -691,8 +691,10 @@ Baseline, verify, and rebaseline register pause support. Their continuation
 retains the exact admitted candidate ids plus completed ids/bytes; resume
 freshly inventories and guards those remaining rows without adding a newly
 appeared row. Inventory and plan register pause unsupported and remain
-cooperatively cancelable. The production interface registry contains all six
-current workflow kinds, and the CLI reaches each through the shared service.
+cooperatively cancelable. The production interface registry includes these
+workflow kinds and same-task manual post-copy verification. The CLI reaches
+standalone and reviewed-sync activities through the shared service; the exact
+manual post-copy action uses the task's retained execution binding.
 
 After integrity selection, running cancellation or ordinary failure derives
 terminal item and byte counters from that live checkpoint rather than the

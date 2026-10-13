@@ -90,7 +90,11 @@ execution, the same task may run its first eligible exact manual post-copy
 verification, or explicitly Refresh, change Inventory visibility, and verify
 current state. Each new session has a fresh current request/session; the original
 Plan request, execution session, terminal record, and review results remain
-independent. A ledger read has no scan provenance until an actual scan occurs;
+independent. Once the original execution is released, an existing Inventory
+publication remains readable during later active or paused auxiliary sessions.
+The current session must still be released before selection or another activity;
+live reads neither create a new publication nor grant mutation authority.
+A ledger read has no scan provenance until an actual scan occurs;
 later manual publication retains the last actual scan's provenance. Linked
 execution cannot start a manual session. A first valid manual claim is consumed
 even if native preparation fails, and equal command replay returns that outcome.

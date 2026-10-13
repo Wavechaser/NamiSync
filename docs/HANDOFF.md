@@ -1,8 +1,15 @@
-# Latest session — M1-10 held after C
+# Latest session — M1-10 resumed, reviewing A–C
 
-2026-10-13, `milestone1`. The user requested a hold after all C work because of
-repeated model-capacity interruptions. C3b is the current reviewed commit
-boundary; after committing it, stop before D/E. Resume only on user instruction.
+2026-10-13, `milestone1`, clean resumption base `41afd262`. The user resumed the
+remaining M1-10 work and requires a thorough integrated A–C review before D.
+Three fresh reviews cover domain A/B, C lifecycle/result ownership,
+and bridge/browser/direct-consumer/evidence contracts. A/B passed 43 fresh native
+checks without a product finding; stale VERIFIER/WORKFLOWS status prose is corrected.
+C review reproduced two finite identity-migration omissions: a current-session
+release guard hid live execution-task Inventory, and the browser SessionRecord
+catalog rejected `manual-verify`. The read guard is the current correction;
+the separate browser correction must close before D. No D implementation has
+started. This session's fallback for unavailable GPT-6.1 Sol is GPT-5.6 Sol.
 The later M1-10 completion still stops for recap and GUI tweaks. M1-12, release,
 DOC-2 and unrelated optimization remain inactive.
 
@@ -20,7 +27,7 @@ From clean `fc8a79b`, the task has delivered these atomic outcomes:
 - `eecf31c` (C2): ordinary integrity sessions, separate results, actual scan
   provenance, control, rollback/replay and Close.
 - `07947213` (C3a): execution-target ledger reads with honest absent-scan facts.
-- C3b (this commit): original Plan/execution identity remains separate from
+- `41afd262` (C3b): original Plan/execution identity remains separate from
   current activity; first exact manual verification and explicit ordinary
   integrity/Refresh and missing-row visibility attach to the same execution task. Bounded manual/ordinary
   overlays, original-command recovery, linked exclusion, live controls and exact
@@ -31,7 +38,24 @@ BRIDGE, INTERFACES, WORKFLOWS, PRESENTATION, DESKTOP_UI and FEATURES describe
 shipped C3b behavior. BUGS records the corrected auxiliary-Close retention gap
 and execution-view visibility admission without scan metadata.
 
-## Verification and dispositions
+## Resumed review and correction evidence
+
+The `resume-review-ab-01.md`, `resume-review-c-01.md` and
+`resume-review-consumers-01.md` reports record the finite review populations,
+supported findings, raw reproductions and remaining D seam obligations.
+`resume-read-drain-04.log` passes all 234 drain tests after the read correction;
+`resume-read-focused-03.log` passes fourteen focused cases. The tests now inspect
+public active/paused windows and details, live Gap, mutation refusal and terminal
+repair rather than relying only on private live result state. Earlier red and
+invalid descending-path fixture receipts remain retained. Browser kind rejection
+is reproduced by the unchanged production drain probe with a real manual record
+variation in `resume-consumer-kind-repro-01.mjs/.log`.
+The read correction additionally passes 2,015 interfaces tests
+(`resume-read-interfaces-05.log`) and all twelve imports
+(`resume-read-imports-05.log`); independent native and source correction review
+is recorded in the C report. Its separate commit precedes the browser correction.
+
+## Prior C3b verification and dispositions
 
 Evidence root: `build/m1-10-20261013/`; preserve failed receipts.
 

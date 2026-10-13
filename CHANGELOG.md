@@ -607,6 +607,13 @@ Integrity controls, manual post-copy handoff and beta packaging remain open.
   Final verification passes 6,049 ordinary
   tests (four expected skips), nineteen affected installed obligations and all
   twelve import contracts; independent review covers the source and corrections.
+- Resume with an independent integrated A–C review. Correct execution-task
+  Inventory reads during active/paused auxiliary work by retaining the original
+  execution's release proof; selection and further activity still require the
+  current session's release. Public live-read and terminal-repair regressions
+  cover the boundary, and stale verifier/workflow delivery descriptions are updated.
+  The correction passes 234 drain checks, 2,015 interfaces checks and twelve
+  import contracts, with independent native/source review.
 
 #### Refine Plan refusal messages, move context and controls (2026-10-04)
 

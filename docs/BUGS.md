@@ -1144,6 +1144,16 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Application task lifecycle
 
+- MODERATE - FIXED (2026-10-13). Current activity revokes retained read authority.
+  Execution-task Inventory refused public windows, details and view gestures
+  during active or paused auxiliary verification, hiding live result overlays.
+  Cause: its read guard required the current session's release after that session
+  had replaced the already released original execution. Reads now rely on the
+  retained original execution's terminal record and an existing publication;
+  selection and mutation retain their current-session release requirements.
+  Real manual pause/resume/cancel cases exercise public live reads and terminal
+  zero/partial/full replacement while preserving Plan truth and exact Close.
+
 - MODERATE - FIXED (2026-10-13). Scan identity substituted for publication identity.
   The M1-10 execution-task candidate safely refused missing-row acknowledge/restore
   until Refresh, despite publishing a complete target-ledger view. Cause: the

@@ -10,7 +10,8 @@ Stage 5 exposes standalone activities through the shared-service CLI with
 explicit location/scope binding and guarded selected rebaseline; desktop
 actions remain Stage 6. Signed-64 totals, exact event v5, and full-width native
 identity are active. The no-rescan manual post-copy workflow and ledger-current
-classification are implemented; desktop/task attachment remains pending. Fresh rebaseline admits
+classification and same-task attachment are implemented; visible desktop actions
+remain pending. Fresh rebaseline admits
 eligible selected rows with or without prior evidence after explicit acceptance.
 
 ## Purpose
@@ -309,7 +310,7 @@ and envelope limits are owned by
 state needed to continue the same admitted work.
 
 Ordinary manual verification is location-scoped and independent of any current
-plan or mapping. It must not require both source and target roots. The deferred
+plan or mapping. It must not require both source and target roots. The manual
 post-copy action is a separate, explicitly execution-linked workflow.
 
 ### Stage 6 manual post-copy handoff
@@ -342,7 +343,8 @@ resume resolves the same target binding again without scanning or substituting
 new evidence. Paused cancellation does not reopen work. Native read retries
 remain the existing verifier policy.
 
-Task attachment and replacement publication remain pending M1-10 consumers.
+Task attachment and separate replacement publication are implemented; visible
+desktop controls remain pending M1-10 consumers.
 Terminal Verify-remaining/subset retry stays deferred. When exact handoff is
 unavailable, the accepted desktop fallback is an
 explicitly ordinary verify-current workflow whose refresh may establish a new

@@ -6852,6 +6852,8 @@ def test_execution_inventory_real_ledger_read_selection_and_close(tmp_path, monk
         execution = registry.start_execution(planned.task_id, request_id=planned.request_id,
             expected_revision=0, destructive_acknowledged=False, command_id="2" * 32,
             wire_intent=("execute",))
+        with pytest.raises(TaskUnavailableError):
+            registry.open_inventory_view(planned.task_id)
         finish(execution)
         def refuse(*args, **kwargs):
             raise AssertionError("ledger browsing must not admit, scan or hash")
@@ -7212,17 +7214,50 @@ def test_manual_dispatcher_partial_pause_and_terminal_reconciliation(tmp_path, m
                 return accept
             return original_start(task_id, execution_session_id, **{**kwargs, "delivery_factory": delivery})
         monkeypatch.setattr(service, "start_task_manual_verification", lossy_start)
+        registry.open_inventory_view(planned.task_id)
         manual = registry.start_manual_verification(planned.task_id, execution.session_id,
             expected_execution_revision=revision, command_id="3" * 32,
             wire_intent=("manual",))
         owner = registry._tasks[planned.task_id].manual_verification
         assert owner is not None and len(owner.subjects) == 2
         subject_index = owner.subjects
+
+        def browse_live(search_query):
+            view = registry.open_inventory_view(planned.task_id)
+            view = registry.update_inventory_view(planned.task_id,
+                expected_revision=view["view_revision"], search_query=search_query, filters=frozenset(),
+                sort_column=PlanSortColumn.PATH, sort_direction=SortDirection.ASCENDING,
+                collapse_node_id=None, collapsed=None)
+            window = registry.get_inventory_window(planned.task_id,
+                expected_revision=view["view_revision"], offset=0, limit=256)
+            overlay = window["manual_verification"]
+            assert overlay["session_id"] == manual.session_id
+            assert overlay["gap"] and not overlay["complete"] and overlay["items"] == []
+            node_id = next(row["node_id"] for row in window["rows"] if row["row_id"] is not None)
+            detail = registry.get_inventory_detail(planned.task_id,
+                expected_revision=view["view_revision"], node_id=node_id)
+            assert detail["disposition"] == "current"
+            assert detail["manual_verification"] == overlay
+            with pytest.raises(TaskUnavailableError):
+                registry.set_inventory_selection(planned.task_id, manual.request_id,
+                    expected_revision=view["view_revision"], node_id=None, selected=True)
+            with pytest.raises(TaskUnavailableError):
+                registry.refresh_inventory(planned.task_id, manual.request_id,
+                    expected_revision=view["view_revision"], node_id=None,
+                    command_id="4" * 32, wire_intent=("refresh-live",))
+            with pytest.raises(TaskUnavailableError):
+                registry.start_inventory_integrity(planned.task_id, manual.request_id,
+                    expected_revision=view["view_revision"], mode="verify",
+                    accept_current_evidence=False, command_id="5" * 32,
+                    wire_intent=("verify-live",))
+
         try:
             assert started.wait(5)
+            browse_live("txt")
             assert registry.control_execution(planned.task_id, manual.session_id, "pause").accepted
             release.set()
             _wait_for(service._dispatcher, manual.session_id, SessionState.PAUSED)
+            browse_live("")
             assert registry.control_execution(planned.task_id, manual.session_id, action).accepted
             finish(manual)
             view = registry.open_inventory_view(planned.task_id)
@@ -7235,6 +7270,8 @@ def test_manual_dispatcher_partial_pause_and_terminal_reconciliation(tmp_path, m
             assert len(calls) == (2 if action == "resume" else 1)
             assert registry._tasks[planned.task_id].execution_session_id == execution.session_id
             registry.close_task(planned.task_id, manual.session_id)
+            with pytest.raises(TaskUnavailableError):
+                registry.open_inventory_view(planned.task_id)
             assert service._runtime._retained_execution_reviews == {}
             assert service._runtime._retained_manual_verification == {}
         finally:
