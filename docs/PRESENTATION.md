@@ -293,7 +293,24 @@ windows keep their independent action ordering and may overlap a retired
 viewport read while it drains; that read cannot adopt or dispatch obsolete
 queued work. Keyboard targets retain precedence until a newer user scroll or
 loaded-row gesture replaces them. The browser retains one 256-row window.
-Disabled Inventory checkbox visuals do not introduce selection state or commands.
+Inventory checkbox visuals remain disabled until the integrity controls surface
+activates them. The server selection API starts empty and retains exact file row
+IDs independently of the active/detail row. A folder gesture covers all its files;
+the header's null-node gesture covers the complete location. Search, facets,
+collapse and paging never narrow that membership or change selection. Warnings
+are informational; directories provide membership only. Labels must disclose
+"Select all files in this location" or "Select all files in this folder", with
+selected/hidden-by-filter counts. Plan's query-matched scope remains distinct.
+
+One existing view revision fences selection, windows and details. A stale request
+or revision changes nothing; selection changes advance the revision. Selection
+requires a current released, clean publication and cannot race admission or a
+pending visibility effect. Replacements retain only surviving exact file row IDs,
+leave new rows unselected, and invalidate prior gestures. A retained prefix of
+selected membership and projection-owned file totals provide constant-time
+per-row tri-state; hidden counts are computed at selection/view changes, not on
+each window read. Mode eligibility remains workflow-owned and no integrity
+operation starts through this selection API.
 Repeated windows
 reuse these values and serialize only the requested slice; current detail uses
 one exact ledger row read for domain subjects. Its separate revisioned snapshot
@@ -320,7 +337,8 @@ and exact revision are required. The response retains bounded actual conditional
 outcomes before rebuilding; failure leaves prior reads available but marks their
 publication dirty, excluding another visibility effect until whole replacement
 succeeds. Rebuilds preserve concurrent view gestures and advance the view revision.
-No ordinary-integrity overlay or selection mechanism is introduced.
+Visibility changes introduce no ordinary-integrity overlay; selection remains
+the separate revisioned presentation state described above.
 
 ## Search, filters, sorting, and follow
 

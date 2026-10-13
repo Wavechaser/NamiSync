@@ -986,6 +986,20 @@ class TaskRegistry:
                 raise TaskUnavailableError("inventory view is unavailable")
             return view.update(**gesture)
 
+    def set_inventory_selection(self, task_id: str, request_id: str, *,
+                                expected_revision: int, node_id: str | None,
+                                selected: bool) -> dict[str, object]:
+        task, view = self._require_inventory_view(task_id)
+        with task.condition:
+            self._require_inventory_task_locked(task)
+            if (self._inventory_views.get(task_id) is not view or task.transition
+                    or task.inventory_view_dirty or task.inventory_view_loading
+                    or not task.session_released or task.delivered_terminal_record is None
+                    or task.request_id != view.request_id):
+                raise TaskUnavailableError("inventory selection requires the current released view")
+            return view.set_selection(request_id=request_id, expected_revision=expected_revision,
+                                      node_id=node_id, selected=selected)
+
     def refresh_inventory(
         self, task_id: str, request_id: str, *, expected_revision: int,
         node_id: str | None, command_id: str, wire_intent: tuple[object, ...],

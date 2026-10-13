@@ -1961,6 +1961,7 @@ def _summarize(
         "replace_cosmetic_section",
         "restore_inventory",
         "reveal_plan_move",
+        "set_inventory_selection",
         "shell_ready",
         "start_execution",
         "start_inventory",

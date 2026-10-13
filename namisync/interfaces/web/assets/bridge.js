@@ -43,6 +43,7 @@ const COMMAND_POLICY_JSON = `{
   "acknowledge_inventory": {"response_policy": "mutation-observed", "retry": "none", "phase": "open"},
   "restore_inventory": {"response_policy": "mutation-observed", "retry": "none", "phase": "open"},
   "update_inventory_view": {"response_policy": "feedback-only", "retry": "none", "phase": "open"},
+  "set_inventory_selection": {"response_policy": "feedback-only", "retry": "none", "phase": "open"},
   "get_inventory_window": {"response_policy": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
   "get_inventory_detail": {"response_policy": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
   "update_plan_view": {"response_policy": "feedback-only", "retry": "none", "phase": "open"},
@@ -776,6 +777,20 @@ export function updateInventoryView(taskId, expectedRevision, view, onDelayed = 
     filters: Object.freeze([...view.filters]), sort_column: view.sortColumn,
     sort_direction: view.sortDirection, collapse_node_id: view.collapseNodeId, collapsed: view.collapsed,
   }), (value) => validateInventorySummary(value) && value.task_id === taskId,
+  PLAN_VIEW_TIMEOUT_MS, false, onDelayed);
+}
+
+export function setInventorySelection(taskId, requestId, expectedRevision, nodeId, selected, onDelayed = null) {
+  requireTaskId(taskId, "setInventorySelection");
+  if (typeof requestId !== "string" || !ID_PATTERN.test(requestId)
+      || !isNonnegativeInteger(expectedRevision) || !(nodeId === null || isNodeId(nodeId))
+      || typeof selected !== "boolean") {
+    throw new TypeError("setInventorySelection requires an exact inventory selection gesture");
+  }
+  return dispatchAttempt("set_inventory_selection", Object.freeze({task_id: taskId,
+    request_id: requestId, expected_revision: expectedRevision, node_id: nodeId, selected}),
+  (value) => validateInventorySummary(value) && value.task_id === taskId
+    && (value.disposition === "conflict" || value.request_id === requestId),
   PLAN_VIEW_TIMEOUT_MS, false, onDelayed);
 }
 
@@ -2859,7 +2874,8 @@ function validateInventoryRollup(value) {
 function validateInventorySummary(value) {
   return isExactObject(value, ["disposition", "task_id", "request_id", "location_id", "view_revision",
     "root_path", "scan_complete", "scan_scope", "observed_count", "missing_count", "warning_count", "rollup",
-    "visible_row_count", "search_query", "filters", "sort_column", "sort_direction", "collapsed_count"])
+    "visible_row_count", "search_query", "filters", "sort_column", "sort_direction", "collapsed_count",
+    "selected_file_count", "selectable_file_count", "hidden_selected_file_count", "selection"])
     && ["opened", "current", "conflict", "noop"].includes(value.disposition)
     && typeof value.task_id === "string" && TASK_PATTERN.test(value.task_id)
     && typeof value.request_id === "string" && ID_PATTERN.test(value.request_id)
@@ -2872,6 +2888,12 @@ function validateInventorySummary(value) {
       ? value.scan_scope.path === null
       : ["item", "folder"].includes(value.scan_scope.kind) && isBoundedPath(value.scan_scope.path))
     && typeof value.scan_complete === "boolean" && validateInventoryRollup(value.rollup)
+    && [value.selected_file_count, value.selectable_file_count, value.hidden_selected_file_count].every(isNonnegativeInteger)
+    && value.selected_file_count <= value.selectable_file_count
+    && value.hidden_selected_file_count <= value.selected_file_count
+    && value.selectable_file_count === value.rollup.file_count
+    && value.selection === (value.selected_file_count === 0 ? "none"
+      : value.selected_file_count === value.selectable_file_count ? "all" : "partial")
     && isTreeViewGesture({searchQuery: value.search_query, filters: value.filters,
       sortColumn: value.sort_column, sortDirection: value.sort_direction,
       collapseNodeId: null, collapsed: null}, INVENTORY_FILTERS);
@@ -2892,7 +2914,7 @@ function validateInventoryRow(value) {
   return isExactObject(value, ["node_id", "display", "depth", "is_container", "visible_index",
     "parent_visible_index", "first_child_visible_index", "position_in_set", "set_size", "expanded",
     "row_kind", "row_id", "presence", "verification_state", "has_baseline", "recorded_checksum", "acknowledged",
-    "reappeared", "size", "mtime_ns", "rollup", "warning"])
+    "reappeared", "size", "mtime_ns", "rollup", "warning", "selectable", "selection"])
     && isNodeId(value.node_id) && isValidUnicode(value.display) && value.display.length <= 300
     && [value.depth, value.visible_index, value.position_in_set, value.set_size].every(isNonnegativeInteger)
     && value.position_in_set > 0 && value.position_in_set <= value.set_size
@@ -2911,11 +2933,14 @@ function validateInventoryRow(value) {
     && value.has_baseline === (value.recorded_checksum !== null)
     && [value.size, value.mtime_ns].every((item) => item === null || isScalar64(item))
     && validateInventoryRollup(value.rollup)
+    && value.selectable === (value.rollup.file_count > 0) && ["none", "partial", "all"].includes(value.selection)
+    && (value.selectable || value.selection === "none")
+    && (value.is_container || value.selection !== "partial")
     && (value.warning === null || (isExactObject(value.warning, ["code", "detail"])
       && isScanWarningCode(value.warning.code)
       && isValidUnicode(value.warning.detail) && value.warning.detail.length <= 300))
     && ((value.row_kind === "notice") === (value.warning !== null))
-    && (value.warning === null || (value.row_id === null && !value.is_container));
+    && (value.warning === null || (value.row_id === null && !value.is_container && !value.selectable));
 }
 
 function validateInventorySubject(value) {

@@ -567,6 +567,13 @@ Integrity controls, manual post-copy handoff and beta packaging remain open.
   scan or persistent operation-time hashes are introduced. Focused checks pass
   239, the affected department gate passes 3,520, and all 12 imports pass.
   Task attachment and desktop controls remain pending.
+- Add server-owned Inventory file selection with complete folder/location scope,
+  revision fences, tri-state and selected/hidden counts. Filtered, collapsed and
+  unloaded rows remain in scope; replacement retains surviving exact identities.
+  The API grants no session-start authority; desktop controls follow separately.
+  Its corrected interfaces/tools gate passes 2,399 tests with three expected skips,
+  all 12 imports pass, and seven installed Inventory/host/transport/gallery checks
+  pass. Earlier foreground refusals remain retained as environment evidence.
 
 #### Refine Plan refusal messages, move context and controls (2026-10-04)
 

@@ -38,6 +38,70 @@ def _update(view, **changes):
     return view.update(**values)
 
 
+def _select(view, node_id=None, selected=True, **changes):
+    values = dict(request_id=view.request_id, expected_revision=view.view_revision,
+                  node_id=node_id, selected=selected)
+    values.update(changes)
+    return view.set_selection(**values)
+
+
+def test_selection_full_scope_hidden_counts_and_single_revision():
+    view = _view()
+    assert view.summary()["selected_file_count"] == 0
+    folder = view.projection.nodes[view.projection.position_by_path_key["A"]]
+    _update(view, search_query="b.txt", collapse_node_id=folder.node_id, collapsed=True)
+    summary = _select(view, folder.node_id)
+    assert (summary["selected_file_count"], summary["hidden_selected_file_count"], summary["selection"]) == (2, 1, "partial")
+    assert view.selected_row_ids == frozenset({"1", "2"})
+    assert summary["view_revision"] == 2
+    assert view.window(expected_revision=1, offset=0, limit=256)["disposition"] == "conflict"
+    assert view.window(expected_revision=2, offset=0, limit=256)["rows"][0]["selection"] == "all"
+    assert _select(view, folder.node_id)["disposition"] == "noop"
+    assert _select(view, selected=False, expected_revision=1)["disposition"] == "conflict"
+    assert _select(view, selected=False, request_id="f" * 32)["disposition"] == "conflict"
+    summary = _select(view)
+    assert (summary["selected_file_count"], summary["hidden_selected_file_count"], summary["selection"]) == (3, 2, "all")
+    _update(view, search_query="", filters=frozenset({"acknowledged"}))
+    assert view.summary()["hidden_selected_file_count"] == 2
+    assert view.selected_row_ids == frozenset({"1", "2", "3"})
+    warning = next(node for node in view.projection.nodes if node.warning)
+    with pytest.raises(ValueError, match="warnings"):
+        _select(view, warning.node_id)
+    assert _select(view, selected=False)["selected_file_count"] == 0
+
+
+def test_selection_replacement_retains_exact_files_and_invalidates_old_gestures():
+    view = _view()
+    _select(view)
+    projection = build_inventory_projection(1, (
+        _row("1", r"a\z.txt"), _row("4", r"a\b.txt"),
+        _row("3", "gone.txt", entry_kind=EntryKind.DIRECTORY),
+    ))
+    replaced = view.replacement("f" * 32, projection, view.root_path, True, 3, 0,
+                                scan_scope=("location", None))
+    assert replaced.selected_row_ids == frozenset({"1"})
+    assert replaced.summary()["selectable_file_count"] == 2
+    assert replaced.view_revision == 2
+    assert _select(replaced, request_id=view.request_id)["disposition"] == "conflict"
+    directory = projection.node_id_by_row_id["3"]
+    assert _select(replaced, directory)["disposition"] == "noop"
+
+
+def test_selection_large_folder_does_not_rederive_or_rescan_per_window(monkeypatch):
+    view = InventoryReviewState("task-" + "1" * 32, "2" * 32,
+        build_inventory_projection(1, (_row(str(i + 1), rf"folder\{i}.txt") for i in range(120_000))),
+        r"C:\root", True, 120_000, 0)
+    folder = view.projection.nodes[1]
+    assert _select(view, folder.node_id)["selected_file_count"] == 120_000
+    prefix = view._selected_prefix
+    def refuse(*args, **kwargs):
+        raise AssertionError("window must use retained selection prefixes")
+    monkeypatch.setattr(InventoryReviewState, "_refresh_selection", refuse)
+    monkeypatch.setattr(InventoryReviewState, "_derive", refuse)
+    assert view.window(expected_revision=1, offset=119_745, limit=256)["rows"][-1]["selection"] == "all"
+    assert view.summary()["selection"] == "all" and view._selected_prefix is prefix
+
+
 def test_complete_view_of_incomplete_scan_keeps_warnings_ack_hiding_and_rollups():
     view = _view()
     rows = view.window(expected_revision=0, offset=0, limit=256)["rows"]
@@ -169,14 +233,15 @@ def test_complete_inventory_256_row_envelope_has_margin_under_response_wall():
     assert set(row) == {"node_id", "display", "depth", "is_container", "visible_index",
         "parent_visible_index", "first_child_visible_index", "position_in_set", "set_size", "expanded",
         "row_kind", "row_id", "presence", "verification_state", "has_baseline", "recorded_checksum",
-        "acknowledged", "reappeared", "size", "mtime_ns", "rollup", "warning"}
+        "acknowledged", "reappeared", "size", "mtime_ns", "rollup", "warning", "selectable", "selection"}
     assert set(row["rollup"]) == {"domain_count", "file_count", "present", "unverified", "verified", "modified",
         "reappeared", "unsupported", "missing", "mismatched", "acknowledged", "size", "size_overflow", "size_partial"}
     assert set(actual) == {"disposition", "view_revision", "offset", "total", "rows"}
     assert set(actual["rows"][0]["warning"]) == {"code", "detail"}
     row.update(display="\x01" * 300, row_id="9" * 19, recorded_checksum="f" * 32,
                size="9" * 19, mtime_ns="9" * 19, presence="unsupported",
-               verification_state="unverified", warning={"code": "scalar_unrepresentable", "detail": "\x01" * 300})
+               verification_state="unverified", selection="partial",
+               warning={"code": "scalar_unrepresentable", "detail": "\x01" * 300})
     row["rollup"] = {key: "9" * 19 if key == "size" else False if type(value) is bool else 9007199254740991
                      for key, value in row["rollup"].items()}
     for key, value in tuple(row.items()):

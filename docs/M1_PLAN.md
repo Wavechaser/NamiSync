@@ -96,7 +96,7 @@ affected composition, then implement, verify and independently review this one
 workflow commit before task attachment work. Read-only design observations are
 in `manual-workflow-design-01.md`; this register remains scope authority.
 
-Unit B verified: the dedicated manual workflow and dormant runtime registration
+Unit B delivered in `959f1bc`: the dedicated manual workflow and dormant runtime registration
 pass 239 focused and 3,520 database/verifier/workflows/interfaces checks
 (`manual-neighborhood-focused-09.log`, `manual-departments-10.log`), plus all
 12 import contracts. Independent review additionally exercises 257 subjects at
@@ -128,6 +128,54 @@ departments, imports and affected installed Inventory/transport/host consumers,
 then fresh review. C1 grants no hashing/session-start authority. C2/C3 are
 refreshed and expanded against B/C1 before implementation; their read-only seam
 census is `c-design-association-20261013-01.md`, not a second register.
+C1 implementation starts at integrated B `959f1bc`. The corrected interfaces/tools
+gate passes 2,399 checks with three expected skips (`selection-neighborhood-08.log`),
+and all 12 import contracts pass. Unaffected workflow passes from
+`selection-departments-04.log` remain valid; its two sorted-catalog failures are
+covered by the 103-pass `selection-catalogs-05.log`. Failed envelope/catalog/import
+receipts remain retained. Six installed host/transport/gallery cases pass; the
+Inventory journey passes unchanged after the user confirms desktop availability
+(`selection-installed-11.log`, one pass); the two earlier foreground refusals
+remain retained and no safety guard changed. All seven installed cases now pass.
+C1 was preserved as recovery-only `c3bb191` and rebuilt into a coherent reviewed
+commit on `milestone1`; recovery ancestry is not integrated. C2 starts only after
+that commit; C3 remains read-only until its prerequisite closes.
+
+C2 is one inventory-task-only association/result commit, designed against
+`959f1bc` and refreshed after C1. Task kind stays inventory with no Plan token.
+An explicit `task-integrity` lifecycle effect permits released inventory-to-
+ordinary, ordinary-to-ordinary and ordinary-to-refresh replacement under the
+existing exact prior association, settlement and retirement guards. The bounded
+`start_inventory_integrity` command freezes nonempty server-owned selected row
+paths at the current view revision, requires exact Boolean rebaseline acceptance
+before a fresh claim, and recovers an original command result before testing
+current publication. Changed intent conflicts; an empty selection never means
+whole location. `control_integrity` binds task/session/action to the current
+ordinary session. Existing command capacity and pause/resume/cancel apply.
+
+C2 retains one latest ordinary result generation, bound to task/request/session/
+mode and exact location/row identity. Capture terminal facts before detail release;
+each newly admitted operation replaces the whole overlay, including zero-outcome
+work. Keep live Gap repair, retained results and ledger verification state distinct.
+Use the scan details from the actual ordinary workflow scan when rebuilding the
+current ledger projection after settlement; hashing is not another scan. Failed
+admission preserves the prior released publication; Close retires results and
+receipts. Execution task association and automatic/manual maps stay in C3.
+
+Finite C2 owners are interfaces service/task_port/task_lifecycle; web drain,
+commands, inventory_review and task_snapshot as required; workflow runtime/models/
+facade for retained ordinary facts; bridge.js and narrow app/inventory renderer
+activity compatibility. Migrate the same exact command catalogs as C1. Tests
+cover those service/lifecycle/runtime/bridge owners and existing production
+inventory/refresh/visibility probes; BRIDGE, PRESENTATION, INTERFACES and WORKFLOWS
+own documentation. The gate follows a real scan through selection, ordinary
+start, live control/release, current-ledger publication with separately bound
+results, refresh/next operation and exact Close. Include all-null/mixed confirmed
+rebaseline, empty/stale rejection before effects, original uncertain-result
+recovery, replacement rollback, stale sink/window/detail suppression, Gap repair,
+zero-result replacement and retirement. Run affected workflows/interfaces/tools,
+installed Inventory compatibility, imports and fresh review. Full controls and
+rich row rendering remain D; no engine rewrite or execution identity migration.
 
 Preserve atomic publication, conditional recording including prior absence,
 root admission, fixed continuation identity and original execution truth.

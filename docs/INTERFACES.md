@@ -503,6 +503,13 @@ through the location-scoped workflow tree using the bridge-owned opaque codec.
 Refresh carries a recursive subtree root so it can discover new descendants,
 while integrity freezes the indexed subtree to exact paths before admission.
 Path-based CLI calls retain their existing full/exact behavior.
+The desktop Inventory view separately owns an initially empty file selection.
+Its bounded node gesture resolves complete server-side membership, requires the
+current released publication and advances the existing view revision. It does
+not call the location service, claim a session, or decide baseline/verify/
+rebaseline eligibility. Full-folder and full-location counts include hidden
+files; replacement retains only surviving exact file row IDs. Integrity starts
+and their task association remain a separate delivery unit.
 If a queued or resumed activity becomes unresolved at wake-up, its retained
 `InventoryDetailsView` carries the same state/candidates and the CLI renders the
 same corrective guidance. A provisional ambiguous binding exposes no selected

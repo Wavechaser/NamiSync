@@ -65,6 +65,7 @@ class InventoryReviewState:
     observed_count: int
     missing_count: int
     scan_scope: tuple[str, str | None] = field(default=("location", None), kw_only=True)
+    selected_row_ids: frozenset[str] = field(default_factory=frozenset, kw_only=True)
     view_revision: int = 0
     search_query: str = ""
     filters: frozenset[str] = field(default_factory=frozenset)
@@ -73,10 +74,61 @@ class InventoryReviewState:
     collapsed_node_ids: frozenset[str] = field(default_factory=frozenset)
     _order: InventoryProjectionOrder = field(init=False, repr=False)
     _visible: VisibleSequence[InventoryProjectionNode] = field(init=False, repr=False)
+    _selected_prefix: tuple[int, ...] = field(init=False, repr=False)
+    _hidden_selected_count: int = field(init=False, default=0, repr=False)
 
     def __post_init__(self) -> None:
         self._order = sort_inventory_projection(self.projection, self.sort_column, self.sort_direction)
         self._visible = self._derive(self._order, self.search_query, self.filters, self.collapsed_node_ids)
+        self._refresh_selection()
+
+    def _refresh_selection(self) -> None:
+        selected = [0]
+        hidden = 0
+        query = self.search_query.casefold()
+        for node in self.projection.nodes:
+            chosen = (node.row is not None and node.row.entry_kind is not None
+                      and node.row.entry_kind.value == "file"
+                      and node.row.row_id in self.selected_row_ids)
+            selected.append(selected[-1] + int(chosen))
+            if chosen:
+                categories = _categories(node)
+                matches = (("acknowledged" not in categories or "acknowledged" in self.filters)
+                           and (bool(categories & self.filters) if self.filters else bool(categories))
+                           and query in node.display.casefold())
+                hidden += int(not matches)
+        self._selected_prefix = tuple(selected)
+        self._hidden_selected_count = hidden
+
+    def _selection(self, node: InventoryProjectionNode) -> dict[str, object]:
+        count = node.rollup.file_count
+        selected = self._selected_prefix[node.subtree_end] - self._selected_prefix[node.position]
+        return {"selectable": count > 0,
+                "selection": "none" if selected == 0 else "all" if selected == count else "partial"}
+
+    def set_selection(self, *, request_id: str, expected_revision: int,
+                      node_id: str | None, selected: bool) -> dict[str, object]:
+        if request_id != self.request_id or expected_revision != self.view_revision:
+            return self.summary(disposition="conflict")
+        if type(selected) is not bool:
+            raise TypeError("inventory selection must be a boolean")
+        node = self.projection.nodes[0] if node_id is None else self.projection.node_for_id(node_id)
+        if node.warning is not None:
+            raise ValueError("inventory warnings cannot be selected")
+        scope = frozenset(
+            item.row.row_id for item in self.projection.nodes[node.position:node.subtree_end]
+            if item.row is not None and item.row.entry_kind is not None
+            and item.row.entry_kind.value == "file"
+        )
+        result = self.selected_row_ids | scope if selected else self.selected_row_ids - scope
+        if result == self.selected_row_ids:
+            return self.summary(disposition="noop")
+        if self.view_revision >= MAX_JAVASCRIPT_SAFE_INTEGER:
+            raise OverflowError("inventory view revision is exhausted")
+        self.selected_row_ids = result
+        self._refresh_selection()
+        self.view_revision += 1
+        return self.summary()
 
     def _derive(self, order: InventoryProjectionOrder, search: str,
                 filters: frozenset[str], collapsed: frozenset[str]) -> VisibleSequence[InventoryProjectionNode]:
@@ -106,6 +158,10 @@ class InventoryReviewState:
             "search_query": self.search_query, "filters": sorted(self.filters),
             "sort_column": self.sort_column.value, "sort_direction": self.sort_direction.value,
             "collapsed_count": len(self.collapsed_node_ids),
+            "selected_file_count": self._selected_prefix[-1],
+            "selectable_file_count": self.projection.nodes[0].rollup.file_count,
+            "hidden_selected_file_count": self._hidden_selected_count,
+            "selection": self._selection(self.projection.nodes[0])["selection"],
         }
 
     def replacement(self, request_id: str, projection: InventoryProjection,
@@ -125,6 +181,10 @@ class InventoryReviewState:
             observed_count, missing_count, self.view_revision + 1,
             self.search_query, self.filters, self.sort_column, self.sort_direction, collapsed,
             scan_scope=scan_scope,
+            selected_row_ids=frozenset(row_id for row_id in self.selected_row_ids
+                if row_id in projection.node_id_by_row_id
+                and projection.row_for_id(row_id).entry_kind is not None
+                and projection.row_for_id(row_id).entry_kind.value == "file"),
         )
 
     def update(self, *, expected_revision: int, search_query: str, filters: frozenset[str],
@@ -155,6 +215,7 @@ class InventoryReviewState:
         visible = self._derive(order, search_query, filters, next_collapsed)
         self.search_query, self.filters, self.sort_column, self.sort_direction, self.collapsed_node_ids = state
         self._order, self._visible = order, visible
+        self._refresh_selection()
         self.view_revision += 1
         return self.summary()
 
@@ -178,6 +239,7 @@ class InventoryReviewState:
                 "first_child_visible_index": None if frame.first_child_visible_index is None else frame.first_child_visible_index - 1,
                 "position_in_set": frame.position_in_set, "set_size": frame.set_size,
                 "expanded": frame.expanded, "row_kind": node.row_kind,
+                **self._selection(node),
                 "row_id": None if row is None else row.row_id,
                 "presence": None if row is None else row.presence.value,
                 "verification_state": None if row is None else row.verification_state.value,

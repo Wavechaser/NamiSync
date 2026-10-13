@@ -2976,6 +2976,68 @@ def test_inventory_read_open_waits_for_release_then_windows_need_no_full_reread(
     assert registry._inventory_views == {}
 
 
+@pytest.mark.parametrize("blocked", ["dirty", "loading", "unreleased", "prior-publication"])
+def test_inventory_selection_requires_current_settled_publication(blocked):
+    registry, service, start, projection = _inventory_read_registry()
+    registry.release_terminal_session(start.task_id, start.session_id)
+    registry.open_inventory_view(start.task_id)
+    task = registry._tasks[start.task_id]
+    if blocked == "dirty":
+        task.inventory_view_dirty = True
+    elif blocked == "loading":
+        task.inventory_view_loading = True
+    elif blocked == "unreleased":
+        task.session_released = False
+    else:
+        task.request_id = "f" * 32
+    with pytest.raises(TaskUnavailableError):
+        registry.set_inventory_selection(start.task_id, start.request_id,
+            expected_revision=0, node_id=None, selected=True)
+    assert registry._inventory_views[start.task_id].selected_row_ids == frozenset()
+
+
+def test_inventory_selection_real_scan_release_view_and_close(tmp_path):
+    from namisync.interfaces.service import SessionObserver, _dispatcher
+    from namisync.workflows import LocationCandidate
+    from _inventory_fixtures import _Resolver, _Scanner, _file, _runtime
+    from _service_fixtures import make_service
+
+    mount = tmp_path / "mount"
+    (mount / "managed" / "folder").mkdir(parents=True)
+    scanner = _Scanner(mount, (_file(r"folder\one.bin", 1), _file("outside.bin", 2)))
+    runtime, location_id = _runtime(tmp_path, _Resolver(mount), scanner, {})
+    dispatcher = _dispatcher(runtime)
+    service = make_service(runtime=runtime, dispatcher=dispatcher, observer=SessionObserver(dispatcher))
+    registry = _make_registry(service, drain_wait=0.1)
+    try:
+        shell = registry.create_task_shell("1" * 32)
+        start = registry.start_setup_inventory(shell.task_id,
+            LocationCandidate.remembered(location_id, selected_mount=str(mount)),
+            command_id="2" * 32, wire_intent=("inventory", "root"))
+        _wait_terminal(dispatcher, start.session_id)
+        for value in range(100, 150):
+            registry.drain(start.task_id, start.session_id, f"{value:032x}", replay_from=None)
+            if registry._tasks[start.task_id].delivered_terminal_record is not None:
+                break
+        registry.release_terminal_session(start.task_id, start.session_id)
+        assert registry.open_inventory_view(start.task_id)["selected_file_count"] == 0
+        result = registry.set_inventory_selection(start.task_id, start.request_id,
+            expected_revision=0, node_id=None, selected=True)
+        assert result["selected_file_count"] == 2 and result["selection"] == "all"
+        assert len(scanner.calls) == 1
+        assert registry.get_inventory_window(start.task_id,
+            expected_revision=0, offset=0, limit=256)["disposition"] == "conflict"
+        rows = registry.get_inventory_window(start.task_id,
+            expected_revision=1, offset=0, limit=256)["rows"]
+        assert all(row["selection"] == "all" for row in rows)
+        assert registry.set_inventory_selection(start.task_id, start.request_id,
+            expected_revision=0, node_id=None, selected=False)["disposition"] == "conflict"
+        registry.close_task(start.task_id, start.session_id)
+        assert registry._inventory_views == {}
+    finally:
+        service.close()
+
+
 def test_inventory_structural_folder_detail_uses_guarded_snapshot_without_ledger_read():
     registry, service, start, projection = _inventory_read_registry(path=r"Parent\Nested\file.txt")
     registry.release_terminal_session(start.task_id, start.session_id)

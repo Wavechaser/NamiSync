@@ -36,6 +36,14 @@ for (const scan_scope of [
 response = fixture.summary;
 const gesture = {searchQuery: "", filters: [], sortColumn: "path", sortDirection: "ascending", collapseNodeId: null, collapsed: null};
 assert.deepEqual(await bridge.updateInventoryView(task, 0, gesture), fixture.summary);
+assert.deepEqual(await bridge.setInventorySelection(task, fixture.summary.request_id, 0, null, true), fixture.summary);
+assert.deepEqual(requests.at(-1).payload, {task_id: task, request_id: fixture.summary.request_id,
+  expected_revision: 0, node_id: null, selected: true});
+for (const patch of [{selected_file_count: true}, {selected_file_count: 999},
+  {hidden_selected_file_count: 1}, {selection: "all"}]) {
+  response = {...fixture.summary, ...patch};
+  await assert.rejects(bridge.openInventoryView(task));
+}
 response = fixture.window;
 assert.deepEqual(await bridge.getInventoryWindow(task, 0, 0, 256), fixture.window);
 assert.equal(fixture.window.rows.find(row => row.row_id === "1").recorded_checksum, fixture.detail.detail.attestation.content.digest);
@@ -55,6 +63,8 @@ for (const patch of [
   {rows: [{...fixture.window.rows[0], recorded_checksum: null}]},
   {rows: [{...fixture.window.rows[0], display: "x".repeat(301)}]},
   {rows: [{...fixture.window.rows[0], display: "\ud800"}]},
+  {rows: [{...fixture.window.rows[0], selectable: false, selection: "all"}]},
+  {rows: [{...fixture.window.rows[0], selection: "unknown"}]},
 ]) {
   response = {...fixture.window, ...patch};
   await assert.rejects(bridge.getInventoryWindow(task, 0, 0, 256));
@@ -88,6 +98,8 @@ for (const patch of [{snapshot: null}, {snapshot: {path: null, warning: null}},
   await assert.rejects(bridge.getInventoryDetail(task, 0, node));
 }
 const before = requests.length;
+assert.throws(() => bridge.setInventorySelection(task, fixture.summary.request_id, 0, null, 1));
+assert.throws(() => bridge.setInventorySelection(task, "foreign", 0, null, true));
 assert.throws(() => bridge.getInventoryWindow(task, 0, 0, 257));
 assert.throws(() => bridge.updateInventoryView(task, 0, {...gesture, filters: ["copy"]}));
 assert.throws(() => bridge.updateInventoryView(task, 0, {...gesture, sortDirection: "descending"}));

@@ -265,6 +265,8 @@ class TaskAuthority(Protocol):
 
     def update_inventory_view(self, *args, **kwargs) -> dict[str, object]: ...
 
+    def set_inventory_selection(self, *args, **kwargs) -> dict[str, object]: ...
+
     def get_inventory_window(self, *args, **kwargs) -> dict[str, object]: ...
 
     def get_inventory_detail(self, *args, **kwargs) -> dict[str, object]: ...
@@ -523,6 +525,15 @@ class _PlanDetailPayload:
     task_id: str
     expected_revision: int
     node_id: str
+
+
+@dataclass(frozen=True, slots=True)
+class _InventorySelectionPayload:
+    task_id: str
+    request_id: str
+    expected_revision: int
+    node_id: str | None
+    selected: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -1025,6 +1036,13 @@ def production_command_specs(
             collapse_node_id=payload.collapse_node_id, collapsed=payload.collapsed,
         )
 
+    def set_inventory_selection(payload: object) -> object:
+        if type(payload) is not _InventorySelectionPayload:
+            raise TypeError("set_inventory_selection received an unvalidated payload")
+        return registry.set_inventory_selection(payload.task_id, payload.request_id,
+            expected_revision=payload.expected_revision, node_id=payload.node_id,
+            selected=payload.selected)
+
     def get_inventory_window(payload: object) -> object:
         if type(payload) is not _PlanWindowPayload:
             raise TypeError("get_inventory_window received an unvalidated payload")
@@ -1460,6 +1478,12 @@ def production_command_specs(
             ),
             "update_inventory_view": CommandSpec(
                 validate_payload=_validate_update_inventory_view, handler=update_inventory_view,
+                access=CommandAccess.READ_ONLY, command_id=FieldRequirement.FORBIDDEN,
+                revision=FieldRequirement.REQUIRED, response_policy=CommandResponsePolicy.FEEDBACK_ONLY,
+                retry=CommandRetry.NONE,
+            ),
+            "set_inventory_selection": CommandSpec(
+                validate_payload=_validate_inventory_selection, handler=set_inventory_selection,
                 access=CommandAccess.READ_ONLY, command_id=FieldRequirement.FORBIDDEN,
                 revision=FieldRequirement.REQUIRED, response_policy=CommandResponsePolicy.FEEDBACK_ONLY,
                 retry=CommandRetry.NONE,
@@ -1934,6 +1958,23 @@ def _validate_inventory_detail(value: object) -> _InventoryDetailPayload:
             or type(node_id) is not str or re.fullmatch(r"node-[0-9a-f]{32}", node_id) is None):
         raise CommandPayloadError("get_inventory_detail payload is invalid")
     return _InventoryDetailPayload(task_id, revision, node_id)
+
+
+def _validate_inventory_selection(value: object) -> _InventorySelectionPayload:
+    if type(value) is not dict or set(value) != {
+        "task_id", "request_id", "expected_revision", "node_id", "selected",
+    }:
+        raise CommandPayloadError("set_inventory_selection payload is invalid")
+    task_id, request_id = value["task_id"], value["request_id"]
+    revision, node_id, selected = value["expected_revision"], value["node_id"], value["selected"]
+    if (type(task_id) is not str or _TASK_ID.fullmatch(task_id) is None
+            or type(request_id) is not str or _OPAQUE_ID.fullmatch(request_id) is None
+            or not _is_javascript_safe_integer(revision) or revision < 0
+            or type(selected) is not bool
+            or (node_id is not None and (type(node_id) is not str
+                or re.fullmatch(r"node-[0-9a-f]{32}", node_id) is None))):
+        raise CommandPayloadError("set_inventory_selection payload is invalid")
+    return _InventorySelectionPayload(task_id, request_id, revision, node_id, selected)
 
 
 def _validate_inventory_refresh(value: object) -> _InventoryRefreshPayload:

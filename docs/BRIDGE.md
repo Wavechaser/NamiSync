@@ -386,9 +386,10 @@ guards and lifecycle settlement remain with their existing owners.
 
 ### Current-state command recovery
 
-`update_plan_view`, `mutate_plan_highlight`, `replace_cosmetic_section`,
+`update_plan_view`, `update_inventory_view`, `set_inventory_selection`,
+`mutate_plan_highlight`, `replace_cosmetic_section`,
 `admit_location` and `pick_folder` do not retain or observe original responses.
-Their submitted promises have no elapsed-time effect deadline. The first four
+Their submitted promises have no elapsed-time effect deadline. All except the picker
 have bounded startup waiting and delayed feedback; the picker retains its
 interactive wait and one live picker owner. Worker/exchange/ACK custody stays
 bounded independently of original-result retention. Valid direct response capture
@@ -478,6 +479,7 @@ BOOTSTRAP rows, commands require OPEN.
 | `refresh_inventory` | `{task_id:TaskId,request_id:HexId,command_id:HexId,expected_revision:SafeInt,node_id:null\|NodeId}` | `{task_id:TaskId,request_id:HexId,session_id:HexId}` | observed original result; 5 s feedback; no mutation replay |
 | `acknowledge_inventory`, `restore_inventory` | `{task_id:TaskId,request_id:HexId,command_id:HexId,expected_revision:SafeInt,node_id:null\|NodeId}` | `InventoryVisibilityResult` | observed original result; 5 s feedback; no mutation replay |
 | `update_inventory_view` | `{task_id:TaskId,expected_revision:SafeInt,search_query:string,filters:[InventoryFilter],sort_column:"path"\|"filename"\|"size"\|"mtime",sort_direction:"ascending"\|"descending",collapse_node_id:null\|NodeId,collapsed:null\|boolean}` | `InventoryViewSummary` | current-state recovery; 5 s feedback; no mutation replay |
+| `set_inventory_selection` | `{task_id:TaskId,request_id:HexId,expected_revision:SafeInt,node_id:null\|NodeId,selected:boolean}` | `InventoryViewSummary` | current-state recovery; 5 s feedback; no automatic retry or mutation replay |
 | `get_inventory_window` | `{task_id:TaskId,expected_revision:SafeInt,offset:SafeInt,limit:1..256}` | `{disposition:"current"\|"conflict",view_revision:SafeInt,offset:SafeInt,total:SafeInt,rows:[InventoryWindowRow]}` | 5 s; one identical-payload retry |
 | `get_inventory_detail` | `{task_id:TaskId,expected_revision:SafeInt,node_id:NodeId}` | `{disposition:"current"\|"conflict"\|"unavailable",view_revision:SafeInt,node_id:NodeId,snapshot:null\|InventorySnapshotDetail,detail:null\|InventoryCurrentDetail}` | 5 s; one identical-payload retry |
 | `update_plan_view` | `{task_id:TaskId,expected_revision:SafeInt,search_query:string,filters:[PlanFilter],sort_column:"path"\|"filename"\|"size"\|"mtime",sort_direction:"ascending"\|"descending",collapse_node_id:null\|NodeId,collapsed:null\|boolean}` | `PlanViewSummary` | current-state recovery; 5 s feedback; no mutation replay |
@@ -505,6 +507,24 @@ an admitted Python handler. Start replay resolves retained wire intent before
 volatile slots: equal id/intent survives expiry; changed wire/resolved intent
 conflicts. Lifecycle release/close uses exact owner identity and idempotent
 recovery, not invented command receipts.
+
+Inventory selection is a process-live presentation gesture on the current
+released publication. A null node selects/deselects every file in the location;
+a folder resolves every file in its complete subtree, including filtered,
+collapsed and off-window subjects. Warnings are inert and directories supply
+membership rather than becoming selected files. Exact request and view revisions
+fence the gesture; conflict changes nothing, and an unchanged assignment is a
+no-op. Selection advances the existing view revision. There is no new receipt,
+session, filesystem effect or mode-eligibility decision.
+
+`InventoryViewSummary` additionally supplies `selected_file_count`,
+`selectable_file_count`, `hidden_selected_file_count` and `selection`
+(`none`, `partial`, `all`). Hidden counts mean search/facet exclusion, not collapsed
+or unloaded rows. Each window row supplies `selectable` and the same tri-state
+`selection`; notices and empty folders are nonselectable with `none`. Counts and
+states derive from server membership, never browser row enumeration. Request,
+response and row limits remain unchanged. Desktop checkboxes stay disabled until
+the integrity controls checkpoint activates their consumer.
 
 Initial inventory publication requires exact terminal delivery and successful
 session release. A prior complete view remains readable during a new scan or a
