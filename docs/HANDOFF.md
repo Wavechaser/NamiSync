@@ -1,43 +1,39 @@
-# Latest session — single-scroller migration complete
+# Latest session — M1-10 implementation
 
-2026-10-13, milestone1; base ca31654. The user explicitly authorized the
-single-scroller candidate despite AX1's unconfirmed cause, as one atomic,
-independently revertible commit. AX2 is complete in the commit containing this
-record. No backend, schema, prefetch, input-queue or Setup behavior changes.
+2026-10-13, `milestone1`, clean starting revision `fc8a79b`. User activated
+M1-10 with execute-task, smallest reasonable atomic commits, and an explicit
+stop after checkpoint completion for recap and GUI tweaks. M1-12, release,
+DOC-2 and unrelated optimization remain inactive.
 
-Plan/execution and Inventory use one outer two-axis viewport with an opaque
-sticky 24px header. Viewport arithmetic reserves that header, keyboard reveal
-keeps rows below it, and focus restoration preserves scroll. Column tracks share
-one gutter. Inventory retains the inner semantic tree and generic-tree defaults.
-Direct page/native/gallery and loading-tool consumers migrated together.
+M1_PLAN is the sole current register. Delivered histories are condensed with
+binding decisions, exclusions, commit/evidence pointers and referenced anchors
+preserved. Its M1-10 units cover operation policy, exact manual workflow,
+task/bridge association, desktop controls and integrated closure. No product
+outcome is complete yet. Root owns shared delivery documents; builders own
+explicit source/test/subject-doc populations, and fresh reviewers precede commits.
 
-Verification: interfaces/tools 2,385 passes with three existing privilege skips;
-focused frontend 57, Inventory 2, loading controls 41 and final gallery controls 26.
-Installed task shell default/larger passes 2, Inventory 1, generic tree plus
-execution default/larger 3, and light/dark/forced gallery 1. Source manifests and
-installed identities support evidence reuse; independent review found no
-unresolved source or consumer regressions.
+Unit A baseline: five deterministic workflow/recorder cases and two existing
+native runtime/CLI cases pass. Restricted-run native reads failed before bytes;
+the exact native cases pass under host PowerShell. Retain failed receipts,
+diagnostic EIO evidence and `integrity-prechange-host-05.log` under
+`build/m1-10-20261013/`. Its AGENTS defines artifact conventions.
+Use justified host PowerShell for native tests; ordinary tests need no watcher.
 
-On resumption the user foregrounded the test windows. Unchanged axis-candidate-03
-passed all 20 sequences/36 browser wheel events across both actual tables,
-with full movement in isolated axes and both switch orders, correct sticky
-geometry, stable rows and valid input ownership. Source/helper/wheel identities
-remained unchanged; both hosts closed. Original physical wheel/tilt symptom and
-Chromium attribution remain unverified. PERFORMANCE owns those limitations.
+Unit A implementation is active: explicit acknowledgement before claim/native
+binding, selected null-evidence rebaseline admission, direct caller migration,
+conditional-recording/mode/continuation coverage. Existing engine and recorder
+appear sufficient; do not rewrite them without evidence. The plan condensation
+and finite register are undergoing fresh independent review.
 
-Evidence: build/single-scroller-20261012/. Earlier focused/native/gallery fixture
-failures and candidate01/02 pre-input foreground refusals remain retained.
-Shell02, inventory01, gallery02 and remaining01 are final native passes. Gallery
-tail observation follows original count/appearance sampling; sticky test bounds
-use the actual usable row area. No product edits followed the final broad pass.
+Unit B design is read-only until A integrates. Exact manual verification needs
+a whole-selection atomic ledger snapshot, target-only admission and a second
+classification to freeze ledger-derived candidates. Do not reuse the public
+256-row display read as start authority, rescan via standalone run_integrity,
+or merge manual results into the original execution result. Pause retains its
+own frozen candidates; no operation-time hash persistence or terminal subset
+retry is authorized. Full details and gates are in M1_PLAN.
 
-Recovery dbcc686 on codex/wip-20261012-single-scroller was rebuilt from ca31654
-on milestone1 via its task-only patch, then final documentation was rewritten;
-the recovery commit was not merged/cherry-picked. integration.md records the
-final identity and recovery cleanup after full change accounting. No unrelated
-work or worktrees were involved. Prior loading 81731de and AX1 ca31654 remain
-separate. Revert only the final AX2 commit to undo this migration.
-
-Use justified host pwsh for tests; preserve foreground/hit checks and serialize
-native windows. README and AGENTS are unchanged because milestone synopsis and
-repository rules are unchanged. No active test processes or pending gates remain.
+No task worktrees, recovery refs, pushes or PRs have been created. The original
+checkout had no unrelated changes. Previous AX2 evidence remains under
+`build/single-scroller-20261012/`; original physical wheel/tilt symptoms remain
+unverified and are unrelated to this checkpoint.

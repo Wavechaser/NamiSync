@@ -546,6 +546,13 @@ Stage 6 delivered the secured desktop host, process-live tasks, frozen Setup,
 bounded Plan review/selection and execution, and live/retained result review.
 Integrity controls, manual post-copy handoff and beta packaging remain open.
 
+#### Deliver M1-10 integrity controls and manual verification (2026-10-13)
+
+- Activate M1-10 alone, condense delivered register history while retaining
+  evidence and binding dispositions, and expand the remaining implementation
+  into independently reviewed atomic outcomes. Stop after this checkpoint for
+  the requested recap and GUI tweaks; M1-12 and release remain inactive.
+
 #### Refine Plan refusal messages, move context and controls (2026-10-04)
 
 - GUI-RF1 carries bounded preflight codes and refusal origin through retained

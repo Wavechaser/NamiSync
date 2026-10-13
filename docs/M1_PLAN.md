@@ -11,738 +11,300 @@ retains investigation, rejected proposals and superseded execution recipes;
 the decisions still governing delivery are below. Historical observations
 certify their recorded build and dependencies only.
 
+Completed registers below are condensed from `fc8a79b`; Git retains their
+full finite populations and chronology, while named local evidence roots
+retain raw and failed receipts. Current subject
+contracts and retained exclusions remain binding; historical measurements
+do not establish acceptance for changed dependencies.
+
+## Remaining checkpoints
+
+The user activated M1-10 on 2026-10-13, with a stop for recap and GUI tweaks
+after its completion. Deliver the smallest reasonable reviewed atomic commits;
+M1-12, release and DOC-2 remain inactive. Backend optimization is closed.
+Other pending rows still need user authorization, active scope and verification.
+A finding does not enlarge a row; [AGENTS](../AGENTS.md) governs scope changes,
+stops and recovery.
+
+| ID | Accepted outcome | Named verification | Status |
+| --- | --- | --- | --- |
+| M1-9 | Bounded inventory projections, current evidence and the full inventory consumer for sibling sorting, including missing-row acknowledge/restore. | Complete or prior-complete publication; warnings outside action scope; raw evidence provenance; search/filter/collapse/window/detail, replacement/race and production sort/reset paths; headed witnesses. | Complete; reviewed commits and evidence in the completed M1-9 section below. |
+| M1-10 | Baseline, verify and rebaseline controls plus first same-task manual post-copy verification, without persistent operation-time hashes. Eligible null-evidence files enter rebaseline; every admitted rebaseline hashes and replaces/creates evidence, and a match is not verified. | Confirm acknowledgement admission before claim/native work; all-null/mixed workflow, service/CLI and desktop paths; conditional recording and supersession races; atomic handoff classification; live pause/resume/cancel and unchanged automatic failed-read retries; overlay/result identity. Independently review operation matrix and conditional recording. Terminal Verify-remaining/subset retry remains deferred. | Active; finite implementation register being expanded. Rebaseline confirmation is distinct from missing-row acknowledgement. |
+| M1-12 | Close integrated lifecycle/retention across activated task surfaces, then complete adversarial, documentation, ordinary and headed verification. This absorbs former M1-11. | Plan-only, execution-only, linked/manual verification, inventory, refused/canceled/degraded/failed tasks across same-document navigation, contained unsupported reload, explicit close and shutdown; admission bounds, stale-response suppression, exact resource release and retained truth. Applicable settlement oracle, ordinary/headed, installed-wheel/product, imports, diff/active-link checks and independent cross-component review. No aggregate-artifact or whole-owner-graph criterion. | Pending. |
+| M1-Release | Beta packaging and release closure after delivery rows above. | Installed artifact from clean checkout; frozen specification/dependency/CI, notices and corresponding source; standard-integrity host proof and every applicable BR-G/SH-G gate. [INTERFACES](INTERFACES.md) owns host/package/SH-G; [BRIDGE](BRIDGE.md) owns BR-G. | Pending. |
+
+DOC-2 remains **pending, outside the AB batch**. Its historical branch proposal
+removes exactly four superseded compact-plan commits from `milestone1`, preserves
+the old tip and opens a draft PR from `milestone1-anthony`. Before any action,
+freshly check divergence, remote tip and preservation of all work; unexpected
+commits or unaccounted work require adjudication. AB-10 and the documentation
+consolidation do not execute, close or authorize DOC-2 history rewriting.
+
+### M1-10 implementation register — 2026-10-13
+
+Inspected clean `milestone1` at `fc8a79b`. The checkpoint is authorized as a
+whole; the dependency order below defines atomic review/commit boundaries,
+not additional product outcomes. Serialize shared writers and refresh each
+dependent unit against its integrated predecessor before implementation.
+Root owns this register, HANDOFF and CHANGELOG. Evidence is retained under
+`build/m1-10-20261013/`, with its local naming/retention conventions.
+
+| Unit | Finite owners and consumers | Acceptance gate / commit boundary |
+| --- | --- | --- |
+| A — operation policy | `db/repositories.py`; `workflows/inventory.py` and facade; `interfaces/service.py`, `cli.py`. Direct tests: inventory runtime/workflow, repositories, service, CLI, bridge service, verifier engine and recorder inventory/integrity. VERIFIER, WORKFLOWS, INTERFACES and FEATURES describe shipped policy; DATABASE changes only if recording policy changes. | Exact Boolean rebaseline confirmation and explicit selected scope before claim, ID resolution or native binding; all-null/mixed selection; fresh hash/replacement on matches; conditional absence/present races and cleared freshness; frozen pause/resume scope and unchanged automatic retries. Existing native runtime/CLI composition first, database/verifier/workflows/interfaces departments, independent operation-matrix and recorder review. One policy commit; no engine/recorder rewrite when existing behavior suffices. |
+| B — exact manual workflow | Dedicated `workflows/manual_verification.py`, execution review/runtime/models/facade, `db/repositories.py`, service registration; existing execution review/repository/post-execution/runtime/checkpoint tests and a focused manual workflow module if needed. DATABASE, VERIFIER, WORKFLOWS, INTERFACES. | Whole selected byte-producing population classified in one coherent transaction, including missing outcomes; target-only fresh admission, second atomic classification and frozen current-ledger candidates; no scan or operation-time hash retention. Ready/already-verified, empty/incomplete/unrecorded/superseded/diverged cases, between-query/start/recording races, real verifier/dispatcher/history composition and pause/resume/cancel. Affected departments and fresh independent review; one workflow commit. |
+| C — task association and bounded bridge | Service/task port/lifecycle; web drain/commands/task snapshot/inventory review; workflow inventory projection/runtime as required. Existing service/lifecycle/inventory projection and bridge command/drain/review tests. Six exact headed/benchmark command catalogs and `tools/performance/bridge_event` are direct consumers. BRIDGE, PRESENTATION, INTERFACES and relevant workflow docs. | Server-owned complete file/folder selection, warning exclusion, revision-fenced confirmation and start, separate ordinary/manual result ownership, immutable original execution, original-command recovery, replacement rollback, late-response retirement and exact Close. Bounded windows/details and existing admission capacity remain. Production composition and affected departments/tools, independent review; split selection and association only if independently coherent. |
+| D — desktop integrity and GUI-A6 | Assets app/bridge/inventory review/plan review/integrity plus directly required markup/styles and task status; existing production JS probes and installed inventory/task-shell/execution/gallery helpers. DESKTOP_UI, BRIDGE, PRESENTATION, FEATURES. | Functional selection, Baseline/Verify/Rebaseline confirmation, truthful live/terminal overlays and pause/resume/cancel, execution-to-Verify navigation, first eligible exact manual action and explicitly ordinary fallback. Delayed/stale/recovery tests and real installed command journeys; preserve scroll/keyboard/selection custody and existing failed-read retries. Independently reviewed UI commits may divide ordinary controls from exact manual navigation after their backend gates pass. |
+| E — checkpoint closure | Integrated A–D and their direct test/doc/helper consumers. | Ordinary suite, affected installed headed gates, import contracts, active-link/diff checks and fresh adversarial cross-component review; account for tests/receipts and all commits. Stop for recap and GUI tweaks. No M1-12 or release claim. |
+
+Unit A baseline: five deterministic workflow/recorder checks pass; the two
+existing native runtime/CLI cases pass under host PowerShell. Restricted-run
+native EIO failures before bytes remain in the evidence directory alongside
+the passing `integrity-prechange-host-05.log`; they are not product changes.
+
+Preserve atomic publication, conditional recording including prior absence,
+root admission, fixed continuation identity and original execution truth.
+Manual exact readiness excludes already-verified members only after proving
+the entire applicable set coherent; an empty set starts nothing. A selected
+byte operation without a successful terminal outcome, current committed
+evidence, or stable settlement blocks the handoff. Unrelated non-byte failure
+or close/flush degradation alone does not revoke committed item evidence.
+The new session uses current ledger evidence and its own history identity;
+ordinary integrity and manual post-copy results remain separate.
+
+Existing 120,000-candidate admission, 256-row presentation windows and bounded
+command custody remain. No schema redesign, persisted operation-time hashes,
+browser-owned domain policy, new performance targets, automatic manual-start
+replay or terminal Verify-remaining/subset retry. Archived D6 missing visibility
+acknowledgement remains distinct; AB-7R's rejected blanket resend and the
+deferred generic owner merger remain rejected/deferred. GUI-A6 and functional
+inventory checkboxes are activated here; prior GUI batches did not deliver them.
+AGENTS scope, recurrence and mandatory preservation stops apply throughout.
+
+## Accepted behavior carried by the delivery rows
+
+Normally completed tasks retain file lists, item statuses and phase aggregates
+for read-only review. Execution-only completion may offer its first eligible
+manual verification; linked completion needs no further action. Non-stopping
+degradation keeps normal review with visible issues. Canceled/abnormal sessions
+retain terminal truth without resume, domain retry or session cleanup. Live
+pause/resume remains separate. Busy Close requests best-effort cancellation and
+keeps the card until settlement/resource release; it never implies trash purge.
+Forced process exit has no durable task/resume guarantee.
+
+Capacity refusal before execution, including queued wakeup, retains the task
+without execution, automatic retry or automatic close. Scan/planner admission
+refusal may have no plan; review preflight can retain an immutable plan with a
+negative verdict. Explicit Plan again resolves reviewed location identities,
+creates fresh Setup in a new task, scans again and requires fresh review. It
+never carries old selection/authorization or changes the old artifact. Removing
+source/target entries affects capacity only through that fresh scan.
+
+Recognized operation, cleanup and destructive-prerequisite capacity failure
+stops later admission after current settlement. Recorder-only write failure
+remains recording degradation with continuation. Generic I/O retains its typed
+reason. Yellow capacity presentation cannot hide independent known failures.
+Trash-location text is accepted for M1; exact count needs complete outcome
+evidence. Location-only Details never promises a count, existence or purge.
+
+Location admission is workflow-owned for typed, picker and recent Setup/inventory
+inputs. A remembered location is not authorization; consumers re-probe at use.
+Setup freezes semantic plan options in a backend-derived snapshot without
+writing global defaults or granting browser text/filter normalization authority.
+
+Plan review preserves operation, selection, scope and fresh-preflight truth
+across view gestures. Canonical path-key order and complete-sibling filename,
+raw size and raw mtime sorting in both directions with reset are accepted M1
+behavior. Sort is process-live view state and cannot change selection,
+commitment, dependency/execution order, risk/counts or action scope; hierarchy
+and node identity survive. [BRIDGE](BRIDGE.md) and [PRESENTATION](PRESENTATION.md)
+own exact validation and scale criteria.
+
+Execution, inventory and post-copy overlays remain distinct from each other
+and ledger-derived state; zero-byte work that ran never looks unrun. Inventory
+warnings stay outside path/action scope; publication is complete or keeps the
+prior complete generation. Baseline, verify and rebaseline remain distinct.
+Rebaseline requires acknowledgement, includes eligible selected null-evidence
+files, creates/replaces evidence after fresh hash and clears verification
+freshness without becoming compare-and-accept. Manual exact post-copy
+verification uses atomic handoff classification on a ready subset, preserves
+execution truth and reports ineligible outcomes honestly.
+
+Release remains accepted. [INTERFACES](INTERFACES.md#sh-g-release-criteria)
+owns open SH-G-15 cold-start/repeated/long-workload resource policy, still without
+a numeric budget or acceptance artifact. Enforced request/population limits and
+separate SH-G-8 transport-custody evidence remain unchanged.
+
+## Release completeness
+
+BR-G-43: active docs, README and UI/mockup status describe shipped behavior;
+every active DESKTOP_UI acceptance item maps to its subject check or an
+explicitly approved deferral. Omission or copied, unmapped checklists do not
+close release. BR-G-44: from a clean checkout, run the complete suite including
+ordinary-default exclusions, lint-imports and diff checks; collect/pass every
+`test_br_g` case without skip/xfail on Windows. Narrow selections do not
+substitute for release evidence. [TESTS](TESTS.md) owns commands and routing.
+These obligations remain open, with no product release claimed by AB-10.
+
 ## Loading sequence and axis scrolling — 2026-10-12
 
-**AX2 user override (2026-10-12):** implement the single two-axis scroller and
-sticky header despite the unconfirmed AX1 cause, in one isolated atomic commit
-that can be reverted independently. This supersedes AX1's reproduction
-prerequisite only; it makes no claim that the physical-wheel issue is resolved.
-Finite owners/consumers: common table CSS and Plan/Inventory layout overrides;
-Plan renderer viewport/reveal/resize, Inventory viewport persistence and tree
-composition, tree viewport abstraction, existing table-column geometry consumers;
-their page/tree/app probes, installed shell/task-shell/Inventory/gallery helpers,
-and table-loading tool/fixtures where scroll anchors change. Preserve 24 px rows,
-256-row windows, current direction/prefetch rules, exact request/selection custody,
-column widths/alignment and keyboard reveal below the sticky header. No backend,
-schema, input-queue or rendering rewrite. DESKTOP_UI/PRESENTATION own behavior;
-root owns M1_PLAN/HANDOFF/CHANGELOG and measurement limitations in PERFORMANCE.
-Gate: focused viewport/keyboard/hidden/reveal/resize consumers, existing installed
-tree/Inventory/shell/gallery witnesses plus candidate axis observations,
-interfaces/tools checks, documentation and fresh independent review. Product
-and direct consumer migrations remain one revertible commit. AGENTS recurrence
-and mandatory stops remain; no proof of physical-device improvement is promised.
+LS1 (`81731de`) immediately shows the existing blank Plan/Inventory review shell
+with truthful Checking/Planning/Scanning and indeterminate progress; frozen
+inputs, command custody, refusal/recovery and complete publication remain.
+Interfaces/tools passed 2,385 checks (three privilege skips), installed
+task-shell/Inventory and independent review passed. Six 8k/32k startup samples
+are diagnostic, with warm filesystem caches and no backend or latency promise.
+Evidence: `build/loading-sequence-20261012/`; PERFORMANCE owns observations.
 
-AX2 implementation uses an opt-in common table modifier, preserving nested
-Setup/generic tables. Plan's viewport moves to the outer list; Inventory's
-semantic tree accepts a separate viewport and header inset while generic tree
-defaults remain. Matching focus/reveal, resize, persistence, gallery and loading
-probe consumers migrate atomically. Product/backend/window policy is otherwise
-unchanged. Interfaces/tools pass 2,385 with three existing privilege skips;
-installed task-shell default/larger, Inventory, execution default/larger, generic
-tree and gallery pass. Final gallery ordinary controls pass 26. Shell test
-geometry was updated for sticky occlusion; one unchanged narrow-status retry
-passed without a proved cause for its earlier failure. Gallery tail observation
-now follows its original appearance/count snapshot. Failed receipts are retained
-under `build/single-scroller-20261012/`, alongside final source manifests.
-AX2 completed on 2026-10-13 in the isolated atomic commit containing this record.
-After the user foregrounded the windows, unchanged `axis-candidate-03` passed
-all 20 actual-table sequences across Plan/Inventory: isolated axes and both
-switch orders at four requested gaps, with full expected movement, valid
-ownership/geometry and unchanged source/helper/installed identities. Earlier
-foreground failures remain retained. Independent review confirms the complete
-gate; original hardware symptom remains unverified. Recovery `dbcc686` was
-rebuilt on milestone1 from `ca31654`, not merged or cherry-picked; the final
-commit includes the complete product/consumer migration and final documentation.
-
-The user explicitly formalized these outcomes from `42aa079`, superseding RI1/
-RI2's investigation-only restriction for the work below. Deliver at least two
-separate reviewed commits, in order; no backend optimization is authorized.
-Root owns shared delivery documents and integration. Serialize frontend and
-test writers; read-only investigation may overlap implementation.
-
-| ID | Outcome and owners | Verification and commit boundary |
-| --- | --- | --- |
-| LS1 | Immediately show the existing Plan/Inventory review shell for a submitted start attempt, with truthful checking/planning/scanning status, indeterminate progress and blank table until complete publication. Owners: app attempt/adoption/routing, Plan/Inventory renderers, existing composition/native consumers and DESKTOP_UI/INTERFACES as affected. Measure initial planning stages using bounded existing fixture/host infrastructure; PERFORMANCE owns method and observations. | Delayed admission and work, refusal, uncertain receipt recovery, task switching, terminal failure and publication must preserve command custody, frozen inputs and disabled unavailable actions. Existing direct page/route probes, installed Setup/task-shell/Inventory witnesses, interfaces and direct tool consumers, fresh independent review. Record source/runtime/fixture provenance and raw samples; diagnostic timings are not latency guarantees. One coherent display-sequence commit including measurements; no partial plans, backend speed changes or bridge schema changes. |
-| AX1 | Confirm or disprove the reported wheel/tilt axis lock in the installed WebView. If nested native scrollers reproduce Chromium target retention and a single scroller removes it, use one two-axis scroller with sticky header in Plan/Inventory. Owners: common table CSS/geometry, Plan/Inventory/tree viewport consumers and existing native/gallery/loading helpers. | Compare actual browser/native wheel input in both axis orders with the same runtime/layout, excluding endpoints and foreground loss. Preserve row windows, direction/prefetch policy, column widths, header alignment, focus/keyboard reveal and task/view ownership. Before implementation, record the confirmed cause and finite consumer migration. Installed axis-switch witness plus affected tree/Inventory/shell/gallery and interfaces/tools gates; fresh review, separate commit. If unconfirmed, deliver investigation evidence and next decision without speculative product changes. |
-
-Evidence lives in ignored `build/loading-sequence-20261012/`; temporary fixtures,
-measurement scripts and unique immutable receipts stay there. Each collector
-records its dependencies and limitations. Reuse existing containment and native
-input ownership checks. No new benchmarking framework, latency SLO, renderer
-rewrite, row schema, execution policy or further window-loading optimization.
-AGENTS recurrence, scope and mandatory stops apply. A cause outside the accepted
-frontend scrolling mechanism requires discussion before implementation.
-
-LS1 finite implementation population: `panels.js`, `task_status.js`,
-`plan_review.js`, `inventory_review.js`; existing setup/task-shell/Plan/Inventory
-JavaScript probes and their wrappers; existing installed task-shell/Inventory
-helpers; DESKTOP_UI and INTERFACES. Start-recovery Check reuses the original
-delivery callback, never a new submission. Plan-again and pair coordination
-retain their old task identity. Measurement uses real 8,000/32,000-file source
-trees with 10% missing targets, three sequential fresh-process observations
-per size and coarse stage timers. Filesystem caches are warm after fixture
-creation; no p95 or cold-device claim. An installed first-frame/first-row witness
-reuses the existing host when practical; measurements stay separate from gates.
-
-AX1 confirmation method uses browser-injected trusted wheel events through the
-existing WebView CDP driver, not DOM WheelEvent dispatch and not a hardware-tilt
-equivalence claim. Compare both axis orders at 50/250/600/1,000 ms, with quiet
-resets and scroll room inside the loaded window, on nested, temporary single,
-then restored nested layout. Capture raw deltas/targets/default prevention,
-scroll positions, geometry, focus and runtime/source identity. Product changes
-remain conditional on the supported nested-scroll mechanism being reproduced.
-
-LS1 is complete in the atomic commit containing this record. Focused checks
-pass 67 (three deselected); interfaces/tools pass 2,385 with three existing
-privilege skips. Installed task-shell cases pass twice in `ls1-native-01`;
-Inventory passes in `ls1-native-retry-01` after correcting the helper's async
-dependency-capture barrier. The earlier failed receipt remains; product bytes
-were unchanged across the retry. Held-work witnesses confirm blank Planning/
-Scanning shells and disabled unavailable actions. Fresh independent review
-covers source, consumers, installed provenance and six startup samples.
-PERFORMANCE owns the 8k/32k method and observations; no backend change occurred.
-
-AX1's first CDP attempt did not reproduce the lock. Its single-scroller control
-was invalid because CSP blocked a stylesheet; retain that receipt, correct the
-ignored control with CSSOM and prove actual overflow geometry. Follow with a
-bounded Windows WHEEL/HWHEEL injection using existing foreground/job ownership
-checks and the same finite matrix. Injected Windows input is not a claim of
-physical device equivalence. No scroller implementation is authorized unless
-the nested/single/restored comparison confirms the mechanism.
-
-AX1 investigation is complete in its separate evidence commit; the conditional
-product migration was not activated. `attempt-02` passes all 80 CDP trials across
-both pages/layouts with full requested movement and valid controls. Windows
-wheel injection in `attempt-03` stopped before input at a focused-process job
-ownership check; missing numeric PID evidence prevents attributing that mismatch.
-No native or sustained-input conclusion follows. PERFORMANCE owns exact method,
-limits and next passive diagnostic if reopened. Fresh review confirms the raw
-negative observations and incomplete native receipt; the user's physical-device
-report remains unresolved. LS1 is `81731de`; no backend/scroller changes follow.
+AX1 (`ca31654`) did not reproduce the axis lock in 80 valid CDP trials.
+The first Windows injection stopped before input on job-ownership evidence;
+neither receipt establishes physical-device behavior. The user then explicitly
+authorized AX2 despite the unconfirmed cause. AX2 (`fc8a79b`) gives Plan/Inventory
+one two-axis scroller and sticky header while generic/Setup tables retain their
+existing scrollers. Row/window bounds, direction/prefetch, widths, exact
+selection/request ownership and keyboard reveal remain. Interfaces/tools,
+installed task-shell/Inventory/execution/tree/gallery and fresh review passed;
+foregrounded `axis-candidate-03` passed all 20 actual-table sequences. Evidence:
+`build/single-scroller-20261012/`, including failed receipts and manifests.
+Recovery `dbcc686` was rebuilt from `ca31654`, never merged as-is. The reported
+physical wheel/tilt symptom remains unverified; no backend optimization shipped.
 
 ## Review follow-ups — 2026-10-11
 
-The user formalized three implementation units and two investigation-only
-outcomes, based on `350af26`. Further scroll-loading optimization is closed;
-RF1 repairs the reported regression without changing placement/prefetch policy.
-Serialize overlapping frontend writers. Root owns shared delivery documents;
-each implementation receives fresh independent review and a separate commit.
-
-| ID | Outcome, owners and finite consumers | Verification and boundary |
+| Closed row | Shipped outcome | Commit / evidence |
 | --- | --- | --- |
-| RF1 | Preserve compatible scroll reads while later wheel/pointer/touch input retires keyboard/navigation intent. Trace app, Plan/Inventory panels and tree request ownership together; migrate their existing delayed probes and subject documentation. | Reproduce repeated real input-event cancellation in both pages before fixing. Preserve task/session/publication/view fences, keyboard/external focus intent, admitted mutation custody, one read/latest demand and failure settlement. Existing frontend/interfaces plus affected loading-tool checks and installed tree/Inventory/shell witnesses; no placement, schema or domain change. |
-| RF2 | Move ghost badge left slightly to align its text, use fill-opacity hover/press, separate inline rename text, and match Inventory disclosure chevrons to Plan. Owners are existing CSS/tokens/renderers and gallery specimens/direct probes. | Reuse current Fluent button and disclosure vocabulary; inspect current gallery and light/dark/forced-color behavior with existing gallery/native checks. Interfaces and affected tools checks. No action/navigation behavior change. |
-| RF3 | Show execution no-op as green Completed and deselected skip as gray Skipped using the already distinct bridge facts. Owners are execution row presentation, gallery/fixtures and direct renderer probes. | Trace producer/bridge facts without changing contracts; pin no-op versus deselected skip and preserve failed/canceled/other terminal states. Interfaces and existing installed execution/shell witness; no executor semantics change. |
-| RI1 | Investigate slow initial plan load and setup-to-review sequencing in Plan and Inventory. | Read click/admission/workflow/projection/first-window owners, existing measurement tools and consumers. Report observed versus unknown cost, bounded measurement needs, and immediate planning-status/indeterminate/empty-table proposal. No implementation. |
-| RI2 | Investigate horizontal/vertical scroll switching lock. | Trace containers, axis handlers, pointer/wheel behavior and WebView constraints; distinguish a reproduced app cause from browser/input hypotheses. Report a bounded reproducer and options. No implementation. |
+| RF1 | Later wheel/pointer/touch input retires navigation intent while compatible scroll reads survive. Exact external intent and existing placement/read bounds remain. | `23e5810`; real-event red/green probes, 2,385 interfaces/tools checks (three skips), installed tree/Inventory/shell and independent review. |
+| RF2 | Move badge text alignment, opacity hover/press, inline-annotation gap and Inventory disclosure rotation corrected. | `7136764`; 84 focused, 2,385 interfaces/tools checks (three skips), gallery light/dark/forced-color/reduced-motion and independent review. |
+| RF3 | Only execution `skipped` with reason `noop` displays green Completed; other skips remain neutral Skipped. Raw notes and independent verification truth remain. | `42aa079`; red/green matrix, 2,385 interfaces/tools checks (three skips), six installed cases and independent review. |
 
-Evidence lives in ignored `build/review-followups-20261011/`, with scoped
-subdirectories, unique retained receipts and manifests. Existing SN evidence
-remains historical. No new performance promise, backend mutation, bridge schema,
-renderer rewrite or larger loading/axis fix is authorized. AGENTS recurrence,
-scope and mandatory stops apply; discoveries do not expand these outcomes.
-
-RF1 is complete. `rf1-red-event-03` reproduces the cancellation in both real
-consumer compositions; `rf1-green-event-03` passes the four focused probes.
-`rf1-neighborhood-01` passes 2,385 interfaces/tools tests (3 existing privilege
-skips); installed tree passes in `rf1-native-01`, Inventory/shell in
-`rf1-native-retry-01` (2 in 44.49s). The unchanged retry needed no product fix;
-the earlier filter target/readiness receipts remain retained without attributing
-them solely to foreground loss. Independent review confirms separated input
-retirement, existing exact external policy and unchanged placement/read bounds.
-
-RF2 is complete. Move-pill text aligns with filenames by compensating its
-5 px border/padding inset; hover/press change only fill opacity, with system
-focus outlines in forced colors. Inline annotations have a measured 4 px gap,
-and Inventory's disclosure no longer double-rotates. `rf2-focused-03` passes
-84 checks; `rf2-neighborhood-01` passes 2,385 interfaces/tools checks with three
-existing privilege skips. After correcting gallery expectations for the token
-ramp and fractional focus rasterization, `rf2-native-02` passes both installed
-gallery gates across light, dark, forced colors and reduced motion (78.33s).
-The changed gallery producer/checker population was rerun; unaffected neighborhood
-evidence remains applicable. Fresh independent review covers the final receipts.
-
-RF3 is complete. The execution row maps only `skipped` plus reason `noop` to
-green Completed; other skipped results use neutral Skipped. Raw notes, planned
-No change, other terminal outcomes and independent verification facts remain.
-`rf3-red-matrix-01` reproduces the label error; `rf3-focused-matrix-01` passes
-28 renderer/gallery checks. `rf3-neighborhood-01` passes 2,385 interfaces/tools
-checks (three existing privilege skips); `rf3-native-01` passes six installed
-execution, shell and gallery cases in 111.82s. The gallery confirms both labels
-and green/neutral styling across themes. Fresh independent review verifies the
-final source, receipts and installed package identity. RF1 is `23e5810`, RF2 is
-`7136764`; RF3 is the atomic commit containing this record. No larger loading
-or axis-switching implementation was included.
-
-RI1 source investigation at `350af26` confirms routing waits for review/loading
-state rather than the submitted attempt, and the empty renderers hide the table.
-Proposal for discussion: show the existing review shell immediately with frozen
-inputs, Checking folders then Planning/Scanning and indeterminate progress;
-preserve admission refusal, uncertain-receipt recovery and complete publication.
-The cold path includes admission, scans/workflow, release, full projection and
-initial view/index construction before the first window. Existing C5 timings
-prebuild projections/views and cannot identify the cold bottleneck. Profile
-those named stages before selecting a speed change; no partial-plan streaming
-or startup implementation is authorized by this investigation.
-
-RI2 source investigation confirms separate nested horizontal and vertical
-scrollers and passive wheel listeners, without an app axis-lock timer. The user
-uses a mouse wheel/tilt wheel over rows. Chromium's phase-less wheel transaction
-and retained scroll target are a plausible explanation, not an installed-runtime
-reproduction. Next evidence would record trusted deltas/targets and both scroll
-positions during immediate axis switches, comparing this layout with a single
-two-axis scroller in the same WebView host. RF1's request cancellation is separate
-from browser axis movement; no axis fix is authorized or measured here.
+Evidence: `build/review-followups-20261011/`, including unchanged-input native
+retries and earlier failures without invented causes. RI1/RI2 were read-only
+startup/axis investigations from `350af26`; LS1/AX2 above subsequently delivered
+the user-approved frontend outcomes. Initial cost attribution does not authorize
+backend changes; RF1 cancellation and browser axis movement are separate causes.
 
 ## Scroll continuity and interruptible navigation — 2026-10-11
 
-The user formalized three atomic units below. Base is `0580b1b`; preserve the
-delivered compatible-response ownership and one-read/256-row bounds. Root owns
-shared register/handoff/evidence; serialize overlapping frontend writers. Read
-the current owners and direct consumers before each unit, including retained
-SW instrumentation anchors and installed helpers. No row-schema migration,
-bridge byte-counter change, renderer rewrite or filesystem/domain change.
-
-| ID | Outcome, owners and finite consumers | Gate and commit boundary |
+| Closed row | Shipped outcome | Commit / evidence |
 | --- | --- | --- |
-| SN1 | Confirm Plan focus-induced scrolling and dropped-read settlement; correct demonstrated failures in `app.js`/`plan_review.js`, their task-shell/Plan probes and installed shell fixture. Keep explicit keyboard reveal and owner fences. | Reproduce each claimed failure or record a negative result; affected frontend and interfaces checks, installed Plan/task-shell witness, fresh review, one fix commit with PRESENTATION/DESKTOP_UI/BUGS/CHANGELOG. Never automatically loop failed reads. |
-| SN2 | Directional placement and travel-side edge prefetch in Plan and Inventory: `app.js`, `plan_review.js`, `tree.js`, `inventory_review.js`, direct probes/native consumers and existing loading collector anchors. Covered viewport must not retire useful early reads; direction reversal, endpoints, hidden/resize and navigation retire stale intent correctly. | After SN1, focused no-ping-pong/one-read/256-row/ownership checks, interfaces and affected tools checks, installed tree/Inventory/shell, repeated matched 240/1,000-row/s measurements and fresh review. One performance commit; PERFORMANCE owns diagnostic results, no latency acceptance promise. |
-| SN3 | Replace navigation backlog with at most one in-flight navigation read and one latest pending target. Other later input supersedes pending intent immediately; late responses cannot reclaim focus or highlighting/selection. Trace Plan highlight mutation and Inventory tree owners plus bridge/projection consumers before implementation. | After SN2, finalize finite action/target contract and affected consumers. Held repeats, release tail, reversal, pointer/scroll/view/task interruption, Shift-range and selection truth require delayed-response tests, affected departments and installed keyboard/pointer witnesses; fresh independent review and separate fix commit. No silent browser-owned selection policy. |
+| SN1 | Ordinary focus restoration preserves scroll; explicit keyboard intent precedes adoption. Exact dropped-read settlement handles Settings/zero-height restoration without failed-read loops. | `940c7ef`; focused controls, loading method, interfaces/tools and installed `sn1-native-03`. |
+| SN2 | Viewport direction places windows with 32 rows behind and prefetches within 64 rows of the travel edge; endpoints and useful early/short/failing reads retain correct settlement. | `fac8ed0`; 2,385 interfaces/tools checks (three skips), 406 tools checks, installed tree/Inventory/shell and twelve matched 240/1,000-row/s children. |
+| SN3 | At most one navigation read and latest pending target; later input retires intent without reclaiming focus or undoing/replaying admitted mutations. Noncoalescible selection commands retain individual custody. | `350af26`; delayed ownership/interruption probes, 2,385 interfaces/tools checks (three skips), installed tree/Inventory/shell. |
 
-Evidence goes in ignored `build/scroll-navigation-20261011/`; unique receipts,
-source manifests and failed controls remain retained. Existing SW native fixture
-publication and fractional-geometry corrections stay active. The accepted
-navigation outcome does not authorize bypassing server selection or mutation
-custody; unresolved contract/effect changes need a coherent proposal before edits.
-AGENTS recurrence and mandatory stops remain binding. No new defect expands scope.
-
-SN1 is complete: focused negative/positive controls, 37 loading-method checks,
-the final interfaces/tools neighborhood and installed `sn1-native-03` pass;
-fresh review confirms source identity and ownership. Ordinary focus restoration
-preserves scroll; explicit keyboard intent is attached before adoption's
-synchronous detail render. Exact request settlement handles Settings and
-zero-height restoration without failed-read loops. Earlier failed native and
-geometry receipts remain evidence. SN1 is integrated as `940c7ef`.
-
-SN2 proceeds from integrated SN1 `940c7ef`. Direction comes from viewport travel;
-place the window with 32 rows behind and trigger only within 64 rows of the travel
-edge. Clamp endpoints, retain useful early requests, and keep short/failing-window
-settlement suppression. Product owners are Plan, tree and Inventory panel assets;
-the app read lanes retain their ownership contracts. Direct consumers are their
-Plan/tree/Inventory/task-shell probes, the existing shell-tree, Inventory and
-task-shell native witnesses, and `table_loading.py`/its browser probe/method tests.
-PRESENTATION and DESKTOP_UI own behavior; PERFORMANCE owns the matched SN1 versus
-candidate study (three children per page, both 240 and 1,000 rows/s, retained
-12-second forward/reverse trajectory). Keyboard setup must correlate the actual
-adopted setup read and exact offset-minus-one target, without relying on old
-placement or triggering an extra scroll-to-edge prefetch. Root owns these
-measurement consumers and shared docs; the builder owns product/probes/subject
-docs. No new latency threshold or native wheel/compositor claim is introduced.
-
-SN2 is complete: focused Plan/tree/Inventory controls, 2,385 interfaces/tools
-checks (3 skipped), the revised method's 406 tools checks (3 skipped), installed
-tree `sn2-native-final-01` and Inventory/shell `sn2-native-retry-01` pass. Review
-corrected the full-page endpoint assumption and verified the actual short-tail
-case. Twelve matched installed children and independently reconstructed frame
-gaps support delivery; PERFORMANCE owns results and limitations. Failed native
-admission and initial keyboard-setup receipts remain retained. SN3 follows and
-revalidates its read-admission and interruption seams against integrated SN2.
-
-SN2 is integrated as `fac8ed0`. SN3 starts there: `app.js` owns Plan navigation
-admission/custody/publication, while `tree.js` and `inventory_review.js` own the
-Inventory desired index and request generation. `plan_review.js` supplies input
-interruption at the panel boundary. Coalesce repeat navigation to an absolute
-desired visible index and ordinary pointer replacement to its latest target,
-sharing Plan read admission with scrolling.
-Existing revisioned windows resolve off-window node IDs; existing highlight
-commands retain server range/anchor policy. Retiring local intent cannot undo an
-admitted mutation or authorize its replay. Scope-dependent pointer and checkbox
-effects keep the revisions the user saw; a conflict must have no selection effect.
-Noncoalescible toggle/add-range/selection commands retain individual custody.
-
-The finite consumer population is the existing task-shell, Plan, tree and
-Inventory browser probes/runners, existing installed shell/Inventory/tree
-witnesses, and existing Python Plan highlight/bridge selection tests. Inspect
-`plan_review.py`, `drain.py`, `commands.py` for preserved contract meaning; no
-Python behavior or command/schema addition is currently needed. Migrate existing
-loading instrumentation anchors/method fixtures only if changed signatures or
-read ordering requires it. PRESENTATION/DESKTOP_UI own behavior and BRIDGE needs
-an update only if its description of existing gesture use changes. Verify held
-repeat endpoint/release tail/reversal/Shift anchor, pointer/scroll/search/view/task
-interruption, stale success/error, admitted mutation custody and no replay in
-delayed-response probes, then interfaces plus any changed tools consumers and
-installed keyboard/pointer witnesses. Fresh review and one fix commit close SN3.
-
-SN3 is complete: `sn3-neighborhood-final-01` passes 2,385 interfaces/tools
-tests (3 existing privilege skips); `sn3-native-final-01` passes installed tree,
-and `sn3-native-retry-02` passes Inventory/shell (2 in 46.33s) with user
-foreground coordination and unchanged product/test inputs. Independent source
-and evidence review closes the gate. Earlier incomplete native attempts and
-the baseline negative control remain retained; no product correction was needed
-for the successful retry. SN3 was rebuilt from recovery `eba28a6` as `350af26`
-on integrated SN2 `fac8ed0`, without merging the WIP. No production timing claim
-is added for SN3; SN2's measured revision remains explicit in PERFORMANCE.
+All received independent review. Evidence: `build/scroll-navigation-20261011/`;
+failed and successful native receipts remain. SN3 recovery `eba28a6` was rebuilt
+on SN2, never merged as-is. PRESENTATION/DESKTOP_UI own behavior; PERFORMANCE
+owns SN2's measured revision, not a universal timing claim. One read/256 rows,
+server range/anchor policy, exact visible revisions and task/view fences remain.
 
 ## Continuous-scroll adoption and follow-up measurements — 2026-10-09–10
 
-The user reviewed the BC2–5 shared-mechanism finding and authorizes its coherent
-Plan/Inventory correction, followed by measurement and narrower experiments.
-This supersedes the investigation-only restriction for the outcomes below.
-Row-schema migration is deferred; no renderer rewrite is authorized.
+SW1 (`93a13b8`) corrected Plan/Inventory's shared viewport-demand starvation
+after user recurrence review: compatible responses settle independently of
+newer demand, with exact navigation/task/session/publication/view fences and
+one read/256-row bounds. Focused/interfaces and installed Inventory/tree/shell
+passed independent review. The native menu fixture now waits for actual pointer
+highlight publication; no menu product change or weakened input guard followed.
 
-| ID | Outcome and population | Verification and commit boundary |
-| --- | --- | --- |
-| SW1 | Correct compatible scroll-window adoption together in `app.js`, `tree.js` and `plan_review.js`, with their direct browser/installed consumers and DESKTOP_UI/PRESENTATION documentation. Coalesce newer scroll demand without retiring compatible in-flight reads; reconcile coverage and active row against the current viewport. | Existing composition first, focused delayed-response/navigation/owner regressions, interfaces department and affected installed headed checks, independent review; one fix commit. Preserve task/session/publication/view/action/highlight fences, exact keyboard/external intent, one read and one 256-row window. |
-| SW2 | Extend the existing loading collector and controls to report burst time from last input as well as first, observed frame cadence, and browser-event steady trajectories at 240 and 1,000 rows/s. Reuse bounded installed fixture/identity/restoration infrastructure. PERFORMANCE owns results. | Method controls and tools department, independent review; separate measurement commit. Three fresh children per page, 12-second forward/reverse trajectories, uncovered intervals and final settlement; freeze sources and serialize timing. No timing acceptance threshold or native wheel/compositor claim. |
-| SW3 | Assess one-window edge-margin/directional prefetch after SW1/SW2 measurements. Approximately 64 rows is an experiment parameter, not an accepted latency guarantee. | Read-only design/measurement decision first; any justified implementation gets its own finite population, navigation/ownership/bound checks, repeated steady measurements and independent review before commit. No second retained window or concurrent read. |
-| SW4 | Experiment with successfully encoded key byte counts and combined punctuation/key charges without changing the row schema. Bridge response and drain-prefix capture remain the owners. | Disposable bounded prototype, old/new differential tests for invalid text, overflow precedence and exact partial charges, real-window timing and bounded-cache analysis. Report findings before product delivery; do not weaken admission/custody or add unbounded/global key retention. |
-
-Evidence belongs in `build/scroll-window-study-20261009/`, with directory
-conventions and unique run receipts; preserve earlier evidence and failures.
-Expand each implementation row before editing its product seam. AGENTS stops
-remain binding. The user's review resolves the prior two-owner recurrence
-decision; it does not authorize unrelated instance fixes. HANDOFF owns current
-resumption context, and each delivered outcome gets tests/docs/review and a
-separate coherent commit. SW3 and SW4 do not justify the deferred DTO migration.
-
-SW1 is delivered in `93a13b8`. The approved recurrence
-correction separates pending demand from read settlement: Inventory finishes
-only the matching failed request without an automatic loop; old Plan navigation
-cannot clear newer demand. Exact keyboard/external and task/session/publication/
-view/action/highlight ownership remain intact. `inventory_review.js` and existing
-failure/navigation probes are included in the finite consumer population.
-
-Evidence: 59 frontend and 1,979 interfaces checks; installed Inventory
-`sw-native-01`, tree `sw-native-retry-01`, and full task-shell
-`sw-task-shell-20261010-02` pass. Eight ordinary shell-helper checks pass after
-its fixture correction. The tree consumer observes current-viewport row 4 and
-fractional border edges with unchanged tolerance. The native shell fixture now
-waits for pointer-highlight publication before opening its menu: the old
-already-highlighted/pending-empty predicate passed before the async response,
-whose valid window replacement dismissed the menu. A foreground-owned trace
-proves the race; no product menu change or weakened input guard was needed.
-Independent review confirms the correction and atomic split. Failed receipts
-and recovery ancestry remain evidence, not acceptance or mergeable commits.
-
-SW2 method/results are complete and independently reviewed:
-37 focused and 402 tools checks pass (three skips), twelve installed children
-retain coverage/cadence and source/restoration identity. SW3 assessment is complete:
-directional placement and a roughly 64-row margin are justified for a separate
-implementation outcome. SW4's bounded disposable cache experiment and balanced
-capture comparison are complete; production delivery still needs ordinary
-response and actual drain-prefix/custody checks. PERFORMANCE owns the values and
-limitations. No prefetch or bridge cache shipped. Row schemas and renderer
-rewrites remain deferred. Recovery changes were rebuilt into coherent commits;
-the disposable ref can be removed after exact source and documentation accounting.
+SW2–4 (`0580b1b`) delivered loading diagnostics and experiments, not production
+prefetch or key caches. Twelve installed children measure first/last-input
+delay, cadence and 12-second forward/reverse trajectories; 37 focused and 402
+tools checks (three skips) passed independent review. SW3 justified subsequent
+SN2. SW4's bounded encoding/cache prototype still requires ordinary-response
+and actual drain-prefix/custody proof before any product delivery. Row-schema
+migration and renderer rewrites remain deferred. Evidence:
+`build/scroll-window-study-20261009/`; PERFORMANCE owns methods and limitations.
 
 ## Bridge counter optimization and loading investigation — 2026-10-07–08
 
-The user authorizes #1 implementation and #2–5 investigation only, from
-`706be4b`. Preserve the response admission contract exactly: canonical UTF-8
-byte count, inclusive ceiling, Unicode refusal and first-failure ordering,
-bounded work on oversized strings, occurrence counting, detached ownership and
-one-time hostile-source enumeration. No wire, GUI, filesystem or domain change.
+BC1a (`806df04`) removed observer hot-loop overhead; BC1b (`9d09f70`) uses bounded
+bulk JSON/UTF-8 string encoding with scalar failing-chunk fallback. Canonical
+bytes, inclusive ceiling, Unicode/first-failure precedence, bounded oversized
+work, occurrence counting, detached ownership and one-time hostile enumeration
+remain. Gates included 5,982 ordinary checks, 12 imports, six installed transport
+checks and independently reviewed six-child measurements with restored assets.
+No wire, domain or timing threshold changed. Evidence:
+`build/bridge-counter-study-20261007/`; PERFORMANCE owns corrected-baseline values.
 
-| ID | Outcome and finite population | Verification and commit boundary |
-| --- | --- | --- |
-| BC1a | Remove per-character observer overhead from `tools/performance/table_loading.py`; retain actual budget accounting. Update its method controls and PERFORMANCE. | Focused controls, tools department, independent review; separate measurement-method commit. Recollect the unchanged-product Plan/Inventory baseline with this method before counter edits. |
-| BC1b | Replace scalar string counting in `interfaces/web/bridge.py` with bounded bulk JSON/UTF-8 encoding; scalar handling of a failing chunk preserves original precedence and budget. Direct consumers are ordinary response capture and drain-prefix capture; tests are transport, commands, shared public views and installed bridge consumers. Update BRIDGE, PERFORMANCE and delivery docs. | Differential old/new mixed-text and boundary tests, actual composition first, ordinary suite/import contracts, same corrected six-child loading matrix and independent adversarial review; one product performance commit. No latency threshold. |
-| BC2–5 | Profile remaining capture; attribute row bytes and consumers; distinguish DOM construction/insertion/layout; measure a predefined steady-scroll profile before discussing prefetch. Owners are bridge/window producers and existing installed measurement assets. | Read-only product investigation with bounded disposable instrumentation and retained raw receipts. Report measurements, limitations and proposals; no capture, DTO, DOM, scheduler or prefetch optimization delivery. |
-
-Evidence lives in `build/bridge-counter-study-20261007/`: unique run-prefixed
-receipts/logs/manifests, disposable installations and temporary analysis helpers;
-retain originals and failures, restore instrumented assets in parent-owned
-cleanup, and remove no earlier evidence. PERFORMANCE owns procedure/results;
-HANDOFF owns resumption. Existing C5 figures retain their original observer
-provenance and cannot serve as the corrected counter baseline. Serialize writers
-and timing; keep profiling separate from headline timings. AGENTS mandatory and
-recurrence stops apply. No changed safety boundary or further optimization is
-authorized; investigation may identify recommendations without delivering them.
-
-BC1a is delivered as `806df04`: 33 focused and 398 tools checks, independent
-review, unchanged product. BC1b passes 587 focused composition checks, the
-migrated observer control plus transport population (191), 5,982 ordinary
-checks, 12 import contracts and six installed transport checks. The observer
-control migration permits product string encoding while rejecting whole-response
-or extra observer serialization; its first failed ordinary receipt is retained.
-Corrected six-child matrices complete with restored assets and unchanged jump
-bytes. PERFORMANCE records faster capture, overlapping Inventory coverage ranges
-and unchanged Plan burst median; no timing threshold is claimed. Final BC1b
-commit/review accounting is retained with the evidence. BC2–5 remains
-investigation only under the predeclared PERFORMANCE method.
-
-BC1b is committed as `9d09f70`; final independent review recomputed raw statistics
-and verified all 144 matrix asset hashes. BC2–5 investigation is complete on
-that unchanged product. Capture/field profiles, six DOM/steady children and two
-browser-event-only control children pass their declared checks. PERFORMANCE
-owns findings and recommendations; BUGS records moving-intent starvation OPEN.
-
-The shared recurrence review for the two observed viewport cases is:
-
-| Owner | Consequence | Common mechanism and follow-up boundary |
-| --- | --- | --- |
-| Plan `app.js` / grid viewport | Returned rows repeatedly discarded during continuous movement; recovery at rest. | Exact request revision/offset is conflated with current viewport compatibility. |
-| Inventory `app.js` / generic tree | Same exposed viewport; both intent and tree generation reject older demand. | Same viewport-demand mechanism, with an additional tree adoption fence. |
-
-No instance fix was attempted. A coherent follow-up must review both adoption
-paths and navigation/stale-owner consumers together, preserving the unchanged
-view/action/identity fences and bounded window/concurrency. Row-schema reductions,
-cheaper encoding calls, shared layout work and prefetch are proposals only.
-User review, not this investigation's closure, authorizes any implementation.
+BC2–5 (`59e92ae`) investigated capture/fields/DOM/steady scrolling on unchanged
+product. The shared Plan/Inventory mechanism conflated current viewport demand
+with exact response ownership; user review authorized the later SW1 correction.
+No isolated instance fix or DTO/layout/cache/prefetch delivery followed from the
+investigation itself. Raw failed receipts and controls remain historical.
 
 ## GUI Inventory refinement — 2026-10-05
 
-The user approved the finalized follow-up proposals and their order from
-`614cd19`: contract correction, Refresh selected target, menu corrections,
-Verify table alignment, then loading measurements and evidence-led optimization.
-This renews GUI-B2 authority and supersedes its earlier deferral below. The
-original review is preserved byte-for-byte in
-`build/gui-inventory-refinement-20261005/user-handoff.md`; run evidence uses
-that directory. Each outcome is independently reviewed and committed before
-dependent implementation. No additional approval is needed for these outcomes.
+GUI-C1–C5 closed the user-approved follow-up and renewed B2 scope. Evidence,
+original user handoff, exact gate receipts and reviewed recovery accounting:
+`build/gui-inventory-refinement-20261005/`, especially `integration.md`.
 
-| ID | Accepted outcome | Dependencies and verification |
+| Closed row | Shipped outcome | Commit / evidence |
 | --- | --- | --- |
-| GUI-C1 | Bound every Plan/Inventory window field by construction; compact Inventory basenames and warning path tails, preserve full-path search, and provide revision-guarded complete snapshot details for rowless nodes through the existing detail command. Preserve structured Plan notice side/code while shortening path/explanation. Migrate serializers, browser validators, consumers and fixtures together. | First. Complete 256-row envelope tests include execution overlays and encoding overhead with a clear margin below the unchanged 8 MiB wall. Real bridge/detail composition, direct consumer tests, ordinary suite/import contracts and affected installed checks. |
-| GUI-C2 | Refresh selected targets the tree's current visible active eligible row, including arrow-key changes while Details is hidden. Detail-card actions retain their displayed item. | C1. Existing action route, tree owner and page consumers; regression activates A, arrows to B, then proves exactly one refresh of B. Interfaces and installed Inventory check. |
-| GUI-C3 | Suppress native fallback for owned row-context gestures even when the custom menu is stale/empty. Verify actual installed Menu/Shift+F10 event behavior before adding any duplicate-event correction. Document acknowledgement as own missing presence, not descendant rollup. | C2. Shared menu and Plan/tree consumers, direct probes, gallery and installed keyboard/pointer checks. No Restore context action. |
-| GUI-C4 | Deliver deferred B2 table appearance: shared 24px row geometry, zebra, disabled unchecked checkboxes, Notes, concise Presence, hierarchical basenames, typography and tones. Only Filename grows passively; Notes participates in deliberate resizing. | C1–C3. Preserve generic tree geometry default and Inventory navigation; direct renderer/tree/bridge probes, interfaces, gallery and installed Inventory checks against official Fluent references. |
-| GUI-C5 | Measure Plan and Inventory loading separately: queue wait, server build, serialization/bytes, browser validation, DOM and visible paint without double-counting round-trip intervals. Then coalesce Inventory to one in-flight/latest-intent read and remeasure. | C4. Record finite profiles and measurement authority before execution. Plan already coalesces. Placement/directional prefetch follows only measured need, retaining one 256-row window; fixed-height noninteractive placeholders only if gaps remain. Each justified optimization is its own reviewed commit with navigation/stale-owner tests and repeated measurements. |
+| C1 | Compact bounded Plan/Inventory window fields retain full-path search and revision-guarded complete snapshot details, distinct from fresh ledger evidence. Identities/enums are never truncated. | `9868f5c`; 5,921 ordinary/four skips, 12 imports and seven installed obligations. Complete envelopes 1,193,678/2,395,485 bytes remain below 8 MiB. |
+| C2 | Refresh selected targets the current visible active eligible row even with Details hidden; item-card actions retain their displayed item. | `dfd9291`; red/green target witness, 64 focused, 1,951 interfaces, 12 imports and installed Inventory/tree. |
+| C3 | Owned context gestures suppress native fallback, including Menu-key follow-up; acknowledgement requires own missing presence, not missing descendants. No Restore context action. | `95ff419`; 67 focused, 1,951 interfaces, 12 imports and seven installed obligations. |
+| C4 | Shared 24px zebra rows, disabled unchecked selection visuals, Notes, concise Presence and shared typography; generic tree remains 28px. Filename alone grows passively; Notes donates deliberate resize width. | `3c984b6`; focused/interfaces/import and eight installed obligations, including forced-color active-cell correction. |
+| C5 | Optional loading collector, task-scoped one-running/latest-queued Inventory reads, then separate Plan off-window keyboard leading-margin correction. Navigation, action custody and 256-row bounds remain. | `61ee878`, `4122b10`, `706be4b`; ordinary/import/method, installed and repeated six-child matrices. |
 
-Preserve safe filesystem text, task/session/view ownership, authoritative action
-scope, fresh-ledger versus published-snapshot evidence, revision conflict behavior,
-selection counts and geometry. Never truncate identities or enum values; establish
-their finite producer domains. No response-wall or row-limit increase, new command,
-filesystem probe/effect, backend selection, hashing or persistence change. Functional
-checkboxes and execution-to-Verify navigation remain M1-10; irreversible-count
-presentation and fixed Filename under Details remain deferred. AGENTS mandatory
-and recurrence stops apply. Expand each pending row's finite source/test/doc
-population and acceptance/commit boundary before editing its product.
-
-**C1 delivered boundary.** Bounded Inventory window labels retain full-path
-search; exact revision-guarded snapshot paths and warning text are separate
-from fresh ledger details. Structured Plan scan notices retain side/code.
-Producer, validator, page and fixture migrations passed 370 focused and 5,921
-ordinary tests (four Windows privilege skips), all 12 import contracts and
-all seven installed obligations. Inventory passed on the 2026-10-06 retry
-`c1-native-inventory-03`; the two earlier foreground failures remain evidence.
-Conservative complete envelopes are 1,193,678 bytes Inventory and 2,395,485
-bytes Plan with execution metadata against the unchanged 8 MiB wall.
-Independent review found no actionable issues and verified dependency-bound
-reuse of prior passes. C1 is reconstructed from exact reviewed files on
-`milestone1`; recovery `a638040` was not merged or cherry-picked. Final commit
-identity and accounting belong to `integration.md` in the evidence directory.
-Retain its disposable recovery ref until final batch accounting. BRIDGE,
-PRESENTATION, INVENTORY and DESKTOP_UI own shipped behavior.
-
-**C2 delivered boundary (from `9868f5c`).** Refresh selected resolves the tree's
-active eligible file/folder in its current window; arrows do not read details,
-cleared/notice targets disable Refresh, and item-card actions retain their own
-item. Optional tree notification plus post-window-adoption eligibility preserve
-revision/session/pending ownership and the existing original-command route.
-The real-page reproducer failed A versus B before correction. Final gates:
-64 focused, 1,951 interfaces, 12 import contracts and both installed Inventory
-and shared-tree journeys. The installed witness preserves hidden card A while
-trusted arrows activate B and exactly one scoped Refresh targets B; earlier
-whole-refresh and visibility assertions remain. Independent review and frozen
-input checks found no actionable issues. Evidence `c2-*`; commit identity in
-`integration.md`. No bridge, backend, selection or geometry contract changed.
-
-**C3 delivered boundary (from `dfd9291`).** Owned row gestures cancel before
-stale/empty or missing-window returns; the custom menu cancels the Menu key's
-observed native follow-up context event. No Plan/tree product change or debounce
-was needed. Direct probes distinguish own-missing domain folders from present
-folders with missing descendants; Restore remains absent. Native Menu/Shift+F10
-checks preserve stable popup placement/focus and compare Escape with the live
-canonical row, not a replaced element. All original action and foreground guards
-remain. Gates: 67 focused, 1,951 interfaces, 12 import contracts and seven installed
-checks across `c3-native-01` (six) and unchanged Inventory retry
-`c3-native-inventory-02` (one). Retain failed/invalidated characterization and
-filter-target-readiness receipts; they are not product regression evidence.
-Independent review found no actionable issue and verified frozen dependencies.
-DESKTOP_UI and BUGS own behavior; raw evidence and commit accounting use `c3-*`
-and `integration.md`. Integrated as `95ff419`.
-
-**C4 delivered boundary (from `95ff419`).** Inventory now reuses shared file-row
-cells and integrity labels in a seven-column, 24px zebra table with disabled
-unchecked selection visuals, Notes, concise Presence and aligned typography.
-Tree identities/disclosure/navigation and the generic 28px default remain.
-Only Filename grows passively; Notes supplies deliberate resizing. Full evidence
-remains in Details; no wire, action, icon or backend change. Gallery producers,
-closed schemas, checkers and native consumers migrated together, retaining C2/C3
-witnesses. Adversarial review reproduced an active forced-color regression and
-confirmed the scoped all-text-cell HighlightText correction, including filled
-Presence. Retain `c4-active-colors-repro-01` and the later stale-reference failure.
-Final gates: 114 focused, 12 imports, 1,951 interfaces with the changed gallery
-checker reverified by `c4-focused-final-03`, and eight installed obligations via
-`c4-native-final-02` non-gallery passes plus `c4-gallery-final-03` (four passes).
-Independent review and exact input binding close the atomic commit; commit
-accounting is in `integration.md`. DESKTOP_UI, PRESENTATION and FEATURES own
-current behavior. Functional checkboxes remain deferred.
-
-**C5 delivered — 2026-10-07.** Loading diagnostics, Inventory viewport
-coalescing and the measured Plan keyboard placement correction are separate
-reviewed units. The optional collector (`61ee878`) reuses existing installed-host,
-fixture and containment helpers, retains exact source/runtime/asset provenance
-and restores disposable installed instrumentation. PERFORMANCE owns the frozen
-six-child method, phase/byte populations and all three matrices. It distinguishes
-visible coverage from obsolete-read settlement, keeps nested spans unsummed and
-makes no SLO, tail-latency or compositor-presentation claim.
-
-Inventory coalescing (`4122b10`) retains one running viewport read plus one latest
-queued intent at task scope. Each caller keeps its own promise/generation;
-superseded queued callbacks resolve null. Covered returns, loaded gestures,
-keyboard replacement, navigation/view/session/reload/disposal retire obsolete
-work. Direct action-owned initial/view reads retain their independent ordering.
-Current dispatch eligibility and stale result/error ownership remain guarded.
-The optional tree cancellation callback leaves generic geometry at 28px and
-Inventory at 24px; selection, C2 Refresh targeting, C3 menus and the 256-row
-window are preserved. Evidence: 88 focused, 2,348 interfaces/tools passes with
-three privilege skips, 12 imports, two installed checks and the repeated matrix.
-
-The separate C5c placement correction changes only off-window moving Plan
-highlights to use the existing 32-row leading margin, clamped at zero. Pointer
-and in-window placement, highlight/selection/revision/navigation/foreground/error
-semantics and the 256 limit remain unchanged. Direct task-shell controls cover
-both directions, extend gestures and zero clamp. Its gate passes 88 focused,
-2,348 interfaces/tools with three privilege skips, 12 imports, both installed
-task-shell sizes and the identical six-child matrix. All nine sampled keyboard
-gestures use one read with covered target rows rather than two reads with exposed
-preceding rows. This is the finite profile's observation, not a universal timing
-guarantee. Final source, consumer and raw-evidence review closes C5c; commit
-identities and gate receipts are recorded in `integration.md` under the evidence
-root. PRESENTATION owns current loading/placement behavior.
-
-The method gate passed 29 focused, 5,953 ordinary/four privilege skips, 12 imports,
-both representatives and six baseline children. Earlier fixture consumers were
-repaired separately: bounded destination-label expectation (`6c6e10f`) and genuine
-RECASE prior evidence (`455fd49`), preserving populations and historical timing
-authorities. The latter user-approved recurrence correction passed 68 focused,
-5,924 ordinary/four privilege skips, 12 imports and installed compatibility.
-Failed receipts, exact recovery bytes and independent reviews remain in the
-evidence root; no recovery WIP was merged or cherry-picked.
-
-Conditional disposition: abrupt jumps provide no gradual-scroll lead time for
-directional prefetch. After the keyboard correction, remaining exposed-spacer
-intervals do not establish beneficial placeholder behavior. Neither is added;
-no backend, bridge, filesystem effect, general scheduler or new measurement
-matrix was introduced. Original accepted exclusions remain. Both task recovery
-contents are accounted for in reviewed integration; `integration.md` records
-reference cleanup. This closes the GUI-C1–C5 batch.
+Every unit received fresh review. C5 fixture prerequisites `6c6e10f`/`455fd49`
+retain bounded labels and genuine RECASE evidence; failed receipts remain.
+PERFORMANCE owns measurements, not latency/compositor guarantees. Recovery
+contents were rebuilt and accounted without merging WIPs. No placeholders,
+row-limit/wall increase, new filesystem effect, backend selection or hashing
+shipped. Functional checkboxes and execution-to-Verify remain M1-10;
+irreversible-count presentation and fixed Filename under Details remain deferred.
 
 ## GUI follow-up batch — 2026-10-05
 
-User-ratified six-unit follow-up from `583f14d` on `milestone1`. B1 and B3–B6
-are delivered as separate verified, independently reviewed atomic units; B2 was
-deferred and is now resumed under GUI-C1/C4 above. Overlapping renderer, gallery and bridge consumers were
-migrated together. Evidence and the user's
-original uncommitted HANDOFF findings are preserved in
-`build/gui-followup-20261005/`. Component docs own shipped behavior; the prior
-proposal and recurrence review below explain the renewed GUI-C1/C4 boundary.
-
-| ID | Accepted outcome | Dependencies and verification |
+| Closed row | Shipped outcome | Commit |
 | --- | --- | --- |
-| GUI-B1 | Restore bounded plan-window labels, validate presentation enums/relationships, and migrate detail disclosure and all direct consumers. Full paths belong to individual details; Rename keeps its prior basename, Move uses a generic origin note, and previous-location destinations use compact labels. Preserve projection classification, node-id reveal, selection, revisions and the existing response wall. | Complete in `53e1abb`: 5,913 ordinary passes/four privilege skips, 12 import contracts and 12 installed gallery/shell/transport passes (`b1-*-02`). Independent review includes the corrected row-kind validator and final input binding. |
-| GUI-B2 | Align Verify table with Plan/gallery row geometry, zebra, disabled checkbox affordances, Notes, concise Presence labels, hierarchical basenames, typography and semantic tones. Preserve inventory evidence, scope, sorting, windowing and recovery. | Earlier deferral is superseded by GUI-C1/C4. Functional checkboxes remain M1-10; disabled visuals are authorized in C4. |
-| GUI-B3 | Match Verify Setup height and reorganize status into summary plus one stable detailed line, with shared progress presentation and existing Refresh/recovery actions. Retain published/current scan distinctions without duplicate routine prose. | Complete in `2828b8b`: 41 focused, 1,943 interfaces and seven installed gallery/shell/Inventory checks (`b3-*-01`); independent review and source binding. |
-| GUI-B4 | Use local `yyyy-MM-DD HH:mm` display for UI timestamps, including Verify mtime, terminal completion and both detail panes; retain raw machine values where explicitly diagnostic. | Complete in `0f87f6a`: 13 focused, 1,944 interfaces and seven installed gallery/Inventory/execution checks (`b4-*-01`); independent review and input binding. |
-| GUI-B5 | Cap details at 20rem, allocate more height to item details, and show full paths joined to the correct known root without filesystem probes. | Complete in `61a5cf5`: six focused, 1,944 interfaces and all nine installed obligations across `b5-native-01` (eight passes) and unchanged-input larger-shell rerun `b5-native-larger-02`. Initial readiness timeout retained; independent review/input binding. |
-| GUI-B6 | Row context menus reuse existing menu styling and existing Show details, Select/Deselect where allowed, and folder Expand/Collapse actions. Verify additionally offers Refresh selected and Acknowledge missing for missing rows, through existing node-scoped commands. | Complete in this atomic commit from `61a5cf5`: 5,914 ordinary passes/four privilege skips, 12 import contracts and 86 final focused checks. Seven installed obligations passed across shell `b6-native-01`, Inventory `-03` and gallery `-04`; final independent review/input binding in `b6-review*`. Inventory has no Select/Deselect action. No clipboard or new filesystem actions. |
+| B1 | Bounded Plan labels/enums and exact individual detail disclosure preserve identities, revisions and response wall. | `53e1abb` |
+| B3 | Verify Setup/status alignment with stable summary/detail and truthful progress/recovery. | `2828b8b` |
+| B4 | Local `yyyy-MM-DD HH:mm` UI times; diagnostic raw values remain. | `0f87f6a` |
+| B5 | Details capped at 20rem, more item height and full paths from known roots without filesystem probes. | `61a5cf5` |
+| B6 | Shared scoped row menus with existing actions, exact row/task/window ownership and no opening-time read/selection effect. Inventory has no Select/Deselect or Restore menu action. | `614cd19` |
 
-All units retain safe filesystem-text rendering, server-owned action scope,
-bounded windows, truthful publication/recovery, operation semantics and M1-10/A6
-deferrals. No hashing, persistence, new execution authority, push or PR. Apply
-AGENTS mandatory and recurrence stops. Trace producer/validator/fixture migrations
-together and retain failed evidence; test color alone does not classify defects.
-Use official Microsoft Fluent references and existing components. HANDOFF is
-updated at delivery, preserving the original user-authored finding in evidence.
-
-**Prior B2 inspected boundary (`583f14d`; renewed by C1/C4).** Inventory's generic tree
-uses 28px rows, while the file-row specimen uses 24px. B2 migrates the Inventory
-controller's geometry with its renderer; preserve the generic tree default and
-generation/keyboard rules. Reuse file-row/Integrity markup and tokens while
-retaining disclosure listeners/tree semantics. Checkbox visuals are explicitly
-disabled and unchecked, with selection functionality deferred by the user.
-Add Notes from existing warning/acknowledgement/partial-total facts; keep complete
-facts in details. Display basenames only, preserve search/identity, and let Notes
-donate manual resize width while only Filename grows passively. Presence uses one
-semantic label with mismatch precedence; Reappeared suppresses redundant Present
-and Unverified text without claiming fresh verification.
-
-Deferred B2 population: the Inventory adapter/detail route and bridge consumer
-if the proposed contract correction is ratified; assets `inventory_review.js`,
-`app.css`, `tree.js` geometry, existing file-row/Integrity rendering; direct
-projection/adapter/bridge/inventory/tree probes; gallery producer/checker and
-installed Inventory helper/parent; DESKTOP_UI/PRESENTATION/BRIDGE and delivery
-docs. Revalidate this proposal against the then-current commit before work.
-Named gates remain real refresh/release/scope composition, direct consumers,
-interfaces and affected installed gallery/Inventory checks. The public-contract
-extension needs its direct consumer departments or the ordinary suite. No
-backend selection, hashing, fabricated progress or new scan policy is approved.
-
-**B2 recurrence review and user deferral.** Read-only examination found the same
-repeated-full-text mechanism in Inventory. The common bridge response wall
-correctly refuses these responses; each adapter's serializer owns compact windows
-and its exact detail route owns complete text. There is no common path-population
-limit enforced before those serializers, and widening the response wall is not a
-remedy. The finite inventory field review found full `display` and `warning.path`;
-remaining warning text is already bounded to 1,024 UTF-8 bytes.
-
-| Instance | Supported consequence | Owner / disposition |
-| --- | --- | --- |
-| Plan move/origin/notice labels | 8.56–50.25 MB windows refused by the 8 MiB wall | B1 adapter and exact detail migration delivered in `53e1abb`. |
-| Inventory domain display | 19,426,765-byte window; basename diagnostic 175,565 bytes admitted | Inventory adapter; no fix implemented. |
-| Inventory warning display/path | 38,691,017-byte window; basename alone still 19,439,817; removing repeated path gives 186,057 admitted | Inventory adapter plus rowless detail routing; no fix implemented. |
-
-The fixture uses 256 typed entries beneath supported 25,120-unit rooted CJK
-paths. Raw method/results: `b2-design-inventory-envelope.py` and `.json` under the
-batch evidence root. Proposed coherent reorganization: compact adapter display,
-remove repeated warning paths, and extend the existing Inventory detail response
-with explicitly snapshot-owned path/warning context for selected rowless nodes,
-separate from existing fresh ledger evidence. No new command, scan, filesystem
-probe or action authority. Following AGENTS recurrence review, the user initially
-chose **Defer B2 and review separately**. That review is now complete; GUI-C1/C4
-own renewed implementation authority and verification. B3–B6 shipped independently
-on the earlier table and contract.
-
-**B6 delivered boundary.** One shared frontend menu retains existing styling,
-server-scoped callbacks and exact row/window/task ownership. Opening it performs
-no read or selection action. Pointer and keyboard navigation, dismissal, pending/
-retired guards and informational-row restrictions are tested together. Inventory
-Refresh accepts the exact current-window domain row; acknowledgement requires
-that row's own missing presence. Existing toolbar folder actions remain unchanged.
-No new bridge command, backend selection, Restore context item or filesystem effect.
-
-The installed Inventory witness distinguishes clicked missing-file scope from
-the other selected folder's details and proves one effect per original command.
-The finite consumer migration corrected clipped-row pointer scrolling, driver
-Details reopening, geometry measurement precision and a gallery combobox capture
-that mixed open and later closed states. Production remained unchanged after the
-ordinary gate; changed producers/checkers/drivers were rerun. Failed receipts,
-exact rejected-report diagnosis and dependency-based evidence reuse are retained
-in `b6-native-disposition.md` and `b6-gallery-rejection.md` under the evidence root.
-`integration.md` records the resulting commit identity. B2 was excluded from B6;
-the renewed scope is owned by GUI-C1/C4 above.
+Independent review, ordinary/interface/import and installed obligations passed
+per unit; evidence and original findings: `build/gui-followup-20261005/`, including
+`integration.md` and retained native/gallery disposition receipts. B2's repeated
+full-text envelope finding paused implementation after recurrence review; the
+user first deferred it, then approved the coherent compact-window/exact-detail
+correction and table alignment as C1/C4. Widening the wall was rejected.
+Functional checkboxes and same-task execution-to-Verify remain M1-10.
 
 ## GUI alignment batch — 2026-10-05
 
-User-ratified seven-point register from `999a568` on `milestone1`. Units
-GUI-A1–A5 and A7 are complete; A6 remains deferred. Each delivered
-unit includes its direct consumers and fixtures, matching documentation,
-verification and fresh independent review in its own atomic commit.
-Shared-file writers and native acceptance runs are serialized. An ordinary
-suite may read the same frozen inputs independently with isolated temporary
-roots and receipts; it cannot overlap source or checker edits. A1–A5 evidence belongs
-under `build/gui-alignment-20261005/`; A7 uses `build/rename-move-20261005/`.
-HANDOFF owns immediate resumption context.
-
-| ID | Accepted outcome / finite owners and consumers | Dependency, gate and status |
+| Closed row | Shipped outcome | Commit |
 | --- | --- | --- |
-| GUI-A1 | Narrow move-reveal recovery: report a still-current rejected/mismatched follow-up window as refreshable; preserve the last coherent summary/window; align conflict viewport with the loaded offset. `assets/app.js`, task-shell and Plan-review probes, their frontend/native consumers, DESKTOP_UI and BUGS. No retries, new bridge fields or lifecycle changes. | `4f314b2`: seven focused, 1,921 interfaces and both installed task-shell cases passed; independent review approved in `a1-review.md`. Evidence `a1-*`. |
-| GUI-A2 | Table enlargement gives extra width only to Filename, preserving header/body alignment, horizontal scrolling and deliberate column resizing. First-visible snapshot in `assets/plan_review.js`; direct Plan probe, installed task-shell child/parent and DESKTOP_UI. No CSS/token/helper redesign. Keep Notes-limited resizing: a narrow snapshot at Notes minimum needs deliberate space transfer before positive fixed-column resizing. Apply the same sizing behavior when A5 migrates Inventory. | `498eb24`: focused 36, interfaces 1,921 and six installed task-shell/gallery checks passed; independent review approved in `a2-review.md`. Evidence `a2-*`. |
-| GUI-A3 | One shared counted Fluent Filter menu for Plan/Inventory with independent canonical categories, All reset, retained search/selection/default visibility, stable pending focus and existing request guards. Pinned Regular icons; neutral/accent trigger; known work-panel popup bounds; outside interaction, resize, Escape, focus/foreground and retirement dismissal. No Python/bridge/query-policy changes. | `49801f7`; 84 focused, 2,286 interfaces/tools (three skips), pinned icon archive and seven installed gallery/task-shell/Inventory checks passed. Fresh review in `a3-review.md`; frozen and raw evidence `a3-*-final*`. A5 reuses it. |
-| GUI-A4 | Full-height optional right details column, toggled by Details; central Setup/status/table regain width when hidden. Separate independently scrollable global and item cards, category/status and supplied item facts. Details capped at 24rem and task rail at 18rem, both shrinking with the window while preserving tab alignment. UI-only renderer/CSS and direct consumer migration. | `4a39789`; 89 focused, 1,921 interfaces and all six installed gallery/task-shell cases pass across retained runs. Fresh review `a4-review.md`; final source `a4-frozen-final-03.json`. A5 adopts this layout. |
-| GUI-A5 | Align standalone Verify/Inventory Setup, status and table with Plan/Execution; put whole/selected Refresh on status; reuse semantic row labels and shared sizing/filter/details components. Add a nullable bounded recorded-baseline checksum to window rows, matching bridge validation and fixtures; show shortened checksum with full stored evidence accessible. Standalone Verify stays on Integrity with Sync disabled. Remove only code made obsolete by this migration. `inventory_review.py`, browser inventory/bridge/panel/status owners, direct Python/JS probes, installed Inventory/gallery helpers, DESKTOP_UI/PRESENTATION/BRIDGE/FEATURES. | Closing A5 commit: 23 early service, 84 focused, 12 token and all seven installed checks pass; 5,887 ordinary tests (four privilege skips) cover interfaces and batch integration; all 12 import contracts pass. Fresh review `a5-review.md`; frozen source `a5-frozen-03.json`, native `a5-native-final-03.xml`, ordinary/import `a5-integration-final.*` / `a5-imports-final.*`. Commit identity is retained in `integration.md`. |
-| GUI-A6 | Execution-to-Verify navigation. Current inventory reads/actions require an inventory task and captured inventory publication; Refresh requires inventory settlement and no retained plan token. Same-task execution navigation needs new association, retention and lifecycle policy. | Deferred to M1-10 under the user's permitted fallback. No enabling switch or new lifecycle behavior in this batch. |
-| GUI-A7 | Projection-owned Rename classification and matching filters; pure same-parent moves/recases have prior-name annotations without origin groups. Genuine move groups begin collapsed; action-shaped purple destination badges contain their paths, while bounded canonical origin annotations preserve filename space. Raw operation kinds and backend behavior stay unchanged. | Closing A7 commit from `37d89ef`: 304 server, 94 frontend and 60 consumer-focused checks; 5,903 ordinary passes/four privilege skips, six installed gallery/shell checks and 12 import contracts. Independent review in `build/rename-move-20261005/rename-review.md`; commit identity in `integration.md`. Claude could not authenticate; the user approved internal-review completion. |
+| A1 | Refreshable move-reveal refusal preserves coherent summary/window and aligns conflicts to loaded offset. | `4f314b2` |
+| A2 | Only Filename passively grows; headers align and deliberate Notes-limited resizing remains. | `498eb24` |
+| A3 | Shared counted Fluent filter menu with canonical categories, All reset and exact pending/retirement guards. | `49801f7` |
+| A4 | Optional full-height right Details with separate global/item scrollers and bounded pane/rail widths. B5 later narrows the cap. | `4a39789` |
+| A5 | Inventory adopts Setup/status/table/filter/details surfaces and bounded stored-baseline digest; no fresh hash or detail fanout. C4 later replaces its initial five-column/28px table. | `37d89ef` |
+| A7 | Projection-owned same-parent MOVE/RECASE Rename classification; genuine move groups start collapsed with bounded destination/origin annotations. Raw operations and effects remain. | `583f14d` |
 
-Preserve revision/task/session ownership, coherent bounded 256-row windows,
-authoritative selection and its counts/bytes, literal search, existing sort and
-collapse behavior except where expressly changed above, safe text rendering,
-original-command recovery and current integrity/visibility action scopes.
-Checksum means stored baseline evidence, not current bytes or fresh verification.
-No hashing, baseline/rebaseline controls, manual post-copy verification, domain
-operation changes, new persistence, M1-10 activation, push or PR is authorized.
-Use Microsoft's Fluent guidance and existing repository components; no framework
-dependency or general UI rewrite. Apply AGENTS mandatory and recurrence stops;
-new effects or ownership changes outside these rows require adjudication.
-
-Before each pending row's implementation, settle its exact source/test/helper
-population against the integrated predecessor. Tests follow TESTS: broaden to
-the ordinary suite/import checks if a shared contract crosses departments or
-blast radius is uncertain. Retain failed evidence and reuse passes only when
-their product, producer, checker and driver dependencies remain unchanged.
-
-**A4 delivered boundary.** `4a39789` moves Plan diagnostics to a root sibling
-spanning Setup/status/table, with default-hidden global/item card scrollers.
-It preserves disclosure focus, highlighted-item ownership, bounded virtual
-windows, selection and central recovery/Gap guidance. Only supplied item facts
-were restored; there are no new DTOs or inferred paths. DESKTOP_UI owns the
-shipped behavior. The four-mode gallery and both task-shell sizes cover card
-scroll, pane/rail caps, central width, alignment and row reachability; frozen
-source, independent review and retained-run identities are in `a4-*` evidence.
-Historical horizontal-card recipes are superseded. The bounded table height
-chain and folded-status feedback-wrap witnesses remain required for A5 reuse.
-
-**A5 delivered boundary.** Inventory reuses the settled Setup/status/table/details surfaces
-and keeps its 28px tree controller, bounded windows, action scope, publication
-and original-command recovery. The five columns are Filename, State, Checksum,
-Size and Modified. Header sorting preserves server meanings; row states retain
-all presence/evidence facts. The nullable stored digest is 32 lowercase hex
-characters, displayed as eight with the full value accessible. No hashing or
-detail fanout is introduced. The shared `table_columns.js` preserves Filename's
-12rem floor and sole passive growth, Plan's Notes donor/14rem floor, and
-Inventory's Modified donor/7rem floor.
-
-Direct projection, bridge, renderer, asset-loader, gallery and installed
-consumers were migrated together with DESKTOP_UI/PRESENTATION/BRIDGE/FEATURES.
-After two inherited-style findings, the user ratified one combined Inventory
-adapter correction: remove generic tree gaps/borders and competing horizontal
-scrolling, and align the single Refresh group beside the title. Plan styling
-and domain effects remain unchanged. The actual Inventory gallery checks all
-five column edges, scroll ownership, status placement, semantic labels, checksum,
-disclosure, sizing and virtual paging. `a5-frozen-03.json`, `a5-review.md` and
-the retained native receipts bind the final candidate and reviewed corrections;
-they do not authorize a general CSS redesign or A6 implementation.
-
-**A7 delivered boundary.** The user explicitly extended presentation classification
-into the Python server and plan projection. RECASE and pure MOVE with the same
-Windows parent display/filter as Rename; cross-parent MOVE remains Move and
-MOVE_UPDATE stays distinct even in place. Details and execution retain real
-operation kinds. Rename rows have no prior groups; genuine groups preserve
-surviving-ancestor/target-parent grouping, initial collapse with retained reopen
-state, and revisioned reveal/recovery. Canonical origin annotations are bounded
-to preserve filenames. No browser row hiding, domain behavior, persistence,
-execution authority, A6 activation or new performance acceptance was introduced.
-
-Projection/server, bridge/renderers, direct tests, gallery and installed shell
-consumers were migrated together. The shell now uses actual cross-parent MOVE
-fixtures. Current measurement adapters use the actual collapsed fixture's full
-first-row facts, including correction of their previously stale target-parent
-id/label; legacy drivers and historical measurement JSON remain unchanged.
-PRESENTATION/BRIDGE/DESKTOP_UI own the shipped contracts; Git retains the finite
-population and implementation register. Final source manifests and raw gates are
-`ordinary-02-*` and `native-02-*` under `build/rename-move-20261005/`.
-
-The requested `claude-opus-5-5` / `xhigh` review did not run: OAuth had expired.
-The user authorized completion with independent internal review. The narrowed
-review package produced zero model usage/cost; original hashes/status matched
-afterward and the exact copy was removed. Raw failure and cleanup receipts remain.
-No external approval is claimed. A6 remains deferred to M1-10.
+Each unit passed its focused, department/ordinary, installed and independent
+review gate. Evidence: `build/gui-alignment-20261005/` and
+`build/rename-move-20261005/`, with exact manifests and `integration.md`.
+The requested external Claude review could not authenticate; the user approved
+independent internal review, with no external approval claimed. A6 execution-to-
+Verify was deferred to M1-10 because it needs association/retention/lifecycle
+policy beyond an enabling switch. Server selection, counts, raw evidence and
+bounded windows remain; no new hashing, persistence or execution authority shipped.
 
 ## Plan GUI refinements — 2026-10-04
 
-Completed user-authorized three-unit batch from `99e65c8` on `milestone1`.
-Each unit includes direct production/test/tool contract migrations, matching
-component documentation and independent adversarial review.
-
-| ID | Shipped outcome and preserved guarantees | Commit / verification |
-| --- | --- | --- |
-| GUI-RF1 | Bounded preflight refusal codes and origin reach Plan review; distinguish commitment/admission failures while preserving effect authority and original-command recovery. | `1865d66`; focused 628, ordinary 5,854/four skips plus corrected fixture module 40, 12 import contracts, all 35 installed cases across retained runs. |
-| GUI-RF2 | Informational prior-move groups attach beneath the deepest surviving scanned ancestor, with root fallback and one capped relative purple pill per move target parent. Reveal canonical destinations and clear only obstructing query settings; preserve expansion and selection/count/byte exclusion. Root destinations reveal the first canonical moved item. | `53fb959`; projection/scale 311, frontend 367, ordinary 5,866/four skips plus corrected host/catalog modules 84/96, 12 import contracts, all 35 installed cases across retained runs. |
-| GUI-RF3 | Delete/Recase labels; regular Pause/play toggle with accented Resume; neutral regular Stop/Cancel arms for five seconds with accented filled Stop before a second click cancels. Preserve authoritative state, pending/recovery and task/session ownership; ordinary renders retain the deadline and retirement disarms. | Atomic RF3 delivery commit containing this record; ordinary 5,875/four skips, focused consumers, pinned archive, 12 import contracts, all 35 installed cases across retained runs. Independent final review approved. |
-
-Evidence and reviews: `build/gui-refinements-20261004/`. RF3's final inventory
-case passed unchanged on resumption; failed foreground-prerequisite receipts
-remain alongside the successful receipt. Its recovery candidate was rebuilt on
-`milestone1`, without merging or cherry-picking the WIP. Git retains the finite
-implementation populations and recovery chronology.
-
-No execution-policy, commitment-authority, persisted-state or unrelated feature
-changes. The optional benchmark's seven pre-existing inventory-command catalog
-omissions remain deferred in BUGS and `rf2-command-catalog-audit.json`; this batch
-claims no new quantitative benchmark result. No later milestone, push or PR is
-authorized by this batch.
+GUI-RF1 (`1865d66`) exposes bounded preflight refusal origin/codes; GUI-RF2
+(`53fb959`) restores grouped move destinations with revisioned canonical reveal;
+GUI-RF3 (`3c0378a`) adds Pause/Resume and five-second two-click Stop arming with
+exact pending/task/session retirement. Effects and selection authority remain.
+Each passed ordinary/import, all 35 installed obligations across retained runs
+and independent review. Evidence: `build/gui-refinements-20261004/`.
+Recovery was rebuilt, never merged as-is; failed native receipts remain.
+The seven optional benchmark inventory-command catalog omissions were excluded
+from this batch and later fixed on 2026-10-04; [BUGS](BUGS.md) records closure.
+`rf2-command-catalog-audit.json` retains the original finding; no new benchmark
+result is claimed here.
 
 ## Open-bug resolutions — 2026-10-01
 
@@ -845,8 +407,8 @@ Still binding: rename/move/Safely Remove may report “in use” during a hold; 
 confirmation cannot authorize reuse. Holds do not fix pre-invocation same-volume
 root replacement or metadata-matching identity-less DELETE/TRASH replacement.
 Those findings remain logged in the retained differential evidence and prior
-register; the exFAT FileIdInfo defect remains open in [BUGS](BUGS.md), outside
-this completed work. Recovery tips were accounted and
+register; the exFAT FileIdInfo defect was outside this completed work and was
+later fixed on 2026-10-01 as recorded in [BUGS](BUGS.md). Recovery tips were accounted and
 pruned with a verified bundle (`resume/wip_cleanup_20260929*`). The detached
 `b8baf42d` baseline worktree was removed at closeout after confirming integrated
 ancestry, no tracked/untracked changes and only 59 regenerable Python caches;
@@ -868,8 +430,8 @@ Admission retries never retry task submission or effects, and inconclusive
 observations never gain reset advice by exhausting retries. AB-8
 implementation, environment monitoring, GUI changes, automatic replay and broad
 schema migration stayed excluded. The unsupported CLI replacement-flag guidance
-defect is in BUGS. Implementation detail and failed receipts remain in Git and
-the evidence roots.
+defect was later fixed on 2026-10-01; [BUGS](BUGS.md) records closure.
+Git retains implementation detail; the evidence roots retain failed receipts.
 
 ## Post-M1-8 reduction plan
 
@@ -979,14 +541,9 @@ register owns its finite gate; prior failed R2 attempts remain failed. A page
 capture alone does not prove native compositor health. Historical recovery
 commits were not merge units.
 
-## Remaining checkpoints
+## Completed M1-9 — 2026-10-01 – 2026-10-02
 
-### Completed M1-9 — 2026-10-01 – 2026-10-02
-
-Delivered on `milestone1` from `937af54`. The user allocated missing-row
-acknowledge/restore here and directed the shared start-admission correction and
-narrow native witness on resumption. Stop here for recap and GUI tweaks;
-M1-10, M1-12, release and DOC-2 are not activated.
+Delivered from `937af54` on `milestone1`, closed in `0160f87`.
 
 | Delivered outcome | Reviewed commit | Acceptance evidence |
 | --- | --- | --- |
@@ -1000,63 +557,24 @@ M1-10, M1-12, release and DOC-2 are not activated.
 | Installed host command catalogs and native completion waits | `02d7595` | Six exact catalogs include seven inventory commands; three local waits fit observed native completion without changing the sixty-second parent bound or semantic assertions; actual host gates, replacement/Close and 1,890 interfaces checks. |
 | Desktop Refresh and missing visibility actions | `5cf18f8` | Original-command recovery, immediate Refresh identity, truthful partial feedback, dirty/current publication rules; production probes and real folder-command clicks, replaced results, row hide/return, screenshot and task/host Close. |
 
-Inventory remains a complete or prior-complete ledger publication, not a claim
-that its preceding scan was complete. Warnings stay outside domain action scope.
-The server owns full folder membership; view filters/windows do not narrow
-effects. Refresh re-admits location authority and can recover retained scope;
-visibility additionally needs a current complete publication. Conditional writes
-retain frozen original facts and actual bounded dispositions, including uncertain
-suffixes after failure. Receipts share the existing 48-entry admission capacity
-and live until task Close. No batch-atomicity or automatic-replay promise is added.
-[INVENTORY](INVENTORY.md), [PRESENTATION](PRESENTATION.md),
-[INTERFACES](INTERFACES.md) and [BRIDGE](BRIDGE.md) own shipped behavior.
+Inventory publishes a complete or prior-complete ledger view; this does not
+claim a complete preceding scan. Warnings remain outside action scope, and
+server-owned folder scope is independent of filters/windows. Refresh re-admits
+location authority; visibility needs a current complete publication. Conditional
+writes retain original facts and actual partial/uncertain dispositions. Receipts
+share the 48-entry admission capacity until Close; no automatic replay or batch
+atomicity is promised. INVENTORY/PRESENTATION/INTERFACES/BRIDGE own behavior.
 
-Final ordinary gate: 5,829 passed, four skipped, 35 headed excluded. The subsequent
-test-only maintenance passes all 1,890 interfaces checks. All 35 headed cases
-are covered across dependency-scoped runs: 30 unchanged existing passes, refreshed
-replacement/Close (one), transport (one), live host gates (two), and the new
-inventory journey (one). This is not a single aggregate headed invocation.
-Twelve import contracts, local document-target checks and diff checks pass.
-The 64 focused frontend/trace checks and retained negative controls cover the
-shared and Refresh lifecycle corrections. Screenshot capture preserves browser
-surface evidence; it does not claim native-material or GUI-polish acceptance.
-
-Raw successes, failures, diagnostic-only runs and independent reviews remain in
-`build/m1-9-20261001/`. Final receipts include
-`complete-ordinary-20261002.log`, `native-wait-ordinary.log`,
-`complete-headed-20261002.log`, `headed-recheck-20261002.log`,
-`native-wait-headed.log`, `native-replacement-20261002.log`,
+Final gates: 5,829 ordinary/four skips, 12 imports, all 35 installed obligations
+across dependency-scoped runs, later 1,890 interfaces checks, document/diff and
+independent reviews. Screenshots prove browser surface, not compositor health.
+Raw successes/failures/reviews: `build/m1-9-20261001/`, including final
+`complete-*`, `native-wait-*`, `headed-recheck-*`, `native-replacement-*`,
 `inventory-headed-focus-ready.log` and `cold-evidence-final-20261002.log`.
-The nine outcome reviews and final documentary review are retained there.
-Thirty-four inventory receipt/identity copies are hash-verified under
-`inventory-native-preserved/`; external fixture roots are retained for provenance.
-Recovery `4b936db` was reconstructed into reviewed commits, never merged or
-cherry-picked as-is; its disposable ref was removed after independently reviewed
-accounting of all twenty saved paths. The original patch remains preserved.
-
-New hashing and integrity controls, overlays, manual post-copy verification,
-schema/history work, broad lifecycle redesign, new performance targets and
-release acceptance remain excluded. Earlier stop/recovery chronology is retained
-in Git and evidence rather than a second active register.
-
-Pending rows record accepted future outcomes. Backend optimization is closed;
-pending rows still need user authorization, active scope and finite verification.
-A finding does not enlarge a row; [AGENTS](../AGENTS.md) governs scope changes,
-stops and recovery.
-
-| ID | Accepted outcome | Named verification | Status |
-| --- | --- | --- | --- |
-| M1-9 | Bounded inventory projections, current evidence and the full inventory consumer for sibling sorting, including missing-row acknowledge/restore. | Complete or prior-complete publication; warnings outside action scope; raw evidence provenance; search/filter/collapse/window/detail, replacement/race and production sort/reset paths; headed witnesses. | Complete; reviewed commits and final evidence above. |
-| M1-10 | Baseline, verify and rebaseline controls plus first same-task manual post-copy verification, without persistent operation-time hashes. Eligible null-evidence files enter rebaseline; every admitted rebaseline hashes and replaces/creates evidence, and a match is not verified. | Confirm acknowledgement admission before claim/native work; all-null/mixed workflow, service/CLI and desktop paths; conditional recording and supersession races; atomic handoff classification; live pause/resume/cancel and unchanged automatic failed-read retries; overlay/result identity. Independently review operation matrix and conditional recording. Terminal Verify-remaining/subset retry remains deferred. | Pending. Rebaseline confirmation is distinct from missing-row acknowledgement. |
-| M1-12 | Close integrated lifecycle/retention across activated task surfaces, then complete adversarial, documentation, ordinary and headed verification. This absorbs former M1-11. | Plan-only, execution-only, linked/manual verification, inventory, refused/canceled/degraded/failed tasks across same-document navigation, contained unsupported reload, explicit close and shutdown; admission bounds, stale-response suppression, exact resource release and retained truth. Applicable settlement oracle, ordinary/headed, installed-wheel/product, imports, diff/active-link checks and independent cross-component review. No aggregate-artifact or whole-owner-graph criterion. | Pending. |
-| M1-Release | Beta packaging and release closure after delivery rows above. | Installed artifact from clean checkout; frozen specification/dependency/CI, notices and corresponding source; standard-integrity host proof and every applicable BR-G/SH-G gate. [INTERFACES](INTERFACES.md) owns host/package/SH-G; [BRIDGE](BRIDGE.md) owns BR-G. | Pending. |
-
-DOC-2 remains **pending, outside the AB batch**. Its historical branch proposal
-removes exactly four superseded compact-plan commits from `milestone1`, preserves
-the old tip and opens a draft PR from `milestone1-anthony`. Before any action,
-freshly check divergence, remote tip and preservation of all work; unexpected
-commits or unaccounted work require adjudication. AB-10 and the documentation
-consolidation do not execute, close or authorize DOC-2 history rewriting.
+Thirty-four receipt/identity copies are verified in `inventory-native-preserved/`.
+Recovery `4b936db` was rebuilt, accounted and pruned; original patch retained.
+New integrity controls/overlays/manual post-copy verification, schema/history,
+broad lifecycle redesign, performance targets and release were not delivered.
 
 ## Delivered product checkpoints
 
@@ -1074,68 +592,3 @@ retry, keyboard/forced-color and admission guarantees remain active. Clearing
 a batch receipt does not close a task. The reported Optics refresh delay remains
 unprofiled. No completed row authorizes M1-10 integrity controls, M1-12
 lifecycle closure or release.
-
-## Accepted behavior carried by the delivery rows
-
-Normally completed tasks retain file lists, item statuses and phase aggregates
-for read-only review. Execution-only completion may offer its first eligible
-manual verification; linked completion needs no further action. Non-stopping
-degradation keeps normal review with visible issues. Canceled/abnormal sessions
-retain terminal truth without resume, domain retry or session cleanup. Live
-pause/resume remains separate. Busy Close requests best-effort cancellation and
-keeps the card until settlement/resource release; it never implies trash purge.
-Forced process exit has no durable task/resume guarantee.
-
-Capacity refusal before execution, including queued wakeup, retains the task
-without execution, automatic retry or automatic close. Scan/planner admission
-refusal may have no plan; review preflight can retain an immutable plan with a
-negative verdict. Explicit Plan again resolves reviewed location identities,
-creates fresh Setup in a new task, scans again and requires fresh review. It
-never carries old selection/authorization or changes the old artifact. Removing
-source/target entries affects capacity only through that fresh scan.
-
-Recognized operation, cleanup and destructive-prerequisite capacity failure
-stops later admission after current settlement. Recorder-only write failure
-remains recording degradation with continuation. Generic I/O retains its typed
-reason. Yellow capacity presentation cannot hide independent known failures.
-Trash-location text is accepted for M1; exact count needs complete outcome
-evidence. Location-only Details never promises a count, existence or purge.
-
-Location admission is workflow-owned for typed, picker and recent Setup/inventory
-inputs. A remembered location is not authorization; consumers re-probe at use.
-Setup freezes semantic plan options in a backend-derived snapshot without
-writing global defaults or granting browser text/filter normalization authority.
-
-Plan review preserves operation, selection, scope and fresh-preflight truth
-across view gestures. Canonical path-key order and complete-sibling filename,
-raw size and raw mtime sorting in both directions with reset are accepted M1
-behavior. Sort is process-live view state and cannot change selection,
-commitment, dependency/execution order, risk/counts or action scope; hierarchy
-and node identity survive. [BRIDGE](BRIDGE.md) and [PRESENTATION](PRESENTATION.md)
-own exact validation and scale criteria.
-
-Execution, inventory and post-copy overlays remain distinct from each other
-and ledger-derived state; zero-byte work that ran never looks unrun. Inventory
-warnings stay outside path/action scope; publication is complete or keeps the
-prior complete generation. Baseline, verify and rebaseline remain distinct.
-Rebaseline requires acknowledgement, includes eligible selected null-evidence
-files, creates/replaces evidence after fresh hash and clears verification
-freshness without becoming compare-and-accept. Manual exact post-copy
-verification uses atomic handoff classification on a ready subset, preserves
-execution truth and reports ineligible outcomes honestly.
-
-Release remains accepted. [INTERFACES](INTERFACES.md#sh-g-release-criteria)
-owns open SH-G-15 cold-start/repeated/long-workload resource policy, still without
-a numeric budget or acceptance artifact. Enforced request/population limits and
-separate SH-G-8 transport-custody evidence remain unchanged.
-
-## Release completeness
-
-BR-G-43: active docs, README and UI/mockup status describe shipped behavior;
-every active DESKTOP_UI acceptance item maps to its subject check or an
-explicitly approved deferral. Omission or copied, unmapped checklists do not
-close release. BR-G-44: from a clean checkout, run the complete suite including
-ordinary-default exclusions, lint-imports and diff checks; collect/pass every
-`test_br_g` case without skip/xfail on Windows. Narrow selections do not
-substitute for release evidence. [TESTS](TESTS.md) owns commands and routing.
-These obligations remain open, with no product release claimed by AB-10.
