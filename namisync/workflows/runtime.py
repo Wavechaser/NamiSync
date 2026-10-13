@@ -22,12 +22,14 @@ from namisync.core.execution import (
 )
 from namisync.core.evidence import RecordingStatus
 from namisync.core.integrity import (
+    IntegrityOutcome,
     IntegrityMode,
     IntegritySelection,
     RecordDisposition,
     VerifierContext,
 )
 from namisync.core.models import ScanResult, VolumeEvidence, VolumeId
+from namisync.core.review import MAX_PLAN_REVIEW_ROWS
 from namisync.core.pathing import normalize_relative_path
 from namisync.core.planning import (
     DeletionPolicy,
@@ -160,6 +162,7 @@ from .models import (
     RetainedExecutionItemWindow,
     RetainedExecutionSummary,
     RetainedIntegrityItemWindow,
+    RetainedInventoryIntegrity,
     HistoryEventView,
     HistoryEventPageView,
     HistoryItemPageView,
@@ -196,6 +199,7 @@ from .views import (
     classify_result_facts,
     phase_result_view,
     result_item_view,
+    operation_result_view,
     session_event_view,
 )
 
@@ -327,6 +331,7 @@ class LocalWorkflowRuntime:
         self._plans: dict[str, PlanArtifact] = {}
         self._execution_details: dict[str, ExecutionDetails] = {}
         self._retained_execution_reviews: dict[str, RetainedExecutionReview] = {}
+        self._retained_inventory_integrity: dict[str, RetainedInventoryIntegrity] = {}
         self._inventory_details: dict[str, InventoryDetails] = {}
         self._execution_started: dict[str, datetime] = {}
         self._history_store: HistoryStore | None = None
@@ -1148,6 +1153,40 @@ class LocalWorkflowRuntime:
             raise KeyError(request_id)
         return details
 
+    def capture_inventory_integrity(
+        self, task_id: str, request_id: str, session_id: str, mode: str,
+        location_id: int, result: OperationResult | None,
+    ) -> RetainedInventoryIntegrity:
+        """Retain ordinary terminal facts independently of the current ledger."""
+        with self._lock:
+            self._require_open()
+            current = self._retained_inventory_integrity.get(task_id)
+            identity = (task_id, request_id, session_id, mode, location_id)
+            if current is not None:
+                if identity != (current.task_id, current.request_id, current.session_id,
+                                current.mode, current.location_id):
+                    raise ValueError("ordinary integrity result binding changed")
+                return current
+            if type(result) is not OperationResult or mode not in _INTEGRITY_KINDS:
+                raise ValueError("ordinary terminal result is unavailable")
+            if len(result.items) > MAX_PLAN_REVIEW_ROWS:
+                raise ValueError("ordinary integrity results exceed inventory capacity")
+            items = tuple(result_item_view(item) for item in result.items
+                          if type(item) is IntegrityOutcome)
+            if any(item.location_id != str(location_id) or item.phase != mode for item in items):
+                raise ValueError("ordinary integrity result changed location or mode")
+            retained = RetainedInventoryIntegrity(*identity, operation_result_view(result), items)
+            self._retained_inventory_integrity[task_id] = retained
+            return retained
+
+    def read_inventory_integrity(self, task_id: str) -> RetainedInventoryIntegrity:
+        with self._lock:
+            return self._retained_inventory_integrity[task_id]
+
+    def retire_inventory_integrity(self, task_id: str) -> None:
+        with self._lock:
+            self._retained_inventory_integrity.pop(task_id, None)
+
     def drop_inventory_details(self, request_id: str) -> None:
         with self._lock:
             self._inventory_details.pop(request_id, None)
@@ -1375,6 +1414,7 @@ class LocalWorkflowRuntime:
                 self._plans.clear()
                 self._execution_details.clear()
                 self._retained_execution_reviews.clear()
+                self._retained_inventory_integrity.clear()
                 self._inventory_details.clear()
                 self._execution_started.clear()
                 self._closed = True

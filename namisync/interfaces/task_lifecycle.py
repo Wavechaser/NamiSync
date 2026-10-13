@@ -238,7 +238,7 @@ class TaskLifecycle:
                 association = self._sessions.get(receipt.session_id)
                 if association is None:
                     task = self._tasks.get(receipt.task_id)
-                    if (receipt.kind == "task-inventory" and task is not None
+                    if (receipt.kind in {"task-inventory", "task-integrity"} and task is not None
                             and command_id in task.inventory_start_command_ids
                             and not task.retiring and task.retirement_claim_id is None):
                         return receipt
@@ -430,7 +430,7 @@ class TaskLifecycle:
                     task.plan_token is not None
                     and task.start_kind == "task-execution"
                 )
-                or task.start_kind == "task-inventory"
+                or task.start_kind in {"task-inventory", "task-integrity"}
             ):
                 self._finish_failed_task_start_locked(task)
             self._condition.notify_all()
@@ -440,10 +440,22 @@ class TaskLifecycle:
         signature: tuple[object, ...],
     ) -> TaskStartClaim:
         """Claim a fresh scan after the exact prior inventory release."""
+        return self._begin_inventory_activity(task_id, request_id, command_id, signature, "task-inventory")
+
+    def begin_task_inventory_integrity(
+        self, task_id: str, request_id: str, command_id: str,
+        signature: tuple[object, ...],
+    ) -> TaskStartClaim:
+        return self._begin_inventory_activity(task_id, request_id, command_id, signature, "task-integrity")
+
+    def _begin_inventory_activity(
+        self, task_id: str, request_id: str, command_id: str,
+        signature: tuple[object, ...], kind: str,
+    ) -> TaskStartClaim:
         self._require_command_id(command_id)
         self._require_opaque_id(request_id, "inventory request id")
         self._require_signature(signature)
-        replay = self.replay_start(command_id, "task-inventory", signature)
+        replay = self.replay_start(command_id, kind, signature)
         if replay is not None:
             if replay.task_id != task_id:
                 raise LifecycleReceiptConflictError("inventory replay belongs to another task")
@@ -453,7 +465,7 @@ class TaskLifecycle:
                 raise RuntimeError("service is closed")
             task = self._tasks.get(task_id)
             prior = None if task is None else self._sessions.get(task.session_id)
-            if (task is None or prior is None or prior.kind != "task-inventory"
+            if (task is None or prior is None or prior.kind not in {"task-inventory", "task-integrity"}
                     or prior.request_id != request_id or not prior.session_released
                     or prior.terminal_digest is None or prior.settlement_claim is not None
                     or prior.observation_claim is not None
@@ -466,7 +478,7 @@ class TaskLifecycle:
                 raise LifecycleReceiptConflictError("command id belongs to another task start")
             task.start_command_id = command_id
             task.start_signature = signature
-            task.start_kind = "task-inventory"
+            task.start_kind = kind
             task.start_failed = False
             return TaskStartClaim(task_id, None, False)
 
@@ -476,7 +488,7 @@ class TaskLifecycle:
             task = self._tasks.get(task_id)
             association = None if task is None else self._sessions.get(task.session_id)
             if (self._closed or task is None or association is None
-                    or association.kind != "task-inventory" or association.request_id != request_id
+                    or association.kind not in {"task-inventory", "task-integrity"} or association.request_id != request_id
                     or not association.session_released or association.terminal_digest is None
                     or association.settlement_claim is not None or association.observation_claim is not None
                     or task.admission_identity is not None or task.retiring
@@ -749,12 +761,12 @@ class TaskLifecycle:
                 if task.session_id is not None:
                     prior = self._sessions.get(task.session_id)
                     if (
-                        kind not in {"task-execution", "task-inventory"}
+                        kind not in {"task-execution", "task-inventory", "task-integrity"}
                         or prior is None
                         or not prior.session_released
                         or prior.terminal_digest is None
                         or (kind == "task-execution" and task.plan_token is None)
-                        or (kind == "task-inventory" and (prior.kind != "task-inventory"
+                        or (kind in {"task-inventory", "task-integrity"} and (prior.kind not in {"task-inventory", "task-integrity"}
                             or task.plan_token is not None or prior.settlement_claim is not None))
                     ):
                         raise LifecycleAssociationError(
@@ -897,7 +909,7 @@ class TaskLifecycle:
                 self._start_receipts[admission.command_id] = receipt
             if task is not None:
                 task.admission_identity = None
-                if admission.kind == "task-inventory":
+                if admission.kind in {"task-inventory", "task-integrity"}:
                     assert admission.command_id is not None
                     task.inventory_start_command_ids.add(admission.command_id)
                     if admission.prior_session_id is not None:
@@ -1443,7 +1455,7 @@ class TaskLifecycle:
             if task.admission_identity != admission.identity:
                 raise LifecycleAssociationError("task admission is stale")
             task.admission_identity = None
-            if task.start_failed and (task.session_id is None or task.start_kind == "task-inventory"):
+            if task.start_failed and (task.session_id is None or task.start_kind in {"task-inventory", "task-integrity"}):
                 self._finish_failed_task_start_locked(task)
 
     def _retire_association_locked(

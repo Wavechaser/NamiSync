@@ -2349,6 +2349,7 @@ def test_workflow_runtime_retains_a_store_whose_close_failed() -> None:
     runtime._plans = {"request": plan}
     runtime._execution_details = {"run": execution_details}
     runtime._retained_execution_reviews = {}
+    runtime._retained_inventory_integrity = {}
     runtime._inventory_details = {"request": inventory_details}
     runtime._execution_started = {"run": NOW}
     del plan, execution_details, inventory_details
@@ -2411,6 +2412,7 @@ def test_concurrent_workflow_runtime_close_waits_for_failed_attempt() -> None:
     runtime._plans = {}
     runtime._execution_details = {}
     runtime._retained_execution_reviews = {}
+    runtime._retained_inventory_integrity = {}
     runtime._inventory_details = {}
     runtime._execution_started = {}
     first_errors: list[Exception] = []

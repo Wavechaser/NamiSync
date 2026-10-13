@@ -508,8 +508,23 @@ Its bounded node gesture resolves complete server-side membership, requires the
 current released publication and advances the existing view revision. It does
 not call the location service, claim a session, or decide baseline/verify/
 rebaseline eligibility. Full-folder and full-location counts include hidden
-files; replacement retains only surviving exact file row IDs. Integrity starts
-and their task association remain a separate delivery unit.
+files; replacement retains only surviving exact file row IDs. Inventory tasks also admit ordinary baseline, verify and confirmed rebaseline
+sessions after exact prior release. They retain task kind `inventory` and have no
+Plan token. `task-integrity` associations can be followed by another ordinary
+operation or Refresh; original start receipts remain recoverable until Close.
+The adapter freezes nonempty selected file paths at the current publication
+revision before admission. Empty selection is never a full-location request.
+Each newly admitted ordinary session replaces the latest ordinary result overlay;
+failed admission restores the prior session, publication and results. Pause,
+resume and cancel require the exact current ordinary task/session.
+
+Terminal release captures ordinary results before Dispatcher/detail cleanup and
+retains the actual workflow scan details for current-ledger publication. Result
+facts are bound to request/session/mode/location/row and remain separate from
+ledger evidence, execution outcomes and automatic verification. Live loss is
+marked incomplete until terminal reconciliation replaces the complete map,
+including an empty result. Refresh retains these prior activity facts; Close
+retires them. Desktop controls and rich result rendering remain pending.
 If a queued or resumed activity becomes unresolved at wake-up, its retained
 `InventoryDetailsView` carries the same state/candidates and the CLI renders the
 same corrective guidance. A provisional ambiguous binding exposes no selected
@@ -522,7 +537,7 @@ domain-effect receipt authority and owns exact session associations; Dispatcher
 custody is not a receipt lifetime. Every admitted direct or task-bound session
 receives an application association before publication.
 
-Desktop transport retains original responses for the eleven effect/lifecycle
+Desktop transport retains original responses for the effect/lifecycle
 commands listed in BRIDGE, using existing bounded custody. Read-only observation
 cannot call the mutation handler or replace application effect receipts. A bounded
 observation round reports pending or unavailable communication without abandoning
@@ -551,15 +566,15 @@ an active direct close or full task close rather than replaying a closing
 session; task replay remains available during terminal-session release.
 
 The adapter may independently retain bounded transport-response replay for
-plan/inventory starts, Plan again and Inventory Refresh. One entry contains only command id, wire intent, in-flight/result
+plan/inventory starts, Plan again, Inventory Refresh and ordinary integrity starts. One entry contains only command id, wire intent, in-flight/result
 delivery state, and an exact `TaskStartView`; it contains no resolved root,
 session association, compensation, observer resource, or cleanup authority. A
 retained successful response may therefore replay before resolving expired or
 evicted source/target slots. A fresh resolution refusal for which no response is
 retained creates no application receipt, association, observer, or dispatcher
-session. Inventory Refresh additionally retains its original failure result at
+session. Inventory Refresh and ordinary integrity starts additionally retain their original failure result at
 the adapter until task Close, preventing the same command from becoming a new
-scan after admission conditions change. Other start refusals are not cached.
+activity after admission conditions change. Other start refusals are not cached.
 
 `TaskLifecyclePort` exposes lifecycle-only shell create/close, task-bound start
 and cancellation, exact task/session reobservation, terminal-session release,

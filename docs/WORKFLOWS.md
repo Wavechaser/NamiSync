@@ -634,6 +634,16 @@ returns inventory plus nominal phase-tagged outcomes. Missing inventory is
 created automatically; the user is not told to run a hidden prerequisite
 manually.
 
+Task-bound ordinary sessions retain one latest `RetainedInventoryIntegrity`
+view independently of current ledger rows. The runtime captures nominal outcomes
+and result axes before session details are dropped; the interface binds that
+capture to exact task/request/session/mode/location identity. The population is
+bounded by inventory review capacity and bounded window/detail reads never
+serialize the full retained population. Admission replaces the prior generation,
+including for later zero-outcome work; Close retires it. Current inventory views
+reuse scan details produced by the actual ordinary workflow scan. Hashing does
+not manufacture a second scan or rewrite an execution result.
+
 Resolution carries the current sole selected mount even when a stable volume
 has moved from its stored hint. The scan and every subsequent verifier open are
 bound by an ephemeral `RootAuthority` built from the fresh resolution's logical

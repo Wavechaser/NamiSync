@@ -15,7 +15,7 @@ window.pywebview.api = {async dispatch(raw) {
   if (raw.startsWith("ack:")) return true;
   if (raw.startsWith("observe:")) {
     observations.push(raw);
-    assert.equal(raw, `observe:${original.request_id}:refresh_inventory`);
+    assert.equal(raw, `observe:${original.request_id}:${original.command}`);
     return {transport_version: 1, state: "ready", generation: 1,
       request_id: original.request_id, response_token: "a".repeat(32), completion_token: null,
       response: {schema_version: 1, request_id: original.request_id, ok: true, result}};
@@ -54,4 +54,18 @@ mode = "capacity";
 await assert.rejects(bridge.refreshInventory(taskId, priorRequest, "7".repeat(32), 7),
   (error) => error.code === "inventory_capacity" && /Close a task/.test(error.message));
 assert.equal(requests.length, 3);
+mode = "lost";
+assert.deepEqual(await bridge.startInventoryIntegrity(taskId, priorRequest, "8".repeat(32), 7, "rebaseline", true), result);
+assert.equal(requests.length, 4);
+assert.equal(observations.length, 2, "ordinary start recovery observes its original command");
+assert.equal(requests.at(-1).command, "start_inventory_integrity");
+assert.deepEqual(requests.at(-1).payload, {task_id: taskId, request_id: priorRequest,
+  command_id: "8".repeat(32), expected_revision: 7, mode: "rebaseline", accept_current_evidence: true});
+for (const args of [
+  [taskId, priorRequest, commandId, 7, "rebaseline", false],
+  [taskId, priorRequest, commandId, 7, "verify", 1],
+  [taskId, priorRequest, commandId, 7, "manual-verify", true],
+  [taskId, priorRequest, commandId, 2 ** 53, "baseline", false],
+]) assert.throws(() => bridge.startInventoryIntegrity(...args));
+assert.equal(requests.length, 4);
 console.log("ok");

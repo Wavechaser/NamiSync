@@ -28,8 +28,8 @@ before any command/gesture. After user confirmation the unchanged exact test
 passes in `selection-installed-11.log` (one pass); the six installed09 passes
 remain valid. No focus/hit guard changed.
 
-The C1 candidate has been restored as enumerated changes onto `milestone1` for
-a coherent normal commit; the WIP ancestry is not merged or cherry-picked.
+C1 is integrated as reviewed `26e72ad` on `milestone1` after reconstruction;
+the WIP ancestry is not merged or cherry-picked.
 Recovery-only stop text is replaced by this current context. Product/test/checker
 bytes match the reviewed recovery candidate. All 19 recovery paths are accounted
 for; retain the recovery ref until final integration accounting and cleanup.
@@ -41,15 +41,53 @@ has 103 passes; imports07 has all 12 contracts. Seven installed cases now pass.
 core-import finding. Failed envelope/catalog/import/native receipts remain under
 `build/m1-10-20261013/`, whose AGENTS defines evidence conventions.
 
-After C1 final approval/commit, implement the registered C2 inventory-task-only
-ordinary integrity association/results, then C3 execution association/manual
+C2 inventory-task-only ordinary integrity association/results is now active,
+then C3 execution association/manual
 start, D controls and E integrated closure. One view revision fences complete
 server-owned file selection; folders/location include hidden/off-window files.
 Ordinary results, current ledger state and immutable original execution truth
 must remain distinct. C2 finite source/test/doc population is in M1_PLAN.
 Terminal subset retry and persistent operation-time hashes remain excluded.
 
+C2 source/tests/subject docs are frozen against `26e72ad`. Final neighborhood10
+passes 3,348 tests with three expected skips; imports11 passes all 12 contracts.
+Failed receipts retain planned fixture/catalog/label/trace migrations, corrected
+unsupported WebView API usage and removal of redundant raw-record activity storage.
+Focused09 passes 67 consumer checks after those corrections. Independent
+`ordinary-review-01.md` approves C2 after final gates; the investigated partial-pause
+item-loss concern is prevented by the existing session accumulator, which
+reconstructs complete emitted facts across invocations. Installed12 runs seven
+direct Inventory/host/transport/gallery consumers; installed13 adds traced Setup
+because its shared validator/instrumentation dependency changed.
+Installed12 has six passes and an Inventory foreground refusal; the user restored
+desktop availability and Inventory passes in installed13. Traced Setup13 and15
+fail an obsolete frozen-Setup DOM predicate. Isolated accepted baseline `26e72ad`
+reproduces it in `ordinary-base-setup-16.log`: the supported flow already entered
+Plan review while the helper waited on retired Setup inputs. Exact driver repair
+is registered in M1_PLAN and confined to `_setup_headed_child.py` and
+`test_setup_headed.py`, separately reviewed/committed before final C2 approval.
+The detached source-clean control worktree is
+`build/m1-10-20261013/ordinary-base-26e72ad`; retain raw baseline/candidate receipts,
+and remove this task-owned worktree after final accounting. C2 product remains
+frozen; its independent review has no actionable supported source finding.
+The driver repair now passes 37 ordinary checks and the traced installed journey
+(`setup-driver-ordinary-03.log`, `setup-driver-installed-03.log`, one native pass).
+Its new predicate waits for actual published Inventory before reading frozen
+context; no product or native input guard changed. Independent driver review
+`setup-driver-review-01.md` approved the repair, committed as `bf9d649`.
+Final C2 review confirms the unchanged source fingerprint and approves its
+separate product commit; all eight affected installed obligations now pass.
+Retained Setup screenshots show a possible pre-existing label-legibility issue;
+the driver proves behavior and identity, not pixel legibility. Carry that
+observation to the requested post-M1-10 GUI review without claiming a diagnosis.
+
+C3a/C3b finite design is recorded in M1_PLAN, with read-only census in
+`manual-attachment-design-01.md`. C3a is execution-associated ledger browsing/
+selection with honest absent-scan provenance and no new mutation authority;
+C3b keeps all auxiliary identity changes together with first manual start.
+
 Use host PowerShell for native tests (restricted Python previously failed
 before native bytes); announce headed input and preserve foreground/hit guards.
-No task worktrees, pushes or PRs exist. No unrelated changes were absorbed.
+Only the detached baseline control worktree above and the accounted C1 recovery
+ref need final cleanup. No pushes or PRs exist. No unrelated changes were absorbed.
 Previous AX2 physical wheel/tilt uncertainty remains unrelated and unverified.

@@ -10,6 +10,7 @@ from typing import Protocol
 from namisync.interfaces.ui_state import MAX_JAVASCRIPT_SAFE_INTEGER
 
 from namisync.workflows import (
+    BASELINE_KIND, REBASELINE_KIND, VERIFY_KIND,
     EXECUTION_KIND,
     INVENTORY_KIND,
     PLAN_KIND,
@@ -20,6 +21,7 @@ from namisync.workflows import (
     PlanProjection,
     InventoryProjection,
     InventoryDetails,
+    RetainedInventoryIntegrity,
 )
 from namisync.workflows.inventory import LocationCandidate
 from namisync.workflows.views import (
@@ -37,6 +39,7 @@ _TASK_RECORD_PAUSE_SUPPORT = {
     PLAN_KIND: False,
     INVENTORY_KIND: False,
     EXECUTION_KIND: True,
+    BASELINE_KIND: True, REBASELINE_KIND: True, VERIFY_KIND: True,
 }
 
 TaskDeliveryUpdate = SessionEventView | SessionRecordView
@@ -399,6 +402,14 @@ class TaskLifecyclePort(Protocol):
         command_id: str, signature: tuple[object, ...],
         delivery_factory: TaskDeliveryFactory,
     ) -> TaskStartView: ...
+
+    def start_task_inventory_integrity(
+        self, task_id: str, request_id: str, *, location_id: int,
+        selected_paths: tuple[str, ...], mode: str, accept_current_evidence: bool,
+        command_id: str, signature: tuple[object, ...], delivery_factory: TaskDeliveryFactory,
+    ) -> TaskStartView: ...
+
+    def read_task_inventory_integrity(self, task_id: str) -> RetainedInventoryIntegrity: ...
 
     def change_task_inventory_visibility(
         self, task_id: str, request_id: str, *, action: str, location_id: int,

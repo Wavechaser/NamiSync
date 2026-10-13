@@ -302,6 +302,17 @@ are informational; directories provide membership only. Labels must disclose
 "Select all files in this location" or "Select all files in this folder", with
 selected/hidden-by-filter counts. Plan's query-matched scope remains distinct.
 
+Ordinary integrity starts freeze this complete nonempty selection against the
+current released publication. Inventory task/session generations fence live
+outcomes and reject stale delivery; result facts have an independent revision
+and exact request/session/mode/location/row binding. The server retains only the
+latest ordinary generation, replacing it on admission and repairing a live Gap
+from the terminal result at release. Window/detail overlays expose only their
+bounded subjects and stay distinct from current ledger evidence and scan scope.
+Refresh preserves these activity facts. Failed admission restores prior state;
+Close retires it. The backend and bridge are available; checkbox activation,
+mode controls and rich result rendering remain pending.
+
 One existing view revision fences selection, windows and details. A stale request
 or revision changes nothing; selection changes advance the revision. Selection
 requires a current released, clean publication and cannot race admission or a

@@ -210,7 +210,7 @@ for (const [scope, expected] of [
   pane.render(task);
   assert.ok(text(pane.element).includes(`Previous published scan: ${expected}`));
   assert.ok(text(globalDetails).includes(`Previous published scan: ${fullScope}`));
-  assert.match(text(pane.element), /Current scan: refused/);
+  assert.match(text(pane.element), /Current activity: refused/);
   task.requestId = fixture.views.default.summary.request_id;
   task.sessionState = "completed";
 }
@@ -396,7 +396,7 @@ assert.match(text(pane.element), /No items match/);
 task.inventoryError = "Inventory unavailable. Reload the inventory view to retry.";
 task.requestId = "f".repeat(32); task.sessionState = "refused";
 pane.render(task); action("inventory-reload").click();
-assert.match(text(pane.element), /Current scan: refused/);
+assert.match(text(pane.element), /Current activity: refused/);
 assert.match(text(pane.element), /Previous published scan/);
 assert.equal(reloads.at(-1), task);
 assert.equal(action("inventory-refresh").disabled, false, "prior publication may refresh current task");
@@ -922,5 +922,11 @@ assert.deepEqual(presented.map(value => value.querySelector(".nami-file-row__not
   ["", "", "Acknowledged", "Partial size", "Size overflow"]);
 assert.equal(presented[0].querySelector(".nami-inventory-row__checksum").textContent, real.recorded_checksum.slice(0, 8));
 assert.equal(presented[1].querySelector(".nami-integrity-row__presence").dataset.integrity, "mismatched");
+for (const [phase, label] of [["baseline", "Baseline"], ["verify", "Verification"], ["rebaseline", "Rebaseline"]]) {
+  presentationTask.sessionState = "completed";
+  presentationTask.snapshot = {terminal_result: {phases: [{phase}]}};
+  presentationPane.render(presentationTask);
+  assert.equal(presentationPane.element.querySelector(".nami-plan-review__status-title").textContent, `${label} completed`);
+}
 presentationPane.dispose();
 process.stdout.write("ok\n");

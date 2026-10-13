@@ -105,4 +105,19 @@ assert.throws(() => bridge.updateInventoryView(task, 0, {...gesture, filters: ["
 assert.throws(() => bridge.updateInventoryView(task, 0, {...gesture, sortDirection: "descending"}));
 assert.equal(requests.length, before);
 assert.ok(requests.every((item) => !Object.hasOwn(item.payload, "command_id")));
+const integrity = {request_id: "a".repeat(32), session_id: "b".repeat(32), mode: "verify",
+  location_id: fixture.summary.location_id, revision: 2, complete: true, gap: false,
+  items: [{row_id: "1", result: "verified", reason: null, recording: "ok", record_disposition: "applied", detail_omitted_count: 0}]};
+response = {...fixture.window, integrity};
+assert.deepEqual((await bridge.getInventoryWindow(task, 0, 0, 256)).integrity, integrity);
+response = {...fixture.detail, integrity};
+assert.deepEqual((await bridge.getInventoryDetail(task, 0, node)).integrity, integrity);
+for (const patch of [{session_id: "foreign"}, {request_id: null}, {mode: "manual-verify"},
+  {revision: true}, {complete: true, gap: true}, {items: [...integrity.items, ...integrity.items]},
+  {items: [{...integrity.items[0], row_id: "999999"}]}, {items: [{...integrity.items[0], result: "future"}]}]) {
+  response = {...fixture.window, integrity: {...integrity, ...patch}};
+  await assert.rejects(bridge.getInventoryWindow(task, 0, 0, 256));
+}
+response = {...fixture.detail, integrity: {...integrity, location_id: "999999"}};
+await assert.rejects(bridge.getInventoryDetail(task, 0, node));
 console.log("ok");

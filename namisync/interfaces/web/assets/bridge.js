@@ -39,6 +39,8 @@ const COMMAND_POLICY_JSON = `{
   "plan_again": {"response_policy": "mutation-observed", "retry": "none", "phase": "open"},
   "open_plan_view": {"response_policy": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
   "open_inventory_view": {"response_policy": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
+  "start_inventory_integrity": {"response_policy": "mutation-observed", "retry": "none", "phase": "open"},
+  "control_integrity": {"response_policy": "mutation-observed", "retry": "none", "phase": "open"},
   "refresh_inventory": {"response_policy": "mutation-observed", "retry": "none", "phase": "open"},
   "acknowledge_inventory": {"response_policy": "mutation-observed", "retry": "none", "phase": "open"},
   "restore_inventory": {"response_policy": "mutation-observed", "retry": "none", "phase": "open"},
@@ -697,7 +699,7 @@ export async function closeTask(taskId, sessionId = null, onDelayed = null) {
 function submitStart(payload, command, timeoutMs, onDelayed = null) {
   const validateResult = (value) => (
     validateStartPlanResult(value)
-    && (command !== "refresh_inventory" || value.request_id !== payload.request_id)
+    && (!["refresh_inventory", "start_inventory_integrity"].includes(command) || value.request_id !== payload.request_id)
     && (command === "plan_again"
       ? value.task_id !== payload.task_id
       : value.task_id === payload.task_id)
@@ -734,6 +736,31 @@ export function refreshInventory(taskId, requestId, commandId, expectedRevision,
   return submitStart(Object.freeze({task_id: taskId, request_id: requestId,
     command_id: commandId, expected_revision: expectedRevision, node_id: nodeId}),
   "refresh_inventory", INVENTORY_START_TIMEOUT_MS, onDelayed);
+}
+
+export function startInventoryIntegrity(taskId, requestId, commandId, expectedRevision, mode, acceptCurrentEvidence, onDelayed = null) {
+  requireTaskId(taskId, "startInventoryIntegrity");
+  if (typeof requestId !== "string" || !ID_PATTERN.test(requestId)
+      || typeof commandId !== "string" || !ID_PATTERN.test(commandId)
+      || !isNonnegativeInteger(expectedRevision) || !["baseline", "verify", "rebaseline"].includes(mode)
+      || typeof acceptCurrentEvidence !== "boolean" || (mode === "rebaseline" && !acceptCurrentEvidence)) {
+    throw new TypeError("startInventoryIntegrity requires a confirmed current selection");
+  }
+  return submitStart(Object.freeze({task_id: taskId, request_id: requestId, command_id: commandId,
+    expected_revision: expectedRevision, mode, accept_current_evidence: acceptCurrentEvidence}),
+  "start_inventory_integrity", INVENTORY_START_TIMEOUT_MS, onDelayed);
+}
+
+export function controlIntegrity(taskId, sessionId, action, onDelayed = null) {
+  requireTaskId(taskId, "controlIntegrity");
+  const task = taskDrains.get(taskId);
+  if (typeof sessionId !== "string" || !ID_PATTERN.test(sessionId)
+      || !["pause", "resume", "cancel"].includes(action)
+      || task === undefined || task.sessionId !== sessionId || task.stopped || task.terminal) {
+    throw new TypeError("controlIntegrity requires the current live integrity session");
+  }
+  return dispatchAttempt("control_integrity", Object.freeze({task_id: taskId, session_id: sessionId, action}),
+    (value) => validateControlReceipt(value, sessionId), PLAN_VIEW_TIMEOUT_MS, false, onDelayed);
 }
 
 function changeInventoryVisibility(action, taskId, requestId, commandId, expectedRevision, nodeId, onDelayed) {
@@ -2562,9 +2589,9 @@ function validateSessionRecord(record, sessionId) {
       "result",
     ]) &&
     record.session_id === sessionId &&
-    isOneOf(record.kind, ["sync-plan", "inventory", "sync-execution"]) &&
+    isOneOf(record.kind, ["sync-plan", "inventory", "sync-execution", "baseline", "verify", "rebaseline"]) &&
     isOneOf(record.state, TERMINAL_STATES) &&
-    record.supports_pause === (record.kind === "sync-execution") &&
+    record.supports_pause === (["sync-execution", "baseline", "verify", "rebaseline"].includes(record.kind)) &&
     isUtcTimestamp(record.created_at) &&
     (record.started_at === null || isUtcTimestamp(record.started_at)) &&
     isUtcTimestamp(record.ended_at) &&
@@ -2899,8 +2926,25 @@ function validateInventorySummary(value) {
       collapseNodeId: null, collapsed: null}, INVENTORY_FILTERS);
 }
 
+function validateInventoryIntegrity(value, rowIds) {
+  return isExactObject(value, ["request_id", "session_id", "mode", "location_id", "revision", "complete", "gap", "items"])
+    && typeof value.request_id === "string" && ID_PATTERN.test(value.request_id)
+    && typeof value.session_id === "string" && ID_PATTERN.test(value.session_id)
+    && ["baseline", "verify", "rebaseline"].includes(value.mode)
+    && isScalar64(value.location_id) && value.location_id !== "0" && isNonnegativeInteger(value.revision)
+    && typeof value.complete === "boolean" && typeof value.gap === "boolean" && !(value.complete && value.gap)
+    && Array.isArray(value.items) && value.items.length <= 256 && Array.isArray(rowIds)
+    && new Set(value.items.map((item) => item?.row_id)).size === value.items.length
+    && value.items.every((item) => {
+      if (!isPlainJsonObject(item)) return false;
+      const {row_id: rowId, ...fact} = item;
+      return isScalar64(rowId) && rowId !== "0" && rowIds.includes(rowId) && validateIntegrityCompact(fact);
+    });
+}
+
 function validateInventoryWindow(value) {
-  return isExactObject(value, ["disposition", "view_revision", "offset", "total", "rows"])
+  return isExactObject(value, ["disposition", "view_revision", "offset", "total", "rows", ...(isPlainJsonObject(value) && Object.prototype.hasOwnProperty.call(value, "integrity") ? ["integrity"] : [])])
+    && (!Object.prototype.hasOwnProperty.call(value, "integrity") || (Array.isArray(value.rows) && validateInventoryIntegrity(value.integrity, value.rows.map((row) => row?.row_id))))
     && ["current", "conflict"].includes(value.disposition)
     && [value.view_revision, value.offset, value.total].every(isNonnegativeInteger)
     && Array.isArray(value.rows) && value.rows.length <= 256
@@ -2959,7 +3003,9 @@ function isScanWarningCode(value) {
 }
 
 function validateInventoryDetail(value) {
-  if (!isExactObject(value, ["disposition", "view_revision", "node_id", "snapshot", "detail"])
+  if (!isExactObject(value, ["disposition", "view_revision", "node_id", "snapshot", "detail", ...(isPlainJsonObject(value) && Object.prototype.hasOwnProperty.call(value, "integrity") ? ["integrity"] : [])])
+      || (Object.prototype.hasOwnProperty.call(value, "integrity") && (!validateInventoryIntegrity(value.integrity, [value.detail?.row?.row_id])
+        || value.integrity.location_id !== value.detail?.row?.location_id))
       || !["current", "conflict", "unavailable"].includes(value.disposition)
       || !isNonnegativeInteger(value.view_revision) || !isNodeId(value.node_id)) return false;
   if (value.disposition !== "current") return value.detail === null && value.snapshot === null;

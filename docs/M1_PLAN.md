@@ -137,12 +137,12 @@ receipts remain retained. Six installed host/transport/gallery cases pass; the
 Inventory journey passes unchanged after the user confirms desktop availability
 (`selection-installed-11.log`, one pass); the two earlier foreground refusals
 remain retained and no safety guard changed. All seven installed cases now pass.
-C1 was preserved as recovery-only `c3bb191` and rebuilt into a coherent reviewed
-commit on `milestone1`; recovery ancestry is not integrated. C2 starts only after
-that commit; C3 remains read-only until its prerequisite closes.
+C1 was preserved as recovery-only `c3bb191` and rebuilt into reviewed commit
+`26e72ad` on `milestone1`; recovery ancestry is not integrated. C2 is active;
+C3 remains read-only until its prerequisite closes.
 
 C2 is one inventory-task-only association/result commit, designed against
-`959f1bc` and refreshed after C1. Task kind stays inventory with no Plan token.
+`959f1bc` and refreshed against integrated C1 `26e72ad`. Task kind stays inventory with no Plan token.
 An explicit `task-integrity` lifecycle effect permits released inventory-to-
 ordinary, ordinary-to-ordinary and ordinary-to-refresh replacement under the
 existing exact prior association, settlement and retirement guards. The bounded
@@ -168,7 +168,8 @@ facade for retained ordinary facts; bridge.js and narrow app/inventory renderer
 activity compatibility. Migrate the same exact command catalogs as C1. Tests
 cover those service/lifecycle/runtime/bridge owners and existing production
 inventory/refresh/visibility probes; BRIDGE, PRESENTATION, INTERFACES and WORKFLOWS
-own documentation. The gate follows a real scan through selection, ordinary
+own documentation, with DESKTOP_UI's current-activity wording migrated where
+ordinary sessions invalidate scan-only labels. The gate follows a real scan through selection, ordinary
 start, live control/release, current-ledger publication with separately bound
 results, refresh/next operation and exact Close. Include all-null/mixed confirmed
 rebaseline, empty/stale rejection before effects, original uncertain-result
@@ -176,6 +177,90 @@ recovery, replacement rollback, stale sink/window/detail suppression, Gap repair
 zero-result replacement and retirement. Run affected workflows/interfaces/tools,
 installed Inventory compatibility, imports and fresh review. Full controls and
 rich row rendering remain D; no engine rewrite or execution identity migration.
+C2's shared start-response validator also changes the exact Plan-again tracing
+anchor; its helper/ordinary transformation checks and one installed Setup flow
+with tracing are direct consumers. Existing runtime close fixture slots and the
+task-port catalog migrate with their owning interfaces tests.
+C2's traced Setup witness exposed a bounded pre-existing driver defect: unchanged
+accepted `26e72ad` reproduces the same frozen-stage timeout as the C2 candidate
+(`ordinary-base-setup-16.log`). The helper captures Setup DOM nodes that are
+retired when the supported flow immediately enters Plan review. Repair the
+existing `_setup_headed_child.py` journey and `test_setup_headed.py` consumers in
+a separate test commit: verify the backend-frozen roots/options in visible Plan
+review, retain actual Plan-again/new-task/revisit and native interaction witnesses,
+and replace only the obsolete hidden-Setup predicates. The complete helper census
+has two such stages: sync's frozen Setup and independent Inventory's frozen Setup;
+both must inspect their visible review pane and authoritative frozen context.
+Absent edit controls supersede disabled-style checks on detached Setup nodes.
+Product behavior and
+verification mechanism stay unchanged. Gate: relevant ordinary driver/transform
+checks plus traced installed Setup, independently reviewed; retain all failed
+candidate/base receipts and rerun the changed driver before accepting C2.
+The repaired driver passes 37 ordinary checks and the traced installed Setup
+journey (`setup-driver-ordinary-03.log`, `setup-driver-installed-03.log`). C2's
+final affected gate passes 3,348 tests with three expected skips, all 12 imports,
+and seven other installed Inventory/host/transport/gallery cases across
+`ordinary-installed-12.log` and `ordinary-installed-13.log`. Independent C2
+partial-progress probes also confirm completed outcomes survive resume/cancel.
+Review owners are `setup-driver-review-01.md` and `ordinary-review-01.md`.
+The independently approved driver repair is committed as `bf9d649`. Its retained
+screenshots also show a possible label-legibility issue in unchanged assets;
+this observation remains for the requested post-M1-10 GUI review. Behavioral
+readback and DOM visibility do not establish pixel legibility.
+
+C3 splits into two independently exercised API commits; D retains actual pane
+navigation and action controls. The read-only census inspected `26e72ad` plus
+the unfinished C2 candidate (`manual-attachment-design-01.md`); refresh its
+changed seams against integrated C2 before implementation.
+
+C3a exposes current-ledger Inventory on a released execution task using the
+original target location and retained execution/Plan binding. Missing location
+is unavailable; opening creates no location, scan, root admission or hash.
+Workflow runtime/models/facade and service/task_port provide the narrow read;
+web drain/inventory_review and bridge/renderer consumers admit nullable actual
+scan provenance. Summary adds `scan_request_id`; scan scope/completeness/counts
+are all null when there was no inventory scan. A complete ledger projection is
+not a completed scan. Preserve Plan reads, existing full-file selection and exact
+Close; explicitly refuse sync-task Refresh, visibility and integrity mutations
+until C3b. Finite tests are existing runtime readers/execution review/inventory
+projection/service/lifecycle and web drain/review/command/frontend/Plan tests,
+plus their existing Inventory probes and exact summary producers. WORKFLOWS,
+INTERFACES, BRIDGE, PRESENTATION and narrow DESKTOP_UI provenance own docs.
+Gate: real execution/release → ledger open/read/hidden selection → preserved
+Plan/detail → Close, with no scan/native/hash entry, truthful missing/no-scan
+state, stale/replacement retirement and mutation refusal. Run affected workflows/
+interfaces, imports, installed Inventory/execution compatibility and fresh review.
+
+C3b atomically migrates current versus original identity before enabling any
+auxiliary start. Retain original Plan request and execution terminal record;
+current request/session/kind track the auxiliary activity. Preserve original
+operation/automatic result maps, timestamps, committed selection, Plan detail,
+anchors/follow and Plan-again identity. Same-task manual verification has its own
+retained/live result generation and history identity; ordinary results remain
+separate. New bounded readiness and observed-start commands carry only exact
+task/original execution identity, revision and (for start) command ID. B rechecks
+whole-set classification and target admission; readiness is never permission.
+Linked execution cannot offer manual verification even after an automatic failed
+read. The first valid fresh manual claim consumes the opportunity through later
+failure/cancellation; wire/identity/revision/capacity refusal before claim does
+not. Only original-command observation/replay survives; no terminal subset retry.
+
+C3b finite owners: workflow runtime/models/execution_review/facade (manual module
+only for required frozen identity/result exposure); service/task_port/lifecycle;
+web drain/commands/inventory_review and actual task-snapshot consumers; assets
+bridge/app/inventory/Plan/task-status. Add direct post-execution/domain-checkpoint/
+inventory/executor-runtime and Plan-limit tests to C3a's population, existing
+task-shell/Plan/execution/detail/window/drain probes, all exact command catalogs
+and their tooling. Subject docs are WORKFLOWS/INTERFACES/BRIDGE/PRESENTATION/
+DESKTOP_UI/FEATURES where shipped behavior changes. No verifier/recorder/schema
+rewrite. The one gate follows execution-only release → ledger view/readiness →
+manual start/control/release → explicit ordinary start/release → exact Close,
+asserting original Plan/execution truth throughout. Include blocked/empty/linked
+cases, ledger races, first-attempt failure recovery, zero outcomes, distinct
+overlays/Gap repair, stale sinks/reads/old-session Close and cleanup replay.
+Run real native composition early, then the ordinary suite for the broad identity
+contract, imports, affected installed host/transport/gallery/Inventory/execution
+checks and fresh independent review. E remains whole-checkpoint closure.
 
 Preserve atomic publication, conditional recording including prior absence,
 root admission, fixed continuation identity and original execution truth.

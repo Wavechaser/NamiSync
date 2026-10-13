@@ -26,6 +26,7 @@ from namisync.core.preflight import RefusalCode, Verdict
 from namisync.core.scalars import bounded_utf8_text, require_safe_int
 from namisync.core.session import OperationResult, PhaseResult, PhaseStatus, SessionState
 from namisync.workflows.views import (
+    IntegrityOutcomeView,
     OperationResultView,
     PhaseResultView,
     RecordingIssueView,
@@ -573,6 +574,17 @@ class RetainedIntegrityItemWindow:
     task_id: str
     run_id: str
     items: tuple[IntegrityOutcome, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class RetainedInventoryIntegrity:
+    task_id: str
+    request_id: str
+    session_id: str
+    mode: str
+    location_id: int
+    result: OperationResultView
+    items: tuple[IntegrityOutcomeView, ...]
 
 
 @dataclass(frozen=True, slots=True)

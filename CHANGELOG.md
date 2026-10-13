@@ -574,6 +574,17 @@ Integrity controls, manual post-copy handoff and beta packaging remain open.
   Its corrected interfaces/tools gate passes 2,399 tests with three expected skips,
   all 12 imports pass, and seven installed Inventory/host/transport/gallery checks
   pass. Earlier foreground refusals remain retained as environment evidence.
+- Attach ordinary baseline/verify/rebaseline sessions to Inventory tasks with
+  exact selected scope, explicit rebaseline acceptance, original-command recovery,
+  pause/resume/cancel and rollback to the prior publication on admission failure.
+  Retain the latest ordinary result separately from current ledger evidence;
+  terminal reconciliation repairs event gaps and Close retires its state.
+  Full desktop action controls remain the following delivery unit.
+  The affected gate passes 3,348 tests with three expected skips and all 12
+  imports. Eight installed checks pass, including a separately repaired Setup
+  driver whose stale hidden-editor expectation also failed on the accepted
+  baseline. Its replacement verifies immutable context in the visible review
+  panes while retaining Plan-again/new-task/revisit and trace checks.
 
 #### Refine Plan refusal messages, move context and controls (2026-10-04)
 

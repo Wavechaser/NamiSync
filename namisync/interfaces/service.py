@@ -55,6 +55,7 @@ from namisync.workflows import (
     RetainedExecutionSummary,
     ExecutionRefusalView,
     RetainedIntegrityItemWindow,
+    RetainedInventoryIntegrity,
     SyncOptions,
     VolumeResolutionRequired,
     VolumeResolutionState,
@@ -621,6 +622,53 @@ class NamiSyncService:
             except BaseException:
                 self._lifecycle.abort_task_start(task_id)
                 raise
+
+    def start_task_inventory_integrity(
+        self, task_id: str, request_id: str, *, location_id: int,
+        selected_paths: tuple[str, ...], mode: str, accept_current_evidence: bool,
+        command_id: str, signature: tuple[object, ...],
+        delivery_factory: TaskDeliveryFactory,
+    ) -> TaskStartView:
+        """Start one ordinary integrity session on a released inventory task."""
+        if mode not in {BASELINE_KIND, VERIFY_KIND, REBASELINE_KIND}:
+            raise ValueError("ordinary integrity mode is invalid")
+        if type(accept_current_evidence) is not bool or (mode == REBASELINE_KIND and not accept_current_evidence):
+            raise ValueError("rebaseline requires explicit acceptance of current evidence")
+        if not selected_paths:
+            raise ValueError("ordinary integrity requires selected file paths")
+        with self._lifecycle.command_guard(command_id):
+            try:
+                claim = self._lifecycle.begin_task_inventory_integrity(task_id, request_id, command_id, signature)
+            except LifecycleReceiptConflictError:
+                raise TaskIntentConflictError("task command intent conflicts") from None
+            except LifecycleAssociationError as error:
+                raise TaskUnavailableError("inventory integrity is unavailable") from error
+            if claim.replay is not None:
+                return TaskStartView(task_id, claim.replay.request_id, claim.replay.session_id)
+            try:
+                with self._lock:
+                    captured = self._task_inventory_details.get(task_id)
+                if captured is None or captured[1] is None or captured[1].location_id != location_id:
+                    raise TaskUnavailableError("inventory location is unavailable")
+                fresh_id = uuid4().hex
+                request = integrity_request(mode, fresh_id, location_id=location_id,
+                    selected_paths=selected_paths, selected_mount=captured[1].resolution.selected_mount,
+                    accept_current_evidence=accept_current_evidence)
+                sink = delivery_factory(task_id)
+                if not callable(sink):
+                    raise TypeError("task delivery factory must return a sink")
+                session_id, receipt = self._submit_session(mode, request, effect_kind="task-integrity",
+                    command_id=command_id, signature=signature, request_id=fresh_id,
+                    observation_sink=sink, task_id=task_id, detail_owner=("inventory", fresh_id))
+                self._runtime.retire_inventory_integrity(task_id)
+                return TaskStartView(task_id, receipt.request_id, str(session_id))
+            except BaseException:
+                self._lifecycle.abort_task_start(task_id)
+                raise
+
+    def read_task_inventory_integrity(self, task_id: str) -> RetainedInventoryIntegrity:
+        self._require_open()
+        return self._runtime.read_inventory_integrity(task_id)
 
     def change_task_inventory_visibility(
         self, task_id: str, request_id: str, *, action: str, location_id: int,
@@ -1890,7 +1938,7 @@ class NamiSyncService:
     def _capture_task_inventory_details(self, work, task_id: str | None) -> None:
         if task_id is None or work.detail_owner is None:
             return
-        if self._lifecycle.settlement_binding(work).kind != "task-inventory":
+        if self._lifecycle.settlement_binding(work).kind not in {"task-inventory", "task-integrity"}:
             return
         request_id = work.detail_owner[1]
         with self._lock:
@@ -2339,12 +2387,20 @@ class NamiSyncService:
                 terminal_digest=terminal_digest,
                 dispatcher_truth_observed=dispatcher_truth_observed,
             )
+            inventory_task = task_id is not None and self._lifecycle.settlement_binding(work).kind in {"task-inventory", "task-integrity"}
             review_binding = self._capture_task_execution_review(
                 work,
                 task_id,
                 terminal_result,
             )
             if not retire_plan:
+                if (task_id is not None and delivery is not None
+                        and self._lifecycle.settlement_binding(work).kind == "task-integrity"):
+                    with self._lock:
+                        captured = self._task_inventory_details[task_id][1]
+                    assert captured is not None and captured.location_id is not None
+                    self._runtime.capture_inventory_integrity(task_id, work.detail_owner[1],
+                        session_id, delivery.record.kind, captured.location_id, terminal_result)
                 self._capture_task_inventory_details(work, task_id)
             if not work.replay:
                 self._observer.release(work.session_id)
@@ -2367,6 +2423,8 @@ class NamiSyncService:
                         retirement = None
             self._lifecycle.complete_settlement(work)
             if retire_plan and task_id is not None:
+                if inventory_task:
+                    self._runtime.retire_inventory_integrity(task_id)
                 with self._lock:
                     self._task_inventory_details.pop(task_id, None)
                     for command_id, receipt in tuple(self._visibility_receipts.items()):

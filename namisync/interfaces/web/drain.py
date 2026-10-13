@@ -6,7 +6,7 @@ import re
 import logging
 from collections import OrderedDict, deque
 from collections.abc import Callable, Iterable, Mapping
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from itertools import chain, islice
 from math import isfinite
 from threading import Condition, Lock, get_ident
@@ -180,6 +180,48 @@ class _DrainClaim:
 
 
 @dataclass(slots=True)
+class _InventoryIntegrityState:
+    mode: str
+    location_id: int
+    membership: frozenset[str]
+    request_id: str | None = None
+    session_id: str | None = None
+    revision: int = 0
+    complete: bool = False
+    gap: bool = False
+    items: dict[str, dict[str, object]] = field(default_factory=dict)
+
+    def offer(self, update: TaskDeliveryUpdate) -> None:
+        if self.complete or type(update) is not SessionEventView:
+            return
+        if update.body_type == "Gap":
+            self.gap = True
+            self.revision += 1
+        elif update.body_type == "IntegrityOutcome":
+            self.add(update.body)
+
+    def add(self, body: Mapping[str, object]) -> None:
+        row_id = str(body["row_id"])
+        if (str(body["location_id"]) != str(self.location_id)
+                or body["phase"] != self.mode or row_id not in self.membership):
+            raise ObservationConflictError("ordinary integrity result changed its selected subject")
+        fact = {key: body[key] for key in ("result", "reason", "recording", "record_disposition", "detail_omitted_count")}
+        previous = self.items.get(row_id)
+        if previous is not None and previous != fact:
+            raise ObservationConflictError("ordinary integrity result changed its outcome")
+        if previous is None:
+            self.items[row_id] = fact
+            self.revision += 1
+
+    def wire(self, row_ids: Iterable[str] = ()) -> dict[str, object]:
+        return {"request_id": self.request_id, "session_id": self.session_id,
+                "mode": self.mode, "location_id": str(self.location_id),
+                "revision": self.revision, "complete": self.complete, "gap": self.gap,
+                "items": [{"row_id": row_id, **self.items[row_id]}
+                          for row_id in row_ids if row_id in self.items]}
+
+
+@dataclass(slots=True)
 class _TaskState:
     task_id: str
     command_id: str
@@ -221,6 +263,7 @@ class _TaskState:
     execution_gap_maximum: int | None = None
     execution_membership: Mapping[str, str] | None = None
     presentation_state: TaskPresentationState | None = None
+    ordinary_integrity: _InventoryIntegrityState | None = None
     inventory_view_loading: bool = False
     inventory_visibility_pending: bool = False
     inventory_view_dirty: bool = False
@@ -258,6 +301,8 @@ class _TaskState:
                 expected_session_id=expected_session_id,
             )
             self._offer_execution_fact(update)
+            if self.ordinary_integrity is not None and (self.ordinary_integrity.session_id in (None, update_session)):
+                self.ordinary_integrity.offer(update)
             if type(update) is SessionRecordView:
                 self.terminal_record = update
                 self.terminal_pending = False
@@ -1004,6 +1049,26 @@ class TaskRegistry:
         self, task_id: str, request_id: str, *, expected_revision: int,
         node_id: str | None, command_id: str, wire_intent: tuple[object, ...],
     ) -> TaskStartView:
+        return self._start_inventory_activity(task_id, request_id, expected_revision=expected_revision,
+            node_id=node_id, command_id=command_id, wire_intent=wire_intent)
+
+    def start_inventory_integrity(
+        self, task_id: str, request_id: str, *, expected_revision: int,
+        mode: str, accept_current_evidence: bool, command_id: str, wire_intent: tuple[object, ...],
+    ) -> TaskStartView:
+        if mode not in {"baseline", "verify", "rebaseline"}:
+            raise ValueError("ordinary integrity mode is invalid")
+        if type(accept_current_evidence) is not bool or (mode == "rebaseline" and not accept_current_evidence):
+            raise ValueError("rebaseline requires explicit acceptance of current evidence")
+        return self._start_inventory_activity(task_id, request_id, expected_revision=expected_revision,
+            node_id=None, command_id=command_id, wire_intent=wire_intent,
+            mode=mode, accept_current_evidence=accept_current_evidence)
+
+    def _start_inventory_activity(
+        self, task_id: str, request_id: str, *, expected_revision: int,
+        node_id: str | None, command_id: str, wire_intent: tuple[object, ...],
+        mode: str | None = None, accept_current_evidence: bool = False,
+    ) -> TaskStartView:
         _require_opaque_id(command_id, "task command id")
         with self._condition:
             if self._closing:
@@ -1023,13 +1088,21 @@ class TaskRegistry:
                     if (request_id != task.request_id
                             or expected_revision != view.view_revision or not task.session_released
                             or task.delivered_terminal_record is None or task.inventory_view_loading
-                            or task.transition):
-                        raise TaskUnavailableError("inventory refresh requires the current released view")
+                            or task.transition or (mode is not None and (
+                                task.inventory_view_dirty or view.request_id != request_id))):
+                        raise TaskUnavailableError("inventory activity requires the current released view")
                     node = view.projection.nodes[0] if node_id is None else view.projection.node_for_id(node_id)
                     if node.warning is not None:
                         raise ValueError("inventory warnings cannot refresh")
                     selected_paths = () if node.is_container else (node.rel_path,)
                     subtree_roots = (node.rel_path,) if node.is_container and node.position != 0 else ()
+                    membership = None
+                    if mode is not None:
+                        membership = {row_id: view.projection.row_for_id(row_id).rel_path
+                                      for row_id in sorted(view.selected_row_ids)}
+                        if not membership:
+                            raise ValueError("ordinary integrity requires selected files")
+                        selected_paths = tuple(membership.values())
                     if len(self._start_responses) >= _START_RESPONSE_CAPACITY:
                         raise InventoryCommandCapacityError("Inventory command capacity is full; close a task before refreshing")
                     # Reserve retained original-result capacity before lifecycle claim or effect.
@@ -1039,6 +1112,7 @@ class TaskRegistry:
                     self._start_responses[command_id] = response
                     task.start_response_ids.add(command_id)
                     prior_request, prior_start = task.request_id, task.start_command_id
+                    prior_integrity = task.ordinary_integrity
                     task.transition = True
                     task.condition.notify_all()
         if retained is not None:
@@ -1072,16 +1146,20 @@ class TaskRegistry:
                 task.terminal_pending = task.session_released = task.closing = False
                 task.active_drain = None
                 task.presentation_state = None
+                if mode is not None:
+                    task.ordinary_integrity = _InventoryIntegrityState(mode, view.projection.location_id, frozenset(membership))
                 return task.sink(task.generation)
 
         result = None
         failure_code = None
         try:
-            candidate = self._lifecycle.start_task_inventory_refresh(
-                task_id, request_id, location_id=view.projection.location_id,
-                selected_paths=selected_paths, subtree_roots=subtree_roots,
-                command_id=command_id, signature=wire_intent, delivery_factory=delivery_factory,
-            )
+            start = (self._lifecycle.start_task_inventory_refresh if mode is None
+                     else self._lifecycle.start_task_inventory_integrity)
+            options = ({"subtree_roots": subtree_roots} if mode is None
+                       else {"mode": mode, "accept_current_evidence": accept_current_evidence})
+            candidate = start(task_id, request_id, location_id=view.projection.location_id,
+                selected_paths=selected_paths, command_id=command_id, signature=wire_intent,
+                delivery_factory=delivery_factory, **options)
             if type(candidate) is not TaskStartView or candidate.task_id != task_id:
                 raise RuntimeError("inventory lifecycle returned invalid start data")
             candidate.__post_init__()
@@ -1089,6 +1167,9 @@ class TaskRegistry:
                 if any(update.session_id != candidate.session_id for update in task.queue):
                     raise ObservationConflictError("inventory observation names another session")
                 task.session_id, task.request_id = candidate.session_id, candidate.request_id
+                if mode is not None:
+                    task.ordinary_integrity.request_id = candidate.request_id
+                    task.ordinary_integrity.session_id = candidate.session_id
                 task.start_command_id = command_id
                 task.prior_session_id = task.prior_delivery = None
                 task.transition = False
@@ -1100,6 +1181,7 @@ class TaskRegistry:
             self._restore_plan_delivery(task)
             with task.condition:
                 task.request_id, task.start_command_id = prior_request, prior_start
+                task.ordinary_integrity = prior_integrity
                 task.transition = False
                 task.condition.notify_all()
         with self._condition:
@@ -1191,7 +1273,11 @@ class TaskRegistry:
             self._require_inventory_task_locked(task)
             if self._inventory_views.get(task_id) is not view:
                 raise TaskUnavailableError("inventory view is unavailable")
-            return view.window(expected_revision=expected_revision, offset=offset, limit=limit)
+            result = view.window(expected_revision=expected_revision, offset=offset, limit=limit)
+            if task.ordinary_integrity is not None:
+                result["integrity"] = task.ordinary_integrity.wire(
+                    row["row_id"] for row in result["rows"] if row["row_id"] is not None)
+            return result
 
     def get_inventory_detail(self, task_id: str, *, expected_revision: int, node_id: str) -> dict[str, object]:
         task, view = self._require_inventory_view(task_id)
@@ -1221,7 +1307,10 @@ class TaskRegistry:
             # A renamed/replaced row cannot attest the path in the earlier view.
             if detail is None or detail["row"]["path_key"] != path_key:
                 return {"disposition": "unavailable", "view_revision": view.view_revision, "node_id": node_id, "snapshot": None, "detail": None}
-            return {"disposition": "current", "view_revision": view.view_revision, "node_id": node_id, "snapshot": snapshot, "detail": detail}
+            result = {"disposition": "current", "view_revision": view.view_revision, "node_id": node_id, "snapshot": snapshot, "detail": detail}
+            if task.ordinary_integrity is not None:
+                result["integrity"] = task.ordinary_integrity.wire((row_id,))
+            return result
 
     def open_plan_view(self, task_id: str) -> dict[str, object]:
         with self._condition:
@@ -2043,6 +2132,18 @@ class TaskRegistry:
         finally:
             self._leave_start_response(response)
 
+    def control_integrity(self, task_id: str, session_id: str, action: str) -> object:
+        task = self._require_task(task_id, session_id)
+        with task.condition:
+            if (task.task_kind != "inventory" or task.ordinary_integrity is None
+                    or task.ordinary_integrity.session_id != session_id):
+                raise TaskUnavailableError("ordinary integrity session is unavailable")
+        if action not in {"pause", "resume", "cancel"}:
+            raise ValueError("integrity control action is invalid")
+        return {"pause": self._lifecycle.pause_task_session,
+                "resume": self._lifecycle.resume_task_session,
+                "cancel": self._lifecycle.cancel_task_session}[action](task_id, session_id)
+
     def control_execution(
         self,
         task_id: str,
@@ -2726,6 +2827,8 @@ class TaskRegistry:
             if task.session_id != session_id:
                 raise TaskUnavailableError("task is unavailable")
             execution_release = task.execution_session_id == session_id
+            ordinary = task.ordinary_integrity
+            ordinary_release = ordinary is not None and ordinary.session_id == session_id
             delivery = self._terminal_delivery_locked(task)
             task.closing = True
             task.generation += 1
@@ -2789,6 +2892,7 @@ class TaskRegistry:
                 raise RuntimeError(
                     "task lifecycle returned invalid retained execution summary"
                 )
+        retained_ordinary = self._lifecycle.read_task_inventory_integrity(task_id) if ordinary_release else None
         with task.condition:
             stale = (
                 task.session_id != session_id
@@ -2804,6 +2908,18 @@ class TaskRegistry:
                 next_revision = _next_execution_revision(task.execution_revision)
                 task.execution_summary = retained_summary
                 task.execution_revision = next_revision
+            if retained_ordinary is not None:
+                if (retained_ordinary.task_id != task_id or retained_ordinary.session_id != session_id
+                        or retained_ordinary.request_id != ordinary.request_id
+                        or retained_ordinary.location_id != ordinary.location_id or retained_ordinary.mode != ordinary.mode):
+                    raise ObservationConflictError("ordinary terminal result changed identity")
+                # Replace the live subset, including the empty terminal population.
+                replacement = _InventoryIntegrityState(ordinary.mode, ordinary.location_id,
+                    ordinary.membership, ordinary.request_id, ordinary.session_id, ordinary.revision + 1)
+                for item in retained_ordinary.items:
+                    replacement.add(asdict(item))
+                replacement.complete = True
+                task.ordinary_integrity = replacement
             task.session_released = True
             task.condition.notify_all()
         return result

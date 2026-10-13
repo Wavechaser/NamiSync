@@ -291,7 +291,8 @@ mutation recovery, interactive wait or feedback-only behavior. It is metadata,
 not a new wire field or recovery protocol.
 
 Original-result retention applies to `create_task`, `start_plan`,
-`start_inventory`, `refresh_inventory`, `acknowledge_inventory`, `restore_inventory`,
+`start_inventory`, `refresh_inventory`, `start_inventory_integrity`, `control_integrity`,
+`acknowledge_inventory`, `restore_inventory`,
 `plan_again`, `start_execution`, `mutate_plan_selection`,
 `mutate_plan_scope`, `mutate_plan_highlighted_selection`, `control_execution`,
 `release_terminal_session` and `close_task`. Existing domain receipts do not
@@ -577,6 +578,26 @@ advances the view revision and preserves
 search, facets, sort and surviving collapsed folders; failed construction leaves
 the old publication intact. Scan completeness remains separate from projection
 completeness.
+
+`start_inventory_integrity` is an observed asynchronous mutation with exact
+`task_id`, `request_id`, `command_id`, `expected_revision`, `mode` and
+`accept_current_evidence` fields. Mode is baseline, verify or rebaseline; the
+acknowledgement is an exact Boolean and must be true for rebaseline. No path,
+row population or location comes from the browser. Original receipt recovery
+precedes current-publication checks. Fresh admission requires nonempty complete
+server selection and shares the existing 48-entry start capacity. Changed
+original intent conflicts. `control_integrity` is an observed direct mutation
+with exact task/session/action (pause, resume or cancel).
+
+After an ordinary start, inventory windows and domain details additionally carry
+an `integrity` context: original request/session/mode/location identity, result
+revision, complete and gap flags, and compact outcome items for only the returned
+row IDs. Items carry result/reason, recording/disposition and omitted-detail
+count. At most 256 facts cross a window and at most one crosses detail; full
+selected populations remain server-owned. Terminal reconciliation replaces the
+live subset and clears the gap flag, even with zero outcomes. These activity
+facts do not reinterpret the separate current ledger fields. Existing pure
+inventory responses omit this context. Full desktop controls remain pending.
 
 Visibility requires the current released request, a matching complete publication
 and its exact revision. Full/root, folder and leaf membership comes from the

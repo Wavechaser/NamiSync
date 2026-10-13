@@ -543,12 +543,17 @@ export function createInventoryReviewPanel(callbacks) {
     recoveryActions.hidden = check.hidden && reload.hidden;
     renderFilesystemText(rootPath, review?.summary.root_path ?? value.form?.source?.text ?? "");
     rootLine.title = review?.summary.root_path ?? value.form?.source?.text ?? "";
+    const ordinary = review?.window?.integrity;
+    const activityKind = (ordinary != null && ordinary.session_id === value.sessionId ? ordinary.mode : null)
+      ?? value.snapshot?.terminal_result?.phases?.find(phase => ["baseline", "verify", "rebaseline"].includes(phase.phase))?.phase
+      ?? value.snapshot?.phase;
+    const activity = ({baseline: "Baseline", verify: "Verification", rebaseline: "Rebaseline"})[activityKind] ?? "Inventory scan";
     const digest = taskStatusDigest(value);
     summary.dataset.status = value.inventoryError ? "attention" : digest.state;
     renderText(title, startAttempt !== null || value.sessionState === "active" || value.inventoryLoading ? digest.title
-      : value.sessionState === "refused" ? "Inventory scan did not start"
-        : value.sessionState === "failed" ? "Inventory scan failed"
-          : value.sessionState === "canceled" ? "Inventory scan canceled" : "Inventory scan completed");
+      : value.sessionState === "refused" ? `${activity} did not start`
+        : value.sessionState === "failed" ? `${activity} failed`
+          : value.sessionState === "canceled" ? `${activity} canceled` : `${activity} completed`);
     progress.className = "nami-progress nami-plan-review__progress"
       + (digest.progress.indeterminate ? " nami-progress--indeterminate" : "");
     progress.dataset.status = digest.state;
@@ -576,7 +581,7 @@ export function createInventoryReviewPanel(callbacks) {
       available ? `${publication} · ${review.summary.scan_complete ? "" : "incomplete · "}${scanCounts}` : "",
       guidance, value.inventoryAction?.message,
     ].filter(Boolean))].join(" · "));
-    renderText(globalScanState, `Current scan: ${value.sessionState === "active" ? "in progress" : value.sessionState}.`);
+    renderText(globalScanState, `Current activity: ${value.sessionState === "active" ? "in progress" : value.sessionState}.`);
     renderFilesystemText(globalScanFacts, available
       ? `${detailPublication} · ${review.summary.scan_complete ? "complete" : "incomplete"} · ${scanCounts}` : "");
     if (!available) {

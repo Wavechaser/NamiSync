@@ -290,6 +290,13 @@ class _Service:
         self.calls.append(("refresh-inventory", task_id, request_id, kwargs))
         return TaskStartView(task_id, "6" * 32, "7" * 32)
 
+    def start_inventory_integrity(self, task_id, request_id, **kwargs):
+        self.calls.append(("inventory-integrity", task_id, request_id, kwargs))
+        return TaskStartView(task_id, "6" * 32, "7" * 32)
+
+    def control_integrity(self, task_id, session_id, action):
+        return self.control_execution(task_id, session_id, action)
+
     def change_inventory_visibility(self, task_id, request_id, **kwargs):
         self.calls.append(("inventory-visibility", task_id, request_id, kwargs))
         return {"task_id": task_id, "request_id": request_id, "action": kwargs["action"],
@@ -571,6 +578,8 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
         "open_plan_view",
         "open_inventory_view",
         "refresh_inventory",
+        "start_inventory_integrity",
+        "control_integrity",
         "acknowledge_inventory",
         "restore_inventory",
         "update_inventory_view",
@@ -598,6 +607,7 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
     assert "test_report" not in commands
     async_commands = {
         "refresh_inventory",
+        "start_inventory_integrity",
         "acknowledge_inventory",
         "restore_inventory",
         "create_task",
@@ -617,7 +627,7 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
         name for name, spec in commands.items()
         if spec.response_policy is CommandResponsePolicy.MUTATION_OBSERVED
     } == {
-        "create_task", "start_plan", "start_inventory", "refresh_inventory",
+        "create_task", "start_plan", "start_inventory", "refresh_inventory", "start_inventory_integrity", "control_integrity",
         "acknowledge_inventory", "restore_inventory",
         "plan_again", "mutate_plan_selection", "mutate_plan_scope",
         "mutate_plan_highlighted_selection", "start_execution",
@@ -650,7 +660,7 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
         (("update_inventory_view", "set_inventory_selection"), CommandAccess.READ_ONLY,
          FieldRequirement.FORBIDDEN, FieldRequirement.REQUIRED,
          CommandResponsePolicy.FEEDBACK_ONLY, CommandRetry.NONE),
-        (("refresh_inventory", "acknowledge_inventory", "restore_inventory"), CommandAccess.MUTATING,
+        (("refresh_inventory", "start_inventory_integrity", "acknowledge_inventory", "restore_inventory"), CommandAccess.MUTATING,
          FieldRequirement.REQUIRED, FieldRequirement.REQUIRED,
          CommandResponsePolicy.MUTATION_OBSERVED, CommandRetry.NONE),
         (("next_events",), CommandAccess.READ_ONLY, FieldRequirement.FORBIDDEN,
@@ -3415,3 +3425,22 @@ def test_generic_record_serializer_preserves_result_free_snapshots() -> None:
     assert to_primitive_view(record)["result"] is None
     pending = replace(record, state="pending", ended_at=None)
     assert to_primitive_view(pending)["state"] == "pending"
+
+
+def test_ordinary_integrity_commands_bound_complete_intent_before_registry():
+    commands, _, authority = _commands()
+    payload = {"task_id": TASK_ID, "request_id": "8" * 32, "command_id": COMMAND_ID,
+               "expected_revision": 4, "mode": "rebaseline", "accept_current_evidence": True}
+    result = _invoke(commands["start_inventory_integrity"], payload)
+    assert result.request_id == "6" * 32
+    assert authority.calls[-1][3]["wire_intent"] == (
+        "inventory-integrity", TASK_ID, "8" * 32, 4, "rebaseline", True)
+    for patch in ({"mode": "manual-verify"}, {"mode": []}, {"accept_current_evidence": 1},
+                  {"accept_current_evidence": False}, {"expected_revision": True},
+                  {"expected_revision": 2**53}, {"request_id": "x" * 33}, {"selected_paths": []}):
+        with pytest.raises(CommandPayloadError):
+            _invoke(commands["start_inventory_integrity"], {**payload, **patch})
+    assert len(authority.calls) == 1
+    for action in ("pause", "resume", "cancel"):
+        result = _invoke(commands["control_integrity"], {"task_id": TASK_ID, "session_id": "7" * 32, "action": action})
+        assert result.session_id == "7" * 32

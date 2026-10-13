@@ -6744,3 +6744,189 @@ def test_terminal_event_alone_does_not_earn_release_receipt() -> None:
     with pytest.raises(TaskUnavailableError):
         registry.release_terminal_session(start.task_id, SESSION)
     assert service.lifecycle_calls == []
+
+@pytest.mark.parametrize("mode", ["baseline", "rebaseline", "mixed"])
+def test_inventory_ordinary_native_selection_results_refresh_and_close(tmp_path, mode):
+    from namisync.interfaces.service import NamiSyncService
+    from namisync.workflows import LocationCandidate
+    root = tmp_path / "files"
+    root.mkdir()
+    (root / "one.bin").write_bytes(b"ordinary bytes")
+    (root / "two.bin").write_bytes(b"more bytes")
+    with NamiSyncService(tmp_path / "ledger.db", tmp_path / "history.db") as service:
+        service.initialize_database_contracts()
+        registry = _make_registry(service, drain_wait=0.1)
+        def finish(start):
+            _wait_terminal(service._dispatcher, start.session_id)
+            for value in range(100, 160):
+                registry.drain(start.task_id, start.session_id, f"{value:032x}", replay_from=None)
+                if registry._tasks[start.task_id].delivered_terminal_record is not None:
+                    break
+            state = registry._tasks[start.task_id].ordinary_integrity
+            if state is not None and state.session_id == start.session_id and not state.complete:
+                assert state.gap == (mode != "baseline")
+                assert len(state.items) == (2 if mode == "baseline" else 0)
+            registry.release_terminal_session(start.task_id, start.session_id)
+        shell = registry.create_task_shell("1" * 32)
+        first = registry.start_setup_inventory(shell.task_id, LocationCandidate.literal(str(root)),
+            command_id="2" * 32, wire_intent=("inventory", str(root)))
+        finish(first)
+        registry.open_inventory_view(first.task_id)
+        if mode == "mixed":
+            seed = service.start_baseline(root_path=str(root), selected_paths=("one.bin",))
+            _wait_terminal(service._dispatcher, seed.session_id)
+            service.close_session(seed.session_id)
+            assert [row.has_baseline for row in service.list_inventory(int(registry.open_inventory_view(first.task_id)["location_id"]))].count(True) == 1
+            mode = "rebaseline"
+        original_start = service.start_task_inventory_integrity
+        offered = []
+        def observed_start(task_id, request_id, **kwargs):
+            factory = kwargs["delivery_factory"]
+            def delivery(task_id):
+                sink = factory(task_id)
+                def accept(update):
+                    if type(update) is SessionEventView and update.body_type == "IntegrityOutcome":
+                        offered.append(update)
+                        if mode == "baseline":
+                            # Same selected row and location remain authoritative if display casing changes.
+                            sink(replace(update, body={**update.body, "path": update.body["path"].upper()}))
+                        else:
+                            # Model a lossy subscriber: only its Gap survives until terminal repair.
+                            sink(replace(update, body_type="Gap", body={"first_missed_seq": update.sequence}))
+                        return
+                    sink(update)
+                return accept
+            return original_start(task_id, request_id, **{**kwargs, "delivery_factory": delivery})
+        service.start_task_inventory_integrity = observed_start
+        with pytest.raises(ValueError, match="selected"):
+            registry.start_inventory_integrity(first.task_id, first.request_id, expected_revision=0,
+                mode=mode, accept_current_evidence=True, command_id="3" * 32, wire_intent=(mode,))
+        selected = registry.set_inventory_selection(first.task_id, first.request_id,
+            expected_revision=0, node_id=None, selected=True)
+        assert selected["selected_file_count"] == 2
+        if mode == "rebaseline":
+            with pytest.raises(ValueError, match="acceptance"):
+                registry.start_inventory_integrity(first.task_id, first.request_id, expected_revision=1,
+                    mode=mode, accept_current_evidence=False, command_id="3" * 32, wire_intent=(mode,))
+        second = registry.start_inventory_integrity(first.task_id, first.request_id, expected_revision=1,
+            mode=mode, accept_current_evidence=True, command_id="3" * 32, wire_intent=(mode,))
+        finish(second)
+        summary = registry.open_inventory_view(first.task_id)
+        assert summary["scan_scope"]["kind"] == "selection"
+        assert summary["rollup"]["unverified"] == 2
+        assert len(offered) == 2
+        window = registry.get_inventory_window(first.task_id, expected_revision=summary["view_revision"], offset=0, limit=256)
+        ordinary = window["integrity"]
+        assert ordinary["session_id"] == second.session_id and ordinary["request_id"] == second.request_id
+        assert ordinary["complete"] and not ordinary["gap"] and len(ordinary["items"]) == 2
+        assert {item["result"] for item in ordinary["items"]} == {"baselined"}
+        assert registry.start_inventory_integrity(first.task_id, first.request_id, expected_revision=1,
+            mode=mode, accept_current_evidence=True, command_id="3" * 32, wire_intent=(mode,)) == second
+        third = registry.refresh_inventory(first.task_id, second.request_id, expected_revision=summary["view_revision"],
+            node_id=None, command_id="4" * 32, wire_intent=("refresh",))
+        finish(third)
+        summary = registry.open_inventory_view(first.task_id)
+        assert registry.get_inventory_window(first.task_id, expected_revision=summary["view_revision"], offset=0, limit=256)["integrity"] == ordinary
+        registry.close_task(first.task_id, third.session_id)
+        assert service._runtime._retained_inventory_integrity == {}
+        assert service._lifecycle._start_receipts == {}
+        assert registry._start_responses == {}
+
+@pytest.mark.parametrize("action", ["resume", "cancel"])
+def test_inventory_ordinary_live_control_terminal_repair_and_zero_replacement(tmp_path, action):
+    from threading import Event
+    from namisync.core.integrity import IntegrityMode
+    from namisync.core.session import SessionState
+    from namisync.interfaces.service import NamiSyncService
+    from namisync.workflows import LocationCandidate
+    from _inventory_fixtures import _wait_for
+    root = tmp_path / "files"
+    root.mkdir()
+    (root / "one.bin").write_bytes(b"ordinary bytes")
+    with NamiSyncService(tmp_path / "ledger.db", tmp_path / "history.db") as service:
+        service.initialize_database_contracts()
+        registry = _make_registry(service, drain_wait=0.1)
+        def finish(start):
+            _wait_terminal(service._dispatcher, start.session_id)
+            for value in range(100, 160):
+                registry.drain(start.task_id, start.session_id, f"{value:032x}", replay_from=None)
+                if registry._tasks[start.task_id].delivered_terminal_record is not None:
+                    break
+            registry.release_terminal_session(start.task_id, start.session_id)
+            return registry.open_inventory_view(start.task_id)
+        shell = registry.create_task_shell("1" * 32)
+        first = registry.start_setup_inventory(shell.task_id, LocationCandidate.literal(str(root)),
+            command_id="2" * 32, wire_intent=("inventory", str(root)))
+        finish(first)
+        registry.set_inventory_selection(first.task_id, first.request_id, expected_revision=0, node_id=None, selected=True)
+        baseline = registry.start_inventory_integrity(first.task_id, first.request_id, expected_revision=1,
+            mode="baseline", accept_current_evidence=False, command_id="3" * 32, wire_intent=("baseline",))
+        summary = finish(baseline)
+        started, release = Event(), Event()
+        original = service._runtime._integrity_deps.runners[IntegrityMode.VERIFY]
+        calls = []
+        def gated(selection, context, recorder):
+            calls.append(tuple(item.row_id for item in selection.pending))
+            if len(calls) == 1:
+                started.set()
+                assert release.wait(5)
+                context.run.checkpoint()
+                pytest.fail("pause must leave the first invocation")
+            return original(selection, context, recorder)
+        service._runtime._integrity_deps.runners[IntegrityMode.VERIFY] = gated
+        current = registry.start_inventory_integrity(first.task_id, baseline.request_id,
+            expected_revision=summary["view_revision"], mode="verify", accept_current_evidence=False,
+            command_id="4" * 32, wire_intent=("verify",))
+        try:
+            assert started.wait(5)
+            before = registry.get_inventory_window(first.task_id, expected_revision=summary["view_revision"], offset=0, limit=256)["integrity"]
+            assert before["session_id"] == current.session_id and before["items"] == [] and not before["complete"]
+            with pytest.raises(TaskUnavailableError):
+                registry.control_integrity(first.task_id, baseline.session_id, "cancel")
+            assert registry.control_integrity(first.task_id, current.session_id, "pause").accepted
+            release.set()
+            _wait_for(service._dispatcher, current.session_id, SessionState.PAUSED)
+            assert registry.control_integrity(first.task_id, current.session_id, action).accepted
+            summary = finish(current)
+            result = registry.get_inventory_window(first.task_id, expected_revision=summary["view_revision"], offset=0, limit=256)["integrity"]
+            assert result["complete"] and not result["gap"]
+            assert [item["result"] for item in result["items"]] == (["verified"] if action == "resume" else [])
+            assert len(calls) == (2 if action == "resume" else 1)
+            # An admitted baseline with no eligible unbaselined members replaces all previous outcomes.
+            empty = registry.start_inventory_integrity(first.task_id, current.request_id,
+                expected_revision=summary["view_revision"], mode="baseline", accept_current_evidence=False,
+                command_id="5" * 32, wire_intent=("baseline-again",))
+            summary = finish(empty)
+            result = registry.get_inventory_window(first.task_id, expected_revision=summary["view_revision"], offset=0, limit=256)["integrity"]
+            assert result["session_id"] == empty.session_id and result["items"] == [] and result["complete"]
+            registry.close_task(first.task_id, empty.session_id)
+        finally:
+            release.set()
+
+
+@pytest.mark.parametrize("after_factory", [False, True])
+def test_inventory_ordinary_failed_admission_preserves_publication_and_exact_original(after_factory):
+    registry, service, start, projection = _inventory_refresh_registry()
+    registry.set_inventory_selection(start.task_id, start.request_id, expected_revision=0, node_id=None, selected=True)
+    calls = []
+    def refuse(task_id, request_id, **kwargs):
+        calls.append(kwargs)
+        if after_factory:
+            kwargs["delivery_factory"](task_id)
+        raise RuntimeError("admission unavailable")
+    service.start_task_inventory_integrity = refuse
+    def attempt(revision=1, intent=("ordinary",)):
+        return registry.start_inventory_integrity(start.task_id, start.request_id, expected_revision=revision,
+            mode="verify", accept_current_evidence=False, command_id="a" * 32, wire_intent=intent)
+    with pytest.raises(RuntimeError):
+        attempt()
+    assert len(calls) == 1 and calls[0]["selected_paths"] == (r"folder\one.txt",)
+    assert registry._tasks[start.task_id].session_id == start.session_id
+    assert registry._tasks[start.task_id].session_released
+    assert registry._inventory_views[start.task_id].projection is projection
+    registry.set_inventory_selection(start.task_id, start.request_id, expected_revision=1, node_id=None, selected=False)
+    with pytest.raises(RuntimeError):
+        attempt()
+    assert len(calls) == 1
+    with pytest.raises(TaskIntentConflictError):
+        attempt(intent=("changed",))

@@ -1959,13 +1959,13 @@ complete file bytes while its tooltip and Details distinguish own object facts.
 The frozen Setup, status and table align with Plan review. The standalone task's
 switcher selects Integrity and disables Sync. Whole and selected Refresh are
 status actions. Setup's path region shares Plan's two-line minimum height while
-retaining one real Root line. The status card keeps the current scan outcome,
+retaining one real Root line. The status card keeps the current activity outcome,
 complete inventory rollup summary and one persistent detailed status paragraph.
 That paragraph carries the displayed publication's scope and scan counts, marks
 incomplete coverage, and includes loading, action-result or recovery guidance
 without adding temporary paragraphs. The visible-row count remains a view fact,
 not a second inventory total. Its shared 8 px progress track remains visible;
-unknown active scan totals use the shared indeterminate animation, and terminal
+unknown activity totals use the shared indeterminate animation, and terminal
 state stops animation without inventing a completion percentage. Supplied known
 progress retains the task snapshot's value. Details starts hidden and opens a full-height optional right
 column using Plan's two independently scrolling cards: task facts above and item
@@ -1973,6 +1973,12 @@ details below, with a selection placeholder. Hiding Details restores focus when
 it was inside that column. The shared 20rem/40% cap, 2:3 global/item allocation and minimum-size chain
 preserve table scrolling. Acknowledgement and restore controls remain with the
 selected item's details.
+
+Inventory terminal labels identify baseline, verification and rebaseline when
+those ordinary sessions are observed; the detailed status calls this the current
+activity. Displayed scan scope/counts continue to describe the actual published
+scan. The ordinary backend and bridge are available; full integrity controls,
+checkbox activation and rich outcome rendering remain pending.
 
 Refresh selected follows the tree's current active file or folder in its loaded
 window, including arrow-key navigation while Details is hidden. Arrows move

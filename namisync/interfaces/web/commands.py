@@ -294,6 +294,8 @@ class TaskAuthority(Protocol):
     def start_execution(self, *args, **kwargs) -> object: ...
 
     def control_execution(self, *args, **kwargs) -> object: ...
+    def control_integrity(self, *args, **kwargs) -> object: ...
+    def start_inventory_integrity(self, *args, **kwargs) -> object: ...
 
     def replay_start(
         self,
@@ -612,6 +614,16 @@ class _StartExecutionPayload:
     command_id: str
     expected_revision: int
     destructive_acknowledged: bool
+
+
+@dataclass(frozen=True, slots=True)
+class _StartInventoryIntegrityPayload:
+    task_id: str
+    request_id: str
+    command_id: str
+    expected_revision: int
+    mode: str
+    accept_current_evidence: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -1004,6 +1016,29 @@ def production_command_specs(
             raise CommandConflictError("inventory refresh command id conflicts") from error
         except (KeyError, ValueError) as error:
             raise PlanningRefusedError("inventory refresh scope was refused") from error
+
+    def start_inventory_integrity(payload: object) -> object:
+        if type(payload) is not _StartInventoryIntegrityPayload:
+            raise TypeError("start_inventory_integrity received an unvalidated payload")
+        intent = ("inventory-integrity", payload.task_id, payload.request_id,
+                  payload.expected_revision, payload.mode, payload.accept_current_evidence)
+        try:
+            return registry.start_inventory_integrity(payload.task_id, payload.request_id,
+                expected_revision=payload.expected_revision, mode=payload.mode,
+                accept_current_evidence=payload.accept_current_evidence,
+                command_id=payload.command_id, wire_intent=intent)
+        except (CommandIdConflictError, TaskIntentConflictError) as error:
+            raise CommandConflictError("ordinary integrity command id conflicts") from error
+        except (KeyError, ValueError) as error:
+            raise PlanningRefusedError("ordinary integrity selection was refused") from error
+
+    def control_integrity(payload: object) -> object:
+        if type(payload) is not _ControlExecutionPayload:
+            raise TypeError("control_integrity received an unvalidated payload")
+        result = registry.control_integrity(payload.task_id, payload.session_id, payload.action)
+        if type(result) is not ControlView or result.session_id != payload.session_id:
+            raise RuntimeError("task registry returned invalid control data")
+        return result
 
     def inventory_visibility(payload: object, action: str) -> object:
         if type(payload) is not _InventoryRefreshPayload:
@@ -1461,6 +1496,18 @@ def production_command_specs(
                 access=CommandAccess.MUTATING, command_id=FieldRequirement.REQUIRED,
                 revision=FieldRequirement.REQUIRED, response_policy=CommandResponsePolicy.MUTATION_OBSERVED,
                 retry=CommandRetry.NONE, work=CommandWork.ASYNC_SMALL,
+            ),
+            "start_inventory_integrity": CommandSpec(
+                validate_payload=_validate_start_inventory_integrity, handler=start_inventory_integrity,
+                access=CommandAccess.MUTATING, command_id=FieldRequirement.REQUIRED,
+                revision=FieldRequirement.REQUIRED, response_policy=CommandResponsePolicy.MUTATION_OBSERVED,
+                retry=CommandRetry.NONE, work=CommandWork.ASYNC_SMALL,
+            ),
+            "control_integrity": CommandSpec(
+                validate_payload=_validate_control_execution, handler=control_integrity,
+                access=CommandAccess.MUTATING, command_id=FieldRequirement.FORBIDDEN,
+                revision=FieldRequirement.FORBIDDEN, response_policy=CommandResponsePolicy.MUTATION_OBSERVED,
+                retry=CommandRetry.NONE,
             ),
             "acknowledge_inventory": CommandSpec(
                 validate_payload=_validate_inventory_refresh,
@@ -2207,6 +2254,23 @@ def _validate_start_execution(value: object) -> _StartExecutionPayload:
     return _StartExecutionPayload(
         task_id, request_id, command_id, expected_revision, acknowledged
     )
+
+
+def _validate_start_inventory_integrity(value: object) -> _StartInventoryIntegrityPayload:
+    if type(value) is not dict or set(value) != {
+        "task_id", "request_id", "command_id", "expected_revision", "mode", "accept_current_evidence"
+    }:
+        raise CommandPayloadError("start_inventory_integrity payload is invalid")
+    task_id, request_id, command_id = value["task_id"], value["request_id"], value["command_id"]
+    revision, mode, accepted = value["expected_revision"], value["mode"], value["accept_current_evidence"]
+    if (type(task_id) is not str or _TASK_ID.fullmatch(task_id) is None
+            or type(request_id) is not str or _OPAQUE_ID.fullmatch(request_id) is None
+            or type(command_id) is not str or _OPAQUE_ID.fullmatch(command_id) is None
+            or not _is_javascript_safe_integer(revision) or revision < 0
+            or type(mode) is not str or mode not in {"baseline", "verify", "rebaseline"}
+            or type(accepted) is not bool or (mode == "rebaseline" and not accepted)):
+        raise CommandPayloadError("start_inventory_integrity payload is invalid")
+    return _StartInventoryIntegrityPayload(task_id, request_id, command_id, revision, mode, accepted)
 
 
 def _validate_control_execution(value: object) -> _ControlExecutionPayload:

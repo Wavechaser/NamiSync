@@ -1656,6 +1656,9 @@ def test_m1_6_task_inventory_has_no_plan_and_retires_exact_details(has_details) 
                 candidate, LocationCandidateState.RESOLVED, binding, root, ("C:\\",)
             )
 
+        def retire_inventory_integrity(self, task_id):
+            pass
+
         def drop_inventory_details(self, request_id):
             self.dropped.append(request_id)
 
