@@ -26,6 +26,9 @@ from namisync.workflows.inventory import (
     resolve_reviewed_binding,
 )
 from namisync.workflows.database_pair import DatabaseAdmissionError, DatabasePairContract
+from namisync.workflows.manual_verification import (
+    ManualVerificationRequest, ManualVerificationReadiness, ManualVerificationUnavailable,
+)
 from namisync.workflows.inventory_projection import (
     InventoryProjection,
     InventoryProjectionNode,
@@ -71,6 +74,7 @@ from namisync.workflows.runtime import (
     BASELINE_KIND,
     EXECUTION_KIND,
     INVENTORY_KIND,
+    MANUAL_VERIFY_KIND,
     PLAN_KIND,
     REBASELINE_KIND,
     VERIFY_KIND,
@@ -168,6 +172,10 @@ __all__ = [
     "SyncOptions",
     "SortDirection",
     "VERIFY_KIND",
+    "MANUAL_VERIFY_KIND",
+    "ManualVerificationRequest",
+    "ManualVerificationReadiness",
+    "ManualVerificationUnavailable",
     "VolumeResolution",
     "VolumeResolutionRequired",
     "VolumeResolutionState",

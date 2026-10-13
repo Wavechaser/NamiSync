@@ -10,7 +10,7 @@ from namisync.core.events import ItemOutcome
 from namisync.core.execution import ExecutionReason
 from namisync.core.integrity import IntegrityOutcome
 from namisync.core.pathing import normalize_relative_path
-from namisync.core.planning import OperationKind, Plan
+from namisync.core.planning import OperationKind, Plan, PlanOperation
 from namisync.core.session import Disposition, OperationResult, SessionState
 from namisync.db.repositories import (
     EXECUTION_EVIDENCE_SUBJECT_LIMIT,
@@ -57,6 +57,7 @@ class RetainedExecutionReview:
     operation_items: dict[str, ItemOutcome]
     integrity_items: dict[str, IntegrityOutcome]
     target_owner_unique: dict[str, bool]
+    applicable_operations: tuple[PlanOperation, ...]
 
 
 def build_retained_execution_review(
@@ -131,6 +132,8 @@ def build_retained_execution_review(
         operations,
         integrity,
         _target_ownership(plan, selected),
+        tuple(operation for operation in plan.operations
+              if str(operation.op_id) in selected and operation.kind in _COPY_LIKE),
     )
 
 

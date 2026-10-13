@@ -558,7 +558,15 @@ Integrity controls, manual post-copy handoff and beta packaging remain open.
   file is freshly hashed and conditionally baselined, including matching content,
   without claiming verification. Existing engine/recorder behavior is preserved.
   The database/verifier/workflows/interfaces gate passes 3,504 checks; all 12
-  import contracts pass. Desktop and manual workflow units remain pending.
+  import contracts pass.
+- Implement the backend for exact manual post-copy verification: classify the
+  complete selected byte-producing population in one ledger snapshot, freshly
+  admit only the target, then classify again to freeze current evidence. A new
+  verification session/history result preserves original execution truth,
+  conditional scope, pause/resume/cancel and recording degradation. No inventory
+  scan or persistent operation-time hashes are introduced. Focused checks pass
+  239, the affected department gate passes 3,520, and all 12 imports pass.
+  Task attachment and desktop controls remain pending.
 
 #### Refine Plan refusal messages, move context and controls (2026-10-04)
 

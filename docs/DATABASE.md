@@ -302,6 +302,11 @@ Manual exact handoff requires a fresh coherent snapshot, repeats the repository
 read before verifier attachment, and retains the original execution scope as
 conditional authority. Recording degradation outside an item does not erase
 coherent item evidence; explicit settlement divergence blocks the handoff.
+The dedicated `read_manual_verification_evidence` method admits at most 120,000
+raw subjects, then holds one transaction across bounded receipt and target-key
+chunks. This complete handoff read does not relax the 256-subject presentation
+reader. Classification and readiness remain workflow-owned; the repository
+returns current facts without starting a scan or retaining operation-time hashes.
 
 ## Purpose And Boundaries
 

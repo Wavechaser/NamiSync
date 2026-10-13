@@ -71,7 +71,63 @@ in `integrity-neighborhood-09.log`; all 12 import contracts and diff checks pass
 Focused native/CLI, mode matrix, conditional absence/conflict and match/freshness
 coverage pass. Earlier failed fixture-migration receipts remain retained.
 Independent review is recorded in `policy-review-01.md`; the documentation-only
-scope/condensation commit is `a730165`. B–E remain pending.
+scope/condensation commit is `a730165`; A is `6ba3575`.
+
+Unit B starts from integrated A `6ba3575`, refreshing the inspected runtime,
+service, facade and repository seams. Complete selected applicable immutable
+Plan operation references stay with retained execution review so absent outcomes
+cannot disappear from readiness. A dedicated bounded repository read holds one
+transaction across receipt/target-key chunks; the public 256-subject reader
+remains unchanged. The specific manual workflow owns classification, a fresh
+request/history identity, target binding, frozen ledger-derived PostCopySelection
+and its pause continuation. It calls existing verify_post_copy and conditional
+LedgerRecorder directly: no inventory scan, original-run finish, fabricated
+execute phase or linked VerifyContinuation. Queue/resume re-admits the frozen
+target and never silently substitutes newly selected evidence.
+
+The finite B tests are repository/execution-review/post-execution/runtime/domain
+checkpoint/service tests and, if useful, one focused manual workflow module
+registered in the department manifest. Verifier-recorder integration and native
+verifier are direct consumers. The B row's real-ledger/dispatcher/history gate
+covers transactions across chunks, admission/classification and later recording
+races, exact pause/cancel truth and immutable execution results. A department
+manifest change additionally requires the ordinary suite. First run existing
+affected composition, then implement, verify and independently review this one
+workflow commit before task attachment work. Read-only design observations are
+in `manual-workflow-design-01.md`; this register remains scope authority.
+
+Unit B verified: the dedicated manual workflow and dormant runtime registration
+pass 239 focused and 3,520 database/verifier/workflows/interfaces checks
+(`manual-neighborhood-focused-09.log`, `manual-departments-10.log`), plus all
+12 import contracts. Independent review additionally exercises 257 subjects at
+the default chunk size and recorder-close degradation across native pause/resume.
+`manual-review-01.md` records source/evidence review. Initial fixture-anchor,
+canonical-key, registration-catalog and keyword failures remain distinct failed
+receipts; no admission check was relaxed. C–E remain pending.
+
+Unit C will split at independently reviewable boundaries: C1 server-owned
+inventory selection, C2 ordinary integrity association/results, C3 execution
+inventory attachment and the B-backed first manual action. C1 uses the existing
+view revision for selection, window and later confirmation fences; no second
+selection revision is needed. One node gesture applies to the complete folder,
+or the complete location for a null node, matching FEATURES' existing inventory
+scope policy. Initial selection is empty; warnings are informational and
+directories are containers. Server counts/tri-state include hidden/off-window
+files; labels disclose whole-folder/location scope and hidden selections.
+
+C1 finite implementation: inventory projection only where complete membership
+needs an owner; web inventory_review/drain/commands and bridge.js validators;
+inventory projection/review/drain/command/frontend tests and existing inventory
+window/refresh/visibility/review/app probe fixtures. Exact command catalogs in
+test_commands, test_component_gallery_headed, test_host, test_native_host_gates,
+test_transport_headed and tools/performance/bridge_event migrate together.
+BRIDGE/PRESENTATION/INTERFACES own its behavior. Gate is real scan/release/view/
+selection composition, stale and replacement controls, hidden/collapsed/full
+folder membership, large-population and envelope bounds, workflow/interface/tool
+departments, imports and affected installed Inventory/transport/host consumers,
+then fresh review. C1 grants no hashing/session-start authority. C2/C3 are
+refreshed and expanded against B/C1 before implementation; their read-only seam
+census is `c-design-association-20261013-01.md`, not a second register.
 
 Preserve atomic publication, conditional recording including prior absence,
 root admission, fixed continuation identity and original execution truth.

@@ -9,7 +9,7 @@ M1_PLAN is the sole current register. Delivered histories are condensed with
 binding decisions, exclusions, commit/evidence pointers and referenced anchors
 preserved. Its M1-10 units cover operation policy, exact manual workflow,
 task/bridge association, desktop controls and integrated closure. Unit A is
-verified; later units remain pending. Root owns shared delivery documents; builders own
+integrated and B verified; later units remain pending. Root owns shared delivery documents; builders own
 explicit source/test/subject-doc populations, and fresh reviewers precede commits.
 Documentation scope/condensation is committed as `a730165`.
 
@@ -20,7 +20,7 @@ diagnostic EIO evidence and `integrity-prechange-host-05.log` under
 `build/m1-10-20261013/`. Its AGENTS defines artifact conventions.
 Use justified host PowerShell for native tests; ordinary tests need no watcher.
 
-Unit A is verified: explicit acknowledgement before claim/native binding,
+Unit A is integrated as `6ba3575`: explicit acknowledgement before claim/native binding,
 selected null-evidence rebaseline admission and direct caller migration.
 Engine/recorder production code is unchanged. Final neighborhood receipt
 `integrity-neighborhood-09.log` passes 3,504 tests, 2,537 deselected; all 12
@@ -29,13 +29,20 @@ Earlier fixture migration failures and restricted-run failures remain retained.
 The reflective-tampering test introduced during drafting was removed because
 DEFENSE excludes that fault model; legitimate boundary tests remain.
 
-Unit B design is read-only until A integrates. Exact manual verification needs
+Unit B is verified from `6ba3575`. Five existing real composition
+cases pass in `manual-prechange-host-02.log`; restricted-shell fixture-creation
+failures remain in `manual-prechange-01.log`. Exact manual verification needs
 a whole-selection atomic ledger snapshot, target-only admission and a second
 classification to freeze ledger-derived candidates. Do not reuse the public
 256-row display read as start authority, rescan via standalone run_integrity,
 or merge manual results into the original execution result. Pause retains its
 own frozen candidates; no operation-time hash persistence or terminal subset
-retry is authorized. Full details and gates are in M1_PLAN.
+retry is authorized. Full details and gates are in M1_PLAN. The focused gate
+passes 239 and `manual-departments-10.log` passes 3,520 checks (2,537 deselected);
+all 12 imports pass. Fresh review `manual-review-01.md` also exercises 257
+subjects and recorder-close degradation across native pause/resume. Failed
+fixture/caller receipts remain retained. C1 selection design is expanded in
+M1_PLAN; C2/C3 attachment and desktop work remain pending.
 
 No task worktrees, recovery refs, pushes or PRs have been created. The original
 checkout had no unrelated changes. Previous AX2 evidence remains under

@@ -40,8 +40,18 @@ the current live record's opaque checkpoint, and its separate metadata-store
 projection never persists it.
 This is not whole-process reference erasure; the scope and M2 protected
 recovery requirement are defined in [DISPATCHER.md](DISPATCHER.md#session-store).
-Manual exact post-copy verification remains unrealized; its accepted contract
-classifies current durable evidence in the original execution scope.
+Manual exact post-copy verification is implemented in `manual_verification.py`.
+It classifies the complete selected byte-producing population, including absent
+outcomes, against one coherent ledger snapshot. Readiness never grants authority:
+prepare classifies again, binds only the target, then reclassifies and freezes
+current evidence in the original execution scope. No inventory scan runs.
+The `manual-verify` registration has its own dispatcher/history identity and
+specific pause checkpoint; it calls the existing post-copy verifier and direct
+conditional recorder without rewriting or finishing the original execution.
+Frozen ledger-derived candidates exist only for this manual session and its
+pause continuation; original operation-time hashes are not retained. Resume
+resolves the frozen target identity, and paused cancel opens no native work.
+Task attachment and desktop controls remain pending M1-10 consumers.
 
 Installed NamiSync modules are trusted-but-fallible internal (rung 3)
 participants, not adversarial security principals. Their public returns are the

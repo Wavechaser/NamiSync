@@ -9,8 +9,8 @@ compound detail incrementally before terminal.
 Stage 5 exposes standalone activities through the shared-service CLI with
 explicit location/scope binding and guarded selected rebaseline; desktop
 actions remain Stage 6. Signed-64 totals, exact event v5, and full-width native
-identity are active. The no-rescan manual post-copy handoff and ledger-current
-classification below remain accepted but unrealized. Fresh rebaseline admits
+identity are active. The no-rescan manual post-copy workflow and ledger-current
+classification are implemented; desktop/task attachment remains pending. Fresh rebaseline admits
 eligible selected rows with or without prior evidence after explicit acceptance.
 
 ## Purpose
@@ -312,9 +312,9 @@ Ordinary manual verification is location-scoped and independent of any current
 plan or mapping. It must not require both source and target roots. The deferred
 post-copy action is a separate, explicitly execution-linked workflow.
 
-### Accepted Stage 6 manual post-copy handoff (not active)
+### Stage 6 manual post-copy handoff
 
-Deferred exact verification classifies current durable ledger state; it never
+The manual workflow classifies current durable ledger state; it never
 reconstructs candidates from retained operation-time hashes. Those transient
 attestations exist only for immediate linked verification and same-session
 pause/resume and never become history, ledger, task, or JavaScript state. The
@@ -335,10 +335,16 @@ original execution scope; a last-moment row, stat, scope, mount, or invalidation
 race becomes a truthful item/result disposition rather than evidence for a
 different state.
 
-A ready handoff receives a new dispatcher/history session and publishes only
-the task's replaceable post-copy result. It cannot rewrite immutable execution
-truth or the ordinary-integrity result. A later attempt may retry only what is
-currently ready. When exact handoff is unavailable, the fallback is an
+A ready handoff receives a new dispatcher/history session. Its result cannot
+rewrite immutable execution truth or the ordinary-integrity result. The specific
+pause checkpoint retains frozen ledger-derived candidates and completed bytes;
+resume resolves the same target binding again without scanning or substituting
+new evidence. Paused cancellation does not reopen work. Native read retries
+remain the existing verifier policy.
+
+Task attachment and replacement publication remain pending M1-10 consumers.
+Terminal Verify-remaining/subset retry stays deferred. When exact handoff is
+unavailable, the accepted desktop fallback is an
 explicitly ordinary verify-current workflow whose refresh may establish a new
 scope. Exact replacement retention and task attachment semantics remain bridge
 authority.

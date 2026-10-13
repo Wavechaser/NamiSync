@@ -35,6 +35,7 @@ from namisync.workflows import (
     HistoryItemPageView,
     HistoryRunSummaryView,
     INVENTORY_KIND,
+    MANUAL_VERIFY_KIND,
     PLAN_KIND,
     PreservationPolicy,
     REBASELINE_KIND,
@@ -2938,6 +2939,10 @@ def _workflow_registry(
             runtime.open_execution,
             supports_pause=True,
             settle_canceled=runtime.settle_canceled_execution,
+        ),
+        MANUAL_VERIFY_KIND: registration(
+            runtime.prepare_manual_verification, runtime.open_manual_verification,
+            supports_pause=True, settle_canceled=runtime.settle_canceled_manual_verification,
         ),
         INVENTORY_KIND: registration(
             runtime.prepare_inventory,

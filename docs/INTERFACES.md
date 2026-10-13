@@ -276,6 +276,13 @@ validation. Browser whole-batch refusal remains for transport, ordering,
 lifecycle, and snapshot admission failures, with clean replay of previously unaccepted
 updates.
 
+The service's workflow registry also includes the dormant `manual-verify`
+runtime route. It accepts an exact retained execution binding and produces an
+independent verification session/history result. Task association, original
+command recovery, bounded result publication and desktop controls remain the
+following M1-10 work; this registration does not expose a browser command or a
+terminal retry action.
+
 The current public service surface includes:
 
 ```python

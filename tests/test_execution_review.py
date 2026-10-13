@@ -54,11 +54,323 @@ from namisync.workflows.execution_review import (
     read_retained_operation_items,
     retained_evidence_subjects,
 )
+from namisync.workflows.manual_verification import classify_manual_verification
 
 from _db_fixtures import NOW, attestation, file_stat, operation, plan, setup_recorder
 
 from namisync.core.preflight import RefusalCode
 from namisync.workflows.models import RefusalView
+
+
+def _manual_native_runtime(tmp_path, *, count=2):
+    from xxhash import xxh3_128
+    from namisync.core.evidence import Attestation, ContentEvidence
+    from namisync.core.models import Root, VolumeEvidence
+    from namisync.core.root_authority import current_volume_anchor, observe_native_volume
+    from namisync.db.schema import initialize_history
+    from namisync.modules.executor import NativeFileSystem
+    from namisync.workflows.inventory import MountedVolume
+    target = tmp_path / "target"
+    target.mkdir()
+    volume = observe_native_volume(target).volume_id
+    anchor = current_volume_anchor(target)
+    members, evidence = [], []
+    for index in range(count):
+        path = target / f"{index}.bin"
+        payload = f"manual bytes {index}".encode()
+        path.write_bytes(payload)
+        stat = NativeFileSystem().stat_path(path)
+        members.append(operation(OperationKind.COPY, source_path=path.name,
+            target_path=path.name, source=stat, intended=stat))
+        evidence.append(Attestation(ContentEvidence("xxh3_128", xxh3_128(payload).digest(),
+            len(payload), Provenance.COPY_ATTESTED, NOW), stat))
+    value = replace(plan(tuple(members)), target_root=Root(str(target), "target"),
+        target_volume_id=volume)
+    setup = setup_recorder(tmp_path / "ledger.db", value)
+    for member, content in zip(members, evidence):
+        setup.run.record_copied(member.op_id, content)
+    setup.recorder.close()
+    writer = connect_ledger_writer(tmp_path / "ledger.db")
+    try:
+        relative = str(target.relative_to(Path(anchor)))
+        writer.execute("UPDATE locations SET volume_relative_path = ?, volume_relative_path_key = ? WHERE id = ?",
+            (relative, normalize_relative_path(relative), setup.target_location_id))
+        writer.commit()
+    finally:
+        writer.close()
+    initialize_history(tmp_path / "history.db")
+    class Resolver:
+        def mounted_volumes(self, volume_id, hints=()):
+            assert volume_id == volume
+            return (MountedVolume(anchor, VolumeEvidence("Target", anchor)),)
+        def probe_root(self, root):
+            assert Path(root) == target
+    runtime = LocalWorkflowRuntime(tmp_path / "ledger.db", tmp_path / "history.db",
+        mounted_volume_resolver=Resolver(), inventory_scanner=lambda *args: pytest.fail("manual workflow scanned"))
+    binding = RetainedExecutionBinding("task", "plan", 1, "execution", setup.run_token)
+    result = OperationResult(SessionState.COMPLETED, items=tuple(map(_item, members)))
+    runtime.capture_execution_review(binding, result, plan=value,
+        selection=frozenset(str(member.op_id) for member in members))
+    return runtime, binding, result
+
+
+def test_manual_native_dispatcher_history_preserves_execution_and_scope(tmp_path):
+    from namisync.dispatcher import Dispatcher, InProcessResourceLockProvider
+    from namisync.interfaces.service import _workflow_registry
+    from namisync.workflows import MANUAL_VERIFY_KIND, ManualVerificationRequest
+    from _inventory_fixtures import _wait_for
+    runtime, binding, original = _manual_native_runtime(tmp_path)
+    dispatcher = Dispatcher(_workflow_registry(runtime), lock_provider=InProcessResourceLockProvider(),
+        audit_observer_factory=runtime.audit_observer)
+    try:
+        assert runtime.read_manual_verification_readiness(binding).ready_count == 2
+        session = dispatcher.submit(MANUAL_VERIFY_KIND, ManualVerificationRequest("manual-history", binding))
+        result = _wait_for(dispatcher, session, SessionState.COMPLETED).result
+        assert result is not None
+        assert [item.result for item in result.items] == [IntegrityResult.VERIFIED] * 2, [(item.reason, item.detail) for item in result.items]
+        assert result.recording is RecordingStatus.OK and result.audit is RecordingStatus.OK
+        assert runtime._retained_execution_reviews[binding.task_id].result is original
+        assert runtime.read_manual_verification_readiness(binding).reason == "already-verified"
+        history = runtime.get_history_summary("manual-history")
+        assert history.activity_kind == "verify" and history.phases == ()
+        assert len(runtime.get_history_items("manual-history").items) == 2
+        with runtime._ledger_read() as repository:
+            handoff_rows = repository.get_inventory(int(history.subject_id))
+        assert all(row.scope_token == binding.run_id for row in handoff_rows)
+    finally:
+        assert dispatcher.shutdown().complete
+        runtime.close()
+
+
+def test_manual_start_reclassifies_after_binding_and_never_reads_if_blocked(tmp_path, monkeypatch):
+    from namisync.workflows import ManualVerificationRequest, ManualVerificationUnavailable
+    import namisync.workflows.runtime as runtime_module
+    runtime, binding, original = _manual_native_runtime(tmp_path)
+    original_bind = runtime_module.bind_inventory_request
+    calls = []
+    def bind_then_supersede(*args, **kwargs):
+        calls.append("bind")
+        bound = original_bind(*args, **kwargs)
+        writer = connect_ledger_writer(runtime.ledger_path)
+        try:
+            writer.execute("UPDATE inventory SET scope_token = 'new-state'")
+            writer.commit()
+        finally:
+            writer.close()
+        return bound
+    monkeypatch.setattr(runtime_module, "bind_inventory_request", bind_then_supersede)
+    try:
+        with pytest.raises(ManualVerificationUnavailable, match="superseded"):
+            runtime.prepare_manual_verification(ManualVerificationRequest("raced", binding))
+        assert calls == ["bind"]
+        with pytest.raises(ManualVerificationUnavailable, match="superseded"):
+            runtime.prepare_manual_verification(ManualVerificationRequest("blocked", binding))
+        assert calls == ["bind"]
+        assert runtime._retained_execution_reviews[binding.task_id].result is original
+    finally:
+        runtime.close()
+
+
+def test_manual_native_pause_resume_preserves_frozen_scope_and_reads_only_pending(tmp_path):
+    from namisync.core.session import PauseRequested, RunContext
+    from namisync.workflows import ManualVerificationRequest
+    runtime, binding, original = _manual_native_runtime(tmp_path)
+    outcomes = []
+    def emit(body):
+        if isinstance(body, IntegrityOutcome):
+            outcomes.append(body)
+    def checkpoint():
+        if outcomes:
+            raise PauseRequested()
+    try:
+        prepared = runtime.prepare_manual_verification(ManualVerificationRequest("pause-manual", binding))
+        invocation = runtime.open_manual_verification(prepared.checkpoint)
+        with pytest.raises(PauseRequested):
+            invocation.run(RunContext(emit, checkpoint))
+        saved = invocation.snapshot()
+        assert len(saved.selection.completed_bytes) == 1
+        readiness = runtime.read_manual_verification_readiness(binding)
+        assert (readiness.ready_count, readiness.already_verified_count) == (1, 1)
+        assert saved.selection.candidates == prepared.checkpoint.selection.candidates
+        result = runtime.open_manual_verification(saved).run(RunContext(emit, lambda: None))
+        assert result.status is SessionState.COMPLETED
+        assert len(result.items) == 1 and len(outcomes) == 2
+        assert len({item.item_id for item in outcomes}) == 2
+        assert all(item.result is IntegrityResult.VERIFIED for item in outcomes)
+        assert runtime._retained_execution_reviews[binding.task_id].result is original
+    finally:
+        runtime.close()
+
+
+def test_manual_queued_cancel_never_opens_invocation(tmp_path, monkeypatch):
+    from threading import Event
+    from namisync.core.session import Canceled
+    from namisync.dispatcher import Dispatcher
+    from namisync.interfaces.service import _workflow_registry
+    from namisync.workflows import MANUAL_VERIFY_KIND, ManualVerificationRequest
+    from _inventory_fixtures import _wait_for
+    runtime, binding, original = _manual_native_runtime(tmp_path)
+    entered, release = Event(), Event()
+    class WaitingProvider:
+        def acquire(self, resources, canceled):
+            entered.set()
+            assert release.wait(5)
+            assert canceled()
+            raise Canceled()
+    monkeypatch.setattr(runtime, "open_manual_verification",
+        lambda checkpoint: pytest.fail("queued cancellation opened native work"))
+    dispatcher = Dispatcher(_workflow_registry(runtime), lock_provider=WaitingProvider(),
+        audit_observer_factory=runtime.audit_observer)
+    try:
+        session = dispatcher.submit(MANUAL_VERIFY_KIND, ManualVerificationRequest("queued-cancel", binding))
+        assert entered.wait(5)
+        dispatcher.cancel(session)
+        release.set()
+        result = _wait_for(dispatcher, session, SessionState.CANCELED).result
+        assert result is not None and result.disposition is Disposition.UNRUN
+        assert result.items == ()
+        assert runtime.read_manual_verification_readiness(binding).ready_count == 2
+    finally:
+        release.set()
+        assert dispatcher.shutdown().complete
+        runtime.close()
+
+
+def test_manual_paused_cancel_does_not_reopen_and_resume_rechecks_target(tmp_path, monkeypatch):
+    from namisync.core.session import PauseRequested, RunContext
+    from namisync.workflows import ManualVerificationRequest
+    runtime, binding, original = _manual_native_runtime(tmp_path)
+    try:
+        prepared = runtime.prepare_manual_verification(ManualVerificationRequest("cancel-manual", binding))
+        invocation = runtime.open_manual_verification(prepared.checkpoint)
+        with pytest.raises(PauseRequested):
+            invocation.run(RunContext(lambda body: None, lambda: (_ for _ in ()).throw(PauseRequested())))
+        saved = invocation.snapshot()
+        monkeypatch.setattr(runtime._mounted_volume_resolver, "mounted_volumes", lambda *args: ())
+        canceled = runtime.settle_canceled_manual_verification(saved, Disposition.RAN)
+        assert canceled.status is SessionState.CANCELED and canceled.disposition is Disposition.RAN
+        assert canceled.bytes_done == saved.selection.processed_bytes
+        resumed = runtime.open_manual_verification(saved).run(RunContext(lambda body: None, lambda: None))
+        assert resumed.status is SessionState.FAILED and resumed.items == ()
+        assert runtime._retained_execution_reviews[binding.task_id].result is original
+    finally:
+        runtime.close()
+
+
+def test_manual_native_recording_conflict_preserves_later_scope(tmp_path):
+    from namisync.core.integrity import RecordDisposition
+    from namisync.core.session import RunContext
+    from namisync.workflows import ManualVerificationRequest
+    runtime, binding, original = _manual_native_runtime(tmp_path)
+    try:
+        prepared = runtime.prepare_manual_verification(ManualVerificationRequest("frozen-manual", binding))
+        writer = connect_ledger_writer(runtime.ledger_path)
+        try:
+            writer.execute("UPDATE inventory SET scope_token = 'later-scan'")
+            writer.commit()
+        finally:
+            writer.close()
+        result = runtime.open_manual_verification(prepared.checkpoint).run(
+            RunContext(lambda body: None, lambda: None))
+        assert result.status is SessionState.COMPLETED
+        assert all(item.result is IntegrityResult.VERIFIED and item.record_disposition is RecordDisposition.STALE
+                   for item in result.items)
+        assert result.recording is RecordingStatus.DEGRADED
+        with runtime._ledger_read() as repository:
+            rows = repository.get_inventory(prepared.checkpoint.binding.location_id)
+        assert all(row.scope_token == "later-scan" and row.last_verified_at is None for row in rows)
+        assert runtime._retained_execution_reviews[binding.task_id].result is original
+    finally:
+        runtime.close()
+
+
+@pytest.mark.parametrize("state, expected", [
+    ("ready", "ready"), ("missing-outcome", "incomplete"),
+    ("failed", "incomplete"), ("unrecorded", "unrecorded"),
+    ("superseded", "superseded"), ("diverged", "settlement-diverged"),
+    ("flush-degraded", "ready"), ("already-verified", "already-verified"),
+    ("empty", "empty"),
+])
+def test_manual_handoff_requires_complete_current_selected_evidence(tmp_path, state, expected):
+    stat = file_stat(volume_serial="target-serial")
+    member = operation(OperationKind.COPY, source=stat, intended=stat)
+    value = plan((member,))
+    setup = setup_recorder(tmp_path / "ledger.db", value)
+    try:
+        if state != "unrecorded":
+            prior = attestation(stat)
+            identity = setup.run.record_copied(member.op_id, prior)
+            if state == "already-verified":
+                setup.run.record_integrity(IntegrityRecordCommand(
+                    IntegrityMode.VERIFY, str(member.op_id), identity.row_id,
+                    identity.location_id, identity.rel_path_key, identity.scope_token,
+                    InventoryState.PRESENT, stat, prior,
+                    attestation(stat, provenance=Provenance.VERIFY_ATTESTED), True, False))
+        if state == "superseded":
+            writer = connect_ledger_writer(setup.recorder.path)
+            try:
+                writer.execute("UPDATE inventory SET scope_token = 'later'")
+                writer.commit()
+            finally:
+                writer.close()
+        issues = ()
+        if state in {"diverged", "flush-degraded"}:
+            issues = (TaskRecordingIssue(
+                TaskRecordingIssueReason.POST_SETTLEMENT_STATE_DIVERGED if state == "diverged"
+                else TaskRecordingIssueReason.FINAL_FLUSH_FAILED),)
+        original = OperationResult(SessionState.COMPLETED,
+            items=() if state == "missing-outcome" else (_item(member,
+                Outcome.FAILED if state == "failed" else Outcome.SUCCEEDED),),
+            recording=RecordingStatus.DEGRADED if issues else RecordingStatus.OK,
+            recording_issues=issues)
+        binding = RetainedExecutionBinding("task", "plan", 1, "execution", setup.run_token)
+        retained = build_retained_execution_review(binding, original, value,
+            frozenset() if state == "empty" else frozenset({str(member.op_id)}))
+        with LedgerRepository(setup.recorder.path) as repository:
+            handoff = classify_manual_verification(repository, retained)
+        assert handoff.readiness.reason == expected
+        assert retained.result is original
+        if expected == "ready":
+            assert handoff.readiness.ready_count == 1
+            assert handoff.rows[0][1].scope_token == setup.run_token
+        elif expected == "already-verified":
+            assert handoff.readiness.already_verified_count == 1
+            assert handoff.rows == ()
+    finally:
+        setup.recorder.close()
+
+
+def test_manual_evidence_chunks_share_snapshot_and_keep_window_bound(tmp_path, monkeypatch):
+    import namisync.db.repositories as repository_module
+    monkeypatch.setattr(repository_module, "QUERY_SUBJECT_BATCH_SIZE", 1)
+    stat = file_stat(volume_serial="target-serial")
+    members = tuple(operation(OperationKind.COPY, source_path=f"{index}.bin",
+        target_path=f"{index}.bin", source=stat, intended=stat) for index in range(2))
+    setup = setup_recorder(tmp_path / "ledger.db", plan(members))
+    for member in members:
+        setup.run.record_copied(member.op_id, attestation(stat))
+    writer = connect_ledger_writer(setup.recorder.path)
+    try:
+        with LedgerRepository(setup.recorder.path) as repository:
+            seen = []
+            def concurrent_write(sql):
+                seen.append(sql)
+                if sql.startswith("SELECT * FROM inventory") and sum(
+                        value.startswith("SELECT * FROM inventory") for value in seen) == 2:
+                    writer.execute("UPDATE inventory SET scope_token = 'concurrent'")
+                    writer.commit()
+            repository._connection.set_trace_callback(concurrent_write)
+            subjects = tuple(ExecutionEvidenceKey(str(member.op_id), normalize_relative_path(member.target_rel_path))
+                for member in members)
+            snapshot = repository.read_manual_verification_evidence(setup.run_token, subjects)
+            assert {row.scope_token for row in snapshot.inventory} == {setup.run_token}
+            assert sum(sql == "BEGIN" for sql in seen) == 1
+            assert repository.read_manual_verification_evidence(setup.run_token, subjects).inventory[0].scope_token == "concurrent"
+            with pytest.raises(ExecutionEvidenceSubjectLimitError):
+                repository.read_execution_evidence(setup.run_token, subjects * 129)
+    finally:
+        writer.close()
+        setup.recorder.close()
 
 
 @pytest.mark.parametrize("origin", ["preflight", "commitment", "other"])

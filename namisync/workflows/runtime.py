@@ -97,6 +97,13 @@ from namisync.modules.preflight import LocalObservationFileSystem, observe, pref
 from namisync.modules.scanner import NativeScannerBackend, WalkingScanner
 from namisync.modules.verifier import baseline, rebaseline, verify, verify_post_copy
 
+from .manual_verification import (
+    ManualVerificationCheckpoint, ManualVerificationInvocation, ManualVerificationRequest,
+    ManualVerificationReadiness,
+    ManualVerificationUnavailable, classify_manual_verification, freeze_manual_verification,
+    settle_canceled_manual_verification,
+)
+
 from .inventory import (
     IntegrityDependencies,
     IntegrityRequest,
@@ -216,6 +223,7 @@ EXECUTION_KIND = "sync-execution"
 INVENTORY_KIND = "inventory"
 BASELINE_KIND = "baseline"
 VERIFY_KIND = "verify"
+MANUAL_VERIFY_KIND = "manual-verify"
 REBASELINE_KIND = "rebaseline"
 
 _INTEGRITY_KINDS = {
@@ -773,10 +781,73 @@ class LocalWorkflowRuntime:
             IntegrityMode.REBASELINE,
         )
 
+    def read_manual_verification_readiness(
+        self, execution: RetainedExecutionBinding,
+    ) -> ManualVerificationReadiness:
+        with self._lock:
+            self._require_open()
+            review = self._retained_execution_review_locked(execution.task_id)
+            if review.binding != execution:
+                raise ValueError("manual verification execution binding changed")
+        with self._ledger_read() as repository:
+            return classify_manual_verification(repository, review).readiness
+
+    def prepare_manual_verification(self, request: object) -> WorkflowPreparation:
+        self._require_open()
+        if type(request) is not ManualVerificationRequest:
+            raise TypeError("manual verification requires its typed request")
+        with self._lock:
+            review = self._retained_execution_review_locked(request.execution.task_id)
+            if review.binding != request.execution:
+                raise ValueError("manual verification execution binding changed")
+        with self._ledger_read() as repository:
+            first = classify_manual_verification(repository, review)
+        if first.readiness.reason != "ready":
+            raise ManualVerificationUnavailable(first.readiness)
+        prepared = bind_inventory_request(
+            InventoryRequest(request.request_id, location_id=first.location_id),
+            ledger_path=self.ledger_path, backend=self._scanner_backend,
+            resolver=self._mounted_volume_resolver, database=self._database,
+        )
+        self._validate_prepared_location(prepared.binding)
+        self._ensure_database_contracts()
+        with self._ledger_read() as repository:
+            second = classify_manual_verification(repository, review)
+        with self._lock:
+            if self._retained_execution_review_locked(request.execution.task_id) is not review:
+                raise ValueError("manual verification execution binding changed")
+        checkpoint = freeze_manual_verification(
+            request, prepared.binding, second, _binding_root(prepared.binding))
+        return WorkflowPreparation(checkpoint,
+            (("volume", _volume_resource_key(prepared.binding.volume_id)),))
+
+    def open_manual_verification(self, checkpoint: object) -> ManualVerificationInvocation:
+        self._require_open()
+        if type(checkpoint) is not ManualVerificationCheckpoint:
+            raise TypeError("manual verification requires its typed checkpoint")
+        return ManualVerificationInvocation(checkpoint, self._integrity_deps, self._deps.verifier)
+
+    def settle_canceled_manual_verification(
+        self, checkpoint: object, disposition: Disposition,
+    ) -> OperationResult:
+        self._require_open()
+        if type(checkpoint) is not ManualVerificationCheckpoint:
+            raise TypeError("manual verification requires its typed checkpoint")
+        return settle_canceled_manual_verification(checkpoint, disposition)
+
     def audit_observer(self, record: SessionRecord) -> HistoryObserver | None:
         if record.checkpoint is None:
             raise ValueError("audit observer requires a nonterminal checkpoint")
         checkpoint = record.checkpoint
+        if record.kind == MANUAL_VERIFY_KIND:
+            if type(checkpoint) is not ManualVerificationCheckpoint:
+                raise TypeError("manual verification history requires its typed checkpoint")
+            store = self._ensure_history_store((_binding_root(checkpoint.binding),))
+            return store.observer(record, HistoryContext(
+                run_token=checkpoint.request.request_id, host_key=self.host_key,
+                activity_kind="verify", subject_kind="location",
+                subject_id=_location_subject_id(checkpoint.binding),
+            ))
         if record.kind == EXECUTION_KIND:
             if type(checkpoint) is not ExecutionCheckpoint:
                 raise TypeError("execution history requires its typed checkpoint")
