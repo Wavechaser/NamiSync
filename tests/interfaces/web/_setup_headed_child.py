@@ -741,22 +741,24 @@ _FROZEN_SCRIPT = r"""
   target.dispatchEvent(new Event("input", {bubbles: true}));
   target.dispatchEvent(new Event("blur", {bubbles: true}));
   await until(() => target.dataset.state === "resolved" && !button.disabled, "resolved typed target");
+  const bridge = await import("./bridge.js");
+  const originalTasks = (await bridge.listTasks()).tasks;
+  if (originalTasks.length !== 1) throw new Error("original Setup task identity is ambiguous");
+  const originalTaskId = originalTasks[0].task_id;
+  const checked = (key) => document.querySelector(`[data-option="${key}"]`).checked;
+  const expectedOptions = {
+    filters: Array.from(document.querySelectorAll(".nami-setup__filter-list span"), (item) => item.textContent),
+    deletion_policy: checked("deletion_policy") ? "additive" : "trash",
+    trash_on_update: checked("trash_on_update"),
+    preservation: {preserve_ads: checked("preserve_ads"), preserve_created: checked("preserve_created"),
+      preserve_acl: checked("preserve_acl")},
+    propagate_source_casing: checked("propagate_source_casing"), verify_after_execute: checked("verify_after_execute"),
+  };
+  const pickerResolved = source.dataset.state === "resolved";
   button.click();
-  const mode = document.querySelector(".nami-setup__mode-group");
-  await until(() => source.disabled && target.disabled && mode instanceof HTMLDivElement && mode.hidden,
-    "persisted frozen Setup snapshot");
-  const frozenModeHidden = !mode.checkVisibility();
-  const frozenSwitches = Array.from(document.querySelectorAll('.nami-setup__options input[role="switch"]'));
-  const frozenPairs = Array.from(document.querySelectorAll(".nami-setup__pair-select"));
-  const frozenRecent = document.querySelector("#setup-source-recent-trigger");
-  const disabledIconControlsTransparent = [frozenRecent, picker].every((control) => {
-    const style = getComputedStyle(control);
-    return control instanceof HTMLButtonElement && control.disabled &&
-      style.backgroundColor === "rgba(0, 0, 0, 0)" && style.borderColor === "rgba(0, 0, 0, 0)";
-  });
   let planAgain;
   try {
-    await until(() => document.querySelector(".nami-plan-review"), "production Plan review");
+    await until(() => document.querySelector(".nami-plan-review")?.checkVisibility(), "production Plan review");
     planAgain = await until(() => {
       const candidate = document.querySelector('.nami-plan-review [data-action="plan-again"]');
       return candidate instanceof HTMLButtonElement && !candidate.hidden
@@ -769,10 +771,20 @@ _FROZEN_SCRIPT = r"""
       guidance: document.querySelector(".nami-setup > p")?.textContent ?? null,
       action: document.querySelector(".nami-setup__action-status")?.textContent ?? null,
       task_status: document.querySelector('[aria-current="page"] .nami-task-card__status')?.textContent ?? null,
-      mode_hidden: mode instanceof HTMLDivElement ? mode.hidden : null,
+      review_visible: document.querySelector(".nami-plan-review")?.checkVisibility() ?? false,
     };
     throw new Error(`${error.message}; dom=${JSON.stringify(detail)}`);
   }
+  const frozen = (await bridge.readSetup(originalTaskId)).snapshot;
+  const frozenReadback = {
+    source: document.querySelector(".nami-plan-review__path--source .nami-labeled-path__value")?.textContent,
+    target: document.querySelector(".nami-plan-review__path--target .nami-labeled-path__value")?.textContent,
+    settings: Array.from(document.querySelectorAll(".nami-plan-review__settings > span"), (item) => item.textContent),
+    visible: Array.from(document.querySelectorAll(".nami-plan-review__path, .nami-plan-review__settings > span"))
+      .every((item) => item.checkVisibility()),
+    controls_absent: document.querySelector(".nami-setup") === null &&
+      document.querySelector(".nami-plan-review__plan input") === null,
+  };
   const before = document.querySelectorAll(".nami-task-rail__row").length;
   await planAgainTraceControl("begin");
   globalThis.__namiPlanAgainTrace?.begin("setup");
@@ -795,17 +807,18 @@ _FROZEN_SCRIPT = r"""
     if (routeError === null) routeError = error;
   }
   if (routeError !== null) throw routeError;
+  const newTasks = (await bridge.listTasks()).tasks.filter((task) => task.task_id !== originalTaskId);
+  if (newTasks.length !== 1) throw new Error("Plan-again task identity is ambiguous");
   return {
-    frozen: true,
-    source_disabled: source.disabled,
-    target_disabled: target.disabled,
+    frozen: frozen.setup_state === "frozen" && frozen.task_kind === "sync-plan",
+    frozen_snapshot: frozen,
+    frozen_readback: frozenReadback,
+    expected_options: expectedOptions,
+    original_after_replan: (await bridge.readSetup(originalTaskId)).snapshot,
+    replanned_snapshot: (await bridge.readSetup(newTasks[0].task_id)).snapshot,
     plan_again_visible: !planAgain.hidden,
     plan_again_new_task: true,
-    picker_resolved: source.dataset.state === "resolved",
-    frozen_switches_disabled: frozenSwitches.length === 7 && frozenSwitches.every((input) => input.disabled),
-    frozen_pairs_disabled: frozenPairs.length === 2 && frozenPairs.every((button) => button.disabled),
-    frozen_mode_hidden: frozenModeHidden,
-    disabled_icon_controls_transparent: disabledIconControlsTransparent,
+    picker_resolved: pickerResolved,
   };
 })()
 """
@@ -861,14 +874,21 @@ _INDEPENDENT_SCRIPT = r"""
     .find((button) => button.textContent === "Create plan");
   const inventoryActionVisibility = inventory.checkVisibility() && !inventoryPlan.checkVisibility();
   inventory.click();
-  await until(() => source.disabled && document.querySelector(".nami-setup__mode-group")?.hidden && target.value === "" &&
-    document.querySelector('[data-purpose="target"]')?.hidden === true &&
-    document.querySelector('[for="setup-source-path"]')?.textContent === "Root", "frozen inventory");
-  const inventoryWithoutPair = target.value === "" &&
-    document.querySelector('[data-purpose="target"]')?.hidden === true;
-  const inventoryInapplicableHidden = !document.querySelector('[data-purpose="target"]').checkVisibility() &&
-    !document.querySelector(".nami-setup__recent-pairs").checkVisibility() &&
-    !document.querySelector(".nami-setup__options").checkVisibility();
+  await until(() => document.querySelector(".nami-inventory-review")?.checkVisibility() &&
+    document.querySelector(".nami-inventory-review .nami-labeled-path__value")?.textContent === __SOURCE__ &&
+    document.querySelector('[data-action="inventory-refresh"]')?.checkVisibility() &&
+    document.querySelector('[data-action="inventory-refresh"]').disabled === false,
+    "frozen inventory readback");
+  const bridge = await import("./bridge.js");
+  const inventoryTasks = (await bridge.listTasks()).tasks.filter((task) => task.task_kind === "inventory");
+  if (inventoryTasks.length !== 1) throw new Error("inventory task identity is ambiguous");
+  const inventorySnapshot = (await bridge.readSetup(inventoryTasks[0].task_id)).snapshot;
+  const inventoryWithoutPair = inventorySnapshot.setup_state === "frozen" &&
+    inventorySnapshot.task_kind === "inventory" && inventorySnapshot.root?.display === __SOURCE__ &&
+    inventorySnapshot.source === null && inventorySnapshot.target === null && inventorySnapshot.options === null;
+  const inventoryInapplicableHidden = document.querySelector(".nami-setup") === null &&
+    document.querySelector(".nami-inventory-review .nami-plan-review__paths input") === null &&
+    document.querySelectorAll(".nami-inventory-review .nami-labeled-path__value").length === 1;
 
   newTask();
   ({source, target} = await editable());

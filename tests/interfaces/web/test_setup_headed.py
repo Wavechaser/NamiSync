@@ -173,10 +173,23 @@ def test_m1_6_installed_setup_flow(
     assert result["plan_again_visible"] is True
     assert result["plan_again_new_task"] is True
     assert result["picker_resolved"] is True
-    assert result["frozen_switches_disabled"] is True
-    assert result["frozen_pairs_disabled"] is True
-    assert result["frozen_mode_hidden"] is True
-    assert result["disabled_icon_controls_transparent"] is True
+    frozen = result["frozen_snapshot"]
+    assert frozen["source"]["display"] == str(tmp_path / "picked-source")
+    assert frozen["target"]["display"] == str(tmp_path / "target")
+    assert frozen["options"] == result["expected_options"]
+    assert result["frozen_readback"] == {
+        "source": frozen["source"]["display"],
+        "target": frozen["target"]["display"],
+        "settings": [
+            "Verify on" if frozen["options"]["verify_after_execute"] else "Verify off",
+            "Additive" if frozen["options"]["deletion_policy"] == "additive" else "Trash",
+        ],
+        "controls_absent": True,
+        "visible": True,
+    }
+    for snapshot in (result["original_after_replan"], result["replanned_snapshot"]):
+        for field in ("setup_state", "task_kind", "source", "target", "root", "options"):
+            assert snapshot[field] == frozen[field]
     assert result["recent_activated"] is True
     assert result["recent_pair_activated"] is True
     assert result["recent_pair_native_button"] is True
@@ -255,10 +268,11 @@ def _run_setup_scenario(
                 terminate_process_tree(process, deadline=deadline)
     if trace_enabled:
         verify_restored_assets(installed.root, trace_assets)
-        validate_trace_snapshot(initial["plan_again_browser_trace"], {"setup"})
-        validate_trace_snapshot(initial["plan_again_host_trace"], {"setup"}, allow_empty=True)
     if milestone == "failure":
         raise AssertionError(f"setup headed gate failed: {initial!r}")
+    if trace_enabled:
+        validate_trace_snapshot(initial["plan_again_browser_trace"], {"setup"})
+        validate_trace_snapshot(initial["plan_again_host_trace"], {"setup"}, allow_empty=True)
     assert final is not None
     require_host_final(final, exit_code=completed.returncode)
     assert completed.returncode == 0, completed.stdout + completed.stderr
