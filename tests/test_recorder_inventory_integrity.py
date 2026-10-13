@@ -750,6 +750,12 @@ def test_integrity_write_is_fully_conditional_and_advances_only_true_verificatio
         )
         assert setup.recorder.record_integrity(baseline_command) is RecordDisposition.APPLIED
         assert setup.recorder.record_integrity(baseline_command) is RecordDisposition.NOOP
+        # A different null-baseline request cannot overwrite newly installed evidence.
+        stale_rebaseline = replace(
+            baseline_command, mode=IntegrityMode.REBASELINE,
+            item_id="null-rebaseline-after-baseline",
+        )
+        assert setup.recorder.record_integrity(stale_rebaseline) is RecordDisposition.STALE
 
         drifted_stats = (
             replace(expected, size=expected.size + 1),
@@ -803,6 +809,16 @@ def test_integrity_write_is_fully_conditional_and_advances_only_true_verificatio
             assert row["last_verified_at"] == "2026-01-02T03:04:05.123456Z"
         finally:
             connection.close()
+        matching_rebaseline = replace(
+            verify_command, mode=IntegrityMode.REBASELINE,
+            item_id="matching-rebaseline", expected_baseline=verified,
+            advances_last_verified=False,
+        )
+        assert setup.recorder.record_integrity(matching_rebaseline) is RecordDisposition.APPLIED
+        with LedgerRepository(setup.recorder.path) as repository:
+            row = repository.get_inventory(setup.source_location_id)[0]
+        assert row.last_verified_at is None
+        assert row.attestation == verified
     finally:
         setup.recorder.close()
 

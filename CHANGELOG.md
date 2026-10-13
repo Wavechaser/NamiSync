@@ -552,6 +552,13 @@ Integrity controls, manual post-copy handoff and beta packaging remain open.
   evidence and binding dispositions, and expand the remaining implementation
   into independently reviewed atomic outcomes. Stop after this checkpoint for
   the requested recap and GUI tweaks; M1-12 and release remain inactive.
+- Require explicit selected-scope/current-evidence acceptance before service or
+  workflow rebaseline admission and forward the existing CLI confirmation.
+  Rebaseline now includes eligible files without prior evidence; every admitted
+  file is freshly hashed and conditionally baselined, including matching content,
+  without claiming verification. Existing engine/recorder behavior is preserved.
+  The database/verifier/workflows/interfaces gate passes 3,504 checks; all 12
+  import contracts pass. Desktop and manual workflow units remain pending.
 
 #### Refine Plan refusal messages, move context and controls (2026-10-04)
 

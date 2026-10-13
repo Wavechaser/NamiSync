@@ -706,10 +706,9 @@ general row validator. Retained-byte authority remains unimplemented and must
 surround the real construction graph.
 
 Candidate filtering happens only while freezing a new integrity selection.
-In the current implementation, baseline admits eligible non-directory rows
-with no attestation; rebaseline
-admits eligible rows that already have an attestation; verify retains both,
-including null-attestation rows that must establish evidence and report
+Baseline admits eligible non-directory rows with no attestation; rebaseline
+and verify retain both evidence states. Null-attestation rows establish evidence
+and report `baselined`; only the verify phase consequently reports
 verification-incomplete. When a continuation already carries
 `selection_item_ids`, resume reconstructs that exact ordered set without
 reapplying mode filters. Completed ids/bytes and the original admitted order
@@ -718,12 +717,11 @@ baseline still performs
 its required fresh inventory recording, but hashes and writes no integrity
 attestation when every eligible row already has evidence.
 
-The accepted but unrealized change admits null-attestation rows to fresh
-rebaseline too, without weakening its explicit selected scope/acceptance or
-changing resume selection. Rebaseline hashes and conditionally replaces or
+Fresh rebaseline includes null-attestation rows. Its request requires explicit
+selected scope and current-evidence acceptance before location binding; resume
+retains the admitted selection. Rebaseline hashes and conditionally replaces or
 creates evidence even when content matches; it clears verification freshness
-rather than reporting a verified match. This admission change is not yet
-implemented. See the [three-operation policy](VERIFIER.md#accepted-standalone-operation-policy)
+rather than reporting a verified match. See the [three-operation policy](VERIFIER.md#accepted-standalone-operation-policy)
 for behavior and the [active M1 plan](M1_PLAN.md#remaining-checkpoints)
 for delivery and regression requirements.
 

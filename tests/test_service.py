@@ -3296,6 +3296,7 @@ def test_location_commands_submit_exact_typed_workflow_requests() -> None:
         selected_mount="F:\\",
     )
     rebaseline = service.start_rebaseline(
+        accept_current_evidence=True,
         location_id=7,
         selected_paths=("a.bin",),
     )
@@ -3335,6 +3336,23 @@ def test_rebaseline_refuses_an_unselected_scope_before_submission() -> None:
 
     with pytest.raises(ValueError, match="explicit selected scope"):
         service.start_rebaseline(location_id=7)
+
+
+@pytest.mark.parametrize("acknowledgement", (False, 1, "yes", None))
+def test_rebaseline_refuses_missing_acceptance_before_claim_or_resolution(
+    acknowledgement, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = make_service()
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("unconfirmed rebaseline reached admission")
+
+    monkeypatch.setattr(service, "_start_integrity", forbidden)
+    with pytest.raises((TypeError, ValueError), match="acceptance|boolean"):
+        service.start_rebaseline(
+            location_id=7, selected_ids=("unresolved-node",),
+            accept_current_evidence=acknowledgement,
+        )
 
 
 @pytest.mark.parametrize(
@@ -3968,6 +3986,7 @@ def test_direct_starts_associate_and_retire_exact_session_receipts(
             root_path=str(source),
             selected_paths=selected_paths,
             command_id=command_id,
+            **({"accept_current_evidence": True} if start_kind == "rebaseline" else {}),
         )
 
     if start_kind == "plan":

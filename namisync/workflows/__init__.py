@@ -99,6 +99,7 @@ def integrity_request(
     location_id: int | None = None,
     selected_paths: tuple[str, ...] = (),
     selected_mount: str | None = None,
+    accept_current_evidence: bool = False,
 ) -> IntegrityRequest:
     """Translate a primitive interface request into a typed integrity request."""
 
@@ -109,6 +110,7 @@ def integrity_request(
         location_id=location_id,
         selected_paths=selected_paths,
         selected_mount=selected_mount,
+        accept_current_evidence=accept_current_evidence,
     )
 
 

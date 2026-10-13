@@ -1353,15 +1353,22 @@ def test_baseline_refuses_to_overwrite_established_evidence(tmp_path: Path) -> N
     assert recorder.commands == []
 
 
+@pytest.mark.parametrize("prior", ("missing", "matching", "changed"))
 def test_rebaseline_accepts_fresh_current_stat_without_calling_it_verified(
     tmp_path: Path,
+    prior: str,
 ) -> None:
     old_stat = _stat(mtime_ns=100)
     current_stat = _stat(mtime_ns=200)
     item = _item(
         tmp_path,
         expected_stat=current_stat,
-        baseline_evidence=_attestation(b"old", old_stat),
+        baseline_evidence=(
+            None if prior == "missing" else _attestation(
+                b"new" if prior == "matching" else b"old",
+                current_stat if prior == "matching" else old_stat,
+            )
+        ),
         reappeared=True,
     )
     recorder = _Recorder()
@@ -1376,7 +1383,9 @@ def test_rebaseline_accepts_fresh_current_stat_without_calling_it_verified(
     assert result.outcomes[0].result is IntegrityResult.BASELINED
     command = recorder.commands[0]
     assert command.mode is IntegrityMode.REBASELINE
-    assert command.expected_baseline.content.digest == xxh3_128(b"old").digest()
+    assert command.expected_baseline == item.baseline
+    assert command.attestation.content.digest == xxh3_128(b"new").digest()
+    assert len(recorder.commands) == 1
     assert command.advances_last_verified is False
     assert command.clear_reappeared is True
 

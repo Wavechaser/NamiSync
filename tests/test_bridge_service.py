@@ -2302,7 +2302,7 @@ def test_br_g_1_and_29_opaque_location_ids_union_freeze_and_refuse_foreign() -> 
         location_id=7,
         selected_ids=(folder_id, hostile_id),
     )
-    service.start_rebaseline(location_id=7, selected_ids=(folder_id,))
+    service.start_rebaseline(location_id=7, selected_ids=(folder_id,), accept_current_evidence=True)
 
     refresh = dispatcher.submissions[0][1]
     assert refresh.subtree_roots == ("Folder",)

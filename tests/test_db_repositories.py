@@ -521,10 +521,11 @@ def test_integrity_candidate_reader_enforces_complete_population_row_wall(
                     )
                 assert raised.value.fact == IntegrityCandidateLimitExceeded.rows()
 
-            assert repository.get_integrity_candidates(
-                setup.source_location_id,
-                IntegrityMode.REBASELINE,
-            ) == ()
+            with pytest.raises(IntegrityCandidateLimitError):
+                repository.get_integrity_candidates(
+                    setup.source_location_id,
+                    IntegrityMode.REBASELINE,
+                )
             with pytest.raises(IntegrityCandidateLimitError):
                 repository.get_integrity_candidates(
                     setup.source_location_id,

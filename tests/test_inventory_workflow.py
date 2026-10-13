@@ -838,8 +838,6 @@ class _IntegrityRepositorySpy:
             )
         if mode is IntegrityMode.BASELINE:
             return tuple(row for row in candidates if row.attestation is None)
-        if mode is IntegrityMode.REBASELINE:
-            return tuple(row for row in candidates if row.attestation is not None)
         return candidates
 
 
@@ -897,6 +895,23 @@ def test_integrity_request_rejects_empty_list_alias() -> None:
             IntegrityMode.VERIFY,
             root_path="M:\\managed",
             selected_paths=[],
+        )
+
+
+@pytest.mark.parametrize("acknowledgement", (False, 1, "yes", None))
+def test_rebaseline_request_requires_explicit_acceptance(acknowledgement) -> None:
+    with pytest.raises((TypeError, ValueError), match="acceptance|boolean"):
+        IntegrityRequest(
+            "rebaseline", IntegrityMode.REBASELINE, location_id=7,
+            selected_paths=("a.txt",), accept_current_evidence=acknowledgement,
+        )
+
+
+def test_rebaseline_request_requires_explicit_scope() -> None:
+    with pytest.raises(ValueError, match="explicit selected scope"):
+        IntegrityRequest(
+            "rebaseline", IntegrityMode.REBASELINE, location_id=7,
+            accept_current_evidence=True,
         )
 
 
@@ -4183,14 +4198,14 @@ def test_stale_integrity_selection_never_materializes_full_inventory(
 @pytest.mark.parametrize(
     ("mode", "expected_path"),
     [
-        (IntegrityMode.BASELINE, "a.txt"),
-        (IntegrityMode.REBASELINE, "b.txt"),
+        (IntegrityMode.BASELINE, ("a.txt",)),
+        (IntegrityMode.REBASELINE, ("a.txt", "b.txt")),
     ],
 )
 def test_stale_integrity_selection_preserves_mode_filtering(
     tmp_path: Path,
     mode: IntegrityMode,
-    expected_path: str,
+    expected_path: tuple[str, ...],
 ) -> None:
     mount = tmp_path / "mount"
     root = mount / "managed"
@@ -4230,7 +4245,7 @@ def test_stale_integrity_selection_preserves_mode_filtering(
         frozenset(),
     )
 
-    assert tuple(row.rel_path for row in selected) == (expected_path,)
+    assert tuple(row.rel_path for row in selected) == expected_path
 
 
 @pytest.mark.parametrize("kind", ("inventory", "integrity"))

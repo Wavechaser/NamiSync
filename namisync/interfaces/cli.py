@@ -392,7 +392,9 @@ def _run_location_workflow(
             elif namespace.command == "verify":
                 session = service.start_verify(**common)
             else:
-                session = service.start_rebaseline(**common)
+                session = service.start_rebaseline(
+                    **common, accept_current_evidence=namespace.accept_current_evidence
+                )
         except LocationResolutionError as error:
             _render_resolution_error(error, stderr)
             return EXIT_USAGE

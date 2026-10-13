@@ -465,8 +465,6 @@ def _bounded_integrity_row_ids(row_ids: Iterable[str]) -> tuple[str, ...]:
 def _integrity_eligibility_sql(mode: IntegrityMode) -> str:
     if mode is IntegrityMode.BASELINE:
         return "content_algorithm IS NULL"
-    if mode is IntegrityMode.REBASELINE:
-        return "content_algorithm IS NOT NULL"
     return "1"
 
 

@@ -1610,12 +1610,18 @@ class NamiSyncService:
         selected_mount: str | None = None,
         selected_ids: tuple[str, ...] | None = None,
         command_id: str | None = None,
+        accept_current_evidence: bool = False,
     ) -> LocationSession:
         self._require_open()
         if selected_ids is None and not selected_paths:
             raise ValueError("rebaseline requires an explicit selected scope")
+        if type(accept_current_evidence) is not bool:
+            raise TypeError("accept_current_evidence must be a boolean")
+        if not accept_current_evidence:
+            raise ValueError("rebaseline requires explicit current-evidence acceptance")
         return self._start_integrity(
             REBASELINE_KIND,
+            accept_current_evidence=accept_current_evidence,
             root_path=root_path,
             location_id=location_id,
             selected_paths=selected_paths,
@@ -2099,6 +2105,7 @@ class NamiSyncService:
         selected_mount: str | None,
         selected_ids: tuple[str, ...] | None,
         command_id: str | None,
+        accept_current_evidence: bool = False,
     ) -> LocationSession:
         signature = (
             root_path,
@@ -2125,6 +2132,7 @@ class NamiSyncService:
                 location_id=location_id,
                 selected_paths=selected_paths,
                 selected_mount=selected_mount,
+                accept_current_evidence=accept_current_evidence,
             )
             result = self._start_location(
                 kind,

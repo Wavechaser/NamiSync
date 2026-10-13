@@ -1518,9 +1518,11 @@ def test_cli_verify_after_copy_renders_compound_typed_result(
     assert stderr.getvalue() == ""
 
 
+@pytest.mark.parametrize("initial_mode", ("baseline", "rebaseline"))
 def test_cli_runs_inventory_and_integrity_lifecycle(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    initial_mode: str,
 ) -> None:
     default_data = tmp_path / "default-app-data"
     monkeypatch.setenv("LOCALAPPDATA", str(default_data))
@@ -1571,7 +1573,10 @@ def test_cli_runs_inventory_and_integrity_lifecycle(
     baseline_output = io.StringIO()
     baseline_errors = io.StringIO()
     baseline = main(
-        ["baseline", *common],
+        [initial_mode, *common, *(
+            ["--path", "payload.bin", "--accept-current-evidence"]
+            if initial_mode == "rebaseline" else []
+        )],
         stdout=baseline_output,
         stderr=baseline_errors,
     )
@@ -1630,12 +1635,15 @@ def test_cli_runs_inventory_and_integrity_lifecycle(
 
     rebaseline_output = io.StringIO()
     rebaseline_errors = io.StringIO()
+    (root / "null-evidence.bin").write_bytes(b"new baseline")
     accepted = main(
         [
             "rebaseline",
             *common,
             "--path",
             "payload.bin",
+            "--path",
+            "null-evidence.bin",
             "--accept-current-evidence",
         ],
         stdout=rebaseline_output,
@@ -1646,7 +1654,7 @@ def test_cli_runs_inventory_and_integrity_lifecycle(
         rebaseline_output.getvalue(),
         rebaseline_errors.getvalue(),
     )
-    assert "baselined=1" in rebaseline_output.getvalue()
+    assert "baselined=2" in rebaseline_output.getvalue()
     assert rebaseline_errors.getvalue() == ""
     final = main(
         ["verify", *common],
@@ -1667,7 +1675,7 @@ def test_cli_runs_inventory_and_integrity_lifecycle(
     baseline_line = next(
         line
         for line in history_output.getvalue().splitlines()
-        if "  baseline  " in line
+        if f"  {initial_mode}  " in line
     )
     baseline_token = baseline_line.split(maxsplit=1)[0]
     detail_output = io.StringIO()
@@ -1685,8 +1693,8 @@ def test_cli_runs_inventory_and_integrity_lifecycle(
     assert listed == EXIT_SUCCESS
     assert history_errors.getvalue() == ""
     assert detailed == EXIT_SUCCESS
-    assert "Activity: baseline" in detail_output.getvalue()
-    assert "baseline/integrity/" in detail_output.getvalue()
+    assert f"Activity: {initial_mode}" in detail_output.getvalue()
+    assert f"{initial_mode}/integrity/" in detail_output.getvalue()
 
 
 def test_case_only_name_advisory_does_not_suppress_changed_content(

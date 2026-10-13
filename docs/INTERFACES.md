@@ -56,7 +56,9 @@ plan, execution, inventory, baseline, verify, and rebaseline with their exact
 pause capabilities. Each location command supplies exactly one root or retained
 location id plus an optional exact selected scope and ambiguity-resolving mount;
 no adapter infers location from a mapping or another argument. Rebaseline also
-requires an explicit selected scope and acceptance intent. Queue control,
+requires an explicit selected scope and exact boolean current-evidence acceptance
+before command custody, selected-node resolution or native work. The CLI forwards
+its required `--accept-current-evidence` flag into that shared admission. Queue control,
 machine output, and desktop integrity controls remain deferred.
 
 ## M1 Shared Service

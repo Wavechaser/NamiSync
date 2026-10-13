@@ -8,9 +8,10 @@ DOC-2 and unrelated optimization remain inactive.
 M1_PLAN is the sole current register. Delivered histories are condensed with
 binding decisions, exclusions, commit/evidence pointers and referenced anchors
 preserved. Its M1-10 units cover operation policy, exact manual workflow,
-task/bridge association, desktop controls and integrated closure. No product
-outcome is complete yet. Root owns shared delivery documents; builders own
+task/bridge association, desktop controls and integrated closure. Unit A is
+verified; later units remain pending. Root owns shared delivery documents; builders own
 explicit source/test/subject-doc populations, and fresh reviewers precede commits.
+Documentation scope/condensation is committed as `a730165`.
 
 Unit A baseline: five deterministic workflow/recorder cases and two existing
 native runtime/CLI cases pass. Restricted-run native reads failed before bytes;
@@ -19,11 +20,14 @@ diagnostic EIO evidence and `integrity-prechange-host-05.log` under
 `build/m1-10-20261013/`. Its AGENTS defines artifact conventions.
 Use justified host PowerShell for native tests; ordinary tests need no watcher.
 
-Unit A implementation is active: explicit acknowledgement before claim/native
-binding, selected null-evidence rebaseline admission, direct caller migration,
-conditional-recording/mode/continuation coverage. Existing engine and recorder
-appear sufficient; do not rewrite them without evidence. The plan condensation
-and finite register are undergoing fresh independent review.
+Unit A is verified: explicit acknowledgement before claim/native binding,
+selected null-evidence rebaseline admission and direct caller migration.
+Engine/recorder production code is unchanged. Final neighborhood receipt
+`integrity-neighborhood-09.log` passes 3,504 tests, 2,537 deselected; all 12
+imports and diff checks pass. Independent review is `policy-review-01.md`.
+Earlier fixture migration failures and restricted-run failures remain retained.
+The reflective-tampering test introduced during drafting was removed because
+DEFENSE excludes that fault model; legitimate boundary tests remain.
 
 Unit B design is read-only until A integrates. Exact manual verification needs
 a whole-selection atomic ledger snapshot, target-only admission and a second

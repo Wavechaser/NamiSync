@@ -10,8 +10,8 @@ Stage 5 exposes standalone activities through the shared-service CLI with
 explicit location/scope binding and guarded selected rebaseline; desktop
 actions remain Stage 6. Signed-64 totals, exact event v5, and full-width native
 identity are active. The no-rescan manual post-copy handoff and ledger-current
-classification below remain accepted but unrealized. Broader fresh rebaseline
-admission to rows without prior evidence is also accepted but unrealized.
+classification below remain accepted but unrealized. Fresh rebaseline admits
+eligible selected rows with or without prior evidence after explicit acceptance.
 
 ## Purpose
 
@@ -234,7 +234,7 @@ evidence.
 
 The current workflow freezes a mode-aware initial selection before calling this module.
 Baseline admits only eligible non-directory rows without an attestation;
-rebaseline admits only rows with one; verify admits both. The filters are not
+rebaseline and verify admit both evidence states. The filters are not
 reapplied when a paused continuation already has exact candidate ids, so an
 evidence change cannot remove admitted pending work. Repeating a full baseline
 still refreshes and records inventory, but when every row already has evidence
@@ -243,16 +243,13 @@ it runs with zero verifier hashes and zero integrity-attestation writes.
 ### Accepted standalone operation policy
 
 This table governs the accepted behavior after fresh inventory for eligible
-readable files whose current subject remains stable during the read. Only
-rebaseline's missing-evidence admission is unrealized; all other cells describe
-existing policy. Current fresh rebaseline still excludes rows without evidence
-as stated above.
+readable files whose current subject remains stable during the read.
 
 | Operation | No prior evidence | Prior evidence exists | Successful evidence / verification freshness |
 | --- | --- | --- | --- |
 | Baseline | Hash and conditionally create a baseline. | Not admitted to verifier work; no verifier hash or attestation write. | Report `baselined`; do not claim a comparison or advance `last_verified_at`. |
 | Verify | Hash and conditionally create a baseline; report `baselined`, so the verify phase is `verification-incomplete`. | Changed baseline stat: `modified` without hashing. Stable stat: hash; equal digest is `verified`, different digest is `mismatched` and never auto-accepted. | Only a genuine comparison match advances `last_verified_at`; negative results retain prior evidence and may conditionally record invalidation. |
-| Rebaseline | **Accepted, unrealized:** hash and conditionally create a baseline, accepting null as the prior evidence state. | Hash and conditionally replace with fresh evidence, including when the digest genuinely matches. | Report `baselined`, never `verified`; clear prior `last_verified_at`, leaving the successfully baselined row `unverified`. |
+| Rebaseline | Hash and conditionally create a baseline, accepting null as the prior evidence state. | Hash and conditionally replace with fresh evidence, including when the digest genuinely matches. | Report `baselined`, never `verified`; clear prior `last_verified_at`, leaving the successfully baselined row `unverified`. |
 
 These are workflow admission rules, not silent per-item `skipped` results.
 Fresh inventory may still update observations for excluded baseline subjects.

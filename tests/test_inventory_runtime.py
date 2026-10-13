@@ -278,7 +278,11 @@ def _run_integrity_mode(
     mode: IntegrityMode,
     request_id: str,
 ):
-    request = IntegrityRequest(request_id, mode, location_id=location_id)
+    request = IntegrityRequest(
+        request_id, mode, location_id=location_id,
+        selected_paths=("a.txt", "b.txt") if mode is IntegrityMode.REBASELINE else (),
+        accept_current_evidence=mode is IntegrityMode.REBASELINE,
+    )
     if mode is IntegrityMode.BASELINE:
         prepared = runtime.prepare_baseline(request)
         invocation = runtime.open_baseline(prepared.checkpoint)
@@ -410,15 +414,15 @@ def test_runtime_registers_inventory_and_all_integrity_modes_with_one_factory(
                         f"{mode.value}-request",
                         mode,
                         location_id=location_id,
+                        selected_paths=("a.txt",),
+                        accept_current_evidence=True,
                     ),
                 )
                 record = _wait_for(
                     dispatcher, session_id, SessionState.COMPLETED
                 )
                 assert record.result is not None
-                assert [item.phase for item in record.result.items] == (
-                    [] if mode is IntegrityMode.REBASELINE else [mode.value]
-                )
+                assert [item.phase for item in record.result.items] == [mode.value]
         finally:
             assert dispatcher.shutdown().complete
 
@@ -607,8 +611,8 @@ def test_repeat_full_baseline_refreshes_inventory_but_runs_no_verifier_work(
         ),
         pytest.param(
             IntegrityMode.REBASELINE,
-            ("a.txt",),
-            id="rebaseline-existing-only",
+            ("a.txt", "b.txt"),
+            id="rebaseline-all-evidence-states",
         ),
     ],
 )
@@ -1055,7 +1059,10 @@ def test_paused_baseline_and_rebaseline_resume_without_repeating_or_losing_items
     try:
         session_id = dispatcher.submit(
             kind,
-            IntegrityRequest(request_id, mode, location_id=location_id),
+            IntegrityRequest(
+                request_id, mode, location_id=location_id,
+                selected_paths=(expected_path,), accept_current_evidence=True,
+            ),
         )
         assert started.wait(2)
         assert dispatcher.pause(session_id).accepted
@@ -1165,6 +1172,7 @@ def test_paused_integrity_cancel_uses_exact_continuation_without_reopening(
             IntegrityRequest(
                 f"pause-cancel-{mode.value}",
                 mode,
+                accept_current_evidence=True,
                 location_id=location_id,
                 selected_paths=("a.txt", "b.txt"),
             ),

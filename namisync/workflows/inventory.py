@@ -583,6 +583,7 @@ class IntegrityRequest:
     selected_paths: tuple[str, ...] = ()
     selected_mount: str | None = None
     stale_before: datetime | None = None
+    accept_current_evidence: bool = False
 
     def __post_init__(self) -> None:
         _validate_location_request(
@@ -590,12 +591,19 @@ class IntegrityRequest:
         )
         if type(self.mode) is not IntegrityMode:
             raise TypeError("integrity mode has the wrong type")
+        if type(self.accept_current_evidence) is not bool:
+            raise TypeError("accept_current_evidence must be a boolean")
         if self.selected_mount is not None:
             require_utf16_path(self.selected_mount, "selected volume mount")
         if type(self.selected_paths) is not tuple:
             raise TypeError("integrity selected_paths must be a tuple")
         scope = ScanScope.scoped(selected_paths=self.selected_paths)
         object.__setattr__(self, "selected_paths", scope.selected_paths)
+        if self.mode is IntegrityMode.REBASELINE:
+            if not self.selected_paths:
+                raise ValueError("rebaseline requires an explicit selected scope")
+            if not self.accept_current_evidence:
+                raise ValueError("rebaseline requires explicit current-evidence acceptance")
         if self.stale_before is not None:
             _require_utc(self.stale_before, "stale_before")
 
@@ -803,6 +811,7 @@ def _exact_integrity_request(value: object) -> IntegrityRequest:
         selected_paths=value.selected_paths,
         selected_mount=value.selected_mount,
         stale_before=value.stale_before,
+        accept_current_evidence=value.accept_current_evidence,
     )
 
 

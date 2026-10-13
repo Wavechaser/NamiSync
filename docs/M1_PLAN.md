@@ -62,6 +62,17 @@ existing native runtime/CLI cases pass under host PowerShell. Restricted-run
 native EIO failures before bytes remain in the evidence directory alongside
 the passing `integrity-prechange-host-05.log`; they are not product changes.
 
+Unit A delivered: service and typed fresh requests require explicit Boolean
+current-evidence acceptance and selected scope before admission; CLI forwards
+its existing confirmation. Fresh rebaseline admits both evidence states;
+existing engine and recorder remain unchanged. The final database/verifier/
+workflows/interfaces gate passes 3,504 checks (2,537 outside these departments)
+in `integrity-neighborhood-09.log`; all 12 import contracts and diff checks pass.
+Focused native/CLI, mode matrix, conditional absence/conflict and match/freshness
+coverage pass. Earlier failed fixture-migration receipts remain retained.
+Independent review is recorded in `policy-review-01.md`; the documentation-only
+scope/condensation commit is `a730165`. B–E remain pending.
+
 Preserve atomic publication, conditional recording including prior absence,
 root admission, fixed continuation identity and original execution truth.
 Manual exact readiness excludes already-verified members only after proving
