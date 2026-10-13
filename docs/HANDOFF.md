@@ -6,9 +6,9 @@ Three fresh reviews cover domain A/B, C lifecycle/result ownership,
 and bridge/browser/direct-consumer/evidence contracts. A/B passed 43 fresh native
 checks without a product finding; stale VERIFIER/WORKFLOWS status prose is corrected.
 C review reproduced two finite identity-migration omissions: a current-session
-release guard hid live execution-task Inventory, and the browser SessionRecord
-catalog rejected `manual-verify`. The read guard is the current correction;
-the separate browser correction must close before D. No D implementation has
+release guard hid live execution-task Inventory (`bccd88f` corrects it), and the
+browser SessionRecord catalog rejected `manual-verify` (this commit corrects it).
+The integrated review is closed after their independent correction gates. No D implementation has
 started. This session's fallback for unavailable GPT-6.1 Sol is GPT-5.6 Sol.
 The later M1-10 completion still stops for recap and GUI tweaks. M1-12, release,
 DOC-2 and unrelated optimization remain inactive.
@@ -54,6 +54,18 @@ The read correction additionally passes 2,015 interfaces tests
 (`resume-read-interfaces-05.log`) and all twelve imports
 (`resume-read-imports-05.log`); independent native and source correction review
 is recorded in the C report. Its separate commit precedes the browser correction.
+`dc80d06` corrects an asynchronous test assumption found by the browser gate:
+independent window/detail reads may advance the result revision. All other
+overlay facts still match exactly; `resume-read-revision-07.log` passes all 234
+drain cases. Browser acceptance covers 2,016 interfaces obligations by dependency:
+1,782 unaffected passes in `resume-kind-interfaces-04.log` plus those 234 cases.
+The failure receipt is retained. `resume-kind-focused-03.log` passes 164 browser
+event/transport checks, and `resume-kind-installed-05.log` passes both affected
+installed host/transport checks. `resume-kind-native-evidence/manifest.json`
+preserves fifteen SHA-256-verified native receipts/artifact identities. The
+consumer report confirms the correction, unchanged independent green drain
+witness and evidence accounting. D1/D2 must close the finite consumer report's
+pending UI seams before claiming desktop integrity delivery.
 
 ## Prior C3b verification and dispositions
 

@@ -619,6 +619,10 @@ attempt checks. Linked execution cannot start this separate manual action.
 Manual live control uses `control_execution` against its current manual session;
 ordinary integrity on either task kind uses `control_integrity`.
 
+Browser terminal-record admission includes manual verification's canonical kind
+and pause capability. The complete drain batch validates before event/cursor
+adoption; an unknown kind or mismatched capability still rejects the batch.
+
 After an ordinary start, inventory windows and domain details additionally carry
 an `integrity` context: activity request/session/mode/location identity, result
 revision, complete and gap flags, and compact outcome items for only the returned

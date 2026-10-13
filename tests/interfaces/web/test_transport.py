@@ -831,8 +831,9 @@ def test_br_g_36_node_discovery_prefers_explicit_test_runtime(
     assert _node_executable() == configured
 
 
+@pytest.mark.parametrize("record_kind", ["sync-plan", "manual-verify"])
 def test_br_g_36_node_drain_validates_transport_before_batch_delivery(
-    tmp_path: Path,
+    tmp_path: Path, record_kind: str,
 ) -> None:
     node = _node_executable()
     if node is None:
@@ -856,7 +857,7 @@ def test_br_g_36_node_drain_validates_transport_before_batch_delivery(
 
     try:
         completed = subprocess.run(
-            [str(node), str(probe), str(bridge), str(producer_fixture)],
+            [str(node), str(probe), str(bridge), str(producer_fixture), record_kind],
             capture_output=True,
             check=False,
             text=True,

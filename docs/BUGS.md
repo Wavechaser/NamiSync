@@ -1144,6 +1144,15 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Application task lifecycle
 
+- MODERATE - FIXED (2026-10-13). Closed kind catalog misses a registered activity.
+  The browser rejected a genuine manual-verification terminal record and its
+  co-batched events, preventing terminal observation and automatic release.
+  Cause: TaskSummary and native registration admitted the new kind, but the
+  separate SessionRecord validator retained its old kind/pause lists. Both lists
+  now admit `manual-verify` with pause support. The canonical/wrong-capability
+  corpus covers every registered kind, and the production drain journey runs
+  with both Plan and manual terminal records. Unknown kinds remain refused.
+
 - MODERATE - FIXED (2026-10-13). Current activity revokes retained read authority.
   Execution-task Inventory refused public windows, details and view gestures
   during active or paused auxiliary verification, hiding live result overlays.

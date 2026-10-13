@@ -182,11 +182,24 @@ fresh reviewer confirmation. Gate the read correction with real composition,
 interfaces tests and imports; gate the browser correction with production
 drain/validation probes, interfaces tests and affected installed host/transport.
 Retain original failures; close the whole finite census before D.
-The read correction passes 234 drain tests, 2,015 interfaces tests and twelve
+Read correction `bccd88f` passes 234 drain tests, 2,015 interfaces tests and twelve
 imports (`resume-read-drain-04.log`, `resume-read-interfaces-05.log`,
 `resume-read-imports-05.log`), with independent native/source confirmation in the
 C report. A/B's fresh native review passed 43 focused cases without a product
 finding; stale VERIFIER/WORKFLOWS delivery prose is reconciled.
+Browser correction accepts the existing manual terminal kind and exact pause
+capability while retaining complete-batch validation. Its canonical capability
+and production drain probes pass 164 checks; two affected installed host/transport
+checks pass (`resume-kind-focused-03.log`, `resume-kind-installed-05.log`). The
+interfaces gate closes by dependency: 1,782 unaffected passes from
+`resume-kind-interfaces-04.log` plus all 234 drain cases from
+`resume-read-revision-07.log`. The failed receipt exposed a test-only assumption
+that two independent live reads have identical result revisions; `dc80d06`
+permits revision advance while retaining equality of every other fact. Product
+bytes and all unaffected evidence are unchanged. The consumer report confirms
+this accounting and the independent red/green production drain witness. The
+integrated A–C review is closed with these corrections; D's existing population
+must cover actual wrapper/overlay use and current ordinary/manual status rendering.
 
 D splits into two functional UI commits after C3b acceptance. Read-only
 `desktop-integrity-design-20261013-01.md` inspected `07947213` plus its unfinished

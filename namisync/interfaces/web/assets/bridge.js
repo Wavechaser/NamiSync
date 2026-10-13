@@ -2620,9 +2620,9 @@ function validateSessionRecord(record, sessionId) {
       "result",
     ]) &&
     record.session_id === sessionId &&
-    isOneOf(record.kind, ["sync-plan", "inventory", "sync-execution", "baseline", "verify", "rebaseline"]) &&
+    isOneOf(record.kind, ["sync-plan", "inventory", "sync-execution", "baseline", "verify", "rebaseline", "manual-verify"]) &&
     isOneOf(record.state, TERMINAL_STATES) &&
-    record.supports_pause === (["sync-execution", "baseline", "verify", "rebaseline"].includes(record.kind)) &&
+    record.supports_pause === (["sync-execution", "baseline", "verify", "rebaseline", "manual-verify"].includes(record.kind)) &&
     isUtcTimestamp(record.created_at) &&
     (record.started_at === null || isUtcTimestamp(record.started_at)) &&
     isUtcTimestamp(record.ended_at) &&

@@ -614,6 +614,13 @@ Integrity controls, manual post-copy handoff and beta packaging remain open.
   cover the boundary, and stale verifier/workflow delivery descriptions are updated.
   The correction passes 234 drain checks, 2,015 interfaces checks and twelve
   import contracts, with independent native/source review.
+- Admit manual-verification terminal records in the browser with their correct
+  pause capability, allowing the complete terminal drain and release to finish.
+  All registered kinds retain positive/wrong-capability coverage; Plan and manual
+  variants exercise the production drain. Independent review confirms 164 focused
+  checks, two installed host/transport gates and 2,016 interface obligations by
+  dependency. A separate test correction allows result revision advancement
+  between independent live reads without weakening their remaining fact checks.
 
 #### Refine Plan refusal messages, move context and controls (2026-10-04)
 

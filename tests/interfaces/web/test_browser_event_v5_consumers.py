@@ -26,7 +26,10 @@ from namisync.core.session import (
 )
 from namisync.interfaces.web import bridge as bridge_module
 from namisync.interfaces.web.bridge import to_primitive_view
-from namisync.workflows import EXECUTION_KIND, INVENTORY_KIND, PLAN_KIND
+from namisync.workflows import (
+    BASELINE_KIND, EXECUTION_KIND, INVENTORY_KIND, MANUAL_VERIFY_KIND,
+    PLAN_KIND, REBASELINE_KIND, VERIFY_KIND,
+)
 from namisync.workflows.views import (
     SessionRecordView,
     operation_result_view,
@@ -208,6 +211,10 @@ def test_required_node_session_record_keeps_task_kind_pause_contract() -> None:
         (PLAN_KIND, False),
         (INVENTORY_KIND, False),
         (EXECUTION_KIND, True),
+        (BASELINE_KIND, True),
+        (VERIFY_KIND, True),
+        (REBASELINE_KIND, True),
+        (MANUAL_VERIFY_KIND, True),
     ):
         value = deepcopy(record)
         value.update(kind=kind, supports_pause=supports_pause)
