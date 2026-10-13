@@ -225,6 +225,19 @@ owns the fixture, measured interval, rerun triggers and historical observation.
 
 A plan or inventory window indexes the complete post-filter visible sequence, not lexical database order. Fixed-height virtual rows and leading/trailing spacers keep scrolling stable. Window requests carry the appropriate revision, offset, and limit; a renderer requests the index it needs, commits only under its request generation, and suppresses duplicate uncovered-range requests. Changing search, collapse, filters, sorting, task detail, publication state, or retirement advances the local generation. Stale responses and queued animation frames are inert. `dispose()` disconnects observers/listeners and invalidates pending work before a root is removed.
 
+Plan and Inventory use one outer viewport for horizontal and vertical scrolling,
+with a sticky 24 px header. The row area's height is the viewport's client height
+minus that header; client height already excludes a horizontal scrollbar. Row
+index zero maps to scrollTop zero because the row origin and sticky occlusion
+both occupy the same header height. Coverage, overlap, follow and keyboard reveal
+use this row area. Scroll observations, resize observations and retained offsets
+belong to the outer viewport. Inventory keeps its semantic tree and active
+descendant on the rows element: the generic tree accepts an optional viewport
+and top inset while its default remains the root with no inset. Focus restoration
+preserves scrolling; explicit keyboard movement reveals the complete target row
+below the header. The outer viewport alone owns the stable vertical gutter and
+header/body column alignment.
+
 Plan and Inventory scrolling prefetch within 64 rows of the loaded edge in the
 direction of travel. Placement retains 32 rows behind travel within one requested
 256-row window, clamped at the sequence endpoints. Only the travel-side edge

@@ -1579,7 +1579,7 @@ window.addEventListener("unhandledrejection", (event) => {
     const content = planReviewPanel.element.querySelector(".nami-plan-review__content");
     const table = planReviewPanel.element.querySelector(".nami-plan-review__table-card");
     const tableHeader = table?.querySelector(".nami-file-list__header");
-    const viewport = planReviewPanel.element.querySelector(".nami-plan-review__rows");
+    const viewport = planReviewPanel.element.querySelector(".nami-plan-review__list");
     const diagnostics = planReviewPanel.element.querySelector(".nami-plan-review__diagnostics");
     const globalDiagnostics = planReviewPanel.element.querySelector(".nami-plan-review__global-diagnostics");
     const issueRegion = planReviewPanel.element.querySelector(".nami-plan-review__execution-issues");
@@ -1619,7 +1619,7 @@ window.addEventListener("unhandledrejection", (event) => {
     const visibleCount = expanded ? 2 : 0;
     const rootFits = planReviewPanel.element.scrollHeight <= planReviewPanel.element.clientHeight + 1
       && contentBounds.bottom <= rootBounds.bottom + 1;
-    const tableUsable = tableBounds.height > 0 && viewport.clientHeight >= 24;
+    const tableUsable = tableBounds.height > 0 && viewport.clientHeight >= 48;
     function controlFits(control) {
       if (control.closest("[hidden]") !== null) return true;
       const bounds = control.getBoundingClientRect();
@@ -1648,7 +1648,7 @@ window.addEventListener("unhandledrejection", (event) => {
     const wholeRowReachable = !populated || (
       rowBounds !== undefined
       && rowBounds.height >= 23.5
-      && rowBounds.top >= Math.max(viewportBounds.top, listBounds.top, rootBounds.top) - 1
+      && rowBounds.top >= Math.max(tableHeader.getBoundingClientRect().bottom, rootBounds.top) - 1
       && rowBounds.bottom <= Math.min(
         viewportBounds.bottom, listBounds.top + list.clientHeight, rootBounds.bottom,
       ) + 1
@@ -1863,7 +1863,10 @@ window.addEventListener("unhandledrejection", (event) => {
       window_adopted: !populated || adoptedOffset > initialOffset,
       viewport_bounded: viewport.clientHeight < (populated ? 1000 * 24 : rootBounds.height),
       row_height: populated ? (rowBounds?.height ?? 0) : 24,
-      header_aligned: Math.abs(tableHeader.getBoundingClientRect().width - viewport.getBoundingClientRect().width) <= 1,
+      header_aligned: Math.abs(tableHeader.clientWidth - table.querySelector(".nami-file-list__grid").clientWidth) <= 1
+        && (!populated || [...tableHeader.children].every((cell, index) => Math.abs(
+          cell.getBoundingClientRect().left - visibleRow.children[index].getBoundingClientRect().left,
+        ) <= 1)),
       whole_row_reachable: wholeRowReachable,
       both_columns_reachable: !expanded || visibleColumns.length === 2,
       row_activation_reachable: rowActivationReachable,
@@ -1995,7 +1998,7 @@ window.addEventListener("unhandledrejection", (event) => {
     statusEvidence.track_height = Number(track.getBoundingClientRect().height.toFixed(3));
     statusEvidence.terminal_value = track.firstElementChild.style.getPropertyValue("--nami-progress-value");
     const headers = [...root.querySelectorAll(".nami-inventory-review__columns > div")];
-    const viewport = root.querySelector(".nami-inventory-review__rows");
+    const viewport = root.querySelector(".nami-inventory-review__list");
     const widths = () => headers.map((value) => Number(value.getBoundingClientRect().width.toFixed(3)));
     const firstRow = () => viewport.querySelector(".nami-inventory-row");
     const observedAt = "2026-12-31T23:04:59.999999+00:00";
@@ -2024,8 +2027,11 @@ window.addEventListener("unhandledrejection", (event) => {
     const rowPositions = [...firstRow().children].map(rectangle);
     const statusRectangles = [".nami-plan-review__status-title", ".nami-plan-review__actions > .nami-inventory-review__actions",
       ".nami-plan-review__status-summary", '[data-action="inventory-details"]'].map((selector) => rectangle(root.querySelector(selector)));
-    const scrollOwners = { outer_x: getComputedStyle(root.querySelector(".nami-inventory-review__list")).overflowX,
-      body_x: getComputedStyle(viewport).overflowX, body_y: getComputedStyle(viewport).overflowY };
+    const body = root.querySelector(".nami-inventory-review__rows");
+    const scrollOwners = { outer_x: getComputedStyle(viewport).overflowX,
+      outer_y: getComputedStyle(viewport).overflowY,
+      header_position: getComputedStyle(headers[0].parentElement).position,
+      body_x: getComputedStyle(body).overflowX, body_y: getComputedStyle(body).overflowY };
     const labels = cases.map((name, index) => {
       const state = viewport.querySelector(`[data-node-id="${index + 1}"] .nami-file-state-label`);
       const style = getComputedStyle(state);
@@ -2173,6 +2179,7 @@ window.addEventListener("unhandledrejection", (event) => {
     viewport.dispatchEvent(new Event("scroll"));
     await settled();
     await settled();
+    const adoptedOffset = review.window.offset;
     const evidence = { headers: headers.map((value) => value.textContent), checkbox_count: root.querySelectorAll('input[type="checkbox"]').length,
       appearance, resizing, timestamps, switcher: [...root.querySelectorAll(".nami-segmented__item")].map((value) => ({ text: value.textContent,
         selected: value.ariaChecked, disabled: value.disabled })), labels, checksum: checksumEvidence,
@@ -2184,8 +2191,19 @@ window.addEventListener("unhandledrejection", (event) => {
         .every((value) => value.closest(".nami-plan-review__summary") !== null),
       root_fits: root.scrollHeight <= root.clientHeight + 1,
       viewport_height: viewportHeight, viewport_scroll_height: viewport.scrollHeight,
-      adopted_offset: review.window.offset, window_requests: requests,
+      adopted_offset: adoptedOffset, window_requests: requests.slice(),
       row_height: firstRow().getBoundingClientRect().height };
+    viewport.scrollTop = viewport.scrollHeight;
+    viewport.dispatchEvent(new Event("scroll"));
+    await settled();
+    await settled();
+    const tailRow = body.querySelectorAll("[data-node-id]").item(body.querySelectorAll("[data-node-id]").length - 1);
+    const tailHeader = headers[0].parentElement;
+    evidence.tail_geometry = { header: rectangle(tailHeader), row: rectangle(tailRow),
+      viewport: rectangle(viewport), client_height: viewport.clientHeight,
+      scroll_top: viewport.scrollTop,
+      columns_aligned: headers.every((value, index) => Math.abs(value.getBoundingClientRect().left
+        - tailRow.children[index].getBoundingClientRect().left) < 1) };
     panel.dispose();
     root.remove();
     window.scrollTo(pageScroll.x, pageScroll.y);

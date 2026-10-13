@@ -13,6 +13,47 @@ certify their recorded build and dependencies only.
 
 ## Loading sequence and axis scrolling — 2026-10-12
 
+**AX2 user override (2026-10-12):** implement the single two-axis scroller and
+sticky header despite the unconfirmed AX1 cause, in one isolated atomic commit
+that can be reverted independently. This supersedes AX1's reproduction
+prerequisite only; it makes no claim that the physical-wheel issue is resolved.
+Finite owners/consumers: common table CSS and Plan/Inventory layout overrides;
+Plan renderer viewport/reveal/resize, Inventory viewport persistence and tree
+composition, tree viewport abstraction, existing table-column geometry consumers;
+their page/tree/app probes, installed shell/task-shell/Inventory/gallery helpers,
+and table-loading tool/fixtures where scroll anchors change. Preserve 24 px rows,
+256-row windows, current direction/prefetch rules, exact request/selection custody,
+column widths/alignment and keyboard reveal below the sticky header. No backend,
+schema, input-queue or rendering rewrite. DESKTOP_UI/PRESENTATION own behavior;
+root owns M1_PLAN/HANDOFF/CHANGELOG and measurement limitations in PERFORMANCE.
+Gate: focused viewport/keyboard/hidden/reveal/resize consumers, existing installed
+tree/Inventory/shell/gallery witnesses plus candidate axis observations,
+interfaces/tools checks, documentation and fresh independent review. Product
+and direct consumer migrations remain one revertible commit. AGENTS recurrence
+and mandatory stops remain; no proof of physical-device improvement is promised.
+
+AX2 implementation uses an opt-in common table modifier, preserving nested
+Setup/generic tables. Plan's viewport moves to the outer list; Inventory's
+semantic tree accepts a separate viewport and header inset while generic tree
+defaults remain. Matching focus/reveal, resize, persistence, gallery and loading
+probe consumers migrate atomically. Product/backend/window policy is otherwise
+unchanged. Interfaces/tools pass 2,385 with three existing privilege skips;
+installed task-shell default/larger, Inventory, execution default/larger, generic
+tree and gallery pass. Final gallery ordinary controls pass 26. Shell test
+geometry was updated for sticky occlusion; one unchanged narrow-status retry
+passed without a proved cause for its earlier failure. Gallery tail observation
+now follows its original appearance/count snapshot. Failed receipts are retained
+under `build/single-scroller-20261012/`, alongside final source manifests.
+AX2 completed on 2026-10-13 in the isolated atomic commit containing this record.
+After the user foregrounded the windows, unchanged `axis-candidate-03` passed
+all 20 actual-table sequences across Plan/Inventory: isolated axes and both
+switch orders at four requested gaps, with full expected movement, valid
+ownership/geometry and unchanged source/helper/installed identities. Earlier
+foreground failures remain retained. Independent review confirms the complete
+gate; original hardware symptom remains unverified. Recovery `dbcc686` was
+rebuilt on milestone1 from `ca31654`, not merged or cherry-picked; the final
+commit includes the complete product/consumer migration and final documentation.
+
 The user explicitly formalized these outcomes from `42aa079`, superseding RI1/
 RI2's investigation-only restriction for the work below. Deliver at least two
 separate reviewed commits, in order; no backend optimization is authorized.

@@ -68,6 +68,28 @@ these observations establish no latency acceptance threshold.
 
 ## Axis-switch investigation — AX1 (2026-10-12)
 
+**AX2 follow-up:** the user subsequently authorized the single-scroller migration
+without requiring confirmation of the suspected mechanism. Plan/Inventory
+loading probes now measure the outer list and subtract the 24 px sticky header
+from usable height; Inventory keyboard inputs still target the inner semantic
+tree. Existing historical timing receipts retain their original viewport and
+producer identity. This migration does not recollect startup/window latency or
+establish a performance improvement, and does not alter prefetch policy.
+
+The unchanged AX2 candidate passed on 2026-10-13 in
+`build/single-scroller-20261012/axis-candidate-03`: ten sequences on each actual
+Plan/Inventory table, with isolated axes and both switch orders at requested
+50/250/600/1,000 ms gaps. All 36 trusted, unprevented browser wheel events
+produced their full 32 px horizontal or 80 px vertical movement. Focus, row
+identity, scroll room and geometry remained valid; the body had zero internal
+vertical range and the sticky header stayed at the outer viewport's top.
+Source/helper/installed identities match before and after; wheel SHA-256 is
+`433dbf6974deb6cf360c43fa2821a03f663cc549b677313736d8f229e9b15ecb`.
+The runtime was WebView2 154.0.4258.62 with pywebview 6.2.1. Earlier candidate
+attempts 01/02 stopped before input on foreground ownership and are retained.
+This confirms candidate browser-axis functionality, not physical-device
+equivalence, sustained scrolling or the original suspected cause.
+
 At `81731de`, the installed WebView2 154.0.4258.62 diagnostic compared actual
 Plan/Inventory tables, inert copies with their nested scrollers, a temporary
 single two-axis scroller with sticky header, and restored nested copies. No

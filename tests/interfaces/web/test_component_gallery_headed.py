@@ -4186,7 +4186,10 @@ def _inventory_panel_sample() -> dict[str, object]:
         "status": {"single_line": True, "loading_same_line": True, "active_animation": "nami-progress-indeterminate",
                    "active_indeterminate": True, "terminal_animation": "none", "terminal_track_visible": True,
                    "track_height": 8.0, "terminal_value": "0%"},
-        "scroll_owners": {"outer_x": "auto", "body_x": "hidden", "body_y": "auto"},
+        "scroll_owners": {"outer_x": "auto", "outer_y": "auto", "header_position": "sticky", "body_x": "visible", "body_y": "visible"},
+        "tail_geometry": {"header": [0.0, 100.0, 920.0, 124.0], "row": [0.0, 376.0, 920.0, 400.0],
+                          "viewport": [0.0, 100.0, 930.0, 410.0], "client_height": 300.0,
+                          "scroll_top": 6924.0, "columns_aligned": True},
         "details": {"initially_hidden": True, "expanded": True, "root_height": 640.0, "column_height": 640.0,
                     "root_width": 1200.0, "column_width": 320.0, "global_overflow": "auto", "item_overflow": "auto",
                     "card_rectangles": [[880.0, 0.0, 1200.0, 251.2], [880.0, 263.2, 1200.0, 640.0]], "rem_size": 16.0,
@@ -4225,7 +4228,12 @@ def _assert_inventory_panel(evidence: dict[str, object], integrity: dict[str, ob
     assert evidence["row_widths"] == pytest.approx(evidence["first_widths"], abs=1)
     for header, row in zip(evidence["header_positions"], evidence["row_positions"], strict=True):
         assert [row[0], row[2]] == pytest.approx([header[0], header[2]], abs=1)
-    assert evidence["scroll_owners"] == {"outer_x": "auto", "body_x": "hidden", "body_y": "auto"}
+    assert evidence["scroll_owners"] == {"outer_x": "auto", "outer_y": "auto", "header_position": "sticky", "body_x": "visible", "body_y": "visible"}
+    tail = evidence["tail_geometry"]
+    assert tail["scroll_top"] > 0 and tail["columns_aligned"] is True
+    assert tail["header"][1] == pytest.approx(tail["viewport"][1], abs=1)
+    assert tail["row"][1] >= tail["header"][3] - 1
+    assert tail["row"][3] == pytest.approx(tail["viewport"][1] + tail["client_height"], abs=1)
     title, actions, facts, toggle = evidence["status_rectangles"]
     assert (title[1] + title[3]) / 2 == pytest.approx((actions[1] + actions[3]) / 2, abs=1)
     assert (facts[1] + facts[3]) / 2 == pytest.approx((toggle[1] + toggle[3]) / 2, abs=1)

@@ -894,7 +894,8 @@ for (const action of ["pause", "cancel"]) {
 }
 task.drainUnavailable = false;
 
-const viewport = findByClass(panel.element, "nami-plan-review__rows");
+const viewport = findByClass(panel.element, "nami-plan-review__list");
+viewport.clientHeight = 2 * ROW_HEIGHT;
 const interruptsBeforeOutsideInput = calls.filter(([name]) => name === "onNavigationInterrupt").length;
 for (const name of ["pointerdown", "keydown"]) {
   document.dispatch(name, {target: document.createElement("button"), key: "ArrowDown"});
@@ -928,7 +929,7 @@ assert.equal(viewport.scrollTop, review.window.rows[0].visible_index * ROW_HEIGH
 assert.equal(review.keyboardRevealWindow, null, "keyboard reveal is consumed by its accepted window");
 document.focusScrollRoot = null;
 review.summary.highlight_focus_node_id = savedFocusNode;
-viewport.clientHeight = ROW_HEIGHT - 1;
+viewport.clientHeight = (ROW_HEIGHT - 1) + ROW_HEIGHT;
 viewport.scrollTop = ROW_HEIGHT * 10;
 const coveredWindowCallCount = calls.filter(([name]) => name === "onWindow").length;
 viewport.dispatch("scroll");
@@ -974,10 +975,10 @@ assert.equal(
   windowCallCount,
   "the same uncovered range is requested once",
 );
-viewport.clientHeight = 0;
+viewport.clientHeight = (0) + ROW_HEIGHT;
 panel.render(task);
 document.defaultView.flushAnimationFrame();
-viewport.clientHeight = ROW_HEIGHT - 1;
+viewport.clientHeight = (ROW_HEIGHT - 1) + ROW_HEIGHT;
 panel.render(task);
 document.defaultView.flushAnimationFrame();
 assert.equal(calls.filter(([name]) => name === "onWindow").length, windowCallCount + 1,
@@ -993,9 +994,9 @@ panel.render(task);
 document.defaultView.flushAnimationFrame();
 assert.equal(calls.filter(([name]) => name === "onWindow").length, windowCallCount + 2,
   "navigation retirement allows the same offset on visible re-entry");
-viewport.clientHeight = 0;
+viewport.clientHeight = (0) + ROW_HEIGHT;
 calls.at(-1)[4]();
-viewport.clientHeight = ROW_HEIGHT - 1;
+viewport.clientHeight = (ROW_HEIGHT - 1) + ROW_HEIGHT;
 document.defaultView.flushAnimationFrame();
 assert.equal(calls.filter(([name]) => name === "onWindow").length, windowCallCount + 3,
   "a zero-height settlement retries after restoration before the next frame");
@@ -1036,7 +1037,7 @@ panel.render(task);
 assert.equal(viewport.scrollTop, 0, "switching reviews starts within retained rows");
 document.defaultView.flushAnimationFrame();
 assert.equal(calls.length, beforeDispose, "task switch does not fetch the old viewport");
-viewport.clientHeight = ROW_HEIGHT * 400;
+viewport.clientHeight = (ROW_HEIGHT * 400) + ROW_HEIGHT;
 panel.render(task);
 document.defaultView.flushAnimationFrame();
 panel.render(task);
@@ -1054,7 +1055,8 @@ search.dispatch("input");
 task.review = null;
 panel.render(task);
 assert.equal(findByClass(panel.element, "nami-plan-review__table-card").hidden, false);
-assert.equal(viewport.children.length, 0, "loading cannot retain the previous plan rows");
+assert.equal(findByClass(panel.element, "nami-plan-review__rows").children.length, 0,
+  "loading cannot retain the previous plan rows");
 assert.equal(findByClass(panel.element, "nami-plan-review__toolbar").hidden, true);
 task.review = review;
 panel.render(task);
@@ -1172,7 +1174,7 @@ assert.equal(moveCalls.at(-1)[2].collapseNodeId, moveRow.node_id);
 moveReview.pending = "view";
 movePanel.render({ ...task, review: moveReview });
 assert.equal(movePill.disabled, true);
-const moveViewport = findByClass(movePanel.element, "nami-plan-review__rows");
+const moveViewport = findByClass(movePanel.element, "nami-plan-review__list");
 moveViewport.scrollTop = ROW_HEIGHT * 400;
 moveReview.pending = null;
 moveReview.moveScrollOffset = 0;
@@ -1674,8 +1676,8 @@ livePanel.dispose();
   const edgeCalls = [];
   const edgePanel = createPlanReviewPanel({...callbacks,
     onWindow: (...args) => edgeCalls.push(args)});
-  const edgeBody = findByClass(edgePanel.element, "nami-plan-review__rows");
-  edgeBody.clientHeight = 16 * ROW_HEIGHT;
+  const edgeBody = findByClass(edgePanel.element, "nami-plan-review__list");
+  edgeBody.clientHeight = (16 * ROW_HEIGHT) + ROW_HEIGHT;
   const edgeWindow = (offset, count = 256) => ({...review.window, offset, total: 1000,
     rows: Array.from({length: count}, (_, index) => ({...row,
       node_id: `node-${(index + 1).toString(16).padStart(32, "0")}`,
@@ -1747,7 +1749,7 @@ const resizeCalls = [];
 const resizePanel = createPlanReviewPanel({
   ...callbacks, onWindow: (_review, offset) => resizeCalls.push(offset),
 });
-const resizeBody = findByClass(resizePanel.element, "nami-plan-review__rows");
+const resizeBody = findByClass(resizePanel.element, "nami-plan-review__list");
 const resizeGrid = findByClass(resizePanel.element, "nami-file-list__grid");
 const resizeHeader = findByClass(resizePanel.element, "nami-file-list__header");
 const resizeObserver = document.defaultView.observers.at(-1);
@@ -1775,7 +1777,7 @@ resizePanel.render(resizeTask);
 document.defaultView.flushAnimationFrame();
 assert.equal(resizeGrid.style.getPropertyValue("--nami-file-column-size"), "100.000px",
   "a reused panel retains its column widths");
-resizeBody.clientHeight = 700;
+resizeBody.clientHeight = (700) + ROW_HEIGHT;
 resizeObserver.trigger();
 document.defaultView.flushAnimationFrame();
 assert.deepEqual(resizeCalls, [0], "reused review observes newly visible rows after resize");
@@ -1784,11 +1786,11 @@ const observedAfterReuse = resizeObserver.observeCount;
 resizePanel.render(resizeTask);
 assert.equal(resizeObserver.observeCount, observedAfterReuse,
   "re-rendering one active review does not add another observation");
-resizeBody.clientHeight = 0;
+resizeBody.clientHeight = (0) + ROW_HEIGHT;
 resizePanel.dispose();
 resizePanel.render(resizeTask);
 document.defaultView.flushAnimationFrame();
-resizeBody.clientHeight = 700;
+resizeBody.clientHeight = (700) + ROW_HEIGHT;
 resizeObserver.trigger();
 document.defaultView.flushAnimationFrame();
 assert.deepEqual(resizeCalls, [0, 0], "another reuse responds to the next viewport resize");
@@ -2029,8 +2031,8 @@ await settleScroll();
 assert.ok(scrollTask.review, "the real app must open the Plan review before input");
 const scrollReview = scrollTask.review;
 const scrollPane = findByClass(scrollApp.panel.element, "nami-plan-review");
-const scrollViewport = findByClass(scrollPane, "nami-plan-review__rows");
-scrollViewport.clientHeight = 16 * ROW_HEIGHT;
+const scrollViewport = findByClass(scrollPane, "nami-plan-review__list");
+scrollViewport.clientHeight = (16 * ROW_HEIGHT) + ROW_HEIGHT;
 const inputScroll = (name, index) => {
   const event = {target: scrollViewport};
   document.dispatch(name, event);

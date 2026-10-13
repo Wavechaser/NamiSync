@@ -116,14 +116,16 @@ or system-preference parity. Microsoft's [scroll viewer guidance](https://learn.
 describes the thin-to-wide behavior; Chromium's [scrollbar styling guidance](https://developer.chrome.com/docs/css-ui/scrollbar-styling)
 explains the classic gutter introduced by custom scrollbar dimensions.
 
-Tables share a CSS layout with a vertical body scroll area below the header.
-Both header and body reserve the same stable gutter, including when rows fit;
-the header does not display a vertical scrollbar. Shared column tracks keep
-their cells aligned. One outer horizontal scroll area moves both together and
-shows its scrollbar only when needed. This uses the
+Plan and Inventory use one outer scroll area for both axes. Their opaque sticky
+24 px header shares column tracks with the unscrolled body; the outer viewport
+alone reserves a stable vertical gutter, including when rows fit. Horizontal
+overflow moves header and rows together and reduces the usable row height by
+its scrollbar. Viewport and reveal calculations reserve the header height, so
+keyboard targets remain below it. Setup and generic table specimens retain a
+vertical body below a fixed header, with matching header/body gutters and an
+outer horizontal scroll area. Both arrangements use the
 [CSS stable-gutter contract](https://www.w3.org/TR/css-overflow-3/#scrollbar-gutter-property),
-including hidden-overflow header compensation, without measuring scrollbar
-widths or repeatedly correcting column positions in JavaScript. File-column
+without measuring scrollbar widths or repeatedly correcting column positions in JavaScript. File-column
 resize gestures retain their existing initial width snapshot.
 
 Before window creation, the primary host constructs the service and consumes
@@ -1256,9 +1258,9 @@ the active filtered projection retains an immediate child: expanded and
 collapsed projected parents emit `true` and `false`, while leaves and
 structural containers with no retained child emit no expansion state. It never
 lets an active descendant remain outside the tree viewport: keyboard movement
-and a completed off-window target use the fixed 28-pixel global index to reveal
-the entire row without scrolling an outer surface. User scroll bursts and
-layout-only tree-root resizes enter the same coalesced animation-frame
+and a completed off-window target use the invocation's fixed row height to reveal
+the entire row in its designated viewport (the root by default). User scroll bursts and
+layout-only viewport resizes enter the same coalesced animation-frame
 reconciliation. Crossing a virtual spacer requests the missing leading or
 trailing global index with the tree-owned generation;
 new positions share the in-flight scroll generation. A still-owned response
@@ -1338,7 +1340,7 @@ Status and table cards use a 16 px top inset. The status
 progress bar is 8 px thick; the rail's progress remains 4 px. The Plan view switcher has
 a 6 px outer radius. At default (1280×800) and larger window sizes the natural-height
 Plan and Status cards leave the remaining work-panel height to the table card;
-the table body scrolls rather than the page. Search is a narrower right-aligned
+the table's two-axis viewport scrolls. Search is a narrower right-aligned
 box with inset submit and Clear icons styled like Setup path-box controls.
 Clear restores input focus and immediately clears the query. Plan and Inventory
 share one ordinary-sized Filter button with regular Filter and chevron icons.
@@ -1391,9 +1393,9 @@ colors); task-rail paths share it. The synthetic Plan root is omitted from the t
 header is the sole tri-state bulk control for all selectable operations
 matching the active search/filter query, not merely the
 loaded or expanded rows. Folder checkboxes target matching descendants;
-changing views alone never changes selection. Its separate header and body share the Setup table's stable
-gutter and thin-to-wide scrollbar styling, so the scrollbar does not overlay
-the header. At the first visible loaded layout, production freezes the fitted
+changing views alone never changes selection. Its outer two-axis viewport owns
+the stable gutter and thin-to-wide scrollbar styling; its sticky header remains
+visible above the rows. At the first visible loaded layout, production freezes the fitted
 non-Name widths; subsequent table growth goes entirely to Name. Hidden or
 disconnected rendering defers that snapshot, and panel reuse retains it.
 Production columns use the gallery's constrained pointer/keyboard resizing,

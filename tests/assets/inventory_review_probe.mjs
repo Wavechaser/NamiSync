@@ -228,6 +228,8 @@ assert.equal(rowElements().find((value) => value.dataset.nodeId === fixture.view
 realElement.click();
 assert.equal(details.at(-1)[1], real.node_id);
 const root = find((value) => value.getAttribute("role") === "tree");
+const viewport = find((value) => value.classList.contains("nami-inventory-review__list"));
+viewport.clientHeight += 24;
 root.dispatch("keydown", { key: "Enter" });
 assert.equal(details.at(-1)[1], real.node_id);
 const folder = rowElements().find((value) => value.ariaExpanded === "true");
@@ -375,7 +377,7 @@ Object.assign(review, fixture.views.maximum);
 pane.render(task);
 assert.equal(rowElements().length, 256, "render complete server window without growing beyond bound");
 assert.match(text(pane.element), /Unavailable \(size overflow\)/);
-root.scrollTop = 300 * 24; root.dispatch("scroll");
+viewport.scrollTop = 300 * 24; viewport.dispatch("scroll");
 while (frames.length) frames.shift()();
 assert.equal(pages.length, 1);
 assert.equal(pages[0][0], review);
@@ -551,6 +553,8 @@ const settle = async () => { for (let count = 0; count < 8; count += 1) await Pr
 app.selectTask(liveTask.taskId); await settle();
 const liveReview = liveTask.inventoryReview;
 const treeRoot = walk(app.panel.element).find((value) => value.getAttribute("role") === "tree");
+const treeViewport = walk(app.panel.element).find((value) => value.classList.contains("nami-inventory-review__list"));
+treeViewport.clientHeight += 24;
 const firstLiveRow = () => treeRoot.children.find((value) => value.getAttribute("role") === "treeitem");
 const initialWindow = liveReview.window;
 const initialNode = firstLiveRow().dataset.nodeId;
@@ -560,15 +564,15 @@ const delayedViewport = () => {
   return { resolve, promise };
 };
 viewportReply = delayedViewport();
-treeRoot.scrollTop = 300 * 24; treeRoot.dispatch("scroll");
+treeViewport.scrollTop = 300 * 24; treeViewport.dispatch("scroll");
 while (frames.length) frames.shift()();
 assert.equal(viewportCalls.at(-1)[2], 268);
 assert.equal(walk(app.panel.element).find((value) => value.dataset.action === "inventory-refresh-selected").disabled,
   true, "a viewport gap clears the current toolbar target");
-treeRoot.scrollTop = 280 * 24; treeRoot.dispatch("scroll");
+treeViewport.scrollTop = 280 * 24; treeViewport.dispatch("scroll");
 while (frames.length) frames.shift()();
 assert.equal(viewportCalls.length, 2, "the second viewport intent waits behind the initial read");
-treeRoot.scrollTop = 0; treeRoot.dispatch("scroll");
+treeViewport.scrollTop = 0; treeViewport.dispatch("scroll");
 while (frames.length) frames.shift()();
 assert.equal(viewportPromises.length, 2, "reversal replaces intent behind the same physical read");
 viewportReply.resolve(fixture.tail); await settle();
@@ -587,7 +591,7 @@ const burstCalls = viewportCalls.length;
 const burstPromises = viewportPromises.length;
 for (const index of [256, 260, 264, 268, 272, 276, 280, 288]) {
   treeRoot.dispatch(input);
-  treeRoot.scrollTop = index * 24; treeRoot.dispatch("scroll");
+  treeViewport.scrollTop = index * 24; treeViewport.dispatch("scroll");
   while (frames.length) frames.shift()();
 }
 assert.equal(viewportCalls.length, burstCalls + 1);
@@ -597,7 +601,7 @@ assert.equal(liveTask.inventoryAction, null);
 burstRead.resolve(fixture.tail); await settle();
 assert.equal(await viewportPromises[burstPromises], fixture.tail);
 assert.equal(liveReview.window, fixture.tail);
-assert.equal(treeRoot.scrollTop, 288 * 24);
+assert.equal(treeViewport.scrollTop, 288 * 24);
 assert.equal(viewportCalls.length, burstCalls + 1, "the first covering reply needs no replacement RPC");
 assert.equal(treeRoot.children.filter((value) => value.getAttribute("role") === "treeitem").length,
   fixture.tail.rows.length);
@@ -612,7 +616,7 @@ while (frames.length) frames.shift()();
 for (const failure of ["error", "conflict"]) {
   const callsBefore = viewportCalls.length;
   viewportReply = delayedViewport();
-  treeRoot.scrollTop = 270 * 24; treeRoot.dispatch("scroll");
+  treeViewport.scrollTop = 270 * 24; treeViewport.dispatch("scroll");
   while (frames.length) frames.shift()();
   assert.equal(viewportCalls.length, callsBefore + 1);
   viewportReply.resolve(failure === "error"
@@ -622,7 +626,7 @@ for (const failure of ["error", "conflict"]) {
   while (frames.length) frames.shift()();
   assert.equal(viewportCalls.length, callsBefore + 1, "failure does not busy-retry");
   viewportReply = delayedViewport();
-  treeRoot.scrollTop = 280 * 24; treeRoot.dispatch("scroll");
+  treeViewport.scrollTop = 280 * 24; treeViewport.dispatch("scroll");
   while (frames.length) frames.shift()();
   assert.equal(viewportCalls.length, callsBefore + 2, "changed scrolling retries the failed read");
   viewportReply.resolve(fixture.tail); await settle();
@@ -637,9 +641,9 @@ for (const failure of ["error", "conflict"]) {
 viewportReply = delayedViewport();
 const beforeKeyboard = viewportReply;
 const keyboardCalls = viewportCalls.length;
-treeRoot.scrollTop = 256 * 24; treeRoot.dispatch("scroll");
+treeViewport.scrollTop = 256 * 24; treeViewport.dispatch("scroll");
 while (frames.length) frames.shift()();
-treeRoot.scrollTop = 280 * 24; treeRoot.dispatch("scroll");
+treeViewport.scrollTop = 280 * 24; treeViewport.dispatch("scroll");
 while (frames.length) frames.shift()();
 const queuedScroll = viewportPromises.at(-1);
 treeRoot.dispatch("keydown", {key: "End"});
@@ -653,7 +657,7 @@ assert.equal(viewportCalls.length, keyboardCalls + 2,
   "settling the stale null cannot retire or duplicate the newer keyboard read");
 viewportReply.resolve(fixture.tail); await settle();
 assert.equal(treeRoot.getAttribute("aria-activedescendant"), treeRoot.children.at(-2).id);
-assert.equal(treeRoot.scrollTop, 301 * 24 - treeRoot.clientHeight);
+assert.equal(treeViewport.scrollTop, 301 * 24 - (treeViewport.clientHeight - 24));
 Object.assign(liveReview, fixture.views.maximum, { scrollTop: 0 });
 app.panel.render(liveTask);
 while (frames.length) frames.shift()();
@@ -716,23 +720,23 @@ for (const cancel of [() => firstLiveRow().click(),
   assert.equal(viewportCalls.length, callsBefore + 1);
   assert.equal(liveReview.window, initialWindow);
   assert.equal(liveReview.message, null);
-  treeRoot.scrollTop = 0;
+  treeViewport.scrollTop = 0;
 }
 app.panel.render(liveTask);
 const restoredTree = walk(app.panel.element).find((value) => value.getAttribute("role") === "tree");
 // Continue the existing witnesses using the recreated controller/root.
 assert.equal(restoredTree, treeRoot);
 viewportReply = delayedViewport();
-treeRoot.scrollTop = 300 * 24; treeRoot.dispatch("scroll");
+treeViewport.scrollTop = 300 * 24; treeViewport.dispatch("scroll");
 while (frames.length) frames.shift()();
 viewportReply.resolve(fixture.tail); await settle();
 assert.equal(liveReview.window === fixture.tail, true, "accepted viewport reply becomes the retained window");
 assert.equal(firstLiveRow().dataset.nodeId, fixture.tail.rows[0].node_id);
 assert.equal(walk(app.panel.element).find((value) => value.dataset.action === "inventory-refresh-selected").disabled,
   false, "accepted viewport adopts eligibility after its window enters the page owner");
-const acceptedScroll = treeRoot.scrollTop;
+const acceptedScroll = treeViewport.scrollTop;
 app.panel.render(liveTask);
-assert.equal(treeRoot.scrollTop, acceptedScroll, "rendering the accepted window preserves scrolling");
+assert.equal(treeViewport.scrollTop, acceptedScroll, "rendering the accepted window preserves scrolling");
 assert.equal(firstLiveRow().dataset.nodeId, fixture.tail.rows[0].node_id);
 Object.assign(liveReview, fixture.views.default, { scrollTop: 0 });
 app.panel.render(liveTask);

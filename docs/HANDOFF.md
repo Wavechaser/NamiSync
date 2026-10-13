@@ -1,48 +1,43 @@
-# Latest session — loading sequence complete; axis cause unconfirmed
+# Latest session — single-scroller migration complete
 
-2026-10-12, milestone1. LS1 and AX1 are separate reviewed commits as requested.
-M1_PLAN owns scope; no backend optimization or further window-loading policy
-change was made. No unrelated work, recovery branch or worktree created.
+2026-10-13, milestone1; base ca31654. The user explicitly authorized the
+single-scroller candidate despite AX1's unconfirmed cause, as one atomic,
+independently revertible commit. AX2 is complete in the commit containing this
+record. No backend, schema, prefetch, input-queue or Setup behavior changes.
 
-LS1: 81731de. Submitted starts immediately show blank Plan/Inventory shells with
-Checking folders then Planning/Scanning and indeterminate progress. Refusal
-returns to editable Setup; uncertain receipt Check retains the original command.
-Admitted terminal failure stays on its review shell. Plan again and pair
-coordination retain existing task identities.
+Plan/execution and Inventory use one outer two-axis viewport with an opaque
+sticky 24px header. Viewport arithmetic reserves that header, keyboard reveal
+keeps rows below it, and focus restoration preserves scroll. Column tracks share
+one gutter. Inventory retains the inner semantic tree and generic-tree defaults.
+Direct page/native/gallery and loading-tool consumers migrated together.
 
-Verification: focused 67 passes/three deselected; interfaces/tools 2,385 passes/
-three existing privilege skips. Both installed task-shell cases pass in
-ls1-native-01. Inventory passes in ls1-native-retry-01 after a test-only barrier
-correction: keep injected dependencies until the asynchronous scanner captures
-them. The earlier failure was not foreground loss. Product bytes are identical
-between native receipts; the final Inventory full journey and blank Scanning
-witness pass. Fresh independent review approved product, fixtures and provenance.
+Verification: interfaces/tools 2,385 passes with three existing privilege skips;
+focused frontend 57, Inventory 2, loading controls 41 and final gallery controls 26.
+Installed task shell default/larger passes 2, Inventory 1, generic tree plus
+execution default/larger 3, and light/dark/forced gallery 1. Source manifests and
+installed identities support evidence reuse; independent review found no
+unresolved source or consumer regressions.
 
-PERFORMANCE records six fresh-process planning samples: warm-filesystem medians
-12.669s for 8k files and 50.482s for 32k. Current-world observation accounts for
-about 74%; later preflight evaluation is distinct. One installed 8k DOM click
-shows the blank shell synchronously and first rows at 13.389s. No backend
-optimization was made. Evidence and method live under
-build/loading-sequence-20261012/measurement/; all measurement children closed.
+On resumption the user foregrounded the test windows. Unchanged axis-candidate-03
+passed all 20 sequences/36 browser wheel events across both actual tables,
+with full movement in isolated axes and both switch orders, correct sticky
+geometry, stable rows and valid input ownership. Source/helper/wheel identities
+remained unchanged; both hosts closed. Original physical wheel/tilt symptom and
+Chromium attribution remain unverified. PERFORMANCE owns those limitations.
 
-AX1: the separate commit containing this final record closes the finite
-investigation without activating the conditional scroller migration. Corrected
-CDP attempt-02 has 80 valid trials: both pages move both axes fully in actual,
-nested-copy, single-copy and restored-nested layouts. Attempt-01's single control
-was invalid because CSP blocked its stylesheet; CSSOM corrected that control.
-Attempt-03 Windows wheel injection failed focused-process job ownership before
-cursor movement or SendInput. Exact PID/job values were not retained at failure,
-so the mismatch cannot be attributed retrospectively. No native/sustained-input
-result exists. The user's wheel/tilt-wheel report remains unresolved.
+Evidence: build/single-scroller-20261012/. Earlier focused/native/gallery fixture
+failures and candidate01/02 pre-input foreground refusals remain retained.
+Shell02, inventory01, gallery02 and remaining01 are final native passes. Gallery
+tail observation follows original count/appearance sampling; sticky test bounds
+use the actual usable row area. No product edits followed the final broad pass.
 
-If reopened, first capture passive numeric HWND/PID/job ownership facts, resolve
-that mismatch without weakening input checks, then obtain a valid native/device
-nested/single/restored comparison. No new active implementation is pending.
-PERFORMANCE records method, runtime and limitations; ignored axis/runs retains
-all receipts under build/loading-sequence-20261012/. Independent review verified
-the 80 trials and the pre-input failure. No native/test processes remain active.
+Recovery dbcc686 on codex/wip-20261012-single-scroller was rebuilt from ca31654
+on milestone1 via its task-only patch, then final documentation was rewritten;
+the recovery commit was not merged/cherry-picked. integration.md records the
+final identity and recovery cleanup after full change accounting. No unrelated
+work or worktrees were involved. Prior loading 81731de and AX1 ca31654 remain
+separate. Revert only the final AX2 commit to undo this migration.
 
-Use justified host pwsh for Python/native tests; sandbox temp/runtime resolution
-does not describe the installed host. Serialize native windows and measurement
-intervals. README/AGENTS need no change because milestone synopsis and repository
-rules are unchanged. integration.md records both exact commit identities.
+Use justified host pwsh for tests; preserve foreground/hit checks and serialize
+native windows. README and AGENTS are unchanged because milestone synopsis and
+repository rules are unchanged. No active test processes or pending gates remain.

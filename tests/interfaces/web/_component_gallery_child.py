@@ -1851,7 +1851,7 @@ def _valid_inventory_panel(value: object) -> bool:
         "header_positions", "row_positions", "status_rectangles", "scroll_owners",
         "details", "refresh_on_status", "root_fits", "viewport_height",
         "viewport_scroll_height", "adopted_offset", "window_requests", "row_height",
-        "setup_heights", "status", "appearance", "resizing",
+        "setup_heights", "status", "appearance", "resizing", "tail_geometry",
     }:
         return False
     details = value["details"]
@@ -1888,8 +1888,14 @@ def _valid_inventory_panel(value: object) -> bool:
         and all(type(value["status"][key]) is str and len(value["status"][key]) <= 64 for key in
                 ("active_animation", "terminal_animation", "terminal_value"))
         and _finite_number_matrix([[value["status"]["track_height"]]], 1, 1)
-        and type(value["scroll_owners"]) is dict and set(value["scroll_owners"]) == {"outer_x", "body_x", "body_y"}
+        and type(value["scroll_owners"]) is dict and set(value["scroll_owners"]) == {"outer_x", "outer_y", "header_position", "body_x", "body_y"}
         and all(type(text) is str and len(text) <= 32 for text in value["scroll_owners"].values())
+        and type(value["tail_geometry"]) is dict and set(value["tail_geometry"]) == {
+            "header", "row", "viewport", "client_height", "scroll_top", "columns_aligned",
+        }
+        and _finite_number_matrix([value["tail_geometry"][key] for key in ("header", "row", "viewport")], 3, 4)
+        and _finite_number_matrix([[value["tail_geometry"][key] for key in ("client_height", "scroll_top")]], 1, 2)
+        and type(value["tail_geometry"]["columns_aligned"]) is bool
         and type(details) is dict and set(details) == {
             "initially_hidden", "expanded", "root_height", "column_height", "root_width", "column_width",
             "global_overflow", "item_overflow", "placeholder", "focus_restored",

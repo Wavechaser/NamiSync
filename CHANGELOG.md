@@ -177,7 +177,16 @@ behavioral evidence.
 Safety, settlement and authority work made high-consequence release claims
 explicit, reviewable and regression-backed.
 
-#### Align desktop review surfaces and recovery (2026-10-05 – 2026-10-12)
+#### Align desktop review surfaces and recovery (2026-10-05 – 2026-10-13)
+
+- Use one two-axis scroller with a sticky header for Plan, execution and
+  Inventory tables, following the user's decision to try the suspected remedy.
+  Preserve virtual-window policy, keyboard reveal and column alignment; keep
+  Setup's existing table behavior. Migrate direct probes, native/gallery and
+  loading-tool consumers together in one independently revertible commit.
+  Interfaces/tools, all seven installed native cases and 20 candidate browser
+  wheel sequences pass. The original physical wheel/tilt-wheel symptom is not
+  claimed resolved.
 
 - Investigate axis switching in both installed tables. Eighty valid browser
   wheel trials did not reproduce the lock in nested or single-scroller controls.

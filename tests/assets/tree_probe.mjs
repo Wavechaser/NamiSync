@@ -1252,6 +1252,39 @@ assert.equal(compactTree.commitWindow(compactStale, unreadableWindow), false);
 assert.equal(compactTree.commitWindow(compactCurrent, fixtureWindow(4, 4)), true);
 compactTree.dispose();
 
+// An outer viewport keeps tree semantics while reserving the sticky header.
+const outerDocument = new TestDocument();
+const outerViewport = outerDocument.createElement("div");
+const outerRoot = outerDocument.createElement("div");
+outerViewport.append(outerRoot);
+outerViewport.clientHeight = 3 * 24; // Header plus two complete rows.
+outerRoot.clientHeight = 1000 * 24; // Content height is never the viewport.
+const outerRequests = [];
+const outerTree = createTree(outerRoot, {
+  requestIndex: (index, generation) => outerRequests.push({index, generation}),
+}, 24, outerViewport, 24);
+outerTree.commitWindow(outerTree.beginWindowRequest(), fixtureWindow(0, 4));
+outerDocument.defaultView.flushAnimationFrame();
+dispatchKey(outerRoot, "ArrowDown");
+dispatchKey(outerRoot, "ArrowDown");
+assert.equal(outerViewport.scrollTop, 24, "bottom reveal reserves the header height");
+assert.equal(outerRoot.scrollTop, 0, "the semantic root never scrolls");
+dispatchKey(outerRoot, "Home");
+assert.equal(outerViewport.scrollTop, 0, "top reveal leaves the row below the header");
+outerViewport.scrollTop = 4 * 24;
+outerViewport.dispatch("scroll");
+outerDocument.defaultView.flushAnimationFrame();
+assert.deepEqual(outerRequests, [{index: 5, generation: 2}]);
+assert.equal(outerRoot.getAttribute("aria-activedescendant"), null);
+assert.equal(outerTree.commitWindow(2, fixtureWindow(4, 4)), true);
+assert.equal(outerViewport.scrollTop, 4 * 24, "page adoption preserves outer scrolling");
+assert.equal(outerRoot.getAttribute("aria-activedescendant"), treeItems(outerRoot)[0].id);
+outerTree.dispose();
+outerViewport.scrollTop = 20 * 24;
+outerViewport.dispatch("scroll");
+outerDocument.defaultView.flushAnimationFrame();
+assert.equal(outerRequests.length, 1, "disposal detaches the outer listener");
+
 // Arbitrary recycling cannot leave a stale active index or descendant.
 const recycledGeneration = tree.beginWindowRequest();
 assert.equal(

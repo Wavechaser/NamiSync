@@ -488,7 +488,7 @@ _PAGE = r"""
     return value instanceof HTMLElement && !value.hidden && !value.textContent.includes('Loading')
       && [...value.querySelectorAll('dt')].some(term => term.textContent === 'Path') ? value : null;
   }, 'detail');
-  const rows = review.querySelector('.nami-plan-review__rows');
+  const rows = review.querySelector('.nami-plan-review__list');
   const adoptedRow = await until(() => [...rows.querySelectorAll('[data-node-id]')]
     .find(candidate => candidate.dataset.nodeId === focusedNodeId
       && candidate.dataset.highlighted === 'true' && candidate.isConnected), 'adopted-row');
@@ -503,7 +503,7 @@ _PAGE = r"""
   const hit=document.elementFromPoint((xb.left+xb.right)/2,(xb.top+xb.bottom)/2);
   window.__executionReviewGeometry = {
     rootFits: review.scrollHeight <= review.clientHeight + 1 && cb.bottom <= rb.bottom + 1,
-    tableUsable: tb.height > 0 && rows.clientHeight >= 24,
+    tableUsable: tb.height > 0 && rows.clientHeight >= 48,
     rowHeight: getComputedStyle(rows.querySelector('[data-node-id]')).height,
     rowActivationFocused,
     rowHit: rowTarget !== null && adoptedRow.contains(rowTarget),

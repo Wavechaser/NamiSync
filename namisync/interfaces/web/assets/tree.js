@@ -4,13 +4,17 @@ export const ROW_H = 28;
 
 let nextTreeId = 1;
 
-export function createTree(root, callbacks = {}, rowHeight = ROW_H) {
+export function createTree(root, callbacks = {}, rowHeight = ROW_H, viewport = root, topInset = 0) {
   if (!(root instanceof Element)) {
     throw new TypeError("tree root must be an Element");
   }
   if (!Number.isSafeInteger(rowHeight) || rowHeight <= 0) {
     throw new TypeError("tree row height must be a positive integer");
   }
+  if (!(viewport instanceof Element) || !Number.isSafeInteger(topInset) || topInset < 0) {
+    throw new TypeError("tree viewport and top inset must be valid");
+  }
+  const viewportHeight = () => Math.max(0, viewport.clientHeight - topInset);
   const document = root.ownerDocument;
   if (document === null || typeof document?.createElement !== "function") {
     throw new TypeError("tree root must belong to a document");
@@ -47,7 +51,7 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H) {
   let activeVisibleIndex = null;
   let pendingRequest = null;
   let settledScrollViewport = null;
-  let scrollTopObserved = root.scrollTop;
+  let scrollTopObserved = viewport.scrollTop;
   let scrollDirection = 0;
   let expectedProgrammaticScroll = null;
   let scrollFramePending = false;
@@ -55,15 +59,15 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H) {
   let disposed = false;
 
   root.addEventListener("keydown", onKeyDown);
-  root.addEventListener("scroll", onScroll, {passive: true});
+  viewport.addEventListener("scroll", onScroll, {passive: true});
   root.addEventListener("focus", onFocus);
-  root.addEventListener("pointerdown", cancelNavigation);
-  root.addEventListener("wheel", cancelNavigation, { passive: true });
-  root.addEventListener("touchstart", cancelNavigation, { passive: true });
+  viewport.addEventListener("pointerdown", cancelNavigation);
+  viewport.addEventListener("wheel", cancelNavigation, { passive: true });
+  viewport.addEventListener("touchstart", cancelNavigation, { passive: true });
   const resizeObserver = new document.defaultView.ResizeObserver(() => {
     scheduleViewportCheck();
   });
-  resizeObserver.observe(root);
+  resizeObserver.observe(viewport);
 
   function onFocus() {
     if (activeElement !== null) {
@@ -83,7 +87,7 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H) {
       throw new Error("tree controller is disposed");
     }
     scrollDirection = 0;
-    scrollTopObserved = root.scrollTop;
+    scrollTopObserved = viewport.scrollTop;
     return beginRequest(pendingIndex, "external");
   }
 
@@ -92,11 +96,11 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H) {
     cancelPendingRequest();
     settledScrollViewport = null;
     pendingRequest = Object.freeze({
-      clientHeight: kind === "scroll" ? root.clientHeight : null,
+      clientHeight: kind === "scroll" ? viewportHeight() : null,
       generation: currentGeneration,
       index: pendingIndex,
       kind,
-      scrollTop: kind === "scroll" ? root.scrollTop : null,
+      scrollTop: kind === "scroll" ? viewport.scrollTop : null,
       direction: kind === "scroll" ? scrollDirection : 0,
     });
     return currentGeneration;
@@ -106,7 +110,7 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H) {
     if (disposed || generation !== currentGeneration || pendingRequest?.generation !== generation) return false;
     clearPendingRequest();
     settledScrollViewport = Object.freeze({
-      clientHeight: root.clientHeight, scrollTop: root.scrollTop,
+      clientHeight: viewportHeight(), scrollTop: viewport.scrollTop,
     });
     return true;
   }
@@ -123,21 +127,21 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H) {
       : null;
     const requestKind = admittedRequest?.kind ?? null;
     const requestedIndex = admittedRequest?.index ?? null;
-    if (requestKind === "scroll" && root.clientHeight > 0 &&
-        (offset * rowHeight >= root.scrollTop + root.clientHeight ||
-         (offset + sourceRows.length) * rowHeight <= root.scrollTop)) {
+    if (requestKind === "scroll" && viewportHeight() > 0 &&
+        (offset * rowHeight >= viewport.scrollTop + viewportHeight() ||
+         (offset + sourceRows.length) * rowHeight <= viewport.scrollTop)) {
       clearPendingRequest();
-      if (root.scrollTop === admittedRequest.scrollTop &&
-          root.clientHeight === admittedRequest.clientHeight) {
+      if (viewport.scrollTop === admittedRequest.scrollTop &&
+          viewportHeight() === admittedRequest.clientHeight) {
         settledScrollViewport = Object.freeze({
-          clientHeight: root.clientHeight, scrollTop: root.scrollTop,
+          clientHeight: viewportHeight(), scrollTop: viewport.scrollTop,
         });
       } else {
         scheduleViewportCheck();
       }
       return false;
     }
-    const preservedScrollTop = root.scrollTop;
+    const preservedScrollTop = viewport.scrollTop;
     const entries = sourceRows.map((sourceRow) => {
       const row = snapshotRow(sourceRow);
       let entry;
@@ -147,14 +151,14 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H) {
           return;
         }
         acceptRenderedIntent(entry);
-        root.focus();
+        root.focus({preventScroll: true});
         toggle(row.node_id, !row.expanded);
       });
       decorateRow(element, sourceRow);
       entry = Object.freeze({element, row});
       element.addEventListener("click", () => {
         acceptRenderedIntent(entry);
-        root.focus();
+        root.focus({preventScroll: true});
         activate(row.node_id);
       });
       element.addEventListener("contextmenu", (event) => {
@@ -222,12 +226,12 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H) {
       setActive(target, requestKind !== "scroll");
     }
     const scrollViewportUnchanged = requestKind === "scroll" &&
-      root.scrollTop === admittedRequest.scrollTop &&
-      root.clientHeight === admittedRequest.clientHeight;
+      viewport.scrollTop === admittedRequest.scrollTop &&
+      viewportHeight() === admittedRequest.clientHeight;
     if (scrollViewportUnchanged) {
       settledScrollViewport = Object.freeze({
-        clientHeight: root.clientHeight,
-        scrollTop: root.scrollTop,
+        clientHeight: viewportHeight(),
+        scrollTop: viewport.scrollTop,
       });
     } else {
       scheduleViewportCheck();
@@ -253,18 +257,18 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H) {
   }
 
   function revealActiveRow() {
-    if (activeVisibleIndex === null || root.clientHeight <= 0) {
+    if (activeVisibleIndex === null || viewportHeight() <= 0) {
       return;
     }
     const rowTop = activeVisibleIndex * rowHeight;
     const rowBottom = rowTop + rowHeight;
-    const viewportTop = root.scrollTop;
-    const viewportBottom = viewportTop + root.clientHeight;
+    const viewportTop = viewport.scrollTop;
+    const viewportBottom = viewportTop + viewportHeight();
     if (rowTop < viewportTop) {
       setProgrammaticScrollTop(rowTop);
     } else if (rowBottom > viewportBottom) {
       setProgrammaticScrollTop(
-        Math.max(rowBottom - root.clientHeight, 0),
+        Math.max(rowBottom - viewportHeight(), 0),
       );
     }
   }
@@ -284,7 +288,7 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H) {
 
   function navigateTo(visibleIndex) {
     scrollDirection = 0;
-    scrollTopObserved = root.scrollTop;
+    scrollTopObserved = viewport.scrollTop;
     if (visibleIndex < 0 || visibleIndex >= currentTotal) {
       return;
     }
@@ -317,19 +321,19 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H) {
   function onScroll() {
     if (
       expectedProgrammaticScroll !== null &&
-      root.scrollTop === expectedProgrammaticScroll.scrollTop
+      viewport.scrollTop === expectedProgrammaticScroll.scrollTop
     ) {
       const reconcile = expectedProgrammaticScroll.reconcile;
       expectedProgrammaticScroll = null;
-      scrollTopObserved = root.scrollTop;
+      scrollTopObserved = viewport.scrollTop;
       if (!reconcile) {
         return;
       }
     } else {
       expectedProgrammaticScroll = null;
-      const direction = Math.sign(root.scrollTop - scrollTopObserved);
+      const direction = Math.sign(viewport.scrollTop - scrollTopObserved);
       if (direction !== 0) scrollDirection = direction;
-      scrollTopObserved = root.scrollTop;
+      scrollTopObserved = viewport.scrollTop;
       if (pendingRequest?.kind === "keyboard") {
         invalidatePendingRequest();
       }
@@ -351,17 +355,17 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H) {
   }
 
   function reconcileViewport() {
-    if (root.clientHeight <= 0 || currentTotal <= 0) {
+    if (viewportHeight() <= 0 || currentTotal <= 0) {
       scrollDirection = 0;
-      scrollTopObserved = root.scrollTop;
+      scrollTopObserved = viewport.scrollTop;
       settledScrollViewport = null;
       if (pendingRequest?.kind === "scroll") invalidatePendingRequest();
       return;
     }
     if (
       settledScrollViewport !== null &&
-      root.scrollTop === settledScrollViewport.scrollTop &&
-      root.clientHeight === settledScrollViewport.clientHeight
+      viewport.scrollTop === settledScrollViewport.scrollTop &&
+      viewportHeight() === settledScrollViewport.clientHeight
     ) {
       return;
     }
@@ -374,8 +378,8 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H) {
       return;
     }
 
-    const viewportTop = Math.max(root.scrollTop, 0);
-    const viewportBottom = viewportTop + root.clientHeight;
+    const viewportTop = Math.max(viewport.scrollTop, 0);
+    const viewportBottom = viewportTop + viewportHeight();
     const firstIndex = Math.min(
       Math.floor(viewportTop / rowHeight),
       currentTotal - 1,
@@ -417,11 +421,11 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H) {
   }
 
   function visibleEntry(preferredIndex = null) {
-    if (root.clientHeight < rowHeight) {
+    if (viewportHeight() < rowHeight) {
       return null;
     }
-    const viewportTop = Math.max(root.scrollTop, 0);
-    const viewportBottom = viewportTop + root.clientHeight;
+    const viewportTop = Math.max(viewport.scrollTop, 0);
+    const viewportBottom = viewportTop + viewportHeight();
     const firstFullIndex = Math.ceil(viewportTop / rowHeight);
     const lastFullIndex = Math.floor(viewportBottom / rowHeight) - 1;
     const nearestIndex = preferredIndex ?? activeVisibleIndex ?? firstFullIndex;
@@ -473,16 +477,16 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H) {
   }
 
   function setProgrammaticScrollTop(value, reconcile = true) {
-    const previous = root.scrollTop;
-    root.scrollTop = value;
+    const previous = viewport.scrollTop;
+    viewport.scrollTop = value;
     if (reconcile) {
       scrollDirection = 0;
-      scrollTopObserved = root.scrollTop;
+      scrollTopObserved = viewport.scrollTop;
     }
-    if (root.scrollTop !== previous) {
+    if (viewport.scrollTop !== previous) {
       expectedProgrammaticScroll = Object.freeze({
         reconcile,
-        scrollTop: root.scrollTop,
+        scrollTop: viewport.scrollTop,
       });
     }
   }
@@ -590,11 +594,11 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H) {
     cancelPendingRequest();
     resizeObserver.disconnect();
     root.removeEventListener("keydown", onKeyDown);
-    root.removeEventListener("scroll", onScroll);
+    viewport.removeEventListener("scroll", onScroll);
     root.removeEventListener("focus", onFocus);
-    root.removeEventListener("pointerdown", cancelNavigation);
-    root.removeEventListener("wheel", cancelNavigation);
-    root.removeEventListener("touchstart", cancelNavigation);
+    viewport.removeEventListener("pointerdown", cancelNavigation);
+    viewport.removeEventListener("wheel", cancelNavigation);
+    viewport.removeEventListener("touchstart", cancelNavigation);
   }
 
   return Object.freeze({beginWindowRequest, commitWindow, finishWindowRequest, cancelNavigation, dispose});

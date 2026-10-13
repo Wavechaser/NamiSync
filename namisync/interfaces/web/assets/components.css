@@ -169,6 +169,30 @@ body {
   overflow-y: auto;
 }
 
+.nami-table-scroll--single {
+  overflow: auto;
+  scrollbar-gutter: stable;
+  scroll-padding-block-start: var(--file-row-h);
+}
+
+.nami-table-scroll--single > .nami-table-layout {
+  block-size: auto;
+  grid-template-rows: auto auto;
+  min-block-size: 100%;
+  align-content: start;
+}
+
+.nami-table-scroll--single .nami-table__header {
+  inset-block-start: 0;
+  position: sticky;
+  z-index: 2;
+}
+
+.nami-table-scroll--single :is(.nami-table__header, .nami-table__body) {
+  overflow: visible;
+  scrollbar-gutter: auto;
+}
+
 .nami-button,
 .nami-input,
 .nami-select,

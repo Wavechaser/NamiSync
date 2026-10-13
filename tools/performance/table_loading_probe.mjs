@@ -10,16 +10,16 @@ globalThis.__tableLoading = (() => {
     if (task?.taskId !== fixture.task_id || task.sessionId !== fixture.session_id) return null;
     const current = component === "plan" ? task.review : task.inventoryReview;
     const panel = document.querySelector(component === "plan" ? ".nami-plan-review" : ".nami-inventory-review");
-    const root = panel?.querySelector(component === "plan" ? ".nami-plan-review__rows" : ".nami-inventory-review__rows");
-    if (!current || !root || root.clientHeight <= 0) return null;
+    const root = panel?.querySelector(component === "plan" ? ".nami-plan-review__list" : ".nami-inventory-review__list");
+    if (!current || !root || root.clientHeight <= 24) return null;
     const first = Math.floor(root.scrollTop / 24);
-    const last = Math.min(current.window.total - 1, Math.ceil((root.scrollTop + root.clientHeight) / 24) - 1);
+    const last = Math.min(current.window.total - 1, Math.ceil((root.scrollTop + root.clientHeight - 24) / 24) - 1);
     const rows = [...root.querySelectorAll("[data-node-id]")];
     const rowIds = rows.map((row) => row.dataset.nodeId);
     const truthful = rows.length === current.window.rows.length && rows.length <= 256
       && current.window.rows.every((row, index) => row.node_id === rowIds[index]);
     const activeNode = component === "plan" ? current.summary.highlight_focus_node_id
-      : document.getElementById(root.getAttribute("aria-activedescendant"))?.dataset.nodeId;
+      : document.getElementById(root.querySelector("[role=tree]").getAttribute("aria-activedescendant"))?.dataset.nodeId;
     return {covered: truthful && first >= current.window.offset
       && last < current.window.offset + current.window.rows.length,
       first, last, offset: current.window.offset, row_count: rows.length, total: current.window.total,
@@ -152,7 +152,7 @@ globalThis.__tableLoading = (() => {
   if (api.currentTask()?.taskId !== fixture.task_id) api.selectTask(fixture.task_id);
   const component = fixture.case === "plan-base" ? "plan" : "inventory";
   const panel = () => document.querySelector(component === "plan" ? ".nami-plan-review" : ".nami-inventory-review");
-  const body = () => panel()?.querySelector(component === "plan" ? ".nami-plan-review__rows" : ".nami-inventory-review__rows");
+  const body = () => panel()?.querySelector(component === "plan" ? ".nami-plan-review__list" : ".nami-inventory-review__list");
   const owner = () => {
     const task = api.currentTask();
     if (task?.taskId !== fixture.task_id || task.sessionId !== fixture.session_id) return null;
@@ -240,7 +240,7 @@ globalThis.__tableLoading = (() => {
     const root = body();
     const profile = {inner_width: innerWidth, inner_height: innerHeight,
       device_pixel_ratio: devicePixelRatio, viewport_width: root.clientWidth,
-      viewport_height: root.clientHeight, theme: document.documentElement.dataset.theme,
+      viewport_height: root.clientHeight - 24, theme: document.documentElement.dataset.theme,
       visibility_state: document.visibilityState, document_has_focus: document.hasFocus(),
       reduced_motion: matchMedia("(prefers-reduced-motion: reduce)").matches,
       forced_colors: matchMedia("(forced-colors: active)").matches,
@@ -257,7 +257,7 @@ globalThis.__tableLoading = (() => {
         if (kind === "keyboard") {
           await reset(20032);
           keyboardSetup = coverage();
-          const last = Math.ceil((20032 * 24 + root.clientHeight) / 24) - 1;
+          const last = Math.ceil((20032 * 24 + root.clientHeight - 24) / 24) - 1;
           const setupRead = trace.requests.findLast(row => row.adopted
             && row.returned_offset === keyboardSetup.offset && row.row_count === 256);
           if (keyboardSetup.first !== 20032 || keyboardSetup.last !== last
@@ -274,7 +274,7 @@ globalThis.__tableLoading = (() => {
           first.focus({preventScroll: true});
           await until(() => trace.pending === 0 && coverage()?.covered
             && (component === "plan" ? owner().summary.highlight_focus_node_id === first.dataset.nodeId
-              : root.getAttribute("aria-activedescendant") === first.id), "keyboard setup focus");
+              : root.querySelector("[role=tree]").getAttribute("aria-activedescendant") === first.id), "keyboard setup focus");
           await frame();
           const selectedSetup = coverage();
           if (selectedSetup.offset !== keyboardSetup.offset || selectedSetup.first !== keyboardSetup.first
@@ -284,7 +284,7 @@ globalThis.__tableLoading = (() => {
           const live = root.querySelector("[data-node-id]");
           live.focus({preventScroll: true});
           if (component === "plan" && document.activeElement !== live) throw new Error("Plan keyboard target lost focus");
-          if (component === "inventory") root.focus();
+          if (component === "inventory") root.querySelector("[role=tree]").focus({preventScroll: true});
         }
         const gesture = {kind, iteration, started: performance.now(), frames: [], inputs: []};
         if (kind === "keyboard") {
@@ -304,7 +304,7 @@ globalThis.__tableLoading = (() => {
           gesture.inputs.push(performance.now()); scroll(10000); await frame();
           gesture.inputs.push(performance.now()); scroll(0); target = 0;
         } else if (kind === "keyboard") {
-          const focused = component === "plan" ? document.activeElement : root;
+          const focused = component === "plan" ? document.activeElement : root.querySelector("[role=tree]");
           gesture.inputs.push(performance.now());
           focused.dispatchEvent(new KeyboardEvent("keydown", {key: "ArrowUp", bubbles: true, cancelable: true}));
         } else { gesture.inputs.push(performance.now()); scroll(target); }

@@ -296,8 +296,6 @@ body {
 }
 
 .nami-inventory-review__grid {
-  block-size: 100%;
-  grid-template-rows: auto minmax(var(--file-row-h), 1fr);
   --nami-file-column-modified: var(--file-column-secondary-default);
 }
 
@@ -319,8 +317,7 @@ body {
   border-radius: 0;
   min-block-size: 0;
   min-inline-size: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
+  overflow: visible;
 }
 
 .nami-tree-row.nami-inventory-row {
@@ -745,9 +742,7 @@ body {
 }
 
 .nami-plan-review__rows {
-  block-size: 100%;
   min-block-size: 0;
-  overflow-y: auto;
 }
 
 .nami-plan-review__sort {
@@ -818,17 +813,12 @@ body {
   pointer-events: auto;
 }
 
-.nami-plan-review__rows {
+.nami-plan-review__list {
   scroll-padding-block-end: 5rem;
 }
 
 .nami-plan-review__toolbar {
   padding-block-end: var(--space-2);
-}
-
-.nami-plan-review .nami-file-list__grid--plan {
-  block-size: 100%;
-  grid-template-rows: auto minmax(var(--file-row-h), 1fr);
 }
 
 .nami-execution-confirmation {

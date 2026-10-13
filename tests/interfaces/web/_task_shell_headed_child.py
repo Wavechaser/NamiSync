@@ -118,7 +118,7 @@ function workTitle() {
   return label.startsWith("Work area — ") ? label.slice("Work area — ".length) : null;
 }
 function planGeometryFor(review) {
-  const viewport = review?.querySelector(".nami-plan-review__rows");
+  const viewport = review?.querySelector(".nami-plan-review__list");
   const workBody = document.querySelector(".nami-work-panel__body");
   const planActions = review?.querySelector(".nami-plan-review__actions");
   const footerStatus = review.querySelector(".nami-plan-review__status");
@@ -537,7 +537,7 @@ window.addEventListener("error", (event) => {
   await control("checkpoint", "plan_surface");
   const review = document.querySelector(".nami-plan-review");
   const facts = review.querySelector(".nami-plan-review__status-summary").textContent;
-  const viewport = review.querySelector(".nami-plan-review__rows");
+  const viewport = review.querySelector(".nami-plan-review__list");
   const planGeometry = planGeometryFor(review);
   const nestedPill = await until(() => [...viewport.querySelectorAll(".nami-plan-move-pill")]
     .find((pill) => pill.textContent.includes("move-parent")), "surviving-parent move pill");
@@ -592,13 +592,14 @@ window.addEventListener("error", (event) => {
   const pixelTolerance = 1 / devicePixelRatio;
   await control("checkpoint", searchMove.value !== "" ? "move_reveal_query"
     : rootBounds === undefined ? "move_reveal_missing"
-      : rootBounds.top < viewportBounds.top - pixelTolerance ? "move_reveal_above"
+      : rootBounds.top < viewportBounds.top + 24 - pixelTolerance ? "move_reveal_above"
         : rootBounds.bottom > viewportBounds.bottom + pixelTolerance ? "move_reveal_below" : "move_reveal_visible");
   await until(() => review.dataset.pending === "" && searchMove.value === ""
     && [...viewport.querySelectorAll("[data-node-id]")].some((row) => {
       if (row.querySelector(".nami-file-row__name-text")?.textContent !== "ZzzMove.txt") return false;
       const bounds = row.getBoundingClientRect();
       const visible = viewport.getBoundingClientRect();
+      visible.y += 24; visible.height -= 24;
       return bounds.top >= visible.top - pixelTolerance && bounds.bottom <= visible.bottom + pixelTolerance;
     }),
     "root move exact item and obstructing search cleared");
@@ -658,9 +659,9 @@ window.addEventListener("error", (event) => {
     && tableCells.every((cell, index) => Math.abs(
       cell.getBoundingClientRect().left - rowCells[index].getBoundingClientRect().left,
     ) <= 0.5);
-  const headerScrollClear = getComputedStyle(tableHeader).overflowY === "hidden"
+  const headerScrollClear = getComputedStyle(tableHeader).position === "sticky"
     && getComputedStyle(viewport).overflowY === "auto"
-    && getComputedStyle(tableHeader).scrollbarGutter === "stable"
+    && getComputedStyle(tableHeader).scrollbarGutter === "auto"
     && getComputedStyle(viewport).scrollbarGutter === "stable";
   // A narrow fitted layout can leave Notes at its minimum; create resize room.
   const nameResizeHandle = review.querySelector('.nami-file-list__column-resizer[data-column="name"]');
@@ -872,11 +873,11 @@ window.addEventListener("error", (event) => {
   highlightedRow().querySelector('.nami-file-row__name').click();
   await until(() => !highlightInvoker.isConnected && highlightedRow()?.dataset.highlighted === "true"
     && document.activeElement === highlightedRow() && fresh.dataset.pending === "", "row highlight roundtrip");
-  const focusViewport = fresh.querySelector('.nami-plan-review__rows');
+  const focusViewport = fresh.querySelector('.nami-plan-review__list');
   const focusScrollOffset = (Number(highlightedRow().ariaRowIndex)) * 24;
   focusViewport.scrollTop = focusScrollOffset;
   await new Promise(requestAnimationFrame);
-  if (highlightedRow().getBoundingClientRect().bottom > focusViewport.getBoundingClientRect().top
+  if (highlightedRow().getBoundingClientRect().bottom > fresh.querySelector('.nami-file-list__header').getBoundingClientRect().bottom
       || focusViewport.scrollTop !== focusScrollOffset) throw new Error("focus restoration fixture must scroll the retained focused row out of view");
   const beforeFocusReplacement = highlightedRow();
   highlightedRow().querySelector('input[type="checkbox"]').click();
@@ -907,7 +908,9 @@ window.addEventListener("error", (event) => {
   const rowArrowFocusedNode = document.activeElement?.dataset?.nodeId ?? null;
   const arrowBounds = document.activeElement.getBoundingClientRect();
   const arrowViewport = focusViewport.getBoundingClientRect();
-  if (arrowBounds.top < arrowViewport.top || arrowBounds.bottom > arrowViewport.bottom) {
+  const arrowHeaderBottom = fresh.querySelector('.nami-file-list__header').getBoundingClientRect().bottom;
+  if (arrowBounds.top < arrowHeaderBottom - pixelTolerance
+      || arrowBounds.bottom > arrowViewport.top + focusViewport.clientHeight + pixelTolerance) {
     throw new Error("explicit Plan keyboard movement must reveal the focused target");
   }
   const childArrowRow = fresh.querySelector(`[data-node-id="${selectionNode}"]`);
@@ -1113,7 +1116,7 @@ window.addEventListener("error", (event) => {
   const live = document.querySelector(".nami-plan-review");
   const liveExecute = live.querySelector('[data-action="execute"]');
   await until(() => liveExecute.disabled === false, "live Execute readiness");
-  const liveViewport = live.querySelector('.nami-plan-review__rows');
+  const liveViewport = live.querySelector('.nami-plan-review__list');
   liveViewport.scrollTop = 280 * 24;
   liveViewport.dispatchEvent(new Event('scroll'));
   await until(() => liveViewport.scrollTop > 0, 'off-window execution start');
@@ -1979,7 +1982,7 @@ def _drive_plan_confirmation(
   const pause = document.querySelector('.nami-plan-review [data-control="pause-resume"]');
   const dialog = document.querySelector("#execution-confirmation");
   const active = document.activeElement;
-  const moveViewport = document.querySelector(".nami-plan-review__rows");
+  const moveViewport = document.querySelector(".nami-plan-review__list");
   const moveTarget = [...(moveViewport?.querySelectorAll("[data-node-id]") ?? [])]
     .find((row) => row.querySelector(".nami-file-row__name-text")?.textContent === "ZzzMove.txt");
   const moveGap = moveTarget === undefined ? null

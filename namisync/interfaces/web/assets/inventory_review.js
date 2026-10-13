@@ -129,7 +129,7 @@ export function createInventoryReviewPanel(callbacks) {
   searchBox.append(search, clear, submit);
   toolbar.append(filters, searchBox);
 
-  const list = element("div", "nami-file-list nami-table-scroll nami-inventory-review__list");
+  const list = element("div", "nami-file-list nami-table-scroll nami-table-scroll--single nami-inventory-review__list");
   const grid = element("div", "nami-file-list__grid nami-table-layout nami-inventory-review__grid");
   const columnHeader = element("div", "nami-file-list__header nami-table__header nami-inventory-review__columns");
   const columnNames = ["selection", "name", "primary", "secondary", "size", "modified", "notes"];
@@ -271,7 +271,7 @@ export function createInventoryReviewPanel(callbacks) {
   const resizeObserver = new window.ResizeObserver(() => {
     if (current !== null) { columns.freeze(); columns.refresh(); }
   });
-  resizeObserver.observe(rows);
+  resizeObserver.observe(list);
   reload.addEventListener("click", () => { if (task !== null) callbacks.onReload(task); });
   refresh.addEventListener("click", () => {
     if (task !== null && current !== null && !blocked()) callbacks.onRefresh(current, null);
@@ -423,7 +423,7 @@ export function createInventoryReviewPanel(callbacks) {
           updateRefreshSelected();
         }
       },
-    }, 24);
+    }, 24, list, 24);
   }
 
   function appendDetail(key, value, filesystem = false) {
@@ -508,7 +508,7 @@ export function createInventoryReviewPanel(callbacks) {
     detailsToggle.ariaExpanded = "false";
     clearTimeout(searchTimer);
     searchTimer = null;
-    if (current !== null) current.scrollTop = rows.scrollTop;
+    if (current !== null) current.scrollTop = list.scrollTop;
     tree?.dispose();
     tree = null;
     committedWindow = null;
@@ -525,7 +525,7 @@ export function createInventoryReviewPanel(callbacks) {
     task = value;
     const first = current !== review;
     current = review;
-    resizeObserver.observe(rows);
+    resizeObserver.observe(list);
     if (focusInDetails && !detailsExpanded) title.focus();
     detailsToggle.hidden = review === null;
     diagnostics.hidden = review === null || !detailsExpanded;
@@ -634,7 +634,7 @@ export function createInventoryReviewPanel(callbacks) {
       const generation = tree.beginWindowRequest();
       tree.commitWindow(generation, review.window);
       committedWindow = review.window;
-      rows.scrollTop = review.scrollTop ?? 0;
+      list.scrollTop = review.scrollTop ?? 0;
     }
     updateRefreshSelected();
     columns.freeze();

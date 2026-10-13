@@ -378,7 +378,7 @@ export function createPlanReviewPanel(callbacks) {
   toolbar.append(filters, searchBox);
 
   const list = document.createElement("div");
-  list.className = "nami-file-list nami-table-scroll nami-plan-review__list";
+  list.className = "nami-file-list nami-table-scroll nami-table-scroll--single nami-plan-review__list";
   list.setAttribute("role", "table");
   list.ariaLabel = "Reviewed plan";
   const grid = document.createElement("div");
@@ -609,22 +609,22 @@ export function createPlanReviewPanel(callbacks) {
         : { sortColumn: column, sortDirection: same ? "descending" : "ascending" });
     });
   }
-  body.addEventListener("wheel", () => { manualScrollIntent = true; }, { passive: true });
-  body.addEventListener("touchstart", () => { manualScrollIntent = true; }, { passive: true });
-  body.addEventListener("pointerdown", () => { manualScrollIntent = true; });
-  body.addEventListener("keydown", (event) => {
+  list.addEventListener("wheel", () => { manualScrollIntent = true; }, { passive: true });
+  list.addEventListener("touchstart", () => { manualScrollIntent = true; }, { passive: true });
+  list.addEventListener("pointerdown", () => { manualScrollIntent = true; });
+  list.addEventListener("keydown", (event) => {
     if (["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " "].includes(event.key)) {
       manualScrollIntent = true;
     }
   });
-  body.addEventListener("scroll", () => {
-    const direction = Math.sign(body.scrollTop - scrollTopObserved);
+  list.addEventListener("scroll", () => {
+    const direction = Math.sign(list.scrollTop - scrollTopObserved);
     if (!programmaticScroll && direction !== 0) scrollDirection = direction;
-    scrollTopObserved = body.scrollTop;
+    scrollTopObserved = list.scrollTop;
     if (current !== null && !programmaticScroll && manualScrollIntent) {
       const target = current.follow?.anchorIndex;
-      const first = Math.floor(Math.max(0, body.scrollTop) / ROW_HEIGHT);
-      const last = Math.max(first, Math.ceil((body.scrollTop + body.clientHeight) / ROW_HEIGHT) - 1);
+      const first = Math.floor(Math.max(0, list.scrollTop) / ROW_HEIGHT);
+      const last = Math.max(first, Math.ceil((list.scrollTop + viewportHeight()) / ROW_HEIGHT) - 1);
       if (!Number.isSafeInteger(target) || target < first || target > last) {
         callbacks.onFollowOverride(current);
       }
@@ -639,8 +639,22 @@ export function createPlanReviewPanel(callbacks) {
     }
     scheduleViewportCheck();
   });
-  resizeObserver.observe(body);
+  resizeObserver.observe(list);
   let resizeObserved = true;
+
+  function viewportHeight() {
+    return Math.max(0, list.clientHeight - ROW_HEIGHT);
+  }
+
+  function revealRow(index) {
+    const top = index * ROW_HEIGHT;
+    const height = viewportHeight();
+    if (height <= 0) return;
+    if (top < list.scrollTop) list.scrollTop = top;
+    else if (top + ROW_HEIGHT > list.scrollTop + height) {
+      list.scrollTop = Math.max(0, top + ROW_HEIGHT - height);
+    }
+  }
 
   function scheduleViewportCheck() {
     if (current === null || scrollFramePending) return;
@@ -653,10 +667,10 @@ export function createPlanReviewPanel(callbacks) {
   }
 
   function reconcileViewport() {
-    if (body.clientHeight <= 0) {
+    if (viewportHeight() <= 0) {
       settledViewport = null;
       scrollDirection = 0;
-      scrollTopObserved = body.scrollTop;
+      scrollTopObserved = list.scrollTop;
       if (pendingWindowOffset !== null) {
         pendingWindowOffset = null;
         pendingWindowRequest = null;
@@ -665,17 +679,17 @@ export function createPlanReviewPanel(callbacks) {
       return;
     }
     if (current.window.total <= 0) return;
-    if (settledViewport?.scrollTop === body.scrollTop
-        && settledViewport.clientHeight === body.clientHeight) return;
+    if (settledViewport?.scrollTop === list.scrollTop
+        && settledViewport.clientHeight === viewportHeight()) return;
     settledViewport = null;
-    const viewportTop = Math.max(body.scrollTop, 0);
+    const viewportTop = Math.max(list.scrollTop, 0);
     const firstIndex = Math.min(
       Math.floor(viewportTop / ROW_HEIGHT),
       current.window.total - 1,
     );
     const lastIndex = Math.min(
       Math.max(
-        Math.ceil((viewportTop + body.clientHeight) / ROW_HEIGHT) - 1,
+        Math.ceil((viewportTop + viewportHeight()) / ROW_HEIGHT) - 1,
         firstIndex,
       ),
       current.window.total - 1,
@@ -702,18 +716,18 @@ export function createPlanReviewPanel(callbacks) {
     if (pendingWindowRequest !== null) callbacks.onWindow(current, null);
     if (offset !== pendingWindowOffset) {
       pendingWindowOffset = offset;
-      const request = { review: current, scrollTop: body.scrollTop, clientHeight: body.clientHeight, direction };
+      const request = { review: current, scrollTop: list.scrollTop, clientHeight: viewportHeight(), direction };
       pendingWindowRequest = request;
       callbacks.onWindow(current, offset, (window) =>
-        body.clientHeight > 0 && window.offset * ROW_HEIGHT < body.scrollTop + body.clientHeight
-        && (window.offset + window.rows.length) * ROW_HEIGHT > body.scrollTop, (outcome) => {
+        viewportHeight() > 0 && window.offset * ROW_HEIGHT < list.scrollTop + viewportHeight()
+        && (window.offset + window.rows.length) * ROW_HEIGHT > list.scrollTop, (outcome) => {
           if (current !== request.review || pendingWindowRequest !== request) return;
           pendingWindowOffset = null;
           pendingWindowRequest = null;
-          settledViewport = outcome === "retired" || outcome === "changed" || body.clientHeight <= 0
+          settledViewport = outcome === "retired" || outcome === "changed" || viewportHeight() <= 0
             ? null : request;
-          if (outcome === "changed" || (outcome !== "retired" && (body.scrollTop !== request.scrollTop
-              || body.clientHeight !== request.clientHeight))) scheduleViewportCheck();
+          if (outcome === "changed" || (outcome !== "retired" && (list.scrollTop !== request.scrollTop
+              || viewportHeight() !== request.clientHeight))) scheduleViewportCheck();
         });
     }
   }
@@ -1000,10 +1014,11 @@ export function createPlanReviewPanel(callbacks) {
         if (focusedRow) {
           const focused = renderedRows.rows.find((row) => row.dataset.nodeId === restoreFocusNodeId);
           if (focused !== undefined) {
-            focused.focus?.({ preventScroll: review.keyboardRevealWindow !== review.window });
+            focused.focus?.({ preventScroll: true });
             if (review.keyboardRevealWindow === review.window) {
+              revealRow(Number(focused.ariaRowIndex) - 2);
               scrollDirection = 0;
-              scrollTopObserved = body.scrollTop;
+              scrollTopObserved = list.scrollTop;
             }
             if (focusOrigin === "pointer") focused.dataset.namiFocusOrigin = "pointer";
           }
@@ -1136,10 +1151,11 @@ export function createPlanReviewPanel(callbacks) {
     if (focusedRow) {
       const focused = rowElements.find((row) => row.dataset.nodeId === restoreFocusNodeId);
       if (focused !== undefined) {
-        focused.focus?.({ preventScroll: review.keyboardRevealWindow !== review.window });
+        focused.focus?.({ preventScroll: true });
         if (review.keyboardRevealWindow === review.window) {
+          revealRow(Number(focused.ariaRowIndex) - 2);
           scrollDirection = 0;
-          scrollTopObserved = body.scrollTop;
+          scrollTopObserved = list.scrollTop;
         }
         if (focusOrigin === "pointer") focused.dataset.namiFocusOrigin = "pointer";
       }
@@ -1163,7 +1179,7 @@ export function createPlanReviewPanel(callbacks) {
       controlSessionId = task.sessionId;
     }
     if (!resizeObserved) {
-      resizeObserver.observe(body);
+      resizeObserver.observe(list);
       resizeObserved = true;
     }
     const focusInDetails = diagnostics.contains(document.activeElement);
@@ -1176,8 +1192,8 @@ export function createPlanReviewPanel(callbacks) {
       pendingWindowOffset = null;
       pendingWindowRequest = null;
       settledViewport = null;
-      body.scrollTop = (task.review?.window.offset ?? 0) * ROW_HEIGHT;
-      scrollTopObserved = body.scrollTop;
+      list.scrollTop = (task.review?.window.offset ?? 0) * ROW_HEIGHT;
+      scrollTopObserved = list.scrollTop;
       scrollDirection = 0;
       detailsExpanded = false;
       focusedPlanRow = null;
@@ -1243,12 +1259,12 @@ export function createPlanReviewPanel(callbacks) {
     toolbar.hidden = false;
     if (previousWindow !== null && previousWindow.view_revision !== review.window.view_revision) {
       scrollDirection = 0;
-      scrollTopObserved = body.scrollTop;
+      scrollTopObserved = list.scrollTop;
     }
     if (Number.isSafeInteger(review.follow?.scrollOffset)) {
       programmaticScroll = true;
-      body.scrollTop = review.follow.scrollOffset * ROW_HEIGHT;
-      scrollTopObserved = body.scrollTop;
+      list.scrollTop = review.follow.scrollOffset * ROW_HEIGHT;
+      scrollTopObserved = list.scrollTop;
       scrollDirection = 0;
       review.follow.scrollOffset = null;
       window.requestAnimationFrame(() => { programmaticScroll = false; });
@@ -1411,8 +1427,8 @@ export function createPlanReviewPanel(callbacks) {
     if (Number.isSafeInteger(review.moveScrollOffset)) {
       // Query removal can grow the spacers; scroll only after their new height exists.
       programmaticScroll = true;
-      body.scrollTop = review.moveScrollOffset * ROW_HEIGHT;
-      scrollTopObserved = body.scrollTop;
+      list.scrollTop = review.moveScrollOffset * ROW_HEIGHT;
+      scrollTopObserved = list.scrollTop;
       scrollDirection = 0;
       review.moveScrollOffset = null;
       window.requestAnimationFrame(() => { programmaticScroll = false; });
