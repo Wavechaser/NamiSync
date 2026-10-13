@@ -564,26 +564,27 @@ export function createInventoryReviewPanel(callbacks) {
     facts.title = available && !review.summary.filters.includes("acknowledged")
       ? `${review.summary.rollup.acknowledged} acknowledged items hidden as matches; folder context may remain. Show them with the Acknowledged filter.` : "";
     const scanScope = review?.summary.scan_scope;
+    const hasScan = available && review.summary.scan_request_id !== null;
     const scopeLabel = scanScope?.kind === "location" ? "Entire location"
       : scanScope?.kind === "item" ? `Item: ${scanScope.path}`
       : scanScope?.kind === "folder" ? `Folder: ${scanScope.path} (including subfolders)` : "Selected items";
     const publication = available
-      ? `${review.summary.request_id === value.requestId ? "Displayed scan" : "Previous published scan"}: ${scopeLabel}` : "";
+      ? hasScan ? `${review.summary.scan_request_id === value.requestId ? "Displayed scan" : "Previous published scan"}: ${scopeLabel}` : "Current ledger · No inventory scan" : "";
     const detailScopeLabel = scanScope?.kind === "item" ? `Item: ${formatFilesystemPath(review.summary.root_path, scanScope.path)}`
       : scanScope?.kind === "folder" ? `Folder: ${formatFilesystemPath(review.summary.root_path, scanScope.path)} (including subfolders)` : scopeLabel;
     const detailPublication = available
-      ? `${review.summary.request_id === value.requestId ? "Displayed scan" : "Previous published scan"}: ${detailScopeLabel}` : "";
-    const scanCounts = available
+      ? hasScan ? `${review.summary.scan_request_id === value.requestId ? "Displayed scan" : "Previous published scan"}: ${detailScopeLabel}` : "Current ledger · No inventory scan" : "";
+    const scanCounts = hasScan
       ? `${review.summary.observed_count} observed · ${review.summary.missing_count} missing · ${review.summary.warning_count} notices from this scan.${scanScope.kind === "location" ? "" : " Other inventory items were not rescanned."}` : "";
     const guidance = value.inventoryError ?? startAttempt?.recovery?.message ?? review?.message
       ?? (value.inventoryLoading ? "Loading inventory view…" : "");
     renderFilesystemText(statusLine, [...new Set([
-      available ? `${publication} · ${review.summary.scan_complete ? "" : "incomplete · "}${scanCounts}` : "",
+      available ? `${publication}${hasScan ? ` · ${review.summary.scan_complete ? "" : "incomplete · "}${scanCounts}` : ""}` : "",
       guidance, value.inventoryAction?.message,
     ].filter(Boolean))].join(" · "));
     renderText(globalScanState, `Current activity: ${value.sessionState === "active" ? "in progress" : value.sessionState}.`);
     renderFilesystemText(globalScanFacts, available
-      ? `${detailPublication} · ${review.summary.scan_complete ? "complete" : "incomplete"} · ${scanCounts}` : "");
+      ? `${detailPublication}${hasScan ? ` · ${review.summary.scan_complete ? "complete" : "incomplete"} · ${scanCounts}` : ""}` : "");
     if (!available) {
       toolbar.hidden = true;
       empty.hidden = true;

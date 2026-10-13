@@ -214,6 +214,11 @@ for (const [scope, expected] of [
   task.requestId = fixture.views.default.summary.request_id;
   task.sessionState = "completed";
 }
+review.summary = {...fixture.views.default.summary, scan_request_id: null,
+  scan_scope: null, scan_complete: null, observed_count: null, missing_count: null};
+pane.render(task);
+assert.match(text(pane.element), /Current ledger · No inventory scan/);
+assert.doesNotMatch(text(pane.element), /incomplete|observed|notices from this scan/);
 review.summary = fixture.views.default.summary;
 pane.render(task);
 assert.ok(!rowElements().some((value) => text(value).includes("missing.txt")));

@@ -39,6 +39,7 @@ from namisync.workflows.inventory_projection import (
     sort_inventory_projection,
 )
 from namisync.workflows.models import (
+    InventoryPublication,
     ExecutionDetails,
     ExecutionRefusalView,
     ExecutionEvidenceResult,
@@ -148,6 +149,7 @@ __all__ = [
     "InventoryDetails",
     "InventoryRequest",
     "InventoryProjection",
+    "InventoryPublication",
     "InventoryProjectionNode",
     "InventoryProjectionOrder",
     "InventoryProjectionPopulationLimitError",

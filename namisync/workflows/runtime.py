@@ -152,6 +152,7 @@ from .database_pair import (
     validate_database_pair,
 )
 from .models import (
+    InventoryPublication,
     ExecuteContinuation,
     ExecutionCheckpoint,
     ExecutionDetails,
@@ -784,6 +785,29 @@ class LocalWorkflowRuntime:
             checkpoint,
             disposition,
             IntegrityMode.REBASELINE,
+        )
+
+    def read_execution_inventory(
+        self, execution: RetainedExecutionBinding, plan: Plan,
+    ) -> InventoryPublication:
+        """Read the original execution target ledger without admitting its root."""
+        with self._lock:
+            self._require_open()
+            review = self._retained_execution_review_locked(execution.task_id)
+            artifact = self._plans.get(execution.request_id)
+            if review.binding != execution or artifact is None or artifact.plan is not plan:
+                raise ValueError("execution inventory binding changed")
+        if plan.target_volume_id is None:
+            raise KeyError("execution target location is unavailable")
+        relative = _volume_relative_path(plan.target_root.path, plan.target_volume_evidence)
+        with self._ledger_read() as repository:
+            location = repository.find_location(plan.target_volume_id, relative)
+            if location is None:
+                raise KeyError("execution target location is unavailable")
+            rows = repository.get_inventory(location.location_id)
+        from .inventory_projection import build_inventory_projection
+        return InventoryPublication(
+            build_inventory_projection(location.location_id, rows), plan.target_root.path, None,
         )
 
     def read_manual_verification_readiness(

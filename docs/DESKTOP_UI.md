@@ -1923,7 +1923,11 @@ terminal publication. View behavior, grouping, evidence classes, overlays,
 and anchor behavior are defined here and in [PRESENTATION.md](PRESENTATION.md); future exact DTOs remain open.
 
 Inventory remains distinct from plan review. Released terminal inventory tasks
-open their own read pane, including when selected again. It supports backend
+open their own read pane, including when selected again. The renderer labels
+execution-associated ledger publications with absent scan provenance as
+“Current ledger · No inventory scan”, without invented scan counts or incomplete
+scan wording. Pane navigation for those publications remains a later control
+surface outcome. It supports backend
 literal search, counted server facets, collapse, bounded windows and explicit
 sibling filename/own-size/own-mtime sorting through the Filename, Size and Modified
 headers: ascending, descending, then canonical path order. The Default facet view hides acknowledged direct matches;

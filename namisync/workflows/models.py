@@ -37,7 +37,17 @@ from namisync.workflows.views import (
 )
 
 if TYPE_CHECKING:
-    from namisync.workflows.inventory import LocationBinding
+    from namisync.workflows.inventory import InventoryDetails, LocationBinding
+    from namisync.workflows.inventory_projection import InventoryProjection
+
+
+@dataclass(frozen=True, slots=True)
+class InventoryPublication:
+    """Current ledger rows with optional, independently identified scan provenance."""
+
+    projection: InventoryProjection
+    root_path: str | None
+    scan_details: InventoryDetails | None
 
 
 @dataclass(frozen=True, slots=True)

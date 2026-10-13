@@ -953,29 +953,34 @@ class TaskRegistry:
                 old.transition = False
                 old.condition.notify_all()
 
-    def _require_inventory_task(self, task_id: str) -> _TaskState:
-        with self._condition:
-            task = self._tasks.get(task_id)
-            if self._closing or task is None:
-                raise TaskUnavailableError("inventory task is unavailable")
-        with task.condition:
-            self._require_inventory_task_locked(task)
-        return task
-
     def _require_inventory_task_locked(self, task: _TaskState) -> None:
         if (self._closing or task.task_kind != "inventory" or task.request_id is None
                 or task.session_id is None or (task.transition and not task.inventory_visibility_pending)
                 or task.retiring):
             raise TaskUnavailableError("inventory task is unavailable")
 
+    def _require_inventory_read_task_locked(self, task: _TaskState) -> None:
+        if task.task_kind == "inventory":
+            self._require_inventory_task_locked(task)
+            return
+        if (self._closing or task.task_kind != "sync-plan" or task.request_id is None
+                or task.session_id is None or task.execution_session_id != task.session_id
+                or not task.session_released or task.delivered_terminal_record is None
+                or task.transition or task.retiring):
+            raise TaskUnavailableError("execution inventory is unavailable")
+
     def open_inventory_view(self, task_id: str) -> dict[str, object]:
-        task = self._require_inventory_task(task_id)
+        with self._condition:
+            task = self._tasks.get(task_id)
+            if task is None:
+                raise TaskUnavailableError("inventory task is unavailable")
         with task.condition:
+            self._require_inventory_read_task_locked(task)
             if task.inventory_visibility_pending:
                 return self._inventory_views[task_id].summary()
             while task.inventory_view_loading:
                 task.condition.wait()
-                self._require_inventory_task_locked(task)
+                self._require_inventory_read_task_locked(task)
             existing = self._inventory_views.get(task_id)
             if existing is not None and existing.request_id == task.request_id and not task.inventory_view_dirty:
                 return existing.summary()
@@ -987,13 +992,21 @@ class TaskRegistry:
             prior_revision = None if existing is None else existing.view_revision
             task.inventory_view_loading = True
         try:
-            projection, details = self._lifecycle.get_task_inventory_projection(task_id, identity[1])
+            if task.task_kind == "sync-plan":
+                publication = self._lifecycle.get_task_execution_inventory(task_id, identity[1], identity[0])
+                projection, root_path, details = publication.projection, publication.root_path, publication.scan_details
+            else:
+                projection, details = self._lifecycle.get_task_inventory_projection(task_id, identity[1])
+                root_path = details.resolution.root_path
             make_view = InventoryReviewState if existing is None else existing.replacement
             args = (task_id, identity[1]) if existing is None else (identity[1],)
             view = make_view(*args,
-                projection, details.resolution.root_path,
-                details.complete, details.observed_count, details.missing_count,
-                scan_scope=inventory_scan_scope(details),
+                projection, root_path,
+                None if details is None else details.complete,
+                None if details is None else details.observed_count,
+                None if details is None else details.missing_count,
+                scan_scope=None if details is None else inventory_scan_scope(details),
+                scan_request_id=None if details is None else details.request_id,
             )
         except BaseException:
             with task.condition:
@@ -1006,7 +1019,7 @@ class TaskRegistry:
                 task.condition.notify_all()
                 if self._closing or self._tasks.get(task_id) is not task:
                     raise TaskUnavailableError("inventory task is unavailable")
-                self._require_inventory_task_locked(task)
+                self._require_inventory_read_task_locked(task)
                 if identity != (task.session_id, task.request_id, task.generation):
                     raise TaskUnavailableError("inventory task changed")
                 if existing is not None and existing.view_revision != prior_revision:
@@ -1016,8 +1029,12 @@ class TaskRegistry:
                 return view.summary(disposition="opened")
 
     def _require_inventory_view(self, task_id: str) -> tuple[_TaskState, InventoryReviewState]:
-        task = self._require_inventory_task(task_id)
+        with self._condition:
+            task = self._tasks.get(task_id)
+            if task is None:
+                raise TaskUnavailableError("inventory task is unavailable")
         with task.condition:
+            self._require_inventory_read_task_locked(task)
             view = self._inventory_views.get(task_id)
             if view is None:
                 raise TaskUnavailableError("inventory view is unavailable")
@@ -1026,7 +1043,7 @@ class TaskRegistry:
     def update_inventory_view(self, task_id: str, **gesture) -> dict[str, object]:
         task, view = self._require_inventory_view(task_id)
         with task.condition:
-            self._require_inventory_task_locked(task)
+            self._require_inventory_read_task_locked(task)
             if self._inventory_views.get(task_id) is not view:
                 raise TaskUnavailableError("inventory view is unavailable")
             return view.update(**gesture)
@@ -1036,7 +1053,7 @@ class TaskRegistry:
                                 selected: bool) -> dict[str, object]:
         task, view = self._require_inventory_view(task_id)
         with task.condition:
-            self._require_inventory_task_locked(task)
+            self._require_inventory_read_task_locked(task)
             if (self._inventory_views.get(task_id) is not view or task.transition
                     or task.inventory_view_dirty or task.inventory_view_loading
                     or not task.session_released or task.delivered_terminal_record is None
@@ -1270,7 +1287,7 @@ class TaskRegistry:
     def get_inventory_window(self, task_id: str, *, expected_revision: int, offset: int, limit: int) -> dict[str, object]:
         task, view = self._require_inventory_view(task_id)
         with task.condition:
-            self._require_inventory_task_locked(task)
+            self._require_inventory_read_task_locked(task)
             if self._inventory_views.get(task_id) is not view:
                 raise TaskUnavailableError("inventory view is unavailable")
             result = view.window(expected_revision=expected_revision, offset=offset, limit=limit)
@@ -1282,7 +1299,7 @@ class TaskRegistry:
     def get_inventory_detail(self, task_id: str, *, expected_revision: int, node_id: str) -> dict[str, object]:
         task, view = self._require_inventory_view(task_id)
         with task.condition:
-            self._require_inventory_task_locked(task)
+            self._require_inventory_read_task_locked(task)
             if self._inventory_views.get(task_id) is not view:
                 raise TaskUnavailableError("inventory view is unavailable")
             if expected_revision != view.view_revision:
@@ -1300,7 +1317,7 @@ class TaskRegistry:
             location_id, row_id, path_key = view.projection.location_id, node.row.row_id, node.row.rel_path_key
         detail = self._lifecycle.read_inventory_detail(location_id, row_id)
         with task.condition:
-            self._require_inventory_task_locked(task)
+            self._require_inventory_read_task_locked(task)
             if (self._inventory_views.get(task_id) is not view
                     or identity != (task.session_id, task.request_id, task.generation, view.view_revision)):
                 return {"disposition": "conflict", "view_revision": view.view_revision, "node_id": node_id, "snapshot": None, "detail": None}

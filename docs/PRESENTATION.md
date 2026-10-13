@@ -266,7 +266,11 @@ accepted offset and cannot publish result facts or retire exact detail, includin
 when the total population is larger.
 
 Inventory read views retain one immutable workflow projection, its complete sort
-permutation and its derived `VisibleSequence` at task scope. Its browser tree
+permutation and its derived `VisibleSequence` at task scope. A released execution
+may publish its original target's current ledger with an initially empty file
+selection, while retaining Plan review. Actual scan provenance is independent
+of this publication identity and is coherently absent when no scan exists;
+view/selection gestures preserve it. Its browser tree
 uses an explicit 24 px geometry; the generic tree default remains
 28 px. Spacer, viewport and keyboard calculations share the invocation's height,
 while the same generation and active-node ownership rules remain authoritative.

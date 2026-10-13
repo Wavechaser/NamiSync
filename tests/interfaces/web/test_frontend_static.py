@@ -506,7 +506,7 @@ def test_inventory_reads_validate_production_windows_and_current_evidence(tmp_pa
         None, None, None, None, None)
     projection = build_inventory_projection(1, (row,), (
         ScanWarning(ScanWarningCode.ACCESS_DENIED, "", "root warning"),))
-    view = InventoryReviewState("task-" + "1" * 32, "2" * 32, projection, r"C:\root", False, 1, 0)
+    view = InventoryReviewState("task-" + "1" * 32, "2" * 32, projection, r"C:\root", False, 1, 0, scan_request_id="2" * 32)
     detail = {"disposition": "current", "view_revision": 0,
               "node_id": projection.node_id_by_row_id["1"], "snapshot": {"path": row.rel_path, "warning": None},
               "detail": inventory_current_detail(row)}

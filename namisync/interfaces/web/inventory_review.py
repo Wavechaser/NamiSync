@@ -61,10 +61,11 @@ class InventoryReviewState:
     request_id: str
     projection: InventoryProjection
     root_path: str | None
-    scan_complete: bool
-    observed_count: int
-    missing_count: int
-    scan_scope: tuple[str, str | None] = field(default=("location", None), kw_only=True)
+    scan_complete: bool | None
+    observed_count: int | None
+    missing_count: int | None
+    scan_scope: tuple[str, str | None] | None = field(default=("location", None), kw_only=True)
+    scan_request_id: str | None = field(default=None, kw_only=True)
     selected_row_ids: frozenset[str] = field(default_factory=frozenset, kw_only=True)
     view_revision: int = 0
     search_query: str = ""
@@ -150,8 +151,9 @@ class InventoryReviewState:
             "disposition": disposition, "task_id": self.task_id,
             "request_id": self.request_id, "location_id": str(self.projection.location_id),
             "view_revision": self.view_revision, "root_path": self.root_path,
+            "scan_request_id": self.scan_request_id,
             "scan_complete": self.scan_complete, "observed_count": self.observed_count,
-            "scan_scope": {"kind": self.scan_scope[0], "path": self.scan_scope[1]},
+            "scan_scope": None if self.scan_scope is None else {"kind": self.scan_scope[0], "path": self.scan_scope[1]},
             "missing_count": self.missing_count, "warning_count": self.projection.warning_count,
             "rollup": inventory_rollup_wire(self.projection.nodes[0].rollup),
             "visible_row_count": max(0, len(self._visible.visible_positions) - 1),
@@ -165,9 +167,10 @@ class InventoryReviewState:
         }
 
     def replacement(self, request_id: str, projection: InventoryProjection,
-                    root_path: str | None, scan_complete: bool,
-                    observed_count: int, missing_count: int, *,
-                    scan_scope: tuple[str, str | None]) -> InventoryReviewState:
+                    root_path: str | None, scan_complete: bool | None,
+                    observed_count: int | None, missing_count: int | None, *,
+                    scan_scope: tuple[str, str | None] | None,
+                    scan_request_id: str | None = None) -> InventoryReviewState:
         """Stage one complete replacement while preserving surviving gestures."""
         if self.view_revision >= MAX_JAVASCRIPT_SAFE_INTEGER:
             raise OverflowError("inventory view revision is exhausted")
@@ -181,6 +184,7 @@ class InventoryReviewState:
             observed_count, missing_count, self.view_revision + 1,
             self.search_query, self.filters, self.sort_column, self.sort_direction, collapsed,
             scan_scope=scan_scope,
+            scan_request_id=scan_request_id,
             selected_row_ids=frozenset(row_id for row_id in self.selected_row_ids
                 if row_id in projection.node_id_by_row_id
                 and projection.row_for_id(row_id).entry_kind is not None

@@ -625,6 +625,13 @@ open throws or finalization degrades.
 
 ## Integrity Workflow
 
+Released execution tasks can read their original target's current ledger through
+`read_execution_inventory`. The runtime checks the exact retained execution
+binding and original Plan, resolves the existing volume-relative location, and
+builds one complete projection. Missing locations are unavailable. This read
+does not create a location, admit a root, scan or hash. Its publication carries
+no scan provenance; execution discovery is not an inventory scan.
+
 Inventory, baseline, verify, and rebaseline are location-centric,
 not plan- or mapping-dependent. The workflow resolves or registers one selected
 location, re-resolves its volume identity at start/resume, performs full or

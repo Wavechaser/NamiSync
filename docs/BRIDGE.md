@@ -531,8 +531,12 @@ Initial inventory publication requires exact terminal delivery and successful
 session release. A prior complete view remains readable during a new scan or a
 failed replacement; its request identity continues to name that publication.
 `InventoryViewSummary` carries task/request/location identity, view revision,
-frozen scan metadata, complete-domain rollup and current search/filter/sort/collapse
-state. Scan scope is a bounded descriptor naming the entire location, one exact
+`scan_request_id`, frozen scan metadata, complete-domain rollup and current search/filter/sort/collapse
+state. `scan_request_id` identifies the actual retained inventory scan. It and
+scan completeness, scope, observed count and missing count are all null when
+there was no inventory scan, as on a released execution's target-ledger read.
+Ledger projection completeness never stands in for scan completion. Warning
+count still describes projection notices. Scan scope is a bounded descriptor naming the entire location, one exact
 item, one recursive folder, or a multi-subject selection; it carries at most one
 path, never the complete scope arrays. It belongs to the producing publication,
 including while a newer scan is running or refused. `InventoryWindowRow` supplies server-derived frames and domain status,

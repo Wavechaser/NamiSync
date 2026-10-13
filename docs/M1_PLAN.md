@@ -207,11 +207,13 @@ The independently approved driver repair is committed as `bf9d649`. Its retained
 screenshots also show a possible label-legibility issue in unchanged assets;
 this observation remains for the requested post-M1-10 GUI review. Behavioral
 readback and DOM visibility do not establish pixel legibility.
+C2 is delivered as `eecf31c`; its independent final review confirms the frozen
+source identity, complete named gates and no actionable supported source finding.
 
 C3 splits into two independently exercised API commits; D retains actual pane
 navigation and action controls. The read-only census inspected `26e72ad` plus
-the unfinished C2 candidate (`manual-attachment-design-01.md`); refresh its
-changed seams against integrated C2 before implementation.
+the unfinished C2 candidate (`manual-attachment-design-01.md`). C3a starts from
+integrated C2 `eecf31c`, refreshing its changed seams before implementation.
 
 C3a exposes current-ledger Inventory on a released execution task using the
 original target location and retained execution/Plan binding. Missing location
@@ -230,6 +232,12 @@ Gate: real execution/release → ledger open/read/hidden selection → preserved
 Plan/detail → Close, with no scan/native/hash entry, truthful missing/no-scan
 state, stale/replacement retirement and mutation refusal. Run affected workflows/
 interfaces, imports, installed Inventory/execution compatibility and fresh review.
+C3a's frozen workflows/interfaces gate passes 2,946 checks
+(`execution-inventory-departments-01.log`); all 12 imports pass. Initial
+test-fixture/encoding corrections and a source-drift receipt remain retained.
+The installed Inventory and two execution-window cases pass in
+`execution-inventory-headed-01.log`. Final independent review is recorded in
+`execution-inventory-review-01.md`; source remains frozen for its identity check.
 
 C3b atomically migrates current versus original identity before enabling any
 auxiliary start. Retain original Plan request and execution terminal record;
@@ -261,6 +269,12 @@ overlays/Gap repair, stale sinks/reads/old-session Close and cleanup replay.
 Run real native composition early, then the ordinary suite for the broad identity
 contract, imports, affected installed host/transport/gallery/Inventory/execution
 checks and fresh independent review. E remains whole-checkpoint closure.
+The read-only `auxiliary-design-refresh-01.md` census additionally identifies
+exact TaskSummary producers in `tools/performance/plan.py`, the Setup and
+interactive bridge probes, public-view/scale witnesses and existing native task
+helpers. These direct consumers migrate with the identity shape; historical
+receipts remain unchanged. Reuse the dispatcher's normalized accumulated
+terminal outcomes across pause/resume/cancel, not a second workflow accumulator.
 
 Preserve atomic publication, conditional recording including prior absence,
 root admission, fixed continuation identity and original execution truth.

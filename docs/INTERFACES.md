@@ -82,6 +82,13 @@ This changes neither service admission nor receipt timing guarantees; the
 [architecture retention account](ARCHITECTURE.md#35-plan-and-execution-types)
 describes the paused-index lifetime.
 
+Released execution tasks also expose current target-ledger Inventory reads and
+selection, bound to their committed original Plan and retained execution review.
+Opening needs an existing location and performs no native admission or scan.
+Plan reads/detail and exact Close remain available. Sync-task Refresh, visibility
+changes and ordinary integrity starts remain refused until auxiliary association
+support ships; a read publication grants no mutation permission.
+
 Inventory tasks additionally retain their exact `InventoryDetails` metadata at
 task scope before terminal release drops runtime request details, including
 the producing scan's exact paths and recursive subtree roots. The read summary

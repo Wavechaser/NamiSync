@@ -43,6 +43,7 @@ from namisync.workflows import (
     InventoryRequest,
     InventoryDetails,
     InventoryProjection,
+    InventoryPublication,
     build_inventory_projection,
     LocationCandidate,
     LocationCandidateResult,
@@ -1929,6 +1930,25 @@ class NamiSyncService:
             raise TaskUnavailableError("inventory location is unavailable")
         rows = self._runtime.list_inventory(details.location_id)
         return build_inventory_projection(details.location_id, rows, details.warnings), details
+
+    def get_task_execution_inventory(
+        self, task_id: str, request_id: str, session_id: str,
+    ) -> InventoryPublication:
+        self._require_open()
+        with self._lock:
+            state = self._plan_selections.get(request_id)
+            if (state is None or state.phase != "committed"
+                    or state.execution_session is None
+                    or state.execution_session.session_id != session_id):
+                raise TaskUnavailableError("execution inventory is unavailable")
+            token = state.plan_token
+            binding = RetainedExecutionBinding(task_id, request_id, token.identity,
+                session_id, state.execution_session.run_id)
+            plan = state.artifact.plan
+        try:
+            return self._runtime.read_execution_inventory(binding, plan)
+        except KeyError as error:
+            raise TaskUnavailableError("execution target inventory is unavailable") from error
 
     def read_inventory_detail(self, location_id: int, row_id: str) -> dict[str, object] | None:
         self._require_open()

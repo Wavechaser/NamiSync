@@ -87,6 +87,22 @@ def test_selection_replacement_retains_exact_files_and_invalidates_old_gestures(
     assert _select(replaced, directory)["disposition"] == "noop"
 
 
+def test_ledger_publication_preserves_absent_scan_provenance_through_gestures_and_replacement():
+    previous = _view()
+    view = InventoryReviewState(previous.task_id, previous.request_id, previous.projection,
+        previous.root_path, None, None, None, scan_scope=None)
+    _select(view)
+    view.update(expected_revision=view.view_revision, search_query="hidden", filters=frozenset(),
+        sort_column=PlanSortColumn.PATH, sort_direction=SortDirection.ASCENDING,
+        collapse_node_id=None, collapsed=None)
+    replaced = view.replacement(view.request_id, view.projection, view.root_path,
+        None, None, None, scan_scope=None)
+    assert replaced.selected_row_ids == view.selected_row_ids
+    assert replaced.search_query == "hidden" and replaced.view_revision == view.view_revision + 1
+    assert all(replaced.summary()[key] is None for key in (
+        "scan_request_id", "scan_complete", "scan_scope", "observed_count", "missing_count"))
+
+
 def test_selection_large_folder_does_not_rederive_or_rescan_per_window(monkeypatch):
     view = InventoryReviewState("task-" + "1" * 32, "2" * 32,
         build_inventory_projection(1, (_row(str(i + 1), rf"folder\{i}.txt") for i in range(120_000))),

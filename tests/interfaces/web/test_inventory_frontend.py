@@ -32,7 +32,7 @@ def _fixture() -> dict[str, object]:
         presence=InventoryPresence.MISSING, acknowledged_at=NOW, missing_since=NOW)
     projection = build_inventory_projection(1, (row, acknowledged), (
         ScanWarning(ScanWarningCode.ACCESS_DENIED, "unreadable", "read failed"),))
-    view = InventoryReviewState("task-" + "1" * 32, "2" * 32, projection, r"C:\root", False, 1, 1)
+    view = InventoryReviewState("task-" + "1" * 32, "2" * 32, projection, r"C:\root", False, 1, 1, scan_request_id="2" * 32)
     views = {"default": {"summary": view.summary(), "window": view.window(expected_revision=0, offset=0, limit=256)}}
     for name, changes in (
         ("acknowledged", {"filters": frozenset({"acknowledged"})}),
@@ -45,7 +45,7 @@ def _fixture() -> dict[str, object]:
     many = tuple(replace(row, row_id=str(index + 10), rel_path=rf"many\{index:03}.txt",
         rel_path_key=normalize_relative_path(rf"many\{index:03}.txt")) for index in range(300))
     maximum = InventoryReviewState(view.task_id, view.request_id, build_inventory_projection(1, many),
-        r"C:\root", True, 300, 0)
+        r"C:\root", True, 300, 0, scan_request_id=view.request_id)
     views["maximum"] = {"summary": maximum.summary(), "window": maximum.window(expected_revision=0, offset=0, limit=256)}
     invalidated = replace(row, invalidation=VerificationInvalidation(NOW, VerificationInvalidationReason.HASH_MISMATCH))
     missing_folder = replace(row, row_id="3", rel_path="missing_folder",
@@ -53,7 +53,7 @@ def _fixture() -> dict[str, object]:
         presence=InventoryPresence.MISSING, observed=replace(stat, kind=EntryKind.DIRECTORY),
         attestation=None, last_verified_at=None, missing_since=NOW)
     folder_view = InventoryReviewState(view.task_id, view.request_id,
-        build_inventory_projection(1, (missing_folder,)), r"C:\root", True, 0, 1)
+        build_inventory_projection(1, (missing_folder,)), r"C:\root", True, 0, 1, scan_request_id=view.request_id)
     detail = {"disposition": "current", "view_revision": 0, "node_id": projection.node_id_by_row_id["1"],
               "snapshot": {"path": row.rel_path, "warning": None}}
     snapshots = {node.node_id: {"disposition": "current", "view_revision": 0, "node_id": node.node_id,

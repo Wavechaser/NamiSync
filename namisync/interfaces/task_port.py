@@ -20,6 +20,7 @@ from namisync.workflows import (
     RetainedIntegrityItemWindow,
     PlanProjection,
     InventoryProjection,
+    InventoryPublication,
     InventoryDetails,
     RetainedInventoryIntegrity,
 )
@@ -463,6 +464,8 @@ class TaskLifecyclePort(Protocol):
     ) -> frozenset[str]: ...
 
     def get_task_inventory_projection(self, task_id: str, request_id: str) -> tuple[InventoryProjection, InventoryDetails]: ...
+
+    def get_task_execution_inventory(self, task_id: str, request_id: str, session_id: str) -> InventoryPublication: ...
 
     def read_inventory_detail(self, location_id: int, row_id: str) -> dict[str, object] | None: ...
 

@@ -585,6 +585,12 @@ Integrity controls, manual post-copy handoff and beta packaging remain open.
   driver whose stale hidden-editor expectation also failed on the accepted
   baseline. Its replacement verifies immutable context in the visible review
   panes while retaining Plan-again/new-task/revisit and trace checks.
+- Expose current target-ledger Inventory browsing and complete file selection
+  on released execution tasks while preserving original Plan review and exact
+  Close. Opening creates no location, scan or native admission; absent actual
+  scan provenance is explicit. Auxiliary mutations and pane navigation follow
+  in their separate delivery units. Verification passes 2,946 workflows/interfaces
+  checks, all 12 imports and three installed Inventory/execution checks.
 
 #### Refine Plan refusal messages, move context and controls (2026-10-04)
 

@@ -2900,21 +2900,25 @@ function validateInventoryRollup(value) {
 
 function validateInventorySummary(value) {
   return isExactObject(value, ["disposition", "task_id", "request_id", "location_id", "view_revision",
-    "root_path", "scan_complete", "scan_scope", "observed_count", "missing_count", "warning_count", "rollup",
+    "root_path", "scan_request_id", "scan_complete", "scan_scope", "observed_count", "missing_count", "warning_count", "rollup",
     "visible_row_count", "search_query", "filters", "sort_column", "sort_direction", "collapsed_count",
     "selected_file_count", "selectable_file_count", "hidden_selected_file_count", "selection"])
     && ["opened", "current", "conflict", "noop"].includes(value.disposition)
     && typeof value.task_id === "string" && TASK_PATTERN.test(value.task_id)
     && typeof value.request_id === "string" && ID_PATTERN.test(value.request_id)
     && isScalar64(value.location_id) && value.location_id !== "0"
-    && ["view_revision", "observed_count", "missing_count", "warning_count", "visible_row_count", "collapsed_count"]
+    && ["view_revision", "warning_count", "visible_row_count", "collapsed_count"]
       .every((key) => isNonnegativeInteger(value[key]))
     && (value.root_path === null || isBoundedPath(value.root_path))
+    && (value.scan_request_id === null
+      ? [value.scan_complete, value.scan_scope, value.observed_count, value.missing_count].every((fact) => fact === null)
+      : typeof value.scan_request_id === "string" && ID_PATTERN.test(value.scan_request_id)
+    && [value.observed_count, value.missing_count].every(isNonnegativeInteger)
     && isExactObject(value.scan_scope, ["kind", "path"])
     && (["location", "selection"].includes(value.scan_scope.kind)
       ? value.scan_scope.path === null
       : ["item", "folder"].includes(value.scan_scope.kind) && isBoundedPath(value.scan_scope.path))
-    && typeof value.scan_complete === "boolean" && validateInventoryRollup(value.rollup)
+    && typeof value.scan_complete === "boolean") && validateInventoryRollup(value.rollup)
     && [value.selected_file_count, value.selectable_file_count, value.hidden_selected_file_count].every(isNonnegativeInteger)
     && value.selected_file_count <= value.selectable_file_count
     && value.hidden_selected_file_count <= value.selected_file_count

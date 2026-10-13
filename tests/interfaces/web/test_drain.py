@@ -6832,6 +6832,108 @@ def test_inventory_ordinary_native_selection_results_refresh_and_close(tmp_path,
         assert service._lifecycle._start_receipts == {}
         assert registry._start_responses == {}
 
+
+@pytest.mark.parametrize("available", [True, False, "close"])
+def test_execution_inventory_real_ledger_read_selection_and_close(tmp_path, monkeypatch, available):
+    from namisync.interfaces.service import NamiSyncService
+    source, target = tmp_path / "source", tmp_path / "target"
+    source.mkdir()
+    target.mkdir()
+    (source / "one.txt").write_text("execution bytes", encoding="utf-8")
+    with NamiSyncService(tmp_path / "ledger.db", tmp_path / "history.db") as service:
+        service.initialize_database_contracts()
+        registry = _make_registry(service, drain_wait=0.1)
+        ids = iter(f"{index:032x}" for index in range(100, 200))
+        def finish(start):
+            _wait_terminal(service._dispatcher, start.session_id)
+            _drain_until_record(registry, start.task_id, start.session_id, ids)
+            registry.release_terminal_session(start.task_id, start.session_id)
+        planned = registry.start_plan(str(source), str(target), deletion_policy=None,
+            command_id="1" * 32)
+        finish(planned)
+        with pytest.raises(TaskUnavailableError):
+            registry.open_inventory_view(planned.task_id)
+        execution = registry.start_execution(planned.task_id, request_id=planned.request_id,
+            expected_revision=0, destructive_acknowledged=False, command_id="2" * 32,
+            wire_intent=("execute",))
+        finish(execution)
+        def refuse(*args, **kwargs):
+            raise AssertionError("ledger browsing must not admit, scan or hash")
+        monkeypatch.setattr(service._runtime, "prepare_inventory", refuse)
+        monkeypatch.setattr(service._runtime._scanner, "scan", refuse)
+        monkeypatch.setattr(service._runtime, "prepare_manual_verification", refuse)
+        if not available:
+            from namisync.db.repositories import LedgerRepository
+            from namisync.db.recorder import LedgerRecorder
+            monkeypatch.setattr(LedgerRepository, "find_location", lambda *args: None)
+            monkeypatch.setattr(LedgerRecorder, "ensure_location", refuse)
+        before_locations = service.remembered_locations()
+        if available == "close":
+            original = service.get_task_execution_inventory
+            def close_during_read(*args):
+                publication = original(*args)
+                registry.close_task(planned.task_id, execution.session_id)
+                return publication
+            monkeypatch.setattr(service, "get_task_execution_inventory", close_during_read)
+            with pytest.raises(TaskUnavailableError):
+                registry.open_inventory_view(planned.task_id)
+            with pytest.raises(TaskUnavailableError):
+                registry.open_plan_view(planned.task_id)
+            with pytest.raises(TaskUnavailableError):
+                original(planned.task_id, planned.request_id, execution.session_id)
+            return
+        if not available:
+            with pytest.raises(TaskUnavailableError, match="unavailable"):
+                registry.open_inventory_view(planned.task_id)
+            assert service.remembered_locations() == before_locations
+        else:
+            publication = service.get_task_execution_inventory(planned.task_id, planned.request_id, execution.session_id)
+            assert publication.scan_details is None
+            for task_id, request_id, session_id in [
+                ("task-" + "f" * 32, planned.request_id, execution.session_id),
+                (planned.task_id, "f" * 32, execution.session_id),
+                (planned.task_id, planned.request_id, "f" * 32),
+            ]:
+                with pytest.raises((TaskUnavailableError, ValueError)):
+                    service.get_task_execution_inventory(task_id, request_id, session_id)
+            summary = registry.open_inventory_view(planned.task_id)
+            assert all(summary[key] is None for key in (
+                "scan_request_id", "scan_complete", "scan_scope", "observed_count", "missing_count"))
+            assert summary["warning_count"] == 0
+            selected = registry.set_inventory_selection(planned.task_id, planned.request_id,
+                expected_revision=0, node_id=None, selected=True)
+            assert selected["selected_file_count"] == 1
+            hidden = registry.update_inventory_view(planned.task_id, expected_revision=1,
+                search_query="hidden", filters=frozenset(), sort_column=PlanSortColumn.PATH,
+                sort_direction=SortDirection.ASCENDING, collapse_node_id=None, collapsed=None)
+            assert hidden["hidden_selected_file_count"] == 1
+            shown = registry.update_inventory_view(planned.task_id, expected_revision=2,
+                search_query="", filters=frozenset(), sort_column=PlanSortColumn.PATH,
+                sort_direction=SortDirection.ASCENDING, collapse_node_id=None, collapsed=None)
+            window = registry.get_inventory_window(planned.task_id, expected_revision=3, offset=0, limit=256)
+            node_id = next(row["node_id"] for row in window["rows"] if row["row_id"] is not None)
+            assert registry.get_inventory_detail(planned.task_id, expected_revision=3, node_id=node_id)["disposition"] == "current"
+            with pytest.raises(TaskUnavailableError):
+                _refresh(registry, planned, revision=3)
+            with pytest.raises(TaskUnavailableError):
+                registry.start_inventory_integrity(planned.task_id, planned.request_id,
+                    expected_revision=3, mode="verify", accept_current_evidence=False,
+                    command_id="6" * 32, wire_intent=("verify",))
+            with pytest.raises(TaskUnavailableError):
+                registry.change_inventory_visibility(planned.task_id, planned.request_id,
+                    expected_revision=3, node_id=None, action="acknowledge",
+                    command_id="7" * 32, wire_intent=("acknowledge",))
+            assert registry.open_inventory_view(planned.task_id) == {**shown, "disposition": "current"}
+            assert service.remembered_locations() == before_locations
+        plan = registry.open_plan_view(planned.task_id)
+        plan_window = registry.get_plan_window(planned.task_id, expected_revision=plan["view_revision"], offset=0, limit=256)
+        if available:
+            assert registry.get_plan_detail(planned.task_id, expected_revision=plan["view_revision"],
+                node_id=plan_window["rows"][0]["node_id"])["disposition"] == "current"
+        registry.close_task(planned.task_id, execution.session_id)
+        with pytest.raises(TaskUnavailableError):
+            registry.open_inventory_view(planned.task_id)
+
 @pytest.mark.parametrize("action", ["resume", "cancel"])
 def test_inventory_ordinary_live_control_terminal_repair_and_zero_replacement(tmp_path, action):
     from threading import Event
