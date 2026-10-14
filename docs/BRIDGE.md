@@ -608,6 +608,9 @@ after auxiliary starts; retained Plan summaries identify the original execution.
 Fresh auxiliary starts require a released association with the same retained
 Plan token. Their current-session Close also retires the original retained Plan
 and execution; an old execution session cannot control or close its successor.
+The browser adopts the accepted start's current request and session together,
+while retaining original Plan identity. A task-list read begun before that
+acceptance cannot overwrite it; reconciliation reads current state afterward.
 
 Manual command `session_id` names the original execution.
 `ManualVerificationReadiness` contains exactly `task_id`, `session_id`,
@@ -635,8 +638,11 @@ count. At most 256 facts cross a window and at most one crosses detail; full
 selected populations remain server-owned. Terminal reconciliation replaces the
 live subset and clears the gap flag, even with zero outcomes. These activity
 facts do not reinterpret the separate current ledger fields. Existing pure
-inventory responses omit this context. Standalone desktop controls consume these
-ordinary overlays; manual post-copy navigation and controls remain pending.
+inventory responses omit this context. Standalone controls and the explicit
+ordinary fallback in a sync task's Verify pane consume these ordinary overlays.
+Manual controls consume their separate context below. The page binds readiness
+to original execution identity/revision and binds controls to the current session;
+pane changes fence pending reads without replacing the retained Plan identity.
 
 Manual windows/details instead add an independent `manual_verification` context:
 original execution session, manual request/session/location, result revision,

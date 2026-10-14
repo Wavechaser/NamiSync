@@ -1,61 +1,77 @@
-# Latest session — M1-10 Plan reload custody correction
+# Latest session — M1-10 final integration
 
-2026-10-14. Finish M1-10, then stop for recap and GUI tweaks. M1-12,
-release, DOC-2 and unrelated optimization remain inactive. The user lifted the
-GUI hold. Announce and serialize native input; retain every foreground, focus
-and hit guard. This session's capacity fallback is GPT-5.6 Sol.
+2026-10-14. Complete M1-10, then stop for recap and GUI tweaks. M1-12,
+release, DOC-2, push/PR and unrelated optimization remain inactive. The session
+capacity fallback is GPT-5.6 Sol. M1_PLAN owns scope and delivered outcomes.
 
-## Current state
+## Integrated state and candidate
 
-A–C, D1 (`541a90ff`), the C3b publication backstop (`f26cb57a`) and D2a kind
-catalogs (`d52a7b2`) are integrated on `milestone1`. D2 UI remains uncommitted
-in the main checkout on `codex/m1-10-d2-resume-20261014`. Its recovery snapshot
-`58126f5` is disposable provenance, never a merge/cherry-pick unit.
+The D2 UI commit follows `cb48274`, the separate Inventory
+confirmation-witness correction, after Plan reload fix `b52f8dd`,
+catalog refactor `d52a7b2`, D1 `541a90ff` and C3b backstop `f26cb57a`.
+A–D and their resumed reviews are complete; E closure is next.
+Recovery `58126f5` was reconstructed, never
+merged or cherry-picked. No unrelated working-tree changes were present.
 
-This isolated worktree, `build/m1-10-20261013/plan-review-custody`, is based on
-`d52a7b2`, branch `codex/m1-10-plan-review-custody`. It owns a separate bounded
-pre-existing Plan reload correction. Native execution run `-09` proved that a
-server-applied highlight lost its visible follow-up when a forced reload replaced
-its incumbent review. The fix must preserve foreground ownership and still
-reconcile authoritative execution summary/window facts. Scope and gates are in
-M1_PLAN. Source and probe are frozen after independent inspection. The disputed
-newer-view ordering was withdrawn after tracing the server's task lock and exact
-view-revision check; no speculative revision-capture code was added.
+D2 retains Plan/Verify panes, first exact manual verification, explicit selected
+ordinary fallback, current controls and independent result generations. Accepted
+starts adopt current request/session together and fence stale task lists while
+retaining original Plan identity. The separate Plan reload fix preserves the
+foreground review across lifecycle reloads. No backend policy/schema changed.
 
-D2 separately corrects accepted current-request adoption: execution adopted its
-new session but retained the Plan request. Native run `-11` captured the actual
-locked admission guard: only request equality failed. Preserve original Plan
-identity, adopt accepted execution/manual/ordinary identities and fence older
-list responses. These are two distinct substantive findings; independent review
-found no recurrence stop. The ordinary fallback helper also needs its declared
-explicit Inventory checkbox selection before Verify; empty initial selection is
-correct product behavior.
+## Verification and review
 
-## Evidence and next action
+All relative receipts are under `build/m1-10-20261013/`.
 
-All receipts are under the main `build/m1-10-20261013/` directory. Preserve failed
-`d2-execution-native-20261014-01` through `-11` and their unique raw pytest bases.
-Temporary Refresh tracing is removed from tracked helpers and preserved with
-provenance in `d2-refresh-diagnostic-20261014/`. Do not reinterpret later passes
-as explanations for earlier failures.
+- Final installed execution17 passes both sizes (26.25s), with actual exact
+  manual verification, retained Plan state, Refresh/release/superseded readiness,
+  trusted selected ordinary verification, both control pairs and exact Close.
+- Inventory04 passes (31.63s); foreground03 passes both shell cases; shared02
+  passes four gallery cases. These use unchanged final product/package bytes.
+- Frontend01 passes 59; final-interfaces02 passes 2,024. Later test-only edits
+  have complete owning-module ordinary reruns: execution 21, Inventory 1.
+  The E reviewer accepts dependency reuse; the department run itself is not
+  represented as running helper bytes edited during/after it.
+- Ordinary01 passed 5,967 with 65 failures and 28 errors from five tools/custody
+  modules rejecting an in-repository basetemp. Their complete external-base
+  rerun ordinary02 passed 191 with 3 skips. Counts overlap; do not sum them.
+  All 12 import contracts pass. Final link/diff checks accompany closing docs.
+- `d2-final-review-20261014.md` is the independent D2 review;
+  `m1-10-final-cross-review-20261014.md` owns E's cross-component review and
+  dependency accounting. E still needs final delivery reconciliation.
 
-The baseline regression fails in `plan-custody-base-reproducer-01.log`; the
-corrected probe passes in `plan-custody-focused-12.log`. Installed execution
-passes both sizes in `plan-custody-native-01.log` (2 passed, 18 deselected), using
-the unique retained `plan-custody-native-temp-01` base. The interfaces gate
-passes 2,020 with 4,076 deselected in `plan-custody-interfaces-01.log`; 222 local
-documentation links pass. Final independent review is
-`plan-custody-review-20261014.md`. Commit this correction separately after
-approval and reconcile it into the D2 tree without
-WIP ancestry. Freeze combined product/helper inputs before repeating affected
-D2 frontend and installed execution/Inventory/shell/gallery checks. E remains
-cross-component review, final documentation and exact recovery accounting.
-M1-10 is not complete.
+Frozen app blob: `d0b87e93743a97cacb31f746098bb467e95ee690`.
+Execution child/parent: `e6258cc3e6b9e87e826be60f538786a600eaa093` /
+`92baf598ff74a9d50b8084545074664b9e9e9747`.
+Inventory child/parent: `d5f5bbb46ad9b304587e150aa14a6d6c133657b7` /
+`0322e759a1b3be36b99981002b67a5f55d95c2c4` (committed in cb48274).
 
-Use the main checkout's venv through host PowerShell, with this worktree as cwd
-for isolated gates. Use unique pytest bases; whole ordinary/tools gates need an
-external base. Bind installed evidence to physical package bytes, not just Git
-blobs. Retain all task recovery branches/worktrees and evidence until integration
-and accounting; five pre-existing stashes and unrelated branches are excluded.
-No push or PR is authorized. Existing legibility and wheel/tilt observations
-remain for the user's GUI recap without a claimed fix.
+Native09 and11 proved two distinct product findings: Plan reload ownership and
+missing current-request adoption. Later failures were helper/environment issues.
+Native14 specifically disproved passive replacement scroll loss: a synthetic
+click focused a row covered by the sticky header, changing scroll before row
+replacement. The corrected fixture selects a fully visible, hit-owned row.
+Native16 exposed a missing Journey capture flag adaptation in the final callback;
+the one-line exact-owner correction passed native17. Inventory Confirm focus
+depends on availability at actual modal close, not later terminal re-enablement.
+All failed receipts, withdrawn diagnoses and unique native bases01–17 remain.
+Temporary Refresh tracing was removed and retained in ignored provenance.
+
+## Immediate next steps and recovery
+
+Integrate D2 on `milestone1`, then close E's docs/recovery accounting and stop
+for the user's GUI recap. Do not
+claim M1-10 complete before E's final review. No further GUI run is required
+unless changed dependencies or a new finding invalidate the final evidence.
+
+Keep recoveries `060becf`, `08bc38e`, `c3bb191`, `58126f5`, task branches, the
+clean Plan worktree and detached `ordinary-base-26e72ad` until full accounting.
+`recovery-accounting-20261014.md` records exact saved-change dispositions.
+Preserve evidence, table-install manifests and raw native identities. Five
+pre-existing stashes and unrelated refs are excluded. No recovery ancestry may
+be integrated. Only fully accounted task refs/checkouts may be cleaned up.
+
+The existing Inventory legibility and physical wheel/tilt observations remain
+for GUI recap, without a claimed fix or visual acceptance. Host PowerShell and
+the project venv remain the test runtime; native runs require announced input,
+all ownership guards and unique bases. Whole ordinary/tools bases stay external.

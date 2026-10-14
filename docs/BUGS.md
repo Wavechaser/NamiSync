@@ -1156,6 +1156,16 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Application task lifecycle
 
+- MODERATE - FIXED (2026-10-14). Incomplete accepted activity adoption. After
+  execution, Inventory Refresh can be refused despite a released session and
+  current idle view. Cause: the browser adopts execution's new session but
+  retains its original Plan request as the current request. The actual adapter
+  guard witness proves only request equality fails. Fixed by adopting the accepted
+  current request separately from retained Plan identity and fencing older task
+  lists across execution/manual/ordinary starts. Distinct-ID/stale-list probes
+  and both installed execution sizes complete real Refresh, superseded readiness
+  and explicit selected ordinary verification; backend admission is unchanged.
+
 - MODERATE - FIXED (2026-10-13). Closed kind catalog misses a registered activity.
   The browser rejected a genuine manual-verification terminal record and its
   co-batched events, preventing terminal observation and automatic release.

@@ -1191,7 +1191,7 @@ window.addEventListener("unhandledrejection", (event) => {
   const planReviewCallbacks = Object.fromEntries([
     "onViewChange", "onWindow", "onSelect", "onScopeSelect", "onExecute", "onControl",
     "onPlanAgain", "onHighlight", "onHighlightedSelect", "onExecutionDetail",
-    "onFollowOverride", "onNavigateCurrent", "onRevealMove",
+    "onFollowOverride", "onNavigateCurrent", "onRevealMove", "onPaneChange",
   ].map((name) => [name, () => {}]));
   planReviewCallbacks.onWindow = (review, offset) => {
     galleryWindowRequests.push(offset);

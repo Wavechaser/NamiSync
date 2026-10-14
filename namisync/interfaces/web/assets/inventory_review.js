@@ -62,14 +62,19 @@ export function createInventoryReviewPanel(callbacks) {
   const switcher = element("div", "nami-segmented nami-plan-review__view-switcher");
   switcher.setAttribute("role", "radiogroup");
   switcher.ariaLabel = "Task type";
-  for (const [text, selected] of [["Sync", false], ["Integrity", true]]) {
-    const option = button(text, "inventory-mode");
-    option.className = "nami-segmented__item";
-    option.setAttribute("role", "radio");
-    option.ariaChecked = String(selected);
-    option.disabled = !selected;
-    switcher.append(option);
-  }
+  const planPane = button("Sync", "pane-plan");
+  planPane.className = "nami-segmented__item";
+  planPane.setAttribute("role", "radio");
+  const verifyPane = button("Integrity", "pane-verify");
+  verifyPane.className = "nami-segmented__item";
+  verifyPane.setAttribute("role", "radio");
+  planPane.addEventListener("click", () => {
+    if (task !== null && !planPane.disabled) callbacks.onPaneChange?.(task, "plan");
+  });
+  verifyPane.addEventListener("click", () => {
+    if (task !== null && !verifyPane.disabled) callbacks.onPaneChange?.(task, "verify");
+  });
+  switcher.append(planPane, verifyPane);
   const paths = element("div", "nami-plan-review__paths");
   const rootLine = element("p", "nami-plan-review__path nami-labeled-path");
   const rootPath = element("span", "nami-labeled-path__value");
@@ -87,11 +92,16 @@ export function createInventoryReviewPanel(callbacks) {
   statusLine.setAttribute("role", "status");
   const integrityResult = element("div", "nami-shell__guidance nami-inventory-review__integrity-result");
   integrityResult.dataset.integrityResult = "";
+  const manualReadiness = element("div", "nami-shell__guidance nami-inventory-review__manual-readiness");
+  manualReadiness.dataset.manualReadiness = "";
+  const manualResult = element("div", "nami-shell__guidance nami-inventory-review__manual-result");
+  manualResult.dataset.manualVerificationResult = "";
   const refresh = button("Refresh inventory", "inventory-refresh");
   const refreshSelected = button("Refresh selected", "inventory-refresh-selected");
   refresh.classList.add("nami-button--primary");
   const baseline = button("Baseline", "inventory-baseline");
   const verify = button("Verify", "inventory-verify");
+  const manualVerify = button("Verify copied files", "verify-copied-files");
   const rebaseline = button("Rebaseline", "inventory-rebaseline");
   verify.classList.add("nami-button--primary");
   const pause = button("Pause", "inventory-pause");
@@ -101,7 +111,7 @@ export function createInventoryReviewPanel(callbacks) {
   const reload = button("Reload inventory view", "inventory-reload");
   const statusActions = element("div", "nami-plan-review__actions");
   const actions = element("div", "nami-inventory-review__actions");
-  actions.append(baseline, verify, rebaseline, pause, resume, cancel, refreshSelected, refresh);
+  actions.append(baseline, verify, rebaseline, manualVerify, pause, resume, cancel, refreshSelected, refresh);
   statusActions.append(title, actions);
   const statusMeta = element("div", "nami-plan-review__status-meta");
   const detailsToggle = button("Details", "inventory-details");
@@ -114,7 +124,8 @@ export function createInventoryReviewPanel(callbacks) {
   progress.append(progressBar);
   const recoveryActions = element("div", "nami-inventory-review__actions");
   recoveryActions.append(check, reload);
-  summary.append(statusActions, statusMeta, selectionSummary, statusLine, integrityResult, recoveryActions, progress);
+  summary.append(statusActions, statusMeta, selectionSummary, statusLine, manualReadiness,
+    manualResult, integrityResult, recoveryActions, progress);
 
   const table = element("div", "nami-card nami-plan-review__table-card nami-inventory-review__table");
   const toolbar = element("div", "nami-plan-review__toolbar");
@@ -251,6 +262,21 @@ export function createInventoryReviewPanel(callbacks) {
       ? result : null;
   }
   function currentIntegrity() { return matchingIntegrity(current?.window?.integrity); }
+  function matchingManual(candidate) {
+    const result = candidate ?? null;
+    const generation = current?.window?.manual_verification ?? null;
+    return result !== null && generation !== null && current !== null
+      && task?.taskKind === "sync-plan"
+      && result.execution_session_id === task.executionSessionId
+      && result.execution_session_id === generation.execution_session_id
+      && result.request_id === generation.request_id && result.session_id === generation.session_id
+      && result.location_id === generation.location_id && result.revision === generation.revision
+      && result.items.every((item) => generation.items.some((owned) => owned.row_id === item.row_id
+        && owned.operation_id === item.operation_id))
+      && result.location_id === current.summary.location_id
+      ? result : null;
+  }
+  function currentManual() { return matchingManual(current?.window?.manual_verification); }
   function selectionBlocked() {
     return blocked() || !task?.sessionReleased || task.sessionState === "active"
       || current?.summary.request_id !== task?.requestId || task?.inventoryViewUnconfirmed;
@@ -339,6 +365,9 @@ export function createInventoryReviewPanel(callbacks) {
       if (current !== null && !control.disabled) callbacks.onStart?.(current, mode, control);
     });
   }
+  manualVerify.addEventListener("click", () => {
+    if (current !== null && !manualVerify.disabled) callbacks.onManualStart?.(current);
+  });
   for (const [control, action] of [[pause, "pause"], [resume, "resume"], [cancel, "cancel"]]) {
     control.addEventListener("click", () => {
       if (current !== null && !control.disabled) callbacks.onControl?.(current, action);
@@ -412,12 +441,18 @@ export function createInventoryReviewPanel(callbacks) {
       .filter(Boolean).join(" · ");
     const notes = element("div", "nami-file-row__cell nami-file-row__notes", notesText);
     notes.title = notesText;
-    const result = currentIntegrity()?.items.find((item) => item.row_id === row.row_id) ?? null;
-    if (result !== null) {
+    const manualItem = currentManual()?.items.find((item) => item.row_id === row.row_id) ?? null;
+    const ordinary = currentIntegrity();
+    const ordinaryItem = ordinary?.items.find((item) => item.row_id === row.row_id) ?? null;
+    const ordinaryOwner = ({baseline: "Baseline", verify: "Verification",
+      rebaseline: "Rebaseline"})[ordinary?.mode] ?? "Integrity";
+    for (const [owner, result] of [["Manual verification", manualItem], [ordinaryOwner, ordinaryItem]]) {
+      if (result === null) continue;
       const resultCell = createIntegrityCell(document, "nami-inventory-row__result", "result",
-        result.result, undefined, integrityLabel(result.result));
-      resultCell.dataset.integrityState = result.result;
-      resultCell.title = [integrityLabel(result.result), result.reason, result.recording,
+        result.result, undefined, `${owner}: ${integrityLabel(result.result)}`);
+      if (owner === "Manual verification") resultCell.dataset.manualVerificationState = result.result;
+      else resultCell.dataset.integrityState = result.result;
+      resultCell.title = [owner, integrityLabel(result.result), result.reason, result.recording,
         result.record_disposition, result.detail_omitted_count > 0
           ? `${result.detail_omitted_count} details omitted` : null].filter(Boolean).join(" · ");
       notes.append(resultCell);
@@ -565,14 +600,23 @@ export function createInventoryReviewPanel(callbacks) {
     appendDetail("Verification invalidated", formatLocalDateTime(value.row.verification_invalidated_at));
     appendDetail("Invalidation reason", value.row.verification_invalidated_reason);
     appendDetail("Unsupported reason", value.row.unsupported_reason);
+    const manual = matchingManual(selected.response.manual_verification);
+    const manualItem = manual?.items.find((item) => item.row_id === row.row_id) ?? null;
+    if (manualItem !== null) {
+      appendDetail("Manual verification result", integrityLabel(manualItem.result));
+      appendDetail("Manual result reason", manualItem.reason);
+      appendDetail("Manual recording", manualItem.recording);
+      appendDetail("Manual record disposition", manualItem.record_disposition);
+      appendDetail("Manual omitted result details", String(manualItem.detail_omitted_count));
+    }
     const ordinary = matchingIntegrity(selected.response.integrity) ?? currentIntegrity();
-    const result = ordinary?.items.find((item) => item.row_id === row.row_id) ?? null;
-    if (result !== null) {
-      appendDetail(`${({baseline: "Baseline", verify: "Verification", rebaseline: "Rebaseline"})[ordinary.mode]} result`, integrityLabel(result.result));
-      appendDetail("Result reason", result.reason);
-      appendDetail("Recording", result.recording);
-      appendDetail("Record disposition", result.record_disposition);
-      appendDetail("Omitted result details", String(result.detail_omitted_count));
+    const ordinaryItem = ordinary?.items.find((item) => item.row_id === row.row_id) ?? null;
+    if (ordinaryItem !== null) {
+      appendDetail(`${({baseline: "Baseline", verify: "Verification", rebaseline: "Rebaseline"})[ordinary.mode]} result`, integrityLabel(ordinaryItem.result));
+      appendDetail("Result reason", ordinaryItem.reason);
+      appendDetail("Recording", ordinaryItem.recording);
+      appendDetail("Record disposition", ordinaryItem.record_disposition);
+      appendDetail("Omitted result details", String(ordinaryItem.detail_omitted_count));
     }
     if (value.attestation === null) {
       appendDetail("Stored digest", "No baseline evidence");
@@ -618,8 +662,17 @@ export function createInventoryReviewPanel(callbacks) {
     detailsToggle.hidden = review === null;
     diagnostics.hidden = review === null || !detailsExpanded;
     const available = review !== null;
+    const syncTask = value.taskKind === "sync-plan" && value.executionStarted;
+    switcher.ariaLabel = syncTask ? "Task view" : "Task type";
+    renderText(planPane, syncTask ? "Plan" : "Sync");
+    renderText(verifyPane, syncTask ? "Verify" : "Integrity");
+    planPane.ariaChecked = String(!syncTask ? false : value.workPane === "plan");
+    verifyPane.ariaChecked = String(!syncTask || value.workPane === "verify");
+    planPane.disabled = !syncTask || value.workPane === "plan";
+    verifyPane.disabled = syncTask ? value.workPane === "verify" : false;
     content.hidden = false;
-    reload.hidden = !value.inventoryError && !review?.message;
+    reload.hidden = !value.inventoryError && !review?.message
+      && !value.manualReadinessError && value.manualReadiness?.reason !== "conflict";
     reload.disabled = value.inventoryLoading || value.closePending;
     const actionBlocked = !available || blocked() || !value.sessionReleased || value.sessionState === "active";
     refresh.disabled = actionBlocked;
@@ -632,14 +685,15 @@ export function createInventoryReviewPanel(callbacks) {
     renderFilesystemText(rootPath, review?.summary.root_path ?? value.form?.source?.text ?? "");
     rootLine.title = review?.summary.root_path ?? value.form?.source?.text ?? "";
     const ordinary = currentIntegrity();
+    const manual = currentManual();
     const activityKind = (ordinary != null && ordinary.session_id === value.sessionId ? ordinary.mode : null)
       ?? value.snapshot?.terminal_result?.phases?.find(phase => ["baseline", "verify", "rebaseline"].includes(phase.phase))?.phase
       ?? value.snapshot?.phase;
     const activity = ({baseline: "Baseline", verify: "Verification", rebaseline: "Rebaseline"})[activityKind] ?? "Inventory scan";
     const digest = taskStatusDigest(value);
-    const ordinarySession = ["baseline", "verify", "rebaseline"].includes(value.sessionKind);
+    const auxiliarySession = ["baseline", "verify", "rebaseline", "manual-verify"].includes(value.sessionKind);
     summary.dataset.status = value.inventoryError ? "attention" : digest.state;
-    renderText(title, ordinarySession ? digest.title
+    renderText(title, auxiliarySession ? digest.title
       : startAttempt !== null || value.sessionState === "active" || value.inventoryLoading ? digest.title
       : value.sessionState === "refused" ? `${activity} did not start`
         : value.sessionState === "failed" ? `${activity} failed`
@@ -666,6 +720,31 @@ export function createInventoryReviewPanel(callbacks) {
           : `Live ${resultMode.toLowerCase()} results`}`
         + ` · ${ordinary.items.length} window result${ordinary.items.length === 1 ? "" : "s"}`);
     integrityResult.hidden = ordinary === null;
+    const readiness = value.manualReadiness;
+    const readinessMessages = {
+      ready: readiness == null ? "" : `${readiness.ready_count} copied file${readiness.ready_count === 1 ? "" : "s"} ready for exact verification.`,
+      "already-verified": "Copied files were already verified during execution.",
+      empty: "This execution copied no files that need manual verification.",
+      incomplete: "Copied-file handoff is incomplete. Verify current state is available when the current selection is usable.",
+      unrecorded: "Copied-file evidence was not recorded. Verify current state is available when the current selection is usable.",
+      superseded: "The inventory changed after execution. Verify current state is available for the current selection.",
+      "settlement-diverged": "Execution settlement and recorded evidence differ. Verify current state is available for the current selection.",
+      "execution-ineligible": "This execution is not eligible for manual verification.",
+      busy: "Another task activity is still in progress. Wait for it to finish, then reload this view.",
+      attempted: "Manual verification was already attempted for this execution.",
+      "linked-execution": "Linked execution verification is handled by that execution.",
+      conflict: "Execution readiness changed. Reload this view to read current state.",
+    };
+    renderText(manualReadiness, !syncTask ? ""
+      : value.manualReadinessLoading ? "Checking copied-file verification readiness…"
+        : value.manualReadinessError ?? readinessMessages[readiness?.reason] ?? "Verification readiness unavailable.");
+    manualReadiness.hidden = !syncTask;
+    manualReadiness.dataset.reason = readiness?.reason ?? (value.manualReadinessLoading ? "loading" : "unavailable");
+    renderText(manualResult, manual === null ? ""
+      : `${manual.complete ? "Manual verification retained results"
+        : manual.gap ? "Live manual verification results may be incomplete"
+          : "Live manual verification results"} · ${manual.items.length} window result${manual.items.length === 1 ? "" : "s"}`);
+    manualResult.hidden = manual === null;
     const scanScope = review?.summary.scan_scope;
     const hasScan = available && review.summary.scan_request_id !== null;
     const scopeLabel = scanScope?.kind === "location" ? "Entire location"
@@ -700,7 +779,7 @@ export function createInventoryReviewPanel(callbacks) {
       rowMenu.close();
       filterMenu.render([], {}, true);
       refreshSelected.disabled = true;
-      for (const control of [baseline, verify, rebaseline, pause, resume, cancel]) control.hidden = true;
+      for (const control of [baseline, verify, rebaseline, manualVerify, pause, resume, cancel]) control.hidden = true;
       updateSelectionControls();
       detailActions.hidden = true;
       return;
@@ -712,18 +791,25 @@ export function createInventoryReviewPanel(callbacks) {
     const currentPublication = review.summary.request_id === value.requestId && !value.inventoryViewUnconfirmed;
     const currentOrdinary = value.sessionState === "active"
       && ["baseline", "verify", "rebaseline"].includes(value.sessionKind);
+    const currentManualSession = value.sessionState === "active" && value.sessionKind === "manual-verify";
     const canStart = value.taskKind === "inventory" && value.sessionReleased && currentPublication
       && review.summary.selected_file_count > 0 && !blocked();
-    for (const control of [baseline, verify, rebaseline]) {
-      control.hidden = currentOrdinary;
+    for (const control of [baseline, rebaseline]) {
+      control.hidden = syncTask || currentOrdinary;
       control.disabled = !canStart;
     }
-    pause.hidden = !currentOrdinary || value.executionControlState === "paused";
-    pause.disabled = !currentOrdinary || value.executionControlState !== "running" || Boolean(blocked());
-    resume.hidden = !currentOrdinary || value.executionControlState !== "paused";
-    resume.disabled = !currentOrdinary || Boolean(blocked());
-    cancel.hidden = !currentOrdinary;
-    cancel.disabled = !currentOrdinary || value.executionControlState === "canceling" || Boolean(blocked());
+    const currentAuxiliary = currentOrdinary || currentManualSession;
+    verify.hidden = currentOrdinary || currentManualSession || (syncTask && !value.manualFallbackEligible);
+    verify.disabled = syncTask ? !value.manualFallbackEligible || Boolean(blocked()) : !canStart;
+    renderText(verify, syncTask ? "Verify current state" : "Verify");
+    manualVerify.hidden = !syncTask || currentAuxiliary || !value.manualExactEligible;
+    manualVerify.disabled = !value.manualExactEligible || Boolean(blocked());
+    pause.hidden = !currentAuxiliary || value.executionControlState === "paused";
+    pause.disabled = !currentAuxiliary || value.executionControlState !== "running" || Boolean(blocked());
+    resume.hidden = !currentAuxiliary || value.executionControlState !== "paused";
+    resume.disabled = !currentAuxiliary || Boolean(blocked());
+    cancel.hidden = !currentAuxiliary;
+    cancel.disabled = !currentAuxiliary || value.executionControlState === "canceling" || Boolean(blocked());
     const missingCount = selected?.is_container ? selected.rollup.missing
       : selected?.presence === "missing" && !selected.acknowledged ? 1 : 0;
     const acknowledgedCount = selected?.is_container ? selected.rollup.acknowledged

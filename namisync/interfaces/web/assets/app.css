@@ -381,6 +381,11 @@ body {
   min-inline-size: 0;
 }
 
+.nami-plan-review[hidden],
+.nami-inventory-review[hidden] {
+  display: none;
+}
+
 :is(.nami-plan-review, .nami-inventory-review):has(.nami-plan-review__diagnostics:not([hidden])) {
   grid-template-columns: minmax(0, 1fr) minmax(0, min(20rem, 40%));
 }

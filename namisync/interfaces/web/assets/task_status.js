@@ -108,7 +108,8 @@ function terminalDigest(result, fallbackState, capacityOnly) {
 }
 
 function ordinaryTerminalDigest(result, fallbackState, mode) {
-  const label = ({baseline: "Baseline", verify: "Verification", rebaseline: "Rebaseline"})[mode];
+  const label = ({baseline: "Baseline", verify: "Verification", rebaseline: "Rebaseline",
+    "manual-verify": "Manual verification"})[mode];
   if (label === undefined || !["completed", "failed", "refused", "canceled"].includes(fallbackState)) return null;
   if (result?.disposition === "unrun" || fallbackState === "refused") {
     return {title: `${label} did not start`, state: "error", detail: `${label} did not start.`};
@@ -160,6 +161,7 @@ export function taskStatusDigest(task) {
   const currentExecution = task?.sessionKind === "sync-execution";
   const currentOrdinary = ["baseline", "verify", "rebaseline"].includes(task?.sessionKind)
     ? task.sessionKind : null;
+  const currentManual = task?.sessionKind === "manual-verify";
   const execution = currentExecution ? selectTaskExecution(task).execution : EMPTY_EXECUTION;
   const attempt = ["sync-plan", "inventory"].includes(form?.attempt?.kind) ? form.attempt : null;
   const checkingFolders = attempt?.running === true && !attempt.dispatched;
@@ -205,6 +207,11 @@ export function taskStatusDigest(task) {
     executionState,
     currentOrdinary,
   );
+  const manualTerminal = ordinaryTerminalDigest(
+    currentManual ? snapshot?.terminal_result ?? null : null,
+    executionState,
+    currentManual ? "manual-verify" : null,
+  );
   const planItemCount = summary?.selected_operation_count ?? 0;
   const planHasItems = (summary?.filter_counts?.all ?? 0) > 0;
   const releaseMessage = task?.releaseRecovery?.message ?? null;
@@ -219,6 +226,7 @@ export function taskStatusDigest(task) {
   else if (planning) [title, state] = ["Planning", "planning"];
   else if (summary !== null && !task?.executionStarted && task?.sessionKind !== "inventory") [title, state] = ["Plan ready", "plan"];
   else if (terminal !== null) ({ title, state } = terminal);
+  else if (manualTerminal !== null) ({ title, state } = manualTerminal);
   else if (ordinaryTerminal !== null) ({ title, state } = ordinaryTerminal);
   else if (executionState === "completed") [title, state] = ["Completed", "completed"];
   else if (executionState === "failed" || executionState === "refused") [title, state] = ["Error", "error"];
@@ -248,6 +256,7 @@ export function taskStatusDigest(task) {
   else if (summary !== null && !task?.executionStarted) detail = planItemCount === 0 && !planHasItems ? "Plan is empty."
     : `${planItemCount} items, ${formatByteCount(summary.required_bytes)} required.`;
   else if (terminal !== null) detail = terminal.detail;
+  else if (manualTerminal !== null) detail = manualTerminal.detail;
   else if (ordinaryTerminal !== null) detail = ordinaryTerminal.detail;
   else if (["completed", "failed", "refused", "canceled"].includes(executionState)) detail = `${title}.`;
   else if (summary === null && task?.executionStarted && currentExecution) detail = progress.total == null

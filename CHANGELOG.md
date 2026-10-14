@@ -545,7 +545,8 @@ explicit, reviewable and regression-backed.
 Stage 6 delivered the secured desktop host, process-live tasks, frozen Setup,
 bounded Plan review/selection and execution, and live/retained result review.
 Standalone Inventory adds integrity selection, controls and retained results.
-Manual post-copy navigation and beta packaging remain open.
+Same-task Plan/Verify navigation adds first manual post-copy verification and
+explicit ordinary fallback. Final lifecycle acceptance and beta packaging remain open.
 
 #### Deliver M1-10 integrity controls and manual verification (2026-10-13 – 2026-10-14)
 
@@ -556,6 +557,13 @@ Manual post-copy navigation and beta packaging remain open.
   concurrent full reload. Defer stale replacement and reconcile authoritative
   execution summary/window facts after the interaction settles; keep selection,
   detail and viewport ownership intact.
+- Add retained Plan/Verify navigation, exact first **Verify copied files** and
+  the explicit selected **Verify current state** fallback. Hide inapplicable
+  standalone actions on sync tasks, route controls to the current auxiliary
+  session, and keep manual/ordinary results separate from ledger and original
+  execution truth. Pane changes preserve Plan review state and fence late reads.
+  Adopt each accepted activity's current request/session separately from original
+  Plan identity, and prevent an older task-list response from overwriting it.
 - Consolidate repeated lifecycle effect catalogs and native/browser task/session
   kind admission. Reuse one session pause-capability map per language owner,
   retaining strict string admission, intentional subsets and execution's distinct

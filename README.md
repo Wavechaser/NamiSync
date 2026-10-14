@@ -64,8 +64,10 @@ card with folded global and operation Details.
 Inventory tasks have their own bounded review with search, facets, sibling
 sorting, current evidence Details, same-task Refresh and missing-row
 acknowledge/restore visibility, complete file selection and standalone
-Baseline/Verify/Rebaseline with live controls and separate results. Manual post-copy
-navigation, final packaging and beta closure remain open, so the window is
+Baseline/Verify/Rebaseline with live controls and separate results. Execution
+tasks retain Plan review alongside a Verify pane for the first exact post-copy
+verification or an explicitly selected ordinary fallback. Final lifecycle
+acceptance, packaging and beta closure remain open, so the window is
 not yet the complete desktop product.
 The [M1 delivery register](docs/M1_PLAN.md) records execution-review acceptance,
 affected performance verification, and any remaining recovery work.
@@ -73,8 +75,8 @@ Desktop release also requires scoped cold-start resource budgets and repeated/
 long-workload leak checks under the [resource acceptance policy](docs/DEFENSE.md#7-quantitative-evidence-and-measurement-authority).
 These remain open and do not promise universal whole-runtime memory containment.
 
-Remaining desktop work includes manual post-copy verification within the active
-task shell. Rebaseline
+Remaining desktop work includes integrated lifecycle and release acceptance.
+Rebaseline
 behavior lives in the [feature catalog](docs/FEATURES.md); the
 [M1 plan](docs/M1_PLAN.md) owns remaining delivery and verification.
 External requests and applicable populations are bounded at their owners;
@@ -321,8 +323,9 @@ halo; the compositor behavior remains deferred. A fixed local Fluent icon
 vocabulary, accessible presentation and persisted cosmetic theme support the
 headed shell. Inventory review adds bounded browsing, current evidence,
 same-task Refresh, conditional missing-row visibility, complete file selection
-and standalone integrity controls/results. Manual post-copy navigation and beta
-packaging remain open.
+and standalone integrity controls/results. Plan/Verify navigation keeps original
+execution review separate from manual post-copy and ordinary current-state
+verification. Final lifecycle acceptance and beta packaging remain open.
 
 ### M1 Features
 

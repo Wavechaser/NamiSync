@@ -339,8 +339,13 @@ result generation. Inventory window/detail exposes only matching returned-row
 manual facts, alongside ordinary facts and current ledger evidence. Terminal
 normalization repairs a live Gap and retains outcomes completed before pause.
 Manual hashing preserves actual prior scan provenance; subsequent ordinary
-scanning supplies its own scan identity. Desktop pane navigation and action
-controls remain the next delivery unit.
+scanning supplies its own scan identity. The desktop's same-task Plan/Verify
+navigation retains both pane states while retiring pending reads from the pane
+being left. Readiness is bound to original execution identity/revision; current
+manual and ordinary controls use their own session identities. Manual results,
+ordinary results and stored ledger evidence have separate labels and generations;
+a new zero-item result does not fall back to old item facts. Returning to Plan
+retains original details, selection, follow and viewport custody.
 
 One existing view revision fences selection, windows and details. A stale request
 or revision changes nothing; selection changes advance the revision. Selection

@@ -27,6 +27,8 @@ let taskSnapshot = null, observedChecks = 0, refuseRefresh = false, delayedRefre
 let refuseIntegrityStart = false;
 let delayedIntegrityStart = null, integrityStartChecks = 0;
 let delayedSelection = null, selectionDisposition = "current", selectedFileCount = fixture.views.default.summary.selected_file_count;
+let manualReadinessResponse = null, delayedManualReadiness = null, delayedManualStart = null;
+let executionStartResult = null;
 let viewRevision = 0, query = "";
 const summary = () => ({ ...fixture.views.default.summary, view_revision: viewRevision, search_query: query,
   selected_file_count:selectedFileCount,
@@ -95,8 +97,9 @@ globalThis.inventoryHarness = {
     calls.push(["integrity-start", taskId, requestId, commandId, revision, mode, accepted]);
     if (refuseIntegrityStart) return Promise.reject(new Error("integrity refused"));
     taskSnapshot = {task_id:taskId, session_id:"d".repeat(32), session_state:"active",
-      session_released:false, task_kind:"inventory", request_id:"e".repeat(32),
-      plan_request_id:null, session_kind:mode};
+      session_released:false, task_kind:taskSnapshot?.task_id === taskId ? taskSnapshot.task_kind : "inventory",
+      request_id:"e".repeat(32), plan_request_id:taskSnapshot?.task_id === taskId
+        ? taskSnapshot.plan_request_id : null, session_kind:mode};
     const result = {task_id:taskId, session_id:taskSnapshot.session_id,
       request_id:taskSnapshot.request_id};
     if (delayedIntegrityStart !== null) {
@@ -109,6 +112,36 @@ globalThis.inventoryHarness = {
   },
   controlIntegrity(taskId, sessionId, action) {
     calls.push(["integrity-control", taskId, sessionId, action]);
+    return Promise.resolve({session_id:sessionId, action, accepted:true,
+      before:action === "resume" ? "paused" : "running",
+      after:action === "pause" ? "pausing" : action === "cancel" ? "canceling" : "running",
+      detail:null});
+  },
+  getManualVerificationReadiness(taskId, sessionId, revision) {
+    calls.push(["manual-readiness", taskId, sessionId, revision]);
+    return delayedManualReadiness?.promise ?? Promise.resolve({...manualReadinessResponse,
+      task_id:taskId, session_id:sessionId, execution_revision:revision});
+  },
+  startManualVerification(taskId, sessionId, commandId, revision) {
+    calls.push(["manual-start", taskId, sessionId, commandId, revision]);
+    taskSnapshot = {task_id:taskId, session_id:"b".repeat(32), session_state:"active",
+      session_released:false, task_kind:"sync-plan", request_id:"c".repeat(32),
+      plan_request_id:taskSnapshot.plan_request_id, session_kind:"manual-verify"};
+    const result = {task_id:taskId, session_id:taskSnapshot.session_id,
+      request_id:taskSnapshot.request_id};
+    return delayedManualStart?.promise ?? Promise.resolve(result);
+  },
+  startExecution(taskId, requestId, revision, acknowledged) {
+    calls.push(["execution-start", taskId, requestId, revision, acknowledged]);
+    if (executionStartResult === null) return Promise.reject(new Error("execution start unavailable"));
+    taskSnapshot = {task_id:taskId, session_id:executionStartResult.session_id,
+      session_state:"active", session_released:false, task_kind:"sync-plan",
+      request_id:executionStartResult.request_id, plan_request_id:requestId,
+      session_kind:"sync-execution"};
+    return Promise.resolve({...executionStartResult, task_id:taskId});
+  },
+  controlExecution(taskId, sessionId, action) {
+    calls.push(["manual-control", taskId, sessionId, action]);
     return Promise.resolve({session_id:sessionId, action, accepted:true,
       before:action === "resume" ? "paused" : "running",
       after:action === "pause" ? "pausing" : action === "cancel" ? "canceling" : "running",
@@ -152,7 +185,7 @@ const replacements = {
 globalThis.inventoryRenders = renders;
 globalThis.inventoryConfirmations = [];
 for (const [key, value] of Object.entries(replacements)) source = source.replace(key, value);
-source += "\nexport { adoptTask, selectTask, acceptTaskUpdate, acceptTaskRelease, loadInventoryReview, changeInventoryView, loadInventoryWindow, readInventoryDetail, runInventoryAction, changeInventorySelection, startInventoryIntegrityAction, controlInventoryIntegrity, checkInventoryOutcome, closeRetainedTask, showSettings, refreshTasks, tasks };";
+source += "\nexport { adoptTask, selectTask, acceptTaskUpdate, acceptTaskRelease, loadInventoryReview, changeInventoryView, loadInventoryWindow, readInventoryDetail, runInventoryAction, changeInventorySelection, startInventoryIntegrityAction, startManualVerificationAction, loadManualReadiness, switchTaskPane, controlInventoryIntegrity, checkInventoryOutcome, closeRetainedTask, showSettings, refreshTasks, executeReviewedPlan, tasks };";
 const app = await import(url(source));
 const taskId = fixture.views.default.summary.task_id;
 const sessionId = "3".repeat(32);
@@ -542,12 +575,66 @@ await tick();
 const syncReview = { ...review, summary: { ...review.summary, task_id: syncTaskId,
   request_id: syncCurrentRequestId }, pending: null, message: null };
 syncTask.inventoryReview = syncReview;
+globalThis.inventoryCallbacks.onPaneChange(syncTask, "verify");
+await tick();
 await app.runInventoryAction(syncReview, "refresh", null);
 assert.equal(syncTask.taskKind, "sync-plan", "ordinary auxiliary Refresh keeps the sync task kind");
 assert.equal(syncTask.planRequestId, syncPlanRequestId,
   "ordinary auxiliary Refresh keeps the original Plan request");
 assert.equal(syncTask.requestId, "8".repeat(32), "Refresh adopts the new current request");
 assert.equal(syncTask.sessionKind, "inventory", "Refresh identifies the current activity");
+
+// Accepted execution adopts its current request before any task-list refresh.
+const executionTaskId = "task-" + "4".repeat(32);
+const planRequestId = "1".repeat(32);
+const planSessionId = "2".repeat(32);
+const executionRequestId = "3".repeat(32);
+const executionSessionId = "4".repeat(32);
+const planSnapshot = {task_id:executionTaskId, session_id:planSessionId,
+  session_state:"completed", session_released:true, task_kind:"sync-plan",
+  request_id:planRequestId, plan_request_id:planRequestId, session_kind:"sync-plan"};
+const executionTask = app.adoptTask(planSnapshot);
+const executionReview = {summary:{task_id:executionTaskId, request_id:planRequestId,
+  selection_state:"reviewing", selection_revision:5,
+  requires_destructive_confirmation:false, destructive_operation_count:0,
+  view_revision:0, highlight_revision:0},
+  window:{offset:0, rows:[], execution:null}, foregroundWindowEpoch:0,
+  actionRevision:0, pending:null, message:null, follow:null};
+executionTask.review = executionReview;
+executionTask.reviewSessionId = planSessionId;
+app.selectTask(executionTaskId);
+await tick();
+executionStartResult = {task_id:executionTaskId, request_id:executionRequestId,
+  session_id:executionSessionId};
+const staleExecutionList = defer();
+let executionListReads = 0;
+globalThis.inventoryHarness.listTasks = () => ++executionListReads === 1
+  ? staleExecutionList.promise : Promise.resolve({tasks:[taskSnapshot]});
+const heldExecutionRead = app.refreshTasks();
+await app.executeReviewedPlan(executionReview, null);
+const pendingExecutionRepair = defer();
+globalThis.inventoryHarness.listTasks = () => pendingExecutionRepair.promise;
+staleExecutionList.resolve({tasks:[planSnapshot]});
+await heldExecutionRead;
+await tick();
+assert.equal(executionTask.requestId, executionRequestId,
+  "accepted execution keeps its current request after an older task-list reply");
+assert.equal(executionTask.sessionId, executionSessionId);
+assert.equal(executionTask.planRequestId, planRequestId,
+  "accepted execution retains the original Plan request independently");
+inventoryOpenRequests.set(executionTaskId, executionRequestId);
+executionTask.sessionState = "completed";
+app.acceptTaskRelease(executionTask, executionSessionId);
+await tick();
+app.switchTaskPane(executionTask, "verify");
+await tick();
+globalThis.inventoryHarness.listTasks = () => Promise.reject(new Error("list transport unavailable"));
+await app.runInventoryAction(executionTask.inventoryReview, "refresh", null);
+assert.deepEqual(calls.findLast(([name]) => name === "refresh").slice(1, 3),
+  [executionTaskId, executionRequestId],
+  "immediate Refresh uses the accepted execution request before list recovery");
+globalThis.inventoryHarness.listTasks = originalListTasks;
+executionStartResult = null;
 
 // Standalone selection, start, control custody, coalesced live results, and stale consent.
 const d1TaskId = "task-" + "7".repeat(32);
@@ -594,6 +681,14 @@ await app.startInventoryIntegrityAction(d1Review, "baseline", trigger);
 assert.equal(d1Task.inventoryAction, null, "a settled refusal releases the gesture for a fresh explicit start");
 assert.equal(d1Review.message, "Integrity work did not start. Try again when you are ready.");
 refuseIntegrityStart = false;
+const staleIntegritySnapshot = {task_id:d1TaskId, session_id:d1Task.sessionId,
+  session_state:"completed", session_released:true, task_kind:"inventory",
+  request_id:d1RequestId, plan_request_id:null, session_kind:"inventory"};
+const staleIntegrityList = defer();
+let integrityListReads = 0;
+globalThis.inventoryHarness.listTasks = () => ++integrityListReads === 1
+  ? staleIntegrityList.promise : Promise.resolve({tasks:[taskSnapshot]});
+const heldIntegrityRead = app.refreshTasks();
 delayedIntegrityStart = defer();
 const delayedStart = app.startInventoryIntegrityAction(d1Review, "baseline", trigger);
 await tick();
@@ -601,11 +696,20 @@ assert.equal(d1Task.inventoryAction.recovery.canCheck, true);
 await app.checkInventoryOutcome(d1Task);
 await delayedStart;
 delayedIntegrityStart = null;
+const pendingIntegrityRepair = defer();
+globalThis.inventoryHarness.listTasks = () => pendingIntegrityRepair.promise;
+staleIntegrityList.resolve({tasks:[staleIntegritySnapshot]});
+await heldIntegrityRead;
+await tick();
 assert.equal(calls.filter(([name]) => name === "integrity-start").length, startsBefore + 2,
   "the owned start attempt does not block its own first submission");
 assert.equal(integrityStartChecks, 1);
 assert.equal(d1Task.sessionKind, "baseline");
 assert.equal(d1Task.sessionState, "active");
+assert.equal(d1Task.requestId, "e".repeat(32),
+  "accepted ordinary integrity keeps its current request after an older task-list reply");
+assert.equal(d1Task.sessionId, "d".repeat(32));
+globalThis.inventoryHarness.listTasks = originalListTasks;
 const controlsBefore = calls.filter(([name]) => name === "integrity-control").length;
 await app.controlInventoryIntegrity(d1Review, "pause");
 assert.equal(calls.filter(([name]) => name === "integrity-control").length, controlsBefore + 1);
@@ -658,4 +762,104 @@ confirmation.onConfirm();
 await tick();
 assert.equal(calls.filter(([name]) => name === "integrity-start").length, startsBefore + 2,
   "changed revision invalidates Rebaseline consent without submitting or replaying");
+
+function attachReleasedExecutionTask(taskId, originalSessionId, currentSessionId, requestId, headline = "success") {
+  let owner = app.adoptTask({task_id:taskId, session_id:originalSessionId,
+    session_state:"completed", session_released:true, task_kind:"sync-plan",
+    request_id:requestId, plan_request_id:requestId, session_kind:"sync-execution"});
+  owner.executionStarted = true;
+  owner.executionSessionState = "completed";
+  owner.reviewSessionId = originalSessionId;
+  owner.review = {summary:{task_id:taskId, request_id:requestId, highlight_focus_node_id:null},
+    window:{execution:{session_id:originalSessionId, execution_revision:7,
+      result:{headline, disposition:"ran", recording:headline === "degraded" ? "degraded" : "ok"}}}};
+  owner.inventoryReview = {...currentD1Review,
+    summary:{...currentD1Review.summary, task_id:taskId, request_id:requestId,
+      selected_file_count:1, selectable_file_count:3, hidden_selected_file_count:0,
+      selection:"partial"}, pending:null, message:null, actionRevision:0};
+  owner = app.adoptTask({task_id:taskId, session_id:currentSessionId,
+    session_state:"completed", session_released:true, task_kind:"sync-plan",
+    request_id:requestId, plan_request_id:requestId, session_kind:"inventory"});
+  taskSnapshot = {task_id:taskId, session_id:currentSessionId, session_state:"completed",
+    session_released:true, task_kind:"sync-plan", request_id:requestId,
+    plan_request_id:requestId, session_kind:"inventory"};
+  return owner;
+}
+
+const exactTaskId = "task-" + "1".repeat(32);
+const exactOriginal = "2".repeat(32);
+const exactAuxiliary = "3".repeat(32);
+const exactRequest = "4".repeat(32);
+const exactTask = attachReleasedExecutionTask(exactTaskId, exactOriginal, exactAuxiliary, exactRequest);
+app.selectTask(exactTaskId);
+manualReadinessResponse = {reason:"ready", applicable_count:1, ready_count:1,
+  already_verified_count:0, attempted:false};
+delayedManualReadiness = defer();
+const readinessBefore = calls.filter(([name]) => name === "manual-readiness").length;
+app.switchTaskPane(exactTask, "verify");
+await tick();
+app.switchTaskPane(exactTask, "plan");
+app.switchTaskPane(exactTask, "verify");
+delayedManualReadiness.resolve({...manualReadinessResponse, task_id:exactTaskId,
+  session_id:exactOriginal, execution_revision:7});
+await tick();
+delayedManualReadiness = null;
+assert.equal(calls.filter(([name]) => name === "manual-readiness").length, readinessBefore + 2,
+  "rapid Verify reentry replaces the pane-retired readiness read");
+assert.equal(exactTask.manualExactEligible, true,
+  "ready exact verification remains available through a released auxiliary association");
+const manualStarts = calls.filter(([name]) => name === "manual-start").length;
+const staleManualSnapshot = {...taskSnapshot};
+const staleManualList = defer();
+let manualListReads = 0;
+globalThis.inventoryHarness.listTasks = () => ++manualListReads === 1
+  ? staleManualList.promise : Promise.resolve({tasks:[taskSnapshot]});
+const heldManualRead = app.refreshTasks();
+delayedManualStart = defer();
+const manualStart = app.startManualVerificationAction(exactTask.inventoryReview);
+await tick();
+app.switchTaskPane(exactTask, "plan");
+delayedManualStart.resolve({task_id:exactTaskId, session_id:"b".repeat(32),
+  request_id:"c".repeat(32)});
+await manualStart;
+delayedManualStart = null;
+const pendingManualRepair = defer();
+globalThis.inventoryHarness.listTasks = () => pendingManualRepair.promise;
+staleManualList.resolve({tasks:[staleManualSnapshot]});
+await heldManualRead;
+await tick();
+assert.equal(calls.filter(([name]) => name === "manual-start").length, manualStarts + 1);
+assert.deepEqual(calls.findLast(([name]) => name === "manual-start").slice(1, 3),
+  [exactTaskId, exactOriginal], "manual start remains bound to the original execution");
+assert.equal(exactTask.sessionKind, "manual-verify");
+assert.equal(exactTask.sessionId, "b".repeat(32),
+  "an accepted manual session remains adopted after switching back to Plan");
+assert.equal(exactTask.requestId, "c".repeat(32),
+  "accepted manual verification keeps its current request after an older task-list reply");
+assert.equal(exactTask.planRequestId, exactRequest);
+assert.equal(drains.at(-1)[1], exactTask.sessionId,
+  "the accepted manual session attaches its drain independently of pane visibility");
+globalThis.inventoryHarness.listTasks = originalListTasks;
+app.switchTaskPane(exactTask, "verify");
+const manualControls = calls.filter(([name]) => name === "manual-control").length;
+await app.controlInventoryIntegrity(exactTask.inventoryReview, "pause");
+assert.equal(calls.filter(([name]) => name === "manual-control").length, manualControls + 1,
+  "manual controls use execution control for the current manual session");
+
+const fallbackTaskId = "task-" + "5".repeat(32);
+const fallbackOriginal = "6".repeat(32);
+const fallbackTask = attachReleasedExecutionTask(fallbackTaskId, fallbackOriginal,
+  "7".repeat(32), "8".repeat(32), "degraded");
+app.selectTask(fallbackTaskId);
+manualReadinessResponse = {reason:"unrecorded", applicable_count:1, ready_count:0,
+  already_verified_count:0, attempted:false};
+app.switchTaskPane(fallbackTask, "verify");
+await tick();
+assert.equal(fallbackTask.manualExactEligible, false);
+assert.equal(fallbackTask.manualFallbackEligible, true,
+  "normally completed recording degradation keeps the explicit current-state fallback");
+const fallbackStarts = calls.filter(([name]) => name === "integrity-start").length;
+await app.startInventoryIntegrityAction(fallbackTask.inventoryReview, "verify", trigger);
+assert.equal(calls.filter(([name]) => name === "integrity-start").length, fallbackStarts + 1);
+assert.equal(calls.findLast(([name]) => name === "integrity-start")[5], "verify");
 process.stdout.write("ok\n");

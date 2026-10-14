@@ -229,6 +229,22 @@ def test_command_wrapper_preserves_specs_arguments_results_and_errors(tmp_path: 
         phase.wrap(failing)["start_execution"].handler(payload)
     assert caught.value is error
 
+    rejected = child._ExecutionReviewPhase(tmp_path / "rejected-source", tmp_path / "rejected-target")
+    rejected.plan = dict(phase.plan)
+    bad_result = SimpleNamespace(
+        task_id="9" * 32, request_id="4" * 32, session_id="5" * 32,
+    )
+    bad_commands = {
+        name: child._test_spec(
+            (lambda _value: bad_result) if name == "start_execution" else lambda _value: object(),
+        )
+        for name in child._COMMANDS
+    }
+    assert rejected.wrap(bad_commands)["start_execution"].handler(payload) is bad_result
+    assert rejected.phase_failure_trace() == {
+        "type": "ValueError", "command": "start_execution",
+    }
+
 
 def test_real_composed_registry_commands_copy_and_bind_distinct_run(tmp_path: Path) -> None:
     from namisync.interfaces.web import host
@@ -304,7 +320,7 @@ def test_real_composed_registry_commands_copy_and_bind_distinct_run(tmp_path: Pa
             "task_id": phase.plan["task_id"], "operation_id": operation_id,
             "expected_execution_revision": window["execution"]["execution_revision"],
         }, context=context)
-        assert phase.capture_ready() is True
+        assert phase.review_ready() is True
         phase.verify_files()
         assert not any(path.name != "one.txt" for path in phase.target.iterdir())
     finally:
@@ -343,6 +359,35 @@ def test_execution_review_phase_uses_distinct_plan_and_run_identities_and_real_b
     assert (phase.source / "one.txt").read_bytes() == child._BYTES
 
 
+def test_journey_defers_blocked_file_verification_until_final_completion(
+    tmp_path: Path,
+) -> None:
+    journey = child._ExecutionReviewJourney(
+        tmp_path / "source", tmp_path / "target",
+        tmp_path / "blocked-source", tmp_path / "blocked-target",
+    )
+    for phase in (journey.exact, journey.blocked):
+        phase.source.mkdir()
+        phase.target.mkdir()
+        for name, contents in phase.fixture.items():
+            (phase.source / name).write_bytes(contents)
+    for name, contents in journey.exact.fixture.items():
+        (journey.exact.target / name).write_bytes(contents)
+
+    journey.verify_exact_files()
+    with pytest.raises(RuntimeError, match="target fixture membership"):
+        journey.verify_files()
+
+    for name, contents in journey.blocked.fixture.items():
+        (journey.blocked.target / name).write_bytes(b"wrong")
+    with pytest.raises(RuntimeError, match="target fixture bytes"):
+        journey.verify_files()
+
+    for name, contents in journey.blocked.fixture.items():
+        (journey.blocked.target / name).write_bytes(contents)
+    journey.verify_files()
+
+
 def test_execution_review_phase_rejects_execution_for_another_plan(tmp_path: Path) -> None:
     phase = child._ExecutionReviewPhase(tmp_path / "source", tmp_path / "target")
     phase.plan = {"task_id": "1" * 32, "request_id": "2" * 32, "session_id": "3" * 32}
@@ -363,11 +408,17 @@ def test_execution_review_phase_accepts_latest_settled_receipt_and_stable_captur
     task_id, plan_id, session_id = "1" * 32, "2" * 32, "5" * 32
     phase.plan = {"task_id": task_id, "request_id": plan_id, "session_id": "3" * 32,
                   "task_label": "Task 1"}
-    service = SimpleNamespace(get_session=lambda _session_id: (_ for _ in ()).throw(SessionNotFound()))
+    active_sessions: set[str] = set()
+    def get_session(value: str) -> object:
+        if value in active_sessions:
+            return object()
+        raise SessionNotFound()
+    service = SimpleNamespace(get_session=get_session)
     task = SimpleNamespace(task_id=task_id, session_id=session_id, session_released=True)
+    tasks = [task]
     phase.registry = SimpleNamespace(
         _lifecycle=service,
-        list_tasks=lambda: SimpleNamespace(tasks=(task,)),
+        list_tasks=lambda: SimpleNamespace(tasks=tuple(tasks)),
     )
     phase.record(
         "start_execution", 1, 2,
@@ -417,6 +468,22 @@ def test_execution_review_phase_accepts_latest_settled_receipt_and_stable_captur
     phase.record("get_execution_detail", 15, 16, detail_payload, detail_result)
     assert phase.execution["completed"] < phase.release["admitted"]
     assert phase.release["completed"] < phase.window["admitted"]
+    assert phase.review_ready() is True
+    assert phase.capture_ready() is False
+    task.session_id = "9" * 32
+    assert phase.review_ready() is False
+    task.session_id = session_id
+    manual_session_id = "0" * 32
+    phase.manual = {
+        "admitted": 17, "completed": 18,
+        "request_id": "7" * 32, "session_id": manual_session_id,
+        "command_id": "8" * 32, "readiness": {},
+    }
+    task.session_id = manual_session_id
+    assert phase.capture_ready() is False
+    phase.auxiliary_releases.append({
+        "admitted": 19, "completed": 20, "session_id": manual_session_id,
+    })
     assert phase.capture_ready() is True
     identity = phase._expected_identity_locked()
     assert phase.detail["operation_path"] == "one.txt"
@@ -425,7 +492,7 @@ def test_execution_review_phase_accepts_latest_settled_receipt_and_stable_captur
     with pytest.raises(RuntimeError, match="identity"):
         phase.set_identity("post", {**identity, "operationPath": "other.txt"})
     phase.record(
-        "get_plan_window", 17, 18,
+        "get_plan_window", 21, 22,
         SimpleNamespace(task_id=task_id, expected_revision=11),
         {**window, "view_revision": 11},
     )
@@ -433,6 +500,25 @@ def test_execution_review_phase_accepts_latest_settled_receipt_and_stable_captur
         phase.set_identity("post", identity)
     task.session_released = False
     assert phase.capture_ready() is False
+    task.session_released = True
+    active_sessions.add(session_id)
+    assert phase.capture_ready() is False
+    active_sessions.remove(session_id)
+    assert phase.capture_ready() is True
+    phase.controls = [
+        {"command": "control_execution", "action": "pause"},
+        {"command": "control_execution", "action": "resume"},
+    ]
+    phase.inventory_window = {
+        "manual_session_id": manual_session_id,
+        "manual_complete": True, "manual_item_count": 1,
+    }
+    phase.close = {"session_id": manual_session_id}
+    tasks.clear()
+    assert phase.capture_ready() is False
+    assert phase.finished_ready() is True
+    phase.auxiliary_releases.clear()
+    assert phase.finished_ready() is False
 
 
 def test_phase_rejects_early_and_mismatched_current_detail(tmp_path: Path) -> None:
@@ -460,6 +546,111 @@ def test_phase_rejects_early_and_mismatched_current_detail(tmp_path: Path) -> No
     phase.record("get_plan_window", 8, 9, SimpleNamespace(task_id=task_id, expected_revision=7), window)
     with pytest.raises(ValueError, match="does not match"):
         phase.record("get_execution_detail", 10, 11, SimpleNamespace(task_id=task_id, operation_id="7" * 32, expected_execution_revision=8), {"disposition": "current", "operation_id": "7" * 32, "execution_revision": 8})
+
+
+def test_blocked_phase_accepts_preserved_receipts_after_close(tmp_path: Path) -> None:
+    from namisync.dispatcher import SessionNotFound
+
+    phase = child._ExecutionReviewPhase(
+        tmp_path / "source", tmp_path / "target", branch="blocked",
+    )
+    task_id, execution_session, refresh_session, ordinary_session = (
+        "1" * 32, "2" * 32, "3" * 32, "4" * 32,
+    )
+    active_sessions: set[str] = set()
+    def get_session(value: str) -> object:
+        if value in active_sessions:
+            return object()
+        raise SessionNotFound()
+    phase.registry = SimpleNamespace(
+        _lifecycle=SimpleNamespace(get_session=get_session),
+        list_tasks=lambda: SimpleNamespace(tasks=()),
+    )
+    phase.plan = {"task_id": task_id, "request_id": "5" * 32}
+    phase.execution = {
+        "admitted": 1, "completed": 2,
+        "request_id": "6" * 32, "session_id": execution_session,
+    }
+    phase.release = {"admitted": 3, "completed": 4, "session_id": execution_session}
+    phase.window = {"admitted": 5, "completed": 6}
+    phase.readiness = [
+        {"reason": "ready", "ready_count": 1}, {"reason": "superseded"},
+    ]
+    phase.refresh = {
+        "admitted": 7, "completed": 8,
+        "request_id": "7" * 32, "session_id": refresh_session,
+    }
+    phase.selection = {
+        "admitted": 11, "completed": 12, "request_id": "7" * 32,
+        "node_id": "8" * 32, "expected_revision": 0,
+        "view_revision": 1, "selected_file_count": 1,
+    }
+    phase.ordinary = {"admitted": 13, "completed": 14, "session_id": ordinary_session}
+    phase.auxiliary_releases = [
+        {"admitted": 9, "completed": 10, "session_id": refresh_session},
+        {"admitted": 15, "completed": 16, "session_id": ordinary_session},
+    ]
+    phase.controls = [
+        {"command": "control_integrity", "action": "pause"},
+        {"command": "control_integrity", "action": "resume"},
+    ]
+    phase.inventory_window = {
+        "integrity_session_id": ordinary_session,
+        "integrity_complete": True, "integrity_item_count": 1,
+    }
+    phase.close = {"session_id": ordinary_session}
+    assert phase.finished_ready() is True
+    selection = phase.selection
+    phase.selection = None
+    assert phase.finished_ready() is False
+    phase.selection = selection
+    phase.auxiliary_releases[0]["admitted"] = phase.refresh["completed"]
+    assert phase.finished_ready() is False
+    phase.auxiliary_releases[0]["admitted"] = 9
+    active_sessions.add(refresh_session)
+    assert phase.finished_ready() is False
+    active_sessions.remove(refresh_session)
+    assert phase.finished_ready() is True
+    phase.auxiliary_releases.pop()
+    assert phase.finished_ready() is False
+
+
+def test_manual_observer_rejects_early_control_and_duplicate_start(tmp_path: Path) -> None:
+    task_id = "1" * 32
+    phase = child._ExecutionReviewPhase(tmp_path / "source", tmp_path / "target")
+    phase.plan = {"task_id": task_id, "request_id": "2" * 32,
+                  "session_id": "3" * 32, "task_label": "Task 1"}
+    phase.execution = {"admitted": 1, "completed": 2,
+                       "request_id": "4" * 32, "session_id": "5" * 32}
+    result = SimpleNamespace(accepted=True, before="running", after="pausing")
+    with pytest.raises(ValueError, match="current session"):
+        phase.record(
+            "control_execution", 3, 4,
+            SimpleNamespace(task_id=task_id, session_id="6" * 32, action="pause"),
+            result,
+        )
+    assert phase.worker_release.is_set() is False
+    phase.window = {"execution_revision": 8}
+    phase.readiness.append({"reason": "ready", "ready_count": 1, "attempted": False})
+    start_payload = SimpleNamespace(
+        task_id=task_id, session_id="5" * 32,
+        expected_execution_revision=8, command_id="8" * 32,
+    )
+    start_result = SimpleNamespace(
+        task_id=task_id, request_id="9" * 32, session_id="0" * 32,
+    )
+    phase.record("start_manual_verification", 5, 6, start_payload, start_result)
+    first_start = dict(phase.manual)
+    with pytest.raises(ValueError, match="current exact readiness"):
+        phase.record("start_manual_verification", 7, 8, start_payload, start_result)
+    assert phase.manual == first_start
+    with pytest.raises(ValueError, match="current session"):
+        phase.record(
+            "control_execution", 5, 6,
+            SimpleNamespace(task_id=task_id, session_id="6" * 32, action="pause"),
+            result,
+        )
+    assert phase.worker_release.is_set() is False
 
 
 def test_task_execution_review_scenarios_own_disjoint_evidence_paths(tmp_path: Path) -> None:
@@ -516,6 +707,29 @@ def test_execution_review_evidence_ready_failure_final_and_privacy(tmp_path: Pat
         "diagnostic": diagnostic,
     }
 
+    capture_root = (tmp_path / "capture-diagnostic").resolve()
+    capture_root.mkdir()
+    capture_paths = EvidencePaths(capture_root)
+    capture = child._Recorder(capture_paths, capture_root / "driver.json")
+    capture.phase = child._ExecutionReviewJourney(
+        tmp_path / "capture-source", tmp_path / "capture-target",
+        tmp_path / "capture-blocked-source", tmp_path / "capture-blocked-target",
+    )
+    capture.phase.exact.failure = "ValueError"
+    capture.phase.exact.failure_command = "control_execution"
+    capture_diagnostic = capture.phase.capture_readiness_diagnostic()
+    assert set(capture_diagnostic) == child._CAPTURE_READINESS_DIAGNOSTIC
+    capture.fail("wait-review", "RuntimeError", capture_diagnostic)
+    assert EvidenceReader(capture_paths).read_failure() == {
+        "stage": "wait-review", "reason": "RuntimeError",
+        "identity": {"exact": {}, "blocked": {}},
+        "diagnostic": capture_diagnostic,
+        "phase_failure": {
+            "exact": {"type": "ValueError", "command": "control_execution"},
+            "blocked": {"type": None, "command": None},
+        },
+    }
+
     preclick_root = (tmp_path / "preclick").resolve()
     preclick_root.mkdir()
     preclick_paths = EvidencePaths(preclick_root)
@@ -551,13 +765,24 @@ def test_installed_task_execution_review_real_copy_and_capture(
         "disclosureFocused": True, "disclosureVisible": True,
         "disclosureHit": True,
     }
+    assert report["retention"] == {name: True for name in child._RETENTION}
+    assert report["actions"] == {name: True for name in child._ACTIONS}
     assert report["dimensions"][0] > 0 and report["dimensions"][1] > 0
-    phase = report["phase"]
-    assert phase["capture_complete"] is True
-    assert phase["pre_identity"] == phase["post_identity"]
-    assert phase["detail"]["operation_id"] == phase["window"]["operation_id"]
-    assert phase["detail"]["execution_revision"] == phase["window"]["execution_revision"]
-    assert phase["plan"]["request_id"] != phase["execution"]["request_id"]
+    exact = report["phase"]["exact"]
+    blocked = report["phase"]["blocked"]
+    assert exact["capture_complete"] is True
+    assert exact["pre_identity"] == exact["post_identity"]
+    assert exact["detail"]["operation_id"] == exact["window"]["operation_id"]
+    assert exact["detail"]["execution_revision"] == exact["window"]["execution_revision"]
+    assert exact["plan"]["request_id"] != exact["execution"]["request_id"]
+    assert exact["manual"]["readiness"]["reason"] == "ready"
+    assert exact["manual"]["readiness"]["ready_count"] == 24
+    assert exact["manual"]["readiness"]["attempted"] is False
+    assert exact["manual"]["session_id"] == exact["inventory_window"]["manual_session_id"]
+    assert blocked["readiness"][-1]["reason"] == "superseded"
+    assert blocked["selection"]["request_id"] == blocked["refresh"]["request_id"]
+    assert blocked["selection"]["selected_file_count"] == 1
+    assert blocked["ordinary"]["session_id"] == blocked["inventory_window"]["integrity_session_id"]
 
 
 def _execution_review_paths(root: Path) -> tuple[Path, Path, Path]:
@@ -578,7 +803,9 @@ def _run_execution_review(
     data = require_absolute_local_test_root(root / "data")
     source = require_absolute_local_test_root(root / "source")
     target = require_absolute_local_test_root(root / "target")
-    for directory in (root, evidence, data, source, target):
+    blocked_source = require_absolute_local_test_root(root / "blocked-source")
+    blocked_target = require_absolute_local_test_root(root / "blocked-target")
+    for directory in (root, evidence, data, source, target, blocked_source, blocked_target):
         directory.mkdir(parents=True, exist_ok=True)
     screenshot.unlink(missing_ok=True)
     driver.unlink(missing_ok=True)
@@ -586,6 +813,7 @@ def _run_execution_review(
     args: tuple[object, ...] = (
         installed.python, _CHILD, "--data-dir", data, "--evidence-dir", evidence,
         "--source", source, "--target", target, "--screenshot", screenshot,
+        "--blocked-source", blocked_source, "--blocked-target", blocked_target,
         "--driver", driver,
         "--mutex", rf"Local\NamiSync.ExecutionReview.{token}",
         "--title", f"NamiSync Execution Review {token}",
@@ -603,7 +831,7 @@ def _run_execution_review(
         milestone, initial = wait_for_initial_evidence(reader, process, deadline=deadline)
         if milestone == "ready":
             wait_for_accessible_text(
-                window, "Completed", python=installed.python, deadline=deadline,
+                window, "No tasks are available.", python=installed.python, deadline=deadline,
             )
         close_window(window)
         closed = True
@@ -624,8 +852,14 @@ def _run_execution_review(
             terminate_process_tree(process, deadline=deadline)
     assert milestone == "ready" and initial is not None
     assert screenshot.is_file()
-    assert (target / "one.txt").read_bytes() == child._BYTES
-    assert (source / "one.txt").read_bytes() == child._BYTES
+    expected = {
+        f"file-{index:02d}.txt": child._BYTES + f"{index:02d}\r\n".encode("ascii")
+        for index in range(24)
+    }
+    assert {path.name: path.read_bytes() for path in source.iterdir()} == expected
+    assert {path.name: path.read_bytes() for path in target.iterdir()} == expected
+    assert (blocked_source / "one.txt").read_bytes() == child._BYTES
+    assert (blocked_target / "one.txt").read_bytes() == child._BYTES
     return initial
 
 def test_native_failure_site_retains_locations_without_exception_text() -> None:

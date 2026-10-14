@@ -992,8 +992,10 @@ const presentationRows = [
 const presentationReview = {...fixture.views.default, pending:null, detail:null,
   window:{...fixture.views.default.window, offset:0, total:presentationRows.length, rows:presentationRows}};
 const presentationTask = {...menuTask, inventoryReview:presentationReview};
+const paneChanges = [], manualStarts = [];
 const presentationPane = createInventoryReviewPanel({onViewChange:()=>{}, onDetail:()=>{},
-  onWindow:async()=>null, onReload:()=>{}, onCheckOutcome:()=>{}, onRefresh:()=>{}, onVisibility:()=>{}});
+  onWindow:async()=>null, onReload:()=>{}, onCheckOutcome:()=>{}, onRefresh:()=>{}, onVisibility:()=>{},
+  onPaneChange:(...args)=>paneChanges.push(args), onManualStart:(...args)=>manualStarts.push(args)});
 presentationPane.render(presentationTask);
 const presented = walk(presentationPane.element).filter(value => value.getAttribute("role") === "treeitem");
 assert.deepEqual(presented.map(value => value.querySelector(".nami-file-state-label").textContent),
@@ -1027,6 +1029,18 @@ assert.match(walk(presentationPane.element).find(value => Object.hasOwn(value.da
   /Live verification results may be incomplete · 1 window result/);
 assert.equal(walk(presentationPane.element).find(value => Object.hasOwn(value.dataset, "integrityState")).dataset.integrityState,
   "verified");
+assert.ok(walk(presentationPane.element).some(value => value.classList.contains("nami-file-state-label")
+  && value.textContent === "Verification: Verified"));
+for (const [mode, owner, result] of [["baseline", "Baseline", "baselined"],
+  ["rebaseline", "Rebaseline", "baselined"]]) {
+  presentationReview.window = {...presentationReview.window,
+    integrity:{...overlay, mode, items:[{...overlayItem, result}]}};
+  presentationPane.render(presentationTask);
+  assert.ok(walk(presentationPane.element).some(value => value.classList.contains("nami-file-state-label")
+    && value.textContent === `${owner}: Baselined`), `${owner} owns its row result label`);
+}
+presentationReview.window = {...presentationReview.window, integrity:overlay};
+presentationPane.render(presentationTask);
 assert.match(text(walk(presentationPane.element).find(value => value.ariaLabel === "Inventory item details")),
   /Verification result Verified.*Stored digest No baseline evidence/,
   "ordinary detail remains visible when ledger attestation is absent");
@@ -1056,5 +1070,92 @@ presentationTask.snapshot = null;
 presentationPane.render(presentationTask);
 assert.equal(walk(presentationPane.element).find(value => Object.hasOwn(value.dataset, "integrityState")).dataset.integrityState,
   "verified", "a later Refresh retains the latest ordinary result generation");
+
+const manualItem = {...overlayItem, operation_id:"1".repeat(32), result:"mismatched"};
+const manualOverlay = {execution_session_id:"2".repeat(32), request_id:"3".repeat(32),
+  session_id:"4".repeat(32), location_id:presentationReview.summary.location_id,
+  revision:5, complete:true, gap:false, items:[manualItem]};
+Object.assign(presentationTask, {taskKind:"sync-plan", executionStarted:true, workPane:"verify",
+  executionSessionId:manualOverlay.execution_session_id, manualReadiness:{reason:"attempted"},
+  manualReadinessLoading:false, manualReadinessError:null, manualExactEligible:false,
+  manualFallbackEligible:false});
+presentationReview.window = {...presentationReview.window, integrity:overlay,
+  manual_verification:manualOverlay};
+presentationReview.detail = {row:presentationRows[0], state:"current", response:{...fixture.detail,
+  detail:{...fixture.detail.detail, attestation:null}, integrity:overlay,
+  manual_verification:manualOverlay}};
+presentationPane.render(presentationTask);
+assert.match(walk(presentationPane.element).find(value => Object.hasOwn(value.dataset,
+  "manualVerificationResult")).textContent, /Manual verification retained results · 1 window result/);
+const resultLabels = walk(presentationPane.element)
+  .filter(value => Object.hasOwn(value.dataset, "manualVerificationState")
+    || Object.hasOwn(value.dataset, "integrityState"))
+  .map(value => value.querySelector(".nami-file-state-label").textContent);
+assert.ok(resultLabels.includes("Manual verification: Mismatch"));
+assert.ok(resultLabels.includes("Verification: Verified"));
+const manualResultCell = walk(presentationPane.element)
+  .find(value => Object.hasOwn(value.dataset, "manualVerificationState"));
+assert.equal(Object.hasOwn(manualResultCell.dataset, "integrityState"), false,
+  "manual and ordinary result selectors identify distinct owners");
+assert.match(text(walk(presentationPane.element).find(value => value.ariaLabel === "Inventory item details")),
+  /Manual verification result Mismatch.*Verification result Verified/,
+  "manual and ordinary result owners stay visibly separate");
+presentationReview.detail = {...presentationReview.detail, response:{...presentationReview.detail.response,
+  manual_verification:{...manualOverlay, items:[{...manualItem, operation_id:"9".repeat(32)}]}}};
+presentationPane.render(presentationTask);
+assert.doesNotMatch(text(walk(presentationPane.element).find(value => value.ariaLabel === "Inventory item details")),
+  /Manual verification result/,
+  "a detail item cannot cross the current manual row and operation binding");
+presentationReview.detail = {...presentationReview.detail, response:{...presentationReview.detail.response,
+  manual_verification:manualOverlay}};
+presentationReview.window = {...presentationReview.window,
+  manual_verification:{...manualOverlay, revision:6, items:[]}};
+presentationPane.render(presentationTask);
+assert.equal(walk(presentationPane.element).some(value => Object.hasOwn(value.dataset,
+  "manualVerificationState")), false,
+  "a newer zero-result manual generation removes the old detail and row subset");
+assert.doesNotMatch(text(walk(presentationPane.element).find(value => value.ariaLabel === "Inventory item details")),
+  /Manual verification result/);
+assert.ok(walk(presentationPane.element).some(value => value.classList.contains("nami-file-state-label")
+  && value.textContent === "Verification: Verified"),
+  "ordinary results survive a separate manual generation replacement");
+presentationTask.sessionKind = "manual-verify";
+presentationTask.sessionId = manualOverlay.session_id;
+presentationTask.sessionState = "completed";
+presentationTask.snapshot = {session_id:manualOverlay.session_id, session_state:"completed", phase:"verify",
+  presentation:{value:100, determinate:true, indeterminate:false, items_done:0, items_total:0},
+  terminal_result:{headline:"partial", disposition:"completed", error:"One copied file changed",
+    phases:[{phase:"verify"}]}};
+presentationPane.render(presentationTask);
+assert.equal(presentationPane.element.querySelector(".nami-plan-review__status-title").textContent,
+  "Manual verification needs review");
+presentationTask.sessionKind = "inventory";
+presentationTask.sessionState = "completed";
+presentationTask.sessionReleased = true;
+presentationTask.snapshot = null;
+presentationTask.manualReadiness = {reason:"ready", ready_count:1};
+presentationTask.manualExactEligible = true;
+presentationPane.render(presentationTask);
+const presentationAction = (key) => walk(presentationPane.element)
+  .find(value => value.dataset.action === key);
+assert.equal(presentationAction("inventory-baseline").hidden, true);
+assert.equal(presentationAction("inventory-rebaseline").hidden, true);
+assert.equal(presentationAction("inventory-verify").hidden, true);
+assert.equal(presentationAction("verify-copied-files").hidden, false);
+presentationAction("verify-copied-files").click();
+assert.deepEqual(manualStarts, [[presentationReview]]);
+assert.equal(presentationAction("pane-plan").textContent, "Plan");
+assert.equal(presentationAction("pane-plan").disabled, false);
+presentationAction("pane-plan").click();
+assert.deepEqual(paneChanges.at(-1), [presentationTask, "plan"]);
+presentationTask.manualExactEligible = false;
+presentationTask.manualFallbackEligible = true;
+presentationTask.manualReadiness = {reason:"unrecorded", ready_count:0};
+presentationPane.render(presentationTask);
+assert.equal(presentationAction("verify-copied-files").hidden, true);
+assert.equal(presentationAction("inventory-verify").hidden, false);
+assert.equal(presentationAction("inventory-verify").textContent, "Verify current state");
+assert.equal(presentationAction("inventory-baseline").hidden, true);
+assert.equal(presentationAction("inventory-rebaseline").hidden, true);
 presentationPane.dispose();
 process.stdout.write("ok\n");

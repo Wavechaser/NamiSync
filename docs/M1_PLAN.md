@@ -66,6 +66,8 @@ and the earlier delivered-register condensation are committed as `a730165`.
 
 | Delivered unit | Shipped result and preserved boundaries | Reviewed commit and evidence |
 | --- | --- | --- |
+| A — operation policy | Explicit confirmation and selected scope precede rebaseline admission. Eligible null-evidence and matching files are freshly hashed and conditionally baselined without claiming verification; engine/recorder behavior remains. | `6ba35753`; 3,504 affected department checks, twelve imports and `policy-review-01.md`. |
+| B — exact manual workflow | Complete selected byte-producing population is classified in one coherent transaction, target authority is freshly admitted, then a second classification freezes current evidence. Separate session/history preserves original execution truth; no scan or persisted operation-time hashes. | `959f1bc9`; 239 focused and 3,520 affected department checks, twelve imports, `manual-departments-10.log`, `manual-imports-11.log` and `manual-review-01.md`. |
 | C1 — server-owned selection | Initially empty exact file/folder/location selection; complete membership and counts include hidden/collapsed/off-window files. Warnings are inert. Existing view revision fences gestures, reads and later confirmation; selection grants no hashing authority. | `26e72ad`; 2,399 interfaces/tools checks, three skips, unaffected workflow evidence, 12 imports and seven installed checks. `selection-neighborhood-08.log`, `selection-installed-11.log`, `selection-review-01.md`. |
 | C2 — ordinary integrity association | Current request/session binds exact selected scope, confirmation and controls. One latest ordinary result remains separate from ledger state and is wholly replaced even for zero outcomes. Real scan provenance, normalized partial-pause results, original-command recovery, rollback, stale-response fences and exact Close remain intact. | `eecf31c`; 3,348 neighborhood checks, three skips, 12 imports and eight affected installed obligations including traced Setup; independent partial-pause resume/cancel probes. `ordinary-installed-12.log`, `ordinary-installed-13.log`, `ordinary-review-01.md`. |
 | C3a — execution target ledger reads | Released executions expose the existing target location through original Plan/execution binding. Opening creates no location, scan, native admission or hash. Missing scan provenance is explicitly null; complete ledger projection does not imply complete scan. Plan reads/selection/Close remain available. C3b owns auxiliary mutations. | `07947213`; 2,946 workflows/interfaces checks, 12 imports, installed Inventory and both execution-window cases. `execution-inventory-departments-01.log`, `execution-inventory-headed-01.log`, `execution-inventory-review-01.md`. |
@@ -178,68 +180,58 @@ Two separately reviewed prerequisites/corrections accompany D1:
   independent approval in `c3b-backstop-review-20261014.md`. No supported path to
   the lost check was found. It is fast-forward integrated in `milestone1`.
 
-Read-only D2 designs are `d2-design-refresh-01.md`,
-`d2-kinds-design-20261014.md` and `d2-ui-refresh-20261014.md`. Revalidate their
-named seams against integrated D1 before implementing. D2a first consolidates
-kind catalogs in existing lifecycle/task-port/browser owners, preserving distinct
-task/effect/session domains and explicit execution publication. Its finite source
-population is those three owners; existing lifecycle/command/browser-consumer
-tests cover complete kind admission and exact pause capabilities. Direct service,
-bridge, drain and transport consumers, interfaces checks, imports and fresh review
-gate a separate behavior-preserving refactor commit. D2a is verified against
-integrated `541a90f`: 837 direct-consumer tests, 2,020 interface tests and all 12
-import contracts pass (`d2-kinds-*-20261014.log` and
-`d2-kinds-direct-consumers-green-02.txt`). Behavioral summary/record admission
-tests replace the design's private-constant assertions; existing lifecycle
-coverage retains the distinct execution guard. Independent approval is recorded
-in `d2-kinds-review-20261014.md` for the separate catalog refactor commit.
-D2a shipped as `d52a7b2` on `milestone1`.
+### D2 — verified implementation and prerequisites
 
-Before D2 integration, correct the pre-existing full Plan reload adoption race
-observed in installed execution review: a forced reload can replace the review
-owning an in-flight foreground highlight and lose its visible follow-up. The
-finite owner is `loadPlanReview` and its existing foreground read coordination;
-direct consumers are destination reveal, view/search/sort/collapse changes,
-virtual windows, highlight and selection. Keep their accepted ownership while
-eventually adopting authoritative execution summary/window facts. No backend,
-wire command, automatic mutation retry or generic owner merger is included.
-The separate `fix(web)` commit owns app.js, the existing task-shell probe,
-PRESENTATION/BUGS and task records. Gate: deterministic reload overlap probes
-(interaction already active and starting during reload), initial execution
-summary reconciliation, the interfaces department, installed execution checks
-at both sizes and fresh adversarial review. D2's separate current-request
-adoption and explicit Inventory selection journey remain pending in the main
-checkout. All evidence is under `build/m1-10-20261013/`; failed receipts remain.
-The isolated correction passes its baseline-failing regression probe
-(`plan-custody-focused-12.log`), 2,020 interfaces checks
-(`plan-custody-interfaces-01.log`), both installed execution sizes
-(`plan-custody-native-01.log`) and 222 local documentation links. Fresh review
-is `plan-custody-review-20261014.md`; D2 and checkpoint closure remain pending.
+The D1-based design was revalidated through `d2-design-refresh-01.md`,
+`d2-kinds-design-20261014.md` and `d2-ui-refresh-20261014.md`. The delivered
+prerequisites are independently reviewable commits:
 
-D2 adds task-local Plan/Verify navigation, on-demand exact-manual readiness and
-the first Verify copied files action, plus clearly separate Verify current state
-ordinary fallback using server selection. Readiness grants no authority; no
-automatic fallback, new attempt or terminal subset retry. Current-session
-controls use C3b's settled route, independently of original execution identity.
-D2 also resolves the currently disabled standalone integrity buttons on sync-plan
-Inventory panes: expose the accepted manual/ordinary actions with guidance, and
-hide actions that do not apply. Consolidate repeated task-kind membership lists
-into named constants in their existing language/layer owners (task_lifecycle,
-task_port and browser bridge) with complete-kind regression coverage; preserve
-intentional differences between sets rather than broadening admission. No cross-
-language schema generator or new domain policy is authorized.
-Owners: D1 assets plus panels/plan_review and narrow existing styles, and the
-named task-kind owners/consumers above; no new wire
-commands or generic pane framework. Consumers: existing task-shell, execution,
-Plan and Inventory probes/wrappers and one installed execution helper extended
-through ledger/readiness/manual/control/release and explicit ordinary fallback.
-Gate: distinct original/current results, blocked/linked/empty/attempted guidance,
-late pane/task responses, Gap/zero replacement, exact Close, preserved Plan
-detail/follow/selection and scroll/keyboard custody; ordinary suite, affected
-installed execution/Inventory/task-shell/gallery and fresh review. Matching
-DESKTOP_UI/FEATURES/PRESENTATION/BRIDGE docs accompany each UI commit. E remains
-checkpoint closure; later GUI polish and the retained legibility observation
-wait for the user-requested recap.
+| Outcome | Commit and verification |
+| --- | --- |
+| Consolidate task/effect/session catalogs in lifecycle, task port and browser owners, preserving distinct admission and pause capabilities. | `d52a7b2`; 837 direct-consumer tests, 2,020 interfaces tests, 12 imports; `d2-kinds-review-20261014.md`. |
+| Preserve foreground Plan ownership across execution-triggered full reloads; reconcile authoritative summary/window facts after the interaction. | `b52f8dd`; baseline-failing probe, 2,020 interfaces tests and both installed execution sizes; `plan-custody-review-20261014.md`. |
+| Correct the standalone Inventory confirmation witness to the existing conditional focus contract, with strong enabled-invoker Cancel proof and bounded diagnostics. | `cb48274`; complete owning-module ordinary/native checks, including `d2-inventory-native-20261014-04`; `m1-10-final-cross-review-20261014.md`. |
+
+D2 UI delivers mounted Plan/Verify
+panes, exact first **Verify copied files**, explicit selected **Verify current
+state** fallback, current auxiliary controls, and separate original/manual/ordinary
+results. Inapplicable Baseline/Rebaseline controls are hidden on sync tasks.
+Readiness grants no authority and never starts or substitutes an operation.
+Accepted activity adoption updates current request/session together while keeping
+original Plan identity and fencing older task lists.
+
+Owners are app, panels, Plan/Inventory review, task status and the narrow hidden
+pane style. Direct consumers are the existing execution, task-shell, Plan and
+Inventory probes, installed execution child/parent and the gallery's shared pane
+callback fixture. No wire command, schema, generic pane framework, external
+performance-tool change or backend-policy weakening was added.
+
+Final evidence under `build/m1-10-20261013/`:
+
+- Combined frontend gate: 59 passes (`d2-combined-frontend-01`). Owning interfaces
+  gate: 2,024 passes (`d2-final-interfaces-20261014-02`). Later helper-only edits
+  have exhaustive owning-module ordinary reruns: execution 21, Inventory 1.
+- Installed gates: both execution sizes pass in `d2-execution-native-20261014-17`,
+  Inventory passes in `d2-inventory-native-20261014-04`, both shell cases pass in
+  `d2-foreground-native-20261014-03`, and four gallery cases pass in
+  `d2-shared-native-20261014-02`. The unchanged guards, geometry/scroll/focus,
+  trusted selection, actual effects, control routing, independent result owners
+  and exact Close remain asserted. Failed attempts are retained, not acceptance.
+- The ordinary repository gate and complete external-basetemp tools/custody
+  correction are `d2-ordinary-20261014-01/02`; their populations overlap and are
+  not summed. The 12 import contracts remain valid. E reviews dependency reuse,
+  final documentation and recovery accounting before checkpoint closure.
+
+`d2-final-review-20261014.md` owns independent D2 review. Two product findings
+were corrected: the separately committed Plan reload owner race, and D2's
+accepted-current-request omission. Native Refresh/release/superseded readiness
+and the explicit selected fallback now complete. Helper corrections retain the
+original guarantees: order selection before its enabled fallback; choose a
+fully visible, hit-owned Plan row rather than one covered by the sticky header;
+read capture completion from its exact-phase owner; and test modal focus only
+when the invoker was available at close. Native14 disproved the proposed passive
+row-replacement scroll diagnosis. No third substantive product defect was found.
+Raw receipts and reviews retain the diagnostic chronology and withdrawn claims.
 
 Preserve atomic publication, conditional recording including prior absence,
 root admission, fixed continuation identity and original execution truth.

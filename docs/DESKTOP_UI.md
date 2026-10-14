@@ -1886,13 +1886,28 @@ The task adapter and browser identity consumers now preserve that separation:
 Plan headers, details and follow use original execution identity, while task
 status uses the current session kind. Reconstructing a task or refreshing its
 Inventory preserves the original Plan request. Loading original Plan review
-does not replace current auxiliary recovery feedback. The first-manual API and
-separate bounded result contexts are implemented; visible Verify navigation and
-manual actions remain the next M1-10 UI delivery unit. Standalone Inventory
-ordinary controls are described below.
-When exact handoff is blocked, the UI explains why and offers only the clearly
-labelled ordinary **Verify current state** fallback for an otherwise eligible,
-normally completed execution; this is not a terminal retry action.
+does not replace current auxiliary recovery feedback. After original execution
+release, the same task's **Plan / Verify** switch opens its target ledger without
+starting a scan or hash. Returning to Plan retains its selection, details,
+follow setting and viewport. Pane changes retire pending navigation reads;
+late replies cannot replace the other pane's state or feedback.
+
+Verify reads exact readiness against the original execution identity/revision.
+**Verify copied files** is available only for a ready, nonempty, unattempted
+handoff with a released current association. Its one original command is observed
+after delivery uncertainty; Check never submits another attempt. An admitted
+claim stays consumed through failure or cancellation. Readiness grants no
+authority and Start rechecks it. Linked, empty, already-verified, attempted and
+ineligible handoffs show guidance; busy or stale state needs a fresh read.
+
+For a normally completed original execution, only incomplete, unrecorded,
+superseded or settlement-diverged handoff evidence can offer the clearly labelled
+ordinary **Verify current state** fallback. It uses the current nonempty
+server-owned selection and never runs automatically. Baseline and Rebaseline
+are hidden on sync tasks. Standalone Inventory ordinary controls are described
+below. Manual controls address the current manual session through execution
+control; ordinary controls address the current ordinary integrity session.
+Neither route controls or rewrites the original execution.
 
 Pre-execution capacity refusal, including queued wakeup refusal, keeps the task
 visible without execution, automatic retry, or automatic close. Scan/planner
@@ -1935,8 +1950,7 @@ Inventory remains distinct from plan review. Released terminal inventory tasks
 open their own read pane, including when selected again. The renderer labels
 execution-associated ledger publications with absent scan provenance as
 “Current ledger · No inventory scan”, without invented scan counts or incomplete
-scan wording. Pane navigation for those publications remains a later control
-surface outcome. It supports backend
+scan wording. Execution tasks reach those publications through Verify. It supports backend
 literal search, counted server facets, collapse, bounded windows and explicit
 sibling filename/own-size/own-mtime sorting through the Filename, Size and Modified
 headers: ascending, descending, then canonical path order. The Default facet view hides acknowledged direct matches;

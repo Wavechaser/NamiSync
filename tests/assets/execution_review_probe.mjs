@@ -388,6 +388,15 @@ const terminalTask = taskStatusDigest({
 });
 assert.equal(terminalTask.title, "Degraded", "known terminal degradation cannot stay green");
 assert.equal(terminalTask.state, "degraded");
+const manualTerminal = taskStatusDigest({
+  taskKind: "sync-plan", sessionKind: "manual-verify", executionStarted: true,
+  sessionId: digestSession, sessionState: "completed", executionControlState: "running",
+  snapshot: { ...terminalSnapshot(result({ headline: "partial", error: "One copied file changed" }), digestSession),
+    session_state: "completed" },
+});
+assert.deepEqual({ title: manualTerminal.title, state: manualTerminal.state, detail: manualTerminal.detail }, {
+  title: "Manual verification needs review", state: "error", detail: "One copied file changed",
+}, "manual verification keeps its own visible terminal owner");
 
 // Exercise the production row renderer rather than only its projected values.
 class RowElement {

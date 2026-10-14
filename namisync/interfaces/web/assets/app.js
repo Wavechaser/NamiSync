@@ -11,6 +11,7 @@ import {
   getExecutionDetail,
   getInventoryDetail,
   getInventoryWindow,
+  getManualVerificationReadiness,
   getPlanAnchor,
   getPlanDetail,
   getPlanOperationAnchor,
@@ -35,6 +36,7 @@ import {
   StartPlanUncertainError,
   startInventory,
   startInventoryIntegrity,
+  startManualVerification,
   startExecution,
   startPlan,
   startTaskDrain,
@@ -260,18 +262,24 @@ const panel = createWorkPanel({
   onFollowOverride: disablePlanFollow,
   onNavigateCurrent: (review, enableFollow) => { queuePlanFollow(review, enableFollow, true); },
   onRevealMove: (review, nodeId) => { void revealPlanMoveDestination(review, nodeId); },
+  onPaneChange: switchTaskPane,
 }, settingsView, {
   onViewChange: (review, patch) => { void changeInventoryView(review, patch); },
   onWindow: loadInventoryWindow,
   onWindowCancelled: cancelInventoryWindow,
   onDetail: (review, nodeId) => { void readInventoryDetail(review, nodeId); },
-  onReload: (task) => { void loadInventoryReview(task, true); },
+  onReload: (task) => {
+    void loadInventoryReview(task, true);
+    if (task.taskKind === "sync-plan") void loadManualReadiness(task);
+  },
   onRefresh: (review, nodeId) => { void runInventoryAction(review, "refresh", nodeId); },
   onVisibility: (review, action, nodeId) => { void runInventoryAction(review, action, nodeId); },
   onSelect: (review, nodeId, selected) => { void changeInventorySelection(review, nodeId, selected); },
   onStart: (review, mode, returnFocus) => { void startInventoryIntegrityAction(review, mode, returnFocus); },
+  onManualStart: (review) => { void startManualVerificationAction(review); },
   onControl: (review, action) => { void controlInventoryIntegrity(review, action); },
   onCheckOutcome: (task) => { void checkInventoryOutcome(task); },
+  onPaneChange: switchTaskPane,
 });
 const rail = createTaskRail({
   onCreate: () => { void createBlankTask(); },
@@ -354,6 +362,7 @@ function taskCloseBlockReason(task) {
 
 function renderTasks() {
   for (const task of tasks.values()) {
+    updateManualEligibility(task);
     if (task.form !== null) {
       task.form.startRecovery = task.startRecovery;
       task.form.recentPairAvailability = recentPairAvailability;
@@ -386,6 +395,70 @@ function renderTasks() {
   );
   if (settingsVisible) panel.renderSettings();
   else panel.render(selectedTaskId === null ? null : tasks.get(selectedTaskId) ?? null);
+}
+
+function originalExecution(task) {
+  const execution = task.review?.window?.execution ?? null;
+  return execution !== null && task.executionSessionId !== null
+    && execution.session_id === task.executionSessionId ? execution : null;
+}
+
+function normallyCompletedExecution(task) {
+  return originalExecution(task) !== null && task.executionSessionState === "completed";
+}
+
+function currentReadiness(task) {
+  const readiness = task.manualReadiness;
+  const execution = originalExecution(task);
+  return readiness !== null && execution !== null
+    && readiness.task_id === task.taskId
+    && readiness.session_id === task.executionSessionId
+    && readiness.execution_revision === execution.execution_revision
+    ? readiness : null;
+}
+
+function updateManualEligibility(task) {
+  const readiness = currentReadiness(task);
+  const review = task.inventoryReview;
+  const currentPublication = review !== null && review.summary.request_id === task.requestId
+    && !task.inventoryViewUnconfirmed && review.summary.selected_file_count > 0;
+  task.manualExactEligible = task.taskKind === "sync-plan" && task.workPane === "verify"
+    && !task.manualReadinessLoading && task.manualReadinessError === null
+    && readiness?.reason === "ready" && readiness.ready_count > 0 && !readiness.attempted
+    && task.sessionId !== null && task.sessionReleased && task.sessionState !== "active";
+  task.manualFallbackEligible = task.taskKind === "sync-plan" && task.workPane === "verify"
+    && !task.manualReadinessLoading && task.manualReadinessError === null
+    && normallyCompletedExecution(task) && currentPublication && task.sessionReleased
+    && task.sessionState !== "active" && ["incomplete", "unrecorded", "superseded",
+      "settlement-diverged"].includes(readiness?.reason);
+}
+
+function verifyPaneAvailable(task) {
+  return task.taskKind === "sync-plan" && task.executionStarted
+    && task.executionSessionId !== null
+    && (task.sessionKind !== "sync-execution" || task.sessionReleased);
+}
+
+function switchTaskPane(task, paneName) {
+  if (task === null || task === undefined || tasks.get(task.taskId) !== task
+      || currentTask() !== task || settingsVisible || !["plan", "verify"].includes(paneName)
+      || task.workPane === paneName || (paneName === "verify" && !verifyPaneAvailable(task))) return;
+  navigationRevision += 1;
+  task.paneRevision += 1;
+  if (paneName === "verify") {
+    if (task.review !== null) interruptPlanNavigation(task.review);
+    task.workPane = "verify";
+    renderTasks();
+    void loadInventoryReview(task);
+    void loadManualReadiness(task);
+    return;
+  }
+  if (task.inventoryReview !== null) {
+    cancelInventoryWindow(task.inventoryReview);
+    if (task.inventoryReview.detail?.state === "loading") retireInventoryDetail(task.inventoryReview);
+  }
+  task.workPane = "plan";
+  renderTasks();
 }
 
 function showSettings() {
@@ -605,6 +678,14 @@ function adoptTask(summary) {
       inventoryError: null,
       inventoryAction: null,
       inventoryViewUnconfirmed: false,
+      workPane: "plan",
+      paneRevision: 0,
+      manualReadiness: null,
+      manualReadinessLoading: false,
+      manualReadinessError: null,
+      manualReadinessRevision: 0,
+      manualExactEligible: false,
+      manualFallbackEligible: false,
       executionStarted: false,
       executionAttempt: null,
       executionControlState: "running",
@@ -638,6 +719,12 @@ function adoptTask(summary) {
       task.progressPresentation = null;
       task.executionControlState = "running";
       task.executionControlRevision += 1;
+      if (summary.task_kind === "sync-plan") {
+        task.manualReadiness = null;
+        task.manualReadinessLoading = false;
+        task.manualReadinessError = null;
+        task.manualReadinessRevision += 1;
+      }
     }
     if (task.sessionId !== summary.session_id || summary.session_state !== "active") {
       const controlAttempt = task.executionControlAttempt;
@@ -658,6 +745,10 @@ function adoptTask(summary) {
         task.executionSessionId = summary.session_id;
         task.executionWindowDirty = true;
         task.executionWindowDirtyRevision += 1;
+        task.workPane = "plan";
+        task.manualReadiness = null;
+        task.manualReadinessError = null;
+        task.manualReadinessRevision += 1;
       }
     }
     if (task.sessionKind === "sync-execution" && summary.session_kind !== "sync-execution") {
@@ -691,7 +782,7 @@ function adoptTask(summary) {
   return task;
 }
 
-function adoptTaskStart(result, taskKind) {
+function adoptTaskStart(result, sessionKind, taskKind = sessionKind) {
   taskMutationRevision += 1;
   const observed = tasks.get(result.task_id);
   if (observed?.sessionId === result.session_id) return observed;
@@ -701,7 +792,7 @@ function adoptTaskStart(result, taskKind) {
     request_id: result.request_id,
     plan_request_id: retainedPlanRequestId ?? (taskKind === "sync-plan" ? result.request_id : null),
     session_id: result.session_id,
-    session_kind: taskKind,
+    session_kind: sessionKind,
     session_state: "active",
     session_released: false,
     task_kind: retainedPlanRequestId === null ? taskKind : "sync-plan",
@@ -755,7 +846,7 @@ function acceptTaskUpdate(task, sessionId, update, snapshot = null) {
           task.executionControlAttempt = null;
         }
       }
-      if (task.inventoryAction?.kind === "integrity-control"
+      if (["integrity-control", "manual-control"].includes(task.inventoryAction?.kind)
           && task.inventoryAction.sessionId === sessionId) {
         task.inventoryAction = null;
       }
@@ -766,7 +857,7 @@ function acceptTaskUpdate(task, sessionId, update, snapshot = null) {
     if (task.review?.follow != null && task.sessionKind === "sync-execution") {
       task.review.follow.hasTarget = task.executionPresentation?.activeItem?.item_id != null;
     }
-    if (["baseline", "verify", "rebaseline"].includes(task.sessionKind)) {
+    if (["baseline", "verify", "rebaseline", "manual-verify"].includes(task.sessionKind)) {
       void refreshInventoryOverlay(task, sessionId);
     }
   }
@@ -783,8 +874,8 @@ function acceptTaskUpdate(task, sessionId, update, snapshot = null) {
     if (task.review !== null && controlAttempt !== null
         && task.review.pending === controlAttempt.actionName) task.review.pending = null;
     task.sessionState = snapshot.session_state;
-    if (["baseline", "verify", "rebaseline"].includes(task.sessionKind)
-        && task.inventoryAction?.kind === "integrity-control") task.inventoryAction = null;
+    if (["baseline", "verify", "rebaseline", "manual-verify"].includes(task.sessionKind)
+        && ["integrity-control", "manual-control"].includes(task.inventoryAction?.kind)) task.inventoryAction = null;
     if (task.form !== null) task.form.sessionState = task.sessionState;
     if (task.sessionKind === "sync-execution" && task.review !== null) {
       task.review.message = task.sessionState === "completed" ? null : `Execution ${task.sessionState}.`;
@@ -1331,6 +1422,7 @@ function acceptTaskRelease(task, sessionId) {
     void loadPlanReview(task, true);
   }
   if (task.taskKind === "inventory" || task.executionStarted) void loadInventoryReview(task, true);
+  if (task.taskKind === "sync-plan" && task.workPane === "verify") void loadManualReadiness(task);
 }
 
 function acceptTaskReleaseDelay(task, sessionId, recovery) {
@@ -1429,11 +1521,107 @@ async function changeInventorySelection(review, nodeId, selected) {
   }
 }
 
-function inventoryIntegrityEligible(task, review, allowedAttempt = null) {
+async function loadManualReadiness(task) {
+  const execution = originalExecution(task);
+  if (execution === null || task.taskKind !== "sync-plan" || task.workPane !== "verify"
+      || tasks.get(task.taskId) !== task || currentTask() !== task || settingsVisible
+      || task.manualReadinessLoading) return;
+  const request = ++task.manualReadinessRevision;
+  const paneRevision = task.paneRevision;
+  const navigation = navigationRevision;
+  const sessionId = task.executionSessionId;
+  const executionRevision = execution.execution_revision;
+  task.manualReadinessLoading = true;
+  task.manualReadinessError = null;
+  renderTasks();
+  const stillCurrent = () => tasks.get(task.taskId) === task && currentTask() === task
+    && !settingsVisible && task.workPane === "verify" && task.paneRevision === paneRevision
+    && navigationRevision === navigation && task.manualReadinessRevision === request
+    && task.executionSessionId === sessionId
+    && originalExecution(task)?.execution_revision === executionRevision;
+  try {
+    const readiness = await getManualVerificationReadiness(task.taskId, sessionId, executionRevision);
+    if (!stillCurrent()) return;
+    task.manualReadiness = readiness;
+  } catch (_error) {
+    if (stillCurrent()) {
+      task.manualReadiness = null;
+      task.manualReadinessError = "Verification readiness unavailable. Reload this view to try again.";
+    }
+  } finally {
+    if (tasks.get(task.taskId) === task && task.manualReadinessRevision === request) {
+      task.manualReadinessLoading = false;
+      renderTasks();
+      if (task.workPane === "verify" && task.paneRevision !== paneRevision) {
+        void loadManualReadiness(task);
+      }
+    }
+  }
+}
+
+async function startManualVerificationAction(review) {
+  const task = currentInventoryTask(review);
+  if (task === null) return;
+  updateManualEligibility(task);
+  const readiness = currentReadiness(task);
+  const execution = originalExecution(task);
+  if (readiness === null || execution === null || !task.manualExactEligible
+      || task.inventoryAction?.pending || task.inventoryAction?.accepted) return;
+  const attempt = {
+    kind: "manual-start", review, sessionId: task.executionSessionId,
+    executionRevision: execution.execution_revision, readiness,
+    commandId: inventoryCommandId(), pending: true, accepted: false,
+    recovery: null, message: "Starting verification of copied files…",
+  };
+  task.inventoryAction = attempt;
+  review.message = attempt.message;
+  renderTasks();
+  const stillOwned = () => tasks.get(task.taskId) === task && task.inventoryAction === attempt
+    && task.executionSessionId === attempt.sessionId
+    && originalExecution(task)?.execution_revision === attempt.executionRevision;
+  try {
+    const result = await startManualVerification(task.taskId, attempt.sessionId,
+      attempt.commandId, attempt.executionRevision, (recovery) => {
+        if (stillOwned()) {
+          attempt.recovery = recovery;
+          attempt.message = recovery.message;
+          if (currentInventoryTask(review) === task) {
+            review.message = attempt.message;
+            renderTasks();
+          }
+        }
+      });
+    if (!stillOwned()) return;
+    task.inventoryAction = null;
+    task.manualReadiness = null;
+    task.manualReadinessRevision += 1;
+    adoptTaskStart(result, "manual-verify", task.taskKind);
+    review.message = null;
+    renderTasks();
+    try { await refreshTasks(); } catch (_error) {
+      // The admitted session and attached drain already own current status.
+    }
+  } catch (error) {
+    if (!stillOwned()) return;
+    if (error instanceof StartPlanUncertainError || error instanceof OutcomeUnavailableError) {
+      attempt.message = attempt.recovery?.message ?? "Waiting for the original manual verification outcome…";
+      review.message = attempt.message;
+    } else {
+      task.inventoryAction = null;
+      review.message = "Copied-file verification did not start. Reload this view before trying again.";
+      void loadManualReadiness(task);
+    }
+    renderTasks();
+  }
+}
+
+function inventoryIntegrityEligible(task, review, mode, allowedAttempt = null) {
   return currentInventoryTask(review) === task && !task.inventoryLoading
     && (task.inventoryAction === null || task.inventoryAction === allowedAttempt
       || (!task.inventoryAction.pending && !task.inventoryAction.accepted))
-    && review.pending === null && task.taskKind === "inventory"
+    && review.pending === null
+    && (task.taskKind === "inventory" || (task.taskKind === "sync-plan"
+      && mode === "verify" && task.manualFallbackEligible))
     && task.sessionReleased && task.sessionState !== "active" && !task.inventoryViewUnconfirmed
     && review.summary.request_id === task.requestId && review.summary.selected_file_count > 0;
 }
@@ -1447,7 +1635,7 @@ function cancelInventoryIntegrityStart(task, attempt) {
 
 async function startInventoryIntegrityAction(review, mode, returnFocus) {
   const task = currentInventoryTask(review);
-  if (task === null || !inventoryIntegrityEligible(task, review)
+  if (task === null || !inventoryIntegrityEligible(task, review, mode)
       || !["baseline", "verify", "rebaseline"].includes(mode)) return;
   const attempt = {
     kind: "integrity-start", mode, review, taskId: task.taskId,
@@ -1485,7 +1673,7 @@ async function startInventoryIntegrityAction(review, mode, returnFocus) {
 async function submitInventoryIntegrity(task, attempt) {
   if (task.inventoryAction !== attempt || attempt.submissionStarted) return;
   const review = task.inventoryReview;
-  if (review !== attempt.review || !inventoryIntegrityEligible(task, review, attempt)
+  if (review !== attempt.review || !inventoryIntegrityEligible(task, review, attempt.mode, attempt)
       || review.summary.request_id !== attempt.requestId
       || review.summary.view_revision !== attempt.revision
       || review.summary.selected_file_count !== attempt.selectedCount
@@ -1514,10 +1702,7 @@ async function submitInventoryIntegrity(task, attempt) {
       });
     if (!stillOwned()) return;
     task.inventoryAction = null;
-    adoptTask({ task_id: result.task_id, request_id: result.request_id,
-      plan_request_id: task.planRequestId, session_id: result.session_id,
-      session_kind: attempt.mode, session_state: "active", session_released: false,
-      task_kind: task.taskKind });
+    adoptTaskStart(result, attempt.mode, task.taskKind);
     review.message = null;
     renderTasks();
     try { await refreshTasks(); } catch (_error) {
@@ -1544,9 +1729,10 @@ async function controlInventoryIntegrity(review, actionName) {
   if (task === null || task.inventoryAction?.pending || task.inventoryAction?.accepted
       || review.pending !== null
       || task.sessionState !== "active" || task.sessionId === null
-      || !["baseline", "verify", "rebaseline"].includes(task.sessionKind)
+      || !["baseline", "verify", "rebaseline", "manual-verify"].includes(task.sessionKind)
       || !["pause", "resume", "cancel"].includes(actionName)) return;
-  const attempt = { kind: "integrity-control", sessionId: task.sessionId, actionName,
+  const manual = task.sessionKind === "manual-verify";
+  const attempt = { kind: manual ? "manual-control" : "integrity-control", sessionId: task.sessionId, actionName,
     pending: true, recovery: null, message: `${actionName[0].toUpperCase()}${actionName.slice(1)} requested…` };
   task.inventoryAction = attempt;
   review.message = attempt.message;
@@ -1554,7 +1740,8 @@ async function controlInventoryIntegrity(review, actionName) {
   const stillOwned = () => tasks.get(task.taskId) === task && task.sessionId === attempt.sessionId
     && task.inventoryAction === attempt;
   try {
-    const result = await controlIntegrity(task.taskId, attempt.sessionId, actionName, (recovery) => {
+    const control = manual ? controlExecution : controlIntegrity;
+    const result = await control(task.taskId, attempt.sessionId, actionName, (recovery) => {
       if (stillOwned()) {
         attempt.recovery = recovery;
         attempt.message = recovery.message;
@@ -1671,12 +1858,13 @@ async function runInventoryAction(review, kind, nodeId) {
 function currentInventoryTask(review) {
   const task = currentTask();
   return task !== null && !settingsVisible && !task.closePending
-    && task.inventoryReview === review ? task : null;
+    && task.inventoryReview === review
+    && (task.taskKind === "inventory" || task.workPane === "verify") ? task : null;
 }
 
 async function refreshInventoryOverlay(task, sessionId = task.sessionId) {
   if (tasks.get(task.taskId) !== task || task.sessionId !== sessionId
-      || !["baseline", "verify", "rebaseline"].includes(task.sessionKind)) return;
+      || !["baseline", "verify", "rebaseline", "manual-verify"].includes(task.sessionKind)) return;
   task.inventoryOverlayRevision += 1;
   if (task.inventoryOverlayRunning) return;
   task.inventoryOverlayRunning = true;
@@ -1686,7 +1874,8 @@ async function refreshInventoryOverlay(task, sessionId = task.sessionId) {
       const request = task.inventoryOverlayRevision;
       attemptedRevision = request;
       const review = task.inventoryReview;
-      if (review === null || selectedTaskId !== task.taskId || settingsVisible || task.closePending) break;
+      if (review === null || selectedTaskId !== task.taskId || settingsVisible || task.closePending
+          || (task.taskKind === "sync-plan" && task.workPane !== "verify")) break;
       const action = review.actionRevision;
       const navigation = navigationRevision;
       const publication = review.summary.request_id;
@@ -1701,7 +1890,8 @@ async function refreshInventoryOverlay(task, sessionId = task.sessionId) {
         && task.inventoryOverlayRevision === request && task.inventoryReview === review
         && review.actionRevision === action && review.summary.request_id === publication
         && review.summary.view_revision === revision && selectedTaskId === task.taskId
-        && navigationRevision === navigation && !settingsVisible && !task.closePending;
+        && navigationRevision === navigation && !settingsVisible && !task.closePending
+        && (task.taskKind === "inventory" || task.workPane === "verify");
       if (stillCurrent && window.disposition === "current" && window.view_revision === revision) {
         review.window = window;
         if (detailResponse !== null && detailResponse.disposition === "current"
@@ -1717,7 +1907,7 @@ async function refreshInventoryOverlay(task, sessionId = task.sessionId) {
   } finally {
     task.inventoryOverlayRunning = false;
     if (tasks.get(task.taskId) === task && task.inventoryOverlayRevision !== attemptedRevision
-        && ["baseline", "verify", "rebaseline"].includes(task.sessionKind)) {
+        && ["baseline", "verify", "rebaseline", "manual-verify"].includes(task.sessionKind)) {
       void refreshInventoryOverlay(task, task.sessionId);
     }
   }
@@ -1725,15 +1915,17 @@ async function refreshInventoryOverlay(task, sessionId = task.sessionId) {
 
 async function loadInventoryReview(task, force = false) {
   const liveIntegrity = task !== undefined && task.sessionState === "active"
-    && ["baseline", "verify", "rebaseline"].includes(task.sessionKind);
+    && ["baseline", "verify", "rebaseline", "manual-verify"].includes(task.sessionKind);
   if (task === undefined || tasks.get(task.taskId) !== task || selectedTaskId !== task.taskId
       || settingsVisible || task.closePending
       || (task.taskKind !== "inventory" && !task.executionStarted)
+      || (task.taskKind === "sync-plan" && task.workPane !== "verify")
       || (!task.sessionReleased && !liveIntegrity) || task.sessionId === null
       || (!force && (task.inventoryLoading || task.inventoryReview !== null))) return;
   const request = ++task.inventoryRevision;
   const sessionId = task.sessionId;
   const navigation = navigationRevision;
+  const paneRevision = task.paneRevision;
   if (task.inventoryReview !== null) {
     cancelInventoryWindow(task.inventoryReview);
     task.inventoryReview.actionRevision += 1;
@@ -1746,7 +1938,9 @@ async function loadInventoryReview(task, force = false) {
   renderTasks();
   const stillCurrent = () => tasks.get(task.taskId) === task && task.inventoryRevision === request
     && task.sessionId === sessionId && selectedTaskId === task.taskId
-    && navigationRevision === navigation && !settingsVisible && !task.closePending;
+    && navigationRevision === navigation && task.paneRevision === paneRevision
+    && (task.taskKind === "inventory" || task.workPane === "verify")
+    && !settingsVisible && !task.closePending;
   try {
     const summary = await openInventoryView(task.taskId);
     if (!stillCurrent()) return;
@@ -1771,6 +1965,11 @@ async function loadInventoryReview(task, force = false) {
     if (tasks.get(task.taskId) === task && task.inventoryRevision === request) {
       task.inventoryLoading = false;
       renderTasks();
+      if (task.taskKind === "sync-plan" && task.workPane === "verify"
+          && task.paneRevision !== paneRevision) {
+        void loadInventoryReview(task, force);
+      }
+      if (task.taskKind === "sync-plan" && task.workPane === "verify") void loadManualReadiness(task);
     }
   }
 }
@@ -1991,6 +2190,7 @@ function markExecutionWindowDirty(task) {
 async function refreshExecutionWindow(task) {
   if (
     tasks.get(task.taskId) !== task || selectedTaskId !== task.taskId || settingsVisible
+    || task.workPane === "verify"
     || task.review === null || task.reviewLoading || task.executionWindowRefreshRunning
     || task.review.foregroundWindowReaders > 0
   ) return;
@@ -2001,6 +2201,7 @@ async function refreshExecutionWindow(task) {
       const review = task.review;
       const foregroundWindowEpoch = review.foregroundWindowEpoch;
       const reviewRevision = task.reviewRevision;
+      const paneRevision = task.paneRevision;
       const sessionId = task.executionSessionId;
       const requestId = review.summary.request_id;
       const action = review.actionRevision;
@@ -2008,6 +2209,7 @@ async function refreshExecutionWindow(task) {
       const offset = review.window.offset;
       const refreshStillCurrent = () => (
         tasks.get(task.taskId) === task && selectedTaskId === task.taskId && !settingsVisible
+        && task.workPane !== "verify" && task.paneRevision === paneRevision
         && task.review === review && !task.reviewLoading && task.reviewRevision === reviewRevision
         && task.executionSessionId === sessionId && review.foregroundWindowReaders === 0
         && review.foregroundWindowEpoch === foregroundWindowEpoch
@@ -2037,7 +2239,7 @@ async function refreshExecutionWindow(task) {
         }
         if (
           tasks.get(task.taskId) === task && selectedTaskId === task.taskId
-          && task.review === review && task.sessionId === sessionId
+          && task.review === review && task.executionSessionId === sessionId
         ) {
           review.message ||= "Execution status refresh delayed.";
           renderTasks();
@@ -2152,7 +2354,7 @@ async function readExecutionDetail(review, row) {
 
 function currentReviewTask(review) {
   const task = currentTask();
-  return task !== null && task.review === review ? task : null;
+  return task !== null && task.workPane !== "verify" && task.review === review ? task : null;
 }
 
 function retainedReviewTask(review) {
@@ -2164,6 +2366,7 @@ function retainedReviewTask(review) {
 async function loadPlanReview(task, force = false) {
   if (
     task === undefined || tasks.get(task.taskId) !== task
+    || (selectedTaskId === task.taskId && task.workPane === "verify")
     || task.taskKind !== "sync-plan" || task.planRequestId === null
     || task.reviewLoading
     || task.review?.pending === "selection"
@@ -2173,6 +2376,7 @@ async function loadPlanReview(task, force = false) {
   const dirtyRevision = task.executionWindowDirtyRevision;
   const sessionId = task.executionSessionId;
   const planRequestId = task.planRequestId;
+  const paneRevision = task.paneRevision;
   const reviewOwner = task.review;
   const foregroundWindowEpoch = reviewOwner?.foregroundWindowEpoch ?? null;
   const foregroundWindowReaders = reviewOwner?.foregroundWindowReaders ?? 0;
@@ -2184,6 +2388,7 @@ async function loadPlanReview(task, force = false) {
     if (
       tasks.get(task.taskId) !== task || task.reviewRevision !== request
       || task.executionSessionId !== sessionId || task.planRequestId !== planRequestId
+      || (selectedTaskId === task.taskId && (task.workPane === "verify" || task.paneRevision !== paneRevision))
     ) return;
     const foregroundInvalidated = reviewOwner !== null && (
       task.review !== reviewOwner
@@ -2981,6 +3186,8 @@ async function submitReviewedExecution(task, attempt) {
     if (tasks.get(task.taskId) !== task || task.executionAttempt !== attempt) return;
     task.executionAttempt = null;
     if (typeof result.task_id === "string") {
+      taskMutationRevision += 1;
+      task.requestId = result.request_id;
       task.sessionId = result.session_id;
       task.sessionKind = "sync-execution";
       task.executionSessionId = result.session_id;

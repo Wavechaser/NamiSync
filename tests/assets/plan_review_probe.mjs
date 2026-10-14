@@ -234,6 +234,7 @@ const calls = [];
 const callbacks = Object.fromEntries([
   "onViewChange", "onWindow", "onSelect", "onScopeSelect", "onExecute", "onControl", "onPlanAgain",
   "onHighlight", "onHighlightedSelect", "onExecutionDetail", "onFollowOverride", "onNavigateCurrent", "onRevealMove", "onNavigationInterrupt",
+  "onPaneChange",
 ].map((name) => [name, (...args) => calls.push([name, ...args])]));
 const panel = createPlanReviewPanel(callbacks);
 const planAgainButton = findAction(panel.element, "plan-again");
@@ -354,6 +355,11 @@ review.window.rows.push(notice);
 
 panel.render(task);
 assert.equal(panel.element.dataset.pending, "");
+assert.equal(findAction(panel.element, "pane-plan").ariaChecked, "true");
+assert.equal(findAction(panel.element, "pane-plan").disabled, true);
+assert.equal(findAction(panel.element, "pane-verify").ariaChecked, "false");
+assert.equal(findAction(panel.element, "pane-verify").disabled, true,
+  "Verify remains unavailable before an execution exists");
 const tierStatus = findByClass(panel.element, "nami-plan-review__status-title");
 const executeButton = findByClass(panel.element, "nami-button--primary");
 assert.equal(tierStatus.textContent, "Plan ready");
@@ -1101,7 +1107,7 @@ function detailFact(root, label) {
 
 const terminologyPanel = createPlanReviewPanel(Object.fromEntries([
   "onViewChange", "onWindow", "onSelect", "onScopeSelect", "onExecute", "onControl",
-  "onPlanAgain", "onHighlight", "onHighlightedSelect", "onExecutionDetail", "onFollowOverride", "onNavigateCurrent", "onRevealMove",
+  "onPlanAgain", "onHighlight", "onHighlightedSelect", "onExecutionDetail", "onFollowOverride", "onNavigateCurrent", "onRevealMove", "onPaneChange",
 ].map((name) => [name, () => {}])));
 function terminologyRow(patch) {
   const specimen = { ...row, row_kind: "operation", operation_id: "5".repeat(32), operation_kind: "noop", presentation_kind: patch.operation_kind ?? "noop", reason: null, ...patch };
@@ -1147,7 +1153,7 @@ terminologyPanel.dispose();
 const moveCalls = [];
 const movePanel = createPlanReviewPanel(Object.fromEntries([
   "onViewChange", "onWindow", "onSelect", "onScopeSelect", "onExecute", "onControl",
-  "onPlanAgain", "onHighlight", "onHighlightedSelect", "onExecutionDetail", "onFollowOverride", "onNavigateCurrent", "onRevealMove",
+  "onPlanAgain", "onHighlight", "onHighlightedSelect", "onExecutionDetail", "onFollowOverride", "onNavigateCurrent", "onRevealMove", "onPaneChange",
 ].map((name) => [name, (...args) => moveCalls.push([name, ...args])])));
 const moveRow = { ...row, row_kind: "prior-group", operation_kind: null,
   selection: "disabled", selectable_operation_count: 0, selected_operation_count: 0,
@@ -1184,12 +1190,13 @@ assert.equal(moveViewport.scrollTop, 0, "move conflict restores the loaded first
 assert.equal(moveReview.moveScrollOffset, null, "the move viewport instruction is consumed once");
 movePanel.dispose();
 
-const detailCalls = [];
+const detailCalls = [], paneCalls = [];
 const executionPanel = createPlanReviewPanel(Object.fromEntries([
   "onViewChange", "onWindow", "onSelect", "onScopeSelect", "onExecute", "onControl",
-  "onPlanAgain", "onHighlight", "onHighlightedSelect", "onExecutionDetail", "onFollowOverride", "onNavigateCurrent", "onRevealMove",
+  "onPlanAgain", "onHighlight", "onHighlightedSelect", "onExecutionDetail", "onFollowOverride", "onNavigateCurrent", "onRevealMove", "onPaneChange",
 ].map((name) => [name, (...args) => {
   if (name === "onExecutionDetail") detailCalls.push(args);
+  if (name === "onPaneChange") paneCalls.push(args);
 }])));
 const operationId = "5".repeat(32);
 const terminalResult = {
@@ -1257,6 +1264,14 @@ for (const [origin, path, expected] of [
 executionReviewState.planDetail = targetPlannedDetail;
 const executionTask = { ...task, review: executionReviewState, executionStarted: true,
   sessionState: "failed" };
+const paneTask = { ...executionTask, taskKind:"sync-plan", workPane:"plan",
+  executionSessionId:executionSummary.session_id, sessionId:executionSummary.session_id,
+  sessionKind:"sync-execution", sessionReleased:true };
+executionPanel.render(paneTask);
+const paneCallBase = paneCalls.length;
+findAction(executionPanel.element, "pane-verify").dispatch("click");
+assert.deepEqual(paneCalls.slice(paneCallBase), [[paneTask, "verify"]],
+  "an executed Plan exposes one explicit Verify navigation action");
 const liveTerminalReview = { ...executionReviewState, window: {
   ...executionReviewState.window, execution: { ...executionSummary, result: null,
     started_at: null, ended_at: null },

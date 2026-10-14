@@ -216,6 +216,7 @@ export function createPlanReviewPanel(callbacks) {
   const required = [
     "onViewChange", "onWindow", "onSelect", "onScopeSelect", "onExecute", "onControl", "onPlanAgain",
     "onHighlight", "onHighlightedSelect", "onExecutionDetail", "onFollowOverride", "onNavigateCurrent", "onRevealMove",
+    "onPaneChange",
   ];
   if (callbacks === null || typeof callbacks !== "object"
       || !required.every((name) => typeof callbacks[name] === "function")) {
@@ -273,13 +274,21 @@ export function createPlanReviewPanel(callbacks) {
   settings.append(verifySetting, deletionSetting);
   const viewSwitcher = document.createElement("div");
   viewSwitcher.className = "nami-segmented nami-plan-review__view-switcher";
-  for (const [label, selected] of [["Sync", true], ["Integrity", false]]) {
-    const option = button(label, "nami-segmented__item");
-    option.ariaChecked = String(selected);
-    option.setAttribute("role", "radio");
-    option.disabled = !selected;
-    viewSwitcher.append(option);
-  }
+  viewSwitcher.setAttribute("role", "radiogroup");
+  viewSwitcher.ariaLabel = "Task view";
+  const planPane = button("Plan", "nami-segmented__item");
+  planPane.dataset.action = "pane-plan";
+  planPane.setAttribute("role", "radio");
+  const verifyPane = button("Verify", "nami-segmented__item");
+  verifyPane.dataset.action = "pane-verify";
+  verifyPane.setAttribute("role", "radio");
+  planPane.addEventListener("click", () => {
+    if (currentTask !== null && !planPane.disabled) callbacks.onPaneChange(currentTask, "plan");
+  });
+  verifyPane.addEventListener("click", () => {
+    if (currentTask !== null && !verifyPane.disabled) callbacks.onPaneChange(currentTask, "verify");
+  });
+  viewSwitcher.append(planPane, verifyPane);
   header.append(viewSwitcher, paths, settings);
   const summary = document.createElement("div");
   summary.className = "nami-card nami-plan-review__summary";
@@ -1172,6 +1181,13 @@ export function createPlanReviewPanel(callbacks) {
 
   function render(task) {
     currentTask = task;
+    const verifyAvailable = task.taskKind === "sync-plan" && task.executionStarted
+      && task.executionSessionId !== null
+      && (task.sessionKind !== "sync-execution" || task.sessionReleased);
+    planPane.ariaChecked = "true";
+    planPane.disabled = true;
+    verifyPane.ariaChecked = "false";
+    verifyPane.disabled = !verifyAvailable;
     if (controlTaskId !== task.taskId || controlSessionId !== task.sessionId) {
       filterMenu.close();
       disarmCancel();

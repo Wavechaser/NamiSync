@@ -19,11 +19,25 @@ export function createWorkPanel(setupCallbacks, planReviewCallbacks, settings, i
   settings.remove();
   settings.hidden = false;
   let content = null;
+  let renderedTaskId = null;
 
   function show(value) {
     if (content === value) return;
+    value.hidden = false;
     content = value;
     body.replaceChildren(value);
+  }
+
+  function showTaskPane(value, peer) {
+    if (content === value) return;
+    value.hidden = false;
+    if (content === peer && peer.parentNode === body) {
+      peer.hidden = true;
+      if (value.parentNode !== body) body.append(value);
+      content = value;
+      return;
+    }
+    show(value);
   }
 
   function render(task) {
@@ -31,13 +45,30 @@ export function createWorkPanel(setupCallbacks, planReviewCallbacks, settings, i
     if (task === null) {
       review.dispose();
       inventory.dispose();
+      renderedTaskId = null;
       const empty = document.createElement("p");
       empty.classList.add("nami-shell__empty");
       renderText(empty, "No task selected.");
       show(empty);
       return;
     }
+    if (renderedTaskId !== null && renderedTaskId !== task.taskId) {
+      review.dispose();
+      inventory.dispose();
+    }
+    renderedTaskId = task.taskId;
     const starting = task.form?.attempt?.kind;
+    if (task.taskKind === "sync-plan" && task.executionStarted && task.workPane === "verify") {
+      showTaskPane(inventory.element, review.element);
+      inventory.render(task);
+      return;
+    }
+    if (task.taskKind === "sync-plan" && (starting === "sync-plan" || task.review !== null
+        || task.reviewLoading || task.executionStarted || task.sessionId != null)) {
+      showTaskPane(review.element, inventory.element);
+      review.render(task);
+      return;
+    }
     if (starting === "inventory" || (task.taskKind === "inventory" && (task.inventoryReview != null
         || task.inventoryLoading || task.sessionReleased || task.sessionId != null || task.sessionState === "active"))) {
       review.dispose();
@@ -46,8 +77,7 @@ export function createWorkPanel(setupCallbacks, planReviewCallbacks, settings, i
       return;
     }
     inventory.dispose();
-    if (starting === "sync-plan" || task.review !== null || task.reviewLoading || task.executionStarted
-        || (task.taskKind === "sync-plan" && task.sessionId != null)) {
+    if (starting === "sync-plan" || task.review !== null || task.reviewLoading || task.executionStarted) {
       show(review.element);
       review.render(task);
       return;
@@ -68,6 +98,7 @@ export function createWorkPanel(setupCallbacks, planReviewCallbacks, settings, i
   function renderSettings() {
     review.dispose();
     inventory.dispose();
+    renderedTaskId = null;
     panel.ariaLabel = "Settings";
     show(settings);
   }

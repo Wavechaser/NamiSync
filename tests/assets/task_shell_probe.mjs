@@ -262,7 +262,8 @@ globalThis.taskHarness = {
   },
   deferTaskGSetup: false,
 };
-globalThis.planReviewHarness = { callbacks: null, reviewRenders };
+globalThis.planReviewHarness = { callbacks: null, reviewRenders, disposeCount: 0 };
+globalThis.inventoryReviewHarness = { callbacks: null, reviewRenders: [], disposeCount: 0 };
 globalThis.executionConfirmationHarness = { confirmationRequests, roots: null };
 
 function moduleUrl(source) {
@@ -392,13 +393,14 @@ const planReviewUrl = moduleUrl(`
       },
     };
     const element = new HTMLElement("div", "Plan review test surface");
+    globalThis.planReviewHarness.element = element;
     return {
       element,
       render(task) {
         globalThis.planReviewHarness.reviewRenders.push(task);
         globalThis.planReviewHarness.onRender?.(task);
       },
-      dispose() {},
+      dispose() { globalThis.planReviewHarness.disposeCount += 1; },
     };
   }
 `);
@@ -406,8 +408,15 @@ const preparedPanelSource = panelSource
   .replace("./setup.js", setupUrl)
   .replace("./plan_review.js", planReviewUrl)
   .replace("./inventory_review.js", moduleUrl(`
-    export function createInventoryReviewPanel() {
-      return { element: new HTMLElement("div"), render() {}, dispose() {} };
+    export function createInventoryReviewPanel(callbacks) {
+      globalThis.inventoryReviewHarness.callbacks = callbacks;
+      const element = new HTMLElement("div");
+      globalThis.inventoryReviewHarness.element = element;
+      return {
+        element,
+        render(task) { globalThis.inventoryReviewHarness.reviewRenders.push(task); },
+        dispose() { globalThis.inventoryReviewHarness.disposeCount += 1; },
+      };
     }
   `));
 const executionConfirmationUrl = moduleUrl(`
@@ -453,6 +462,8 @@ const bridgeUrl = moduleUrl(`
   export const updateInventoryView = () => Promise.reject(new Error("unused inventory read"));
   export const getInventoryWindow = () => Promise.reject(new Error("unused inventory read"));
   export const getInventoryDetail = () => Promise.reject(new Error("unused inventory read"));
+  export const getManualVerificationReadiness = () => Promise.reject(new Error("unused manual readiness"));
+  export const startManualVerification = () => Promise.reject(new Error("unused manual start"));
   export const refreshInventory = () => Promise.reject(new Error("unused inventory action"));
   export const acknowledgeInventory = () => Promise.reject(new Error("unused inventory action"));
   export const restoreInventory = () => Promise.reject(new Error("unused inventory action"));
@@ -3007,8 +3018,27 @@ planWindows[auxiliaryReloadWindowBase].resolve(planWindow(auxiliaryPlan));
 await until(() => !auxiliaryTask.reviewLoading);
 assert.equal(auxiliaryTask.error, "Manual verification updates unavailable",
   "an original Plan reload cannot clear current auxiliary recovery feedback");
-auxiliaryTask.progressPresentation = { activeItem: { item_id: "f".repeat(32), item_type: "operation" } };
 taskButton(auxiliaryTask.label).click();
+const planDisposeBase = globalThis.planReviewHarness.disposeCount;
+const planParent = globalThis.planReviewHarness.element.parentNode;
+globalThis.planReviewHarness.callbacks.onPaneChange(auxiliaryTask, "verify");
+assert.equal(auxiliaryTask.workPane, "verify");
+assert.equal(globalThis.inventoryReviewHarness.reviewRenders.at(-1), auxiliaryTask);
+assert.equal(globalThis.planReviewHarness.element.parentNode, planParent,
+  "Verify keeps the same-task Plan viewport mounted");
+assert.equal(globalThis.planReviewHarness.element.hidden, true);
+const inventoryParent = globalThis.inventoryReviewHarness.element.parentNode;
+globalThis.inventoryReviewHarness.callbacks.onPaneChange(auxiliaryTask, "plan");
+assert.equal(auxiliaryTask.workPane, "plan");
+assert.equal(globalThis.planReviewHarness.element.parentNode, planParent);
+assert.equal(globalThis.planReviewHarness.element.hidden, false);
+assert.equal(globalThis.inventoryReviewHarness.element.parentNode, inventoryParent,
+  "Plan keeps the same-task Verify viewport mounted");
+assert.equal(globalThis.inventoryReviewHarness.element.hidden, true);
+assert.equal(globalThis.planReviewHarness.disposeCount, planDisposeBase,
+  "same-task Plan and Verify navigation preserves the Plan renderer state");
+await turns();
+auxiliaryTask.progressPresentation = { activeItem: { item_id: "f".repeat(32), item_type: "operation" } };
 const auxiliaryAnchorBase = planAnchors.length;
 globalThis.planReviewHarness.callbacks.onNavigateCurrent(auxiliaryTask.review, false);
 await turns();
