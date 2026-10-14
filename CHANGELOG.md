@@ -549,6 +549,9 @@ Manual post-copy navigation and beta packaging remain open.
 
 #### Deliver M1-10 integrity controls and manual verification (2026-10-13 – 2026-10-14)
 
+- Make the installed Inventory confirmation witness derive focus restoration
+  from invoker availability at modal close, prove Cancel returns focus to its
+  enabled invoker, and retain bounded close-state diagnostics.
 - Preserve foreground Plan navigation when execution start/release triggers a
   concurrent full reload. Defer stale replacement and reconcile authoritative
   execution summary/window facts after the interaction settles; keep selection,

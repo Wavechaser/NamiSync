@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Callable
 from unittest.mock import patch
 
-from _headed_cdp import NativeCdp, decode_png, failure_site
+from _headed_cdp import NativeCdp, decode_png, failure_site, runtime_value
 from _headed_evidence import EvidencePaths, EvidencePublisher
 from _headed_native import foreground_window_handle
 from _startup_test_support import headed_command_extension
@@ -26,6 +26,13 @@ _FILE_BYTES = b"NamiSync native inventory fixture\r\n"
 _INTEGRITY_STAGES = ("select-folder", "select-location-clear", "select-location", "baseline",
                      "verify", "pause", "resume", "verify-cancel", "cancel",
                      "rebaseline-cancel-open", "rebaseline-cancel", "rebaseline-open", "rebaseline-confirm")
+_CONFIRMATION_EXIT_FACT_KEYS = frozenset({
+    "closed", "app_active", "theme_active", "scroll_restored", "focus_restored",
+    "trigger_connected", "trigger_disabled", "trigger_hidden", "active_category",
+})
+_CONFIRMATION_ACTIVE_CATEGORIES = frozenset({
+    "trigger", "dialog", "inventory", "body", "other",
+})
 _OWN_FAILURES = frozenset({
     "inventory command evidence is incomplete",
     "inventory action identities or actual effects differ",
@@ -55,6 +62,26 @@ _OWN_FAILURES = frozenset({
 def _owned_failure(error: BaseException) -> str | None:
     message = str(error)
     return message if message in _OWN_FAILURES else None
+
+
+def _bounded_confirmation_exit_diagnostic(value: object) -> dict[str, object] | None:
+    if type(value) is not dict or set(value) != {"last_close", "timeout"}:
+        return None
+    bounded: dict[str, object] = {}
+    for name in ("last_close", "timeout"):
+        facts = value[name]
+        if facts is None:
+            bounded[name] = None
+            continue
+        if type(facts) is not dict or set(facts) != _CONFIRMATION_EXIT_FACT_KEYS:
+            return None
+        if any(type(facts[key]) is not bool for key in _CONFIRMATION_EXIT_FACT_KEYS
+               if key != "active_category"):
+            return None
+        if facts["active_category"] not in _CONFIRMATION_ACTIVE_CATEGORIES:
+            return None
+        bounded[name] = {key: facts[key] for key in sorted(_CONFIRMATION_EXIT_FACT_KEYS)}
+    return bounded
 
 
 class _InventoryPhase:
@@ -437,6 +464,45 @@ _PAGE = r"""
     }
     throw new Error(label);
   };
+  const confirmationExitFacts = (trigger = window.__inventoryConfirmationInvoker) => {
+    const confirmation = document.querySelector('#rebaseline-confirmation');
+    const appRoot = document.querySelector('#app');
+    const themeOptions = document.querySelector('#theme-options');
+    const review = document.querySelector('.nami-inventory-review');
+    const active = document.activeElement;
+    return {
+      closed:confirmation instanceof HTMLDialogElement && !confirmation.open,
+      app_active:appRoot instanceof HTMLElement && !appRoot.inert,
+      theme_active:themeOptions instanceof HTMLElement && !themeOptions.inert,
+      scroll_restored:document.documentElement.style.getPropertyValue('overflow') === ''
+        && document.documentElement.style.getPropertyPriority('overflow') === '',
+      focus_restored:active === trigger,
+      trigger_connected:trigger instanceof HTMLButtonElement && trigger.isConnected,
+      trigger_disabled:!(trigger instanceof HTMLButtonElement) || trigger.disabled,
+      trigger_hidden:!(trigger instanceof HTMLButtonElement) || trigger.hidden,
+      active_category:active === trigger ? 'trigger'
+        : confirmation instanceof HTMLElement && confirmation.contains(active) ? 'dialog'
+        : review instanceof HTMLElement && review.contains(active) ? 'inventory'
+        : active === document.body ? 'body' : 'other',
+    };
+  };
+  const confirmationExitReceipt = (closeFacts, trigger) => {
+    const currentFacts = confirmationExitFacts(trigger);
+    const focusRequired = closeFacts.trigger_connected && !closeFacts.trigger_disabled;
+    return {
+      closed:currentFacts.closed, app_active:currentFacts.app_active,
+      theme_active:currentFacts.theme_active, scroll_restored:currentFacts.scroll_restored,
+      focus_required:focusRequired, focus_restored:currentFacts.focus_restored,
+      trigger_connected_at_close:closeFacts.trigger_connected,
+      trigger_disabled_at_close:closeFacts.trigger_disabled,
+      trigger_hidden_at_close:closeFacts.trigger_hidden,
+    };
+  };
+  const confirmationExitReady = (closeFacts, trigger) => {
+    const receipt = confirmationExitReceipt(closeFacts, trigger);
+    return receipt.closed && receipt.app_active && receipt.theme_active && receipt.scroll_restored
+      && (!receipt.focus_required || receipt.focus_restored);
+  };
   const card = await until(() => document.querySelector('.nami-task-rail__row .nami-task-card'), 'task-card');
   card.click();
   const review = await until(() => {
@@ -513,6 +579,9 @@ _PAGE = r"""
         : `[data-action="inventory-${name}"]`;
       const control = document.querySelector(selector);
       if (control === null) return {point:null, facts:{connected:false}};
+      if (name === 'rebaseline-open' || name === 'rebaseline-cancel-open') {
+        window.__inventoryConfirmationInvoker = control;
+      }
       const focusTarget = name === 'context-open' || name === 'selected-activate'
         ? review.querySelector('.nami-inventory-review__rows') : control;
       focusTarget.focus();
@@ -763,29 +832,42 @@ _PAGE = r"""
   await stage('rebaseline-cancel-open');
   const confirmation = document.querySelector('#rebaseline-confirmation');
   await until(() => !confirmation.hidden && confirmation.open, 'rebaseline-confirmation');
+  const cancelInvoker = window.__inventoryConfirmationInvoker;
+  const originalConfirmationClose = confirmation.close;
+  window.__inventoryConfirmationLastClose = null;
+  window.__inventoryConfirmationTimeout = null;
+  confirmation.close = function(...args) {
+    window.__inventoryConfirmationLastClose = confirmationExitFacts();
+    return Reflect.apply(originalConfirmationClose, this, args);
+  };
   const confirmationText = document.querySelector('#rebaseline-confirmation-count').textContent;
   await stage('rebaseline-cancel');
-  await until(() => !confirmation.open && !review.querySelector('[data-action="inventory-rebaseline"]').disabled,
+  const cancelCloseFacts = await until(() => window.__inventoryConfirmationLastClose,
+    'rebaseline-cancel-close');
+  await until(() => cancelCloseFacts.trigger_connected && !cancelCloseFacts.trigger_disabled
+    && !cancelCloseFacts.trigger_hidden && confirmationExitReady(cancelCloseFacts, cancelInvoker)
+    && !cancelInvoker.disabled && document.activeElement === cancelInvoker,
     'rebaseline-cancel-no-effect');
+  const cancelConfirmationRestored = confirmationExitReceipt(cancelCloseFacts, cancelInvoker);
   const cancelPreservedResult = review.querySelector('[data-integrity-result]').textContent === canceledResult;
   await stage('rebaseline-open');
   await until(() => confirmation.open, 'rebaseline-confirm-again');
+  const confirmInvoker = window.__inventoryConfirmationInvoker;
+  window.__inventoryConfirmationLastClose = null;
   await stage('rebaseline-confirm');
+  const confirmCloseFacts = await until(() => window.__inventoryConfirmationLastClose,
+    'rebaseline-confirm-close');
+  try {
+    await until(() => confirmationExitReady(confirmCloseFacts, confirmInvoker),
+      'rebaseline-confirmation-exit');
+  } catch (error) {
+    window.__inventoryConfirmationTimeout = confirmationExitFacts(confirmInvoker);
+    throw error;
+  }
+  const confirmationRestored = confirmationExitReceipt(confirmCloseFacts, confirmInvoker);
   const rebaselinePresentation = await released('rebaseline-terminal',
     'Rebaseline retained results · 1 window result', 'baselined');
   const rebaselineResult = rebaselinePresentation.text;
-  const appRoot = document.querySelector('#app');
-  const themeOptions = document.querySelector('#theme-options');
-  const rebaselineControl = review.querySelector('[data-action="inventory-rebaseline"]');
-  await until(() => !confirmation.open && !appRoot.inert && !themeOptions.inert
-    && document.documentElement.style.getPropertyValue('overflow') === ''
-    && document.documentElement.style.getPropertyPriority('overflow') === ''
-    && document.activeElement === rebaselineControl, 'rebaseline-confirmation-exit');
-  const confirmationRestored = {closed:!confirmation.open, app_active:!appRoot.inert,
-    theme_active:!themeOptions.inert,
-    scroll_restored:document.documentElement.style.getPropertyValue('overflow') === ''
-      && document.documentElement.style.getPropertyPriority('overflow') === '',
-    focus_restored:document.activeElement === rebaselineControl};
   const scanText = review.querySelector('.nami-inventory-review__status-line').textContent;
   const scanSelected = scanText.includes('Displayed scan: Selected items');
   const integrityJourney = {checkbox_custody:checkboxCustody, hidden_selection:hiddenSelection,
@@ -794,6 +876,7 @@ _PAGE = r"""
     rebaseline_result:rebaselineResult, scan_selected:scanSelected,
     terminal_presentations:[baselinePresentation, verifyPresentation,
       canceledPresentation, rebaselinePresentation],
+    cancel_confirmation_restored:cancelConfirmationRestored,
     confirmation_restored:confirmationRestored};
   if (!checkboxCustody || !cancelPreservedResult || !scanSelected) throw new Error('integrity UI custody differs');
   return {table_appearance:tableAppearance, filter_geometry:menuGeometry, filter_colors:filterColors, filter_menu:filterMenu, row_menu:rowMenu, keyboard_input:keyboardInput, native_clicks:nativeClicks, pane_visible:review.isConnected && !review.hidden,
@@ -822,16 +905,50 @@ def _drive(window: object, phase: _InventoryPhase, recorder: _Recorder,
         failed = True
         phase.initial_scan_release.set()
         phase.verify_release.set()
-        recorder.fail(step, type(error).__name__)
         diagnostic = failure_site(task)
         diagnostic.update({"checkpoint": checkpoint, "page_result": page_result,
                            "foreground_owned": foreground_owned, "phase": phase.diagnostic(),
                            "assertion": _owned_failure(error),
                            "click_target": click_target,
-                           "owned_handle": owned_handle, "observed_handle": observed_handle})
-        screenshot.with_name("inventory-failure-site.json").write_text(
-            json.dumps(diagnostic, sort_keys=True), encoding="utf-8",
-        )
+                           "owned_handle": owned_handle, "observed_handle": observed_handle,
+                           "confirmation_exit": None})
+
+        def publish(value: object = None) -> None:
+            diagnostic["confirmation_exit"] = _bounded_confirmation_exit_diagnostic(value)
+            screenshot.with_name("inventory-failure-site.json").write_text(
+                json.dumps(diagnostic, sort_keys=True), encoding="utf-8",
+            )
+            recorder.fail(step, type(error).__name__)
+
+        expression = r"""({
+          last_close:window.__inventoryConfirmationLastClose ?? null,
+          timeout:window.__inventoryConfirmationTimeout ?? null,
+        })"""
+        try:
+            diagnostic_task = core.CallDevToolsProtocolMethodAsync(
+                "Runtime.evaluate",
+                json.dumps({"expression": expression, "returnByValue": True}),
+            )
+
+            def diagnostic_completed() -> None:
+                from System import Action
+
+                def finish() -> None:
+                    try:
+                        publish(runtime_value(diagnostic_task))
+                    except BaseException:
+                        publish()
+
+                action = Action(finish)
+                retained.append(action)
+                native.BeginInvoke(action)
+
+            from System import Action
+            completion = Action(diagnostic_completed)
+            retained.append(completion)
+            diagnostic_task.GetAwaiter().OnCompleted(completion)
+        except BaseException:
+            publish()
 
     cdp = NativeCdp(native, core, retained, fail)
     stage_names = ("refresh", "filter-open", "filter-present", "filter-escape", "filter-reopen", "filter-all", "details", "acknowledge", "restore-details", "restore", "context-open", "context-escape", "context-keyboard", "context-keyboard-escape", "context-menu", "context-acknowledge", "context-restore-details", "context-restore", "selected-activate", "selected-arrow-first", "selected-arrow-second", "selected-refresh", *_INTEGRITY_STAGES)

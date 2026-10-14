@@ -7,6 +7,7 @@ from uuid import uuid4
 
 import pytest
 
+import _task_inventory_headed_child as child
 from _headed_evidence import EvidencePaths, EvidenceReader, require_host_final
 from _headed_native import (
     clean_child_environment, close_window, require_absolute_local_test_root,
@@ -21,6 +22,39 @@ _INTEGRITY_INPUT = {name: True for name in (
     "select-folder", "select-location-clear", "select-location", "baseline", "verify", "pause", "resume",
     "verify-cancel", "cancel", "rebaseline-cancel-open", "rebaseline-cancel", "rebaseline-open", "rebaseline-confirm",
 )}
+
+
+def test_inventory_confirmation_exit_diagnostic_is_exact_and_bounded() -> None:
+    facts = {
+        "closed": True,
+        "app_active": True,
+        "theme_active": True,
+        "scroll_restored": True,
+        "focus_restored": False,
+        "trigger_connected": True,
+        "trigger_disabled": False,
+        "trigger_hidden": False,
+        "active_category": "inventory",
+    }
+    diagnostic = {"last_close": {**facts, "closed": False, "active_category": "dialog"},
+                  "timeout": facts}
+
+    assert child._bounded_confirmation_exit_diagnostic(diagnostic) == {
+        "last_close": {key: diagnostic["last_close"][key] for key in sorted(facts)},
+        "timeout": {key: facts[key] for key in sorted(facts)},
+    }
+    assert child._bounded_confirmation_exit_diagnostic(
+        {**diagnostic, "path": r"C:\private"},
+    ) is None
+    assert child._bounded_confirmation_exit_diagnostic(
+        {**diagnostic, "timeout": {**facts, "closed": 1}},
+    ) is None
+    assert child._bounded_confirmation_exit_diagnostic(
+        {**diagnostic, "timeout": {**facts, "active_category": r"C:\private"}},
+    ) is None
+    assert child._bounded_confirmation_exit_diagnostic(
+        {"last_close": None, "timeout": None},
+    ) == {"last_close": None, "timeout": None}
 
 
 @pytest.mark.headed
@@ -158,10 +192,26 @@ def test_installed_inventory_refresh_acknowledge_restore_and_close(
         assert all(item["result"]["accepted"] for item in commands["controls"])
         journey = initial["report"]["integrity_journey"]
         assert journey["checkbox_custody"] and journey["cancel_preserved_result"] and journey["scan_selected"]
-        assert journey["confirmation_restored"] == {
+        assert journey["cancel_confirmation_restored"] == {
             "closed": True, "app_active": True, "theme_active": True,
-            "scroll_restored": True, "focus_restored": True,
+            "scroll_restored": True, "focus_required": True, "focus_restored": True,
+            "trigger_connected_at_close": True, "trigger_disabled_at_close": False,
+            "trigger_hidden_at_close": False,
         }
+        confirmation = journey["confirmation_restored"]
+        assert {key: confirmation[key] for key in (
+            "closed", "app_active", "theme_active", "scroll_restored",
+            "trigger_connected_at_close",
+        )} == {key: True for key in (
+            "closed", "app_active", "theme_active", "scroll_restored",
+            "trigger_connected_at_close",
+        )}
+        assert confirmation["trigger_hidden_at_close"] is False
+        assert confirmation["focus_required"] == (
+            confirmation["trigger_connected_at_close"]
+            and not confirmation["trigger_disabled_at_close"]
+        )
+        assert not confirmation["focus_required"] or confirmation["focus_restored"]
         assert "3 of 3 files selected" in journey["hidden_selection"]
         assert "2 hidden by filters or search" in journey["hidden_selection"]
         assert "3" in journey["confirmation_text"] and "2" in journey["confirmation_text"]
