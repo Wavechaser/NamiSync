@@ -550,6 +550,12 @@ explicit ordinary fallback. Final lifecycle acceptance and beta packaging remain
 
 #### Deliver M1-10 integrity controls and manual verification (2026-10-13 – 2026-10-14)
 
+- Close the integrated A–E review and stop for GUI recap. Final verification
+  includes 2,024 interfaces checks, affected helper reruns, nine installed
+  Inventory/gallery/shell/execution checks, twelve import contracts and the
+  dependency-accounted ordinary suite. Condense delivered plan sections; archive
+  four accounted recovery snapshots in a verified bundle and remove task refs
+  and clean temporary worktrees while retaining all evidence and unrelated stashes.
 - Make the installed Inventory confirmation witness derive focus restoration
   from invoker availability at modal close, prove Cancel returns focus to its
   enabled invoker, and retain bounded close-state diagnostics.

@@ -19,14 +19,10 @@ do not establish acceptance for changed dependencies.
 
 ## Remaining checkpoints
 
-The user activated M1-10 on 2026-10-13, with a stop for recap and GUI tweaks
-after its completion. During C3b, the user requested an earlier hold after all C
-units finish because of repeated model-capacity interruptions. C3b shipped as
-`41afd262`. The user subsequently resumed the remaining M1-10 work, requiring a
-thorough integrated A–C review before D. For this resumed session only, GPT-5.6
-Sol replaces GPT-6 Sol as the fallback if GPT-6.1 Sol is unavailable. Deliver the
-smallest reasonable reviewed atomic commits;
-M1-12, release and DOC-2 remain inactive. Backend optimization is closed.
+M1-10 is complete as of 2026-10-14, including the requested integrated A–C
+review before D and final cross-component review. Work stops for the user's
+recap and GUI tweaks. M1-12, release and DOC-2 remain inactive. Backend
+optimization is closed.
 Other pending rows still need user authorization, active scope and verification.
 A finding does not enlarge a row; [AGENTS](../AGENTS.md) governs scope changes,
 stops and recovery.
@@ -34,7 +30,7 @@ stops and recovery.
 | ID | Accepted outcome | Named verification | Status |
 | --- | --- | --- | --- |
 | M1-9 | Bounded inventory projections, current evidence and the full inventory consumer for sibling sorting, including missing-row acknowledge/restore. | Complete or prior-complete publication; warnings outside action scope; raw evidence provenance; search/filter/collapse/window/detail, replacement/race and production sort/reset paths; headed witnesses. | Complete; reviewed commits and evidence in the completed M1-9 section below. |
-| M1-10 | Baseline, verify and rebaseline controls plus first same-task manual post-copy verification, without persistent operation-time hashes. Eligible null-evidence files enter rebaseline; every admitted rebaseline hashes and replaces/creates evidence, and a match is not verified. | Confirm acknowledgement admission before claim/native work; all-null/mixed workflow, service/CLI and desktop paths; conditional recording and supersession races; atomic handoff classification; live pause/resume/cancel and unchanged automatic failed-read retries; overlay/result identity. Independently review operation matrix and conditional recording. Terminal Verify-remaining/subset retry remains deferred. | Resumed; integrated A–C review precedes D/E. Rebaseline confirmation is distinct from missing-row acknowledgement. |
+| M1-10 | Baseline, verify and rebaseline controls plus first same-task manual post-copy verification, without persistent operation-time hashes. Eligible null-evidence files enter rebaseline; every admitted rebaseline hashes and replaces/creates evidence, and a match is not verified. | Confirm acknowledgement admission before claim/native work; all-null/mixed workflow, service/CLI and desktop paths; conditional recording and supersession races; atomic handoff classification; live pause/resume/cancel and unchanged automatic failed-read retries; overlay/result identity. Independently review operation matrix and conditional recording. Terminal Verify-remaining/subset retry remains deferred. | Complete; A–E reviewed and integrated through D2 `d88f863` plus documentation closure. Stopped for recap and GUI tweaks. Rebaseline confirmation remains distinct from missing-row acknowledgement. |
 | M1-12 | Close integrated lifecycle/retention across activated task surfaces, then complete adversarial, documentation, ordinary and headed verification. This absorbs former M1-11. | Plan-only, execution-only, linked/manual verification, inventory, refused/canceled/degraded/failed tasks across same-document navigation, contained unsupported reload, explicit close and shutdown; admission bounds, stale-response suppression, exact resource release and retained truth. Applicable settlement oracle, ordinary/headed, installed-wheel/product, imports, diff/active-link checks and independent cross-component review. No aggregate-artifact or whole-owner-graph criterion. | Pending. |
 | M1-Release | Beta packaging and release closure after delivery rows above. | Installed artifact from clean checkout; frozen specification/dependency/CI, notices and corresponding source; standard-integrity host proof and every applicable BR-G/SH-G gate. [INTERFACES](INTERFACES.md) owns host/package/SH-G; [BRIDGE](BRIDGE.md) owns BR-G. | Pending. |
 
@@ -45,13 +41,11 @@ freshly check divergence, remote tip and preservation of all work; unexpected
 commits or unaccounted work require adjudication. AB-10 and the documentation
 consolidation do not execute, close or authorize DOC-2 history rewriting.
 
-### M1-10 implementation register — 2026-10-13
+### M1-10 delivered register — 2026-10-13–14
 
-Inspected clean `milestone1` at `fc8a79b`. The checkpoint is authorized as a
-whole, with the later user-requested hold after C; the dependency order below defines atomic review/commit boundaries,
-not additional product outcomes. Serialize shared writers and refresh each
-dependent unit against its integrated predecessor before implementation.
-Root owns this register, HANDOFF and CHANGELOG. Evidence is retained under
+Delivered from clean `milestone1` at `fc8a79b` through separately reviewed
+atomic commits. The temporary hold after C and later resumption are recorded
+in Git and evidence. Root owns this register, HANDOFF and CHANGELOG. Evidence remains under
 `build/m1-10-20261013/`, with its local naming/retention conventions.
 
 | Unit | Finite owners and consumers | Acceptance gate / commit boundary |
@@ -132,7 +126,8 @@ It delivers standalone Inventory checkboxes and complete selected/hidden counts,
 Baseline/Verify/Rebaseline with revision-bound explicit confirmation, current
 pause/resume/cancel, original-command observation and separate ordinary results.
 Empty selection and canceled confirmation start nothing; actual scan provenance
-remains separate. Current subject documents own the behavior. D2/E remain open.
+remains separate. Current subject documents own the behavior; D2/E delivery is
+recorded below.
 
 D1's final gate passes 2,018 interface checks, 69 focused consumer checks, two
 final browser probes and all nine affected installed obligations: Inventory,
@@ -192,7 +187,7 @@ prerequisites are independently reviewable commits:
 | Preserve foreground Plan ownership across execution-triggered full reloads; reconcile authoritative summary/window facts after the interaction. | `b52f8dd`; baseline-failing probe, 2,020 interfaces tests and both installed execution sizes; `plan-custody-review-20261014.md`. |
 | Correct the standalone Inventory confirmation witness to the existing conditional focus contract, with strong enabled-invoker Cancel proof and bounded diagnostics. | `cb48274`; complete owning-module ordinary/native checks, including `d2-inventory-native-20261014-04`; `m1-10-final-cross-review-20261014.md`. |
 
-D2 UI delivers mounted Plan/Verify
+D2 UI shipped as `d88f863`, delivering mounted Plan/Verify
 panes, exact first **Verify copied files**, explicit selected **Verify current
 state** fallback, current auxiliary controls, and separate original/manual/ordinary
 results. Inapplicable Baseline/Rebaseline controls are hidden on sync tasks.
@@ -219,8 +214,8 @@ Final evidence under `build/m1-10-20261013/`:
   and exact Close remain asserted. Failed attempts are retained, not acceptance.
 - The ordinary repository gate and complete external-basetemp tools/custody
   correction are `d2-ordinary-20261014-01/02`; their populations overlap and are
-  not summed. The 12 import contracts remain valid. E reviews dependency reuse,
-  final documentation and recovery accounting before checkpoint closure.
+  not summed. The 12 import contracts remain valid. E confirms dependency reuse,
+  final documentation and recovery accounting at checkpoint closure.
 
 `d2-final-review-20261014.md` owns independent D2 review. Two product findings
 were corrected: the separately committed Plan reload owner race, and D2's
@@ -232,6 +227,27 @@ read capture completion from its exact-phase owner; and test modal focus only
 when the invoker was available at close. Native14 disproved the proposed passive
 row-replacement scroll diagnosis. No third substantive product defect was found.
 Raw receipts and reviews retain the diagnostic chronology and withdrawn claims.
+
+### E — checkpoint closure
+
+`m1-10-final-cross-review-20261014.md` closes the integrated A–D review and
+verification accounting. Nine affected installed checks pass across the named
+final receipts; the ordinary/department/helper/import populations are accounted
+by dependency without summing overlapping runs. Final local-link and diff checks
+pass. Product/package bytes remain identical to the accepted installed source.
+
+All four recovery snapshots were rebuilt into reviewed commits without WIP
+ancestry and fully accounted in `recovery-accounting-20261014.md`. Their complete
+history remains recoverable in the verified `m1-10-recovery-snapshots-20261014.bundle`.
+The four local recovery refs, four integrated task branches and two clean
+temporary worktrees were removed; only regenerable caches accompanied worktree
+removal. Raw evidence, manifests and five pre-existing stashes remain.
+`recovery-cleanup-20261014.log` records the checks and exact removals.
+
+Stop here for recap and GUI tweaks. Existing Inventory legibility and physical
+wheel/tilt observations remain for that review, without a claimed fix or visual
+acceptance. M1-12, release, terminal subset retry and unrelated optimization
+remain outside this delivery.
 
 Preserve atomic publication, conditional recording including prior absence,
 root admission, fixed continuation identity and original execution truth.
