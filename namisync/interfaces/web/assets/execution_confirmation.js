@@ -12,39 +12,49 @@ function button(label, className) {
   return element;
 }
 
-export function createExecutionConfirmation(backgroundRoots) {
+export function createExecutionConfirmation(backgroundRoots, presentation = {}) {
   if (!Array.isArray(backgroundRoots)
       || backgroundRoots.length === 0
       || !backgroundRoots.every((root) => root instanceof HTMLElement)) {
     throw new TypeError("execution confirmation requires page background roots");
   }
 
+  const id = presentation.id ?? "execution-confirmation";
+  const headingText = presentation.heading ?? "Confirm destructive changes";
+  const consequenceText = presentation.consequence
+    ?? "These selected operations can replace or remove files. Review the count before continuing.";
+  const confirmText = presentation.confirm ?? "Confirm and execute";
+  const countText = presentation.count ?? ((value) =>
+    `${value} selected destructive operation${value === 1 ? "" : "s"}`);
+  if (typeof id !== "string" || id === "" || typeof headingText !== "string"
+      || typeof consequenceText !== "string" || typeof confirmText !== "string"
+      || typeof countText !== "function") {
+    throw new TypeError("execution confirmation presentation is invalid");
+  }
+
   const dialog = document.createElement("dialog");
-  dialog.id = "execution-confirmation";
+  dialog.id = id;
   dialog.className = "nami-dialog nami-execution-confirmation";
-  dialog.setAttribute("aria-labelledby", "execution-confirmation-title");
+  dialog.setAttribute("aria-labelledby", `${id}-title`);
   dialog.setAttribute(
     "aria-describedby",
-    "execution-confirmation-consequence execution-confirmation-count",
+    `${id}-consequence ${id}-count`,
   );
 
   const heading = document.createElement("h2");
-  heading.id = "execution-confirmation-title";
-  renderText(heading, "Confirm destructive changes");
+  heading.id = `${id}-title`;
+  renderText(heading, headingText);
   const consequence = document.createElement("p");
-  consequence.id = "execution-confirmation-consequence";
-  renderText(
-    consequence,
-    "These selected operations can replace or remove files. Review the count before continuing.",
-  );
+  consequence.id = `${id}-consequence`;
+  renderText(consequence, consequenceText);
   const count = document.createElement("p");
-  count.id = "execution-confirmation-count";
+  count.id = `${id}-count`;
   count.className = "nami-execution-confirmation__count";
   const actions = document.createElement("div");
   actions.className = "nami-execution-confirmation__actions";
   const cancel = button("Cancel", "nami-button nami-button--secondary");
   cancel.dataset.cancelExecution = "";
-  const confirm = button("Confirm and execute", "nami-button nami-button--primary");
+  const confirm = button(confirmText, "nami-button nami-button--primary");
   confirm.dataset.confirmExecution = "";
   actions.append(cancel, confirm);
   dialog.append(heading, consequence, count, actions);
@@ -127,11 +137,12 @@ export function createExecutionConfirmation(backgroundRoots) {
       event.stopPropagation();
     });
   }
-  function show({ destructiveOperationCount, returnFocus, onCancel, onConfirm }) {
+  function show({ destructiveOperationCount, countDetail = null, returnFocus, onCancel, onConfirm }) {
     if (
       current !== null
       || !Number.isSafeInteger(destructiveOperationCount)
       || destructiveOperationCount <= 0
+      || !(countDetail === null || typeof countDetail === "string")
       || !(returnFocus instanceof HTMLElement)
       || typeof onCancel !== "function"
       || typeof onConfirm !== "function"
@@ -146,10 +157,7 @@ export function createExecutionConfirmation(backgroundRoots) {
     ];
     document.documentElement.style.setProperty("overflow", "hidden", "important");
     for (const root of backgroundRoots) root.inert = true;
-    renderText(
-      count,
-      `${destructiveOperationCount} selected destructive operation${destructiveOperationCount === 1 ? "" : "s"}`,
-    );
+    renderText(count, countText(destructiveOperationCount, countDetail));
     cancel.disabled = false;
     confirm.disabled = false;
     delete dialog.dataset.closing;

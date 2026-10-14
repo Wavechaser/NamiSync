@@ -56,21 +56,16 @@ Root owns this register, HANDOFF and CHANGELOG. Evidence is retained under
 
 | Unit | Finite owners and consumers | Acceptance gate / commit boundary |
 | --- | --- | --- |
-| A — operation policy | `db/repositories.py`; `workflows/inventory.py` and facade; `interfaces/service.py`, `cli.py`. Direct tests: inventory runtime/workflow, repositories, service, CLI, bridge service, verifier engine and recorder inventory/integrity. VERIFIER, WORKFLOWS, INTERFACES and FEATURES describe shipped policy; DATABASE changes only if recording policy changes. | Exact Boolean rebaseline confirmation and explicit selected scope before claim, ID resolution or native binding; all-null/mixed selection; fresh hash/replacement on matches; conditional absence/present races and cleared freshness; frozen pause/resume scope and unchanged automatic retries. Existing native runtime/CLI composition first, database/verifier/workflows/interfaces departments, independent operation-matrix and recorder review. One policy commit; no engine/recorder rewrite when existing behavior suffices. |
-| B — exact manual workflow | Dedicated `workflows/manual_verification.py`, execution review/runtime/models/facade, `db/repositories.py`, service registration; existing execution review/repository/post-execution/runtime/checkpoint tests and a focused manual workflow module if needed. DATABASE, VERIFIER, WORKFLOWS, INTERFACES. | Whole selected byte-producing population classified in one coherent transaction, including missing outcomes; target-only fresh admission, second atomic classification and frozen current-ledger candidates; no scan or operation-time hash retention. Ready/already-verified, empty/incomplete/unrecorded/superseded/diverged cases, between-query/start/recording races, real verifier/dispatcher/history composition and pause/resume/cancel. Affected departments and fresh independent review; one workflow commit. |
-| C — task association and bounded bridge | Service/task port/lifecycle; web drain/commands/task snapshot/inventory review; workflow inventory projection/runtime as required. Existing service/lifecycle/inventory projection and bridge command/drain/review tests. Six exact headed/benchmark command catalogs and `tools/performance/bridge_event` are direct consumers. BRIDGE, PRESENTATION, INTERFACES and relevant workflow docs. | Server-owned complete file/folder selection, warning exclusion, revision-fenced confirmation and start, separate ordinary/manual result ownership, immutable original execution, original-command recovery, replacement rollback, late-response retirement and exact Close. Bounded windows/details and existing admission capacity remain. Production composition and affected departments/tools, independent review; split selection and association only if independently coherent. |
 | D — desktop integrity and GUI-A6 | Assets app/bridge/inventory review/plan review/integrity plus directly required markup/styles and task status; existing production JS probes and installed inventory/task-shell/execution/gallery helpers. DESKTOP_UI, BRIDGE, PRESENTATION, FEATURES. | Functional selection, Baseline/Verify/Rebaseline confirmation, truthful live/terminal overlays and pause/resume/cancel, execution-to-Verify navigation, first eligible exact manual action and explicitly ordinary fallback. Delayed/stale/recovery tests and real installed command journeys; preserve scroll/keyboard/selection custody and existing failed-read retries. Independently reviewed UI commits may divide ordinary controls from exact manual navigation after their backend gates pass. |
 | E — checkpoint closure | Integrated A–D and their direct test/doc/helper consumers. | Ordinary suite, affected installed headed gates, import contracts, active-link/diff checks and fresh adversarial cross-component review; account for tests/receipts and all commits. Stop for recap and GUI tweaks. No M1-12 or release claim. |
 
-Delivered A–C3a are condensed below. Their finite implementation populations,
-earlier decisions and failed receipts remain in Git through `07947213` and the
+Delivered A–C and resumed review corrections are condensed below. Their finite
+implementation populations, earlier decisions and failed receipts remain in Git through `1648d2d5` and the
 named evidence root; subject documents own current behavior. Scope preparation
 and the earlier delivered-register condensation are committed as `a730165`.
 
 | Delivered unit | Shipped result and preserved boundaries | Reviewed commit and evidence |
 | --- | --- | --- |
-| A — operation policy | Explicit Boolean confirmation and selected scope precede rebaseline admission. Null/prior evidence both enter fresh hashing and conditional replacement; matches clear freshness rather than become verified. Existing engine/recorder behavior is unchanged. | `6ba3575`; 3,504 database/verifier/workflows/interfaces checks, 12 imports, focused native/CLI matrix and races. `integrity-neighborhood-09.log`, `policy-review-01.md`. |
-| B — exact manual workflow | Whole selected applicable population, including absent outcomes, is classified atomically with bounded repository chunks. Fresh target admission and a second classification freeze ledger-derived candidates for existing post-copy verification and pause continuation. Own session/history; no scan, original-run finish or persistent operation-time hashes. | `959f1bc`; 239 focused, 3,520 neighborhood checks, 12 imports, independent 257-subject/native pause/degradation probes. `manual-neighborhood-focused-09.log`, `manual-departments-10.log`, `manual-review-01.md`. |
 | C1 — server-owned selection | Initially empty exact file/folder/location selection; complete membership and counts include hidden/collapsed/off-window files. Warnings are inert. Existing view revision fences gestures, reads and later confirmation; selection grants no hashing authority. | `26e72ad`; 2,399 interfaces/tools checks, three skips, unaffected workflow evidence, 12 imports and seven installed checks. `selection-neighborhood-08.log`, `selection-installed-11.log`, `selection-review-01.md`. |
 | C2 — ordinary integrity association | Current request/session binds exact selected scope, confirmation and controls. One latest ordinary result remains separate from ledger state and is wholly replaced even for zero outcomes. Real scan provenance, normalized partial-pause results, original-command recovery, rollback, stale-response fences and exact Close remain intact. | `eecf31c`; 3,348 neighborhood checks, three skips, 12 imports and eight affected installed obligations including traced Setup; independent partial-pause resume/cancel probes. `ordinary-installed-12.log`, `ordinary-installed-13.log`, `ordinary-review-01.md`. |
 | C3a — execution target ledger reads | Released executions expose the existing target location through original Plan/execution binding. Opening creates no location, scan, native admission or hash. Missing scan provenance is explicitly null; complete ledger projection does not imply complete scan. Plan reads/selection/Close remain available. C3b owns auxiliary mutations. | `07947213`; 2,946 workflows/interfaces checks, 12 imports, installed Inventory and both execution-window cases. `execution-inventory-departments-01.log`, `execution-inventory-headed-01.log`, `execution-inventory-review-01.md`. |
@@ -89,143 +84,122 @@ after user availability confirmations. C1 recovery `c3bb191` was rebuilt into
 the reviewed commit without merging recovery ancestry. HANDOFF retains the
 task-owned recovery/worktree cleanup pointers until final accounting.
 
-C3b atomically migrates current versus original identity before enabling any
-auxiliary start. Retain original Plan request and execution terminal record;
-current request/session/kind track the auxiliary activity. Preserve original
-operation/automatic result maps, timestamps, committed selection, Plan detail,
-anchors/follow and Plan-again identity. Same-task manual verification has its own
-retained/live result generation and history identity; ordinary results remain
-separate. New bounded readiness and observed-start commands carry only exact
-task/original execution identity, revision and (for start) command ID. B rechecks
-whole-set classification and target admission; readiness is never permission.
-Linked execution cannot offer manual verification even after an automatic failed
-read. The first valid fresh manual claim consumes the opportunity through later
-failure/cancellation; wire/identity/revision/capacity refusal before claim does
-not. Only original-command observation/replay survives; no terminal subset retry.
-C3b was implemented from integrated C3a `07947213`, with the read-only
-consumer census refreshed against that predecessor before editing.
+C3b shipped as `41afd262`: original Plan/execution identity, results, times,
+selection, detail/follow and Plan again remain separate from current auxiliary
+activity. First exact manual verification, ordinary integrity, Refresh and missing
+visibility share the retained task with distinct result generations, actual scan
+provenance, original-command recovery, live controls and exact Close. Readiness
+is not authority; the first valid manual claim consumes the opportunity through
+failure/cancellation, while preclaim refusal does not. Linked verification stays
+ineligible; no terminal subset retry, schema or verifier/recorder rewrite shipped.
+Direct identity/catalog/fixture consumers migrated without retiring their checks;
+review corrected original-execution retirement and no-scan visibility admission.
 
-C3b finite owners: workflow runtime/models/execution_review/facade (manual module
-only for required frozen identity/result exposure); service/task_port/lifecycle;
-web drain/commands/inventory_review and actual task-snapshot consumers; assets
-bridge/app/inventory/Plan/task-status. Add direct post-execution/domain-checkpoint/
-inventory/executor-runtime and Plan-limit tests to C3a's population, existing
-task-shell/Plan/execution/detail/window/drain probes, all exact command catalogs
-and their tooling. Subject docs are WORKFLOWS/INTERFACES/BRIDGE/PRESENTATION/
-DESKTOP_UI/FEATURES where shipped behavior changes. No verifier/recorder/schema
-rewrite. The one gate follows execution-only release → ledger view/readiness →
-manual start/control/release → explicit ordinary start/release → exact Close,
-asserting original Plan/execution truth throughout. Include blocked/empty/linked
-cases, ledger races, first-attempt failure recovery, zero outcomes, distinct
-overlays/Gap repair, stale sinks/reads/old-session Close and cleanup replay.
-Run real native composition early, then the ordinary suite for the broad identity
-contract, imports, affected installed host/transport/gallery/Inventory/execution
-checks and fresh independent review. E remains whole-checkpoint closure.
-The read-only `auxiliary-design-refresh-01.md` census additionally identifies
-exact TaskSummary producers in `tools/performance/plan.py`, the Setup and
-interactive bridge probes, public-view/scale witnesses and existing native task
-helpers. These direct consumers migrate with the identity shape; historical
-receipts remain unchanged. Reuse the dispatcher's normalized accumulated
-terminal outcomes across pause/resume/cancel, not a second workflow accumulator.
-The full integrated gate additionally reaches exact service/runtime doubles in
-`test_service.py`/`test_bridge_service.py`, the lifecycle port catalog, Plan
-summary/scale fixtures, sorted native/benchmark command catalogs and the
-`tools/performance/table_loading.py` render instrumentation anchor. These are
-direct consumers of the declared identity/port migration; migrate their shapes
-and anchors without retiring their behavioral checks. Review reproduced an
-introduced original-execution review retention gap after auxiliary Close; the
-same C3b outcome corrects task-owned retirement and verifies it through actual
-manual/ordinary and Refresh sessions. Manual Gap/zero terminal witnesses close
-the named evidence gap. Final review also closed the finite visibility-admission
-migration: execution ledger views use retained execution binding under the current
-request claim, without requiring scan metadata. Real missing-row cases cover
-direct and refreshed views, acknowledge/replay/restore and exact Close. The initial all-tests receipt (misnamed ordinary01)
-includes headed checks and remains retained; it is not acceptance.
+C3b acceptance: 6,049 ordinary passes/four expected skips (`c3b-ordinary-12.log`),
+twelve imports (`c3b-imports-13.log`), and nineteen installed obligations by
+dependency: fourteen in `c3b-headed-02.log`, four in `c3b-gallery-04.log`, and
+Inventory in `c3b-inventory-17.log`. The latter passed with unchanged guards after
+foreground/focus refusals. `auxiliary-review-luna-01.md` owns independent review;
+`c3b-close-repro-01.log`, `c3b-review-corrections-01.log` and
+`c3b-visibility-11.log` retain the Close, Gap/zero/partial and visibility witnesses.
+The two `c3b-native-evidence*` manifests preserve 141 hash-verified evidence files.
+Earlier broad/gallery/foreground failures remain failures, not acceptance.
 
-C3b final gates pass 6,049 ordinary checks with four expected skips and 35
-headed deselections (`c3b-ordinary-12.log`), all twelve import contracts
-(`c3b-imports-13.log`) and nineteen affected installed obligations: fourteen
-unaffected passes in `c3b-headed-02.log`, four gallery checks in
-`c3b-gallery-04.log`, and the changed service visibility path's installed Inventory
-journey in `c3b-inventory-17.log`. The gallery rerun covers changed identity
-specimens and the sorted command checker; host/transport/execution/task-shell/Setup
-evidence remains valid by dependency. Visibility's focused gate passes fifteen
-checks (`c3b-visibility-11.log`). Inventory retries 14/15 stopped at foreground
-ownership and 16 at pre-click focus; 17 passed with all guards intact.
-The initial broad and gallery failures remain failed receipts. Close regression
-red/green and manual Gap/zero/partial repair are in `c3b-close-repro-01.log` and
-`c3b-review-corrections-01.log`; `auxiliary-review-luna-01.md` owns independent
-source, correction and final acceptance review. Exactly 106 native evidence
-files were copied and hash-verified under `c3b-native-evidence/`, with 35 final
-Inventory retry files under `c3b-native-evidence-final/`. The reviewed C3b commit
-completed the original C delivery; the subsequent hold and resumption are recorded above.
+The requested resumed A–C review is complete. Three fresh reports
+(`resume-review-{ab,c,consumers}-01.md`) cover policy/recording, lifecycle/results
+and all direct browser/validator/fixture consumers against `41afd262`.
+A/B passed 43 fresh native cases with no product finding; stale delivery prose
+was reconciled. Two finite omissions in C's original/current identity and closed
+kind migrations were corrected in separate reviewed commits:
 
-D is authorized after the resumed A–C review closes. Review the integrated
-`41afd262` in three read-only populations: A/B policy, classification, admission
-and conditional recording; C selection, association, result/replay/Close ownership;
-and bridge/browser/direct-consumer migrations, test retirement and evidence.
-Trace cross-unit consumers and reproduce supported concerns before disposition.
-Existing unchanged gates remain evidence by dependency; findings do not authorize
-new scope, and AGENTS recurrence/mandatory stops remain binding. Review receipts
-use `resume-review-{ab,c,consumers}-01.md` under the existing evidence root.
-No D product/test edits precede this review's closure.
+| Correction | Verified result and evidence |
+| --- | --- |
+| `bccd88f` — retain existing execution Inventory reads during live/paused auxiliary work | Original execution release proof authorizes existing reads; current release still gates selection/mutations. 234 drain, 2,015 interfaces and twelve imports; `resume-read-{drain-04,interfaces-05,imports-05}.log`. |
+| `1648d2d5` — accept manual terminal records with exact pause capability | Complete-batch validation retains all kind/capability refusals. 164 focused and two installed host/transport checks; `resume-kind-{focused-03,installed-05}.log`. Interfaces: 1,782 unaffected passes in `resume-kind-interfaces-04.log` plus 234 drain passes in `resume-read-revision-07.log`. |
 
-The resumed review reproduced a C3 read-admission omission: current auxiliary
-activity revoked reads of an already published execution Inventory. Correct the
-original/current release check in `web/drain.py`, with public active/paused reads
-in the existing real manual composition and preserved mutation/retirement guards.
-Separately census the browser's closed session-kind validators: SessionRecord
-omits `manual-verify` despite the accepted kind migration. These are bounded
-corrections within C's predeclared identity/consumer migration, not new outcomes
-or effect authority. Each receives its own fix commit, matching tests/docs and
-fresh reviewer confirmation. Gate the read correction with real composition,
-interfaces tests and imports; gate the browser correction with production
-drain/validation probes, interfaces tests and affected installed host/transport.
-Retain original failures; close the whole finite census before D.
-Read correction `bccd88f` passes 234 drain tests, 2,015 interfaces tests and twelve
-imports (`resume-read-drain-04.log`, `resume-read-interfaces-05.log`,
-`resume-read-imports-05.log`), with independent native/source confirmation in the
-C report. A/B's fresh native review passed 43 focused cases without a product
-finding; stale VERIFIER/WORKFLOWS delivery prose is reconciled.
-Browser correction accepts the existing manual terminal kind and exact pause
-capability while retaining complete-batch validation. Its canonical capability
-and production drain probes pass 164 checks; two affected installed host/transport
-checks pass (`resume-kind-focused-03.log`, `resume-kind-installed-05.log`). The
-interfaces gate closes by dependency: 1,782 unaffected passes from
-`resume-kind-interfaces-04.log` plus all 234 drain cases from
-`resume-read-revision-07.log`. The failed receipt exposed a test-only assumption
-that two independent live reads have identical result revisions; `dc80d06`
-permits revision advance while retaining equality of every other fact. Product
-bytes and all unaffected evidence are unchanged. The consumer report confirms
-this accounting and the independent red/green production drain witness. The
-integrated A–C review is closed with these corrections; D's existing population
-must cover actual wrapper/overlay use and current ordinary/manual status rendering.
+The latter gate exposed only an asynchronous test assumption: `dc80d06` permits
+result revision advancement between independent live reads while retaining all
+other fact equality. The failed receipt and independent red/green drain witness
+remain; the consumer reviewer approved dependency reuse. Fifteen installed
+receipts/identities are hash-verified in `resume-kind-native-evidence/`.
+D must close the reports' remaining renderer/wrapper/current-status obligations;
+no new effect authority or outcome was added by this review.
 
-D splits into two functional UI commits after C3b acceptance. Read-only
-`desktop-integrity-design-20261013-01.md` inspected `07947213` plus its unfinished
-C3b candidate; recheck current/original identity, control routing, sync ordinary
-admission and exact result shapes against integrated C3b before editing.
+D1 delivers standalone Inventory checkboxes and complete selected/hidden counts,
+Baseline/Verify/Rebaseline with revision-bound explicit confirmation, current
+pause/resume/cancel, original-command observation and separate ordinary results.
+Empty selection and canceled confirmation start nothing; actual scan provenance
+remains separate. Current subject documents own the behavior. D2/E remain open.
 
-D1 activates standalone Inventory checkboxes, complete location/folder scope
-labels and selected/hidden counts; Baseline, Verify and explicit revision-bound
-Rebaseline confirmation; ordinary results separate from ledger state; current
-pause/resume/cancel and original-start observation recovery. Empty selections
-start nothing; canceling confirmation changes nothing. Stale selection results
-reload authoritative state rather than optimistically changing or replaying it.
-Owners: assets inventory_review/app/task_status and only required existing
-confirmation/styles/integrity-cell support. Consumers: existing Inventory
-review/app/window/refresh/visibility probes and wrappers, shared tree behavior,
-and installed Inventory child/helper. Gate: delayed/stale selection and reads,
-hidden/collapsed/off-window scope, confirmation cancel/revision changes, real
-baseline/verify/rebaseline/control/release, Gap/zero results, original-command
-recovery and exact Close; interfaces checks, installed journey and fresh review.
+D1's final gate passes 2,018 interface checks, 69 focused consumer checks, two
+final browser probes and all nine affected installed obligations: Inventory,
+four gallery modes, both task-shell sizes and both execution-review sizes.
+The unchanged external Inventory table-loading probe passes one child with
+before/after installed identity and asset-restoration checks; this establishes
+consumer correctness, not a performance claim. Evidence in the existing root:
+`d1-interfaces-20261014.log`, `d1-consumer-ordinary-final-20261014.log`,
+`d1-probe-final-20261014.log`, `d1-native-final-20261014.log`,
+`d1-native-final-temp-20261014/`, and `d1-table-inventory-20261014-01.*`.
+Final independent review and the coherent D1 commit close this unit; no recovery
+commit is an integration unit. HANDOFF retains exact resumption/cleanup pointers.
+
+The user's 2026-10-14 review replaced the rejected selector-consumer migration
+with removal of the checkbox's unused duplicate `data-node-id`. Selection uses
+its row closure; row identity remains unique. Only D1-owned checkbox tests were
+adjusted; gallery row selectors and the external tool remain unchanged. The
+unnecessary facts wrapper was also removed to preserve original facts/Details
+alignment. Three status witnesses now count the reusable feedback line rather
+than conflating it with the new selection-count paragraph; geometry, input
+guards and other verdicts remain unchanged.
+
+The retained failure history is evidence, not extra product defects: Inv01's
+pause-race hypothesis was unproved and almost certainly masked the missing-stat
+failure. Its attempted fix introduced Inv02's blocking UI-thread wait. Inv04's
+raw visible counts were 0/0/0/0, not the earlier 1/1/0/1 interpretation; expanding
+the helper's collapsed folder resolved that witness. Shell Shift+F10 guards remain
+unchanged with five-Boolean diagnostics; later passes establish no earlier cause.
+Pytest removed raw retry-173 before copying; its failed parent log remains,
+without a raw-evidence claim. The final nine-check run uses a unique retained
+base directory and supplies current acceptance. Earlier preserved failures remain
+in `d1-native-evidence*`; reports retain their corrections and superseded claims.
+
+Two separately reviewed prerequisites/corrections accompany D1:
+
+- `107dfa2` fixes shared workflow conversion of missing rows' historical stat
+  into current expected stat. Real Baseline/Verify/Rebaseline red/green cases,
+  177 owning tests and 2,960 workflow/interfaces checks pass. The defect failed
+  entire affected selections, including CLI use; BUGS records its core-workflow
+  consequence. Core, repository, verifier policy and historical evidence remain.
+- `f26cb57` restores C3b's distinct execution publication branch and missing-
+  reviewed-plan backstop, preserving optional auxiliary association. The
+  reproducer is red/green; 45 lifecycle and 215 direct-consumer tests pass with
+  independent approval in `c3b-backstop-review-20261014.md`. No supported path to
+  the lost check was found. It is fast-forward integrated in `milestone1`.
+
+Read-only D2 designs are `d2-design-refresh-01.md`,
+`d2-kinds-design-20261014.md` and `d2-ui-refresh-20261014.md`. Revalidate their
+named seams against integrated D1 before implementing. D2a first consolidates
+kind catalogs in existing lifecycle/task-port/browser owners, preserving distinct
+task/effect/session domains and explicit execution publication. Its finite source
+population is those three owners; existing lifecycle/command/browser-consumer
+tests cover complete kind admission and exact pause capabilities. Direct service,
+bridge, drain and transport consumers, interfaces checks, imports and fresh review
+gate a separate behavior-preserving refactor commit. D2 UI then follows below.
 
 D2 adds task-local Plan/Verify navigation, on-demand exact-manual readiness and
 the first Verify copied files action, plus clearly separate Verify current state
 ordinary fallback using server selection. Readiness grants no authority; no
 automatic fallback, new attempt or terminal subset retry. Current-session
 controls use C3b's settled route, independently of original execution identity.
-Owners: D1 assets plus panels/plan_review and narrow existing styles; no new wire
+D2 also resolves the currently disabled standalone integrity buttons on sync-plan
+Inventory panes: expose the accepted manual/ordinary actions with guidance, and
+hide actions that do not apply. Consolidate repeated task-kind membership lists
+into named constants in their existing language/layer owners (task_lifecycle,
+task_port and browser bridge) with complete-kind regression coverage; preserve
+intentional differences between sets rather than broadening admission. No cross-
+language schema generator or new domain policy is authorized.
+Owners: D1 assets plus panels/plan_review and narrow existing styles, and the
+named task-kind owners/consumers above; no new wire
 commands or generic pane framework. Consumers: existing task-shell, execution,
 Plan and Inventory probes/wrappers and one installed execution helper extended
 through ledger/readiness/manual/control/release and explicit ordinary fallback.

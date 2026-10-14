@@ -1,4 +1,4 @@
-"""Installed-wheel child for the native M1-9 inventory action witness."""
+"""Installed-wheel child for the native inventory and integrity action witness."""
 
 from __future__ import annotations
 
@@ -20,8 +20,12 @@ from _headed_native import foreground_window_handle
 from _startup_test_support import headed_command_extension
 
 
-_COMMANDS = frozenset({"refresh_inventory", "acknowledge_inventory", "restore_inventory"})
+_COMMANDS = frozenset({"refresh_inventory", "acknowledge_inventory", "restore_inventory",
+                       "set_inventory_selection", "start_inventory_integrity", "control_integrity"})
 _FILE_BYTES = b"NamiSync native inventory fixture\r\n"
+_INTEGRITY_STAGES = ("select-folder", "select-location-clear", "select-location", "baseline",
+                     "verify", "pause", "resume", "verify-cancel", "cancel",
+                     "rebaseline-cancel-open", "rebaseline-cancel", "rebaseline-open", "rebaseline-confirm")
 _OWN_FAILURES = frozenset({
     "inventory command evidence is incomplete",
     "inventory action identities or actual effects differ",
@@ -34,6 +38,17 @@ _OWN_FAILURES = frozenset({
     "initial inventory loading witness timed out",
     "initial inventory loading witness is invalid",
     "initial inventory scanner did not enter",
+    "native integrity runner did not enter before control",
+    "native integrity control witness timed out",
+    "native integrity control did not leave held invocation",
+    "integrity capture has no task identity",
+    "integrity capture preceded terminal release",
+    "native integrity detail identity differs",
+    "native integrity command identity or control differs",
+    "native integrity terminal reconciliation differs",
+    "native integrity durable ledger differs",
+    "native integrity durable hash differs",
+    "inventory integrity state remained after Close",
 }) | frozenset(f"inventory {name} did not have one original command" for name in _COMMANDS)
 
 
@@ -53,6 +68,12 @@ class _InventoryPhase:
         self.failure: dict[str, object] | None = None
         self.initial_scan_entered = threading.Event()
         self.initial_scan_release = threading.Event()
+        self.verify_runner_entered = threading.Event()
+        self.verify_release = threading.Event()
+        self.verify_gate_pending = False
+        self.verify_runner_calls = 0
+        self.verify_control_entries: list[str] = []
+        self.integrity_results: list[dict[str, object]] = []
 
     def bind(self, registry: object) -> None:
         from namisync.workflows import LocationCandidate
@@ -64,9 +85,27 @@ class _InventoryPhase:
         folder.mkdir()
         (folder / "one.txt").write_bytes(_FILE_BYTES)
         (folder / "two.txt").write_bytes(_FILE_BYTES)
+        (folder / "zz.txt").write_bytes(_FILE_BYTES)
         shell = registry.create_task_shell("a" * 32)
         runtime = registry._lifecycle._runtime
         original = runtime._inventory_deps
+        from namisync.core.integrity import IntegrityMode
+        original_verify = runtime._integrity_deps.runners[IntegrityMode.VERIFY]
+
+        def gated_verify(selection: object, context: object, recorder: object) -> object:
+            with self.lock:
+                self.verify_runner_calls += 1
+                held = self.verify_gate_pending
+                self.verify_gate_pending = False
+                self.verify_runner_entered.set()
+            if held:
+                if not self.verify_release.wait(60):
+                    raise RuntimeError("native integrity control witness timed out")
+                context.run.checkpoint()
+                raise RuntimeError("native integrity control did not leave held invocation")
+            return original_verify(selection, context, recorder)
+
+        runtime._integrity_deps.runners[IntegrityMode.VERIFY] = gated_verify
 
         def delayed_scan(*args: object, **kwargs: object) -> object:
             self.initial_scan_entered.set()
@@ -135,6 +174,14 @@ class _InventoryPhase:
         from namisync.interfaces.web.bridge import to_primitive_view
 
         def invoke(payload: object) -> object:
+            if name == "start_inventory_integrity":
+                if any(item["command"] == name for item in self.commands):
+                    self.capture_integrity()
+                if payload.mode == "verify":
+                    with self.lock:
+                        self.verify_runner_entered.clear()
+                        self.verify_release.clear()
+                        self.verify_gate_pending = True
             try:
                 result = original(payload)
             except BaseException as error:
@@ -148,8 +195,17 @@ class _InventoryPhase:
                 self.commands.append(record)
                 try:
                     record["result"] = to_primitive_view(result)
-                    record.update({"task_id": payload.task_id, "request_id": payload.request_id,
-                                   "command_id": payload.command_id, "node_id": payload.node_id})
+                    record.update({"task_id": payload.task_id,
+                                   "request_id": getattr(payload, "request_id", None),
+                                   "command_id": getattr(payload, "command_id", None),
+                                   "node_id": getattr(payload, "node_id", None)})
+                    if name == "set_inventory_selection":
+                        record.update({"selected": payload.selected, "expected_revision": payload.expected_revision})
+                    elif name == "start_inventory_integrity":
+                        record.update({"mode": payload.mode, "accept_current_evidence": payload.accept_current_evidence,
+                                       "session_id": result.session_id, "next_request_id": result.request_id})
+                    elif name == "control_integrity":
+                        record.update({"session_id": payload.session_id, "action": payload.action})
                     if name == "refresh_inventory":
                         record.update({"request_id": result.request_id, "session_id": result.session_id,
                                        "prior_request_id": payload.request_id})
@@ -157,13 +213,62 @@ class _InventoryPhase:
                     if self.failure is None:
                         self.failure = {"command": name, "stage": "observation", "reason": type(error).__name__,
                                         "assertion": _owned_failure(error)}
+            if name == "control_integrity" and payload.action in {"pause", "cancel"} and result.accepted:
+                self.verify_release.set()
             return result
         return invoke
+
+    def capture_integrity(self) -> None:
+        registry, initial = self.registry, self.initial
+        if registry is None or initial is None:
+            raise RuntimeError("integrity capture has no task identity")
+        task = next(item for item in registry.list_tasks().tasks if item.task_id == initial["task_id"])
+        if not task.session_released:
+            raise RuntimeError("integrity capture preceded terminal release")
+        view = registry.open_inventory_view(initial["task_id"])
+        window = registry.get_inventory_window(initial["task_id"], expected_revision=view["view_revision"], offset=0, limit=256)
+        ledger = registry._lifecycle._runtime.list_inventory(int(view["location_id"]))
+        projection = registry._inventory_views[initial["task_id"]].projection
+        details = [registry.get_inventory_detail(initial["task_id"], expected_revision=view["view_revision"], node_id=node.node_id)
+                   for node in projection.nodes if node.row is not None and node.row.entry_kind is not None
+                   and node.row.entry_kind.value == "file"]
+        integrity = dict(window["integrity"])
+        integrity["items"] = []
+        for detail in details:
+            overlay = detail["integrity"]
+            if (detail["disposition"] != "current"
+                    or {key: value for key, value in overlay.items() if key != "items"}
+                    != {key: value for key, value in integrity.items() if key != "items"}):
+                raise RuntimeError("native integrity detail identity differs")
+            integrity["items"].extend(overlay["items"])
+        rows = [{"path": row.rel_path, "presence": row.presence.value,
+                 "digest": row.attestation.content.digest.hex() if row.attestation else None,
+                 "algorithm": row.attestation.content.algorithm if row.attestation else None,
+                 "evidence_at": row.attestation.content.observed_at.isoformat() if row.attestation else None,
+                 "last_verified_at": row.last_verified_at.isoformat() if row.last_verified_at else None,
+                 "verification_state": row.verification_state.value} for row in ledger]
+        self.integrity_results.append({"request_id": view["request_id"],
+                                       "scan_request_id": view["scan_request_id"],
+                                       "scan_scope": view["scan_scope"],
+                                       "visible_integrity": window["integrity"],
+                                       "integrity": integrity, "ledger": rows})
+
+    def observe_verify_runner_entry(self, action: str) -> bool:
+        if action not in {"pause", "cancel"}:
+            raise ValueError("native integrity runner entry action is invalid")
+        if not self.verify_runner_entered.is_set():
+            return False
+        with self.lock:
+            if not self.verify_runner_entered.is_set():
+                return False
+            self.verify_control_entries.append(action)
+        return True
 
     def diagnostic(self) -> dict[str, object]:
         with self.lock:
             commands = list(self.commands)
             failure = self.failure
+            verify_control_entries = list(self.verify_control_entries)
         return {
             "commands": [
                 {"command": item["command"],
@@ -174,12 +279,16 @@ class _InventoryPhase:
             "wrapper_failure": failure,
             "initial_scan_entered": self.initial_scan_entered.is_set(),
             "initial_scan_released": self.initial_scan_release.is_set(),
+            "verify_runner_entered": self.verify_runner_entered.is_set(),
+            "verify_runner_calls": self.verify_runner_calls,
+            "verify_control_entries": verify_control_entries,
         }
 
     def report(self) -> dict[str, object]:
         with self.lock:
             registry, initial = self.registry, self.initial
             commands, failure, fixture = list(self.commands), self.failure, self.fixture
+            verify_control_entries = list(self.verify_control_entries)
         if registry is None or initial is None or failure is not None or fixture is None:
             raise RuntimeError("inventory command evidence is incomplete")
         def matching(name: str, expected: int) -> list[dict[str, object]]:
@@ -213,10 +322,44 @@ class _InventoryPhase:
                 or context_acknowledge["result"]["applied"] != 1
                 or context_restore["result"]["applied"] != 1):
             raise RuntimeError("inventory action identities or actual effects differ")
+        self.capture_integrity()
         view = registry.open_inventory_view(initial["task_id"])
-        if (view["request_id"] != selected_refresh["request_id"]
-                or view["scan_scope"] != {"kind": "item", "path": fixture["missing_path"]}):
+        selections = matching("set_inventory_selection", 3)
+        starts = matching("start_inventory_integrity", 4)
+        controls = matching("control_integrity", 3)
+        if (view["scan_scope"] != {"kind": "selection", "path": None}
+                or view["scan_request_id"] != starts[-1]["next_request_id"]):
             raise RuntimeError("inventory publication was not replaced")
+        if ([item["node_id"] for item in selections] != [fixture["folder_node_id"], None, None]
+                or [item["selected"] for item in selections] != [True, False, True]
+                or [item["mode"] for item in starts] != ["baseline", "verify", "verify", "rebaseline"]
+                or [item["accept_current_evidence"] for item in starts] != [False, False, False, True]
+                or [item["action"] for item in controls] != ["pause", "resume", "cancel"]
+                or [item["session_id"] for item in controls] != [starts[1]["session_id"], starts[1]["session_id"], starts[2]["session_id"]]
+                or any(not item["result"]["accepted"] for item in controls)
+                or len({item["command_id"] for item in starts}) != 4
+                or verify_control_entries != ["pause", "cancel"]
+                or self.verify_runner_calls != 3):
+            raise RuntimeError("native integrity command identity or control differs")
+        for index, (start, captured) in enumerate(zip(starts, self.integrity_results, strict=True)):
+            overlay = captured["integrity"]
+            expected_results = (["baselined", "baselined", "missing"] if index in {0, 3}
+                                else ["missing", "verified", "verified"] if index == 1 else [])
+            if (captured["scan_scope"] != {"kind": "selection", "path": None}
+                    or captured["scan_request_id"] != start["next_request_id"]
+                    or overlay["session_id"] != start["session_id"] or overlay["request_id"] != start["next_request_id"]
+                    or not overlay["complete"] or overlay["gap"]
+                    or sorted(item["result"] for item in overlay["items"]) != expected_results):
+                raise RuntimeError("native integrity terminal reconciliation differs")
+            present = [row for row in captured["ledger"] if row["presence"] == "present" and row["digest"] is not None]
+            if ({row["path"] for row in present} != {r"folder\one.txt", r"folder\zz.txt"}
+                    or any(row["verification_state"] != ("verified" if index in {1, 2} else "unverified") for row in present)):
+                raise RuntimeError("native integrity durable ledger differs")
+            from xxhash import xxh3_128
+            expected_hash = xxh3_128()
+            expected_hash.update(_FILE_BYTES)
+            if any(row["digest"] != expected_hash.digest().hex() for row in present):
+                raise RuntimeError("native integrity durable hash differs")
         return {"initial": initial, "fixture": fixture,
                 "results": {"refresh": {"request_id": refresh["request_id"],
                                         "session_id": refresh["session_id"]},
@@ -231,9 +374,13 @@ class _InventoryPhase:
                                                 "applied": context_restore["result"]["applied"]}},
                 "publication": {"request_id": view["request_id"],
                                 "view_revision": view["view_revision"],
+                                "scan_request_id": view["scan_request_id"],
                                 "scan_scope": view["scan_scope"],
                                 "missing": view["rollup"]["missing"],
-                                "acknowledged": view["rollup"]["acknowledged"]}}
+                                "acknowledged": view["rollup"]["acknowledged"]},
+                "integrity_results": self.integrity_results,
+                "integrity_commands": {"selections": selections, "starts": starts, "controls": controls,
+                                       "runner_entry_controls": verify_control_entries}}
 
     def verify_closed(self) -> None:
         with self.lock:
@@ -244,6 +391,8 @@ class _InventoryPhase:
             raise RuntimeError("inventory task remained after explicit Close")
         if initial["task_id"] in registry._inventory_views:
             raise RuntimeError("inventory publication remained after Close")
+        if initial["task_id"] in registry._lifecycle._runtime._retained_inventory_integrity:
+            raise RuntimeError("inventory integrity state remained after Close")
         if registry._start_responses or registry._lifecycle._visibility_receipts:
             raise RuntimeError("inventory command receipts remained after Close")
 
@@ -293,22 +442,34 @@ _PAGE = r"""
   const review = await until(() => {
     const pane = document.querySelector('.nami-inventory-review');
     return pane?.isConnected && !pane.querySelector('[data-action="inventory-refresh"]')?.disabled
-      && pane.querySelector('.nami-inventory-review__rows [data-node-id]') ? pane : null;
+      && pane.querySelector('.nami-inventory-review__rows > .nami-tree-row[role="treeitem"][data-node-id]') ? pane : null;
   }, 'initial-inventory-view');
-  const tableRows = [...review.querySelectorAll('.nami-inventory-review__rows [data-node-id]')];
+  const tableRows = [...review.querySelectorAll('.nami-inventory-review__rows > .nami-tree-row[role="treeitem"][data-node-id]')];
   const tableHeaders = [...review.querySelector('.nami-inventory-review__columns').children];
+  const checkboxAppearance = value => ({disabled:value.disabled, checked:value.checked,
+    mixed:value.indeterminate, width:value.getBoundingClientRect().width,
+    height:value.getBoundingClientRect().height});
+  const headerControls = [...tableHeaders[0].querySelectorAll(':scope > input[data-action="inventory-select-location"]')];
+  const rowCheckboxes = tableRows.map(row => {
+    const controls = [...row.querySelectorAll(':scope > .nami-file-row__selection > input[data-action="inventory-select-row"]')];
+    return {node_id:row.dataset.nodeId, control_count:controls.length,
+      appearance:controls.length === 1 ? checkboxAppearance(controls[0]) : null};
+  });
   const tableAppearance = {
     headers:tableHeaders.map(value => value.textContent),
     row_height:tableRows[0].getBoundingClientRect().height,
     row_count:tableRows.length,
-    checkboxes:[...review.querySelectorAll('input[type="checkbox"]')].map(value => ({
-      disabled:value.disabled, checked:value.checked, mixed:value.indeterminate,
-      width:value.getBoundingClientRect().width, height:value.getBoundingClientRect().height})),
+    header_control_count:headerControls.length,
+    header_checkbox:headerControls.length === 1 ? checkboxAppearance(headerControls[0]) : null,
+    row_checkboxes:rowCheckboxes,
     column_edges:tableHeaders.map((value,index) => [value.getBoundingClientRect().left,
       value.getBoundingClientRect().right, tableRows[0].children[index].getBoundingClientRect().left,
       tableRows[0].children[index].getBoundingClientRect().right]),
   };
-  const nativeClicks = Object.fromEntries(['refresh', 'filter-open', 'filter-present', 'filter-escape', 'filter-reopen', 'filter-all', 'details', 'acknowledge', 'restore-details', 'restore', 'context-open', 'context-escape', 'context-keyboard', 'context-keyboard-escape', 'context-menu', 'context-acknowledge', 'context-restore-details', 'context-restore', 'selected-activate', 'selected-arrow-first', 'selected-arrow-second', 'selected-refresh'].map(name => [name, false]));
+  const integrityStages = ['select-folder', 'select-location-clear', 'select-location', 'baseline',
+    'verify', 'pause', 'resume', 'verify-cancel', 'cancel',
+    'rebaseline-cancel-open', 'rebaseline-cancel', 'rebaseline-open', 'rebaseline-confirm'];
+  const nativeClicks = Object.fromEntries(['refresh', 'filter-open', 'filter-present', 'filter-escape', 'filter-reopen', 'filter-all', 'details', 'acknowledge', 'restore-details', 'restore', 'context-open', 'context-escape', 'context-keyboard', 'context-keyboard-escape', 'context-menu', 'context-acknowledge', 'context-restore-details', 'context-restore', 'selected-activate', 'selected-arrow-first', 'selected-arrow-second', 'selected-refresh', ...integrityStages].map(name => [name, false]));
   const keyboardInput = [];
   async function stage(name) {
     await until(() => document.hasFocus(), 'document-focus');
@@ -331,7 +492,13 @@ _PAGE = r"""
     }
     let listenedControl = null;
     window.__inventoryNativeCheck = async () => {
-      const selector = name === 'filter-open' || name === 'filter-reopen' ? '[data-action="filter-menu"]'
+      const selector = name === 'select-folder' ? `.nami-inventory-review__rows > .nami-tree-row[role="treeitem"][data-node-id="${window.__inventoryFixture.folder_node_id}"] input[data-action="inventory-select-row"]`
+        : name === 'select-location' || name === 'select-location-clear' ? '[data-action="inventory-select-location"]'
+        : name === 'rebaseline-confirm' ? '#rebaseline-confirmation [data-confirm-execution]'
+        : name === 'rebaseline-cancel' ? '#rebaseline-confirmation [data-cancel-execution]'
+        : name === 'rebaseline-open' || name === 'rebaseline-cancel-open' ? '[data-action="inventory-rebaseline"]'
+        : name === 'verify-cancel' ? '[data-action="inventory-verify"]'
+        : name === 'filter-open' || name === 'filter-reopen' ? '[data-action="filter-menu"]'
         : name === 'filter-present' || name === 'filter-escape' ? '.nami-filter-menu__popup [data-filter="present"]'
         : name === 'filter-all' ? '.nami-filter-menu__popup [data-filter="all"]'
         : name === 'restore-details' || name === 'context-restore-details' ? '[data-action="inventory-details"]'
@@ -344,7 +511,7 @@ _PAGE = r"""
         : name === 'context-acknowledge' ? '.nami-row-menu [data-action="row-acknowledge"]'
         : name === 'context-restore' ? '[data-action="inventory-restore"]'
         : `[data-action="inventory-${name}"]`;
-      const control = review.querySelector(selector);
+      const control = document.querySelector(selector);
       if (control === null) return {point:null, facts:{connected:false}};
       const focusTarget = name === 'context-open' || name === 'selected-activate'
         ? review.querySelector('.nami-inventory-review__rows') : control;
@@ -443,7 +610,7 @@ _PAGE = r"""
     firstReachable:menuGeometry.first.hit, lastReachable:menuGeometry.last.hit, popupInside};
   if (Object.values(filterMenu).some(value => value !== true)) throw new Error('filter menu contract failed');
   const fixture = window.__inventoryFixture;
-  const row = id => [...review.querySelectorAll('.nami-inventory-review__rows [data-node-id]')]
+  const row = id => [...review.querySelectorAll('.nami-inventory-review__rows > .nami-tree-row[role="treeitem"][data-node-id]')]
     .find(value => value.dataset.nodeId === id);
   const missing = () => row(fixture.missing_node_id);
   await until(() => missing()?.querySelector('[data-integrity="missing"]')
@@ -510,7 +677,7 @@ _PAGE = r"""
   rowMenu.raw_rectangles = contextRawRectangles;
   const summary = review.querySelector('.nami-plan-review__summary');
   const track = summary.querySelector('.nami-plan-review__progress');
-  const status = {paragraphs:summary.querySelectorAll(':scope > p').length,
+  const status = {feedback_lines:summary.querySelectorAll('.nami-inventory-review__status-line').length,
     has_scope:summary.querySelector('.nami-inventory-review__status-line').textContent.includes('Displayed scan: Entire location'),
     track_height:track.getBoundingClientRect().height,
     animation:getComputedStyle(track.firstElementChild).animationName,
@@ -534,8 +701,104 @@ _PAGE = r"""
   await until(() => !review.querySelector('[data-action="inventory-refresh"]').disabled
     && review.querySelector('.nami-inventory-review__status-line').textContent.includes(`Displayed scan: Item: ${fixture.missing_path}`),
     'selected-item-publication');
+  const tree = review.querySelector('.nami-inventory-review__rows');
+  folder().querySelector('.nami-tree-row__disclosure').click();
+  await until(() => !missing(), 'collapsed-selection-scope');
+  const activeBefore = tree.getAttribute('aria-activedescendant');
+  const scrollBefore = tree.scrollTop;
+  await stage('select-folder');
+  const selectionText = () => review.querySelector('[data-inventory-selection-summary]').textContent;
+  await until(() => selectionText().includes('3 of 3 files selected')
+    && !review.querySelector('[data-action="inventory-baseline"]').disabled, 'folder-selection');
+  const checkboxCustody = !missing() && tree.getAttribute('aria-activedescendant') === activeBefore
+    && tree.scrollTop === scrollBefore;
+  const search = review.querySelector('[data-action="inventory-search"]');
+  search.value = 'one.txt'; search.dispatchEvent(new Event('input', {bubbles:true}));
+  await until(() => selectionText().includes('2 hidden by filters or search'), 'hidden-selection');
+  const hiddenSelection = selectionText();
+  await stage('select-location-clear');
+  await until(() => selectionText().includes('0 of 3 files selected'), 'location-clear');
+  await stage('select-location');
+  await until(() => selectionText().includes('3 of 3 files selected')
+    && selectionText().includes('2 hidden by filters or search'), 'location-selection');
+  folder().querySelector('.nami-tree-row__disclosure').click();
+  await until(() => {
+    const visibleFiles = [...review.querySelectorAll(
+      '.nami-inventory-review__rows > .nami-tree-row[role="treeitem"][data-node-id][data-folder="false"]')];
+    return folder()?.getAttribute('aria-expanded') === 'true'
+      && visibleFiles.length === 1
+      && visibleFiles[0].querySelector('.nami-tree-row__label')?.textContent === 'one.txt';
+  }, 'integrity-visible-file');
+  const released = async (label, expectedText, expectedState) => until(() => {
+    const result = review.querySelector('[data-integrity-result]');
+    const states = [...review.querySelectorAll('.nami-inventory-row__result[data-integrity-state]')]
+      .map(value => value.dataset.integrityState);
+    const expectedStates = expectedState === null ? [] : [expectedState];
+    const currentScan = review.querySelector('.nami-inventory-review__status-line').textContent
+      .includes('Displayed scan: Selected items');
+    return !review.querySelector('[data-action="inventory-verify"]').disabled
+      && !result.hidden && result.textContent === expectedText
+      && states.length === expectedStates.length
+      && states.every((value, index) => value === expectedStates[index])
+      && currentScan ? {text:result.textContent, states, current_scan:currentScan} : null;
+  }, label);
+  await stage('baseline');
+  const baselinePresentation = await released('baseline-terminal',
+    'Baseline retained results · 1 window result', 'baselined');
+  const baselineResult = baselinePresentation.text;
+  await stage('verify');
+  await until(() => !review.querySelector('[data-action="inventory-pause"]').disabled, 'verify-active');
+  await stage('pause');
+  await until(() => !review.querySelector('[data-action="inventory-resume"]').disabled, 'verify-paused');
+  await stage('resume');
+  const verifyPresentation = await released('verify-terminal',
+    'Verification retained results · 1 window result', 'verified');
+  const verifyResult = verifyPresentation.text;
+  await stage('verify-cancel');
+  await until(() => !review.querySelector('[data-action="inventory-cancel"]').disabled, 'cancel-active');
+  await stage('cancel');
+  const canceledPresentation = await released('cancel-terminal',
+    'Verification retained results · 0 window results', null);
+  const canceledResult = canceledPresentation.text;
+  await stage('rebaseline-cancel-open');
+  const confirmation = document.querySelector('#rebaseline-confirmation');
+  await until(() => !confirmation.hidden && confirmation.open, 'rebaseline-confirmation');
+  const confirmationText = document.querySelector('#rebaseline-confirmation-count').textContent;
+  await stage('rebaseline-cancel');
+  await until(() => !confirmation.open && !review.querySelector('[data-action="inventory-rebaseline"]').disabled,
+    'rebaseline-cancel-no-effect');
+  const cancelPreservedResult = review.querySelector('[data-integrity-result]').textContent === canceledResult;
+  await stage('rebaseline-open');
+  await until(() => confirmation.open, 'rebaseline-confirm-again');
+  await stage('rebaseline-confirm');
+  const rebaselinePresentation = await released('rebaseline-terminal',
+    'Rebaseline retained results · 1 window result', 'baselined');
+  const rebaselineResult = rebaselinePresentation.text;
+  const appRoot = document.querySelector('#app');
+  const themeOptions = document.querySelector('#theme-options');
+  const rebaselineControl = review.querySelector('[data-action="inventory-rebaseline"]');
+  await until(() => !confirmation.open && !appRoot.inert && !themeOptions.inert
+    && document.documentElement.style.getPropertyValue('overflow') === ''
+    && document.documentElement.style.getPropertyPriority('overflow') === ''
+    && document.activeElement === rebaselineControl, 'rebaseline-confirmation-exit');
+  const confirmationRestored = {closed:!confirmation.open, app_active:!appRoot.inert,
+    theme_active:!themeOptions.inert,
+    scroll_restored:document.documentElement.style.getPropertyValue('overflow') === ''
+      && document.documentElement.style.getPropertyPriority('overflow') === '',
+    focus_restored:document.activeElement === rebaselineControl};
+  const scanText = review.querySelector('.nami-inventory-review__status-line').textContent;
+  const scanSelected = scanText.includes('Displayed scan: Selected items');
+  const integrityJourney = {checkbox_custody:checkboxCustody, hidden_selection:hiddenSelection,
+    confirmation_text:confirmationText, cancel_preserved_result:cancelPreservedResult,
+    baseline_result:baselineResult, verify_result:verifyResult, canceled_result:canceledResult,
+    rebaseline_result:rebaselineResult, scan_selected:scanSelected,
+    terminal_presentations:[baselinePresentation, verifyPresentation,
+      canceledPresentation, rebaselinePresentation],
+    confirmation_restored:confirmationRestored};
+  if (!checkboxCustody || !cancelPreservedResult || !scanSelected) throw new Error('integrity UI custody differs');
   return {table_appearance:tableAppearance, filter_geometry:menuGeometry, filter_colors:filterColors, filter_menu:filterMenu, row_menu:rowMenu, keyboard_input:keyboardInput, native_clicks:nativeClicks, pane_visible:review.isConnected && !review.hidden,
-    refreshed_missing:true, acknowledged_hidden:true, restored_missing:true, status, selected_refresh:selectedRefresh};
+    refreshed_missing:true, acknowledged_hidden:true, restored_missing:true, status, selected_refresh:selectedRefresh,
+    integrity_journey:integrityJourney};
 })()
 """
 
@@ -550,7 +813,7 @@ def _drive(window: object, phase: _InventoryPhase, recorder: _Recorder,
     page_result: dict[str, object] | None = None
     observed_handle: int | None = None
     click_target: dict[str, object] | None = None
-    foreground_owned = {name: False for name in ("refresh", "filter-open", "filter-present", "filter-escape", "filter-reopen", "filter-all", "details", "acknowledge", "restore-details", "restore", "context-open", "context-escape", "context-keyboard", "context-keyboard-escape", "context-menu", "context-acknowledge", "context-restore-details", "context-restore", "selected-activate", "selected-arrow-first", "selected-arrow-second", "selected-refresh")}
+    foreground_owned = {name: False for name in ("refresh", "filter-open", "filter-present", "filter-escape", "filter-reopen", "filter-all", "details", "acknowledge", "restore-details", "restore", "context-open", "context-escape", "context-keyboard", "context-keyboard-escape", "context-menu", "context-acknowledge", "context-restore-details", "context-restore", "selected-activate", "selected-arrow-first", "selected-arrow-second", "selected-refresh", *_INTEGRITY_STAGES)}
 
     def fail(error: BaseException, task: object | None, step: str, _method: str) -> None:
         nonlocal failed
@@ -558,6 +821,7 @@ def _drive(window: object, phase: _InventoryPhase, recorder: _Recorder,
             return
         failed = True
         phase.initial_scan_release.set()
+        phase.verify_release.set()
         recorder.fail(step, type(error).__name__)
         diagnostic = failure_site(task)
         diagnostic.update({"checkpoint": checkpoint, "page_result": page_result,
@@ -570,7 +834,7 @@ def _drive(window: object, phase: _InventoryPhase, recorder: _Recorder,
         )
 
     cdp = NativeCdp(native, core, retained, fail)
-    stage_names = ("refresh", "filter-open", "filter-present", "filter-escape", "filter-reopen", "filter-all", "details", "acknowledge", "restore-details", "restore", "context-open", "context-escape", "context-keyboard", "context-keyboard-escape", "context-menu", "context-acknowledge", "context-restore-details", "context-restore", "selected-activate", "selected-arrow-first", "selected-arrow-second", "selected-refresh")
+    stage_names = ("refresh", "filter-open", "filter-present", "filter-escape", "filter-reopen", "filter-all", "details", "acknowledge", "restore-details", "restore", "context-open", "context-escape", "context-keyboard", "context-keyboard-escape", "context-menu", "context-acknowledge", "context-restore-details", "context-restore", "selected-activate", "selected-arrow-first", "selected-arrow-second", "selected-refresh", *_INTEGRITY_STAGES)
 
     def next_stage(index: int) -> None:
         if index == len(stage_names):
@@ -583,6 +847,7 @@ def _drive(window: object, phase: _InventoryPhase, recorder: _Recorder,
         def click(_ready: object) -> None:
             nonlocal observed_handle
             focus_deadline = monotonic() + 60.0 if name == "refresh" else None
+            runner_deadline = monotonic() + 60.0 if name in {"pause", "cancel"} else None
 
             def dispatch_owned(checked: object) -> None:
                 nonlocal observed_handle, click_target
@@ -645,7 +910,16 @@ def _drive(window: object, phase: _InventoryPhase, recorder: _Recorder,
             def check_target() -> None:
                 cdp.evaluate("window.__inventoryNativeCheck()", dispatch_owned, f"preclick-{name}")
 
-            require_foreground()
+            def require_runner_entry() -> None:
+                if runner_deadline is None or phase.observe_verify_runner_entry(name):
+                    require_foreground()
+                elif monotonic() < runner_deadline:
+                    cdp.evaluate("new Promise(resolve => setTimeout(() => resolve(true), 100))",
+                                 lambda _value: require_runner_entry(), f"wait-{name}-runner-entry")
+                else:
+                    raise RuntimeError("native integrity runner did not enter before control")
+
+            require_runner_entry()
 
         cdp.evaluate(expression, click, f"wait-{name}")
 
@@ -654,7 +928,7 @@ def _drive(window: object, phase: _InventoryPhase, recorder: _Recorder,
         checkpoint = "page-result"
         if type(value) is dict:
             page_result = {key: value.get(key) for key in
-                           ("table_appearance", "filter_geometry", "filter_colors", "filter_menu", "row_menu", "keyboard_input", "native_clicks", "pane_visible", "refreshed_missing", "acknowledged_hidden", "restored_missing", "status", "selected_refresh")}
+                           ("table_appearance", "filter_geometry", "filter_colors", "filter_menu", "row_menu", "keyboard_input", "native_clicks", "pane_visible", "refreshed_missing", "acknowledged_hidden", "restored_missing", "status", "selected_refresh", "integrity_journey")}
         if type(value) is not dict or value.get("native_clicks") != {name: True for name in stage_names} or any(value.get(key) is not True for key in
                  ("pane_visible", "refreshed_missing", "acknowledged_hidden", "restored_missing")):
             raise RuntimeError("native inventory page result is invalid")
@@ -693,7 +967,7 @@ def _drive(window: object, phase: _InventoryPhase, recorder: _Recorder,
       if(pane?.querySelector('.nami-plan-review__status-title')?.textContent==='Scanning'
           && pane.querySelector('.nami-progress--indeterminate')
           && !pane.querySelector('.nami-inventory-review__content').hidden
-          && pane.querySelectorAll('.nami-inventory-review__rows [data-node-id]').length===0
+          && pane.querySelectorAll('.nami-inventory-review__rows > .nami-tree-row[role="treeitem"][data-node-id]').length===0
           && pane.querySelector('[data-action="inventory-refresh"]').disabled) return true;
       await new Promise(r=>setTimeout(r,25));}throw new Error('initial-inventory-loading');})()"""
     cdp.evaluate(loading, initial_loading, "initial-loading")
@@ -743,6 +1017,7 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
             )
         finally:
             phase.initial_scan_release.set()
+            phase.verify_release.set()
     if not recorder.settled:
         recorder.fail("child", "HostReturned")
     recorder.finish(code, True)

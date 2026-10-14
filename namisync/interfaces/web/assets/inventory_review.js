@@ -14,6 +14,8 @@ const FACETS = Object.freeze([
   ["notice", "Notice"],
 ]);
 const label = (value) => FACETS.find(([key]) => key === value)?.[1] ?? value;
+const integrityLabel = (value) => ({baselined: "Baselined", canceled: "Canceled",
+  error: "Error"})[value] ?? label(value);
 const bytes = (value) => value === null ? "Unavailable" : formatByteCount(value);
 
 function modifiedTime(value) {
@@ -79,16 +81,27 @@ export function createInventoryReviewPanel(callbacks) {
   title.setAttribute("role", "status");
   title.tabIndex = -1;
   const facts = element("p", "nami-shell__guidance nami-plan-review__status-summary");
+  const selectionSummary = element("p", "nami-shell__guidance nami-inventory-review__selection-summary");
+  selectionSummary.dataset.inventorySelectionSummary = "";
   const statusLine = element("p", "nami-shell__guidance nami-inventory-review__status-line");
   statusLine.setAttribute("role", "status");
+  const integrityResult = element("div", "nami-shell__guidance nami-inventory-review__integrity-result");
+  integrityResult.dataset.integrityResult = "";
   const refresh = button("Refresh inventory", "inventory-refresh");
   const refreshSelected = button("Refresh selected", "inventory-refresh-selected");
   refresh.classList.add("nami-button--primary");
+  const baseline = button("Baseline", "inventory-baseline");
+  const verify = button("Verify", "inventory-verify");
+  const rebaseline = button("Rebaseline", "inventory-rebaseline");
+  verify.classList.add("nami-button--primary");
+  const pause = button("Pause", "inventory-pause");
+  const resume = button("Resume", "inventory-resume");
+  const cancel = button("Cancel", "inventory-cancel");
   const check = button("Check original outcome", "inventory-check-outcome");
   const reload = button("Reload inventory view", "inventory-reload");
   const statusActions = element("div", "nami-plan-review__actions");
   const actions = element("div", "nami-inventory-review__actions");
-  actions.append(refreshSelected, refresh);
+  actions.append(baseline, verify, rebaseline, pause, resume, cancel, refreshSelected, refresh);
   statusActions.append(title, actions);
   const statusMeta = element("div", "nami-plan-review__status-meta");
   const detailsToggle = button("Details", "inventory-details");
@@ -101,7 +114,7 @@ export function createInventoryReviewPanel(callbacks) {
   progress.append(progressBar);
   const recoveryActions = element("div", "nami-inventory-review__actions");
   recoveryActions.append(check, reload);
-  summary.append(statusActions, statusMeta, statusLine, recoveryActions, progress);
+  summary.append(statusActions, statusMeta, selectionSummary, statusLine, integrityResult, recoveryActions, progress);
 
   const table = element("div", "nami-card nami-plan-review__table-card nami-inventory-review__table");
   const toolbar = element("div", "nami-plan-review__toolbar");
@@ -134,6 +147,7 @@ export function createInventoryReviewPanel(callbacks) {
   const columnHeader = element("div", "nami-file-list__header nami-table__header nami-inventory-review__columns");
   const columnNames = ["selection", "name", "primary", "secondary", "size", "modified", "notes"];
   const sortHeaders = new Map();
+  let headerSelection = null;
   for (const [index, [text, column]] of [
     ["Selection", null], ["Filename", "filename"], ["Presence", null], ["Checksum", null],
     ["Size", "size"], ["Modified", "mtime"], ["Notes", null],
@@ -145,8 +159,15 @@ export function createInventoryReviewPanel(callbacks) {
       checkbox.type = "checkbox";
       checkbox.checked = false;
       checkbox.indeterminate = false;
-      checkbox.disabled = true;
-      checkbox.ariaLabel = "Inventory selection unavailable";
+      checkbox.dataset.action = "inventory-select-location";
+      checkbox.ariaLabel = "Select all files in this location, including hidden and off-window files";
+      for (const eventName of ["pointerdown", "click", "change"]) {
+        checkbox.addEventListener(eventName, (event) => event.stopPropagation());
+      }
+      checkbox.addEventListener("change", () => {
+        if (current !== null && !checkbox.disabled) callbacks.onSelect?.(current, null, checkbox.checked);
+      });
+      headerSelection = checkbox;
       cell.append(checkbox);
     } else if (column === null) renderText(cell, text);
     else {
@@ -216,12 +237,24 @@ export function createInventoryReviewPanel(callbacks) {
   let tree = null;
   let committedWindow = null;
   let activeNodeId = null;
+  const selectionControls = new Map();
   let searchTimer = null;
   let searchDraft = false;
   const rowMenu = createRowMenu(pane);
 
   function blocked() { return task?.closePending || task?.inventoryLoading || current?.pending
-    || task?.inventoryAction?.pending; }
+    || task?.inventoryAction?.pending || task?.inventoryAction?.accepted; }
+  function matchingIntegrity(candidate) {
+    const result = candidate ?? null;
+    return result !== null && current !== null
+      && result.location_id === current.summary.location_id
+      ? result : null;
+  }
+  function currentIntegrity() { return matchingIntegrity(current?.window?.integrity); }
+  function selectionBlocked() {
+    return blocked() || !task?.sessionReleased || task.sessionState === "active"
+      || current?.summary.request_id !== task?.requestId || task?.inventoryViewUnconfirmed;
+  }
   function activeRow() {
     return current?.window.rows.find((row) => row.node_id === activeNodeId) ?? null;
   }
@@ -229,6 +262,21 @@ export function createInventoryReviewPanel(callbacks) {
     const row = activeRow();
     refreshSelected.disabled = row === null || row.warning !== null || Boolean(blocked())
       || !task?.sessionReleased || task.sessionState === "active";
+  }
+  function updateSelectionControls() {
+    if (headerSelection !== null) {
+      headerSelection.checked = current?.summary.selection === "all";
+      headerSelection.indeterminate = current?.summary.selection === "partial";
+      headerSelection.disabled = current === null || current.summary.selectable_file_count === 0
+        || selectionBlocked();
+    }
+    for (const row of current?.window.rows ?? []) {
+      const checkbox = selectionControls.get(row.node_id);
+      if (checkbox === undefined) continue;
+      checkbox.checked = row.selection === "all";
+      checkbox.indeterminate = row.selection === "partial";
+      checkbox.disabled = !row.selectable || selectionBlocked();
+    }
   }
   function submitSearch() {
     clearTimeout(searchTimer);
@@ -286,6 +334,16 @@ export function createInventoryReviewPanel(callbacks) {
     const row = activeRow();
     if (!refreshSelected.disabled) callbacks.onRefresh(current, row.node_id);
   });
+  for (const [control, mode] of [[baseline, "baseline"], [verify, "verify"], [rebaseline, "rebaseline"]]) {
+    control.addEventListener("click", () => {
+      if (current !== null && !control.disabled) callbacks.onStart?.(current, mode, control);
+    });
+  }
+  for (const [control, action] of [[pause, "pause"], [resume, "resume"], [cancel, "cancel"]]) {
+    control.addEventListener("click", () => {
+      if (current !== null && !control.disabled) callbacks.onControl?.(current, action);
+    });
+  }
   acknowledge.addEventListener("click", () => {
     const row = current?.detail?.row;
     if (row !== undefined && row.warning === null && !blocked()) callbacks.onVisibility(current, "acknowledge", row.node_id);
@@ -310,10 +368,20 @@ export function createInventoryReviewPanel(callbacks) {
     const selection = element("div", "nami-file-row__cell nami-file-row__selection");
     const checkbox = element("input", "nami-checkbox");
     checkbox.type = "checkbox";
-    checkbox.checked = false;
-    checkbox.indeterminate = false;
-    checkbox.disabled = true;
-    checkbox.ariaLabel = `Selection unavailable for ${row.display}`;
+    checkbox.dataset.action = "inventory-select-row";
+    checkbox.checked = row.selection === "all";
+    checkbox.indeterminate = row.selection === "partial";
+    checkbox.disabled = !row.selectable || selectionBlocked();
+    checkbox.ariaLabel = row.is_container
+      ? `Select folder ${row.display}, including hidden, collapsed, and off-window files`
+      : `Select file ${row.display}`;
+    for (const eventName of ["pointerdown", "click", "change"]) {
+      checkbox.addEventListener(eventName, (event) => event.stopPropagation());
+    }
+    checkbox.addEventListener("change", () => {
+      if (current !== null && !checkbox.disabled) callbacks.onSelect?.(current, row.node_id, checkbox.checked);
+    });
+    selectionControls.set(row.node_id, checkbox);
     selection.append(checkbox);
     rowElement.replaceChildren(selection, name);
     const stateKey = row.warning !== null || row.row_id === null ? ""
@@ -344,6 +412,16 @@ export function createInventoryReviewPanel(callbacks) {
       .filter(Boolean).join(" · ");
     const notes = element("div", "nami-file-row__cell nami-file-row__notes", notesText);
     notes.title = notesText;
+    const result = currentIntegrity()?.items.find((item) => item.row_id === row.row_id) ?? null;
+    if (result !== null) {
+      const resultCell = createIntegrityCell(document, "nami-inventory-row__result", "result",
+        result.result, undefined, integrityLabel(result.result));
+      resultCell.dataset.integrityState = result.result;
+      resultCell.title = [integrityLabel(result.result), result.reason, result.recording,
+        result.record_disposition, result.detail_omitted_count > 0
+          ? `${result.detail_omitted_count} details omitted` : null].filter(Boolean).join(" · ");
+      notes.append(resultCell);
+    }
     rowElement.append(state, checksum, size, modified, notes);
   }
 
@@ -487,6 +565,15 @@ export function createInventoryReviewPanel(callbacks) {
     appendDetail("Verification invalidated", formatLocalDateTime(value.row.verification_invalidated_at));
     appendDetail("Invalidation reason", value.row.verification_invalidated_reason);
     appendDetail("Unsupported reason", value.row.unsupported_reason);
+    const ordinary = matchingIntegrity(selected.response.integrity) ?? currentIntegrity();
+    const result = ordinary?.items.find((item) => item.row_id === row.row_id) ?? null;
+    if (result !== null) {
+      appendDetail(`${({baseline: "Baseline", verify: "Verification", rebaseline: "Rebaseline"})[ordinary.mode]} result`, integrityLabel(result.result));
+      appendDetail("Result reason", result.reason);
+      appendDetail("Recording", result.recording);
+      appendDetail("Record disposition", result.record_disposition);
+      appendDetail("Omitted result details", String(result.detail_omitted_count));
+    }
     if (value.attestation === null) {
       appendDetail("Stored digest", "No baseline evidence");
       return;
@@ -513,6 +600,7 @@ export function createInventoryReviewPanel(callbacks) {
     tree = null;
     committedWindow = null;
     activeNodeId = null;
+    selectionControls.clear();
     current = null;
     task = null;
     searchDraft = false;
@@ -543,14 +631,16 @@ export function createInventoryReviewPanel(callbacks) {
     recoveryActions.hidden = check.hidden && reload.hidden;
     renderFilesystemText(rootPath, review?.summary.root_path ?? value.form?.source?.text ?? "");
     rootLine.title = review?.summary.root_path ?? value.form?.source?.text ?? "";
-    const ordinary = review?.window?.integrity;
+    const ordinary = currentIntegrity();
     const activityKind = (ordinary != null && ordinary.session_id === value.sessionId ? ordinary.mode : null)
       ?? value.snapshot?.terminal_result?.phases?.find(phase => ["baseline", "verify", "rebaseline"].includes(phase.phase))?.phase
       ?? value.snapshot?.phase;
     const activity = ({baseline: "Baseline", verify: "Verification", rebaseline: "Rebaseline"})[activityKind] ?? "Inventory scan";
     const digest = taskStatusDigest(value);
+    const ordinarySession = ["baseline", "verify", "rebaseline"].includes(value.sessionKind);
     summary.dataset.status = value.inventoryError ? "attention" : digest.state;
-    renderText(title, startAttempt !== null || value.sessionState === "active" || value.inventoryLoading ? digest.title
+    renderText(title, ordinarySession ? digest.title
+      : startAttempt !== null || value.sessionState === "active" || value.inventoryLoading ? digest.title
       : value.sessionState === "refused" ? `${activity} did not start`
         : value.sessionState === "failed" ? `${activity} failed`
           : value.sessionState === "canceled" ? `${activity} canceled` : `${activity} completed`);
@@ -563,6 +653,19 @@ export function createInventoryReviewPanel(callbacks) {
     facts.hidden = !available;
     facts.title = available && !review.summary.filters.includes("acknowledged")
       ? `${review.summary.rollup.acknowledged} acknowledged items hidden as matches; folder context may remain. Show them with the Acknowledged filter.` : "";
+    renderText(selectionSummary, available
+      ? `${review.summary.selected_file_count} of ${review.summary.selectable_file_count} files selected`
+        + (review.summary.hidden_selected_file_count > 0
+          ? ` · ${review.summary.hidden_selected_file_count} hidden by filters or search` : "")
+      : "");
+    selectionSummary.hidden = !available;
+    const resultMode = ({baseline: "Baseline", verify: "Verification", rebaseline: "Rebaseline"})[ordinary?.mode];
+    renderText(integrityResult, ordinary === null ? ""
+      : `${ordinary.complete ? `${resultMode} retained results`
+        : ordinary.gap ? `Live ${resultMode.toLowerCase()} results may be incomplete`
+          : `Live ${resultMode.toLowerCase()} results`}`
+        + ` · ${ordinary.items.length} window result${ordinary.items.length === 1 ? "" : "s"}`);
+    integrityResult.hidden = ordinary === null;
     const scanScope = review?.summary.scan_scope;
     const hasScan = available && review.summary.scan_request_id !== null;
     const scopeLabel = scanScope?.kind === "location" ? "Entire location"
@@ -597,6 +700,8 @@ export function createInventoryReviewPanel(callbacks) {
       rowMenu.close();
       filterMenu.render([], {}, true);
       refreshSelected.disabled = true;
+      for (const control of [baseline, verify, rebaseline, pause, resume, cancel]) control.hidden = true;
+      updateSelectionControls();
       detailActions.hidden = true;
       return;
     }
@@ -605,6 +710,20 @@ export function createInventoryReviewPanel(callbacks) {
     const selected = review.detail?.row ?? null;
     const domain = selected !== null && selected.warning === null;
     const currentPublication = review.summary.request_id === value.requestId && !value.inventoryViewUnconfirmed;
+    const currentOrdinary = value.sessionState === "active"
+      && ["baseline", "verify", "rebaseline"].includes(value.sessionKind);
+    const canStart = value.taskKind === "inventory" && value.sessionReleased && currentPublication
+      && review.summary.selected_file_count > 0 && !blocked();
+    for (const control of [baseline, verify, rebaseline]) {
+      control.hidden = currentOrdinary;
+      control.disabled = !canStart;
+    }
+    pause.hidden = !currentOrdinary || value.executionControlState === "paused";
+    pause.disabled = !currentOrdinary || value.executionControlState !== "running" || Boolean(blocked());
+    resume.hidden = !currentOrdinary || value.executionControlState !== "paused";
+    resume.disabled = !currentOrdinary || Boolean(blocked());
+    cancel.hidden = !currentOrdinary;
+    cancel.disabled = !currentOrdinary || value.executionControlState === "canceling" || Boolean(blocked());
     const missingCount = selected?.is_container ? selected.rollup.missing
       : selected?.presence === "missing" && !selected.acknowledged ? 1 : 0;
     const acknowledgedCount = selected?.is_container ? selected.rollup.acknowledged
@@ -637,12 +756,14 @@ export function createInventoryReviewPanel(callbacks) {
     empty.hidden = review.window.total !== 0;
     ensureTree();
     if (committedWindow !== review.window) {
+      selectionControls.clear();
       const generation = tree.beginWindowRequest();
       tree.commitWindow(generation, review.window);
       committedWindow = review.window;
       list.scrollTop = review.scrollTop ?? 0;
     }
     updateRefreshSelected();
+    updateSelectionControls();
     columns.freeze();
     columns.refresh();
     renderDetails();

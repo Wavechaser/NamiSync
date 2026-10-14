@@ -107,6 +107,24 @@ function terminalDigest(result, fallbackState, capacityOnly) {
   return { title, state, detail, fallbackState };
 }
 
+function ordinaryTerminalDigest(result, fallbackState, mode) {
+  const label = ({baseline: "Baseline", verify: "Verification", rebaseline: "Rebaseline"})[mode];
+  if (label === undefined || !["completed", "failed", "refused", "canceled"].includes(fallbackState)) return null;
+  if (result?.disposition === "unrun" || fallbackState === "refused") {
+    return {title: `${label} did not start`, state: "error", detail: `${label} did not start.`};
+  }
+  if (fallbackState === "canceled" || result?.headline === "canceled") {
+    return {title: `${label} canceled`, state: "canceled", detail: `${label} canceled.`};
+  }
+  if (fallbackState === "failed" || ["failed", "partial", "mismatch"].includes(result?.headline)) {
+    return {title: `${label} needs review`, state: "error", detail: result?.error ?? `${label} needs review.`};
+  }
+  if (["verification-incomplete", "degraded"].includes(result?.headline)) {
+    return {title: `${label} incomplete`, state: "degraded", detail: result?.error ?? `${label} incomplete.`};
+  }
+  return {title: `${label} completed`, state: "completed", detail: `${label} completed.`};
+}
+
 export function terminalStatusLine(execution, sessionState = null) {
   const result = execution.result;
   if (result === null && !["completed", "failed", "refused", "canceled"].includes(sessionState)) return null;
@@ -140,10 +158,13 @@ export function taskStatusDigest(task) {
     ? task.snapshot : null;
   const executionState = snapshot?.session_state ?? task?.sessionState ?? null;
   const currentExecution = task?.sessionKind === "sync-execution";
+  const currentOrdinary = ["baseline", "verify", "rebaseline"].includes(task?.sessionKind)
+    ? task.sessionKind : null;
   const execution = currentExecution ? selectTaskExecution(task).execution : EMPTY_EXECUTION;
   const attempt = ["sync-plan", "inventory"].includes(form?.attempt?.kind) ? form.attempt : null;
   const checkingFolders = attempt?.running === true && !attempt.dispatched;
-  const scanning = task?.inventoryError == null && (task?.taskKind === "inventory" || attempt?.kind === "inventory")
+  const scanning = task?.inventoryError == null && (task?.sessionKind === "inventory"
+      || (task?.taskKind === "inventory" && task?.sessionKind == null) || attempt?.kind === "inventory")
     && (executionState === "active" || task?.inventoryLoading === true
       || (attempt?.running === true && attempt.dispatched));
   // Planning has no item-level progress, but the shell can still tell us that
@@ -179,6 +200,11 @@ export function taskStatusDigest(task) {
     executionState,
     currentExecution && isCapacityOnlyExecution(execution),
   );
+  const ordinaryTerminal = ordinaryTerminalDigest(
+    currentOrdinary === null ? null : snapshot?.terminal_result ?? null,
+    executionState,
+    currentOrdinary,
+  );
   const planItemCount = summary?.selected_operation_count ?? 0;
   const planHasItems = (summary?.filter_counts?.all ?? 0) > 0;
   const releaseMessage = task?.releaseRecovery?.message ?? null;
@@ -193,6 +219,7 @@ export function taskStatusDigest(task) {
   else if (planning) [title, state] = ["Planning", "planning"];
   else if (summary !== null && !task?.executionStarted && task?.sessionKind !== "inventory") [title, state] = ["Plan ready", "plan"];
   else if (terminal !== null) ({ title, state } = terminal);
+  else if (ordinaryTerminal !== null) ({ title, state } = ordinaryTerminal);
   else if (executionState === "completed") [title, state] = ["Completed", "completed"];
   else if (executionState === "failed" || executionState === "refused") [title, state] = ["Error", "error"];
   else if (executionState === "canceled") [title, state] = ["Canceled", "canceled"];
@@ -203,7 +230,9 @@ export function taskStatusDigest(task) {
     title = task.executionControlState === "paused" ? "Paused" : "Verifying";
     state = title.toLowerCase();
   } else if (executionState === "active" && ["inventory", "baseline", "verify", "rebaseline"].includes(task?.sessionKind)) {
-    title = task.executionControlState === "paused" ? "Paused" : "Inventory";
+    const activeLabel = ({inventory: "Scanning", baseline: "Baselining", verify: "Verifying",
+      rebaseline: "Rebaselining"})[task.sessionKind];
+    title = task.executionControlState === "paused" ? "Paused" : activeLabel;
     state = title.toLowerCase();
   } else if (executionState === "active") {
     title = task?.taskKind === "inventory" ? "Inventory" : "Planning";
@@ -219,6 +248,7 @@ export function taskStatusDigest(task) {
   else if (summary !== null && !task?.executionStarted) detail = planItemCount === 0 && !planHasItems ? "Plan is empty."
     : `${planItemCount} items, ${formatByteCount(summary.required_bytes)} required.`;
   else if (terminal !== null) detail = terminal.detail;
+  else if (ordinaryTerminal !== null) detail = ordinaryTerminal.detail;
   else if (["completed", "failed", "refused", "canceled"].includes(executionState)) detail = `${title}.`;
   else if (summary === null && task?.executionStarted && currentExecution) detail = progress.total == null
     ? "Execution in progress." : `${progress.done} of ${progress.total} items.`;

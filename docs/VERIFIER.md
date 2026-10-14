@@ -7,8 +7,8 @@ for optional in-session readback. The production dispatcher registry carries
 all four headless kinds and receipt-aware history v7 commits standalone and
 compound detail incrementally before terminal.
 Stage 5 exposes standalone activities through the shared-service CLI with
-explicit location/scope binding and guarded selected rebaseline; desktop
-actions remain Stage 6. Signed-64 totals, exact event v5, and full-width native
+explicit location/scope binding and guarded selected rebaseline; the standalone
+desktop now exposes those actions and live controls. Signed-64 totals, exact event v5, and full-width native
 identity are active. The no-rescan manual post-copy workflow and ledger-current
 classification and same-task attachment are implemented; visible desktop actions
 remain pending. Fresh rebaseline admits
@@ -546,8 +546,9 @@ Implemented by the Stage 5 interface:
 - typed counts, per-item outcomes, phase summaries, and independent result axes;
 - required selected scope plus explicit current-evidence intent for rebaseline.
 
-Desktop actions remain a later M1 stage. The contracts above define their
-accepted target without claiming implementation.
+Standalone desktop Baseline, Verify and Rebaseline actions consume these
+contracts with complete server-owned selection and exact current-session
+controls. Manual post-copy desktop navigation remains a later M1 unit.
 
 The shared SQLite ledger already implements the injected conditional
 `record_integrity` command, including atomic evidence/reappearance updates and

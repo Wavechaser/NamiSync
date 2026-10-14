@@ -74,6 +74,7 @@ def test_task_shell_child_preserves_the_production_stack_and_bounded_seams() -> 
     assert '"Page.captureScreenshot"' in source
     assert '"Input.dispatchKeyEvent"' in source
     assert '"Input.dispatchMouseEvent"' in source
+    assert "last_plan_context_readiness = _bounded_plan_context_readiness(facts)" in source
     assert "evaluate_js" not in source
     assert "ExecuteScriptAsync" not in source
     assert "scenario_deadline(" in launch
@@ -160,6 +161,13 @@ def test_task_shell_failure_records_do_not_expose_private_text(tmp_path: Path) -
         "browser_async_error": {"type": "TypeError", "line": 1608},
         "move_bottom_gap": None,
         "plan_context_input": None,
+        "plan_context_readiness": {
+            "connected": True,
+            "document_focused": True,
+            "focused": False,
+            "hit_owned": True,
+            "visible": True,
+        },
     }
     child._write_driver_diagnostic(diagnostic_path, diagnostic)
     persisted = json.loads(diagnostic_path.read_text(encoding="utf-8"))
@@ -172,6 +180,22 @@ def test_task_shell_failure_records_do_not_expose_private_text(tmp_path: Path) -
     assert child._sanitized_browser_error({"type": "TypeError", "line": 1608}) == {
         "type": "TypeError", "line": 1608,
     }
+
+
+def test_task_shell_plan_context_readiness_is_exact_and_bounded() -> None:
+    value = {
+        "document_focused": True,
+        "connected": True,
+        "visible": True,
+        "focused": False,
+        "hit_owned": True,
+    }
+    assert child._bounded_plan_context_readiness(value) == {
+        name: value[name] for name in sorted(value)
+    }
+    assert child._bounded_plan_context_readiness({**value, "path": r"C:\private"}) is None
+    assert child._bounded_plan_context_readiness({**value, "focused": 1}) is None
+    assert child._bounded_plan_context_readiness(None) is None
 
 
 def test_task_shell_page_failure_releases_held_fixture_workers(

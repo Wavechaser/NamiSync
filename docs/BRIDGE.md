@@ -526,8 +526,11 @@ session, filesystem effect or mode-eligibility decision.
 or unloaded rows. Each window row supplies `selectable` and the same tri-state
 `selection`; notices and empty folders are nonselectable with `none`. Counts and
 states derive from server membership, never browser row enumeration. Request,
-response and row limits remain unchanged. Desktop checkboxes stay disabled until
-the integrity controls checkpoint activates their consumer.
+response and row limits remain unchanged. Standalone desktop checkboxes consume
+these authoritative states. Stale or uncertain selection gestures refresh the
+publication without resending the gesture. Integrity starts use the existing
+original-command observation path; rebaseline confirmation is bound to the exact
+request and view revision, rather than reusable acceptance for a later selection.
 
 Initial inventory publication requires exact terminal delivery and successful
 session release. A prior complete view remains readable during a new scan or a
@@ -631,7 +634,8 @@ count. At most 256 facts cross a window and at most one crosses detail; full
 selected populations remain server-owned. Terminal reconciliation replaces the
 live subset and clears the gap flag, even with zero outcomes. These activity
 facts do not reinterpret the separate current ledger fields. Existing pure
-inventory responses omit this context. Full desktop controls remain pending.
+inventory responses omit this context. Standalone desktop controls consume these
+ordinary overlays; manual post-copy navigation and controls remain pending.
 
 Manual windows/details instead add an independent `manual_verification` context:
 original execution session, manual request/session/location, result revision,

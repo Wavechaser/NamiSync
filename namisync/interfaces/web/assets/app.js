@@ -4,6 +4,7 @@ import {
   admitLocation,
   BridgeTransportError,
   closeTask,
+  controlIntegrity,
   controlExecution,
   createTask,
   echoReadiness,
@@ -33,9 +34,11 @@ import {
   revealPlanMove,
   StartPlanUncertainError,
   startInventory,
+  startInventoryIntegrity,
   startExecution,
   startPlan,
   startTaskDrain,
+  setInventorySelection,
   TaskCreateUncertainError,
   TaskCloseUncertainError,
   TerminalPresentationError,
@@ -265,6 +268,9 @@ const panel = createWorkPanel({
   onReload: (task) => { void loadInventoryReview(task, true); },
   onRefresh: (review, nodeId) => { void runInventoryAction(review, "refresh", nodeId); },
   onVisibility: (review, action, nodeId) => { void runInventoryAction(review, action, nodeId); },
+  onSelect: (review, nodeId, selected) => { void changeInventorySelection(review, nodeId, selected); },
+  onStart: (review, mode, returnFocus) => { void startInventoryIntegrityAction(review, mode, returnFocus); },
+  onControl: (review, action) => { void controlInventoryIntegrity(review, action); },
   onCheckOutcome: (task) => { void checkInventoryOutcome(task); },
 });
 const rail = createTaskRail({
@@ -277,6 +283,15 @@ const rail = createTaskRail({
 app.append(rail.element, panel.element);
 const executionConfirmation = createExecutionConfirmation([app, themeOptions]);
 document.body.append(executionConfirmation.element);
+const rebaselineConfirmation = createExecutionConfirmation([app, themeOptions], {
+  id: "rebaseline-confirmation",
+  heading: "Confirm Rebaseline",
+  consequence: "Rebaseline replaces or creates stored evidence for every selected file, including files hidden by filters or search.",
+  confirm: "Confirm Rebaseline",
+  count: (value, detail) => `${value} selected file${value === 1 ? "" : "s"}`
+    + (detail === null ? "" : ` · ${detail}`),
+});
+document.body.append(rebaselineConfirmation.element);
 
 function taskArray() {
   return Array.from(tasks.values()).reverse();
@@ -313,7 +328,7 @@ function taskCloseBlockReason(task) {
       || fixedOutcome(task.releaseRecovery)
       || task.executionAttempt?.state === "uncertain") return UNKNOWN_OUTCOME_GUIDANCE;
   if (task.executionAttempt !== null) return "Resolve the in-flight execution request before closing.";
-  if (task.inventoryAction?.pending) return fixedOutcome(task.inventoryAction.recovery)
+  if (task.inventoryAction?.pending || task.inventoryAction?.accepted) return fixedOutcome(task.inventoryAction.recovery)
     ? UNKNOWN_OUTCOME_GUIDANCE
     : checkableOutcome(task.inventoryAction.recovery)
       ? "Check the original inventory outcome before closing this task."
@@ -585,6 +600,8 @@ function adoptTask(summary) {
       inventoryRevision: 0,
       inventoryWindowRunning: false,
       inventoryWindowIntent: null,
+      inventoryOverlayRevision: 0,
+      inventoryOverlayRunning: false,
       inventoryError: null,
       inventoryAction: null,
       inventoryViewUnconfirmed: false,
@@ -610,6 +627,7 @@ function adoptTask(summary) {
         retireInventoryDetail(task.inventoryReview);
       }
       task.inventoryRevision += 1;
+      task.inventoryOverlayRevision += 1;
       task.inventoryLoading = false;
       task.recoveryRetry = null;
       task.recoverySessionId = null;
@@ -618,6 +636,8 @@ function adoptTask(summary) {
       task.closeFailed = false;
       task.snapshot = null;
       task.progressPresentation = null;
+      task.executionControlState = "running";
+      task.executionControlRevision += 1;
     }
     if (task.sessionId !== summary.session_id || summary.session_state !== "active") {
       const controlAttempt = task.executionControlAttempt;
@@ -735,12 +755,19 @@ function acceptTaskUpdate(task, sessionId, update, snapshot = null) {
           task.executionControlAttempt = null;
         }
       }
+      if (task.inventoryAction?.kind === "integrity-control"
+          && task.inventoryAction.sessionId === sessionId) {
+        task.inventoryAction = null;
+      }
       if (task.sessionKind === "sync-execution" && task.review !== null && !fixedOutcome(task.review.recovery)) {
         task.review.message = executionControlMessage(snapshot.control_state);
       }
     }
     if (task.review?.follow != null && task.sessionKind === "sync-execution") {
       task.review.follow.hasTarget = task.executionPresentation?.activeItem?.item_id != null;
+    }
+    if (["baseline", "verify", "rebaseline"].includes(task.sessionKind)) {
+      void refreshInventoryOverlay(task, sessionId);
     }
   }
   if (task.sessionKind === "sync-execution") markExecutionWindowDirty(task);
@@ -756,6 +783,8 @@ function acceptTaskUpdate(task, sessionId, update, snapshot = null) {
     if (task.review !== null && controlAttempt !== null
         && task.review.pending === controlAttempt.actionName) task.review.pending = null;
     task.sessionState = snapshot.session_state;
+    if (["baseline", "verify", "rebaseline"].includes(task.sessionKind)
+        && task.inventoryAction?.kind === "integrity-control") task.inventoryAction = null;
     if (task.form !== null) task.form.sessionState = task.sessionState;
     if (task.sessionKind === "sync-execution" && task.review !== null) {
       task.review.message = task.sessionState === "completed" ? null : `Execution ${task.sessionState}.`;
@@ -1340,6 +1369,215 @@ function inventoryResultMessage(result) {
     + `${result.unresolved_count} unresolved of ${result.total} missing items.`;
 }
 
+async function replaceInventoryPublication(task, review, summary, action, sessionId, publication, navigation) {
+  const stillOwned = () => tasks.get(task.taskId) === task && task.inventoryReview === review
+    && review.actionRevision === action && task.sessionId === sessionId
+    && review.summary.request_id === publication && navigationRevision === navigation;
+  const authoritative = summary.disposition === "conflict"
+    ? await openInventoryView(task.taskId) : summary;
+  if (!stillOwned()) return false;
+  const window = await getInventoryWindow(task.taskId, authoritative.view_revision, review.window.offset, 256);
+  if (!stillOwned() || window.disposition !== "current"
+      || window.view_revision !== authoritative.view_revision) return false;
+  review.summary = authoritative;
+  review.window = window;
+  task.inventoryViewUnconfirmed = false;
+  return true;
+}
+
+async function changeInventorySelection(review, nodeId, selected) {
+  const task = currentInventoryTask(review);
+  if (task === null || task.inventoryLoading || task.inventoryAction?.pending
+      || task.inventoryAction?.accepted
+      || review.pending !== null || !task.sessionReleased || task.sessionState === "active"
+      || task.inventoryViewUnconfirmed || review.summary.request_id !== task.requestId
+      || typeof selected !== "boolean") return;
+  const action = ++review.actionRevision;
+  const sessionId = task.sessionId;
+  const publication = review.summary.request_id;
+  const revision = review.summary.view_revision;
+  const navigation = navigationRevision;
+  review.pending = "selection";
+  review.message = "Updating selected files…";
+  renderTasks();
+  try {
+    const summary = await setInventorySelection(task.taskId, publication, revision, nodeId, selected);
+    if (currentInventoryTask(review) !== task || review.actionRevision !== action
+        || task.sessionId !== sessionId || review.summary.request_id !== publication) return;
+    const replaced = await replaceInventoryPublication(task, review, summary, action, sessionId, publication, navigation);
+    if (replaced) review.message = summary.disposition === "conflict"
+      ? "Selection changed elsewhere. Current selection shown." : null;
+    else review.message = "Selection changed. Reload the inventory view to continue.";
+  } catch (_error) {
+    if (currentInventoryTask(review) === task && review.actionRevision === action) {
+      try {
+        const replaced = await replaceInventoryPublication(task, review, {disposition: "conflict"},
+          action, sessionId, publication, navigation);
+        review.message = replaced
+          ? "Selection response unavailable. Current authoritative selection shown."
+          : "Selection response unavailable. Reload the inventory view to continue.";
+      } catch (_reloadError) {
+        review.message = "Selection response unavailable. Reload the inventory view to continue.";
+      }
+    }
+  } finally {
+    if (tasks.get(task.taskId) === task && task.inventoryReview === review
+        && review.actionRevision === action) {
+      review.pending = null;
+      renderTasks();
+    }
+  }
+}
+
+function inventoryIntegrityEligible(task, review, allowedAttempt = null) {
+  return currentInventoryTask(review) === task && !task.inventoryLoading
+    && (task.inventoryAction === null || task.inventoryAction === allowedAttempt
+      || (!task.inventoryAction.pending && !task.inventoryAction.accepted))
+    && review.pending === null && task.taskKind === "inventory"
+    && task.sessionReleased && task.sessionState !== "active" && !task.inventoryViewUnconfirmed
+    && review.summary.request_id === task.requestId && review.summary.selected_file_count > 0;
+}
+
+function cancelInventoryIntegrityStart(task, attempt) {
+  if (task.inventoryAction !== attempt || attempt.kind !== "integrity-start") return;
+  task.inventoryAction = null;
+  if (task.inventoryReview === attempt.review) attempt.review.message = null;
+  renderTasks();
+}
+
+async function startInventoryIntegrityAction(review, mode, returnFocus) {
+  const task = currentInventoryTask(review);
+  if (task === null || !inventoryIntegrityEligible(task, review)
+      || !["baseline", "verify", "rebaseline"].includes(mode)) return;
+  const attempt = {
+    kind: "integrity-start", mode, review, taskId: task.taskId,
+    requestId: review.summary.request_id, revision: review.summary.view_revision,
+    selectedCount: review.summary.selected_file_count, commandId: inventoryCommandId(),
+    hiddenSelectedCount: review.summary.hidden_selected_file_count,
+    pending: true, recovery: null, submissionStarted: false,
+    message: mode === "rebaseline" ? "Confirm Rebaseline in the dialog."
+      : `Starting ${mode === "verify" ? "verification" : "baseline"}…`,
+  };
+  task.inventoryAction = attempt;
+  review.message = attempt.message;
+  renderTasks();
+  if (mode !== "rebaseline") {
+    await submitInventoryIntegrity(task, attempt);
+    return;
+  }
+  try {
+    rebaselineConfirmation.show({
+      destructiveOperationCount: attempt.selectedCount,
+      countDetail: `${attempt.hiddenSelectedCount} hidden by filters or search`,
+      returnFocus,
+      onCancel: () => cancelInventoryIntegrityStart(task, attempt),
+      onConfirm: () => { void submitInventoryIntegrity(task, attempt); },
+    });
+  } catch (_error) {
+    cancelInventoryIntegrityStart(task, attempt);
+    if (task.inventoryReview === review) {
+      review.message = "Rebaseline confirmation unavailable. Selection was not changed.";
+      renderTasks();
+    }
+  }
+}
+
+async function submitInventoryIntegrity(task, attempt) {
+  if (task.inventoryAction !== attempt || attempt.submissionStarted) return;
+  const review = task.inventoryReview;
+  if (review !== attempt.review || !inventoryIntegrityEligible(task, review, attempt)
+      || review.summary.request_id !== attempt.requestId
+      || review.summary.view_revision !== attempt.revision
+      || review.summary.selected_file_count !== attempt.selectedCount
+      || review.summary.hidden_selected_file_count !== attempt.hiddenSelectedCount) {
+    task.inventoryAction = null;
+    if (review !== null) {
+      review.message = "Selection changed before confirmation. Reloading the current selection…";
+      renderTasks();
+      void loadInventoryReview(task, true);
+    }
+    return;
+  }
+  attempt.submissionStarted = true;
+  attempt.message = `Starting ${attempt.mode === "verify" ? "verification" : attempt.mode}…`;
+  review.message = attempt.message;
+  renderTasks();
+  const stillOwned = () => tasks.get(task.taskId) === task && task.inventoryAction === attempt;
+  try {
+    const result = await startInventoryIntegrity(task.taskId, attempt.requestId, attempt.commandId,
+      attempt.revision, attempt.mode, attempt.mode === "rebaseline", (recovery) => {
+        if (stillOwned()) {
+          attempt.recovery = recovery;
+          attempt.message = recovery.message;
+          renderTasks();
+        }
+      });
+    if (!stillOwned()) return;
+    task.inventoryAction = null;
+    adoptTask({ task_id: result.task_id, request_id: result.request_id,
+      plan_request_id: task.planRequestId, session_id: result.session_id,
+      session_kind: attempt.mode, session_state: "active", session_released: false,
+      task_kind: task.taskKind });
+    review.message = null;
+    renderTasks();
+    try { await refreshTasks(); } catch (_error) {
+      // The admitted session and attached drain already own current status.
+    }
+  } catch (error) {
+    if (!stillOwned()) return;
+    if (error instanceof StartPlanUncertainError || error instanceof OutcomeUnavailableError) {
+      attempt.message = attempt.recovery?.message ?? "Waiting for the original integrity outcome…";
+      review.message = attempt.message;
+    } else {
+      attempt.pending = false;
+      attempt.recovery = null;
+      attempt.message = "Integrity work did not start. Try again when you are ready.";
+      review.message = attempt.message;
+      task.inventoryAction = null;
+    }
+    renderTasks();
+  }
+}
+
+async function controlInventoryIntegrity(review, actionName) {
+  const task = currentInventoryTask(review);
+  if (task === null || task.inventoryAction?.pending || task.inventoryAction?.accepted
+      || review.pending !== null
+      || task.sessionState !== "active" || task.sessionId === null
+      || !["baseline", "verify", "rebaseline"].includes(task.sessionKind)
+      || !["pause", "resume", "cancel"].includes(actionName)) return;
+  const attempt = { kind: "integrity-control", sessionId: task.sessionId, actionName,
+    pending: true, recovery: null, message: `${actionName[0].toUpperCase()}${actionName.slice(1)} requested…` };
+  task.inventoryAction = attempt;
+  review.message = attempt.message;
+  renderTasks();
+  const stillOwned = () => tasks.get(task.taskId) === task && task.sessionId === attempt.sessionId
+    && task.inventoryAction === attempt;
+  try {
+    const result = await controlIntegrity(task.taskId, attempt.sessionId, actionName, (recovery) => {
+      if (stillOwned()) {
+        attempt.recovery = recovery;
+        attempt.message = recovery.message;
+        renderTasks();
+      }
+    });
+    if (!stillOwned()) return;
+    attempt.pending = false;
+    attempt.accepted = result.accepted;
+    attempt.message = result.accepted ? executionControlMessage(result.after)
+      : result.detail || `The ${actionName} request was not accepted.`;
+    review.message = attempt.message;
+  } catch (error) {
+    if (!stillOwned()) return;
+    attempt.pending = error instanceof OutcomeUnavailableError;
+    attempt.message = attempt.pending && attempt.recovery?.message
+      ? attempt.recovery.message : `${actionName[0].toUpperCase()}${actionName.slice(1)} refused. Follow live status.`;
+    review.message = attempt.message;
+  } finally {
+    if (stillOwned()) renderTasks();
+  }
+}
+
 async function checkInventoryOutcome(task) {
   const attempt = task.inventoryAction;
   if (tasks.get(task.taskId) !== task || !attempt?.pending
@@ -1358,6 +1596,7 @@ async function checkInventoryOutcome(task) {
 async function runInventoryAction(review, kind, nodeId) {
   const task = currentInventoryTask(review);
   if (task === null || task.inventoryLoading || task.inventoryAction?.pending
+      || task.inventoryAction?.accepted
       || (kind !== "refresh" && task.inventoryViewUnconfirmed) || review.pending !== null
       || !task.sessionReleased || task.sessionState === "active"
       || checkableOutcome(task.closeRecovery) || fixedOutcome(task.closeRecovery)) return;
@@ -1435,11 +1674,62 @@ function currentInventoryTask(review) {
     && task.inventoryReview === review ? task : null;
 }
 
+async function refreshInventoryOverlay(task, sessionId = task.sessionId) {
+  if (tasks.get(task.taskId) !== task || task.sessionId !== sessionId
+      || !["baseline", "verify", "rebaseline"].includes(task.sessionKind)) return;
+  task.inventoryOverlayRevision += 1;
+  if (task.inventoryOverlayRunning) return;
+  task.inventoryOverlayRunning = true;
+  let attemptedRevision = task.inventoryOverlayRevision;
+  try {
+    while (tasks.get(task.taskId) === task && task.sessionId === sessionId) {
+      const request = task.inventoryOverlayRevision;
+      attemptedRevision = request;
+      const review = task.inventoryReview;
+      if (review === null || selectedTaskId !== task.taskId || settingsVisible || task.closePending) break;
+      const action = review.actionRevision;
+      const navigation = navigationRevision;
+      const publication = review.summary.request_id;
+      const revision = review.summary.view_revision;
+      const detail = review.detail?.state === "current" ? review.detail : null;
+      const [window, detailResponse] = await Promise.all([
+        getInventoryWindow(task.taskId, revision, review.window.offset, 256),
+        detail === null ? Promise.resolve(null)
+          : getInventoryDetail(task.taskId, revision, detail.row.node_id),
+      ]);
+      const stillCurrent = tasks.get(task.taskId) === task && task.sessionId === sessionId
+        && task.inventoryOverlayRevision === request && task.inventoryReview === review
+        && review.actionRevision === action && review.summary.request_id === publication
+        && review.summary.view_revision === revision && selectedTaskId === task.taskId
+        && navigationRevision === navigation && !settingsVisible && !task.closePending;
+      if (stillCurrent && window.disposition === "current" && window.view_revision === revision) {
+        review.window = window;
+        if (detailResponse !== null && detailResponse.disposition === "current"
+            && detailResponse.view_revision === revision && review.detail === detail) {
+          detail.response = detailResponse;
+        }
+        renderTasks();
+      }
+      if (task.inventoryOverlayRevision === request) break;
+    }
+  } catch (_error) {
+    // Live progress remains available from the task drain; the next update or release rereads the overlay.
+  } finally {
+    task.inventoryOverlayRunning = false;
+    if (tasks.get(task.taskId) === task && task.inventoryOverlayRevision !== attemptedRevision
+        && ["baseline", "verify", "rebaseline"].includes(task.sessionKind)) {
+      void refreshInventoryOverlay(task, task.sessionId);
+    }
+  }
+}
+
 async function loadInventoryReview(task, force = false) {
+  const liveIntegrity = task !== undefined && task.sessionState === "active"
+    && ["baseline", "verify", "rebaseline"].includes(task.sessionKind);
   if (task === undefined || tasks.get(task.taskId) !== task || selectedTaskId !== task.taskId
       || settingsVisible || task.closePending
       || (task.taskKind !== "inventory" && !task.executionStarted)
-      || !task.sessionReleased || task.sessionId === null
+      || (!task.sessionReleased && !liveIntegrity) || task.sessionId === null
       || (!force && (task.inventoryLoading || task.inventoryReview !== null))) return;
   const request = ++task.inventoryRevision;
   const sessionId = task.sessionId;
@@ -1558,7 +1848,8 @@ function cancelInventoryWindow(review) {
 
 function inventoryWindowReady(task, review) {
   return task !== null && currentInventoryTask(review) === task
-    && !task.inventoryLoading && !task.inventoryAction?.pending && review.pending === null
+    && !task.inventoryLoading && !task.inventoryAction?.pending && !task.inventoryAction?.accepted
+    && review.pending === null
     && !checkableOutcome(task.closeRecovery) && !fixedOutcome(task.closeRecovery);
 }
 

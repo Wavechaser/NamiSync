@@ -641,9 +641,14 @@ const prefix = source.slice(0, source.indexOf("(async () => {"));
 const native = JSON.parse(process.argv[2]);
 global.window = {addEventListener() {}};
 eval(prefix + `
+const site = failureSite({name:"TypeError", stack:[
+  "TypeError: private sentinel",
+  "    at inventory (file:///C:/private/gallery.js:1961:5)",
+  "    at render (https://private.invalid/inventory.js:43:7)",
+].join(String.fromCharCode(10))});
 console.log(JSON.stringify([
-  buildFailureEvidence("measurement", "Error", "control_styles", "control_invariant"),
-  buildFailureEvidence("measurement", "Error", "native_minimum_request", "native_minimum_pending", native),
+  buildFailureEvidence("measurement", "Error", "control_styles", "control_invariant", null, site),
+  buildFailureEvidence("measurement", "Error", "native_minimum_request", "native_minimum_pending", native, site),
 ]));`);
 """
     completed = subprocess.run(
@@ -659,6 +664,16 @@ console.log(JSON.stringify([
     non_native_failure, native_failure = json.loads(
         completed.stdout
     )
+    assert non_native_failure["site"] == {
+        "exception": "TypeError", "lines": [1960, 42],
+    }
+    assert "private" not in json.dumps(non_native_failure).casefold()
+    assert not component_gallery_child._valid_failure_site({
+        "exception": [], "lines": [],
+    })
+    assert not component_gallery_child._valid_failure_site({
+        "exception": "Error", "lines": [True],
+    })
 
     paths = EvidencePaths((tmp_path / "native").resolve())
     paths.root.mkdir()
@@ -675,6 +690,17 @@ console.log(JSON.stringify([
             {
                 "phase": "failure",
                 "failure": {**non_native_failure, "detail": private_text},
+            },
+            context=_OPEN_CONTEXT,
+        )
+    with pytest.raises(CommandPayloadError, match="report is invalid"):
+        spec.invoke(
+            {
+                "phase": "failure",
+                "failure": {
+                    **non_native_failure,
+                    "site": {"exception": "TypeError", "lines": [42], "path": private_text},
+                },
             },
             context=_OPEN_CONTEXT,
         )
@@ -3114,7 +3140,7 @@ def _sanitized_failure_record(value: object) -> dict[str, object]:
         type(failure) is not dict
         or not {"stage", "type", "step", "reason"}.issubset(failure)
         or not set(failure).issubset(
-            {"stage", "type", "step", "reason", "native"}
+            {"stage", "type", "step", "reason", "native", "site"}
         )
         or failure.get("stage")
         not in component_gallery_child._EVIDENCE_FAILURE_STAGES
@@ -3122,6 +3148,10 @@ def _sanitized_failure_record(value: object) -> dict[str, object]:
         not in component_gallery_child._EVIDENCE_FAILURE_TYPES
         or failure.get("step") not in component_gallery_child._FAILURE_STEPS
         or failure.get("reason") not in component_gallery_child._FAILURE_REASONS
+        or (
+            "site" in failure
+            and not component_gallery_child._valid_failure_site(failure["site"])
+        )
         or (
             failure.get("reason")
             in component_gallery_child._NATIVE_FAILURE_REASONS
@@ -4203,8 +4233,9 @@ def _inventory_panel_sample() -> dict[str, object]:
         "viewport_scroll_height": 7200.0, "adopted_offset": 218, "window_requests": [218], "row_height": 24.0,
         "appearance": {"typography": typography, "zebra": ["rgb(250, 250, 250)", "rgb(255, 255, 255)"],
             "reference_zebra": ["rgb(250, 250, 250)", "rgb(255, 255, 255)"], "transparent_cells": True,
-            "checkboxes": [{"disabled": True, "checked": False, "mixed": False, "width": 16.0, "height": 16.0,
-                            "background": "rgb(255, 255, 255)", "border": "rgb(128, 128, 128)"} for _ in range(65)],
+            "checkboxes": [{"disabled": index == 12, "checked": False, "mixed": False,
+                            "width": 16.0, "height": 16.0, "background": "rgb(255, 255, 255)",
+                            "border": "rgb(128, 128, 128)"} for index in range(65)],
             "reference_checkbox": ["rgb(255, 255, 255)", "rgb(128, 128, 128)"],
             "active_colors": ["rgb(255, 255, 255)", "rgb(0, 0, 0)"],
             "active_node_id": "1",
@@ -4299,10 +4330,12 @@ def _assert_inventory_panel(evidence: dict[str, object], integrity: dict[str, ob
     assert appearance["zebra"] == appearance["reference_zebra"]
     assert appearance["transparent_cells"] is True
     assert len(appearance["checkboxes"]) == evidence["checkbox_count"]
-    for checkbox in appearance["checkboxes"]:
-        assert checkbox["disabled"] and not checkbox["checked"] and not checkbox["mixed"]
+    for index, checkbox in enumerate(appearance["checkboxes"]):
+        assert checkbox["disabled"] is (index == 12)
+        assert not checkbox["checked"] and not checkbox["mixed"]
         assert [checkbox["width"], checkbox["height"]] == pytest.approx([16, 16], abs=0.5)
-        assert [checkbox["background"], checkbox["border"]] == appearance["reference_checkbox"]
+        if checkbox["disabled"]:
+            assert [checkbox["background"], checkbox["border"]] == appearance["reference_checkbox"]
     assert appearance["notes"] == _inventory_panel_sample()["appearance"]["notes"]
     assert appearance["name_indent"] == pytest.approx([8, 24], abs=0.5)
     for index, geometry in enumerate(appearance["chevrons"]):

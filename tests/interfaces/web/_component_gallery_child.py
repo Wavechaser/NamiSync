@@ -308,6 +308,9 @@ _NATIVE_FAILURE_REASONS = frozenset(
 _NATIVE_PENDING = frozenset(
     {"none", "pseudo_states", "wheel_content", "wheel_backdrop", "minimum_window"}
 )
+_FAILURE_SITE_TYPES = frozenset(
+    {"Error", "TypeError", "ReferenceError", "SyntaxError"}
+)
 _SYSTEM_COLOR_NAMES = frozenset(
     {
         "Canvas",
@@ -475,6 +478,12 @@ class _Recorder:
                     and _valid_native_failure_snapshot(native)
                 ):
                     result["native"] = dict(native)
+                site = failure.get("site")
+                if _valid_failure_site(site):
+                    result["site"] = {
+                        "exception": site["exception"],
+                        "lines": list(site["lines"]),
+                    }
                 return result
         if "pseudo_state_failed" in self._data:
             return {
@@ -543,6 +552,26 @@ def _valid_native_failure_snapshot(value: object) -> bool:
                 "owner_scale", "minimum_width", "minimum_height",
                 "outer_width", "outer_height", "client_width", "client_height",
             )
+        )
+    )
+
+
+def _valid_failure_site(value: object) -> bool:
+    return (
+        type(value) is dict
+        and set(value) == {"exception", "lines"}
+        and (
+            value["exception"] is None
+            or (
+                type(value["exception"]) is str
+                and value["exception"] in _FAILURE_SITE_TYPES
+            )
+        )
+        and type(value["lines"]) is list
+        and len(value["lines"]) <= 8
+        and all(
+            type(line) is int and 0 <= line <= 1000000
+            for line in value["lines"]
         )
     )
 
@@ -690,7 +719,7 @@ def _test_report_spec(
                 type(failure) is not dict
                 or not {"stage", "type", "step", "reason"}.issubset(failure)
                 or not set(failure).issubset(
-                    {"stage", "type", "step", "reason", "native"}
+                    {"stage", "type", "step", "reason", "native", "site"}
                 )
                 or type(failure["stage"]) is not str
                 or type(failure["type"]) is not str
@@ -700,6 +729,7 @@ def _test_report_spec(
                 or failure["type"] not in _FAILURE_TYPES
                 or failure["step"] not in _FAILURE_STEPS
                 or failure["reason"] not in _FAILURE_REASONS
+                or ("site" in failure and not _valid_failure_site(failure["site"]))
                 or (
                     "native" in failure
                     and (

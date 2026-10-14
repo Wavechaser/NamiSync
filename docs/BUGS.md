@@ -2431,9 +2431,11 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
-- MODERATE - FIXED (2026-10-13). Historical observation promotion. Ordinary
-  integrity over a previously observed file that later becomes missing fails
-  before hashing, suppressing outcomes for otherwise eligible present siblings.
+- SEVERE - FIXED (2026-10-13). Historical observation promotion. Baseline or
+  Verify over any selection containing a previously observed, now-deleted file
+  fails entirely before hashing, including whole-location CLI use; otherwise
+  eligible present siblings receive no outcomes. This makes the core integrity
+  workflow unusable for a routine deletion case, not merely one failed item.
   Cause: the workflow promotes the ledger's retained last-observed metadata to
   a current expected stat even for a non-present row, which the core selection
   contract rejects. The installed mixed-selection journey reproduces this

@@ -297,8 +297,7 @@ windows keep their independent action ordering and may overlap a retired
 viewport read while it drains; that read cannot adopt or dispatch obsolete
 queued work. Keyboard targets retain precedence until a newer user scroll or
 loaded-row gesture replaces them. The browser retains one 256-row window.
-Inventory checkbox visuals remain disabled until the integrity controls surface
-activates them. The server selection API starts empty and retains exact file row
+Inventory checkboxes use the server selection API, which starts empty and retains exact file row
 IDs independently of the active/detail row. A folder gesture covers all its files;
 the header's null-node gesture covers the complete location. Search, facets,
 collapse and paging never narrow that membership or change selection. Warnings
@@ -314,8 +313,11 @@ latest ordinary generation, replacing it on admission and repairing a live Gap
 from the terminal result at release. Window/detail overlays expose only their
 bounded subjects and stay distinct from current ledger evidence and scan scope.
 Refresh preserves these activity facts. Failed admission restores prior state;
-Close retires it. The backend and bridge are available; checkbox activation,
-mode controls and rich result rendering remain pending.
+Close retires it. The standalone desktop exposes selection and mode controls,
+current-session pause/resume/cancel, and separate window/detail result overlays.
+Selection replies replace authoritative summary/window state; uncertain or stale
+gestures reload that state rather than replaying membership changes. Rebaseline
+confirmation binds the selected count and scope to the exact publication revision.
 
 Execution tasks can also attach ordinary current-location work and one first
 exact manual verification. Their current activity request/session/kind is

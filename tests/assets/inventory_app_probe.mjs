@@ -21,10 +21,18 @@ globalThis.window = { chrome: { webview: {} }, addEventListener() {} };
 const url = (source) => `data:text/javascript;base64,${Buffer.from(source).toString("base64")}`;
 const fixture = JSON.parse(await readFile(process.argv[3], "utf8"));
 const calls = [], renders = [], drains = [], stoppedDrains = [];
+const inventoryOpenRequests = new Map();
 let delayedDetail = null, delayedWindow = null, delayedView = null, delayedOpen = null, delayedVisibility = null;
 let taskSnapshot = null, observedChecks = 0, refuseRefresh = false, delayedRefresh = null;
+let refuseIntegrityStart = false;
+let delayedIntegrityStart = null, integrityStartChecks = 0;
+let delayedSelection = null, selectionDisposition = "current", selectedFileCount = fixture.views.default.summary.selected_file_count;
 let viewRevision = 0, query = "";
-const summary = () => ({ ...fixture.views.default.summary, view_revision: viewRevision, search_query: query });
+const summary = () => ({ ...fixture.views.default.summary, view_revision: viewRevision, search_query: query,
+  selected_file_count:selectedFileCount,
+  hidden_selected_file_count:Math.min(fixture.views.default.summary.hidden_selected_file_count, selectedFileCount),
+  selection:selectedFileCount === 0 ? "none"
+    : selectedFileCount === fixture.views.default.summary.selectable_file_count ? "all" : "partial" });
 const windowResponse = (revision, offset) => ({ ...fixture.views.default.window, view_revision: revision, offset });
 const defer = () => {
   let resolve;
@@ -32,7 +40,9 @@ const defer = () => {
   return { resolve, promise };
 };
 globalThis.inventoryHarness = {
-  openInventoryView(taskId) { calls.push(["open", taskId]); return delayedOpen?.promise ?? Promise.resolve(summary()); },
+  openInventoryView(taskId) { calls.push(["open", taskId]); return delayedOpen?.promise ?? Promise.resolve({
+    ...summary(), task_id:taskId, request_id:inventoryOpenRequests.get(taskId) ?? summary().request_id,
+  }); },
   getInventoryWindow(taskId, revision, offset, limit) {
     calls.push(["window", taskId, revision, offset, limit]);
     return delayedWindow?.promise ?? Promise.resolve(windowResponse(revision, offset));
@@ -71,6 +81,39 @@ globalThis.inventoryHarness = {
       expected_revision: args[3], total: 3, applied: 1, noop: 0, stale: 1,
       conflict: 0, unresolved_count: 1, disposition: "partial" });
   },
+  setInventorySelection(taskId, requestId, revision, nodeId, selected) {
+    calls.push(["select", taskId, requestId, revision, nodeId, selected]);
+    if (delayedSelection !== null) return delayedSelection.promise;
+    if (selectionDisposition !== "conflict") {
+      selectedFileCount = selected ? fixture.views.default.summary.selectable_file_count : 0;
+      viewRevision += 1;
+    }
+    return Promise.resolve({...summary(), task_id:taskId, request_id:requestId,
+      disposition:selectionDisposition});
+  },
+  startInventoryIntegrity(taskId, requestId, commandId, revision, mode, accepted, onDelayed) {
+    calls.push(["integrity-start", taskId, requestId, commandId, revision, mode, accepted]);
+    if (refuseIntegrityStart) return Promise.reject(new Error("integrity refused"));
+    taskSnapshot = {task_id:taskId, session_id:"d".repeat(32), session_state:"active",
+      session_released:false, task_kind:"inventory", request_id:"e".repeat(32),
+      plan_request_id:null, session_kind:mode};
+    const result = {task_id:taskId, session_id:taskSnapshot.session_id,
+      request_id:taskSnapshot.request_id};
+    if (delayedIntegrityStart !== null) {
+      const held = delayedIntegrityStart;
+      onDelayed({canCheck:true, checking:false, message:"Check original integrity start",
+        check() { integrityStartChecks += 1; held.resolve(result); return held.promise; }});
+      return held.promise;
+    }
+    return Promise.resolve(result);
+  },
+  controlIntegrity(taskId, sessionId, action) {
+    calls.push(["integrity-control", taskId, sessionId, action]);
+    return Promise.resolve({session_id:sessionId, action, accepted:true,
+      before:action === "resume" ? "paused" : "running",
+      after:action === "pause" ? "pausing" : action === "cancel" ? "canceling" : "running",
+      detail:null});
+  },
 };
 const appPath = join(process.argv[2], "app.js");
 let source = await readFile(appPath, "utf8");
@@ -97,7 +140,9 @@ const replacements = {
   "./readiness.js": url("export const installReadinessReceiver = () => ({ revision: () => 0 });"),
   "./appearance.js": url("export const installAppearanceReceiver = () => {};"),
   "./theme.js": url("export const installThemeCombobox = () => ({}); export const installThemeSelector = () => ({ refresh() {} });"),
-  "./execution_confirmation.js": url("export const createExecutionConfirmation = () => ({ element: new HTMLElement('dialog') });"),
+  "./execution_confirmation.js": url(`export const createExecutionConfirmation = (...factory) => ({
+    element: new HTMLElement('dialog'), show(request) { globalThis.inventoryConfirmations.push({factory, request}); }
+  });`),
   "./rail.js": url("export const createTaskRail = () => ({ element: new HTMLElement('nav'), render() {} });"),
   "./panels.js": url(`export const createWorkPanel = (setup, plan, settings, inventory) => {
     globalThis.inventoryCallbacks = inventory;
@@ -105,8 +150,9 @@ const replacements = {
   };`),
 };
 globalThis.inventoryRenders = renders;
+globalThis.inventoryConfirmations = [];
 for (const [key, value] of Object.entries(replacements)) source = source.replace(key, value);
-source += "\nexport { adoptTask, selectTask, acceptTaskRelease, loadInventoryReview, changeInventoryView, loadInventoryWindow, readInventoryDetail, runInventoryAction, checkInventoryOutcome, closeRetainedTask, showSettings, refreshTasks, tasks };";
+source += "\nexport { adoptTask, selectTask, acceptTaskUpdate, acceptTaskRelease, loadInventoryReview, changeInventoryView, loadInventoryWindow, readInventoryDetail, runInventoryAction, changeInventorySelection, startInventoryIntegrityAction, controlInventoryIntegrity, checkInventoryOutcome, closeRetainedTask, showSettings, refreshTasks, tasks };";
 const app = await import(url(source));
 const taskId = fixture.views.default.summary.task_id;
 const sessionId = "3".repeat(32);
@@ -502,4 +548,114 @@ assert.equal(syncTask.planRequestId, syncPlanRequestId,
   "ordinary auxiliary Refresh keeps the original Plan request");
 assert.equal(syncTask.requestId, "8".repeat(32), "Refresh adopts the new current request");
 assert.equal(syncTask.sessionKind, "inventory", "Refresh identifies the current activity");
+
+// Standalone selection, start, control custody, coalesced live results, and stale consent.
+const d1TaskId = "task-" + "7".repeat(32);
+const d1RequestId = "8".repeat(32);
+inventoryOpenRequests.set(d1TaskId, d1RequestId);
+const d1Task = app.adoptTask({task_id:d1TaskId, session_id:"9".repeat(32), session_state:"active",
+  session_released:false, task_kind:"inventory", request_id:d1RequestId,
+  plan_request_id:null, session_kind:"inventory"});
+app.selectTask(d1TaskId); await tick();
+d1Task.sessionState = "completed";
+d1Task.sessionReleased = true;
+let d1Review = {...fixture.views.default, summary:{...fixture.views.default.summary,
+  task_id:d1TaskId, request_id:d1RequestId}, pending:null, message:null, detail:null,
+  queuedSearchQuery:null, actionRevision:0, windowRequestRevision:0, detailRevision:0, scrollTop:19};
+d1Task.inventoryReview = d1Review;
+const selectionCalls = calls.filter(([name]) => name === "select").length;
+delayedSelection = defer();
+const unavailableSelection = app.changeInventorySelection(d1Review, null, false);
+delayedSelection.resolve(Promise.reject(new Error("selection transport unavailable")));
+await unavailableSelection;
+delayedSelection = null;
+await tick();
+assert.equal(calls.filter(([name]) => name === "select").length, selectionCalls + 1,
+  "transport recovery never replays a selection gesture");
+assert.equal(d1Task.inventoryReview, d1Review,
+  "transport uncertainty adopts authoritative state without discarding tree custody");
+d1Review = d1Task.inventoryReview;
+selectionDisposition = "conflict";
+await app.changeInventorySelection(d1Review, null, false);
+assert.equal(calls.filter(([name]) => name === "select").length, selectionCalls + 2);
+assert.match(d1Review.message, /changed elsewhere/i);
+selectionDisposition = "current";
+const selectionRevision = d1Review.summary.view_revision;
+await app.changeInventorySelection(d1Review, null, true);
+assert.equal(calls.filter(([name]) => name === "select").length, selectionCalls + 3);
+assert.deepEqual(calls.findLast(([name]) => name === "select").slice(1),
+  [d1TaskId, d1RequestId, selectionRevision, null, true]);
+assert.equal(d1Review.summary.selected_file_count, d1Review.summary.selectable_file_count);
+assert.equal(d1Review.scrollTop, 19, "authoritative selection replacement preserves review scroll custody");
+const trigger = new HTMLElement("button");
+const startsBefore = calls.filter(([name]) => name === "integrity-start").length;
+refuseIntegrityStart = true;
+await app.startInventoryIntegrityAction(d1Review, "baseline", trigger);
+assert.equal(d1Task.inventoryAction, null, "a settled refusal releases the gesture for a fresh explicit start");
+assert.equal(d1Review.message, "Integrity work did not start. Try again when you are ready.");
+refuseIntegrityStart = false;
+delayedIntegrityStart = defer();
+const delayedStart = app.startInventoryIntegrityAction(d1Review, "baseline", trigger);
+await tick();
+assert.equal(d1Task.inventoryAction.recovery.canCheck, true);
+await app.checkInventoryOutcome(d1Task);
+await delayedStart;
+delayedIntegrityStart = null;
+assert.equal(calls.filter(([name]) => name === "integrity-start").length, startsBefore + 2,
+  "the owned start attempt does not block its own first submission");
+assert.equal(integrityStartChecks, 1);
+assert.equal(d1Task.sessionKind, "baseline");
+assert.equal(d1Task.sessionState, "active");
+const controlsBefore = calls.filter(([name]) => name === "integrity-control").length;
+await app.controlInventoryIntegrity(d1Review, "pause");
+assert.equal(calls.filter(([name]) => name === "integrity-control").length, controlsBefore + 1);
+assert.equal(d1Task.inventoryAction.accepted, true);
+await app.controlInventoryIntegrity(d1Review, "pause");
+assert.equal(calls.filter(([name]) => name === "integrity-control").length, controlsBefore + 1,
+  "an accepted receipt retains custody until an authoritative state update");
+delayedWindow = defer();
+const overlayReads = calls.filter(([name]) => name === "window").length;
+const activeSnapshot = {session_id:d1Task.sessionId, session_state:"active", phase:"baseline",
+  active_item:null, control_state:"pausing", presentation:{value:20, determinate:true,
+    indeterminate:false, items_done:1, items_total:3, item_percent:null,
+    throughput_bytes_per_second:null, eta_seconds:null}, terminal_result:null,
+  progress_inconsistent:false};
+app.acceptTaskUpdate(d1Task, d1Task.sessionId, {update_type:"state"}, activeSnapshot);
+assert.equal(d1Task.inventoryAction, null,
+  "the authoritative pausing snapshot releases accepted receipt custody");
+assert.equal(d1Task.executionControlState, "pausing");
+app.acceptTaskUpdate(d1Task, d1Task.sessionId, {update_type:"progress"},
+  {...activeSnapshot, control_state:"paused",
+    presentation:{...activeSnapshot.presentation, value:40, items_done:2}});
+assert.equal(d1Task.executionControlState, "paused",
+  "only the later checkpoint snapshot makes Resume available");
+assert.equal(calls.filter(([name]) => name === "window").length, overlayReads + 1,
+  "one live overlay read runs while a latest update queues");
+const liveOverlay = {request_id:d1Task.requestId, session_id:d1Task.sessionId, mode:"baseline",
+  location_id:d1Review.summary.location_id, revision:1, complete:false, gap:true, items:[]};
+delayedWindow.resolve({...windowResponse(d1Review.summary.view_revision, d1Review.window.offset),
+  integrity:liveOverlay});
+delayedWindow = null;
+await tick();
+assert.equal(calls.filter(([name]) => name === "window").length, overlayReads + 2,
+  "the coalesced reader performs only the latest pending overlay read");
+
+d1Task.sessionState = "completed";
+d1Task.sessionReleased = true;
+d1Task.requestId = "a".repeat(32);
+d1Task.inventoryReview = {...d1Review, summary:{...d1Review.summary, request_id:d1Task.requestId,
+  view_revision:d1Review.summary.view_revision + 1, selected_file_count:3,
+  selectable_file_count:3, hidden_selected_file_count:2, selection:"all"}, pending:null,
+  message:null, actionRevision:0};
+const currentD1Review = d1Task.inventoryReview;
+await app.startInventoryIntegrityAction(currentD1Review, "rebaseline", trigger);
+const confirmation = globalThis.inventoryConfirmations.at(-1).request;
+assert.equal(confirmation.destructiveOperationCount, 3);
+assert.match(confirmation.countDetail, /2 hidden/);
+currentD1Review.summary = {...currentD1Review.summary,
+  view_revision:currentD1Review.summary.view_revision + 1};
+confirmation.onConfirm();
+await tick();
+assert.equal(calls.filter(([name]) => name === "integrity-start").length, startsBefore + 2,
+  "changed revision invalidates Rebaseline consent without submitting or replaying");
 process.stdout.write("ok\n");

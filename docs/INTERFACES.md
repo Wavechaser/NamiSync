@@ -4,7 +4,7 @@ This document owns the implemented CLI and desktop adapters, service/task lifecy
 
 `BRIDGE.md` owns external desktop protocol, transport, retry/recovery, and its exact evidence. `PRESENTATION.md` owns tree/view/search/sort/selection behavior and visual scale evidence. The frozen v1 event-and-transport custody result is scoped to its bridge evidence and does not establish whole-runtime containment. The former BR-G-45 aggregate terminal-artifact model is retired. SH-G-15 remains an open, scoped release criterion defined below.
 
-The active service and CLI support sync, inventory, baseline, verify and rebaseline. The desktop exposes the bounded host/transport foundation and process-live tasks with frozen Setup, typed/picker/recent locations, plan and standalone inventory starts, Plan again, navigation, reconstruction, and explicit close. Plan review supplies bounded hierarchy, sibling sorting, server-owned selection, destructive confirmation and same-task execution with live controls and retained result review. Inventory read projections and desktop whole/selected Refresh and missing-item visibility controls use the same-task bridge actions. Manual post-copy verification, history and full settings remain accepted but unrealized outcomes. Their delivery register is [M1_PLAN.md](M1_PLAN.md).
+The active service and CLI support sync, inventory, baseline, verify and rebaseline. The desktop exposes the bounded host/transport foundation and process-live tasks with frozen Setup, typed/picker/recent locations, plan and standalone inventory starts, Plan again, navigation, reconstruction, and explicit close. Plan review supplies bounded hierarchy, sibling sorting, server-owned selection, destructive confirmation and same-task execution with live controls and retained result review. Inventory read projections, whole/selected Refresh, missing-item visibility and standalone integrity selection/controls use the same-task bridge actions. Manual post-copy desktop navigation, history and full settings remain accepted but unrealized outcomes. Their delivery register is [M1_PLAN.md](M1_PLAN.md).
 
 
 ## Purpose
@@ -59,7 +59,8 @@ no adapter infers location from a mapping or another argument. Rebaseline also
 requires an explicit selected scope and exact boolean current-evidence acceptance
 before command custody, selected-node resolution or native work. The CLI forwards
 its required `--accept-current-evidence` flag into that shared admission. Queue control,
-machine output, and desktop integrity controls remain deferred.
+machine output and desktop manual post-copy controls remain deferred; standalone
+Inventory exposes ordinary integrity selection, starts and live controls.
 
 ## M1 Shared Service
 
@@ -544,7 +545,9 @@ facts are bound to request/session/mode/location/row and remain separate from
 ledger evidence, execution outcomes and automatic verification. Live loss is
 marked incomplete until terminal reconciliation replaces the complete map,
 including an empty result. Refresh retains these prior activity facts; Close
-retires them. Desktop controls and rich result rendering remain pending.
+retires them. Standalone desktop controls expose these starts and current-session
+controls with bounded row/detail results; manual post-copy navigation follows
+in its separate delivery unit.
 If a queued or resumed activity becomes unresolved at wake-up, its retained
 `InventoryDetailsView` carries the same state/candidates and the CLI renders the
 same corrective guidance. A provisional ambiguous binding exposes no selected

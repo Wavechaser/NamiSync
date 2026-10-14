@@ -1,131 +1,82 @@
-# Latest session — M1-10 resumed, reviewing A–C
+# Latest session — M1-10 D1 acceptance and D2 preparation
 
-2026-10-13, `milestone1`, clean resumption base `41afd262`. The user resumed the
-remaining M1-10 work and requires a thorough integrated A–C review before D.
-Three fresh reviews cover domain A/B, C lifecycle/result ownership,
-and bridge/browser/direct-consumer/evidence contracts. A/B passed 43 fresh native
-checks without a product finding; stale VERIFIER/WORKFLOWS status prose is corrected.
-C review reproduced two finite identity-migration omissions: a current-session
-release guard hid live execution-task Inventory (`bccd88f` corrects it), and the
-browser SessionRecord catalog rejected `manual-verify` (this commit corrects it).
-The integrated review is closed after their independent correction gates. No D implementation has
-started. This session's fallback for unavailable GPT-6.1 Sol is GPT-5.6 Sol.
-The later M1-10 completion still stops for recap and GUI tweaks. M1-12, release,
-DOC-2 and unrelated optimization remain inactive.
+2026-10-14. The user reviewed A–C and D1, authorized the product-side selector
+correction and C3b repair, and confirmed finishing D1 before D2. Finish M1-10,
+then stop for recap/GUI tweaks. M1-12, release, DOC-2 and unrelated optimization
+remain inactive. Use GPT-5.6 Sol as this session's fallback for capacity trouble.
+M1_PLAN owns decisions and the completion denominator.
 
-## Delivered and current boundary
+## Integrated and current work
 
-From clean `fc8a79b`, the task has delivered these atomic outcomes:
+A–C and the requested thorough resumed review are complete. `107dfa2` corrected
+missing rows' historical-stat promotion in the shared integrity workflow; its
+whole-selection failure included CLI use. `f26cb57abb52a905c12a0a02210353718dea7b8c`
+restores C3b's separate execution publication backstop; 45 lifecycle and 215
+direct-consumer checks pass with independent approval. `milestone1` is fast-forward
+integrated through that fix. Current branch: `codex/m1-10-resume-20261014`.
 
-- `a730165`: condense delivered registers and scope M1-10.
-- `6ba3575` (A): selected confirmed rebaseline admits null/prior evidence.
-- `959f1bc` (B): exact whole-selection manual workflow with fresh target
-  admission, frozen continuation and independent session/history.
-- `26e72ad` (C1): server-owned complete Inventory selection and revision fences.
-- `bf9d649`: separate Setup driver repair follows the visible review panes;
-  reproduced on the accepted baseline and independently reviewed.
-- `eecf31c` (C2): ordinary integrity sessions, separate results, actual scan
-  provenance, control, rollback/replay and Close.
-- `07947213` (C3a): execution-target ledger reads with honest absent-scan facts.
-- `41afd262` (C3b): original Plan/execution identity remains separate from
-  current activity; first exact manual verification and explicit ordinary
-  integrity/Refresh and missing-row visibility attach to the same execution task. Bounded manual/ordinary
-  overlays, original-command recovery, linked exclusion, live controls and exact
-  Close preserve original execution truth. Visible D controls are not included.
+D1 is ready for final review/commit: standalone selection/counts, integrity
+starts/confirmation, current controls, original-command recovery and truthful
+ordinary results. Product checkbox no longer duplicates row identity. Its closure
+still supplies selection ID. Removed the unnecessary facts wrapper to preserve
+facts/Details alignment. D1-owned checkbox lookups and three feedback-line
+witnesses match the accepted UI; gallery row selectors, external performance
+tools, CSS, input guards and geometry verdicts remain unchanged.
 
-M1_PLAN is the sole active register and now condenses delivered A–C3a details.
-BRIDGE, INTERFACES, WORKFLOWS, PRESENTATION, DESKTOP_UI and FEATURES describe
-shipped C3b behavior. BUGS records the corrected auxiliary-Close retention gap
-and execution-view visibility admission without scan metadata.
+## Current evidence
 
-## Resumed review and correction evidence
+All evidence is in `build/m1-10-20261013/`:
 
-The `resume-review-ab-01.md`, `resume-review-c-01.md` and
-`resume-review-consumers-01.md` reports record the finite review populations,
-supported findings, raw reproductions and remaining D seam obligations.
-`resume-read-drain-04.log` passes all 234 drain tests after the read correction;
-`resume-read-focused-03.log` passes fourteen focused cases. The tests now inspect
-public active/paused windows and details, live Gap, mutation refusal and terminal
-repair rather than relying only on private live result state. Earlier red and
-invalid descending-path fixture receipts remain retained. Browser kind rejection
-is reproduced by the unchanged production drain probe with a real manual record
-variation in `resume-consumer-kind-repro-01.mjs/.log`.
-The read correction additionally passes 2,015 interfaces tests
-(`resume-read-interfaces-05.log`) and all twelve imports
-(`resume-read-imports-05.log`); independent native and source correction review
-is recorded in the C report. Its separate commit precedes the browser correction.
-`dc80d06` corrects an asynchronous test assumption found by the browser gate:
-independent window/detail reads may advance the result revision. All other
-overlay facts still match exactly; `resume-read-revision-07.log` passes all 234
-drain cases. Browser acceptance covers 2,016 interfaces obligations by dependency:
-1,782 unaffected passes in `resume-kind-interfaces-04.log` plus those 234 cases.
-The failure receipt is retained. `resume-kind-focused-03.log` passes 164 browser
-event/transport checks, and `resume-kind-installed-05.log` passes both affected
-installed host/transport checks. `resume-kind-native-evidence/manifest.json`
-preserves fifteen SHA-256-verified native receipts/artifact identities. The
-consumer report confirms the correction, unchanged independent green drain
-witness and evidence accounting. D1/D2 must close the finite consumer report's
-pending UI seams before claiming desktop integrity delivery.
+- `d1-interfaces-20261014.log`: 2,018 passed, 4,076 deselected.
+- `d1-consumer-ordinary-final-20261014.log`: 69 passed, five headed deselected.
+- `d1-probe-final-20261014.log`: two current browser probes passed.
+- `d1-native-final-20261014.log`: nine passed (109.65 seconds), covering installed
+  Inventory, four gallery obligations, both shell and both execution sizes.
+  `d1-native-final-temp-20261014/` is a unique retained pytest base; do not reuse it.
+- `d1-table-inventory-20261014-01.*`: one unchanged Inventory table-loading child
+  passed with before/after package identity and restored assets; no speed claim.
+- `c3b-backstop-review-20261014.md`: independent approval of the separate fix.
+  Final D1 review is `d1-final-review-20261014.md` when complete.
 
-## Prior C3b verification and dispositions
+Earlier raw receipt corrections matter: Inv01's pause-race theory was unproved
+and the missing-stat failure is the likely cause; Inv02's blocking wait was
+introduced by that attempted fix. Inv04 visible counts were 0/0/0/0; full details
+were 3/3/0/3. The helper's collapsed folder explained the missing visible outcomes.
+The old checkbox-consumer migration proposal was rejected, not implemented.
+Shell's earlier Shift+F10 cause remains unknown; unchanged later passes explain
+nothing. Read raw receipts before new hypotheses. Final gallery screenshots show
+Plan, so Inventory layout claims use its raw geometry and source.
 
-Evidence root: `build/m1-10-20261013/`; preserve failed receipts.
+Retry-173 raw files were removed by pytest retention before copying; its parent
+failure log remains but supplies no raw-evidence claim. Final acceptance uses
+the dedicated retained directory. Earlier copied failures remain in
+`d1-native-evidence*`; do not relabel them as passes.
 
-- `c3b-ordinary-12.log`: 6,049 passed, four expected skips, 35 headed deselected.
-- `c3b-imports-13.log`: all twelve import contracts kept.
-- Nineteen affected installed obligations pass: fourteen unaffected passes in
-  `c3b-headed-02.log`, four gallery checks in `c3b-gallery-04.log`, and Inventory
-  in `c3b-inventory-17.log` after the service visibility correction. The larger task-shell retry passed
-  unchanged; the earlier failure does not establish a foreground cause.
-- `c3b-close-repro-01.log` fails both real auxiliary-Close retirement assertions
-  before correction. `c3b-review-corrections-01.log` passes six cases including
-  manual live Gap and zero/partial/full terminal repair across pause/resume/cancel.
-- `auxiliary-review-luna-01.md` owns independent source/correction/final review;
-  final document-link and diff receipts use the `c3b-*-18.log` names.
-- `c3b-native-evidence/manifest.json` accounts for 106 copied, SHA-256-verified
-  native receipts, screenshots, logs and wheel identity records from finalized
-  pytest-108/109/110 runs. Initial broad-run pytest-104 temporary files were
-  already removed by pytest retention; its complete failed output remains.
-- `c3b-visibility-repro-09.log` reproduces the no-scan admission refusal;
-  `c3b-visibility-11.log` passes all fifteen visibility cases after correction.
-  Retry 10 exposed an incomplete missing-row fixture, corrected by an independent
-  scan before Plan. No synthetic task scan provenance was added.
-- Installed retries 14/15 stopped before input at the foreground guard; 16
-  reached foreground but stopped at pre-click button focus. Retry 17 passed with
-  unchanged guards after title-bar activation. `c3b-native-evidence-final/`
-  preserves 35 hash-verified files from pytest-117/118/119. Pytest-116 was already
-  retired by pytest; its complete failure output remains in retry 14's log.
+## Next work
 
-The misnamed `c3b-ordinary-01.txt` cleared addopts and included headed tests;
-it is not acceptance. Its failures exposed direct-consumer migration omissions
-(catalog ordering, runtime doubles, Plan/gallery identity fixtures and one render
-instrumentation anchor). Those consumers were updated without removing their
-behavioral checks. Failures in `c3b-headed-02.log` and `c3b-gallery-03.log`
-remain failed receipts. Source and
-helpers were frozen before the final acceptance runs. Use host PowerShell for
-native/file gates; restricted native runs produce environmental EIO failures.
-Announce and serialize native input; retain foreground/hit-target guards.
+Commit and integrate D1 after final independent approval, then revalidate
+`d2-kinds-design-20261014.md` and `d2-ui-refresh-20261014.md` against that commit.
+D2a is a separate catalog refactor, preserving different effect/session/task
+domains and C3b's explicit execution check. D2 UI adds retained Plan/Verify
+navigation, first exact manual verification and explicit ordinary fallback;
+resolve sync-task disabled buttons with applicable actions/guidance. Preserve
+Plan state, original/current identities and separate result generations.
+D2/E have not started implementation. E owns full ordinary/import/cross-component
+closure, final review and recovery accounting before the user-requested stop.
 
-## Resumption and preserved work
+Keep task recoveries until exact accounting:
 
-D1 supplies standalone Inventory selection/actions, revision-bound Rebaseline
-confirmation, ordinary overlays and controls. D2 supplies Plan/Verify navigation,
-exact-manual readiness/action and explicit ordinary fallback. The read-only
-`desktop-integrity-design-20261013-01.md` inspected `07947213` plus unfinished
-C3b: refresh it against this integrated commit before implementation. C3b settled
-manual control through `control_execution`, ordinary control through
-`control_integrity`, and original/current identity separation. E is still the
-whole-checkpoint closure. No D product work has started.
+- D1 `060becf` on `codex/wip-20261013-1820-m1-10-d1` and `08bc38e` on
+  `codex/wip-20261013-d1-review-hold`, rebuilt without WIP ancestry.
+- Selection `c3bb191` on `codex/wip-20261013-1228-m1-10-selection`, already
+  accounted in `selection-recovery-accounting-12.log`.
+- Clean baseline worktree `build/m1-10-20261013/ordinary-base-26e72ad`; retain its
+  Setup receipts and verify clean before removing through Git.
+- Disposable table installations `d1-table-install-20261014` (unused predecessor)
+  and `d1-table-install-20261014-02` (current observed child). Preserve identities,
+  receipts and restoration manifests before any temporary-runtime cleanup.
 
-Retain until M1-10 closeout:
-
-- Recovery `c3bb191` on `codex/wip-20261013-1228-m1-10-selection`: all 19 paths
-  rebuilt/accounted in C1 without integrating WIP ancestry. Only delivery docs
-  differ from its reconstructed commit; `selection-recovery-accounting-12.log`.
-- Source-clean detached baseline worktree
-  `build/m1-10-20261013/ordinary-base-26e72ad`. Retain its Setup control receipts;
-  verify clean and use Git worktree removal during final accounting.
-
-The earlier Setup captures carry an undiagnosed label-legibility observation for
-the later GUI review; DOM behavior does not establish pixel legibility. Previous
-AX2 wheel/tilt uncertainty remains unrelated and unverified. No pushes or PRs.
+Use host PowerShell for Python/native gates. Announce and serialize native input;
+preserve foreground/focus/hit guards. Freeze product/helpers/README before native
+acceptance. No pushes or PRs were requested. Earlier legibility observations stay
+for GUI recap; physical wheel/tilt uncertainty remains unrelated/unverified.

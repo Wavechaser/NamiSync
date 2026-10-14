@@ -82,7 +82,11 @@ _DRIVER_DIAGNOSTIC_KEYS = frozenset(
         "browser_async_error",
         "move_bottom_gap",
         "plan_context_input",
+        "plan_context_readiness",
     }
+)
+_PLAN_CONTEXT_READINESS_KEYS = frozenset(
+    {"document_focused", "connected", "visible", "focused", "hit_owned"}
 )
 
 
@@ -1907,6 +1911,16 @@ def _write_driver_diagnostic(path: Path, record: dict[str, object]) -> None:
     path.write_text(json.dumps(record, sort_keys=True), encoding="utf-8")
 
 
+def _bounded_plan_context_readiness(value: object) -> dict[str, bool] | None:
+    if (
+        type(value) is not dict
+        or set(value) != _PLAN_CONTEXT_READINESS_KEYS
+        or any(type(item) is not bool for item in value.values())
+    ):
+        return None
+    return {name: value[name] for name in sorted(_PLAN_CONTEXT_READINESS_KEYS)}
+
+
 def _drive_plan_confirmation(
     native: object,
     core: object,
@@ -1921,6 +1935,7 @@ def _drive_plan_confirmation(
     failed = False
     last_driver_step = "start"
     last_method: str | None = None
+    last_plan_context_readiness: dict[str, bool] | None = None
 
     def fail(error: BaseException, task: object | None = None) -> None:
         nonlocal failed
@@ -1975,6 +1990,7 @@ def _drive_plan_confirmation(
             "browser_async_error": None,
             "move_bottom_gap": None,
             "plan_context_input": None,
+            "plan_context_readiness": last_plan_context_readiness,
         }
         diagnostic_expression = r"""
 (() => {
@@ -2164,6 +2180,8 @@ def _drive_plan_confirmation(
         })()"""
 
         def send(facts: object) -> None:
+            nonlocal last_plan_context_readiness
+            last_plan_context_readiness = _bounded_plan_context_readiness(facts)
             if type(facts) is not dict or not facts or any(value is not True for value in facts.values()):
                 raise RuntimeError("Plan context input target is unavailable")
             if foreground_window_handle() != int(native.Handle.ToInt64()):

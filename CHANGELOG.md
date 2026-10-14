@@ -544,7 +544,8 @@ explicit, reviewable and regression-backed.
 
 Stage 6 delivered the secured desktop host, process-live tasks, frozen Setup,
 bounded Plan review/selection and execution, and live/retained result review.
-Integrity controls, manual post-copy handoff and beta packaging remain open.
+Standalone Inventory adds integrity selection, controls and retained results.
+Manual post-copy navigation and beta packaging remain open.
 
 #### Deliver M1-10 integrity controls and manual verification (2026-10-13 – 2026-10-14)
 
@@ -573,7 +574,7 @@ Integrity controls, manual post-copy handoff and beta packaging remain open.
   conditional scope, pause/resume/cancel and recording degradation. No inventory
   scan or persistent operation-time hashes are introduced. Focused checks pass
   239, the affected department gate passes 3,520, and all 12 imports pass.
-  Task attachment and desktop controls remain pending.
+  Later units below attach these workflows to retained tasks and desktop controls.
 - Add server-owned Inventory file selection with complete folder/location scope,
   revision fences, tri-state and selected/hidden counts. Filtered, collapsed and
   unloaded rows remain in scope; replacement retains surviving exact identities.
@@ -627,6 +628,20 @@ Integrity controls, manual post-copy handoff and beta packaging remain open.
   checks, two installed host/transport gates and 2,016 interface obligations by
   dependency. A separate test correction allows result revision advancement
   between independent live reads without weakening their remaining fact checks.
+- Activate standalone Inventory's complete location/folder/file selection,
+  selected and hidden counts, Baseline/Verify and revision-bound Rebaseline
+  confirmation. Retain original-command observation, exact current-session
+  pause/resume/cancel, separate ordinary result overlays and actual scan
+  provenance. Extend the existing installed Inventory journey through real
+  hashing, control transitions and conditional ledger evidence replacement.
+  Preserve row-only DOM identity and the original facts/Details alignment.
+  Final verification passes 2,018 interface checks, nine installed obligations
+  and the unchanged Inventory table-loading consumer; no speed claim is made.
+- Correct the pre-existing integrity selection conversion that treated a missing
+  file's retained historical stat as current, failing the whole selection before
+  hashing. Real present-to-missing Baseline/Verify/Rebaseline cases now emit the
+  missing outcome and continue eligible siblings without discarding ledger
+  history or weakening core validation.
 
 #### Refine Plan refusal messages, move context and controls (2026-10-04)
 

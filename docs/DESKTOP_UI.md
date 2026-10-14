@@ -6,8 +6,9 @@ typed/picker/recent plan and standalone inventory starts. Production Plan
 review, execution admission and live pause/resume/cancel controls are active;
 retained execution-result review is active in that Plan pane. Inventory has a
 separate bounded read pane with search, facets, sibling sorting and current
-evidence details, Refresh and missing-item visibility controls. Hashing controls,
-history and full settings remain pending. Current v5 item
+evidence details, Refresh, missing-item visibility, complete file selection and
+ordinary integrity controls. Manual post-copy navigation, history and full
+settings remain pending. Current v5 item
 progress and detailed result rows are reduced by the bridge for bounded display.
 
 This document owns visual/user interaction behavior. BRIDGE owns exact transport,
@@ -1887,7 +1888,8 @@ status uses the current session kind. Reconstructing a task or refreshing its
 Inventory preserves the original Plan request. Loading original Plan review
 does not replace current auxiliary recovery feedback. The first-manual API and
 separate bounded result contexts are implemented; visible Verify navigation and
-integrity action controls remain the next M1-10 UI delivery unit.
+manual actions remain the next M1-10 UI delivery unit. Standalone Inventory
+ordinary controls are described below.
 When exact handoff is blocked, the UI explains why and offers only the clearly
 labelled ordinary **Verify current state** fallback for an otherwise eligible,
 normally completed execution; this is not a terminal retry action.
@@ -1945,8 +1947,12 @@ generic tree controller's keyboard, scroll and stale-generation behavior with
 an explicit 24 px row height; other tree consumers retain the 28 px default.
 Its columns are Selection, Filename, Presence, Checksum, Size, Modified and Notes.
 The Selection header has an accessible name and no visible text. Header and row
-checkboxes are disabled, unchecked and non-mixed; they dispatch no selection
-or action. Functional Inventory selection remains M1-10.
+checkboxes display server-owned none/partial/all state. The header selects all
+files in the location; a folder selects all its files, including filtered,
+collapsed and unloaded descendants. Accessible labels disclose that complete
+scope, while selected and hidden-by-filter counts make hidden membership visible.
+Warnings and empty folders are inert. A selection reply replaces authoritative
+summary/window state; stale or uncertain gestures reload instead of replaying.
 Checksum shows eight characters of recorded baseline evidence, with the full
 stored digest in its tooltip; no evidence shows an em dash. Missing, modified or
 reappeared rows retain their stored checksum. A scan does not verify current bytes.
@@ -1963,7 +1969,7 @@ Both lists reuse 24 px rows, 12 px/16 px caption text, shared zebra surfaces,
 16 px checkboxes, semibold folder names and state labels, monospace checksums,
 and the shared tertiary foreground for Size, Modified and Notes. In forced
 colors, active Inventory text cells inherit HighlightText while filled Presence
-backgrounds and disabled checkbox semantics remain. Tree spacers do not receive
+backgrounds and checkbox eligibility remain. Tree spacers do not receive
 zebra fill. Folder Size shows
 complete file bytes while its tooltip and Details distinguish own object facts.
 
@@ -1988,8 +1994,13 @@ selected item's details.
 Inventory terminal labels identify baseline, verification and rebaseline when
 those ordinary sessions are observed; the detailed status calls this the current
 activity. Displayed scan scope/counts continue to describe the actual published
-scan. The ordinary backend and bridge are available; full integrity controls,
-checkbox activation and rich outcome rendering remain pending.
+scan. Baseline, Verify and Rebaseline use the complete server-owned selection.
+An empty selection starts nothing. Rebaseline opens a blocking confirmation
+showing the selected scope and count; Cancel changes nothing, and acceptance
+cannot survive a request or view-revision change. Start recovery observes the
+original command without submitting another operation. Pause, Resume and Cancel
+address only the exact current ordinary session, with task status derived from
+that activity's snapshot rather than relabeling every Inventory activity a scan.
 
 Refresh selected follows the tree's current active file or folder in its loaded
 window, including arrow-key navigation while Details is hidden. Arrows move
@@ -2032,7 +2043,10 @@ The controls show confirmed applied/noop/stale/conflict counts and an unresolved
 suffix. An uncertain original action retains Check original outcome across task
 navigation. Visibility needs a confirmed current publication; Refresh can recover
 from a prior publication after a failed rebuild. Notices have no action controls.
-Baseline, Verify, Rebaseline and live integrity overlays remain future controls.
+Latest ordinary-integrity outcomes appear separately from stored ledger evidence
+in rows and Details. Their request/session/location identity fences late replies;
+terminal replacement repairs live gaps, including an empty result, without
+leaving missing result rows apparently pending.
 
 Plan and Inventory rows offer a shared context menu using the existing menu
 surface and item styles. Right-click targets the row under the pointer without
@@ -2041,7 +2055,7 @@ key targets the focused Plan row or Inventory tree's active row. Show details
 opens the existing Details pane for that exact row; Plan selection and container
 Expand/Collapse reuse the existing server-scoped actions. Committed, disabled
 and informational Plan rows have no selection action. Inventory has no
-selection action; its checkboxes are disabled visuals only. Its domain file/folder rows offer Refresh selected;
+selection context-menu action; its checkboxes provide selection. Its domain file/folder rows offer Refresh selected;
 Acknowledge missing is offered only for a currently eligible row whose own
 presence is missing, including a domain folder, using the existing node-scoped
 visibility command. Missing descendants do not qualify a present folder. The
@@ -2059,7 +2073,7 @@ scroll, resize, task/view replacement and disposal dismiss without stealing
 focus. Inventory pointer invocation preserves a partially visible row's scroll
 position, while keyboard invocation reuses the tree's active-row authority.
 
-The accepted but unrealized policy admits eligible selected files with or
+Rebaseline admits eligible selected files with or
 without evidence to rebaseline. It always hashes and conditionally replaces or
 creates evidence,
 even for a genuine match, and clears verification freshness; explicit
@@ -2067,10 +2081,9 @@ acceptance remains required for all-null and mixed selections. Baseline stays
 missing-evidence-only; verify compares existing evidence or establishes an
 initial baseline without claiming a verification. The
 [three-operation policy](VERIFIER.md#accepted-standalone-operation-policy)
-owns the outcomes and deferred compare-and-accept behavior. This is accepted,
-not current desktop functionality.
+owns the outcomes and deferred compare-and-accept behavior.
 
-The accepted future integrity surface presents ledger-derived verification state
+The standalone integrity surface presents ledger-derived verification state
 separately from its latest ordinary-integrity overlay. Manual post-copy results
 never enter that field. Folder rollups exclude warnings and do not change when acknowledged
 rows are hidden. Overflow is displayed as unavailable, never a clamped total.

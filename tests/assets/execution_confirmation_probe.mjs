@@ -199,6 +199,21 @@ await Promise.resolve();
 assert.equal(dialog.open, false);
 assert.equal(document.activeElement, trigger);
 
+const rebaseline = createExecutionConfirmation([app, popup], {
+  id: "rebaseline-confirmation", heading: "Confirm Rebaseline",
+  consequence: "Replace evidence for all selected files.", confirm: "Confirm Rebaseline",
+  count: (value, detail) => `${value} selected files · ${detail}`,
+});
+document.body.append(rebaseline.element);
+rebaseline.show({destructiveOperationCount:3, countDetail:"2 hidden by filters or search",
+  returnFocus:trigger, onCancel:() => { canceled += 1; }, onConfirm:() => { confirmed += 1; }});
+assert.equal(rebaseline.element.id, "rebaseline-confirmation");
+assert.equal(walk(rebaseline.element).find(item => item.id === "rebaseline-confirmation-count").textContent,
+  "3 selected files · 2 hidden by filters or search");
+findByDataset(rebaseline.element, "cancelExecution").dispatch("click");
+frame(); frame(); frame();
+assert.equal(rebaseline.element.open, false);
+
 dialog.animations = [];
 confirmation.show({
   destructiveOperationCount: 1,

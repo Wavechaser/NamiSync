@@ -113,6 +113,7 @@ const source = (await readFile(join(assetRoot, "inventory_review.js"), "utf8"))
 const { createInventoryReviewPanel } = await import(moduleUrl(source));
 const fixture = JSON.parse(await readFile(process.argv[3], "utf8"));
 const viewChanges = [], details = [], pages = [], reloads = [], refreshes = [], visibility = [], checks = [];
+const selections = [], starts = [], controls = [];
 let pendingPage;
 const pane = createInventoryReviewPanel({
   onViewChange: (...args) => viewChanges.push(args),
@@ -121,6 +122,9 @@ const pane = createInventoryReviewPanel({
   onReload: (task) => reloads.push(task),
   onRefresh: (...args) => refreshes.push(args),
   onVisibility: (...args) => visibility.push(args),
+  onSelect: (...args) => selections.push(args),
+  onStart: (...args) => starts.push(args),
+  onControl: (...args) => controls.push(args),
   onCheckOutcome: (task) => checks.push(task),
 });
 const review = { ...fixture.views.default, pending: null, message: null, detail: null, queuedSearchQuery: null, scrollTop: 0 };
@@ -133,14 +137,15 @@ const walk = (root) => [root, ...root.children.flatMap(walk)];
 const find = (predicate) => walk(pane.element).find(predicate);
 const action = (key) => find((value) => value.dataset.action === key);
 const rowElements = () => walk(pane.element).filter((value) => value.getAttribute("role") === "treeitem");
+const rowElement = (nodeId) => rowElements().find((value) => value.dataset.nodeId === nodeId);
+const rowSelection = (nodeId) => walk(rowElement(nodeId))
+  .find((value) => value.dataset.action === "inventory-select-row");
 const text = (root) => [root.textContent, ...root.children.map(text)].join(" ");
 const tick = async () => { await Promise.resolve(); await Promise.resolve(); };
 pane.render(task);
-const statusCard = find((value) => value.classList.contains("nami-plan-review__summary"));
 const statusLine = find((value) => value.classList.contains("nami-inventory-review__status-line"));
 const statusSummary = find((value) => value.classList.contains("nami-plan-review__status-summary"));
 const progressTrack = find((value) => value.classList.contains("nami-plan-review__progress"));
-assert.equal(statusCard.children.filter((value) => value.tagName === "P").length, 1);
 assert.doesNotMatch(statusSummary.textContent, /visible rows/);
 assert.doesNotMatch(statusLine.textContent, /Current scan:|completed/);
 assert.equal(progressTrack.hidden, false, "terminal track remains visible without inventing a percentage");
@@ -149,8 +154,6 @@ task.inventoryLoading = true;
 pane.render(task);
 assert.equal(find((value) => value.classList.contains("nami-inventory-review__status-line")), statusLine);
 assert.match(statusLine.textContent, /Loading inventory view…/);
-assert.equal(statusCard.children.filter((value) => value.tagName === "P").length, 1,
-  "loading uses the existing status line");
 task.inventoryLoading = false;
 task.sessionState = "active";
 pane.render(task);
@@ -174,13 +177,84 @@ pane.render(task);
 action("inventory-refresh").click();
 assert.deepEqual(refreshes.at(-1), [review, null]);
 assert.equal(rowElements().length, fixture.views.default.window.rows.length);
+assert.deepEqual(walk(pane.element).filter((value) => value.dataset.nodeId !== undefined), rowElements(),
+  "data-node-id uniquely identifies Inventory rows");
 assert.equal(find((value) => value.getAttribute("role") === "tree").tabIndex, 0);
 const selectionVisuals = walk(pane.element).filter((value) => value.tagName === "INPUT" && value.type === "checkbox");
 assert.equal(selectionVisuals.length, rowElements().length + 1);
-assert.ok(selectionVisuals.every((value) => value.disabled && !value.checked && !value.indeterminate));
+const locationSelection = action("inventory-select-location");
+assert.equal(locationSelection.checked, review.summary.selection === "all");
+assert.equal(locationSelection.indeterminate, review.summary.selection === "partial");
+assert.equal(locationSelection.disabled, review.summary.selectable_file_count === 0);
+for (const row of review.window.rows) {
+  const checkbox = rowSelection(row.node_id);
+  assert.equal(checkbox.checked, row.selection === "all");
+  assert.equal(checkbox.indeterminate, row.selection === "partial");
+  assert.equal(checkbox.disabled, !row.selectable);
+}
 const beforeSelectionClick = [viewChanges.length, details.length, refreshes.length, visibility.length];
-selectionVisuals.forEach((value) => value.click());
+locationSelection.checked = false;
+locationSelection.dispatch("change");
+assert.deepEqual(selections.at(-1), [review, null, false]);
+const selectableRow = review.window.rows.find((row) => row.selectable);
+const selectableCheckbox = rowSelection(selectableRow.node_id);
+const detailCount = details.length;
+selectableCheckbox.checked = false;
+selectableCheckbox.dispatch("change");
+assert.deepEqual(selections.at(-1), [review, selectableRow.node_id, false]);
+assert.equal(details.length, detailCount, "checkbox change cannot activate the tree row");
 assert.deepEqual([viewChanges.length, details.length, refreshes.length, visibility.length], beforeSelectionClick);
+assert.match(action("inventory-select-location").ariaLabel, /including hidden and off-window/i);
+assert.match(selectableCheckbox.ariaLabel, /including hidden, collapsed, and off-window|Select file/);
+assert.match(find((value) => Object.hasOwn(value.dataset, "inventorySelectionSummary")).textContent,
+  new RegExp(`^${review.summary.selected_file_count} of ${review.summary.selectable_file_count} files selected`));
+assert.equal(action("inventory-baseline").disabled, review.summary.selected_file_count === 0);
+const originalSummary = review.summary;
+const originalWindow = review.window;
+review.summary = {...review.summary, selected_file_count:review.summary.selectable_file_count,
+  hidden_selected_file_count:0, selection:"all"};
+review.window = {...review.window, rows:review.window.rows.map(row => row.selectable
+  ? {...row, selection:"all"} : row)};
+pane.render(task);
+assert.equal(action("inventory-baseline").disabled, false);
+action("inventory-baseline").click();
+assert.deepEqual(starts.at(-1).slice(0, 2), [review, "baseline"]);
+task.sessionId = "b".repeat(32);
+task.sessionKind = "verify";
+task.sessionState = "active";
+task.sessionReleased = false;
+task.executionControlState = "running";
+review.summary = originalSummary;
+review.window = originalWindow;
+pane.render(task);
+assert.equal(action("inventory-pause").hidden, false);
+assert.equal(action("inventory-resume").hidden, true);
+action("inventory-pause").click();
+assert.deepEqual(controls.at(-1), [review, "pause"]);
+task.inventoryAction = {pending:false, accepted:true};
+pane.render(task);
+assert.equal(action("inventory-pause").disabled, true,
+  "an accepted control remains visibly owned until live state changes");
+assert.equal(action("inventory-cancel").disabled, true);
+task.inventoryAction = null;
+task.executionControlState = "pausing";
+pane.render(task);
+assert.equal(action("inventory-pause").disabled, true);
+assert.equal(action("inventory-resume").hidden, true,
+  "pausing keeps both Pause and Resume unavailable until the checkpoint settles");
+task.executionControlState = "paused";
+pane.render(task);
+assert.equal(action("inventory-resume").hidden, false);
+action("inventory-resume").click();
+assert.deepEqual(controls.at(-1), [review, "resume"]);
+action("inventory-cancel").click();
+assert.deepEqual(controls.at(-1), [review, "cancel"]);
+task.sessionId = null;
+task.sessionKind = "inventory";
+task.sessionState = "completed";
+task.sessionReleased = true;
+task.executionControlState = "running";
+pane.render(task);
 assert.equal(find((value) => value.getAttribute("role") === "tree").style.values.get("--row-h"), "24px");
 const filterTrigger = action("filter-menu");
 const filterPopup = find((value) => value.classList.contains("nami-filter-menu__popup"));
@@ -410,7 +484,6 @@ task.inventoryAction = { pending: true, recovery: { canCheck: true, checking: fa
 pane.render(task);
 assert.match(statusLine.textContent, /Original pending/);
 assert.match(statusLine.textContent, /Inventory unavailable/);
-assert.equal(statusCard.children.filter((value) => value.tagName === "P").length, 1);
 action("inventory-check-outcome").click();
 assert.equal(checks.at(-1), task);
 assert.equal(action("inventory-refresh").disabled, true);
@@ -935,5 +1008,53 @@ for (const [phase, label] of [["baseline", "Baseline"], ["verify", "Verification
   presentationPane.render(presentationTask);
   assert.equal(presentationPane.element.querySelector(".nami-plan-review__status-title").textContent, `${label} completed`);
 }
+const overlayItem = {row_id:real.row_id, result:"verified", reason:null, recording:"ok",
+  record_disposition:null, detail_omitted_count:0};
+const overlay = {request_id:"c".repeat(32), session_id:"d".repeat(32), mode:"verify",
+  location_id:presentationReview.summary.location_id, revision:1, complete:false, gap:true,
+  items:[overlayItem]};
+presentationTask.requestId = overlay.request_id;
+presentationTask.sessionId = overlay.session_id;
+presentationTask.sessionKind = "verify";
+presentationTask.sessionState = "active";
+presentationTask.sessionReleased = false;
+presentationTask.snapshot = null;
+presentationReview.window = {...presentationReview.window, integrity:overlay};
+presentationReview.detail = {row:presentationRows[0], state:"current", response:{...fixture.detail,
+  detail:{...fixture.detail.detail, attestation:null}, integrity:overlay}};
+presentationPane.render(presentationTask);
+assert.match(walk(presentationPane.element).find(value => Object.hasOwn(value.dataset, "integrityResult")).textContent,
+  /Live verification results may be incomplete · 1 window result/);
+assert.equal(walk(presentationPane.element).find(value => Object.hasOwn(value.dataset, "integrityState")).dataset.integrityState,
+  "verified");
+assert.match(text(walk(presentationPane.element).find(value => value.ariaLabel === "Inventory item details")),
+  /Verification result Verified.*Stored digest No baseline evidence/,
+  "ordinary detail remains visible when ledger attestation is absent");
+presentationReview.window = {...presentationReview.window,
+  integrity:{...overlay, revision:2, complete:true, gap:false, items:[]}};
+presentationTask.sessionState = "completed";
+presentationTask.sessionReleased = true;
+presentationTask.snapshot = {session_id:overlay.session_id, session_state:"completed", phase:"verify",
+  presentation:{value:100, determinate:true, indeterminate:false, items_done:0, items_total:0},
+  terminal_result:{headline:"partial", disposition:"completed", error:"One result needs review",
+    phases:[{phase:"verify"}]}};
+presentationPane.render(presentationTask);
+assert.match(walk(presentationPane.element).find(value => Object.hasOwn(value.dataset, "integrityResult")).textContent,
+  /Verification retained results · 0 window results/);
+assert.equal(walk(presentationPane.element).some(value => Object.hasOwn(value.dataset, "integrityState")), false,
+  "terminal zero-result replacement removes the live subset");
+assert.equal(presentationPane.element.querySelector(".nami-plan-review__status-title").textContent,
+  "Verification needs review", "terminal reconciliation is not presented as successful completion");
+presentationReview.window = {...presentationReview.window,
+  integrity:{...overlay, revision:3, complete:true, gap:false}};
+presentationTask.requestId = "e".repeat(32);
+presentationTask.sessionId = "f".repeat(32);
+presentationTask.sessionKind = "inventory";
+presentationTask.sessionState = "active";
+presentationTask.sessionReleased = false;
+presentationTask.snapshot = null;
+presentationPane.render(presentationTask);
+assert.equal(walk(presentationPane.element).find(value => Object.hasOwn(value.dataset, "integrityState")).dataset.integrityState,
+  "verified", "a later Refresh retains the latest ordinary result generation");
 presentationPane.dispose();
 process.stdout.write("ok\n");

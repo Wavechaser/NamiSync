@@ -9,6 +9,12 @@ const FAILURE_TYPES = Object.freeze(new Set([
   "SyntaxError",
   "TypeError",
 ]));
+const FAILURE_SITE_TYPES = Object.freeze(new Set([
+  "Error",
+  "ReferenceError",
+  "SyntaxError",
+  "TypeError",
+]));
 let galleryStage = "module_import";
 let galleryMeasurementStep = "not_started";
 let galleryFailureReason = "stage_failure";
@@ -55,6 +61,22 @@ function minimumWindowSettled(value, innerWidth, innerHeight) {
     && Math.abs(value.client_height / value.owner_scale - innerHeight) <= 2;
 }
 
+function failureSite(error) {
+  try {
+    const exception = FAILURE_SITE_TYPES.has(error?.name) ? error.name : null;
+    const stack = typeof error?.stack === "string" ? error.stack.slice(0, 8192) : "";
+    const lines = [];
+    for (const match of stack.matchAll(/:(\d{1,6}):\d{1,6}(?=\)?(?:\n|$))/g)) {
+      const line = Number(match[1]) - 1;
+      if (Number.isSafeInteger(line) && line >= 0 && line <= 1000000) lines.push(line);
+      if (lines.length === 8) break;
+    }
+    return Object.freeze({ exception, lines: Object.freeze(lines) });
+  } catch {
+    return Object.freeze({ exception: null, lines: Object.freeze([]) });
+  }
+}
+
 async function waitForTheme(theme) {
   for (let frame = 0; frame < 120; frame += 1) {
     if (document.documentElement.dataset.theme === theme) {
@@ -80,9 +102,10 @@ async function waitForThemeSelector(root, theme, disabled) {
   throw new Error("the product theme selector did not reconcile");
 }
 
-function buildFailureEvidence(stage, type, step, reason, native = null) {
+function buildFailureEvidence(stage, type, step, reason, native = null, site = null) {
   const failure = { stage, type, step, reason };
   if (native !== null) failure.native = Object.freeze({ ...native });
+  if (site !== null) failure.site = site;
   return Object.freeze(failure);
 }
 
@@ -92,6 +115,7 @@ async function reportFailure(error) {
   if (galleryWatchdog !== null) clearTimeout(galleryWatchdog);
   const candidate = error !== null && typeof error === "object" ? error.name : "";
   const type = FAILURE_TYPES.has(candidate) ? candidate : "Error";
+  const site = failureSite(error);
   let native = null;
   const nativeFailure = [
     "native_pseudo_pending",
@@ -118,7 +142,7 @@ async function reportFailure(error) {
   }
   const failure = buildFailureEvidence(
     galleryStage, type, galleryMeasurementStep, galleryFailureReason,
-    native,
+    native, site,
   );
   if (typeof dispatchInteractive === "function") {
     try {
@@ -136,6 +160,7 @@ async function reportFailure(error) {
             phase: "failure",
             failure: buildFailureEvidence(
               galleryStage, type, galleryMeasurementStep, "stage_failure",
+              null, site,
             ),
           }),
           validAccepted,
@@ -1939,6 +1964,7 @@ window.addEventListener("unhandledrejection", (event) => {
       const row = { node_id: String(index + 1), row_id: String(index + 1), display: `evidence-${index}.txt`,
         depth: 0, visible_index: index, parent_visible_index: null, first_child_visible_index: null,
         position_in_set: index + 1, set_size: 300, expanded: null, is_container: false, kind: "file",
+        selectable: true, selection: "none",
         presence: ["unsupported", "missing"].includes(state) ? state : "present",
         verification_state: ["unsupported", "missing", "reappeared"].includes(state) ? "unverified" : state,
         reappeared: state === "reappeared", acknowledged: false, size: 10, mtime_ns: "1000000000",
@@ -1952,7 +1978,8 @@ window.addEventListener("unhandledrejection", (event) => {
         rollup:{...rollup, size_partial:state === "partial", size_overflow:state === "overflow"}});
       if (state === "child") Object.assign(row, {display:"child.txt", depth:1, parent_visible_index:9, verification_state:"verified"});
       if (state === "notice") Object.assign(row, {row_id:null, presence:null, verification_state:null,
-        display:"access_denied unreadable", warning:{code:"access_denied", detail:"Cannot read this item."}});
+        display:"access_denied unreadable", selectable:false,
+        warning:{code:"access_denied", detail:"Cannot read this item."}});
       return row;
     };
     const windowAt = (offset) => ({ offset, total: 300,
@@ -1960,7 +1987,9 @@ window.addEventListener("unhandledrejection", (event) => {
     const review = { summary: { root_path: "C:\\recorded", request_id: "1".repeat(32),
       rollup, visible_row_count: 300, filters: [], scan_scope: { kind: "location" }, scan_complete: true,
       observed_count: 299, missing_count: 1, warning_count: 0, search_query: "",
-      sort_column: "path", sort_direction: "ascending" }, window: windowAt(0), detail: null,
+      sort_column: "path", sort_direction: "ascending", selected_file_count: 0,
+      selectable_file_count: 300, hidden_selected_file_count: 0, selection: "none" },
+      window: windowAt(0), detail: null,
       pending: null, message: null, queuedSearchQuery: null };
     const inventoryTask = { taskId: "task-" + "2".repeat(32), requestId: "1".repeat(32),
       sessionState: "completed", sessionReleased: true, taskKind: "inventory", inventoryReview: review };
@@ -1968,6 +1997,7 @@ window.addEventListener("unhandledrejection", (event) => {
     const panel = createInventoryReviewPanel({
       onWindow: async (_owner, offset) => { requests.push(offset); return windowAt(offset); },
       onDetail() {}, onViewChange() {}, onRefresh() {}, onReload() {}, onCheckOutcome() {}, onVisibility() {},
+      onSelect() {}, onStart() {}, onControl() {},
     });
     const root = panel.element;
     root.dataset.gallerySection = "inventory_panel";
@@ -1997,12 +2027,12 @@ window.addEventListener("unhandledrejection", (event) => {
     const statusLine = root.querySelector(".nami-inventory-review__status-line");
     const statusCard = root.querySelector(".nami-plan-review__summary");
     const track = root.querySelector(".nami-plan-review__progress");
-    const statusEvidence = { single_line: statusCard.querySelectorAll(":scope > p").length === 1 };
+    const statusEvidence = { single_line: statusCard.querySelectorAll(".nami-inventory-review__status-line").length === 1 };
     panel.render({ ...inventoryTask, sessionState: "active", sessionReleased: false, inventoryLoading: true });
     await settled();
     statusEvidence.loading_same_line = root.querySelector(".nami-inventory-review__status-line") === statusLine
       && statusLine.textContent.includes("Loading inventory view…")
-      && statusCard.querySelectorAll(":scope > p").length === 1;
+      && statusCard.querySelectorAll(".nami-inventory-review__status-line").length === 1;
     statusEvidence.active_animation = getComputedStyle(track.firstElementChild).animationName;
     statusEvidence.active_indeterminate = track.classList.contains("nami-progress--indeterminate");
     panel.render(inventoryTask);
