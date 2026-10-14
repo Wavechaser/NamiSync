@@ -86,7 +86,13 @@ from namisync.interfaces.web.slots import FolderSlotTable, SlotUnavailableError
 from namisync.interfaces.web.task_snapshot import TaskPresentationState, TaskSnapshotStage
 from namisync.interfaces.web.readiness import CommandPhase, ReadinessContext
 from namisync.workflows import (
+    BASELINE_KIND,
+    EXECUTION_KIND,
+    INVENTORY_KIND,
+    MANUAL_VERIFY_KIND,
     PLAN_KIND,
+    REBASELINE_KIND,
+    VERIFY_KIND,
     LocationBinding,
     LocationCandidate,
     LocationCandidateResult,
@@ -3191,6 +3197,60 @@ def test_br_g_32_public_view_enum_manifest_matches_manual_witnesses() -> None:
         witnessed_enum_types.update(_value_enum_types(witness.value))
 
     assert not witnessed_enum_types
+
+
+def test_task_summary_accepts_complete_task_and_session_kind_domains() -> None:
+    for session_kind in (
+        PLAN_KIND,
+        INVENTORY_KIND,
+        EXECUTION_KIND,
+        BASELINE_KIND,
+        VERIFY_KIND,
+        REBASELINE_KIND,
+        MANUAL_VERIFY_KIND,
+    ):
+        TaskSummaryView(
+            TASK_ID,
+            SESSION_ID,
+            "active",
+            False,
+            PLAN_KIND,
+            "6" * 32,
+            "7" * 32,
+            session_kind,
+        )
+    TaskSummaryView(
+        TASK_ID,
+        SESSION_ID,
+        "active",
+        False,
+        INVENTORY_KIND,
+        "6" * 32,
+        None,
+        INVENTORY_KIND,
+    )
+    with pytest.raises(ValueError, match="task summary kind"):
+        TaskSummaryView(
+            TASK_ID,
+            SESSION_ID,
+            "active",
+            False,
+            "invented",
+            "6" * 32,
+            None,
+            INVENTORY_KIND,
+        )
+    with pytest.raises(ValueError, match="session kind"):
+        TaskSummaryView(
+            TASK_ID,
+            SESSION_ID,
+            "active",
+            False,
+            PLAN_KIND,
+            "6" * 32,
+            "7" * 32,
+            "invented",
+        )
 
 
 def test_br_g_33_codec_approves_only_exact_adapter_task_views() -> None:

@@ -40,6 +40,7 @@ from namisync.workflows.views import (
 _TASK_DRAIN_CAPACITY = 64
 _OPAQUE_ID = re.compile(r"[0-9a-f]{32}")
 _TASK_ID = re.compile(r"task-[0-9a-f]{32}")
+_TASK_KINDS = frozenset({PLAN_KIND, INVENTORY_KIND})
 _TASK_RECORD_PAUSE_SUPPORT = {
     PLAN_KIND: False,
     INVENTORY_KIND: False,
@@ -136,7 +137,7 @@ class TaskSetupSnapshotView:
     def __post_init__(self) -> None:
         if self.setup_state not in {"default", "frozen"}:
             raise ValueError("Setup snapshot state is invalid")
-        if self.task_kind not in {None, "sync-plan", "inventory"}:
+        if self.task_kind is not None and self.task_kind not in _TASK_KINDS:
             raise ValueError("Setup snapshot task kind is invalid")
         for value in (self.source, self.target, self.root):
             if value is not None and type(value) is not TaskSetupLocationView:
@@ -221,7 +222,7 @@ class TaskSummaryView:
             raise ValueError("task summary session state is inconsistent")
         if self.session_released and self.session_state in {None, "active"}:
             raise ValueError("released task requires terminal session truth")
-        if self.task_kind not in {None, "sync-plan", "inventory"}:
+        if self.task_kind is not None and self.task_kind not in _TASK_KINDS:
             raise ValueError("task summary kind is invalid")
         if self.request_id is not None:
             _require_opaque_id(self.request_id, "task request id")
@@ -231,8 +232,10 @@ class TaskSummaryView:
             _require_opaque_id(self.plan_request_id, "original plan request id")
         if (self.task_kind == "sync-plan") != (self.plan_request_id is not None):
             raise ValueError("task summary original plan identity is inconsistent")
-        if self.session_kind not in {None, PLAN_KIND, EXECUTION_KIND, INVENTORY_KIND,
-                                     BASELINE_KIND, VERIFY_KIND, REBASELINE_KIND, MANUAL_VERIFY_KIND}:
+        if (
+            self.session_kind is not None
+            and self.session_kind not in _TASK_RECORD_PAUSE_SUPPORT
+        ):
             raise ValueError("task summary session kind is invalid")
         if (self.session_id is None) != (self.session_kind is None):
             raise ValueError("task summary session kind is inconsistent")

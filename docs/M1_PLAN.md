@@ -125,7 +125,8 @@ receipts/identities are hash-verified in `resume-kind-native-evidence/`.
 D must close the reports' remaining renderer/wrapper/current-status obligations;
 no new effect authority or outcome was added by this review.
 
-D1 delivers standalone Inventory checkboxes and complete selected/hidden counts,
+D1 shipped as `541a90f`, reviewed and fast-forward integrated on `milestone1`.
+It delivers standalone Inventory checkboxes and complete selected/hidden counts,
 Baseline/Verify/Rebaseline with revision-bound explicit confirmation, current
 pause/resume/cancel, original-command observation and separate ordinary results.
 Empty selection and canceled confirmation start nothing; actual scan provenance
@@ -140,8 +141,9 @@ consumer correctness, not a performance claim. Evidence in the existing root:
 `d1-interfaces-20261014.log`, `d1-consumer-ordinary-final-20261014.log`,
 `d1-probe-final-20261014.log`, `d1-native-final-20261014.log`,
 `d1-native-final-temp-20261014/`, and `d1-table-inventory-20261014-01.*`.
-Final independent review and the coherent D1 commit close this unit; no recovery
-commit is an integration unit. HANDOFF retains exact resumption/cleanup pointers.
+`d1-final-review-20261014.md` closes independent review; 51 final native evidence
+files are hash-verified in `d1-native-evidence-final-20261014/manifest.json`.
+No recovery commit is an integration unit. HANDOFF retains cleanup pointers.
 
 The user's 2026-10-14 review replaced the rejected selector-consumer migration
 with removal of the checkbox's unused duplicate `data-node-id`. Selection uses
@@ -184,7 +186,14 @@ task/effect/session domains and explicit execution publication. Its finite sourc
 population is those three owners; existing lifecycle/command/browser-consumer
 tests cover complete kind admission and exact pause capabilities. Direct service,
 bridge, drain and transport consumers, interfaces checks, imports and fresh review
-gate a separate behavior-preserving refactor commit. D2 UI then follows below.
+gate a separate behavior-preserving refactor commit. D2a is verified against
+integrated `541a90f`: 837 direct-consumer tests, 2,020 interface tests and all 12
+import contracts pass (`d2-kinds-*-20261014.log` and
+`d2-kinds-direct-consumers-green-02.txt`). Behavioral summary/record admission
+tests replace the design's private-constant assertions; existing lifecycle
+coverage retains the distinct execution guard. Independent approval is recorded
+in `d2-kinds-review-20261014.md` for the separate catalog refactor commit.
+D2 UI then follows below and remains read-only until this predecessor closes.
 
 D2 adds task-local Plan/Verify navigation, on-demand exact-manual readiness and
 the first Verify copied files action, plus clearly separate Verify current state

@@ -38,6 +38,9 @@ from namisync.workflows.views import (
 
 
 BRIDGE_JS = Path(bridge_module.__file__).parent / "assets" / "bridge.js"
+TASK_ID = "task-" + "1" * 32
+REQUEST_ID = "2" * 32
+PLAN_REQUEST_ID = "3" * 32
 
 
 def _assert_node_cases(cases: list[dict[str, object]]) -> None:
@@ -48,7 +51,7 @@ def _assert_node_cases(cases: list[dict[str, object]]) -> None:
 import { readFileSync } from "node:fs";
 globalThis.window = { addEventListener() {} };
 const source = readFileSync(process.argv[1], "utf8") +
-  "\nexport { validateOperationResultView, validateTaskUpdate };";
+  "\nexport { validateOperationResultView, validateTaskSummary, validateTaskUpdate };";
 const bridge = await import(
   "data:text/javascript;base64," + Buffer.from(source).toString("base64")
 );
@@ -65,6 +68,8 @@ for (const item of corpus.cases) {
     actual = bridge.validateTaskUpdate(
       { update_type: "record", record: item.value }, sessionId,
     );
+  } else if (item.kind === "task-summary") {
+    actual = bridge.validateTaskSummary(item.value);
   } else {
     actual = bridge.validateOperationResultView(item.value);
   }
@@ -240,5 +245,88 @@ def test_required_node_session_record_keeps_task_kind_pause_contract() -> None:
         "expected": False,
         "value": unknown,
     })
+    for invalid in ([VERIFY_KIND], 1):
+        coercive = deepcopy(record)
+        coercive["kind"] = invalid
+        cases.append({
+            "name": f"coercive-task-kind-{type(invalid).__name__}",
+            "kind": "record",
+            "expected": False,
+            "value": coercive,
+        })
+
+    _assert_node_cases(cases)
+
+
+def test_required_node_task_summary_keeps_complete_kind_catalogs() -> None:
+    summary = {
+        "task_id": TASK_ID,
+        "session_id": SESSION_ID,
+        "session_state": "active",
+        "session_released": False,
+        "task_kind": PLAN_KIND,
+        "request_id": REQUEST_ID,
+        "plan_request_id": PLAN_REQUEST_ID,
+        "session_kind": PLAN_KIND,
+    }
+    cases = []
+    for session_kind in (
+        PLAN_KIND,
+        INVENTORY_KIND,
+        EXECUTION_KIND,
+        BASELINE_KIND,
+        VERIFY_KIND,
+        REBASELINE_KIND,
+        MANUAL_VERIFY_KIND,
+    ):
+        value = deepcopy(summary)
+        value["session_kind"] = session_kind
+        cases.append({
+            "name": f"{session_kind}-summary-session-kind",
+            "kind": "task-summary",
+            "expected": True,
+            "value": value,
+        })
+    inventory = deepcopy(summary)
+    inventory.update(
+        task_kind=INVENTORY_KIND,
+        plan_request_id=None,
+        session_kind=INVENTORY_KIND,
+    )
+    cases.append({
+        "name": "inventory-task-kind",
+        "kind": "task-summary",
+        "expected": True,
+        "value": inventory,
+    })
+    cases.append({
+        "name": "blank-task-null-kinds",
+        "kind": "task-summary",
+        "expected": True,
+        "value": {
+            "task_id": TASK_ID,
+            "session_id": None,
+            "session_state": None,
+            "session_released": False,
+            "task_kind": None,
+            "request_id": None,
+            "plan_request_id": None,
+            "session_kind": None,
+        },
+    })
+    for field, invalid in (
+        ("task_kind", "invented"),
+        ("session_kind", "invented"),
+        ("session_kind", [VERIFY_KIND]),
+        ("session_kind", 1),
+    ):
+        unknown = deepcopy(summary)
+        unknown[field] = invalid
+        cases.append({
+            "name": f"invalid-{field}-{type(invalid).__name__}",
+            "kind": "task-summary",
+            "expected": False,
+            "value": unknown,
+        })
 
     _assert_node_cases(cases)

@@ -128,6 +128,16 @@ const TERMINAL_STATES = Object.freeze([
   "canceled",
   "refused",
 ]);
+const TASK_KINDS = Object.freeze(["sync-plan", "inventory"]);
+const TASK_SESSION_PAUSE_SUPPORT = Object.freeze({
+  "sync-plan": false,
+  inventory: false,
+  "sync-execution": true,
+  baseline: true,
+  verify: true,
+  rebaseline: true,
+  "manual-verify": true,
+});
 const RECORDING_STATES = Object.freeze(["ok", "degraded"]);
 const TASK_RECORDING_REASONS_V5 = Object.freeze([
   "recording-open-failed",
@@ -1856,7 +1866,8 @@ function validateRecentLocation(value) {
 
 function validateSetupSnapshot(value) {
   if (!isExactObject(value, ["setup_state", "task_kind", "source", "target", "root", "options", "plan_again"])) return false;
-  if (!["default", "frozen"].includes(value.setup_state) || ![null, "sync-plan", "inventory"].includes(value.task_kind)) return false;
+  if (!["default", "frozen"].includes(value.setup_state)
+      || (value.task_kind !== null && !TASK_KINDS.includes(value.task_kind))) return false;
   if (![value.source, value.target, value.root].every(validateSetupLocation)) return false;
   if (value.options !== null && !validateSetupOptions(value.options)) return false;
   if (value.plan_again !== null && !validatePlanAgainReadiness(value.plan_again)) return false;
@@ -1948,12 +1959,15 @@ function validateTaskSummary(value) {
       value.session_state,
     ) &&
     typeof value.session_released === "boolean" &&
-    [null, "sync-plan", "inventory"].includes(value.task_kind) &&
+    (value.task_kind === null || TASK_KINDS.includes(value.task_kind)) &&
     (value.request_id === null || (typeof value.request_id === "string" && ID_PATTERN.test(value.request_id))) &&
     ((value.task_kind === null) === (value.request_id === null)) &&
     (value.plan_request_id === null || (typeof value.plan_request_id === "string" && ID_PATTERN.test(value.plan_request_id))) &&
     ((value.task_kind === "sync-plan") === (value.plan_request_id !== null)) &&
-    [null, "sync-plan", "sync-execution", "inventory", "baseline", "verify", "rebaseline", "manual-verify"].includes(value.session_kind) &&
+    (value.session_kind === null || (typeof value.session_kind === "string"
+      && Object.prototype.hasOwnProperty.call(
+        TASK_SESSION_PAUSE_SUPPORT, value.session_kind,
+      ))) &&
     ((value.session_id === null) === (value.session_kind === null)) &&
     ((value.session_state === null) === (value.session_id === null)) &&
     !(value.session_released && [null, "active"].includes(value.session_state))
@@ -2620,9 +2634,10 @@ function validateSessionRecord(record, sessionId) {
       "result",
     ]) &&
     record.session_id === sessionId &&
-    isOneOf(record.kind, ["sync-plan", "inventory", "sync-execution", "baseline", "verify", "rebaseline", "manual-verify"]) &&
+    typeof record.kind === "string" &&
+    Object.prototype.hasOwnProperty.call(TASK_SESSION_PAUSE_SUPPORT, record.kind) &&
     isOneOf(record.state, TERMINAL_STATES) &&
-    record.supports_pause === (["sync-execution", "baseline", "verify", "rebaseline", "manual-verify"].includes(record.kind)) &&
+    record.supports_pause === TASK_SESSION_PAUSE_SUPPORT[record.kind] &&
     isUtcTimestamp(record.created_at) &&
     (record.started_at === null || isUtcTimestamp(record.started_at)) &&
     isUtcTimestamp(record.ended_at) &&

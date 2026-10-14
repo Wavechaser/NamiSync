@@ -549,6 +549,10 @@ Manual post-copy navigation and beta packaging remain open.
 
 #### Deliver M1-10 integrity controls and manual verification (2026-10-13 – 2026-10-14)
 
+- Consolidate repeated lifecycle effect catalogs and native/browser task/session
+  kind admission. Reuse one session pause-capability map per language owner,
+  retaining strict string admission, intentional subsets and execution's distinct
+  reviewed-plan backstop. No kind, wire command or capability is added.
 - Restore task-execution publication's missing-reviewed-plan backstop and
   original execution-session binding after C3b combined it with optional
   auxiliary association. A missing-plan regression fails before the fix;

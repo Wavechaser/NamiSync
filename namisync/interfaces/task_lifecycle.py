@@ -14,6 +14,22 @@ from uuid import uuid4
 TASK_EFFECT_CAPACITY = 48
 _OPAQUE_ID = re.compile(r"[0-9a-f]{32}")
 _ANY_TASK = object()
+_PLAN_EFFECT_KINDS = frozenset({"plan", "task-plan"})
+_TASK_EFFECT_KINDS = frozenset({
+    "task-execution",
+    "task-inventory",
+    "task-integrity",
+    "task-manual-verification",
+})
+_AUXILIARY_TASK_EFFECT_KINDS = frozenset({
+    "task-inventory",
+    "task-integrity",
+    "task-manual-verification",
+})
+_PLANLESS_INVENTORY_EFFECT_KINDS = frozenset({
+    "task-inventory",
+    "task-integrity",
+})
 
 
 class LifecycleReceiptConflictError(ValueError):
@@ -240,7 +256,7 @@ class TaskLifecycle:
                 association = self._sessions.get(receipt.session_id)
                 if association is None:
                     task = self._tasks.get(receipt.task_id)
-                    if (receipt.kind in {"task-execution", "task-inventory", "task-integrity", "task-manual-verification"} and task is not None
+                    if (receipt.kind in _TASK_EFFECT_KINDS and task is not None
                             and command_id in task.inventory_start_command_ids
                             and not task.retiring and task.retirement_claim_id is None):
                         return receipt
@@ -432,7 +448,7 @@ class TaskLifecycle:
                     task.plan_token is not None
                     and task.start_kind == "task-execution"
                 )
-                or task.start_kind in {"task-inventory", "task-integrity", "task-manual-verification"}
+                or task.start_kind in _AUXILIARY_TASK_EFFECT_KINDS
             ):
                 self._finish_failed_task_start_locked(task)
             self._condition.notify_all()
@@ -467,7 +483,7 @@ class TaskLifecycle:
             prior = None if task is None else self._sessions.get(task.session_id)
             if (self._closed or task is None or prior is None or task.plan_token is None
                     or task.manual_attempt_command_id is not None
-                    or prior.kind not in {"task-execution", "task-inventory", "task-integrity", "task-manual-verification"}
+                    or prior.kind not in _TASK_EFFECT_KINDS
                     or task.execution_session_id != execution_session_id
                     or prior.plan_token != task.plan_token
                     or not prior.session_released or prior.terminal_digest is None
@@ -510,7 +526,7 @@ class TaskLifecycle:
                 raise RuntimeError("service is closed")
             task = self._tasks.get(task_id)
             prior = None if task is None else self._sessions.get(task.session_id)
-            if (task is None or prior is None or prior.kind not in {"task-inventory", "task-integrity", "task-execution", "task-manual-verification"}
+            if (task is None or prior is None or prior.kind not in _TASK_EFFECT_KINDS
                     or prior.request_id != request_id or not prior.session_released
                     or prior.terminal_digest is None or prior.settlement_claim is not None
                     or prior.observation_claim is not None
@@ -533,7 +549,7 @@ class TaskLifecycle:
             task = self._tasks.get(task_id)
             association = None if task is None else self._sessions.get(task.session_id)
             if (self._closed or task is None or association is None
-                    or association.kind not in {"task-inventory", "task-integrity", "task-execution", "task-manual-verification"} or association.request_id != request_id
+                    or association.kind not in _TASK_EFFECT_KINDS or association.request_id != request_id
                     or not association.session_released or association.terminal_digest is None
                     or association.settlement_claim is not None or association.observation_claim is not None
                     or task.admission_identity is not None or task.retiring
@@ -806,14 +822,14 @@ class TaskLifecycle:
                 if task.session_id is not None:
                     prior = self._sessions.get(task.session_id)
                     if (
-                        kind not in {"task-execution", "task-inventory", "task-integrity", "task-manual-verification"}
+                        kind not in _TASK_EFFECT_KINDS
                         or prior is None
                         or not prior.session_released
                         or prior.terminal_digest is None
                         or (kind == "task-execution" and task.plan_token is None)
-                        or (kind in {"task-inventory", "task-integrity", "task-manual-verification"}
-                            and (prior.kind not in {"task-inventory", "task-integrity", "task-execution", "task-manual-verification"}
-                                 or (task.plan_token is None and prior.kind not in {"task-inventory", "task-integrity"})
+                        or (kind in _AUXILIARY_TASK_EFFECT_KINDS
+                            and (prior.kind not in _TASK_EFFECT_KINDS
+                                 or (task.plan_token is None and prior.kind not in _PLANLESS_INVENTORY_EFFECT_KINDS)
                                  or (task.plan_token is not None and prior.plan_token != task.plan_token)
                                  or prior.settlement_claim is not None or prior.observation_claim is not None))
                     ):
@@ -929,7 +945,7 @@ class TaskLifecycle:
                         "command_id raced with a different admitted session"
                     )
             task = self._task_for_association_locked(admission)
-            if admission.kind in {"plan", "task-plan"}:
+            if admission.kind in _PLAN_EFFECT_KINDS:
                 # Plan request IDs are minted fresh by the service. Another
                 # session under this ID is a collision, not a retirement
                 # waiter or a reusable key.
@@ -953,14 +969,14 @@ class TaskLifecycle:
                     raise RuntimeError("task execution lost its reviewed plan")
                 admission.plan_token = task.plan_token
                 task.execution_session_id = session_id
-            elif admission.kind in {"task-inventory", "task-integrity", "task-manual-verification"} and task is not None and task.plan_token is not None:
+            elif admission.kind in _AUXILIARY_TASK_EFFECT_KINDS and task is not None and task.plan_token is not None:
                 admission.plan_token = task.plan_token
             admission.request_id = request_id
             if admission.command_id is not None:
                 self._start_receipts[admission.command_id] = receipt
             if task is not None:
                 task.admission_identity = None
-                if admission.kind in {"task-inventory", "task-integrity", "task-manual-verification"}:
+                if admission.kind in _AUXILIARY_TASK_EFFECT_KINDS:
                     assert admission.command_id is not None
                     task.inventory_start_command_ids.add(admission.command_id)
                     if admission.prior_session_id is not None:
@@ -1138,7 +1154,7 @@ class TaskLifecycle:
                         "task close names a superseded session"
                     )
                 if (
-                    association.kind in {"plan", "task-plan"}
+                    association.kind in _PLAN_EFFECT_KINDS
                     and task.start_kind == "task-execution"
                     and (
                         task.session_id == association.session_id
@@ -1207,7 +1223,7 @@ class TaskLifecycle:
                 raise LifecycleAssociationError("session is unavailable")
             if (
                 claim.close_task
-                and association.kind in {"plan", "task-plan"}
+                and association.kind in _PLAN_EFFECT_KINDS
                 and association.plan_token is None
             ):
                 raise RuntimeError("task plan identity is unavailable")
@@ -1509,7 +1525,7 @@ class TaskLifecycle:
             if task.admission_identity != admission.identity:
                 raise LifecycleAssociationError("task admission is stale")
             task.admission_identity = None
-            if task.start_failed and (task.session_id is None or task.start_kind in {"task-inventory", "task-integrity", "task-manual-verification"}):
+            if task.start_failed and (task.session_id is None or task.start_kind in _AUXILIARY_TASK_EFFECT_KINDS):
                 self._finish_failed_task_start_locked(task)
 
     def _retire_association_locked(

@@ -1,4 +1,4 @@
-# Latest session — M1-10 D1 acceptance and D2 preparation
+# Latest session — M1-10 D1 delivered, D2a active
 
 2026-10-14. The user reviewed A–C and D1, authorized the product-side selector
 correction and C3b repair, and confirmed finishing D1 before D2. Finish M1-10,
@@ -13,9 +13,10 @@ missing rows' historical-stat promotion in the shared integrity workflow; its
 whole-selection failure included CLI use. `f26cb57abb52a905c12a0a02210353718dea7b8c`
 restores C3b's separate execution publication backstop; 45 lifecycle and 215
 direct-consumer checks pass with independent approval. `milestone1` is fast-forward
-integrated through that fix. Current branch: `codex/m1-10-resume-20261014`.
+integrated through that fix and D1 `541a90ff3e6ab0f98feea8813a571d9a22251aa1`.
+Current branch: `milestone1`; the resume branch and recovery refs remain retained.
 
-D1 is ready for final review/commit: standalone selection/counts, integrity
+D1 is delivered and independently approved: standalone selection/counts, integrity
 starts/confirmation, current controls, original-command recovery and truthful
 ordinary results. Product checkbox no longer duplicates row identity. Its closure
 still supplies selection ID. Removed the unnecessary facts wrapper to preserve
@@ -36,7 +37,8 @@ All evidence is in `build/m1-10-20261013/`:
 - `d1-table-inventory-20261014-01.*`: one unchanged Inventory table-loading child
   passed with before/after package identity and restored assets; no speed claim.
 - `c3b-backstop-review-20261014.md`: independent approval of the separate fix.
-  Final D1 review is `d1-final-review-20261014.md` when complete.
+  Final D1 approval is `d1-final-review-20261014.md`. Its 51 final native evidence
+  copies are hash-verified in `d1-native-evidence-final-20261014/manifest.json`.
 
 Earlier raw receipt corrections matter: Inv01's pause-race theory was unproved
 and the missing-stat failure is the likely cause; Inv02's blocking wait was
@@ -54,14 +56,20 @@ the dedicated retained directory. Earlier copied failures remain in
 
 ## Next work
 
-Commit and integrate D1 after final independent approval, then revalidate
-`d2-kinds-design-20261014.md` and `d2-ui-refresh-20261014.md` against that commit.
+`d2-kinds-design-20261014.md` is revalidated against `541a90f`; D2a implementation
+is active with a disjoint builder and fresh read-only reviewer. Root owns docs
+and gates. `d2-ui-refresh-20261014.md` remains read-only preparation.
 D2a is a separate catalog refactor, preserving different effect/session/task
-domains and C3b's explicit execution check. D2 UI adds retained Plan/Verify
+domains and C3b's explicit execution check. Its final source passes 837 direct
+consumer tests, 2,020 interface tests and all 12 import contracts. Receipts:
+`d2-kinds-direct-consumers-green-02.txt`, `d2-kinds-interfaces-20261014.log`,
+`d2-kinds-imports-20261014.log`. Independent approval is recorded in
+`d2-kinds-review-20261014.md`; commit this finite refactor before D2 UI.
+D2 UI adds retained Plan/Verify
 navigation, first exact manual verification and explicit ordinary fallback;
 resolve sync-task disabled buttons with applicable actions/guidance. Preserve
 Plan state, original/current identities and separate result generations.
-D2/E have not started implementation. E owns full ordinary/import/cross-component
+D2 UI/E have not started implementation. E owns full ordinary/import/cross-component
 closure, final review and recovery accounting before the user-requested stop.
 
 Keep task recoveries until exact accounting:

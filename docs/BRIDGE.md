@@ -14,10 +14,11 @@ Identifiers are opaque. `HexId` is 32 lowercase hexadecimal characters; current 
 
 Production core events are v5. There is no positive v3/v4 compatibility path. The bridge response envelope is independently v1; each live event carries the nested `schema_version: 5` and the exact `body_type`/`body` pair from `CORE.md`. A `SessionEventView` carries session id, positive sequence, strict UTC timestamp, schema version, body type, and body. A terminal `SessionRecordView` carries a non-null result consistent with its terminal state. A drain update is exactly `{update_type:"event",event:SessionEventView}` or `{update_type:"record",record:SessionRecordView}`. The response has no cursor, acknowledgement, receipt, has_more, or echoed replay value. A result-free snapshot is not a terminal update and cannot release a session.
 
-Task terminal records describe the underlying plan, inventory or execution
-session, even when the retained task kind remains sync-plan. Native and browser
-validators preserve that closed kind/capability mapping: plan and inventory do
-not support pause; execution does. A fast terminal result must reach the task
+Task terminal records describe the current session independently of the retained
+task kind. Within each native/browser owner, summary admission and terminal
+capability validation use the same session-kind catalog; stable task kinds and
+internal lifecycle effect kinds remain separate. Plan and inventory sessions do
+not support pause; execution and integrity sessions do. A fast terminal result must reach the task
 queue and release path just as a later result does. Exact source-owned record
 validation remains in `task_port.py` and its browser consumer.
 
