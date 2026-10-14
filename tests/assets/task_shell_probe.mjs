@@ -1328,6 +1328,7 @@ assert.equal(retainedAdmissionReview.summary, unchangedSelection);
 assert.equal(reviewRenders.at(-1).executionWindowDirty, true);
 
 const committedReview = planSummary({
+  request_id: unchangedSelection.request_id,
   selection_state: "committed", view_revision: 3, selection_revision: 1,
   preflight_ready: true, preflight_refusal_count: 0, warning_count: 0,
 });
@@ -1335,8 +1336,16 @@ committedReload.resolve(committedReview);
 const committedWindowBase = planWindows.length;
 await until(() => planWindows.length === committedWindowBase + 1);
 planWindows.at(-1).resolve(planWindow(committedReview));
-await turns();
-taskButton("Task 7").click();
+await until(() => !reviewRenders.at(-1).reviewLoading);
+assert.equal(reviewRenders.at(-1).review, retainedAdmissionReview,
+  "post-admission reconciliation retains the acquired review owner");
+assert.equal(retainedAdmissionReview.summary.selection_state, "committed",
+  "post-admission reconciliation cannot strand the reviewing summary");
+await until(() => planWindows.length === committedWindowBase + 2);
+planWindows.at(-1).resolve(planWindow(committedReview, unchangedAdmissionWindow.offset));
+await until(() => !reviewRenders.at(-1).executionWindowRefreshRunning);
+assert.equal(retainedAdmissionReview.window.offset, unchangedAdmissionWindow.offset,
+  "post-admission execution reconciliation retains the foreground viewport");
 const liveTask = reviewRenders.at(-1);
 assert.equal(liveTask.sessionId, executionSession);
 assert.equal(liveTask.review.summary.selection_state, "committed");
@@ -1345,6 +1354,14 @@ assert.equal(
   "paused",
   "Plan review refresh preserves the observed live control state",
 );
+assert.equal(liveTask.review.foregroundWindowReaders, 0);
+assert.equal(liveTask.reviewLoading, false);
+assert.equal(liveTask.executionWindowRefreshRunning, false);
+assert.equal(liveTask.sessionKind, "sync-execution");
+assert.equal(liveTask.reviewSessionId, liveTask.executionSessionId);
+taskButton("Task 7").click();
+assert.equal(liveTask.reviewLoading, false,
+  "selecting the reconciled review does not request a redundant full reload");
 
 const conflictWindow = (reviewSummary) => ({
   ...planWindow(reviewSummary), disposition: "conflict",
@@ -1849,8 +1866,6 @@ const releaseWindowBefore = liveReview.window;
 const releaseResultBefore = liveTask.snapshot.terminal_result;
 const retainedSummary = liveReview.summary;
 const retiredViewUpdate = planViewUpdates.length;
-globalThis.planReviewHarness.callbacks.onViewChange(liveReview, { sortColumn: "path" });
-assert.equal(liveReview.foregroundWindowReaders, 1);
 liveTask.reviewSessionId = null;
 const releaseOpenBase = planOpens.length;
 executionDrain.acceptRelease(TASK_G, executionSession);
@@ -1863,6 +1878,8 @@ await until(() => !liveTask.executionWindowRefreshRunning);
 assert.equal(liveReview.window, releaseWindowBefore, "reload admission invalidates old refresh before review replacement");
 assert.equal(liveTask.snapshot.terminal_result, releaseResultBefore);
 assert.equal(liveTask.reviewLoading, true);
+globalThis.planReviewHarness.callbacks.onViewChange(liveReview, { sortColumn: "path" });
+assert.equal(liveReview.foregroundWindowReaders, 1);
 
 // A user detail read can observe the newly retained revision during reload.
 // Its real conflict disposition adds dirty intent after reload admission.
@@ -1877,28 +1894,58 @@ await until(() => liveReview.executionDetail === null);
 assert.equal(planWindows.length, controlWindowBase + 1, "dirty detail reconciliation cannot compete with reload");
 retainedReload.resolve(retainedSummary);
 await until(() => planWindows.length === controlWindowBase + 2);
-planWindows.at(-1).resolve(executionWindow(retainedSummary, 0, 7));
-await until(() => reviewRenders.at(-1).review !== liveReview);
-const postTerminalReview = reviewRenders.at(-1).review;
+planWindows.at(-1).resolve({
+  ...executionWindow(retainedSummary, 0, 7), disposition: "conflict",
+});
+await until(() => liveTask.reviewLoading === false);
+assert.equal(liveTask.review, liveReview, "reload completion cannot retire an acquired foreground view update");
+const appliedView = planSummary({
+  ...retainedSummary, disposition: "applied", view_revision: 5,
+  sort_column: "path", sort_direction: "ascending",
+});
+planViewUpdates[retiredViewUpdate].resolve(appliedView);
 await until(() => planWindows.length === controlWindowBase + 3);
-assert.deepEqual(calls.at(-1), ["plan-window", TASK_G, retainedSummary.view_revision, 0, 256]);
-planWindows.at(-1).resolve(executionWindow(retainedSummary, 0, 7));
+assert.deepEqual(calls.at(-1), ["plan-window", TASK_G, appliedView.view_revision, 0, 256]);
+planWindows.at(-1).resolve(executionWindow(appliedView, 0, 7, failedResult));
+await until(() => liveReview.foregroundWindowReaders === 0);
+await until(() => planWindows.length === controlWindowBase + 4);
+planWindows.at(-1).resolve(executionWindow(appliedView, 0, 7, failedResult));
 await until(() => !liveTask.executionWindowRefreshRunning);
 assert.equal(liveTask.executionWindowDirty, false);
-assert.equal(postTerminalReview.foregroundWindowReaders, 0);
-assert.equal(postTerminalReview.window.execution.execution_revision, 7);
-assert.equal(liveReview.window, releaseWindowBefore, "retired review never adopts replacement receipts");
-const replacementWindow = postTerminalReview.window;
-planViewUpdates[retiredViewUpdate].reject(new Error("old view request failed after replacement"));
-await until(() => liveReview.foregroundWindowReaders === 0);
-assert.equal(postTerminalReview.window, replacementWindow);
-assert.equal(postTerminalReview.message, terminalMessage, "stale foreground rejection cannot overwrite replacement feedback");
-assert.equal(planWindows.length, controlWindowBase + 3, "retired foreground cleanup cannot launch another refresh");
+assert.equal(liveReview.window.execution.execution_revision, 7);
+assert.equal(liveReview.summary, appliedView, "the foreground view response keeps presentation authority");
+const postTerminalReview = liveReview;
 assert.equal(
-  postTerminalReview.message,
-  terminalMessage,
-  "a forced review refresh cannot replace terminal execution truth",
+  postTerminalReview.window.execution.result,
+  failedResult,
+  "foreground reconciliation retains terminal execution truth",
 );
+const activeWindowBase = planWindows.length;
+globalThis.planReviewHarness.callbacks.onWindow(postTerminalReview, 256);
+await until(() => planWindows.length === activeWindowBase + 1);
+assert.equal(postTerminalReview.foregroundWindowReaders, 1);
+const activeReloadOpenBase = planOpens.length;
+void globalThis.taskHarness.forceReview(liveTask, true);
+await until(() => planOpens.length === activeReloadOpenBase + 1);
+planOpens.at(-1).resolve(postTerminalReview.summary);
+await until(() => planWindows.length === activeWindowBase + 2);
+planWindows[activeWindowBase + 1].resolve(
+  executionWindow(postTerminalReview.summary, 0, 7, failedResult),
+);
+await until(() => liveTask.reviewLoading === false);
+assert.equal(liveTask.review, postTerminalReview,
+  "reload admission cannot retire a foreground window already in progress");
+planWindows[activeWindowBase].resolve(
+  executionWindow(postTerminalReview.summary, 256, 7, failedResult),
+);
+await until(() => postTerminalReview.foregroundWindowReaders === 0);
+await until(() => planWindows.length === activeWindowBase + 3);
+planWindows[activeWindowBase + 2].resolve(
+  executionWindow(postTerminalReview.summary, 256, 7, failedResult),
+);
+await until(() => !liveTask.executionWindowRefreshRunning);
+assert.equal(postTerminalReview.window.offset, 256,
+  "the acquired window remains authoritative through deferred execution reconciliation");
 globalThis.planReviewHarness.callbacks.onPlanAgain(postTerminalReview);
 await until(() => planAgainStarts.length === 1);
 assert.deepEqual(calls.at(-1), ["plan-again", TASK_G, null, null]);

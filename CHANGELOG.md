@@ -549,6 +549,10 @@ Manual post-copy navigation and beta packaging remain open.
 
 #### Deliver M1-10 integrity controls and manual verification (2026-10-13 – 2026-10-14)
 
+- Preserve foreground Plan navigation when execution start/release triggers a
+  concurrent full reload. Defer stale replacement and reconcile authoritative
+  execution summary/window facts after the interaction settles; keep selection,
+  detail and viewport ownership intact.
 - Consolidate repeated lifecycle effect catalogs and native/browser task/session
   kind admission. Reuse one session pause-capability map per language owner,
   retaining strict string admission, intentional subsets and execution's distinct

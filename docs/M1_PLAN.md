@@ -193,7 +193,28 @@ import contracts pass (`d2-kinds-*-20261014.log` and
 tests replace the design's private-constant assertions; existing lifecycle
 coverage retains the distinct execution guard. Independent approval is recorded
 in `d2-kinds-review-20261014.md` for the separate catalog refactor commit.
-D2 UI then follows below and remains read-only until this predecessor closes.
+D2a shipped as `d52a7b2` on `milestone1`.
+
+Before D2 integration, correct the pre-existing full Plan reload adoption race
+observed in installed execution review: a forced reload can replace the review
+owning an in-flight foreground highlight and lose its visible follow-up. The
+finite owner is `loadPlanReview` and its existing foreground read coordination;
+direct consumers are destination reveal, view/search/sort/collapse changes,
+virtual windows, highlight and selection. Keep their accepted ownership while
+eventually adopting authoritative execution summary/window facts. No backend,
+wire command, automatic mutation retry or generic owner merger is included.
+The separate `fix(web)` commit owns app.js, the existing task-shell probe,
+PRESENTATION/BUGS and task records. Gate: deterministic reload overlap probes
+(interaction already active and starting during reload), initial execution
+summary reconciliation, the interfaces department, installed execution checks
+at both sizes and fresh adversarial review. D2's separate current-request
+adoption and explicit Inventory selection journey remain pending in the main
+checkout. All evidence is under `build/m1-10-20261013/`; failed receipts remain.
+The isolated correction passes its baseline-failing regression probe
+(`plan-custody-focused-12.log`), 2,020 interfaces checks
+(`plan-custody-interfaces-01.log`), both installed execution sizes
+(`plan-custody-native-01.log`) and 222 local documentation links. Fresh review
+is `plan-custody-review-20261014.md`; D2 and checkpoint closure remain pending.
 
 D2 adds task-local Plan/Verify navigation, on-demand exact-manual readiness and
 the first Verify copied files action, plus clearly separate Verify current state

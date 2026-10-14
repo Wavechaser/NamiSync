@@ -1,90 +1,61 @@
-# Latest session — M1-10 D1 delivered, D2a active
+# Latest session — M1-10 Plan reload custody correction
 
-2026-10-14. The user reviewed A–C and D1, authorized the product-side selector
-correction and C3b repair, and confirmed finishing D1 before D2. Finish M1-10,
-then stop for recap/GUI tweaks. M1-12, release, DOC-2 and unrelated optimization
-remain inactive. Use GPT-5.6 Sol as this session's fallback for capacity trouble.
-M1_PLAN owns decisions and the completion denominator.
+2026-10-14. Finish M1-10, then stop for recap and GUI tweaks. M1-12,
+release, DOC-2 and unrelated optimization remain inactive. The user lifted the
+GUI hold. Announce and serialize native input; retain every foreground, focus
+and hit guard. This session's capacity fallback is GPT-5.6 Sol.
 
-## Integrated and current work
+## Current state
 
-A–C and the requested thorough resumed review are complete. `107dfa2` corrected
-missing rows' historical-stat promotion in the shared integrity workflow; its
-whole-selection failure included CLI use. `f26cb57abb52a905c12a0a02210353718dea7b8c`
-restores C3b's separate execution publication backstop; 45 lifecycle and 215
-direct-consumer checks pass with independent approval. `milestone1` is fast-forward
-integrated through that fix and D1 `541a90ff3e6ab0f98feea8813a571d9a22251aa1`.
-Current branch: `milestone1`; the resume branch and recovery refs remain retained.
+A–C, D1 (`541a90ff`), the C3b publication backstop (`f26cb57a`) and D2a kind
+catalogs (`d52a7b2`) are integrated on `milestone1`. D2 UI remains uncommitted
+in the main checkout on `codex/m1-10-d2-resume-20261014`. Its recovery snapshot
+`58126f5` is disposable provenance, never a merge/cherry-pick unit.
 
-D1 is delivered and independently approved: standalone selection/counts, integrity
-starts/confirmation, current controls, original-command recovery and truthful
-ordinary results. Product checkbox no longer duplicates row identity. Its closure
-still supplies selection ID. Removed the unnecessary facts wrapper to preserve
-facts/Details alignment. D1-owned checkbox lookups and three feedback-line
-witnesses match the accepted UI; gallery row selectors, external performance
-tools, CSS, input guards and geometry verdicts remain unchanged.
+This isolated worktree, `build/m1-10-20261013/plan-review-custody`, is based on
+`d52a7b2`, branch `codex/m1-10-plan-review-custody`. It owns a separate bounded
+pre-existing Plan reload correction. Native execution run `-09` proved that a
+server-applied highlight lost its visible follow-up when a forced reload replaced
+its incumbent review. The fix must preserve foreground ownership and still
+reconcile authoritative execution summary/window facts. Scope and gates are in
+M1_PLAN. Source and probe are frozen after independent inspection. The disputed
+newer-view ordering was withdrawn after tracing the server's task lock and exact
+view-revision check; no speculative revision-capture code was added.
 
-## Current evidence
+D2 separately corrects accepted current-request adoption: execution adopted its
+new session but retained the Plan request. Native run `-11` captured the actual
+locked admission guard: only request equality failed. Preserve original Plan
+identity, adopt accepted execution/manual/ordinary identities and fence older
+list responses. These are two distinct substantive findings; independent review
+found no recurrence stop. The ordinary fallback helper also needs its declared
+explicit Inventory checkbox selection before Verify; empty initial selection is
+correct product behavior.
 
-All evidence is in `build/m1-10-20261013/`:
+## Evidence and next action
 
-- `d1-interfaces-20261014.log`: 2,018 passed, 4,076 deselected.
-- `d1-consumer-ordinary-final-20261014.log`: 69 passed, five headed deselected.
-- `d1-probe-final-20261014.log`: two current browser probes passed.
-- `d1-native-final-20261014.log`: nine passed (109.65 seconds), covering installed
-  Inventory, four gallery obligations, both shell and both execution sizes.
-  `d1-native-final-temp-20261014/` is a unique retained pytest base; do not reuse it.
-- `d1-table-inventory-20261014-01.*`: one unchanged Inventory table-loading child
-  passed with before/after package identity and restored assets; no speed claim.
-- `c3b-backstop-review-20261014.md`: independent approval of the separate fix.
-  Final D1 approval is `d1-final-review-20261014.md`. Its 51 final native evidence
-  copies are hash-verified in `d1-native-evidence-final-20261014/manifest.json`.
+All receipts are under the main `build/m1-10-20261013/` directory. Preserve failed
+`d2-execution-native-20261014-01` through `-11` and their unique raw pytest bases.
+Temporary Refresh tracing is removed from tracked helpers and preserved with
+provenance in `d2-refresh-diagnostic-20261014/`. Do not reinterpret later passes
+as explanations for earlier failures.
 
-Earlier raw receipt corrections matter: Inv01's pause-race theory was unproved
-and the missing-stat failure is the likely cause; Inv02's blocking wait was
-introduced by that attempted fix. Inv04 visible counts were 0/0/0/0; full details
-were 3/3/0/3. The helper's collapsed folder explained the missing visible outcomes.
-The old checkbox-consumer migration proposal was rejected, not implemented.
-Shell's earlier Shift+F10 cause remains unknown; unchanged later passes explain
-nothing. Read raw receipts before new hypotheses. Final gallery screenshots show
-Plan, so Inventory layout claims use its raw geometry and source.
+The baseline regression fails in `plan-custody-base-reproducer-01.log`; the
+corrected probe passes in `plan-custody-focused-12.log`. Installed execution
+passes both sizes in `plan-custody-native-01.log` (2 passed, 18 deselected), using
+the unique retained `plan-custody-native-temp-01` base. The interfaces gate
+passes 2,020 with 4,076 deselected in `plan-custody-interfaces-01.log`; 222 local
+documentation links pass. Final independent review is
+`plan-custody-review-20261014.md`. Commit this correction separately after
+approval and reconcile it into the D2 tree without
+WIP ancestry. Freeze combined product/helper inputs before repeating affected
+D2 frontend and installed execution/Inventory/shell/gallery checks. E remains
+cross-component review, final documentation and exact recovery accounting.
+M1-10 is not complete.
 
-Retry-173 raw files were removed by pytest retention before copying; its parent
-failure log remains but supplies no raw-evidence claim. Final acceptance uses
-the dedicated retained directory. Earlier copied failures remain in
-`d1-native-evidence*`; do not relabel them as passes.
-
-## Next work
-
-`d2-kinds-design-20261014.md` is revalidated against `541a90f`; D2a implementation
-is active with a disjoint builder and fresh read-only reviewer. Root owns docs
-and gates. `d2-ui-refresh-20261014.md` remains read-only preparation.
-D2a is a separate catalog refactor, preserving different effect/session/task
-domains and C3b's explicit execution check. Its final source passes 837 direct
-consumer tests, 2,020 interface tests and all 12 import contracts. Receipts:
-`d2-kinds-direct-consumers-green-02.txt`, `d2-kinds-interfaces-20261014.log`,
-`d2-kinds-imports-20261014.log`. Independent approval is recorded in
-`d2-kinds-review-20261014.md`; commit this finite refactor before D2 UI.
-D2 UI adds retained Plan/Verify
-navigation, first exact manual verification and explicit ordinary fallback;
-resolve sync-task disabled buttons with applicable actions/guidance. Preserve
-Plan state, original/current identities and separate result generations.
-D2 UI/E have not started implementation. E owns full ordinary/import/cross-component
-closure, final review and recovery accounting before the user-requested stop.
-
-Keep task recoveries until exact accounting:
-
-- D1 `060becf` on `codex/wip-20261013-1820-m1-10-d1` and `08bc38e` on
-  `codex/wip-20261013-d1-review-hold`, rebuilt without WIP ancestry.
-- Selection `c3bb191` on `codex/wip-20261013-1228-m1-10-selection`, already
-  accounted in `selection-recovery-accounting-12.log`.
-- Clean baseline worktree `build/m1-10-20261013/ordinary-base-26e72ad`; retain its
-  Setup receipts and verify clean before removing through Git.
-- Disposable table installations `d1-table-install-20261014` (unused predecessor)
-  and `d1-table-install-20261014-02` (current observed child). Preserve identities,
-  receipts and restoration manifests before any temporary-runtime cleanup.
-
-Use host PowerShell for Python/native gates. Announce and serialize native input;
-preserve foreground/focus/hit guards. Freeze product/helpers/README before native
-acceptance. No pushes or PRs were requested. Earlier legibility observations stay
-for GUI recap; physical wheel/tilt uncertainty remains unrelated/unverified.
+Use the main checkout's venv through host PowerShell, with this worktree as cwd
+for isolated gates. Use unique pytest bases; whole ordinary/tools gates need an
+external base. Bind installed evidence to physical package bytes, not just Git
+blobs. Retain all task recovery branches/worktrees and evidence until integration
+and accounting; five pre-existing stashes and unrelated branches are excluded.
+No push or PR is authorized. Existing legibility and wheel/tilt observations
+remain for the user's GUI recap without a claimed fix.

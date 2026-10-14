@@ -265,6 +265,12 @@ remain current. Invalidated or rejected reads preserve one dirty replay at the
 accepted offset and cannot publish result facts or retire exact detail, including
 when the total population is larger.
 
+Full Plan reloads obey the same foreground ownership rule: a reload admitted
+before or during a user interaction cannot replace the review owning that
+interaction. Compatible authoritative summary facts reconcile in place without
+rolling back newer foreground revisions. Execution window reconciliation remains
+pending until a read can be adopted at the retained offset after the interaction.
+
 Inventory read views retain one immutable workflow projection, its complete sort
 permutation and its derived `VisibleSequence` at task scope. A released execution
 may publish its original target's current ledger with an initially empty file

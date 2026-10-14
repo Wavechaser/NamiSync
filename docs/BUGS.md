@@ -923,6 +923,18 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Review viewport loading
 
+- MODERATE - FIXED (2026-10-14). Unfenced publication replacement. A Plan row
+  highlight can apply on the server but disappear from the visible review,
+  leaving its detail unopened until the user reloads. Cause: a forced Plan
+  reload after execution starts or releases can replace the incumbent review
+  while its foreground navigation is completing; that navigation then loses
+  presentation ownership before its authoritative window read. Installed
+  evidence records the applied highlight and missing follow-up read. Reloads
+  now retain the foreground owner, reconcile compatible summary facts in place
+  and defer window adoption to its retained offset. Overlap, initial execution
+  adoption and invalid-window probes cover the common reload boundary; backend
+  selection and execution admission fences remain intact.
+
 - MODERATE - FIXED (2026-10-11). Conflated input cancellation. SN3's general
   input handlers retired scroll-window requests along with keyboard navigation,
   discarding useful reads during repeated wheel events in Plan and Inventory.

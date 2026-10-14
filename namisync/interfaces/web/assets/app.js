@@ -2173,6 +2173,9 @@ async function loadPlanReview(task, force = false) {
   const dirtyRevision = task.executionWindowDirtyRevision;
   const sessionId = task.executionSessionId;
   const planRequestId = task.planRequestId;
+  const reviewOwner = task.review;
+  const foregroundWindowEpoch = reviewOwner?.foregroundWindowEpoch ?? null;
+  const foregroundWindowReaders = reviewOwner?.foregroundWindowReaders ?? 0;
   task.reviewLoading = true;
   renderTasks();
   try {
@@ -2182,10 +2185,19 @@ async function loadPlanReview(task, force = false) {
       tasks.get(task.taskId) !== task || task.reviewRevision !== request
       || task.executionSessionId !== sessionId || task.planRequestId !== planRequestId
     ) return;
+    const foregroundInvalidated = reviewOwner !== null && (
+      task.review !== reviewOwner
+      || foregroundWindowReaders > 0
+      || reviewOwner.foregroundWindowEpoch !== foregroundWindowEpoch
+    );
     if (
       window.disposition !== "current" || window.view_revision !== summary.view_revision
       || window.highlight_revision !== summary.highlight_revision
     ) {
+      if (foregroundInvalidated) {
+        task.executionWindowDirty = true;
+        return;
+      }
       task.executionWindowDirty = task.executionWindowDirtyRevision !== dirtyRevision;
       if (task.review !== null) task.review.message = "Execution status refresh delayed. Select the task to retry.";
       else if (task.sessionState !== "active"
@@ -2202,6 +2214,25 @@ async function loadPlanReview(task, force = false) {
         : originalResult.canceled ? "canceled"
           : ["failed", "partial", "mismatch", "refused"].includes(originalResult.headline)
             ? "failed" : "completed";
+    }
+    if (foregroundInvalidated) {
+      if (task.review === reviewOwner && reviewOwner.summary.request_id === summary.request_id) {
+        const current = reviewOwner.summary;
+        reviewOwner.summary = summary.view_revision > current.view_revision
+          || (summary.view_revision === current.view_revision
+            && summary.selection_revision >= current.selection_revision
+            && summary.highlight_revision >= current.highlight_revision)
+          ? summary
+          : {
+            ...current,
+            selection_state: summary.selection_state === "committed"
+              ? "committed" : current.selection_state,
+            execution: summary.execution,
+          };
+        task.reviewSessionId = task.executionSessionId;
+      }
+      task.executionWindowDirty = true;
+      return;
     }
     const message = task.executionStarted
       ? task.sessionKind === "sync-execution" && task.sessionState === "active"
