@@ -546,7 +546,13 @@ Stage 6 delivered the secured desktop host, process-live tasks, frozen Setup,
 bounded Plan review/selection and execution, and live/retained result review.
 Integrity controls, manual post-copy handoff and beta packaging remain open.
 
-#### Deliver M1-10 integrity controls and manual verification (2026-10-13)
+#### Deliver M1-10 integrity controls and manual verification (2026-10-13 – 2026-10-14)
+
+- Restore task-execution publication's missing-reviewed-plan backstop and
+  original execution-session binding after C3b combined it with optional
+  auxiliary association. A missing-plan regression fails before the fix;
+  successful execution and standalone auxiliary publication remain covered.
+  No supported path to the lost check was found.
 
 - Activate M1-10 alone, condense delivered register history while retaining
   evidence and binding dispositions, and expand the remaining implementation

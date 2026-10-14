@@ -1721,6 +1721,41 @@ def _release_lifecycle_task(
     lifecycle.complete_settlement(work)
 
 
+def test_lifecycle_task_execution_publication_requires_reviewed_plan_task() -> None:
+    lifecycle = TaskLifecycle()
+    shell = lifecycle.begin_task_shell(f"{51_400:032x}")
+    lifecycle.complete_task_shell(shell)
+    command_id = f"{51_401:032x}"
+    signature = ("missing-reviewed-plan",)
+    lifecycle.begin_task_shell_start(
+        shell.task_id,
+        command_id,
+        "task-execution",
+        signature,
+    )
+    admission = lifecycle.begin_admission(
+        "task-execution",
+        command_id,
+        signature,
+        task_id=shell.task_id,
+    )
+    session_id = f"{51_402:032x}"
+    lifecycle.attach_session(admission, session_id)
+
+    with pytest.raises(RuntimeError, match="lost its reviewed plan"):
+        lifecycle.publish_start(
+            admission,
+            session_id,
+            f"{51_403:032x}",
+        )
+
+    assert lifecycle.replay_start(
+        command_id,
+        "task-execution",
+        signature,
+    ) is None
+
+
 def test_m1_7_task_followup_preserves_plan_and_both_exact_start_replays() -> None:
     lifecycle = TaskLifecycle()
     plan_command = f"{51_401:032x}"
@@ -1770,6 +1805,7 @@ def test_m1_7_task_followup_preserves_plan_and_both_exact_start_replays() -> Non
         execution_signature,
     ).replay == execution_receipt
     assert lifecycle._tasks[task.task_id].session_id == execution_session
+    assert lifecycle._tasks[task.task_id].execution_session_id == execution_session
     assert lifecycle._sessions[execution_session].plan_token == lifecycle.require_plan(
         plan_receipt.request_id
     )

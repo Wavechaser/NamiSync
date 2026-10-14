@@ -948,12 +948,13 @@ class TaskLifecycle:
                 admission.plan_token = self._plan_token(plan)
                 if task is not None:
                     task.plan_token = admission.plan_token
-            elif admission.kind in {"task-execution", "task-inventory", "task-integrity", "task-manual-verification"} and task is not None and task.plan_token is not None:
+            elif admission.kind == "task-execution":
                 if task is None or task.plan_token is None:
                     raise RuntimeError("task execution lost its reviewed plan")
                 admission.plan_token = task.plan_token
-                if admission.kind == "task-execution":
-                    task.execution_session_id = session_id
+                task.execution_session_id = session_id
+            elif admission.kind in {"task-inventory", "task-integrity", "task-manual-verification"} and task is not None and task.plan_token is not None:
+                admission.plan_token = task.plan_token
             admission.request_id = request_id
             if admission.command_id is not None:
                 self._start_receipts[admission.command_id] = receipt

@@ -678,7 +678,11 @@ Dispatcher close remains strict, and only a sealed exact application settlement
 interprets `SessionNotFound` as custody already absent. Plan retirement uses one
 tolerant exact-token claim: a retired token produces no new work, while active
 mutation and retirement remain mutually exclusive. `TaskLifecycle.publish_start`
-deliberately does not wait for plan retirement. Fresh service-minted plan
+requires a retained reviewed plan when publishing task execution and records
+its original execution session identity. Auxiliary Inventory/integrity/manual
+publication carries an existing plan association when present, without making
+it a requirement for standalone Inventory. Plan publication deliberately does
+not wait for plan retirement. Fresh service-minted plan
 request ids are not intentionally reused by supported callers, so a live or
 retiring collision fails fast instead of treating the id as a reusable key. The
 application retains the exact association, terminal digest, settlement target,
