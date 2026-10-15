@@ -179,6 +179,9 @@ explicit, reviewable and regression-backed.
 
 #### Align Verify table interaction and action consequences (2026-10-15)
 
+- Generate browser session-kind and pause-capability mirror cases from the
+  Python task-port catalog, preserving independent invalid/coercive verdicts.
+  New Python kinds now enter those checks without a second handwritten list.
 - Record the approved follow-up: shared range highlighting, filter-aware bulk
   selection and viewport continuity; explicit warning before Refresh forfeits
   copied-file verification; bounded overlay rendering and catalog-driven kind

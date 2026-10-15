@@ -24,12 +24,10 @@ from namisync.core.session import (
     PhaseStatus,
     SessionState,
 )
+from namisync.interfaces.task_port import _TASK_RECORD_PAUSE_SUPPORT
 from namisync.interfaces.web import bridge as bridge_module
 from namisync.interfaces.web.bridge import to_primitive_view
-from namisync.workflows import (
-    BASELINE_KIND, EXECUTION_KIND, INVENTORY_KIND, MANUAL_VERIFY_KIND,
-    PLAN_KIND, REBASELINE_KIND, VERIFY_KIND,
-)
+from namisync.workflows import INVENTORY_KIND, PLAN_KIND, VERIFY_KIND
 from namisync.workflows.views import (
     SessionRecordView,
     operation_result_view,
@@ -212,15 +210,7 @@ def test_required_node_session_record_keeps_task_kind_pause_contract() -> None:
         operation_result_view(OperationResult(SessionState.COMPLETED)),
     ))
     cases = []
-    for kind, supports_pause in (
-        (PLAN_KIND, False),
-        (INVENTORY_KIND, False),
-        (EXECUTION_KIND, True),
-        (BASELINE_KIND, True),
-        (VERIFY_KIND, True),
-        (REBASELINE_KIND, True),
-        (MANUAL_VERIFY_KIND, True),
-    ):
+    for kind, supports_pause in _TASK_RECORD_PAUSE_SUPPORT.items():
         value = deepcopy(record)
         value.update(kind=kind, supports_pause=supports_pause)
         cases.append({
@@ -270,15 +260,7 @@ def test_required_node_task_summary_keeps_complete_kind_catalogs() -> None:
         "session_kind": PLAN_KIND,
     }
     cases = []
-    for session_kind in (
-        PLAN_KIND,
-        INVENTORY_KIND,
-        EXECUTION_KIND,
-        BASELINE_KIND,
-        VERIFY_KIND,
-        REBASELINE_KIND,
-        MANUAL_VERIFY_KIND,
-    ):
+    for session_kind in _TASK_RECORD_PAUSE_SUPPORT:
         value = deepcopy(summary)
         value["session_kind"] = session_kind
         cases.append({
