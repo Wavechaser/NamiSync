@@ -208,7 +208,7 @@ explicit, reviewable and regression-backed.
   Cancel leaves the task and reads untouched; Confirm submits the captured scope
   once after fresh ownership/revision checks. Superseded wording describes stale
   evidence rather than changed file contents. The execution-evidence contract
-  stays unchanged; the final read-only ablation study remains pending.
+  stays unchanged.
 - Correct the earlier shell diagnosis: all eight untraced D2 shared01/shared02
   and hardening native09/native10 failures are foreground refusals after Plan
   again succeeded. The Task 52 snapshot preceded Task 53 selection; native11
@@ -223,6 +223,13 @@ explicit, reviewable and regression-backed.
   prove Refresh Cancel has no scan effect and Confirm submits exactly once.
   The final Refresh candidate passes all nine installed cases, 6,073 ordinary
   tests with four skips, and all 12 import contracts.
+- Complete the read-only D/Verify ablation study and independent evidence review.
+  Retain distinct ownership, attribution and consent guards; identify delivered
+  reuse/indexing savings and remaining probe-coupling/native-wait maintenance
+  costs. Bound fault-control conclusions to the assertions actually reached;
+  make no study-driven simplification or measured speedup claim. Integrate the
+  reviewed rebuild into `milestone1`, condense the register and restore HANDOFF
+  to latest-session context while retaining recovery evidence.
 
 #### Align desktop review surfaces and recovery (2026-10-05 – 2026-10-13)
 
