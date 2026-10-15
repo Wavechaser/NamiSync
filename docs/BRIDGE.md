@@ -643,6 +643,15 @@ ordinary fallback in a sync task's Verify pane consume these ordinary overlays.
 Manual controls consume their separate context below. The page binds readiness
 to original execution identity/revision and binds controls to the current session;
 pane changes fence pending reads without replacing the retained Plan identity.
+The page observes matching Plan-summary/current-window execution facts separately
+from Plan painting, monotonically within the original session and reset on its
+replacement. A readiness conflict is only a hint: one `open_plan_view` summary
+read may reconcile those facts, followed by one readiness reread. This page-owned
+round fetches no Plan rows, grants no start authority and does not change the
+bridge's existing same-payload transport retry. One running read coalesces latest
+demand; repeated conflict or read failure offers Reload instead of polling.
+Manual Start still captures and submits the exact current execution revision
+once; the backend independently checks admission and original-command recovery.
 
 Manual windows/details instead add an independent `manual_verification` context:
 original execution session, manual request/session/location, result revision,

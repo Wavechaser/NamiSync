@@ -79,7 +79,7 @@ it is not a mergeable delivery. Refresh implementation and the final ablation
 study remain pending. Rebuild reviewed work into coherent verified commits;
 never merge or cherry-pick the recovery commit as-is.
 
-Current evidence: Inventory native08 and four gallery cases native09 pass;
+Saved table-candidate evidence: Inventory native08 and four gallery cases native09 pass;
 ordinary01 has 6,062 passes/four skips and three test-consumer failures corrected
 by the 74-pass owning-module migration28 run. The later execution-helper
 correction passes its 22 ordinary cases (execution30), but native12 does not
@@ -131,7 +131,7 @@ demand, not a shared backend or transport failure.
 | --- | --- | --- |
 | Plan reload crosses newer foreground interaction; applied highlight/detail can disappear. | `loadPlanReview`; corrected in `b52f8ddf`. | Capture foreground ownership, preserve the incumbent review and retain dirty reconciliation at its offset. |
 | Inventory live overlay crosses newer scroll/highlight; an old window can replace current rows or discard the final needed update. | `refreshInventoryOverlay`; saved candidate correction must be revalidated during rebuild. | Same foreground read boundary, current revision/offset checks and deferred dirty replay. |
-| Copied-file readiness crosses an execution revision or returns conflict; the action can remain unavailable until another load. | `loadManualReadiness`, `originalExecution` and execution-window adoption; pre-existing D2 defect, OPEN. | Loading drops demand, stale rejection retains no follow-up, conflict is stored without reconciliation. The old Plan window is also the readiness revision source. |
+| Copied-file readiness crosses an execution revision or returns conflict; the action can remain unavailable until another load. | `loadManualReadiness`, `originalExecution` and execution-window adoption; pre-existing D2 defect corrected in the rebuild. | Named execution observation owner plus coalesced demand and bounded conflict reconciliation, separate from Plan painting. |
 
 The scratch A/B/C orderings and no-crossing control reproduce consumer behavior
 on `47a4bcae` and `d1c3b325`; their direct window assignment is not proof that a
@@ -185,6 +185,16 @@ already declared defects are approved inputs, not new recurrence instances.
 Other scope exclusions and mandatory stops remain unchanged. HANDOFF returns to
 latest-session operational context; the exact prior user text remains in ignored
 `recurrence-input-handoff-01.md`.
+
+Rebuild prerequisites (2026-10-16): harness `8a780ac` and the readiness fix pass
+fresh independent review. The real release/Verify producer witness fails on the
+baseline and passes on the candidate; the no-crossing control passes both.
+Focused gates pass 70 harness and 59 frontend cases. On the frozen combined
+candidate, installed shell/execution pass all four sizes/cases, trace-enabled
+shell passes both sizes with no overflow, interfaces pass 2,029 cases and all
+12 import contracts hold. Evidence: `rebuild-{native,trace,interfaces}-20261016-01`,
+`readiness-replay-identities-20261016-01.json` and the two outcome review reports.
+This is prerequisite acceptance, not table/Refresh or final batch acceptance.
 
 ### M1-10 delivered register — 2026-10-13–14
 

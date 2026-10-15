@@ -341,8 +341,22 @@ normalization repairs a live Gap and retains outcomes completed before pause.
 Manual hashing preserves actual prior scan provenance; subsequent ordinary
 scanning supplies its own scan identity. The desktop's same-task Plan/Verify
 navigation retains both pane states while retiring pending reads from the pane
-being left. Readiness is bound to original execution identity/revision; current
-manual and ordinary controls use their own session identities. Manual results,
+being left. One task-owned original-execution fact binds readiness and manual
+Start to the retained Plan request and original session. Matching Plan summaries
+and current execution windows feed this observation independently of permission
+to repaint Plan; a release reload may advance the fact while Verify is visible.
+Within one original execution its revision cannot decrease. A new original
+execution resets it; an auxiliary session association does not. Terminal state,
+snapshots and manual/ordinary results retain their separate owners.
+
+Readiness keeps one running read and one coalesced latest demand. A newer execution
+fact preserves demand while retiring an older reply. On conflict, one existing
+Plan-summary read reconciles the original execution, followed by one readiness
+reread without fetching or replacing Plan rows. Conflict alone grants no
+eligibility. Repeated conflict or transport error settles with actionable Reload;
+there is no polling or mutation replay. Pane/task/Settings navigation, Close and
+original-session replacement retire pending read authority; reentry can demand
+a fresh read. Current manual and ordinary controls use their own session identities. Manual results,
 ordinary results and stored ledger evidence have separate labels and generations;
 a new zero-item result does not fall back to old item facts. Returning to Plan
 retains original details, selection, follow and viewport custody.

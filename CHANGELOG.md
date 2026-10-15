@@ -187,6 +187,10 @@ explicit, reviewable and regression-backed.
   guidance distinct from unexpected output. Suppress duplicate trace observations
   while retaining transitions, events and strict overflow rejection; rebuild the
   execution recorder's current-readiness correction.
+- Reconcile copied-file readiness when Verify opens during execution release.
+  Observe current execution facts without repainting retained Plan rows; coalesce
+  renewed demand and bound conflict recovery, with actionable Reload on failure.
+  The production release/pane regression and both installed execution sizes pass.
 - Prepare shared Plan/Verify server range highlighting and browser navigation
   in the preserved delivery candidate. Verify
   header, folder and highlighted-range checkboxes select search/filter matches

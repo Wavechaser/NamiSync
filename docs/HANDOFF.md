@@ -31,14 +31,15 @@ Separate execution-fact observation from permission to repaint Plan. Keep
 coalesced demand bounded, exact Start singular, and conflict/error recovery
 actionable without mutation replay.
 
-Harness and readiness changes are implemented and independently source-reviewed.
+Harness `8a780ac` and readiness changes are implemented and independently reviewed.
 Focused checks pass (70 harness, 59 frontend). The frozen combined candidate
 passes all four installed shell/execution cases, both trace-enabled shell cases,
 2,029 owning interface cases and 12 import contracts. Receipts are
 `rebuild-{native,trace,interfaces}-20261016-01` under the evidence root; frozen
-file identities are in `rebuild-freeze-20261016-01.json`. Commit the harness and
-readiness separately after final evidence review, then apply the 34-path saved
-table patch and its newly identified overlay rejection-settlement correction.
+file identities are in `rebuild-freeze-20261016-01.json`. Final evidence review
+approves both atomic outcomes. Next apply the 34-path saved table patch and its
+newly identified overlay rejection-settlement correction. Reconcile the saved
+Inventory app tests with the new readiness tests; do not replace the whole file.
 The prior user handoff and both recovery refs remain preserved.
 
 Prior Inventory/gallery/ordinary evidence remains recorded in M1_PLAN and must

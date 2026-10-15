@@ -29,6 +29,7 @@ let delayedIntegrityStart = null, integrityStartChecks = 0;
 let delayedSelection = null, selectionDisposition = "current", selectedFileCount = fixture.views.default.summary.selected_file_count;
 let manualReadinessResponse = null, delayedManualReadiness = null, delayedManualStart = null;
 let executionStartResult = null;
+let planSummaryResponse = null, planWindowResponse = null, delayedPlanOpen = null;
 let viewRevision = 0, query = "";
 const summary = () => ({ ...fixture.views.default.summary, view_revision: viewRevision, search_query: query,
   selected_file_count:selectedFileCount,
@@ -37,11 +38,19 @@ const summary = () => ({ ...fixture.views.default.summary, view_revision: viewRe
     : selectedFileCount === fixture.views.default.summary.selectable_file_count ? "all" : "partial" });
 const windowResponse = (revision, offset) => ({ ...fixture.views.default.window, view_revision: revision, offset });
 const defer = () => {
-  let resolve;
-  const promise = new Promise((accept) => { resolve = accept; });
-  return { resolve, promise };
+  let resolve, reject;
+  const promise = new Promise((accept, refuse) => { resolve = accept; reject = refuse; });
+  return { resolve, reject, promise };
 };
 globalThis.inventoryHarness = {
+  openPlanView(taskId) {
+    calls.push(["plan-open", taskId]);
+    return delayedPlanOpen?.promise ?? Promise.resolve(planSummaryResponse);
+  },
+  getPlanWindow(taskId, revision, offset, limit) {
+    calls.push(["plan-window", taskId, revision, offset, limit]);
+    return Promise.resolve(planWindowResponse);
+  },
   openInventoryView(taskId) { calls.push(["open", taskId]); return delayedOpen?.promise ?? Promise.resolve({
     ...summary(), task_id:taskId, request_id:inventoryOpenRequests.get(taskId) ?? summary().request_id,
   }); },
@@ -185,7 +194,7 @@ const replacements = {
 globalThis.inventoryRenders = renders;
 globalThis.inventoryConfirmations = [];
 for (const [key, value] of Object.entries(replacements)) source = source.replace(key, value);
-source += "\nexport { adoptTask, selectTask, acceptTaskUpdate, acceptTaskRelease, loadInventoryReview, changeInventoryView, loadInventoryWindow, readInventoryDetail, runInventoryAction, changeInventorySelection, startInventoryIntegrityAction, startManualVerificationAction, loadManualReadiness, switchTaskPane, controlInventoryIntegrity, checkInventoryOutcome, closeRetainedTask, showSettings, refreshTasks, executeReviewedPlan, tasks };";
+source += "\nexport { adoptTask, selectTask, acceptTaskUpdate, acceptTaskRelease, loadPlanReview, observeOriginalExecution, loadInventoryReview, changeInventoryView, loadInventoryWindow, readInventoryDetail, runInventoryAction, changeInventorySelection, startInventoryIntegrityAction, startManualVerificationAction, loadManualReadiness, switchTaskPane, controlInventoryIntegrity, checkInventoryOutcome, closeRetainedTask, showSettings, refreshTasks, executeReviewedPlan, tasks };";
 const app = await import(url(source));
 const taskId = fixture.views.default.summary.task_id;
 const sessionId = "3".repeat(32);
@@ -773,6 +782,7 @@ function attachReleasedExecutionTask(taskId, originalSessionId, currentSessionId
   owner.review = {summary:{task_id:taskId, request_id:requestId, highlight_focus_node_id:null},
     window:{execution:{session_id:originalSessionId, execution_revision:7,
       result:{headline, disposition:"ran", recording:headline === "degraded" ? "degraded" : "ok"}}}};
+  app.observeOriginalExecution(owner, requestId, owner.review.window.execution);
   owner.inventoryReview = {...currentD1Review,
     summary:{...currentD1Review.summary, task_id:taskId, request_id:requestId,
       selected_file_count:1, selectable_file_count:3, hidden_selected_file_count:0,
@@ -862,4 +872,266 @@ const fallbackStarts = calls.filter(([name]) => name === "integrity-start").leng
 await app.startInventoryIntegrityAction(fallbackTask.inventoryReview, "verify", trigger);
 assert.equal(calls.filter(([name]) => name === "integrity-start").length, fallbackStarts + 1);
 assert.equal(calls.findLast(([name]) => name === "integrity-start")[5], "verify");
+
+// Release launches a production Plan reload. Entering Verify retires its paint
+// authority, but the original execution facts must still reconcile readiness.
+const releaseTaskId = "task-" + "9".repeat(32);
+const releaseOriginal = "a".repeat(32);
+const releaseRequest = "f".repeat(32);
+const releaseTask = attachReleasedExecutionTask(releaseTaskId, releaseOriginal,
+  releaseOriginal, releaseRequest);
+releaseTask.sessionKind = "sync-execution";
+releaseTask.sessionReleased = false;
+const retainedPlan = releaseTask.review;
+retainedPlan.window = {...retainedPlan.window, offset:512, rows:[]};
+retainedPlan.summary = {...retainedPlan.summary, view_revision:0, highlight_revision:0,
+  selection_revision:0, selection_state:"committed", search_query:"", filters:[],
+  sort_column:"path", sort_direction:"ascending", execution:retainedPlan.window.execution};
+retainedPlan.executionDetail = {sentinel:"retained-detail"};
+retainedPlan.planDetail = {sentinel:"retained-plan-detail"};
+retainedPlan.foregroundWindowReaders = 0;
+retainedPlan.foregroundWindowEpoch = 0;
+retainedPlan.actionRevision = 0;
+app.selectTask(releaseTaskId);
+await tick();
+planSummaryResponse = {...retainedPlan.summary,
+  execution:{...retainedPlan.window.execution, execution_revision:8}};
+planWindowResponse = {disposition:"current", view_revision:0, highlight_revision:0,
+  offset:0, rows:[], execution:planSummaryResponse.execution};
+delayedPlanOpen = defer();
+delayedManualReadiness = defer();
+const releasedSummary = delayedPlanOpen;
+app.acceptTaskRelease(releaseTask, releaseOriginal);
+app.switchTaskPane(releaseTask, "verify");
+await tick();
+delayedPlanOpen = null;
+releasedSummary.resolve(planSummaryResponse);
+await tick();
+delayedManualReadiness.resolve({task_id:releaseTaskId, session_id:releaseOriginal,
+  execution_revision:8, reason:"conflict", applicable_count:1, ready_count:0,
+  already_verified_count:0, attempted:false});
+delayedManualReadiness = null;
+manualReadinessResponse = {reason:"ready", applicable_count:1, ready_count:1,
+  already_verified_count:0, attempted:false};
+await tick();
+assert.equal(releaseTask.manualExactEligible, true,
+  "release/Verify ordering reconciles original execution readiness without Reload");
+assert.equal(releaseTask.review, retainedPlan, "Verify retains the Plan review owner");
+assert.equal(retainedPlan.window.offset, 512, "execution fact adoption cannot paint Plan rows");
+assert.equal(retainedPlan.executionDetail.sentinel, "retained-detail");
+assert.equal(retainedPlan.planDetail.sentinel, "retained-plan-detail");
+
+const readinessRead = globalThis.inventoryHarness.getManualVerificationReadiness;
+const planOpenRead = globalThis.inventoryHarness.openPlanView;
+const readyResult = (owner, revision, reason = "ready") => ({task_id:owner.taskId,
+  session_id:owner.executionSessionId, execution_revision:revision, reason,
+  applicable_count:1, ready_count:reason === "ready" ? 1 : 0,
+  already_verified_count:0, attempted:false});
+const readinessCalls = (owner) => calls.filter(([name, id]) => name === "manual-readiness" && id === owner.taskId);
+const planOpenCalls = (owner) => calls.filter(([name, id]) => name === "plan-open" && id === owner.taskId);
+async function readinessOwner(index) {
+  planSummaryResponse = null;
+  const id = index.toString(16).padStart(32, "0");
+  const owner = attachReleasedExecutionTask("task-" + id, "ac" + id.slice(2),
+    "ac" + id.slice(2), "bc" + id.slice(2));
+  await tick();
+  owner.sessionKind = "sync-execution";
+  owner.review.summary = {...retainedPlan.summary, task_id:owner.taskId,
+    request_id:owner.planRequestId, execution:owner.review.window.execution};
+  owner.review.window = {...owner.review.window, offset:768, rows:[]};
+  owner.review.foregroundWindowReaders = 0;
+  owner.review.foregroundWindowEpoch = 0;
+  owner.review.actionRevision = 0;
+  owner.review.pending = null;
+  owner.review.executionDetail = {sentinel:index};
+  owner.review.planDetail = {sentinel:index};
+  inventoryOpenRequests.set(owner.taskId, owner.requestId);
+  app.selectTask(owner.taskId);
+  await tick();
+  planSummaryResponse = owner.review.summary;
+  planWindowResponse = {disposition:"current", view_revision:0, highlight_revision:0,
+    offset:0, rows:[], execution:owner.review.window.execution};
+  return owner;
+}
+
+// Conflict is a hint: the existing summary read, rather than the hint itself,
+// supplies revision 8, then one bounded read establishes eligibility.
+const conflictOwner = await readinessOwner(101);
+const conflictPlan = conflictOwner.review;
+const conflictSummary = defer();
+let conflictReads = 0;
+globalThis.inventoryHarness.getManualVerificationReadiness = (id, session, revision) => {
+  calls.push(["manual-readiness", id, session, revision]);
+  return Promise.resolve(readyResult(conflictOwner, ++conflictReads === 1 ? 8 : revision,
+    conflictReads === 1 ? "conflict" : "ready"));
+};
+globalThis.inventoryHarness.openPlanView = (id) => {
+  calls.push(["plan-open", id]); return conflictSummary.promise;
+};
+const conflictWindows = calls.filter(([name]) => name === "plan-window").length;
+app.switchTaskPane(conflictOwner, "verify");
+await tick();
+assert.equal(conflictOwner.manualExactEligible, false, "a conflict revision alone grants no eligibility");
+assert.equal(conflictOwner.originalExecutionFact.execution.execution_revision, 7);
+conflictSummary.resolve({...conflictPlan.summary,
+  execution:{...conflictPlan.window.execution, execution_revision:8}});
+await tick();
+assert.deepEqual(readinessCalls(conflictOwner).map((call) => call[3]), [7, 8]);
+assert.equal(planOpenCalls(conflictOwner).length, 2, "one initial fixture read plus one conflict summary read");
+assert.equal(calls.filter(([name]) => name === "plan-window").length, conflictWindows,
+  "readiness reconciliation never fetches or paints Plan rows");
+assert.equal(conflictOwner.manualExactEligible, true);
+assert.equal(conflictOwner.review, conflictPlan);
+assert.equal(conflictPlan.window.offset, 768);
+assert.equal(conflictPlan.executionDetail.sentinel, 101);
+assert.equal(conflictPlan.planDetail.sentinel, 101);
+globalThis.inventoryHarness.getManualVerificationReadiness = readinessRead;
+globalThis.inventoryHarness.openPlanView = planOpenRead;
+
+taskSnapshot = {task_id:conflictOwner.taskId, session_id:conflictOwner.sessionId,
+  session_state:"completed", session_released:true, task_kind:"sync-plan",
+  request_id:conflictOwner.requestId, plan_request_id:conflictOwner.planRequestId,
+  session_kind:"sync-execution"};
+const latestStartBase = calls.filter(([name]) => name === "manual-start").length;
+const acceptedOriginalFact = conflictOwner.originalExecutionFact;
+delayedManualStart = defer();
+const latestStart = app.startManualVerificationAction(conflictOwner.inventoryReview);
+await tick();
+await app.startManualVerificationAction(conflictOwner.inventoryReview);
+// A late lower Plan read cannot revoke the admitted command's result custody.
+app.observeOriginalExecution(conflictOwner, conflictOwner.planRequestId,
+  {...conflictPlan.window.execution, execution_revision:7});
+delayedManualStart.resolve({task_id:conflictOwner.taskId, session_id:"b".repeat(32),
+  request_id:"c".repeat(32)});
+await latestStart;
+delayedManualStart = null;
+assert.equal(calls.filter(([name]) => name === "manual-start").length, latestStartBase + 1,
+  "double gesture never replays the one manual Start");
+assert.equal(calls.findLast(([name]) => name === "manual-start")[4], 8,
+  "the first manual Start captures the reconciled execution revision");
+assert.equal(conflictOwner.sessionKind, "manual-verify");
+assert.equal(conflictOwner.originalExecutionFact, acceptedOriginalFact,
+  "accepted auxiliary work preserves original execution fact custody");
+
+// The real release summary can advance first while an older readiness reply is
+// running. A burst keeps exactly one latest demand and never rolls facts back.
+const burstOwner = await readinessOwner(102);
+burstOwner.sessionReleased = false;
+delayedPlanOpen = defer();
+const burstSummary = delayedPlanOpen;
+delayedManualReadiness = defer();
+const burstRead = delayedManualReadiness;
+app.acceptTaskRelease(burstOwner, burstOwner.sessionId);
+app.switchTaskPane(burstOwner, "verify");
+await tick();
+const burstBase = readinessCalls(burstOwner).length;
+for (let index = 0; index < 20; index += 1) void app.loadManualReadiness(burstOwner);
+planSummaryResponse = {...burstOwner.review.summary,
+  execution:{...burstOwner.review.window.execution, execution_revision:8}};
+planWindowResponse = {...planWindowResponse, execution:planSummaryResponse.execution};
+delayedPlanOpen = null;
+burstSummary.resolve(planSummaryResponse);
+await tick();
+assert.equal(burstOwner.originalExecutionFact.execution.execution_revision, 8);
+assert.equal(readinessCalls(burstOwner).length, burstBase, "only one readiness read runs through a burst");
+delayedManualReadiness = null;
+burstRead.resolve(readyResult(burstOwner, 7));
+await tick();
+assert.deepEqual(readinessCalls(burstOwner).map((call) => call[3]), [7, 8]);
+assert.equal(burstOwner.manualExactEligible, true, "a crossed read retains the latest demand");
+app.observeOriginalExecution(burstOwner, burstOwner.planRequestId,
+  {...planSummaryResponse.execution, execution_revision:6});
+assert.equal(burstOwner.originalExecutionFact.execution.execution_revision, 8,
+  "a late lower revision cannot roll the same execution back");
+app.observeOriginalExecution(burstOwner, "wrong-plan", {...planSummaryResponse.execution, execution_revision:9});
+app.observeOriginalExecution(burstOwner, burstOwner.planRequestId,
+  {...planSummaryResponse.execution, session_id:"ff".repeat(16), execution_revision:9});
+assert.equal(burstOwner.originalExecutionFact.execution.execution_revision, 8,
+  "unrelated Plan and original-session facts have no adoption authority");
+
+// Repeated conflict and transport failure terminate with actionable Reload.
+const failedOwner = await readinessOwner(103);
+let failedReads = 0;
+globalThis.inventoryHarness.getManualVerificationReadiness = (id, session, revision) => {
+  calls.push(["manual-readiness", id, session, revision]); failedReads += 1;
+  return Promise.resolve(readyResult(failedOwner, revision, "conflict"));
+};
+app.switchTaskPane(failedOwner, "verify");
+await tick();
+assert.equal(failedReads, 2, "unchanged conflict gets one reconciliation round and stops");
+assert.equal(failedOwner.manualReadinessLoading, false);
+assert.equal(failedOwner.manualExactEligible, false);
+assert.match(failedOwner.manualReadinessError, /Reload/);
+await tick();
+assert.equal(failedReads, 2, "conflict does not poll on later turns");
+globalThis.inventoryHarness.getManualVerificationReadiness = (id, session, revision) => {
+  calls.push(["manual-readiness", id, session, revision]); failedReads += 1;
+  return Promise.reject(new Error("transport unavailable"));
+};
+await app.loadManualReadiness(failedOwner);
+assert.equal(failedReads, 3, "an explicit Reload admits one fresh attempt");
+assert.equal(failedOwner.manualReadinessLoading, false);
+assert.match(failedOwner.manualReadinessError, /Reload/);
+globalThis.inventoryHarness.getManualVerificationReadiness = readinessRead;
+
+// Harmless variation: delayed Inventory completion with no execution crossing
+// retains the same ready facts and produces no conflict-summary read.
+const harmlessOwner = await readinessOwner(104);
+delayedOpen = defer();
+const harmlessInventory = delayedOpen;
+const harmlessOpenBase = planOpenCalls(harmlessOwner).length;
+app.switchTaskPane(harmlessOwner, "verify");
+await tick();
+assert.equal(harmlessOwner.manualExactEligible, true);
+delayedOpen = null;
+harmlessInventory.resolve({...summary(), task_id:harmlessOwner.taskId,
+  request_id:harmlessOwner.requestId});
+await tick();
+assert.equal(harmlessOwner.manualExactEligible, true);
+assert.ok(readinessCalls(harmlessOwner).every((call) => call[3] === 7));
+assert.equal(planOpenCalls(harmlessOwner).length, harmlessOpenBase);
+
+// Pane, task, Settings, Close and original-session replacement retire the old
+// demand. Reentry gets a fresh read; an auxiliary session keeps original facts.
+for (const [index, retire] of [
+  [105, (owner) => app.switchTaskPane(owner, "plan")],
+  [106, () => app.selectTask(harmlessOwner.taskId)],
+  [107, () => app.showSettings()],
+  [108, (owner) => app.closeRetainedTask(owner.taskId)],
+  [109, (owner) => app.adoptTask({task_id:owner.taskId, session_id:"dd".repeat(16),
+    session_state:"active", session_released:false, task_kind:"sync-plan",
+    request_id:owner.requestId, plan_request_id:owner.planRequestId, session_kind:"sync-execution"})],
+]) {
+  const owner = await readinessOwner(index);
+  const originalFact = owner.originalExecutionFact;
+  delayedManualReadiness = defer();
+  const retiredRead = delayedManualReadiness;
+  app.switchTaskPane(owner, "verify");
+  await tick();
+  const retiredReply = readyResult(owner, 7);
+  await retire(owner);
+  delayedManualReadiness = null;
+  retiredRead.resolve(retiredReply);
+  await tick();
+  assert.equal(owner.manualReadiness, null, `${index}: retired reply cannot restore eligibility`);
+  assert.equal(readinessCalls(owner).length, 1, `${index}: retirement cannot revive old demand`);
+  assert.equal(owner.manualReadinessLoading, false);
+  if (index === 109) {
+    assert.equal(owner.originalExecutionFact, null, "a new original execution resets its fact");
+    app.observeOriginalExecution(owner, owner.planRequestId,
+      {...originalFact.execution, session_id:owner.executionSessionId, execution_revision:1});
+    assert.equal(owner.originalExecutionFact.execution.execution_revision, 1,
+      "a replacement execution may begin at a lower revision");
+  } else if (index !== 108) {
+    app.selectTask(owner.taskId);
+    if (owner.workPane === "plan") app.switchTaskPane(owner, "verify");
+    await tick();
+    assert.equal(owner.manualExactEligible, true, `${index}: reentry demands current readiness`);
+    const fact = owner.originalExecutionFact;
+    app.adoptTask({task_id:owner.taskId, session_id:"ee".repeat(16),
+      session_state:"completed", session_released:true, task_kind:"sync-plan",
+      request_id:owner.requestId, plan_request_id:owner.planRequestId, session_kind:"inventory"});
+    assert.equal(owner.originalExecutionFact, fact, "auxiliary association preserves original execution facts");
+  }
+}
 process.stdout.write("ok\n");

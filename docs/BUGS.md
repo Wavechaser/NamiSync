@@ -923,16 +923,17 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Review viewport loading
 
-- MODERATE - OPEN (2026-10-15). Lost read reconciliation. D2 copied-file
+- MODERATE - FIXED (2026-10-16). Lost read reconciliation. D2 copied-file
   verification can remain unavailable after a completed execution until another
   pane load or Reload, despite eligible copied files. Cause: readiness drops
   triggers while loading, discards responses after its execution revision changes
   without retaining demand, and stores conflicts without reacquiring current
-  authority. Its revision source is the retained Plan window, whose painting is
-  separately fenced while Verify is visible. Controlled consumer orderings
-  reproduce the missing action on `47a4bcae` and `d1c3b325`; those scratch writes
-  do not identify the exact native producer ordering. No data or safety impact.
-  M1_PLAN's approved recurrence scope governs the active fix; verification is pending.
+  authority. Its revision source was the retained Plan window, whose painting is
+  separately fenced while Verify is visible. Fix: observe matching execution facts
+  independently of Plan painting, retain coalesced demand and bound conflict
+  reconciliation to one summary refresh/reread. The real release/Verify producer
+  witness fails the baseline and passes the fix; no-crossing controls and both
+  installed execution sizes pass. No data or safety impact.
 
 - MODERATE - FIXED (2026-10-14). Unfenced publication replacement. A Plan row
   highlight can apply on the server but disappear from the visible review,

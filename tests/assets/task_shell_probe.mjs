@@ -3003,6 +3003,9 @@ await until(() => auxiliaryTask.review !== null);
 assert.equal(auxiliaryTask.requestId, auxiliaryRequestId);
 assert.equal(auxiliaryTask.planRequestId, auxiliaryPlanId);
 assert.equal(auxiliaryTask.executionSessionId, originalExecutionId);
+assert.equal(auxiliaryTask.originalExecutionFact.planRequestId, auxiliaryPlanId,
+  "reconstruction observes original execution facts under the retained Plan identity");
+assert.equal(auxiliaryTask.originalExecutionFact.execution.session_id, originalExecutionId);
 assert.equal(auxiliaryTask.reviewSessionId, originalExecutionId);
 assert.equal(auxiliaryTask.review.summary.request_id, auxiliaryPlanId);
 assert.equal(selectTaskExecution(auxiliaryTask).execution.session_id, originalExecutionId);
@@ -3010,6 +3013,7 @@ assert.equal(taskStatusDigest(auxiliaryTask).title, "Verifying");
 auxiliaryTask.error = "Manual verification updates unavailable";
 const auxiliaryReloadBase = planOpens.length;
 const auxiliaryReloadWindowBase = planWindows.length;
+const auxiliaryOriginalFact = auxiliaryTask.originalExecutionFact;
 void globalThis.taskHarness.forceReview(auxiliaryTask, true);
 await until(() => planOpens.length === auxiliaryReloadBase + 1);
 planOpens[auxiliaryReloadBase].resolve(auxiliaryPlan);
@@ -3018,6 +3022,8 @@ planWindows[auxiliaryReloadWindowBase].resolve(planWindow(auxiliaryPlan));
 await until(() => !auxiliaryTask.reviewLoading);
 assert.equal(auxiliaryTask.error, "Manual verification updates unavailable",
   "an original Plan reload cannot clear current auxiliary recovery feedback");
+assert.equal(auxiliaryTask.originalExecutionFact, auxiliaryOriginalFact,
+  "an equal-revision reload does not replace original execution facts with auxiliary activity");
 taskButton(auxiliaryTask.label).click();
 const planDisposeBase = globalThis.planReviewHarness.disposeCount;
 const planParent = globalThis.planReviewHarness.element.parentNode;

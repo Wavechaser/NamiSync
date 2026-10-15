@@ -398,9 +398,33 @@ function renderTasks() {
 }
 
 function originalExecution(task) {
-  const execution = task.review?.window?.execution ?? null;
+  const fact = task.originalExecutionFact;
+  const execution = fact != null && fact.planRequestId === task.planRequestId ? fact.execution : null;
   return execution !== null && task.executionSessionId !== null
     && execution.session_id === task.executionSessionId ? execution : null;
+}
+
+function setOriginalExecutionSession(task, sessionId) {
+  if (task.executionSessionId === sessionId) return;
+  task.executionSessionId = sessionId;
+  task.originalExecutionFact = null;
+  task.manualReadiness = null;
+  task.manualReadinessError = null;
+  task.manualReadinessDemand = null;
+  task.manualReadinessRevision += 1;
+}
+
+function observeOriginalExecution(task, planRequestId, execution, demand = true) {
+  if (tasks.get(task.taskId) !== task || task.planRequestId !== planRequestId
+      || execution?.session_id == null
+      || (task.executionSessionId !== null && task.executionSessionId !== execution.session_id)) return;
+  setOriginalExecutionSession(task, execution.session_id);
+  const previous = originalExecution(task);
+  if (previous !== null && previous.execution_revision >= execution.execution_revision) return;
+  task.originalExecutionFact = { planRequestId, execution };
+  task.manualReadiness = null;
+  task.manualReadinessError = null;
+  if (demand) void loadManualReadiness(task);
 }
 
 function normallyCompletedExecution(task) {
@@ -642,6 +666,7 @@ function adoptTask(summary) {
       planRequestId: summary.plan_request_id,
       sessionKind: summary.session_kind,
       executionSessionId: summary.session_kind === "sync-execution" ? summary.session_id : null,
+      originalExecutionFact: null,
       executionSessionState: null,
       executionSnapshot: null,
       executionPresentation: null,
@@ -684,6 +709,7 @@ function adoptTask(summary) {
       manualReadinessLoading: false,
       manualReadinessError: null,
       manualReadinessRevision: 0,
+      manualReadinessDemand: null,
       manualExactEligible: false,
       manualFallbackEligible: false,
       executionStarted: false,
@@ -721,7 +747,6 @@ function adoptTask(summary) {
       task.executionControlRevision += 1;
       if (summary.task_kind === "sync-plan") {
         task.manualReadiness = null;
-        task.manualReadinessLoading = false;
         task.manualReadinessError = null;
         task.manualReadinessRevision += 1;
       }
@@ -742,7 +767,7 @@ function adoptTask(summary) {
     ) {
       if (summary.session_kind === "sync-execution") {
         task.executionStarted = true;
-        task.executionSessionId = summary.session_id;
+        setOriginalExecutionSession(task, summary.session_id);
         task.executionWindowDirty = true;
         task.executionWindowDirtyRevision += 1;
         task.workPane = "plan";
@@ -763,7 +788,7 @@ function adoptTask(summary) {
     task.requestId = summary.request_id;
     task.planRequestId = summary.plan_request_id;
     task.sessionKind = summary.session_kind;
-    if (summary.session_kind === "sync-execution") task.executionSessionId = summary.session_id;
+    if (summary.session_kind === "sync-execution") setOriginalExecutionSession(task, summary.session_id);
   }
   if (task.form !== null) task.form.sessionState = task.sessionState;
   if (
@@ -1522,40 +1547,57 @@ async function changeInventorySelection(review, nodeId, selected) {
 }
 
 async function loadManualReadiness(task) {
-  const execution = originalExecution(task);
-  if (execution === null || task.taskKind !== "sync-plan" || task.workPane !== "verify"
+  if (originalExecution(task) === null || task.taskKind !== "sync-plan" || task.workPane !== "verify"
       || tasks.get(task.taskId) !== task || currentTask() !== task || settingsVisible
-      || task.manualReadinessLoading) return;
-  const request = ++task.manualReadinessRevision;
-  const paneRevision = task.paneRevision;
-  const navigation = navigationRevision;
-  const sessionId = task.executionSessionId;
-  const executionRevision = execution.execution_revision;
+      || task.closePending) return;
+  task.manualReadinessDemand = { paneRevision: task.paneRevision, navigation: navigationRevision,
+    sessionId: task.executionSessionId, planRequestId: task.planRequestId,
+    revision: task.manualReadinessRevision };
+  if (task.manualReadinessLoading) return;
   task.manualReadinessLoading = true;
   task.manualReadinessError = null;
   renderTasks();
-  const stillCurrent = () => tasks.get(task.taskId) === task && currentTask() === task
-    && !settingsVisible && task.workPane === "verify" && task.paneRevision === paneRevision
-    && navigationRevision === navigation && task.manualReadinessRevision === request
-    && task.executionSessionId === sessionId
-    && originalExecution(task)?.execution_revision === executionRevision;
   try {
-    const readiness = await getManualVerificationReadiness(task.taskId, sessionId, executionRevision);
-    if (!stillCurrent()) return;
-    task.manualReadiness = readiness;
-  } catch (_error) {
-    if (stillCurrent()) {
-      task.manualReadiness = null;
-      task.manualReadinessError = "Verification readiness unavailable. Reload this view to try again.";
-    }
-  } finally {
-    if (tasks.get(task.taskId) === task && task.manualReadinessRevision === request) {
-      task.manualReadinessLoading = false;
-      renderTasks();
-      if (task.workPane === "verify" && task.paneRevision !== paneRevision) {
-        void loadManualReadiness(task);
+    while (task.manualReadinessDemand !== null) {
+      const demand = task.manualReadinessDemand;
+      task.manualReadinessDemand = null;
+      const stillCurrent = () => tasks.get(task.taskId) === task && currentTask() === task
+        && !settingsVisible && !task.closePending && task.workPane === "verify"
+        && task.paneRevision === demand.paneRevision && navigationRevision === demand.navigation
+        && task.manualReadinessRevision === demand.revision
+        && task.planRequestId === demand.planRequestId && task.executionSessionId === demand.sessionId;
+      if (!stillCurrent()) continue;
+      try {
+        let executionRevision = originalExecution(task).execution_revision;
+        let readiness = await getManualVerificationReadiness(task.taskId, demand.sessionId, executionRevision);
+        if (!stillCurrent()) continue;
+        if (originalExecution(task)?.execution_revision !== executionRevision) continue;
+        if (readiness.reason === "conflict") {
+          const summary = await openPlanView(task.taskId);
+          if (!stillCurrent()) continue;
+          if (summary.request_id !== demand.planRequestId
+              || summary.execution.session_id !== demand.sessionId) throw new Error("Original execution changed");
+          observeOriginalExecution(task, demand.planRequestId, summary.execution, false);
+          executionRevision = originalExecution(task).execution_revision;
+          readiness = await getManualVerificationReadiness(task.taskId, demand.sessionId, executionRevision);
+          if (!stillCurrent()) continue;
+          if (originalExecution(task)?.execution_revision !== executionRevision) continue;
+        }
+        if (readiness.reason === "conflict" || readiness.execution_revision !== executionRevision) {
+          throw new Error("Readiness did not reconcile");
+        }
+        task.manualReadiness = readiness;
+        task.manualReadinessError = null;
+      } catch (_error) {
+        if (stillCurrent()) {
+          task.manualReadiness = null;
+          task.manualReadinessError = "Verification readiness unavailable. Reload this view to try again.";
+        }
       }
     }
+  } finally {
+    task.manualReadinessLoading = false;
+    if (tasks.get(task.taskId) === task) renderTasks();
   }
 }
 
@@ -2140,6 +2182,8 @@ async function readInventoryDetail(review, nodeId) {
 }
 
 function adoptExecutionWindow(review, window) {
+  const task = retainedReviewTask(review);
+  if (task !== null) observeOriginalExecution(task, review.summary.request_id, window.execution);
   if (review.window?.execution?.execution_revision
       !== window.execution.execution_revision) retireExecutionDetail(review);
   review.window = window;
@@ -2218,6 +2262,11 @@ async function refreshExecutionWindow(task) {
       );
       try {
         const window = await getPlanWindow(task.taskId, viewRevision, offset, 256);
+        if (tasks.get(task.taskId) === task && task.review === review
+            && task.executionSessionId === sessionId && task.planRequestId === requestId
+            && window.disposition === "current") {
+          observeOriginalExecution(task, requestId, window.execution);
+        }
         if (!refreshStillCurrent()) {
           task.executionWindowDirty = true;
           return;
@@ -2374,7 +2423,7 @@ async function loadPlanReview(task, force = false) {
   ) return;
   const request = ++task.reviewRevision;
   const dirtyRevision = task.executionWindowDirtyRevision;
-  const sessionId = task.executionSessionId;
+  let sessionId = task.executionSessionId;
   const planRequestId = task.planRequestId;
   const paneRevision = task.paneRevision;
   const reviewOwner = task.review;
@@ -2384,7 +2433,16 @@ async function loadPlanReview(task, force = false) {
   renderTasks();
   try {
     const summary = await openPlanView(task.taskId);
+    if (tasks.get(task.taskId) !== task || task.reviewRevision !== request
+        || task.executionSessionId !== sessionId || task.planRequestId !== planRequestId) return;
+    observeOriginalExecution(task, summary.request_id, summary.execution);
+    sessionId = task.executionSessionId;
     const window = await getPlanWindow(task.taskId, summary.view_revision, 0, 256);
+    if (tasks.get(task.taskId) === task && task.reviewRevision === request
+        && task.executionSessionId === sessionId && task.planRequestId === summary.request_id
+        && window.disposition === "current") {
+      observeOriginalExecution(task, planRequestId, window.execution);
+    }
     if (
       tasks.get(task.taskId) !== task || task.reviewRevision !== request
       || task.executionSessionId !== sessionId || task.planRequestId !== planRequestId
@@ -2412,7 +2470,6 @@ async function loadPlanReview(task, force = false) {
       return;
     }
     task.executionStarted ||= summary.selection_state === "committed";
-    if (summary.execution.session_id !== null) task.executionSessionId = summary.execution.session_id;
     if (task.executionSessionState === null && summary.execution.result !== null) {
       const originalResult = summary.execution.result;
       task.executionSessionState = originalResult.disposition === "unrun" ? "refused"
@@ -3190,7 +3247,7 @@ async function submitReviewedExecution(task, attempt) {
       task.requestId = result.request_id;
       task.sessionId = result.session_id;
       task.sessionKind = "sync-execution";
-      task.executionSessionId = result.session_id;
+      setOriginalExecutionSession(task, result.session_id);
       task.sessionState = "active";
       task.executionSessionState = "active";
       task.sessionReleased = false;
