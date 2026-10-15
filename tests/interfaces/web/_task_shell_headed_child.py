@@ -92,8 +92,8 @@ _PLAN_CONTEXT_READINESS_KEYS = frozenset(
 
 _COMMON_JS = r"""
 var sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
-async function until(predicate, label) {
-  for (let attempt = 0; attempt < 300; attempt += 1) {
+async function until(predicate, label, attempts = 300) {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
     if (window.__namiFirstAsyncError) throw new Error("browser asynchronous error");
     const value = predicate();
     if (value) return value;
@@ -983,7 +983,7 @@ window.addEventListener("error", (event) => {
         hit_owned:invoker.contains(document.elementFromPoint(point.x, point.y))};
     };
     window.__namiPlanContextStage = `${name}-ready`;
-    await until(() => window.__namiPlanContextAck === name, `native Plan ${name} roundtrip`);
+    await until(() => window.__namiPlanContextAck === name, `native Plan ${name} roundtrip`, 1200);
     await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     for (const type of ['keydown', 'keyup', 'contextmenu']) document.removeEventListener(type, observe, true);
     const rect = contextPopup.getBoundingClientRect();
@@ -999,7 +999,7 @@ window.addEventListener("error", (event) => {
         hit_owned:item.contains(document.elementFromPoint((rect.left + rect.right) / 2, (rect.top + rect.bottom) / 2))};
     };
     window.__namiPlanContextStage = `${name}-escape-ready`;
-    await until(() => window.__namiPlanContextAck === `${name}-escape`, `native Plan ${name} Escape`);
+    await until(() => window.__namiPlanContextAck === `${name}-escape`, `native Plan ${name} Escape`, 1200);
     const canonicalInvoker = contextInvoker();
     rowMenuInput.at(-1).escape = {popup_hidden:contextPopup.hidden,
       invoker_connected:invoker.isConnected, invoker_canonical:canonicalInvoker === invoker,

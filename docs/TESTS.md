@@ -183,6 +183,9 @@ Shell context-menu and execution input stages yield the UI thread while waiting
 up to 15 seconds for foreground, with one native activation attempt, a window
 flash and guidance to leave the test window in front. Recheck the focused/hit target after acquisition;
 expiry records the observed/owned handles and refusal reason and sends no input.
+The shell's native context-menu acknowledgement waits allow 30 seconds, covering
+foreground acquisition and dispatch; its ordinary browser-state waits remain
+7.5 seconds. Execution's existing acknowledgement waits already allow 30 seconds.
 Guidance uses stdout. The shell parent accepts at most four exact guidance lines
 (one for each context-menu stage); unexpected stdout or any stderr still fails.
 The optional Plan-again trace suppresses repeated identical eligibility/projection

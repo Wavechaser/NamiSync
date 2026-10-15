@@ -37,10 +37,20 @@ passes all four installed shell/execution cases, both trace-enabled shell cases,
 2,029 owning interface cases and 12 import contracts. Receipts are
 `rebuild-{native,trace,interfaces}-20261016-01` under the evidence root; frozen
 file identities are in `rebuild-freeze-20261016-01.json`. Final evidence review
-approves both atomic outcomes. Next apply the 34-path saved table patch and its
-newly identified overlay rejection-settlement correction. Reconcile the saved
-Inventory app tests with the new readiness tests; do not replace the whole file.
-The prior user handoff and both recovery refs remain preserved.
+approves both atomic outcomes. Readiness is committed as `b891285`.
+
+The 34-path table rebuild is frozen in
+`table-rebuild-source-freeze-20261016-01.json`, with readiness preserved and the
+overlay rejection-settlement gap reproduced and corrected. Its focused checks
+pass 357 cases plus 10 composition cases; the full ordinary gate passes 6,070
+with four skips, and all 12 import contracts hold. Installed Inventory and four
+gallery cases pass native01; execution passes both sizes in execution02 after
+foreground refusals in native01. The shell's page acknowledgement expired
+before the new foreground deadline; its two native waits are corrected, with
+38 owning ordinary passes and installed shell default04/larger05 passes.
+The extra Alt key-up and foreground-refused attempts remain retained.
+The table is not yet committed. Root owns the subject/delivery docs; Refresh remains dependent on
+table acceptance. The prior user handoff and both recovery refs remain preserved.
 
 Prior Inventory/gallery/ordinary evidence remains recorded in M1_PLAN and must
 be reused only where all producer, checker and driver dependencies remain

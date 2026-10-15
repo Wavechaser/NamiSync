@@ -187,6 +187,8 @@ explicit, reviewable and regression-backed.
   guidance distinct from unexpected output. Suppress duplicate trace observations
   while retaining transitions, events and strict overflow rejection; rebuild the
   execution recorder's current-readiness correction.
+  Align the shell's native acknowledgement deadline with foreground acquisition,
+  preserving the shorter ordinary browser-state waits and every input guard.
 - Reconcile copied-file readiness when Verify opens during execution release.
   Observe current execution facts without repainting retained Plan rows; coalesce
   renewed demand and bound conflict recovery, with actionable Reload on failure.

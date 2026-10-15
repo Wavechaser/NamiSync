@@ -196,6 +196,20 @@ shell passes both sizes with no overflow, interfaces pass 2,029 cases and all
 `readiness-replay-identities-20261016-01.json` and the two outcome review reports.
 This is prerequisite acceptance, not table/Refresh or final batch acceptance.
 
+The table rerun exposed a harness deadline mismatch: the shell's existing
+7.5-second page acknowledgement could expire during the new 15-second
+foreground wait. Correct only its two native context-menu acknowledgement
+calls to allow 30 seconds; keep ordinary page waits and every input guard.
+Execution already has the longer acknowledgement bound. A contained fake-clock
+test exercises the actual page consumers with a late acknowledgement and a
+missing acknowledgement. Both fail on the old wait; all 38 owning ordinary
+cases pass after correction. Installed shell default04 and larger05 pass;
+shell03/default's extra Alt key-up and the other foreground refusals remain
+retained without a product-failure claim.
+Raw native01 receipts and `table-shell-budget-investigation-20261016-01.md`
+retain the exact failure mapping. This is an introduced harness regression,
+not a product Plan-again failure or a new async product-read instance.
+
 ### M1-10 delivered register — 2026-10-13–14
 
 Delivered from clean `milestone1` at `fc8a79b` through separately reviewed

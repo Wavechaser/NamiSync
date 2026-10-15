@@ -83,6 +83,49 @@ def test_foreground_recovery_guidance_does_not_poison_shell_receipt(
         _require_task_shell_process_output(streams.out * 5, "")
 
 
+@pytest.mark.parametrize("escape", [False, True])
+def test_native_context_ack_allows_foreground_wait_and_still_terminates(
+    tmp_path: Path, escape: bool,
+) -> None:
+    from _frontend_test_support import _node_executable, run_node_probe
+
+    node = _node_executable()
+    assert node is not None, "Node.js is required for the native ACK deadline witness"
+    waits = [line.strip() for line in child._PLAN_REVIEW_SCRIPT.splitlines()
+        if line.strip().startswith("await until(() => window.__namiPlanContextAck ===")]
+    assert len(waits) == 2
+    statement = waits[int(escape)]
+    expected = "shift-escape" if escape else "shift"
+    script = tmp_path / "native-context-ack.mjs"
+    script.write_text('import assert from "node:assert/strict";\n' + child._COMMON_JS + "\n"
+        + "const name = 'shift';\nconst expected = " + json.dumps(expected) + ";\n"
+        + r"""
+globalThis.window = {};
+let elapsed = 0, supplyAck = true;
+globalThis.setTimeout = (callback, delay) => {
+  elapsed += delay;
+  if (supplyAck && elapsed >= 14900) window.__namiPlanContextAck = expected;
+  callback();
+};
+""" + statement + r"""
+assert.equal(elapsed, 14900, "native ACK can arrive near the foreground deadline");
+elapsed = 0;
+supplyAck = false;
+window.__namiPlanContextAck = null;
+await assert.rejects(async () => {
+""" + statement + r"""
+}, /timed out waiting for native Plan/);
+assert.equal(elapsed, 30000, "missing native ACK remains bounded");
+elapsed = 0;
+await assert.rejects(() => until(() => false, "ordinary page wait"), /ordinary page wait/);
+assert.equal(elapsed, 7500, "ordinary page waits retain their original bound");
+process.stdout.write("ok\n");
+""", encoding="utf-8")
+    completed = run_node_probe([str(node), str(script)], timeout=10)
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert completed.stdout == "ok\n" and completed.stderr == ""
+
+
 def _task_shell_evidence_paths(root: Path) -> tuple[Path, Path]:
     confirmation = require_absolute_local_test_root(root / "execution-confirmation.png")
     return confirmation, confirmation.with_name("execution-confirmation-driver.json")
