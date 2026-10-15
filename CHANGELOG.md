@@ -177,6 +177,17 @@ behavioral evidence.
 Safety, settlement and authority work made high-consequence release claims
 explicit, reviewable and regression-backed.
 
+#### Align Verify table interaction and action consequences (2026-10-15)
+
+- Record the approved follow-up: shared range highlighting, filter-aware bulk
+  selection and viewport continuity; explicit warning before Refresh forfeits
+  copied-file verification; bounded overlay rendering and catalog-driven kind
+  coverage. Keep the execution-evidence contract unchanged and finish with a
+  read-only ablation study.
+- Correct M1-10 evidence accounting: shared01/shared02 include unresolved
+  Plan-again shell failures. Later shell passes do not explain those failures;
+  the four passing gallery cases remain separate evidence.
+
 #### Align desktop review surfaces and recovery (2026-10-05 – 2026-10-13)
 
 - Use one two-axis scroller with a sticky header for Plan, execution and

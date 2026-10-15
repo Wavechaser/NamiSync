@@ -20,8 +20,8 @@ do not establish acceptance for changed dependencies.
 ## Remaining checkpoints
 
 M1-10 is complete as of 2026-10-14, including the requested integrated A–C
-review before D and final cross-component review. Work stops for the user's
-recap and GUI tweaks. M1-12, release and DOC-2 remain inactive. Backend
+review before D and final cross-component review. The user has activated the
+GUI-hardening follow-up below. M1-12, release and DOC-2 remain inactive. Backend
 optimization is closed.
 Other pending rows still need user authorization, active scope and verification.
 A finding does not enlarge a row; [AGENTS](../AGENTS.md) governs scope changes,
@@ -40,6 +40,58 @@ the old tip and opens a draft PR from `milestone1-anthony`. Before any action,
 freshly check divergence, remote tip and preservation of all work; unexpected
 commits or unaccounted work require adjudication. AB-10 and the documentation
 consolidation do not execute, close or authorize DOC-2 history rewriting.
+
+### Verify table hardening — 2026-10-15
+
+Approved after the M1-10 GUI recap, starting at `d6770c7`. This is a separate
+hardening batch, not activation of M1-12. Root owns delivery documents; evidence
+and the final ablation report live under `build/verify-ux-20261015/`.
+
+| Outcome / atomic boundary | Owners and finite consumers | Verification |
+| --- | --- | --- |
+| Kind catalog coverage | `tests/interfaces/web/test_browser_event_v5_consumers.py`; use the Python task-port catalog to generate browser mirror cases. | Owning module and interfaces department; preserve invalid/coercive cases. |
+| Verify table alignment | Inventory/Plan web presentation state, shared highlight/visible-sequence helpers, task presentation/port/lifecycle bridge adapters, `app.js`, `bridge.js`, Inventory/Plan/tree/row assets as directly needed; their existing Python, browser probes, installed Inventory/execution/shell/gallery consumers. PRESENTATION, DESKTOP_UI, BRIDGE and FEATURES own changed contracts. | Shared server range gestures, Ctrl/Shift and keyboard behavior, highlighted checkbox scope, query-matched folder/header membership including off-window/collapsed matches, authoritative stale/conflict rejection, live viewport/focus continuity, separate result identities. Existing interfaces tests plus affected installed Inventory/execution, shell and gallery gates; imports and broader ordinary coverage for shared contract changes. |
+| Bounded overlay cost | `inventory_review.js` and its existing probe: avoid repeated self-membership validation for a window's own manual result. | Preserve mismatch/detail rejection and row result labels; demonstrate removal of repeated quadratic membership work without a new timing threshold. May accompany the renderer alignment where dependencies overlap. |
+| Refresh consequence UX | `inventory_review.js`, `app.js`, existing confirmation component and their browser/installed execution consumers; DESKTOP_UI/PRESENTATION/FEATURES. Make exact Verify primary; warn before a scan can forfeit it; truthful supersession message. | Cancel has no scan effect; explicit confirmation retains normal revision/scope/admission checks; whole, selected and context Refresh routes; no unnecessary prompt after the exact option is consumed/unavailable; installed command journey. |
+| Evidence correction and ablation | M1_PLAN/HANDOFF/CHANGELOG and retained D1/D2 receipts; study the D delivery diff and final table changes. | Record unresolved Plan-again intermittency without treating a later pass as explanation. Assess removals/reuse by lost behavior, logic, test/environment complexity and maintenance costs, with source/evidence pointers. Report only; no study-driven simplification. |
+
+Preserve workflow safety and execution-evidence token ownership, complete
+operation selection for starts (including hidden selections), separate row
+highlight and checkbox selection, bounded 256-row browser windows, revision
+and lifecycle fences, exact/manual/automatic versus ordinary result truth, and
+existing native ownership guards. Only checkbox bulk membership changes to
+current search/facet matches; Refresh and missing-row visibility retain their
+complete explicit scope. Reuse shared mechanics where they fit without a new
+general UI framework. No backend eligibility preservation across scans, automatic
+fallback/replay, terminal subset retry, or unrelated shell repair is authorized.
+Each outcome requires fresh independent review before commit. Repository
+recurrence and always-stop rules apply; the named findings are declared inputs,
+not newly discovered defects. Finish with the requested study and recap.
+
+Table implementation uses the existing `VisibleSequence` through one shared
+server highlight owner, keeping Plan operation/dependency policy and Inventory
+file membership separate. Inventory gains compact revisioned highlight and
+highlighted-selection commands; direct command-catalog consumers in host,
+transport, gallery and `tools/performance/bridge_event` migrate together.
+Existing data-URL probes and table-loading instrumentation are direct consumers
+of extracted browser imports/functions and must remain usable. Shared browser
+gesture/navigation code should reuse existing behavior without a general table
+framework. Selection replies preserve highlights; search/facet changes clear
+them; sort/collapse preserve membership; a new scan/publication clears highlights
+while retaining surviving checkbox selections. Extend the existing Inventory
+native witness to inspect the actual outer viewport at nonzero scroll, including
+an off-window range, rather than the non-scrolling rows element.
+
+**Open intermittent observation:** `d2-shared-native-20261014-02.log` lines
+142/244 and both raw shell `failure.json` files show a fresh Task 53 row while
+Task 52 remains selected and `review_pending` remains `plan-again`. The same
+signature is retained in shared01. Later foreground03 shell passes do not
+explain or close this failure. Earlier D1/AB observations have differing symptoms
+and do not establish a common cause. Gallery acceptance is limited to the four
+passing gallery cases; its reuse never constitutes shell acceptance. Preserve
+the existing diagnostics and investigate raw evidence if it recurs. Causation
+is unresolved, so this observation is recorded here rather than assigned a
+speculative BUGS mechanism.
 
 ### M1-10 delivered register — 2026-10-13–14
 
