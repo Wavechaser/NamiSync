@@ -17,7 +17,7 @@ from unittest.mock import patch
 
 from _headed_cdp import NativeCdp, decode_png, failure_site
 from _headed_evidence import EvidencePaths, EvidencePublisher
-from _headed_native import foreground_window_handle
+from _headed_native import foreground_window_handle, wait_for_foreground
 from _startup_test_support import headed_command_extension
 
 
@@ -444,12 +444,17 @@ class _ExecutionReviewPhase:
         if name == "get_manual_verification_readiness":
             if (payload.session_id != self.execution["session_id"]
                     or self.window is None
-                    or payload.expected_execution_revision != self.window["execution_revision"]
                     or type(result) is not dict
                     or result.get("task_id") != self.plan["task_id"]
                     or result.get("session_id") != payload.session_id
-                    or result.get("execution_revision") != payload.expected_execution_revision):
+                    or type(result.get("execution_revision")) is not int):
                 raise ValueError("manual readiness changed original execution identity")
+            if result.get("reason") == "conflict":
+                return
+            if result["execution_revision"] != payload.expected_execution_revision:
+                raise ValueError("manual readiness changed original execution identity")
+            if payload.expected_execution_revision != self.window["execution_revision"]:
+                return
             self.readiness.append({
                 "admitted": admitted, "completed": completed,
                 "reason": result.get("reason"),
@@ -468,6 +473,7 @@ class _ExecutionReviewPhase:
                     or self.window is None
                     or payload.expected_execution_revision != self.window["execution_revision"]
                     or latest is None or latest["reason"] != "ready"
+                    or latest.get("execution_revision") != payload.expected_execution_revision
                     or latest["ready_count"] != len(self.fixture)
                     or latest["attempted"] is not False
                     or result.task_id != self.plan["task_id"]):
@@ -1637,7 +1643,9 @@ def _drive(window: object, phase: _ExecutionReviewJourney, recorder: _Recorder, 
         blocked = phase.snapshot()["blocked"]
         refresh = blocked["refresh"]
         refresh_observed = type(refresh) is dict
-        phase_failure = blocked["failure"]
+        failure = phase.blocked.phase_failure_trace()
+        phase_failure = failure["type"]
+        phase_failure_command = failure["command"]
         backend = {
             "refreshObserved": refresh_observed,
             "refreshReleaseObserved": refresh_observed and any(
@@ -1654,9 +1662,12 @@ def _drive(window: object, phase: _ExecutionReviewJourney, recorder: _Recorder, 
             "timeout": True,
             "blockedStage": value["blockedStage"],
             "phaseFailureType": phase_failure,
+            "phaseFailureCommand": phase_failure_command,
             "booleans": {**backend, **value["booleans"]},
         }
         if ((phase_failure is not None and type(phase_failure) is not str)
+                or (phase_failure_command is not None
+                    and phase_failure_command not in _COMMANDS)
                 or set(diagnostic["booleans"]) != _SELECTION_TIMEOUT_BOOLS):
             raise RuntimeError("selection timeout diagnostic is invalid")
         recorder.driver.with_name("selection-timeout-diagnostic.json").write_text(
@@ -1702,6 +1713,7 @@ def _drive(window: object, phase: _ExecutionReviewJourney, recorder: _Recorder, 
 
     def write_selection_foreground_diagnostic(
         stage: str, observed_handle: int | None, owned_handle: int,
+        reason: str = "foreground-changed",
     ) -> None:
         if (stage not in {"wait-selection-callback", "selection-target-callback"}
                 or (observed_handle is not None and type(observed_handle) is not int)
@@ -1712,6 +1724,7 @@ def _drive(window: object, phase: _ExecutionReviewJourney, recorder: _Recorder, 
                 "stage": stage,
                 "observedHandle": observed_handle,
                 "ownedHandle": owned_handle,
+                "reason": reason,
             }, sort_keys=True),
             encoding="utf-8",
         )
@@ -1723,15 +1736,20 @@ def _drive(window: object, phase: _ExecutionReviewJourney, recorder: _Recorder, 
             failed = True
             recorder.fail("wait-selection", "RuntimeError")
             return
-        observed_handle = foreground_window_handle()
         owned_handle = int(native.Handle.ToInt64())
-        if observed_handle != owned_handle:
+        def refused(facts: dict[str, object]) -> None:
             write_selection_foreground_diagnostic(
-                "wait-selection-callback", observed_handle, owned_handle,
+                "wait-selection-callback", facts["observedHandle"], owned_handle,
+                facts["reason"],
             )
-            raise RuntimeError("native execution window is not foreground")
-        cdp.evaluate("window.__executionReviewSelectionTarget()", dispatch_fallback,
-                     "selection-target")
+            fail(RuntimeError("native execution foreground deadline expired"),
+                 None, "wait-selection-foreground", "foreground")
+        wait_for_foreground(
+            owned_handle, activate=native.Activate,
+            ready=lambda: cdp.evaluate("window.__executionReviewSelectionTarget()",
+                                       dispatch_fallback, "selection-target"),
+            refused=refused, retained=retained,
+        )
 
     def dispatch_fallback(point: object) -> None:
         if type(point) is not dict or set(point) != {"x", "y"}:
@@ -1800,8 +1818,36 @@ def _drive(window: object, phase: _ExecutionReviewJourney, recorder: _Recorder, 
         if type(point) is not dict:
             raise RuntimeError("execute point missing")
         phase.bind_visible_label(point["taskLabel"])
-        point = point["point"]
-        cdp.call("Input.dispatchMouseEvent", {"type":"mousePressed","button":"left","buttons":1,"clickCount":1,**point}, lambda _v: cdp.call("Input.dispatchMouseEvent", {"type":"mouseReleased","button":"left","buttons":0,"clickCount":1,**point}, confirmed, "execute-up"), "execute-down")
+        def dispatch_execute(current: object) -> None:
+            if (type(current) is not dict
+                    or foreground_window_handle() != int(native.Handle.ToInt64())):
+                raise RuntimeError("native Execute target is unavailable")
+            cdp.call("Input.dispatchMouseEvent", {"type":"mousePressed","button":"left","buttons":1,"clickCount":1,**current}, lambda _v: cdp.call("Input.dispatchMouseEvent", {"type":"mouseReleased","button":"left","buttons":0,"clickCount":1,**current}, confirmed, "execute-up"), "execute-down")
+
+        def refused(facts: dict[str, object]) -> None:
+            recorder.driver.with_name("execute-foreground-diagnostic.json").write_text(
+                json.dumps(facts, sort_keys=True), encoding="utf-8",
+            )
+            fail(RuntimeError("native Execute foreground deadline expired"),
+                 None, "execute-foreground", "foreground")
+
+        wait_for_foreground(
+            int(native.Handle.ToInt64()), activate=native.Activate,
+            ready=lambda: cdp.evaluate(r"""(() => {
+              const button = document.querySelector('.nami-plan-review [data-action="execute"]');
+              if (!button?.isConnected || button.disabled || !document.hasFocus()
+                  || document.activeElement !== button) throw new Error('Execute focus changed');
+              const rect = button.getBoundingClientRect();
+              const point = {x:(rect.left+rect.right)/2,y:(rect.top+rect.bottom)/2};
+              if (rect.width <= 0 || rect.height <= 0 || point.x < 0 || point.y < 0
+                  || point.x >= innerWidth || point.y >= innerHeight
+                  || document.elementFromPoint(point.x, point.y) !== button) {
+                throw new Error('Execute hit target changed');
+              }
+              return point;
+            })()""", dispatch_execute, "execute-current-target"),
+            refused=refused, retained=retained,
+        )
 
     cdp.evaluate(_PAGE, finished, "page")
     cdp.evaluate(wait_execute, execute, "wait-execute")

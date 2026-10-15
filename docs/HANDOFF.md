@@ -31,10 +31,21 @@ Separate execution-fact observation from permission to repaint Plan. Keep
 coalesced demand bounded, exact Start singular, and conflict/error recovery
 actionable without mutation replay.
 
-No new implementation gates have run yet. Prior Inventory/gallery/ordinary
-evidence remains recorded in M1_PLAN and must be reused only where all producer,
-checker and driver dependencies remain unchanged. Announce native-input runs;
-retain foreground/focus/hit guards. No gate waiver is authorized.
+Harness and readiness changes are implemented and independently source-reviewed.
+Focused checks pass (70 harness, 59 frontend). The frozen combined candidate
+passes all four installed shell/execution cases, both trace-enabled shell cases,
+2,029 owning interface cases and 12 import contracts. Receipts are
+`rebuild-{native,trace,interfaces}-20261016-01` under the evidence root; frozen
+file identities are in `rebuild-freeze-20261016-01.json`. Commit the harness and
+readiness separately after final evidence review, then apply the 34-path saved
+table patch and its newly identified overlay rejection-settlement correction.
+The prior user handoff and both recovery refs remain preserved.
+
+Prior Inventory/gallery/ordinary evidence remains recorded in M1_PLAN and must
+be reused only where all producer, checker and driver dependencies remain
+unchanged. Announce native-input runs; retain foreground/focus/hit guards. No gate
+waiver is authorized. The final ordinary gate, table/Refresh verification and
+ablation study remain outstanding.
 
 Root owns delivery docs and integration; builders must not overlap shared files
 or commit before independent review. M1-12, release, DOC-2, push/PR and backend

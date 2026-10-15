@@ -32,6 +32,10 @@ _JOB_OBJECT_EXTENDED_LIMIT_INFORMATION = 9
 _JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x00002000
 _JOB_OBJECT_LIMIT_JOB_MEMORY = 0x00000200
 _HOST_CHILD = Path(__file__).with_name("_headed_host_child.py")
+FOREGROUND_GUIDANCE = (
+    "Native input waiting: leave the NamiSync test window in front; "
+    "input will be refused after 15 seconds."
+)
 
 
 class _JobObjectBasicLimitInformation(ctypes.Structure):
@@ -659,6 +663,56 @@ def foreground_window_handle() -> int | None:
     return int(handle) if handle else None
 
 
+def wait_for_foreground(
+    owned_handle: int,
+    *,
+    activate: Callable[[], None],
+    ready: Callable[[], None],
+    refused: Callable[[dict[str, object]], None],
+    retained: list[object],
+) -> None:
+    """Yield the UI thread while acquiring foreground, for at most 15 seconds."""
+
+    from System.Windows.Forms import Timer
+
+    deadline = scenario_deadline(15.0)
+    timer = Timer()
+    timer.Interval = 50
+    activation_attempted = False
+    settled = False
+
+    def tick(*_args: object) -> None:
+        nonlocal activation_attempted, settled
+        if settled:
+            return
+        observed = foreground_window_handle()
+        if time.monotonic() >= deadline.expires_at:
+            settled = True
+            timer.Stop()
+            timer.Dispose()
+            if activation_attempted:
+                _user32().FlashWindow(owned_handle, False)
+            refused({"reason": "foreground-deadline", "observedHandle": observed,
+                     "ownedHandle": owned_handle})
+        elif observed == owned_handle:
+            settled = True
+            timer.Stop()
+            timer.Dispose()
+            if activation_attempted:
+                _user32().FlashWindow(owned_handle, False)
+            ready()
+        elif not activation_attempted:
+            activation_attempted = True
+            print(FOREGROUND_GUIDANCE, flush=True)
+            activate()
+            _user32().FlashWindow(owned_handle, True)
+
+    timer.Tick += tick
+    retained.extend((timer, tick))
+    timer.Start()
+    tick()
+
+
 def _bounded_reap(
     process: subprocess.Popen[str],
     *,
@@ -912,4 +966,6 @@ def _user32():
     user32.GetDlgItem.restype = wintypes.HWND
     user32.GetForegroundWindow.argtypes = ()
     user32.GetForegroundWindow.restype = wintypes.HWND
+    user32.FlashWindow.argtypes = (wintypes.HWND, wintypes.BOOL)
+    user32.FlashWindow.restype = wintypes.BOOL
     return user32

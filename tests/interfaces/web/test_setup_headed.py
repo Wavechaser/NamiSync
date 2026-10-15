@@ -450,6 +450,48 @@ def test_plan_again_trace_validator_handles_empty_host_case_and_overflow() -> No
         validate_trace_snapshot(overflow.snapshot(), {"task-52-53"})
 
 
+def test_browser_trace_bounds_repeated_diagnostics_but_preserves_event_overflow(tmp_path: Path) -> None:
+    from _frontend_test_support import _node_executable, run_node_probe
+    from _plan_again_trace import _BRIDGE_TRACE, TRACE_LIMIT
+
+    node = _node_executable()
+    assert node is not None, "Node.js is required for the ordinary browser trace witness"
+    probe = tmp_path / "trace.mjs"
+    probe.write_text(_BRIDGE_TRACE + r'''
+const trace = globalThis.__namiPlanAgainTrace;
+trace.begin("task-52-53");
+trace.record("button-event", "untrusted-enabled-current");
+trace.record("eligibility", "enabled");
+for (let i = 0; i < 200; i += 1) {
+  trace.record("eligibility", "ineligible");
+  trace.record("button-projection", "ineligible");
+}
+trace.record("dispatch-settle", "success");
+trace.record("eligibility", "enabled");
+trace.record("button-projection", "enabled");
+trace.end("task-52-53");
+trace.begin("task-53-54");
+for (let i = 0; i < 49; i += 1) trace.record("button-event", "untrusted-enabled-current");
+console.log(JSON.stringify(trace.snapshot()));
+''', encoding="utf-8")
+    result = run_node_probe((node, probe), timeout=10)
+    assert result.returncode == 0, result.stderr
+    snapshot = json.loads(result.stdout)
+    first = {"cases": {"task-52-53": snapshot["cases"]["task-52-53"]}}
+    validate_trace_snapshot(first, {"task-52-53"})
+    entries = first["cases"]["task-52-53"]["entries"]
+    assert [(entry["stage"], entry["value"]) for entry in entries] == [
+        ("button-event", "untrusted-enabled-current"), ("eligibility", "enabled"),
+        ("eligibility", "ineligible"), ("button-projection", "ineligible"),
+        ("dispatch-settle", "success"), ("eligibility", "enabled"),
+        ("button-projection", "enabled"),
+    ]
+    second = {"cases": {"task-53-54": snapshot["cases"]["task-53-54"]}}
+    assert len(second["cases"]["task-53-54"]["entries"]) == TRACE_LIMIT
+    with pytest.raises(AssertionError, match="case bounds"):
+        validate_trace_snapshot(second, {"task-53-54"})
+
+
 def test_plan_again_command_wrappers_delegate_once_and_preserve_results() -> None:
     from dataclasses import dataclass
     from _plan_again_trace import PlanAgainHostTrace, traced_plan_again_commands

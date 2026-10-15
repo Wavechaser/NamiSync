@@ -23,6 +23,62 @@ class _ExpiredElement(Exception):
     HResult = -2147220991
 
 
+@pytest.mark.parametrize("expires", [False, True])
+def test_foreground_wait_yields_and_never_delivers_ready_after_deadline(
+    monkeypatch: pytest.MonkeyPatch, expires: bool,
+) -> None:
+    class Event(list):
+        def __iadd__(self, callback):
+            self.append(callback)
+            return self
+
+    class Timer:
+        def __init__(self):
+            self.Tick = Event()
+            self.running = False
+            self.disposed = False
+
+        def Start(self):
+            self.running = True
+
+        def Stop(self):
+            self.running = False
+
+        def Dispose(self):
+            self.disposed = True
+
+    monkeypatch.setitem(sys.modules, "System.Windows.Forms", SimpleNamespace(Timer=Timer))
+    now = [10.0]
+    foreground = [99]
+    monkeypatch.setattr(native.time, "monotonic", lambda: now[0])
+    monkeypatch.setattr(native, "foreground_window_handle", lambda: foreground[0])
+    flashes = []
+    monkeypatch.setattr(native, "_user32", lambda: SimpleNamespace(
+        FlashWindow=lambda handle, state: flashes.append((handle, state)),
+    ))
+    activated, inputs, refusals, retained = [], [], [], []
+    native.wait_for_foreground(
+        42, activate=lambda: activated.append(True),
+        ready=lambda: inputs.append(True), refused=refusals.append, retained=retained,
+    )
+    timer = retained[0]
+    assert timer.running and activated == [True] and inputs == []
+    timer.Tick[0]()
+    assert activated == [True] and inputs == []
+    foreground[0] = 42
+    now[0] = 25.0 if expires else 24.9
+    timer.Tick[0]()
+    assert timer.disposed and not timer.running
+    assert flashes == [(42, True), (42, False)]
+    timer.Tick[0]()
+    if expires:
+        assert inputs == []
+        assert refusals == [{"reason": "foreground-deadline", "observedHandle": 42,
+                             "ownedHandle": 42}]
+    else:
+        assert inputs == [True] and refusals == []
+
+
 def test_installed_host_ready_exposure_is_explicit_test_only_opt_in() -> None:
     base = [
         "--data-dir",

@@ -61,6 +61,10 @@ globalThis.__namiPlanAgainTrace = (() => {
     try {
       if (phase === null || typeof stage !== "string" || typeof value !== "string") return;
       const item = cases[phase];
+      if (stage === "eligibility" || stage === "button-projection") {
+        const previous = item.entries.findLast((entry) => entry.stage === stage);
+        if (previous?.value === value) return;
+      }
       if (item.entries.length >= NAMI_PLAN_AGAIN_TRACE_LIMIT) {
         item.overflow = true;
         return;

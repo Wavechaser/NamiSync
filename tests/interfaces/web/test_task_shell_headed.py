@@ -16,6 +16,7 @@ import pytest
 import _task_shell_headed_child as child
 from _headed_evidence import EvidencePaths, EvidenceReader, require_host_final
 from _headed_native import (
+    FOREGROUND_GUIDANCE,
     clean_child_environment,
     close_window,
     require_absolute_local_test_root,
@@ -34,6 +35,52 @@ from _plan_again_trace import (
 
 
 _CHILD = Path(__file__).with_name("_task_shell_headed_child.py")
+
+
+def _require_task_shell_process_output(stdout: str, stderr: str) -> None:
+    lines = stdout.splitlines()
+    assert len(lines) <= 4 and all(line == FOREGROUND_GUIDANCE for line in lines), stdout
+    if stderr:
+        raise AssertionError(stderr)
+
+
+def test_foreground_recovery_guidance_does_not_poison_shell_receipt(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+) -> None:
+    import sys
+    from types import SimpleNamespace
+    import _headed_native as native
+
+    class Event(list):
+        def __iadd__(self, callback):
+            self.append(callback)
+            return self
+
+    timer = SimpleNamespace(Tick=Event(), Start=lambda: None,
+                            Stop=lambda: None, Dispose=lambda: None)
+    monkeypatch.setitem(sys.modules, "System.Windows.Forms",
+                        SimpleNamespace(Timer=lambda: timer))
+    foreground = [99]
+    monkeypatch.setattr(native, "foreground_window_handle", lambda: foreground[0])
+    monkeypatch.setattr(native, "_user32", lambda: SimpleNamespace(FlashWindow=lambda *_: None))
+    inputs, refusals = [], []
+    native.wait_for_foreground(
+        42, activate=lambda: None, ready=lambda: inputs.append(True),
+        refused=refusals.append, retained=[],
+    )
+    assert inputs == []
+    foreground[0] = 42
+    timer.Tick[0]()
+    assert inputs == [True] and refusals == []
+    streams = capsys.readouterr()
+    assert streams.out == FOREGROUND_GUIDANCE + "\n"
+    _require_task_shell_process_output(streams.out, streams.err)
+    with pytest.raises(AssertionError, match="unexpected error"):
+        _require_task_shell_process_output(streams.out, "unexpected error")
+    with pytest.raises(AssertionError, match="unexpected output"):
+        _require_task_shell_process_output("unexpected output\n", "")
+    with pytest.raises(AssertionError):
+        _require_task_shell_process_output(streams.out * 5, "")
 
 
 def _task_shell_evidence_paths(root: Path) -> tuple[Path, Path]:
@@ -559,9 +606,7 @@ def _run_task_shell_scenario(
     assert final["host_returned"] is True
     assert "post_ready_failure" not in final
     assert completed.returncode == 0, completed.stdout + completed.stderr
-    assert completed.stdout == ""
-    if completed.stderr:
-        raise AssertionError(completed.stderr)
+    _require_task_shell_process_output(completed.stdout, completed.stderr)
     assert initial["schema_version"] == 1
     assert initial["phase"] == "complete"
     assert initial["startup_errors"] == []

@@ -749,7 +749,7 @@ window.addEventListener("error", (event) => {
     firstPlanAgainError = error;
   }
   try {
-    await control("record", { plan_again_diagnostic: {
+    await control("record", { plan_again_preselection_diagnostic: {
       phase: "task-52-53",
       before: planAgainBefore,
       after: {
@@ -1298,9 +1298,9 @@ class _Recorder:
                 name: value for name, value in self._data.items()
                 if name in {"plan_again_browser_trace", "plan_again_host_trace"}
             }
-            plan_again_diagnostic = self._data["report"].get("plan_again_diagnostic")
+            plan_again_diagnostic = self._data["report"].get("plan_again_preselection_diagnostic")
             if plan_again_diagnostic is not None:
-                diagnostics["plan_again_diagnostic"] = plan_again_diagnostic
+                diagnostics["plan_again_preselection_diagnostic"] = plan_again_diagnostic
             self._publisher.publish_failure({"failure": failure, **diagnostics})
             self._initial = "failure"
 
@@ -1930,7 +1930,7 @@ def _drive_plan_confirmation(
     screenshot: Path,
 ) -> Callable[[BaseException, object | None], None]:
     from System import Action
-    from _headed_native import foreground_window_handle
+    from _headed_native import foreground_window_handle, wait_for_foreground
 
     failed = False
     last_driver_step = "start"
@@ -2164,6 +2164,7 @@ def _drive_plan_confirmation(
         ]
 
     def plan_context(index: int = 0) -> None:
+        nonlocal last_driver_step
         stages = ("shift", "shift-escape", "menu", "menu-escape")
         if index == len(stages):
             evaluate(wait_execute, after_execute, "wait_execute")
@@ -2184,7 +2185,11 @@ def _drive_plan_confirmation(
             last_plan_context_readiness = _bounded_plan_context_readiness(facts)
             if type(facts) is not dict or not facts or any(value is not True for value in facts.values()):
                 raise RuntimeError("Plan context input target is unavailable")
-            if foreground_window_handle() != int(native.Handle.ToInt64()):
+            observed_handle = foreground_window_handle()
+            if observed_handle != int(native.Handle.ToInt64()):
+                record_foreground({"reason": "foreground-changed",
+                                   "observedHandle": observed_handle,
+                                   "ownedHandle": int(native.Handle.ToInt64())})
                 raise RuntimeError("Plan context input window is not foreground")
             key, virtual_key = (("Escape", 27) if name.endswith("-escape")
                                 else ("F10", 121) if name == "shift" else ("ContextMenu", 93))
@@ -2201,7 +2206,21 @@ def _drive_plan_confirmation(
                 lambda _ack: plan_context(index + 1), "plan_context_ack_" + name,
             ), "plan_context_" + name)
 
-        evaluate(expression, send, "wait_plan_context_" + name)
+        def record_foreground(facts: dict[str, object]) -> None:
+            screenshot.with_name("plan-context-foreground-diagnostic.json").write_text(
+                json.dumps({"stage": name, **facts}, sort_keys=True), encoding="utf-8",
+            )
+
+        def refused(facts: dict[str, object]) -> None:
+            record_foreground(facts)
+            fail(RuntimeError("Plan context input foreground deadline expired"))
+
+        last_driver_step = "wait_plan_context_foreground_" + name
+        wait_for_foreground(
+            int(native.Handle.ToInt64()), activate=native.Activate,
+            ready=lambda: evaluate(expression, send, "wait_plan_context_" + name),
+            refused=refused, retained=retained,
+        )
 
     wait_execute = r"""
 (async () => {

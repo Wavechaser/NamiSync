@@ -615,6 +615,38 @@ def test_blocked_phase_accepts_preserved_receipts_after_close(tmp_path: Path) ->
     assert phase.finished_ready() is False
 
 
+def test_readiness_recorder_excludes_stale_replies_but_rejects_changed_identity(tmp_path: Path) -> None:
+    phase = child._ExecutionReviewPhase(tmp_path / "source", tmp_path / "target", branch="blocked")
+    task_id, session_id = "1" * 32, "2" * 32
+    phase.plan = {"task_id": task_id}
+    phase.execution = {"session_id": session_id}
+    phase.window = {"execution_revision": 2}
+    payload = SimpleNamespace(task_id=task_id, session_id=session_id, expected_execution_revision=2)
+    ready = {"task_id": task_id, "session_id": session_id, "execution_revision": 2,
+        "reason": "ready", "applicable_count": 1, "ready_count": 1,
+        "already_verified_count": 0, "attempted": False}
+    conflict = {**ready, "execution_revision": 3, "reason": "conflict",
+        "applicable_count": 0, "ready_count": 0}
+
+    phase.record("get_manual_verification_readiness", 1, 2, payload, conflict)
+    assert phase.readiness == [], "a supported stale read cannot become accepted readiness"
+    phase.window["execution_revision"] = 3
+    phase.record("get_manual_verification_readiness", 3, 4, payload, ready)
+    assert phase.readiness == [], "a current reply crossing a newer window cannot authorize a start"
+    for invalid in ({**conflict, "task_id": "9" * 32},
+                    {**conflict, "session_id": "9" * 32},
+                    {**conflict, "execution_revision": None},
+                    {**ready, "execution_revision": 3},
+                    []):
+        with pytest.raises(ValueError, match="original execution identity"):
+            phase.record("get_manual_verification_readiness", 5, 6, payload, invalid)
+    phase.window["execution_revision"] = 2
+    phase.record("get_manual_verification_readiness", 7, 8, payload, ready)
+    assert len(phase.readiness) == 1
+    assert phase.readiness[0]["execution_revision"] == 2
+    assert phase.readiness[0]["reason"] == "ready"
+
+
 def test_manual_observer_rejects_early_control_and_duplicate_start(tmp_path: Path) -> None:
     task_id = "1" * 32
     phase = child._ExecutionReviewPhase(tmp_path / "source", tmp_path / "target")
@@ -631,7 +663,8 @@ def test_manual_observer_rejects_early_control_and_duplicate_start(tmp_path: Pat
         )
     assert phase.worker_release.is_set() is False
     phase.window = {"execution_revision": 8}
-    phase.readiness.append({"reason": "ready", "ready_count": 1, "attempted": False})
+    phase.readiness.append({"reason": "ready", "ready_count": 1, "attempted": False,
+                            "execution_revision": 7})
     start_payload = SimpleNamespace(
         task_id=task_id, session_id="5" * 32,
         expected_execution_revision=8, command_id="8" * 32,
@@ -639,6 +672,10 @@ def test_manual_observer_rejects_early_control_and_duplicate_start(tmp_path: Pat
     start_result = SimpleNamespace(
         task_id=task_id, request_id="9" * 32, session_id="0" * 32,
     )
+    with pytest.raises(ValueError, match="current exact readiness"):
+        phase.record("start_manual_verification", 5, 6, start_payload, start_result)
+    assert phase.manual is None
+    phase.readiness[-1]["execution_revision"] = 8
     phase.record("start_manual_verification", 5, 6, start_payload, start_result)
     first_start = dict(phase.manual)
     with pytest.raises(ValueError, match="current exact readiness"):
@@ -717,6 +754,8 @@ def test_execution_review_evidence_ready_failure_final_and_privacy(tmp_path: Pat
     )
     capture.phase.exact.failure = "ValueError"
     capture.phase.exact.failure_command = "control_execution"
+    capture.phase.blocked.failure = "ValueError"
+    capture.phase.blocked.failure_command = "get_manual_verification_readiness"
     capture_diagnostic = capture.phase.capture_readiness_diagnostic()
     assert set(capture_diagnostic) == child._CAPTURE_READINESS_DIAGNOSTIC
     capture.fail("wait-review", "RuntimeError", capture_diagnostic)
@@ -726,7 +765,7 @@ def test_execution_review_evidence_ready_failure_final_and_privacy(tmp_path: Pat
         "diagnostic": capture_diagnostic,
         "phase_failure": {
             "exact": {"type": "ValueError", "command": "control_execution"},
-            "blocked": {"type": None, "command": None},
+            "blocked": {"type": "ValueError", "command": "get_manual_verification_readiness"},
         },
     }
 

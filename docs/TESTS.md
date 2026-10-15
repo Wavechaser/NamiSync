@@ -179,6 +179,16 @@ before sending input. A user focus change makes that attempt incomplete; it is
 not evidence that a gesture is disabled. Keep the failed receipt, restore any
 temporary window/cursor state and rerun after the interference ends. This does
 not require attendance for ordinary tests or probes that do not send input.
+Shell context-menu and execution input stages yield the UI thread while waiting
+up to 15 seconds for foreground, with one native activation attempt, a window
+flash and guidance to leave the test window in front. Recheck the focused/hit target after acquisition;
+expiry records the observed/owned handles and refusal reason and sends no input.
+Guidance uses stdout. The shell parent accepts at most four exact guidance lines
+(one for each context-menu stage); unexpected stdout or any stderr still fails.
+The optional Plan-again trace suppresses repeated identical eligibility/projection
+observations within each phase while retaining transitions and every event. Its
+48-entry bound and strict overflow rejection remain unchanged. The shell's
+Plan-again preselection diagnostic describes that earlier snapshot only.
 The transport folder-picker helper verifies the Unicode edit value and posts
 one confirmation. Its `dialog_closed` receipt describes only that observation;
 the fixture must separately verify the returned source/target paths. A delayed
