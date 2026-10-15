@@ -1900,6 +1900,17 @@ claim stays consumed through failure or cancellation. Readiness grants no
 authority and Start rechecks it. Linked, empty, already-verified, attempted and
 ineligible handoffs show guidance; busy or stale state needs a fresh read.
 
+On this pane, **Verify copied files** is primary and Refresh is secondary.
+Whole, selected and context-row Refresh ask for confirmation while the exact
+opportunity is ready or unresolved. The dialog explains that rescanning can
+make it unavailable even when files are unchanged, and that explicitly selected
+current-state verification remains possible afterward. Cancel is the default
+and starts no scan. Confirm submits the captured scope only if its task,
+publication, view and original execution still match; stale consent asks for a
+fresh choice. A conclusively consumed or unavailable exact opportunity needs no
+warning, and standalone Inventory retains immediate Refresh. Superseded guidance
+describes evidence no longer being current, not a claim that file contents changed.
+
 For a normally completed original execution, only incomplete, unrecorded,
 superseded or settlement-diverged handoff evidence can offer the clearly labelled
 ordinary **Verify current state** fallback. It uses the current nonempty

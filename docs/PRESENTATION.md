@@ -376,6 +376,16 @@ ordinary results and stored ledger evidence have separate labels and generations
 a new zero-item result does not fall back to old item facts. Returning to Plan
 retains original details, selection, follow and viewport custody.
 
+Refresh retains its complete explicit scan scope and current activity request,
+including recovery from a displayed prior publication. In a sync Verify pane,
+ready or unresolved exact readiness requires confirmation before scan submission.
+Opening or canceling the dialog sends no scan and retires no read. Confirm
+rechecks the captured task/review, navigation, current association, publication,
+view, original execution and node against normal admission; it neither retargets
+the active row nor replays a command. Conclusive consumed/unavailable readiness
+and standalone Inventory need no warning. This discloses scan supersession;
+it does not preserve or reinterpret execution evidence across scans.
+
 One existing view revision fences selection, windows and details. A stale request
 or revision changes nothing; selection changes advance the revision. Selection
 requires a current released, clean publication and cannot race admission or a

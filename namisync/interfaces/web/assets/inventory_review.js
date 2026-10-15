@@ -118,6 +118,7 @@ export function createInventoryReviewPanel(callbacks) {
   const baseline = button("Baseline", "inventory-baseline");
   const verify = button("Verify", "inventory-verify");
   const manualVerify = button("Verify copied files", "verify-copied-files");
+  manualVerify.classList.add("nami-button--primary");
   const rebaseline = button("Rebaseline", "inventory-rebaseline");
   verify.classList.add("nami-button--primary");
   const pause = button("Pause", "inventory-pause");
@@ -376,7 +377,7 @@ export function createInventoryReviewPanel(callbacks) {
   resizeObserver.observe(list);
   reload.addEventListener("click", () => { if (task !== null) callbacks.onReload(task); });
   refresh.addEventListener("click", () => {
-    if (task !== null && current !== null && !blocked()) callbacks.onRefresh(current, null);
+    if (task !== null && current !== null && !blocked()) callbacks.onRefresh(current, null, refresh);
   });
   check.addEventListener("click", () => {
     if (task === null || check.disabled) return;
@@ -386,7 +387,7 @@ export function createInventoryReviewPanel(callbacks) {
   refreshSelected.addEventListener("click", () => {
     updateRefreshSelected();
     const row = activeRow();
-    if (!refreshSelected.disabled) callbacks.onRefresh(current, row.node_id);
+    if (!refreshSelected.disabled) callbacks.onRefresh(current, row.node_id, refreshSelected);
   });
   for (const [control, mode] of [[baseline, "baseline"], [verify, "verify"], [rebaseline, "rebaseline"]]) {
     control.addEventListener("click", () => {
@@ -533,7 +534,7 @@ export function createInventoryReviewPanel(callbacks) {
         }
         if (row.warning === null && !actionBlocked) {
           actions.push({ id: "row-refresh", label: "Refresh selected",
-            run: () => callbacks.onRefresh(review, nodeId) });
+            run: () => callbacks.onRefresh(review, nodeId, rowElement) });
           if (row.presence === "missing" && !row.acknowledged
               && review.summary.request_id === owner.requestId && !owner.inventoryViewUnconfirmed) {
             actions.push({ id: "row-acknowledge", label: "Acknowledge missing",
@@ -717,6 +718,7 @@ export function createInventoryReviewPanel(callbacks) {
     diagnostics.hidden = review === null || !detailsExpanded;
     const available = review !== null;
     const syncTask = value.taskKind === "sync-plan" && value.executionStarted;
+    refresh.classList.toggle("nami-button--primary", !syncTask);
     switcher.ariaLabel = syncTask ? "Task view" : "Task type";
     renderText(planPane, syncTask ? "Plan" : "Sync");
     renderText(verifyPane, syncTask ? "Verify" : "Integrity");
@@ -781,7 +783,7 @@ export function createInventoryReviewPanel(callbacks) {
       empty: "This execution copied no files that need manual verification.",
       incomplete: "Copied-file handoff is incomplete. Verify current state is available when the current selection is usable.",
       unrecorded: "Copied-file evidence was not recorded. Verify current state is available when the current selection is usable.",
-      superseded: "The inventory changed after execution. Verify current state is available for the current selection.",
+      superseded: "Original execution evidence is no longer current, for example after a rescan. Select files to verify their current state.",
       "settlement-diverged": "Execution settlement and recorded evidence differ. Verify current state is available for the current selection.",
       "execution-ineligible": "This execution is not eligible for manual verification.",
       busy: "Another task activity is still in progress. Wait for it to finish, then reload this view.",

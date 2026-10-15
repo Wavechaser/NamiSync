@@ -203,8 +203,12 @@ explicit, reviewable and regression-backed.
 - Index bounded manual/ordinary result windows once while retaining detail
   generation and operation binding. Remove repeated window self-validation
   without changing result ownership or adding a timing threshold.
-- The approved Refresh warning and final read-only ablation study remain pending;
-  the execution-evidence contract stays unchanged.
+- Make Verify copied files primary and warn before whole, selected or context-row
+  Refresh can forfeit exact verification, including when readiness is unresolved.
+  Cancel leaves the task and reads untouched; Confirm submits the captured scope
+  once after fresh ownership/revision checks. Superseded wording describes stale
+  evidence rather than changed file contents. The execution-evidence contract
+  stays unchanged; the final read-only ablation study remains pending.
 - Correct the earlier shell diagnosis: all eight untraced D2 shared01/shared02
   and hardening native09/native10 failures are foreground refusals after Plan
   again succeeded. The Task 52 snapshot preceded Task 53 selection; native11
@@ -215,7 +219,10 @@ explicit, reviewable and regression-backed.
 - Rebuild and independently review the table candidate after harness/readiness
   correction. All affected installed Inventory, execution, shell and gallery
   cases pass, alongside 6,070 ordinary tests and 12 import contracts. Retain
-  failed receipts and the recovery branch; Refresh and final ablation remain open.
+  failed receipts and the recovery branch. Both native execution sizes also
+  prove Refresh Cancel has no scan effect and Confirm submits exactly once.
+  The final Refresh candidate passes all nine installed cases, 6,073 ordinary
+  tests with four skips, and all 12 import contracts.
 
 #### Align desktop review surfaces and recovery (2026-10-05 – 2026-10-13)
 

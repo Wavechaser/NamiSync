@@ -21,6 +21,11 @@ class ElementFake {
     this.classList = {
       add: (...values) => { this.className = [...new Set([...this.className.split(" "), ...values])].join(" "); },
       contains: (value) => this.className.split(" ").includes(value),
+      toggle: (value, enabled) => {
+        const values = new Set(this.className.split(" "));
+        if (enabled) values.add(value); else values.delete(value);
+        this.className = [...values].join(" ");
+      },
     };
   }
   append(...values) {
@@ -196,7 +201,7 @@ assert.equal(progressTrack.children[0].style.values.get("--nami-progress-value")
 task.snapshot = null;
 pane.render(task);
 action("inventory-refresh").click();
-assert.deepEqual(refreshes.at(-1), [review, null]);
+assert.deepEqual(refreshes.at(-1), [review, null, action("inventory-refresh")]);
 assert.equal(rowElements().length, fixture.views.default.window.rows.length);
 assert.deepEqual(walk(pane.element).filter((value) => value.dataset.nodeId !== undefined), rowElements(),
   "data-node-id uniquely identifies Inventory rows");
@@ -391,7 +396,7 @@ review.detail = { row: real, state: "current", response: fixture.detail };
 pane.render(task);
 rowElements().find((value) => value.dataset.nodeId === real.node_id).click();
 action("inventory-refresh-selected").click();
-assert.deepEqual(refreshes.at(-1), [review, real.node_id]);
+assert.deepEqual(refreshes.at(-1), [review, real.node_id, action("inventory-refresh-selected")]);
 const detail = find((value) => value.ariaLabel === "Inventory item details");
 const pathFact = () => {
   const body = detail.children.find((value) => value.tagName === "DL");
@@ -954,7 +959,7 @@ assert.deepEqual(menuCalls.at(-1), ["detail", menuReview, missingRow.node_id]);
 assert.equal(menuWalk().find((value) => value.classList.contains("nami-plan-review__diagnostics")).hidden, false);
 menuPointer(missingRow);
 menuPopup.children[1].click();
-assert.deepEqual(menuCalls.at(-1), ["refresh", menuReview, missingRow.node_id]);
+assert.deepEqual(menuCalls.at(-1), ["refresh", menuReview, missingRow.node_id, menuRow(missingRow)]);
 menuPointer(menuFolder);
 assert.equal(menuPopup.children.some((value) => value.dataset.action === "row-acknowledge"), false,
   "missing descendant counts do not authorize context acknowledgement of a present folder");
@@ -1308,5 +1313,15 @@ alignedReview.window = {...fixture.views.maximum.window,
 alignedPane.render(alignedTask);
 assert.equal(walk(alignedPane.element).filter(value => Object.hasOwn(value.dataset, "manualVerificationState")).length,
   costItems.length);
+const alignedAction = (name) => walk(alignedPane.element).find(value => value.dataset.action === name);
+assert.equal(alignedAction("inventory-refresh").classList.contains("nami-button--primary"), false);
+assert.equal(alignedAction("verify-copied-files").classList.contains("nami-button--primary"), true);
+alignedTask.manualReadiness = {reason:"superseded"};
+alignedPane.render(alignedTask);
+assert.match(walk(alignedPane.element).find(value => Object.hasOwn(value.dataset, "manualReadiness")).textContent,
+  /Original execution evidence is no longer current/);
+alignedTask.taskKind = "inventory";
+alignedPane.render(alignedTask);
+assert.equal(alignedAction("inventory-refresh").classList.contains("nami-button--primary"), true);
 alignedPane.dispose();
 process.stdout.write("ok\n");

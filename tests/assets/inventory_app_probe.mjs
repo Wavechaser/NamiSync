@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { assertSameNode } from "./fake_dom_assertions.mjs";
 
 class ElementFake {
   constructor(tag) {
@@ -588,7 +589,9 @@ const syncReview = { ...review, summary: { ...review.summary, task_id: syncTaskI
 syncTask.inventoryReview = syncReview;
 globalThis.inventoryCallbacks.onPaneChange(syncTask, "verify");
 await tick();
-await app.runInventoryAction(syncReview, "refresh", null);
+await app.runInventoryAction(syncReview, "refresh", null, new HTMLElement("button"));
+globalThis.inventoryConfirmations.at(-1).request.onConfirm();
+await tick();
 assert.equal(syncTask.taskKind, "sync-plan", "ordinary auxiliary Refresh keeps the sync task kind");
 assert.equal(syncTask.planRequestId, syncPlanRequestId,
   "ordinary auxiliary Refresh keeps the original Plan request");
@@ -640,7 +643,9 @@ await tick();
 app.switchTaskPane(executionTask, "verify");
 await tick();
 globalThis.inventoryHarness.listTasks = () => Promise.reject(new Error("list transport unavailable"));
-await app.runInventoryAction(executionTask.inventoryReview, "refresh", null);
+await app.runInventoryAction(executionTask.inventoryReview, "refresh", null, new HTMLElement("button"));
+globalThis.inventoryConfirmations.at(-1).request.onConfirm();
+await tick();
 assert.deepEqual(calls.findLast(([name]) => name === "refresh").slice(1, 3),
   [executionTaskId, executionRequestId],
   "immediate Refresh uses the accepted execution request before list recovery");
@@ -1349,4 +1354,96 @@ retiredOverlayRead.reject(new Error("retired overlay unavailable"));
 await retiredOverlayWork; await tick();
 assert.equal(rowReads.length, retiredOverlayReads, "retired navigation cannot resurrect invalidated overlay demand");
 assert.equal(alignedReview.window.integrity.revision, retiredOverlayRevision);
+
+// Refresh disclosure owns one captured scan, without retiring reads on Cancel.
+const refreshOwner = await readinessOwner(201);
+app.switchTaskPane(refreshOwner, "verify"); await tick();
+const refreshReview = refreshOwner.inventoryReview;
+const refreshInvoker = new HTMLElement("button");
+const refreshCount = () => calls.filter(([name]) => name === "refresh").length;
+const refreshDialogs = () => globalThis.inventoryConfirmations.filter(({factory}) => factory[1]?.id === "refresh-confirmation");
+const setRefreshReady = (reason = "ready") => {
+  refreshOwner.manualReadiness = readyResult(refreshOwner,
+    refreshOwner.originalExecutionFact.execution.execution_revision, reason);
+};
+const openRefresh = async (node = null) => {
+  await app.runInventoryAction(refreshReview, "refresh", node, refreshInvoker);
+  return refreshDialogs().at(-1).request;
+};
+refuseRefresh = true;
+setRefreshReady();
+const initialRefreshCount = refreshCount();
+const readCustody = [refreshReview.windowRequestRevision, refreshReview.detailRevision, refreshReview.detail];
+const callsBeforeChoice = calls.length;
+const cancelledRefresh = await openRefresh();
+assertSameNode(cancelledRefresh.returnFocus, refreshInvoker);
+assert.equal(cancelledRefresh.countDetail, "Entire location");
+assert.equal(refreshCount(), initialRefreshCount, "opening disclosure starts no scan");
+cancelledRefresh.onCancel();
+cancelledRefresh.onConfirm(); await tick();
+assert.equal(refreshCount(), initialRefreshCount, "Cancel retires the attempt, including late callbacks");
+assert.equal(calls.length, callsBeforeChoice, "opening and Cancel emit no bridge work");
+assert.deepEqual([refreshReview.windowRequestRevision, refreshReview.detailRevision, refreshReview.detail], readCustody,
+  "opening and Cancel preserve window and detail read custody");
+const capturedNode = refreshReview.window.rows.find(row => row.warning === null).node_id;
+const capturedRequest = refreshOwner.requestId;
+const capturedRevision = refreshReview.summary.view_revision;
+const confirmedRefresh = await openRefresh(capturedNode);
+confirmedRefresh.onConfirm(); confirmedRefresh.onConfirm(); await tick();
+assert.equal(refreshCount(), initialRefreshCount + 1, "Confirm submits once");
+assert.deepEqual(calls.findLast(([name]) => name === "refresh").slice(1, 3), [refreshOwner.taskId, capturedRequest]);
+assert.deepEqual(calls.findLast(([name]) => name === "refresh").slice(4), [capturedRevision, capturedNode]);
+
+for (const unresolved of [null, "busy", "conflict", "future-reason", "stale"]) {
+  setRefreshReady(unresolved === "stale" ? "superseded" : unresolved);
+  if (unresolved === null) refreshOwner.manualReadiness = null;
+  if (unresolved === "stale") refreshOwner.manualReadiness.execution_revision -= 1;
+  const count = refreshDialogs().length;
+  const choice = await openRefresh();
+  assert.equal(refreshDialogs().length, count + 1, `${unresolved}: unresolved readiness warns`);
+  choice.onCancel();
+}
+for (const reason of ["attempted", "linked-execution", "already-verified", "empty",
+  "execution-ineligible", "incomplete", "unrecorded", "superseded", "settlement-diverged"]) {
+  setRefreshReady(reason);
+  refreshOwner.manualReadinessLoading = true;
+  const count = refreshDialogs().length, scans = refreshCount();
+  await app.runInventoryAction(refreshReview, "refresh", null, refreshInvoker);
+  assert.equal(refreshDialogs().length, count, `${reason}: matching conclusive readiness needs no prompt`);
+  assert.equal(refreshCount(), scans + 1);
+}
+refreshOwner.manualReadinessLoading = false;
+setRefreshReady();
+refreshOwner.manualReadiness.attempted = true;
+const consumedDialogs = refreshDialogs().length;
+await app.runInventoryAction(refreshReview, "refresh", null, refreshInvoker);
+assert.equal(refreshDialogs().length, consumedDialogs, "consumed claim suppresses disclosure");
+setRefreshReady();
+for (const [target, key, changed] of [
+  [refreshOwner, "requestId", "changed-request"], [refreshOwner, "sessionId", "changed-session"],
+  [refreshReview.summary, "request_id", "changed-publication"],
+  [refreshReview.summary, "view_revision", refreshReview.summary.view_revision + 1],
+  [refreshOwner, "executionSessionId", "changed-execution"],
+  [refreshOwner.originalExecutionFact.execution, "execution_revision", 100],
+  [refreshOwner, "sessionReleased", false], [refreshOwner, "closePending", true],
+]) {
+  const choice = await openRefresh(), before = refreshCount(), previous = target[key];
+  target[key] = changed; choice.onConfirm(); await tick(); target[key] = previous;
+  assert.equal(refreshCount(), before, `${key}: stale confirmation starts nothing`);
+  assert.equal(refreshOwner.inventoryAction, null);
+}
+const lostNodeChoice = await openRefresh(capturedNode);
+const previousRows = refreshReview.window.rows, previousDetail = refreshReview.detail;
+refreshReview.window.rows = previousRows.filter(row => row.node_id !== capturedNode);
+refreshReview.detail = null;
+const scansBeforeLostNode = refreshCount();
+lostNodeChoice.onConfirm(); await tick();
+assert.equal(refreshCount(), scansBeforeLostNode, "a lost scoped node cannot retarget Refresh");
+refreshReview.window.rows = previousRows; refreshReview.detail = previousDetail;
+const staleNavigation = await openRefresh();
+app.showSettings(); app.selectTask(refreshOwner.taskId); await tick();
+const scansBeforeNavigation = refreshCount();
+staleNavigation.onConfirm(); await tick();
+assert.equal(refreshCount(), scansBeforeNavigation, "leaving and returning retires confirmation");
+refuseRefresh = false;
 process.stdout.write("ok\n");

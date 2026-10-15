@@ -49,17 +49,23 @@ foreground refusals in native01. The shell's page acknowledgement expired
 before the new foreground deadline; its two native waits are corrected, with
 38 owning ordinary passes and installed shell default04/larger05 passes.
 The extra Alt key-up and foreground-refused attempts remain retained.
-The harness correction is committed as `c6dc0a0`. Fresh table review approves
-the frozen implementation and behavior docs; all named table gates are closed.
-Root is committing this atomic outcome, then releasing Refresh implementation
-from `refresh-design-20261016.md` after revalidating its recorded seams. Root
-owns subject/delivery docs. The prior handoff and both recovery refs remain preserved.
+The harness correction is committed as `c6dc0a0`, table alignment as `a594b3c`.
+All named table gates are closed. Refresh is now implemented and frozen in
+`refresh-builder-freeze-20261016-01.json`: exact Verify is primary, warned scans
+retain captured scope, Cancel leaves reads/task untouched, and Confirm submits
+once after current ownership checks. Focused06 passes 26; native01 passes all
+nine cases, ordinary01 passes 6,073 with four skips, and all 12 import contracts
+hold. Fresh source/native review has no findings; final delivery review precedes
+the atomic Refresh commit. Next run the approved read-only ablation study, then
+final documentation and fast-forward integration. Root owns subject/delivery docs.
+`rebuild-recovery-accounting-20261016.json` accounts all 48 saved path entries;
+the prior handoff, recovery refs and five pre-existing stashes remain preserved.
 
 Prior Inventory/gallery/ordinary evidence remains recorded in M1_PLAN and must
 be reused only where all producer, checker and driver dependencies remain
 unchanged. Announce native-input runs; retain foreground/focus/hit guards. No gate
-waiver is authorized. Refresh verification, final integration and the ablation
-study remain outstanding; the table's ordinary gate is complete.
+waiver is authorized. Final integration and the ablation study remain outstanding;
+Refresh and table verification are complete.
 
 Root owns delivery docs and integration; builders must not overlap shared files
 or commit before independent review. M1-12, release, DOC-2, push/PR and backend

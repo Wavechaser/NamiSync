@@ -75,8 +75,8 @@ sandbox run encountered native/path and package-build access failures and is
 retained without an acceptance claim. The user stopped work on 2026-10-15
 for separate shell review and approved resumption on 2026-10-16. The table candidate is preserved on disposable
 recovery branch `codex/wip-20261015-1621-verify-table`, based on `47a4bcae`;
-it is not a mergeable delivery. Refresh implementation and the final ablation
-study remain pending. Rebuild reviewed work into coherent verified commits;
+it is not a mergeable delivery. Table and Refresh acceptance are recorded below;
+the final ablation study remains pending. Rebuild reviewed work into coherent verified commits;
 never merge or cherry-pick the recovery commit as-is.
 
 Saved table-candidate evidence: Inventory native08 and four gallery cases native09 pass;
@@ -219,8 +219,22 @@ execution02 both sizes, shell04 default and shell05 larger; ordinary01 has
 6,070 passes/four skips, with the later isolated harness change covered by its
 38 owning cases; all 12 import contracts hold. These receipts use the
 `table-rebuild-` prefix under the evidence root. `table-rebuild-review-20261016-01.md`
-records source/install identities and final approval. Refresh confirmation and
-the read-only ablation study are next; recovery refs remain until full accounting.
+records source/install identities and final approval. Table commit: `a594b3c`.
+Recovery refs remain until full accounting.
+
+Refresh consequence UX is implemented on that predecessor, with readiness
+already delivered in `b891285`. The existing dialog discloses possible exact
+verification loss before whole/selected/context scans while readiness is ready
+or unresolved; Cancel emits no bridge work, and Confirm retains captured scope,
+normal admission, current association and original-execution fences. Current
+conclusive unavailability and standalone Inventory avoid the warning. Exact
+Verify is primary and supersession copy describes evidence currency.
+Focused06 passes 26 cases; `refresh-native-20261016-01` passes all nine affected
+installed cases, including trusted Cancel/Confirm and zero/one Refresh submissions
+at both execution sizes. `refresh-ordinary-20261016-01` passes 6,073 cases with
+four skips, and all 12 import contracts hold. The six-path source freeze and
+`refresh-review-20261016.md` bind source, producer, checker and installed identities.
+Only final review/document closure, integration and the read-only ablation remain.
 
 ### M1-10 delivered register — 2026-10-13–14
 

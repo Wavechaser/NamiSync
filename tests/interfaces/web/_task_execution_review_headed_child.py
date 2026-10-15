@@ -44,6 +44,7 @@ _ACTIONS = frozenset({
     "exactReadinessVisible", "manualResultVisible", "manualRowVisible",
     "fallbackVisible", "ordinaryResultVisible", "ordinaryRowVisible",
     "resultsSeparated", "closedBoth",
+    "refreshCancelledWithoutScan", "refreshConfirmedOnce", "refreshNativeTrusted",
 })
 _WAIT_REVIEW_DIAGNOSTIC = frozenset({
     "stageExecuteReady", "stageCaptureReady", "nativeConfirmed",
@@ -83,6 +84,7 @@ _SELECTION_TIMEOUT_DOM_BOOLS = frozenset({
 _BLOCKED_STAGES = frozenset({
     "exact-close", "blocked-execution", "blocked-execution-release", "blocked-verify-pane",
     "blocked-initial-readiness", "blocked-refresh", "blocked-handoff",
+    "refresh-cancel-ready", "refresh-confirm-ready",
     "blocked-fallback-control", "blocked-row", "blocked-checkbox", "selection-ready",
 })
 _SCROLL_DIAGNOSTIC_POINTS = frozenset({
@@ -135,6 +137,7 @@ class _ExecutionReviewPhase:
         self.readiness: list[dict[str, object]] = []
         self.manual: dict[str, object] | None = None
         self.refresh: dict[str, object] | None = None
+        self.refresh_admissions = 0
         self.selection: dict[str, object] | None = None
         self.ordinary: dict[str, object] | None = None
         self.controls: list[dict[str, object]] = []
@@ -235,6 +238,8 @@ class _ExecutionReviewPhase:
     def _record_admission_locked(self, name: str, admitted: int, payload: object) -> None:
         if self.plan is None or getattr(payload, "task_id", None) != self.plan["task_id"]:
             return
+        if name == "refresh_inventory":
+            self.refresh_admissions += 1
         if name == "mutate_plan_highlight" and self.highlight_mutation is None:
             self.highlight_mutation = {
                 "admitted": admitted, "completed": None,
@@ -807,6 +812,9 @@ class _ExecutionReviewPhase:
 
     def snapshot(self) -> dict[str, object]:
         with self.lock:
+            task = next((item for item in self.registry.list_tasks().tasks
+                         if self.plan is not None and item.task_id == self.plan["task_id"]), None) \
+                if self.registry is not None else None
             return deepcopy({
                 "plan": self.plan, "execution": self.execution, "release": self.release,
                 "window": self.window, "detail": self.detail,
@@ -817,6 +825,11 @@ class _ExecutionReviewPhase:
                 "inventory_window": self.inventory_window,
                 "readiness": self.readiness,
                 "manual": self.manual, "refresh": self.refresh, "selection": self.selection,
+                "refresh_admissions": self.refresh_admissions,
+                "current_association": None if task is None else {
+                    "task_id": task.task_id, "request_id": task.request_id,
+                    "session_id": task.session_id,
+                },
                 "ordinary": self.ordinary, "controls": self.controls,
                 "auxiliary_releases": self.auxiliary_releases,
                 "close": self.close, "branch": self.branch,
@@ -1309,7 +1322,57 @@ _PAGE = r"""
   }, 'blocked initial exact readiness');
   window.__executionReviewBlockedStage = 'blocked-refresh';
   const refresh = await until(() => usable(blockedInventory, 'inventory-refresh'), 'blocked refresh');
+  const beforeRefreshChoice = (await control()).blocked;
+  if (beforeRefreshChoice.refresh_admissions !== 0) throw new Error('Refresh submitted before choice');
+  const refreshInputs = {};
+  const chooseRefresh = async (choice) => {
+    const dialog = await until(() => {
+      const value = document.getElementById('refresh-confirmation');
+      return value?.open === true ? value : null;
+    }, 'Refresh warning');
+    const button = dialog.querySelector(choice === 'cancel' ? '[data-cancel-execution]' : '[data-confirm-execution]');
+    if (!(button instanceof HTMLButtonElement)) throw new Error('Refresh choice missing');
+    if (document.activeElement !== dialog.querySelector('[data-cancel-execution]')) {
+      throw new Error('Refresh warning did not focus Cancel');
+    }
+    const input = {down:false, up:false, click:false};
+    refreshInputs[choice] = input;
+    button.addEventListener('mousedown', event => { input.down ||= event.isTrusted; }, {once:true});
+    button.addEventListener('mouseup', event => { input.up ||= event.isTrusted; }, {once:true});
+    button.addEventListener('click', event => { input.click ||= event.isTrusted; }, {once:true});
+    button.focus();
+    window.__executionReviewRefreshTarget = () => {
+      const bounds = button.getBoundingClientRect();
+      const point = {x:(bounds.left+bounds.right)/2, y:(bounds.top+bounds.bottom)/2};
+      if (!dialog.open || !button.isConnected || button.disabled || !document.hasFocus()
+          || document.activeElement !== button || bounds.width <= 0 || bounds.height <= 0
+          || point.x < 0 || point.y < 0 || point.x >= innerWidth || point.y >= innerHeight
+          || document.elementFromPoint(point.x, point.y) !== button) {
+        throw new Error('Refresh choice target changed');
+      }
+      return point;
+    };
+    window.__executionReviewBlockedStage = `refresh-${choice}-ready`;
+    window.__executionReviewStage = `refresh-${choice}-ready`;
+    await until(() => window.__executionReviewRefreshChoiceAck === choice, 'native Refresh choice');
+    await until(() => input.down && input.up && input.click, 'trusted Refresh choice');
+    await until(() => !dialog.open, 'Refresh warning exit');
+  };
   refresh.click();
+  await chooseRefresh('cancel');
+  const afterRefreshCancel = (await control()).blocked;
+  const refreshCancelledWithoutScan = afterRefreshCancel.refresh_admissions === 0
+    && JSON.stringify(beforeRefreshChoice.current_association) === JSON.stringify(afterRefreshCancel.current_association)
+    && afterRefreshCancel.readiness.at(-1)?.reason === 'ready'
+    && usable(blockedInventory, 'verify-copied-files') !== null
+    && document.activeElement === refresh;
+  if (!refreshCancelledWithoutScan) throw new Error('Refresh Cancel changed the task or exact opportunity');
+  refresh.click();
+  await chooseRefresh('confirm');
+  await until(async () => (await control()).blocked.refresh_admissions === 1, 'Refresh admission');
+  const refreshConfirmedOnce = (await control()).blocked.refresh_admissions === 1;
+  const refreshNativeTrusted = Object.values(refreshInputs).every(input => input.down && input.up && input.click);
+  if (!refreshConfirmedOnce) throw new Error('Refresh Confirm did not submit once');
   window.__executionReviewBlockedStage = 'blocked-handoff';
   await until(async () => {
     const value = (await control()).blocked;
@@ -1420,6 +1483,7 @@ _PAGE = r"""
       exactReadinessVisible, manualResultVisible,
       manualRowVisible, fallbackVisible, ordinaryResultVisible,
       ordinaryRowVisible, resultsSeparated, closedBoth,
+      refreshCancelledWithoutScan, refreshConfirmedOnce, refreshNativeTrusted,
     },
   };
 })()
@@ -1625,8 +1689,52 @@ def _drive(window: object, phase: _ExecutionReviewJourney, recorder: _Recorder, 
         if value is not True:
             raise RuntimeError("capture acknowledgement failed")
         phase.acknowledge_capture()
-        cdp.evaluate(wait_selection, select_fallback, "wait-selection")
+        wait_refresh_choice("cancel")
         complete_if_ready()
+
+    def wait_refresh_choice(choice: str) -> None:
+        def ready(value: object) -> None:
+            if value is not True:
+                raise RuntimeError("Refresh native stage did not become ready")
+            owned_handle = int(native.Handle.ToInt64())
+            def refused(facts: dict[str, object]) -> None:
+                recorder.driver.with_name(f"refresh-{choice}-foreground-diagnostic.json").write_text(
+                    json.dumps(facts, sort_keys=True), encoding="utf-8",
+                )
+                fail(RuntimeError("Refresh foreground deadline expired"),
+                     None, f"refresh-{choice}-foreground", "foreground")
+            def dispatch(point: object) -> None:
+                if (type(point) is not dict or set(point) != {"x", "y"}
+                        or foreground_window_handle() != owned_handle):
+                    raise RuntimeError("Refresh native target is unavailable")
+                cdp.call("Input.dispatchMouseEvent", {
+                    "type": "mousePressed", "button": "left", "buttons": 1,
+                    "clickCount": 1, **point,
+                }, lambda _v: cdp.call("Input.dispatchMouseEvent", {
+                    "type": "mouseReleased", "button": "left", "buttons": 0,
+                    "clickCount": 1, **point,
+                }, clicked, f"refresh-{choice}-up"), f"refresh-{choice}-down")
+            wait_for_foreground(
+                owned_handle, activate=native.Activate,
+                ready=lambda: cdp.evaluate("window.__executionReviewRefreshTarget()",
+                                           dispatch, f"refresh-{choice}-target"),
+                refused=refused, retained=retained,
+            )
+        def clicked(_value: object) -> None:
+            def next_choice(_value: object) -> None:
+                if choice == "cancel":
+                    wait_refresh_choice("confirm")
+                else:
+                    cdp.evaluate(wait_selection, select_fallback, "wait-selection")
+            cdp.evaluate(f"window.__executionReviewRefreshChoiceAck='{choice}';true",
+                         next_choice, f"refresh-{choice}-ack")
+        cdp.evaluate(f"""(async () => {{
+          for (let i = 0; i < 1200; i += 1) {{
+            if (window.__executionReviewStage === 'refresh-{choice}-ready') return true;
+            await new Promise(resolve => setTimeout(resolve, 25));
+          }}
+          return false;
+        }})()""", ready, f"wait-refresh-{choice}")
 
     def selection_confirmed(_value: object) -> None:
         cdp.evaluate("window.__executionReviewSelectionConfirmed=true;true", lambda _v: None,

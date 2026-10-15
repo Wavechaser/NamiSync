@@ -548,6 +548,19 @@ def test_phase_rejects_early_and_mismatched_current_detail(tmp_path: Path) -> No
         phase.record("get_execution_detail", 10, 11, SimpleNamespace(task_id=task_id, operation_id="7" * 32, expected_execution_revision=8), {"disposition": "current", "operation_id": "7" * 32, "execution_revision": 8})
 
 
+def test_refresh_submission_is_counted_before_a_failed_handler(tmp_path: Path) -> None:
+    phase = child._ExecutionReviewPhase(tmp_path / "source", tmp_path / "target", branch="blocked")
+    phase.plan = {"task_id": "1" * 32}
+    def refused(_payload: object) -> object:
+        raise RuntimeError("handler refused")
+    observed = phase._observe("refresh_inventory", refused)
+    assert phase.snapshot()["refresh_admissions"] == 0
+    with pytest.raises(RuntimeError, match="handler refused"):
+        observed(SimpleNamespace(task_id="1" * 32))
+    assert phase.snapshot()["refresh_admissions"] == 1
+    assert phase.refresh is None
+
+
 def test_blocked_phase_accepts_preserved_receipts_after_close(tmp_path: Path) -> None:
     from namisync.dispatcher import SessionNotFound
 
@@ -819,6 +832,7 @@ def test_installed_task_execution_review_real_copy_and_capture(
     assert exact["manual"]["readiness"]["attempted"] is False
     assert exact["manual"]["session_id"] == exact["inventory_window"]["manual_session_id"]
     assert blocked["readiness"][-1]["reason"] == "superseded"
+    assert blocked["refresh_admissions"] == 1
     assert blocked["selection"]["request_id"] == blocked["refresh"]["request_id"]
     assert blocked["selection"]["selected_file_count"] == 1
     assert blocked["ordinary"]["session_id"] == blocked["inventory_window"]["integrity_session_id"]

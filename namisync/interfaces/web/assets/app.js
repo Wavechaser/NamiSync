@@ -274,7 +274,7 @@ const panel = createWorkPanel({
     void loadInventoryReview(task, true);
     if (task.taskKind === "sync-plan") void loadManualReadiness(task);
   },
-  onRefresh: (review, nodeId) => { void runInventoryAction(review, "refresh", nodeId); },
+  onRefresh: (review, nodeId, returnFocus) => { void runInventoryAction(review, "refresh", nodeId, returnFocus); },
   onVisibility: (review, action, nodeId) => { void runInventoryAction(review, action, nodeId); },
   onSelect: (review, nodeId, selected) => { void changeInventorySelection(review, nodeId, selected); },
   onHighlightedSelect: (review, selected) => { void changeInventorySelection(review, null, selected, true); },
@@ -305,6 +305,14 @@ const rebaselineConfirmation = createExecutionConfirmation([app, themeOptions], 
     + (detail === null ? "" : ` · ${detail}`),
 });
 document.body.append(rebaselineConfirmation.element);
+const refreshConfirmation = createExecutionConfirmation([app, themeOptions], {
+  id: "refresh-confirmation",
+  heading: "Refresh inventory?",
+  consequence: "Rescanning can make Verify copied files unavailable for this execution, even when files are unchanged. Cancel to verify copied files first. You can still select files and verify their current state afterward.",
+  confirm: "Refresh inventory",
+  count: (_value, detail) => detail,
+});
+document.body.append(refreshConfirmation.element);
 
 function taskArray() {
   return Array.from(tasks.values()).reverse();
@@ -1836,27 +1844,92 @@ async function checkInventoryOutcome(task) {
   }
 }
 
-async function runInventoryAction(review, kind, nodeId) {
-  const task = currentInventoryTask(review);
-  if (task === null || task.inventoryLoading || task.inventoryAction?.pending
-      || task.inventoryAction?.accepted
+function inventoryActionEligible(task, review, kind, nodeId, allowedAttempt = null) {
+  if (task === null || currentInventoryTask(review) !== task || task.inventoryLoading
+      || (task.inventoryAction !== allowedAttempt
+        && (task.inventoryAction?.pending || task.inventoryAction?.accepted))
       || (kind !== "refresh" && task.inventoryViewUnconfirmed) || review.pending !== null
       || !task.sessionReleased || task.sessionState === "active"
-      || checkableOutcome(task.closeRecovery) || fixedOutcome(task.closeRecovery)) return;
+      || checkableOutcome(task.closeRecovery) || fixedOutcome(task.closeRecovery)) return false;
   if (nodeId !== null) {
     const row = review.window.rows.find((value) => value.node_id === nodeId)
       ?? (review.detail?.row?.node_id === nodeId ? review.detail.row : null);
-    if (row === null || row.warning !== null) return;
+    if (row === null || row.warning !== null) return false;
   }
-  if (kind !== "refresh" && review.summary.request_id !== task.requestId) return;
-  const requestId = task.requestId;
-  const revision = review.summary.view_revision;
+  return kind === "refresh" || review.summary.request_id === task.requestId;
+}
+
+function warnBeforeInventoryRefresh(task) {
+  if (task.taskKind !== "sync-plan" || task.workPane !== "verify") return false;
+  const readiness = currentReadiness(task);
+  return !readiness?.attempted && !["attempted", "linked-execution", "already-verified",
+    "empty", "execution-ineligible", "incomplete", "unrecorded", "superseded",
+    "settlement-diverged"].includes(readiness?.reason);
+}
+
+function cancelInventoryActionConfirmation(task, attempt) {
+  if (task.inventoryAction !== attempt || attempt.submissionStarted) return;
+  task.inventoryAction = null;
+  renderTasks();
+}
+
+async function runInventoryAction(review, kind, nodeId, returnFocus) {
+  const task = currentInventoryTask(review);
+  if (!inventoryActionEligible(task, review, kind, nodeId)) return;
   const attempt = {
-    kind, requestId, revision, nodeId, commandId: inventoryCommandId(),
-    pending: true, recovery: null,
+    kind, requestId: task.requestId, revision: review.summary.view_revision,
+    nodeId, commandId: inventoryCommandId(), review, sessionId: task.sessionId,
+    publication: review.summary.request_id, navigation: navigationRevision,
+    planRequestId: task.planRequestId, executionSessionId: task.executionSessionId,
+    executionRevision: originalExecution(task)?.execution_revision ?? null,
+    pending: true, recovery: null, submissionStarted: false,
     message: kind === "refresh" ? "Starting inventory scan…" : "Updating missing-item visibility…",
   };
   task.inventoryAction = attempt;
+  if (kind !== "refresh" || !warnBeforeInventoryRefresh(task)) {
+    await submitInventoryAction(task, attempt);
+    return;
+  }
+  attempt.message = "Confirm Refresh in the dialog.";
+  renderTasks();
+  const row = nodeId === null ? null : review.window.rows.find((value) => value.node_id === nodeId)
+    ?? review.detail?.row;
+  try {
+    refreshConfirmation.show({
+      destructiveOperationCount: 1,
+      countDetail: row === null ? "Entire location"
+        : `${row.is_container ? "Folder" : "Item"}: ${row.display}${row.is_container ? " (including subfolders)" : ""}`,
+      returnFocus,
+      onCancel: () => cancelInventoryActionConfirmation(task, attempt),
+      onConfirm: () => { void submitInventoryAction(task, attempt); },
+    });
+  } catch (_error) {
+    cancelInventoryActionConfirmation(task, attempt);
+    if (task.inventoryReview === review) {
+      review.message = "Refresh confirmation unavailable. The scan did not start.";
+      renderTasks();
+    }
+  }
+}
+
+async function submitInventoryAction(task, attempt) {
+  if (task.inventoryAction !== attempt || attempt.submissionStarted) return;
+  const { review, kind, requestId, revision, nodeId } = attempt;
+  if (!inventoryActionEligible(task, review, kind, nodeId, attempt)
+      || task.requestId !== requestId || task.sessionId !== attempt.sessionId
+      || review.summary.request_id !== attempt.publication || review.summary.view_revision !== revision
+      || navigationRevision !== attempt.navigation || task.planRequestId !== attempt.planRequestId
+      || task.executionSessionId !== attempt.executionSessionId
+      || (originalExecution(task)?.execution_revision ?? null) !== attempt.executionRevision) {
+    task.inventoryAction = null;
+    if (task.inventoryReview === review) {
+      review.message = "Inventory changed before confirmation. Review the current view and choose Refresh again.";
+    }
+    renderTasks();
+    return;
+  }
+  attempt.submissionStarted = true;
+  attempt.message = kind === "refresh" ? "Starting inventory scan…" : "Updating missing-item visibility…";
   cancelInventoryWindow(review);
   retireInventoryDetail(review);
   renderTasks();
